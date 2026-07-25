@@ -24,7 +24,7 @@
 #   必须配合 -BuildOnHost。非宿主模式下 docker CLI 被 minikube docker-env 指向 minikube
 #   内置 daemon，'localhost:5000' 会解析到 minikube VM 内部而非宿主 registry 容器，
 #   造成"push 看着成功、制品库里没有"。脚本对此 fail-closed 直接报错，不静默推错地方。
-#   registry 由 tools/devops 栈提供：pwsh XuanMing-Server/tools/devops/up.ps1
+#   registry 由 tools/devops 栈提供：在后端仓库根跑 pwsh tools/devops/up.ps1
 #
 # UE Linux DS 包来源（不写死路径，按下列优先级解析）：
 #   1) 显式 -SourcePkg 参数
@@ -54,7 +54,12 @@ param(
     # 必须配合 -BuildOnHost：详见下方 Push-One 的说明（minikube 内置 daemon 的
     # localhost 是 VM 自己，不是宿主 registry，会推丢）。
     [switch]$PushRegistry,
-    [string]$RegistryHost = 'localhost:5000'
+    [string]$RegistryHost = 'localhost:5000',
+    # 只解析并打印 DS 包来源后退出，不同步、不构建。用于验证来源接对了没。
+    [switch]$ResolveOnly,
+    # 放行「解析到的 DS 包比当前 stage 里的还旧」这种降级同步（默认 fail-closed 拒绝）。
+    # 正常不该用；确实要回滚到旧包时才显式加。
+    [switch]$AllowOlderPackage
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,7 +78,7 @@ if ($PushRegistry) {
         Invoke-WebRequest -Uri "http://$RegistryHost/v2/" -TimeoutSec 5 -UseBasicParsing | Out-Null
         Write-Host "[build-image-minikube] 制品 registry 可达：$RegistryHost" -ForegroundColor DarkGray
     } catch {
-        throw "制品 registry '$RegistryHost' 不可达：$($_.Exception.Message)。先起 DevOps 栈：pwsh XuanMing-Server/tools/devops/up.ps1"
+        throw "制品 registry '$RegistryHost' 不可达：$($_.Exception.Message)。先起 DevOps 栈：在后端仓库根跑 pwsh tools/devops/up.ps1"
     }
 }
 
@@ -82,30 +87,133 @@ $StageDir = Join-Path $ScriptDir 'stage\LinuxServer'
 $Dockerfile = Join-Path $ScriptDir 'Dockerfile'
 $RepoRoot = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
 
-# 解析 UE Linux DS 包（不写死路径）：显式 -SourcePkg > 环境变量 > 同级客户端仓库。
+# 解析 UE Linux DS 包（不写死路径）。优先级：
+#   ① 显式 -SourcePkg
+#   ② 环境变量 PANDORA_DS_LINUX_PKG
+#   ③ **制品库**（新标准来源）：<制品根>\{releases,snapshots}\client\<branch>\Server_Linux_Development\<版本>\LinuxServer
+#   ④ 同级客户端仓库的 Packages\...（**旧来源，已退役**，仅为兼容尚未清理的机器保留）
+#
+# 2026-07-25 变更：客户端打包产物不再经 SVN 工作副本的 Packages 目录分发，改由
+# Tool\Build\PublishPackages.ps1 发布到制品库。③ 因此取代 ④ 成为默认来源。
+# 制品根解析与 PublishPackages.ps1 保持一致：PANDORA_ARTIFACT_ROOT > F:\work\artifacts。
 function Resolve-LinuxPkg {
     if (-not [string]::IsNullOrWhiteSpace($SourcePkg)) {
         if (-not (Test-Path -LiteralPath $SourcePkg)) { throw "指定的 -SourcePkg 不存在：$SourcePkg" }
+        Write-Host "[build-image-minikube] DS 包来源：显式 -SourcePkg" -ForegroundColor DarkGray
         return (Resolve-Path -LiteralPath $SourcePkg).Path
     }
     if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_LINUX_PKG) -and (Test-Path -LiteralPath $env:PANDORA_DS_LINUX_PKG)) {
+        Write-Host "[build-image-minikube] DS 包来源：环境变量 PANDORA_DS_LINUX_PKG" -ForegroundColor DarkGray
         return (Resolve-Path -LiteralPath $env:PANDORA_DS_LINUX_PKG).Path
     }
-    # 后端仓库同级目录里找客户端仓库（含 Packages\Server_Linux_Development\LinuxServer）
+
+    # ③ 制品库：两轨都扫，取最新发布的一份（release 与 snapshot 同等参与，按发布时间取新）
+    $artRoot = if ($env:PANDORA_ARTIFACT_ROOT) { $env:PANDORA_ARTIFACT_ROOT } else { 'F:\work\artifacts' }
+    if (Test-Path -LiteralPath $artRoot) {
+        $artCands = foreach ($track in @('releases', 'snapshots')) {
+            $flavorRoot = Join-Path $artRoot "$track\client"
+            if (-not (Test-Path -LiteralPath $flavorRoot)) { continue }
+            # <branch>\Server_Linux_Development\<版本>\LinuxServer
+            Get-ChildItem -LiteralPath $flavorRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $verRoot = Join-Path $_.FullName 'Server_Linux_Development'
+                if (-not (Test-Path -LiteralPath $verRoot)) { return }
+                Get-ChildItem -LiteralPath $verRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                    $ls = Join-Path $_.FullName 'LinuxServer'
+                    if (Test-Path -LiteralPath $ls) {
+                        [pscustomobject]@{ Path = $ls; Track = $track; Version = $_.Name; Published = $_.LastWriteTime }
+                    }
+                }
+            }
+        }
+        $pick = $artCands | Sort-Object Published -Descending | Select-Object -First 1
+        if ($pick) {
+            Write-Host "[build-image-minikube] DS 包来源：制品库 [$($pick.Track)] $($pick.Version)（发布于 $($pick.Published.ToString('yyyy-MM-dd HH:mm')))" -ForegroundColor DarkGray
+            if (($artCands | Measure-Object).Count -gt 1) {
+                Write-Host "[build-image-minikube]   制品库共 $(($artCands | Measure-Object).Count) 个候选，已取最新；要指定别的版本请用 -SourcePkg。" -ForegroundColor DarkGray
+            }
+            return $pick.Path
+        }
+    }
+
+    # ④ 旧来源（已退役）：同级客户端仓库的 Packages。仅兼容尚未清理的机器。
     $rel = 'Packages\Server_Linux_Development\LinuxServer'
     $parent = Split-Path $RepoRoot -Parent
     $cands = Get-ChildItem -LiteralPath $parent -Directory -ErrorAction SilentlyContinue |
         Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName $rel) }
     if (-not $cands) { return $null }
-    # 优先名字匹配 Pandora-Client* 的同级仓库，其次任意命中
     $pref = $cands | Where-Object { $_.Name -like 'Pandora-Client*' } | Select-Object -First 1
     $repo = if ($pref) { $pref } else { ($cands | Select-Object -First 1) }
+    Write-Host "[build-image-minikube] !! DS 包来源：同级仓库 '$($repo.Name)' 的 Packages —— 这是【已退役】来源。" -ForegroundColor Yellow
+    Write-Host "[build-image-minikube] !! 制品库里没有可用的 Server_Linux_Development 产物，才回退到这里。" -ForegroundColor Yellow
+    Write-Host "[build-image-minikube] !! 正确做法：在客户端仓库跑 Tool\Build\PublishPackages.ps1 发布到制品库。" -ForegroundColor Yellow
+    if (-not $pref -and $cands.Count -gt 1) {
+        Write-Host "[build-image-minikube] !! 且同级有 $($cands.Count) 个候选、无 'Pandora-Client*' 可优先：$([string]::Join('、', ($cands | ForEach-Object { $_.Name })))，按枚举顺序取了 '$($repo.Name)'。" -ForegroundColor Yellow
+    }
     return (Join-Path $repo.FullName $rel)
 }
 
 # 若解析到客户端 Linux 包，就 robocopy /MIR 同步进 stage\LinuxServer（build 上下文内才能被 docker COPY）。
 $srcPkg = Resolve-LinuxPkg
+
+if ($ResolveOnly) {
+    Write-Host ""
+    if ($srcPkg) {
+        $bin = Join-Path $srcPkg 'Pandora\Binaries\Linux\PandoraServer'
+        Write-Host "解析结果：$srcPkg" -ForegroundColor Green
+        if (Test-Path -LiteralPath $bin) {
+            $fi = Get-Item -LiteralPath $bin
+            Write-Host ("  PandoraServer  {0:N1} MB  {1:yyyy-MM-dd HH:mm:ss}" -f ($fi.Length / 1MB), $fi.LastWriteTime)
+        } else {
+            Write-Host "  !! 该目录下找不到 Pandora\Binaries\Linux\PandoraServer，可能不是完整 DS 包" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "解析结果：未解析到任何 DS 包来源（将回退沿用已暂存的 stage\LinuxServer）" -ForegroundColor Yellow
+        if (Test-Path -LiteralPath $StageDir) {
+            $sbin = Join-Path $StageDir 'Pandora\Binaries\Linux\PandoraServer'
+            if (Test-Path -LiteralPath $sbin) {
+                $sfi = Get-Item -LiteralPath $sbin
+                Write-Host ("  当前 stage：{0:N1} MB  {1:yyyy-MM-dd HH:mm:ss}" -f ($sfi.Length / 1MB), $sfi.LastWriteTime) -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "  且 stage 也不存在 —— 真正构建时会直接报错中止。" -ForegroundColor Red
+        }
+    }
+    return
+}
 if ($srcPkg) {
+    # 降级守卫（fail-closed）：robocopy /MIR 会用解析到的包整体覆盖 stage。
+    # 若解析到的包比 stage 里已有的更旧，这一步就是把 DS 镜像**悄悄退回老代码**——
+    # 构建照样成功、镜像照样能跑，只是跑的是旧二进制，极难察觉。
+    # 典型成因：制品库最新发布落后于本地最近一次 DS 构建（迭代产物没发布进制品库）。
+    $srcBin = Join-Path $srcPkg 'Pandora\Binaries\Linux\PandoraServer'
+    $stgBin = Join-Path $StageDir 'Pandora\Binaries\Linux\PandoraServer'
+    if ((Test-Path -LiteralPath $srcBin) -and (Test-Path -LiteralPath $stgBin)) {
+        $srcTime = (Get-Item -LiteralPath $srcBin).LastWriteTime
+        $stgTime = (Get-Item -LiteralPath $stgBin).LastWriteTime
+        if ($srcTime -lt $stgTime -and $AllowOlderPackage) {
+            Write-Host "[build-image-minikube] !! 已显式放行降级同步（-AllowOlderPackage）：将用 $($srcTime.ToString('yyyy-MM-dd HH:mm:ss')) 的包覆盖 stage 里 $($stgTime.ToString('yyyy-MM-dd HH:mm:ss')) 的包。" -ForegroundColor Yellow
+        }
+        elseif ($srcTime -lt $stgTime) {
+            $msg = @"
+拒绝降级同步：解析到的 DS 包比 stage 里已有的更旧。
+  解析到 : $srcPkg
+           PandoraServer $($srcTime.ToString('yyyy-MM-dd HH:mm:ss'))
+  当前 stage: $StageDir
+           PandoraServer $($stgTime.ToString('yyyy-MM-dd HH:mm:ss'))
+继续同步会用旧二进制覆盖新二进制，DS 镜像将静默退回老代码。
+
+处理方式（任选其一）：
+  1) 把最近一次 DS 构建发布进制品库（推荐，客户端仓库执行）：
+       pwsh Tool\Build\PublishPackages.ps1 -AllowDirty
+     注意：只有 Package.bat / PackageSet.ps1 的产出带 BUILD_INFO.txt 才能发布；
+     build-linux-ds.ps1 输出到 PandoraDSArchive，缺 BUILD_INFO.txt 会被发布器拒收。
+  2) 直接指定要用的包：
+       -SourcePkg <包路径>    或   设置环境变量 PANDORA_DS_LINUX_PKG
+  3) 确实要回滚到旧包：显式加 -AllowOlderPackage
+"@
+            throw $msg
+        }
+    }
     Write-Host "[build-image-minikube] 同步客户端 Linux DS 包 -> stage：$srcPkg" -ForegroundColor Cyan
     if (-not (Test-Path -LiteralPath $StageDir)) { New-Item -ItemType Directory -Path $StageDir -Force | Out-Null }
     & robocopy $srcPkg $StageDir /MIR /NFL /NDL /NJH /NJS /NP *> $null
@@ -211,7 +319,7 @@ function Push-One {
     Write-Host "[build-image-minikube] docker push $remoteTag" -ForegroundColor Cyan
     & docker push $remoteTag
     if ($LASTEXITCODE -ne 0) {
-        throw "docker push 失败：$remoteTag。确认 registry 在跑：pwsh XuanMing-Server/tools/devops/up.ps1"
+        throw "docker push 失败：$remoteTag。确认 registry 在跑：在后端仓库根跑 pwsh tools/devops/up.ps1"
     }
 
     # 发布 manifest 应记 digest 而非 tag：tag 可被覆盖，digest 不可变（见 docs/design/release-pipeline.md）。

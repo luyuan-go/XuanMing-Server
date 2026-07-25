@@ -1,0 +1,350 @@
+# GoReleaser 配置 —— Pandora 后端 24 个 Go 二进制的统一构建 / 版本戳 / 打包。
+#
+# ⚠️ 本仓库是 **go.work 多模块工作区**（29 个 use，每服务独立 module，无根 go.mod）。
+#    GoReleaser 默认按单 module 工作，这里靠每个 build 的 `dir:` 指到具体模块目录来适配。
+#    该组合已实测可用（linux/amd64 真产物 + ldflags 注入生效）。
+#
+# 定位（避免与既有机制重复，见 CLAUDE.md §15）：
+#   - 既有 `deploy/services/Dockerfile` + `start.ps1` 负责**镜像**构建与注入 → 仍是部署主链路。
+#   - 本配置负责**裸二进制**的可复现构建 + 统一版本戳 + 归档校验和，
+#     适合：给运维/GM 发 CLI（gmctl）、出可追溯的构建产物、CI 里一条命令编全部服务。
+#   - `release:` 已 disable —— 你们不用 GitHub Releases，产物归宿是 F:\work\artifacts 与 MinIO。
+#
+# 常用命令：
+#   goreleaser build --snapshot --clean          # 编全部（dev 快照，无需 tag）
+#   goreleaser build --snapshot --clean --id login   # 只编某一个
+#   goreleaser check                             # 校验本文件
+#
+# 版本注入目标见 pkg/version/version.go（Version / Commit / BuildTime 三个包级 var）。
+version: 2
+project_name: pandora
+
+builds:
+  - id: login
+    dir: services/account/login
+    main: ./cmd/login
+    binary: login
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: player
+    dir: services/account/player
+    main: ./cmd/player
+    binary: player
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: battle_result
+    dir: services/battle/battle_result
+    main: ./cmd/battle_result
+    binary: battle_result
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: battle_auth_quarantine
+    dir: services/battle/ds_allocator
+    main: ./cmd/battle_auth_quarantine
+    binary: battle_auth_quarantine
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: ds_allocator
+    dir: services/battle/ds_allocator
+    main: ./cmd/ds_allocator
+    binary: ds_allocator
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: gmctl
+    dir: services/battle/ds_allocator
+    main: ./cmd/gmctl
+    binary: gmctl
+    env: [CGO_ENABLED=0]
+    goos: [linux, windows]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: pod_uid_acl_cleanup
+    dir: services/battle/ds_allocator
+    main: ./cmd/pod_uid_acl_cleanup
+    binary: pod_uid_acl_cleanup
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: hub_allocator
+    dir: services/battle/hub_allocator
+    main: ./cmd/hub_allocator
+    binary: hub_allocator
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: hub_auth_quarantine
+    dir: services/battle/hub_allocator
+    main: ./cmd/hub_auth_quarantine
+    binary: hub_auth_quarantine
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: data_service
+    dir: services/data/data_service
+    main: ./cmd/data_service
+    binary: data_service
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: auction
+    dir: services/economy/auction
+    main: ./cmd/auction
+    binary: auction
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: inventory
+    dir: services/economy/inventory
+    main: ./cmd/inventory
+    binary: inventory
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: trade
+    dir: services/economy/trade
+    main: ./cmd/trade
+    binary: trade
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: matchmaker
+    dir: services/matchmaking/matchmaker
+    main: ./cmd/matchmaker
+    binary: matchmaker
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: team
+    dir: services/matchmaking/team
+    main: ./cmd/team
+    binary: team
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: leaderboard
+    dir: services/runtime/leaderboard
+    main: ./cmd/leaderboard
+    binary: leaderboard
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: owner
+    dir: services/runtime/owner
+    main: ./cmd/owner
+    binary: owner
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: locator
+    dir: services/runtime/player_locator
+    main: ./cmd/locator
+    binary: locator
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: push
+    dir: services/runtime/push
+    main: ./cmd/push
+    binary: push
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: chat
+    dir: services/social/chat
+    main: ./cmd/chat
+    binary: chat
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: dialogue
+    dir: services/social/dialogue
+    main: ./cmd/dialogue
+    binary: dialogue
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: friend
+    dir: services/social/friend
+    main: ./cmd/friend
+    binary: friend
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: guild
+    dir: services/social/guild
+    main: ./cmd/guild
+    binary: guild
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+  - id: mail
+    dir: services/social/mail
+    main: ./cmd/mail
+    binary: mail
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  disable: true
+
+# 产物归宿是制品库（artifacts/ 与 MinIO），不发 GitHub Release。
+release:
+  disable: true

@@ -1,0 +1,65 @@
+# Argo CD Application：把 deploy/k8s/services 这层 kustomize base 纳入 GitOps 管理。
+#
+# ⚠️⚠️ 应用前必读：为什么这里【故意】不开自动同步和 prune ⚠️⚠️
+#
+# 1) namespace `pandora` 是**正在跑的活环境**。开 `automated.prune=true` 后，
+#    Argo CD 会删除"集群里有、git 里没有"的资源。
+#
+# 2) 本仓库存在**故意不进 git 的运行时资源**，最典型的是 Secret `pandora-config`——
+#    deploy/k8s/services/kustomization.yaml 注释写明它由 start.ps1 现场
+#    `kubectl create secret generic` 生成（含 HS256 密钥）。它不在 git 里，
+#    **一旦开 prune 就会被 Argo CD 删掉，服务随即起不来**。
+#
+# 3) 同理 Agones Fleet、migrate Job 等由脚本按环境注入的资源也不在这层 base 里。
+#
+# 因此默认配置是：**手动同步 + 不 prune + 只做差异展示**。
+# 先在 Argo CD UI 里看 diff，确认无误再手动点 Sync。
+# 确实要开自动同步前，必须先把 Secret / Fleet 等运行时资源的归属理清楚
+#（标准做法：Secret 走 External Secrets / Sealed Secrets 进 git，或给这些资源打
+# `argocd.argoproj.io/compare-options: IgnoreExtraneous` 排除在 prune 之外）。
+#
+# 另注：Argo CD 从 **GitHub 上的 main 分支**拉取，不是你本地工作区。
+# 本地未 push 的改动不会被同步——这正是 GitOps 的预期语义。
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pandora-services
+  namespace: argocd
+  # 删 Application 时不级联删掉集群里的实际资源（安全默认）。
+  # 要让 Argo CD 接管生命周期时再换成 resources-finalizer.argocd.argoproj.io
+  finalizers: []
+spec:
+  project: default
+
+  source:
+    # ⚠️ 这是 **GitHub 远端地址**，与本地目录名无关（本地叫 XuanMing-Server 还是
+    #    Pandora-Server 都不影响这里）。但按 CLAUDE.md §13「Xuanming 已废弃命名」，
+    #    若将来把 GitHub 仓库也改名，**必须同步改这一行**，否则 Argo CD 拉不到代码。
+    repoURL: https://github.com/luyuan-cpp/XuanMing-Server.git
+    targetRevision: main
+    path: deploy/k8s/services
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pandora
+
+  syncPolicy:
+    # 【故意留空】不配 automated:，即手动同步。理由见文件顶部。
+    syncOptions:
+      # namespace 由 kustomize 的 00-namespace.yaml 管，不让 Argo CD 代建
+      - CreateNamespace=false
+      # 只把 Argo CD 自己管的字段纳入比较，减少与 start.ps1 注入字段的无谓 diff
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m
+
+  # 忽略由运行时/HPA 等外部控制器改写的字段，避免永远 OutOfSync
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

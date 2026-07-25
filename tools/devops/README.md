@@ -97,7 +97,7 @@ docker rmi minio/minio:latest -f; docker pull minio/minio:latest       # 之前�
 ## 起 / 停
 
 ```powershell
-cd XuanMing-Server/tools/devops
+cd <后端仓库根>/tools/devops     # 目录名随仓库，不写死
 pwsh ./up.ps1          # 一键起（首次拉镜像+装 Jenkins 插件，约几分钟）
 pwsh ./down.ps1        # 停，保留数据
 pwsh ./down.ps1 -Volumes   # 停并清空所有数据卷（慎用）
@@ -116,7 +116,7 @@ Jenkins 首启装插件需 1–3 分钟，其间登录页 502/未就绪是正常
 1. 那台机器装好 **Docker Desktop + PowerShell 7**。
 2. 把本仓库同步过去（SVN/git 拉，或直接拷 `tools/devops/` 整个目录）。
 3. ```powershell
-   cd XuanMing-Server/tools/devops
+   cd <后端仓库根>/tools/devops
    cp .env.example .env      # 按需改端口/口令（生产务必改口令）
    pwsh ./up.ps1
    ```
@@ -161,8 +161,8 @@ mc cp --recursive ..\..\..\artifacts\releases\ pandora/pandora-artifacts/release
 
 ### 3. Jenkins 挂 4 条流水线
 仓库里已有 4 条 Jenkinsfile：
-- `Pandora-Client-SVN/Tool/Build/Jenkinsfile`(+`.release`)
-- `XuanMing-Server/Jenkinsfile`(+`.release`)
+- 客户端仓库：`Tool/Build/Jenkinsfile`(+`.release`)
+- 后端仓库：`Jenkinsfile`(+`.release`)
 
 登录 Jenkins → New Item → **Pipeline** → 「Pipeline script from SCM」→ 填仓库地址 + `Script Path` 指到对应 Jenkinsfile → 建 SVN/git 凭据。
 （想开机自带这几个 job：`jenkins/casc.yaml` 末尾有 job-dsl 模板，补好凭据后取消注释即可。）
@@ -181,7 +181,7 @@ Jenkins → Manage Nodes → New Node → 用 50000 端口的 inbound agent 接�
 | **Argo CD** | ✅ 已装进 `pandora-agones` minikube（v3.4.5） | `deploy/k8s/argocd/` |
 | **Harbor** | 📄 安装脚本就绪（**限 Linux 宿主机**） | `tools/devops/harbor/install-harbor.sh` |
 | **Nexus** | ⚙️ compose 可选 profile（默认关，职责重叠） | `--profile nexus` |
-| **GoReleaser** | 见 `docs/design/release-pipeline.md` 的 go.work 说明 | — |
+| **GoReleaser** | ✅ 24 个二进制全量构建实测通过 | 仓库根 `.goreleaser.yaml` |
 | **Horde** | ❌ 刻意不做一键 | 见下方说明 |
 
 ### Argo CD（已部署）
@@ -218,6 +218,23 @@ Harbor 与 registry:2 是**二选一替代**（Harbor 自带 registry 并占 80/
 docker compose -f docker-compose.stack.yml --profile nexus up -d
 # 初始密码：docker exec pandora-nexus cat /nexus-data/admin.password
 ```
+
+### GoReleaser（已验证）
+
+仓库根 [`.goreleaser.yaml`](../../.goreleaser.yaml)，24 个二进制统一构建 + 版本戳：
+
+```powershell
+goreleaser build --snapshot --clean            # 编全部（实测 26s）
+goreleaser build --snapshot --clean --id login # 只编一个
+```
+
+**go.work 适配**：本仓库是 29 个 use 的多模块工作区、无根 `go.mod`，GoReleaser 默认按单
+module 走 —— 靠每个 build 的 `dir:` 指到模块目录解决，已实测产出真二进制且
+`pkg/version` 的 ldflags 注入生效。
+
+**定位**：不取代既有 `Dockerfile` + `start.ps1` 的镜像链路（那仍是部署主线）；
+它负责裸二进制的可复现构建、统一版本戳、归档校验和 —— 适合发 gmctl 这类运维 CLI
+和出可追溯构建产物。`release:` 已 disable（产物归宿是 artifacts/ 与 MinIO，不发 GitHub Release）。
 
 ### Horde（刻意不做一键）
 
