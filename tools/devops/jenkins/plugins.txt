@@ -1,7 +1,14 @@
 # 声明式 CI 所需最小插件集（版本由镜像固化）
+#
+# workflow-aggregator 是 Pipeline 伞包，它负责拉进 pipeline-model-definition
+# （声明式 Pipeline）与 workflow-multibranch。这条依赖链缺失时不会报错，
+# 只会让 Jenkinsfile 的 pipeline{} 块静默不执行，务必在部署后验证：
+#   curl -u admin:<pw> http://localhost:8080/pluginManager/api/json?depth=1
+#   确认 pipeline-model-definition 存在且 active=true
 configuration-as-code
 job-dsl
 workflow-aggregator
+pipeline-model-definition
 pipeline-stage-view
 git
 subversion

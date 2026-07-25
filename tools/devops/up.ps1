@@ -54,6 +54,34 @@ try {
     $mUser  = Val 'MINIO_ROOT_USER' 'pandora'
     $mPass  = Val 'MINIO_ROOT_PASSWORD' 'change-me-minio'
 
+    # ── 校验声明式 Pipeline 插件真的装上了 ──
+    # 踩过的坑：pipeline-model-definition 缺失时不会报错，只会让 Jenkinsfile 的
+    # pipeline{} 块静默不执行——构建"成功"但零 stage。必须显式验，不能假定装上了。
+    Write-Host '==> 校验 Jenkins 声明式 Pipeline 插件...' -ForegroundColor Cyan
+    $pluginOk = $false
+    for ($i = 0; $i -lt 60; $i++) {
+        try {
+            $b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${jUser}:${jPass}"))
+            $pl = Invoke-RestMethod -Uri "http://localhost:$jPort/pluginManager/api/json?depth=1" `
+                    -Headers @{ Authorization = "Basic $b64" } -TimeoutSec 10
+            $decl = $pl.plugins | Where-Object { $_.shortName -eq 'pipeline-model-definition' -and $_.active }
+            if ($decl) { $pluginOk = $true; break }
+            # 插件可能已下载但待重启激活
+            if ($pl.plugins.Count -gt 0 -and $i -eq 20) {
+                Write-Host '    声明式 Pipeline 插件未激活，重启 Jenkins 以完成激活...' -ForegroundColor Yellow
+                docker compose -f $compose restart jenkins | Out-Null
+            }
+        } catch { }
+        Start-Sleep -Seconds 5
+    }
+    if ($pluginOk) {
+        Write-Host '    OK：pipeline-model-definition 已激活' -ForegroundColor Green
+    } else {
+        Write-Host '    !! 警告：pipeline-model-definition 未激活。' -ForegroundColor Red
+        Write-Host '    !! 此时 Jenkinsfile 的 pipeline{} 块会被静默忽略——构建会"成功"但一个 stage 都不跑。' -ForegroundColor Red
+        Write-Host '    !! 处理：docker compose -f docker-compose.stack.yml restart jenkins；仍不行则 up.ps1 -Pull 重建镜像。' -ForegroundColor Red
+    }
+
     Write-Host ''
     Write-Host '========== Pandora DevOps 已启动 ==========' -ForegroundColor Green
     Write-Host ("  Jenkins        http://localhost:{0}      账号 {1} / {2}" -f $jPort, $jUser, $jPass)
