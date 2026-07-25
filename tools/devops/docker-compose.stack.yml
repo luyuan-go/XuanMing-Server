@@ -23,6 +23,12 @@ services:
       - CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
       # 跳过 setup 向导——用 JCasC 声明式初始化，保证「另一台机器」结果一致
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    # 内网主机名映射：容器不参与宿主机的 mDNS/NetBIOS 解析，
+    # 宿主机能 ping 通 infinity-svn 不代表容器能。controller 要做 SCM 轮询和拉
+    # Jenkinsfile，解析不了就整条流水线起不来（表现为 HTTP 000 连接失败）。
+    # 换机器/换网段时改 .env 的 SVN_HOST / SVN_HOST_IP。
+    extra_hosts:
+      - "${SVN_HOST:-infinity-svn}:${SVN_HOST_IP:-192.168.2.254}"
     ports:
       - "${JENKINS_HTTP_PORT:-8080}:8080"
       - "${JENKINS_AGENT_PORT:-50000}:50000"
