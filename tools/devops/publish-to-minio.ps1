@@ -43,6 +43,9 @@ param(
     # compose 网络名与服务名；非默认部署时可覆盖
     [string]$Network = 'pandora-devops_default',
     [string]$Endpoint = 'http://minio:9000',
+    # mirror 失败重试次数。宿主机负载高时 Docker 挂载会偶发短读，属瞬时故障；
+    # mirror 幂等，重跑只补缺失对象，所以重试是安全的。
+    [int]$MirrorRetries = 3,
     [switch]$DryRun
 )
 
@@ -124,14 +127,32 @@ $args = @(
     '-e', "MC_HOST_pandora=$mcHost",
     '-v', "${mountSrc}:/artifacts:ro",
     'minio/mc',
-    'mirror', '--overwrite'
+    # 不加 --overwrite：制品是不可变的，已存在的对象不该重传。
+    # 更关键的是 --overwrite 会让每次重试都重传全部文件，重试永远无法收敛；
+    # 去掉后 mirror 只补缺失/不一致的对象，失败重试才真正只处理失败的那部分。
+    'mirror'
 )
 if ($DryRun) { $args += '--dry-run' }
 $args += @("/artifacts/$relative", "pandora/$Bucket/$relative")
 
 Info ("执行 mc mirror{0} ..." -f $(if ($DryRun) { '（DryRun）' } else { '' }))
-& docker @args
-if ($LASTEXITCODE -ne 0) { throw "mc mirror 失败（exit=$LASTEXITCODE）。检查 MinIO 是否在跑：docker compose -f docker-compose.stack.yml ps" }
+
+# 带重试：宿主机高负载时，Docker 的 Windows 目录挂载偶发短读，
+# mc 会报 "You did not provide the number of bytes specified by the Content-Length HTTP header"。
+# 文件本身完好（本地校验一致），属传输层瞬时故障。mirror 幂等，重跑只补缺失的对象。
+$maxAttempts = if ($DryRun) { 1 } else { $MirrorRetries }
+$mirrorOk = $false
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    if ($attempt -gt 1) {
+        Warn "第 $attempt/$maxAttempts 次重试（mirror 幂等，只补前一次未完成的对象）..."
+        Start-Sleep -Seconds ([Math]::Min(30, 5 * ($attempt - 1)))
+    }
+    & docker @args
+    if ($LASTEXITCODE -eq 0) { $mirrorOk = $true; break }
+}
+if (-not $mirrorOk) {
+    throw "mc mirror 连续 $maxAttempts 次失败（最后 exit=$LASTEXITCODE）。`n若报 Content-Length 不符，多为宿主机负载过高导致的挂载短读，可稍后重跑；`n若报连接失败，检查 MinIO：docker compose -f docker-compose.stack.yml ps"
+}
 
 if ($DryRun) { Ok 'DryRun 结束，未实际上传。'; return }
 

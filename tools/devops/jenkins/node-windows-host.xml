@@ -1,0 +1,37 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<slave>
+  <name>windows-host</name>
+  <description>Windows 宿主机构建代理（UE 打包 / DS 镜像）。由 tools/devops 接线。</description>
+  <remoteFS>@@AGENT_WORKDIR@@</remoteFS>
+  <numExecutors>1</numExecutors>
+  <mode>NORMAL</mode>
+  <retentionStrategy class="hudson.slaves.RetentionStrategy$Always"/>
+  <launcher class="hudson.slaves.JNLPLauncher">
+    <workDirSettings>
+      <disabled>false</disabled>
+      <internalDir>remoting</internalDir>
+      <failIfWorkDirIsMissing>false</failIfWorkDirIsMissing>
+    </workDirSettings>
+    <webSocket>true</webSocket>
+  </launcher>
+  <label>windows</label>
+  <nodeProperties>
+    <hudson.slaves.EnvironmentVariablesNodeProperty>
+      <envVars serialization="custom">
+        <unserializable-parents/>
+        <tree-map>
+          <default>
+            <comparator class="hudson.util.CaseInsensitiveComparator"/>
+          </default>
+          <int>3</int>
+          <string>LINUX_MULTIARCH_ROOT</string>
+          <string>@@LINUX_MULTIARCH_ROOT@@</string>
+          <string>PANDORA_ARTIFACT_ROOT</string>
+          <string>@@PANDORA_ARTIFACT_ROOT@@</string>
+          <string>PANDORA_PROTO_SERVER_ROOT</string>
+          <string>@@PANDORA_PROTO_SERVER_ROOT@@</string>
+        </tree-map>
+      </envVars>
+    </hudson.slaves.EnvironmentVariablesNodeProperty>
+  </nodeProperties>
+</slave>

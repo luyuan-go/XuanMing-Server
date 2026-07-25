@@ -1,0 +1,136 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<flow-definition plugin="workflow-job@1571.1580.v18e46842c125">
+  <actions>
+    <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobAction plugin="pipeline-model-definition@2.2291.v2934911987b_6"/>
+    <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction plugin="pipeline-model-definition@2.2291.v2934911987b_6">
+      <jobProperties>
+        <string>org.jenkinsci.plugins.workflow.job.properties.DisableConcurrentBuildsJobProperty</string>
+        <string>jenkins.model.BuildDiscarderProperty</string>
+      </jobProperties>
+      <triggers>
+        <string>hudson.triggers.SCMTrigger</string>
+      </triggers>
+      <parameters>
+        <string>PACKAGE_KIND</string>
+        <string>FORCE_PACKAGE</string>
+        <string>PANDORA_PROTO_SERVER_ROOT_OVERRIDE</string>
+        <string>ARTIFACT_ROOT_OVERRIDE</string>
+        <string>PUBLISH_PACKAGES</string>
+        <string>UE_ENGINE_DIR_OVERRIDE</string>
+        <string>PANDORA_BUF_PATH_OVERRIDE</string>
+        <string>PANDORA_PROTOC_PATH_OVERRIDE</string>
+        <string>LINUX_MULTIARCH_ROOT_OVERRIDE</string>
+      </parameters>
+      <options>
+        <string>skipDefaultCheckout</string>
+      </options>
+    </org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction>
+  </actions>
+  <description>Pandora 客户端 UE 打包 dev 快照轨。SVN 凭据 ID = @@SVN_CREDENTIALS_ID@@。
+lightweight=true：controller 只取 Tool/Build/Jenkinsfile，不做整仓检出
+（false 会把整个客户端仓库拉进 Jenkins 容器，实测 7.3G+ 且毫无用处；
+真正的工作区检出由流水线内的 checkout scm 在 windows agent 上完成）。</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+      <triggers>
+        <hudson.triggers.SCMTrigger>
+          <spec>H/5 * * * *</spec>
+          <ignorePostCommitHooks>false</ignorePostCommitHooks>
+        </hudson.triggers.SCMTrigger>
+      </triggers>
+    </org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>PACKAGE_KIND</name>
+          <description>What Jenkins should package.</description>
+          <choices>
+            <string>Client_Dev</string>
+            <string>Client_Shipping</string>
+            <string>Server_Linux_Dev</string>
+            <string>All_Dev</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>FORCE_PACKAGE</name>
+          <description>Run package manually even when no code/resource change is detected.</description>
+          <defaultValue>false</defaultValue>
+        </hudson.model.BooleanParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>PUBLISH_PACKAGES</name>
+          <description>Publish the generated Packages to the artifact directory after a successful package.</description>
+          <defaultValue>true</defaultValue>
+        </hudson.model.BooleanParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>ARTIFACT_ROOT_OVERRIDE</name>
+          <description>Optional artifact root override. Empty preserves the agent PANDORA_ARTIFACT_ROOT and then falls back to @@PANDORA_ARTIFACT_ROOT@@.</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>UE_ENGINE_DIR_OVERRIDE</name>
+          <description>Optional UE 5.8 engine root override. Empty preserves the agent UE_ENGINE_DIR and then falls back to EngineAssociation.</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>LINUX_MULTIARCH_ROOT_OVERRIDE</name>
+          <description>Optional Linux cross compile toolchain override. Empty preserves the agent LINUX_MULTIARCH_ROOT.</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>PANDORA_PROTO_SERVER_ROOT_OVERRIDE</name>
+          <description>Optional XuanMing-Server checkout override. Empty preserves the agent environment and then uses the sibling directory.</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>PANDORA_BUF_PATH_OVERRIDE</name>
+          <description>Optional full path to buf.exe. Empty preserves PANDORA_BUF_PATH and then resolves Buf from PATH.</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>PANDORA_PROTOC_PATH_OVERRIDE</name>
+          <description>Optional full path to protoc.exe 35.0. Empty preserves PANDORA_PROTOC_PATH and then resolves protoc from PATH.</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+    <jenkins.model.BuildDiscarderProperty>
+      <strategy class="hudson.tasks.LogRotator">
+        <daysToKeep>-1</daysToKeep>
+        <numToKeep>30</numToKeep>
+        <artifactDaysToKeep>-1</artifactDaysToKeep>
+        <artifactNumToKeep>-1</artifactNumToKeep>
+        <removeLastBuild>false</removeLastBuild>
+      </strategy>
+    </jenkins.model.BuildDiscarderProperty>
+    <org.jenkinsci.plugins.workflow.job.properties.DisableConcurrentBuildsJobProperty>
+      <abortPrevious>false</abortPrevious>
+    </org.jenkinsci.plugins.workflow.job.properties.DisableConcurrentBuildsJobProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps@4209.v83c4e257f1e9">
+    <scm class="hudson.scm.SubversionSCM" plugin="subversion@1303.vcfd9679fb_c12">
+      <locations>
+        <hudson.scm.SubversionSCM_-ModuleLocation>
+          <remote>@@SVN_CLIENT_URL@@</remote>
+          <credentialsId>@@SVN_CREDENTIALS_ID@@</credentialsId>
+          <local>.</local>
+          <depthOption>infinity</depthOption>
+          <ignoreExternalsOption>true</ignoreExternalsOption>
+          <cancelProcessOnExternalsFail>true</cancelProcessOnExternalsFail>
+        </hudson.scm.SubversionSCM_-ModuleLocation>
+      </locations>
+      <excludedRegions></excludedRegions>
+      <includedRegions></includedRegions>
+      <excludedUsers></excludedUsers>
+      <excludedRevprop></excludedRevprop>
+      <excludedCommitMessages></excludedCommitMessages>
+      <workspaceUpdater class="hudson.scm.subversion.UpdateUpdater"/>
+      <ignoreDirPropChanges>false</ignoreDirPropChanges>
+      <filterChangelog>false</filterChangelog>
+      <quietOperation>true</quietOperation>
+    </scm>
+    <scriptPath>Tool/Build/Jenkinsfile</scriptPath>
+    <lightweight>true</lightweight>
+  </definition>
+  <disabled>false</disabled>
+</flow-definition>
