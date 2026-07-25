@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -182,8 +183,8 @@ func TestCampaignFailureObservableViaHealth(t *testing.T) {
 	defer func() { _ = lease.Close() }()
 
 	waitFor(t, "campaign failures counted", func() bool {
-		n, last := lease.Health()
-		return n >= 1 && last == "etcd unreachable"
+		h := lease.Health()
+		return h.ConsecutiveCampaignErrs >= 1 && h.LastCampaignErr == "etcd unreachable"
 	})
 	// 失败期间不得报告持有。
 	if _, held := lease.Current(); held {
@@ -194,9 +195,68 @@ func TestCampaignFailureObservableViaHealth(t *testing.T) {
 		_, held := lease.Current()
 		return held
 	})
-	n, last := lease.Health()
-	if n != 0 || last != "" {
-		t.Fatalf("election must reset health counters, got n=%d last=%q", n, last)
+	h := lease.Health()
+	if h.ConsecutiveCampaignErrs != 0 || h.LastCampaignErr != "" {
+		t.Fatalf("election must reset health counters, got %+v", h)
+	}
+	if !h.Held || h.Token != 9 {
+		t.Fatalf("health snapshot must mirror Current(), got %+v", h)
+	}
+}
+
+// R10 复审 P0-4:继任 sweep 必须是**接流前硬门**——激活钩子成功之前绝不宣告持有,
+// 否则"当选到推扫完成"之间本副本已在接写,而前任在未被推扫触碰的 slot 上仍能写。
+func TestActivationHookGatesWritability(t *testing.T) {
+	term := newFakeTerm(11)
+	backend := &fakeBackend{terms: []*fakeTerm{term}}
+	release := make(chan struct{})
+	var activatedToken atomic.Uint64
+	lease := StartWithBackend(context.Background(), backend, Config{
+		Election: "hub_allocator/writer",
+		OnElected: func(_ context.Context, token uint64) error {
+			activatedToken.Store(token)
+			<-release
+			return nil
+		},
+	})
+	defer func() { _ = lease.Close() }()
+
+	waitFor(t, "activation hook invoked", func() bool { return activatedToken.Load() == 11 })
+	if _, held := lease.Current(); held {
+		t.Fatal("lease must not report held while the activation hook is still running")
+	}
+	close(release)
+	waitFor(t, "held after activation", func() bool {
+		_, held := lease.Current()
+		return held
+	})
+}
+
+// 激活失败 = 让位重选,期间恒不持有;失败可经 Health() 观测(Degraded 用于告警)。
+func TestActivationFailureNeverAnnouncesHeld(t *testing.T) {
+	terms := make([]*fakeTerm, 0, 4)
+	for i := 0; i < 4; i++ {
+		terms = append(terms, newFakeTerm(uint64(20+i)))
+	}
+	backend := &fakeBackend{terms: terms}
+	lease := StartWithBackend(context.Background(), backend, Config{
+		Election:  "hub_allocator/writer",
+		OnElected: func(context.Context, uint64) error { return errors.New("fence sweep failed") },
+	})
+	defer func() { _ = lease.Close() }()
+
+	waitFor(t, "activation failure counted", func() bool {
+		return lease.Health().ConsecutiveActivationErrs >= 1
+	})
+	if _, held := lease.Current(); held {
+		t.Fatal("failed activation must never announce writability")
+	}
+	h := lease.Health()
+	if h.LastActivationErr != "fence sweep failed" {
+		t.Fatalf("activation error must be observable, got %+v", h)
+	}
+	if !terms[0].wasResigned() {
+		t.Fatal("failed activation must resign the term so another replica can take over")
 	}
 }
 

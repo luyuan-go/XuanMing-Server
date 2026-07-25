@@ -348,6 +348,12 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	var sessGenLease data.SessionGenerationLease
 	if u.sessionGen != nil {
 		lease, gerr := u.sessionGen.PersistSessionJTI(ctx, playerID, sessJTI)
+		if gerr != nil && data.IsCommitAmbiguous(gerr) {
+			// R11 复审 P0-1 问题 A:COMMIT 结果不确定。不猜——用本次 jti 作唯一标记读回
+			// 权威判定(§9.22「结果不确定必须 fail-closed,禁止冒充默认状态」的落法是把
+			// 不确定态判定掉,而不是把它当失败)。
+			lease, gerr = u.resolveAmbiguousSessionGeneration(ctx, playerID, sessJTI, lease)
+		}
 		if gerr != nil {
 			h.Errorw("msg", "session_generation_persist_failed", "err", gerr, "player_id", playerID)
 			return nil, errcode.NewCause(errcode.ErrUnavailable, gerr,
@@ -1350,23 +1356,27 @@ func (u *LoginUsecase) RequireTicketSessionCurrent(ctx context.Context, playerID
 //	   玩家下一次成功登录原子推进两个存储自愈(客户端对本次失败拿到的是可重试错误)。
 //
 // 全部为 best-effort 补偿:补偿本身失败只记 Error(登录已失败,不会因此交付能力)。
+//
+// R11 复审 P0-1 问题 B:补偿**不得**跑在请求 ctx 上。触发 Redis 写失败的原因常常就是
+// handler deadline / 客户端断连导致的 ctx 取消(login-dev.yaml grpc timeout 15s),那时
+// 这三步全部立刻失败,只剩日志,不确定态原样留在库里。改用 plog.Detach 派生脱离取消、
+// 不携带请求 transport 的 ctx(CLAUDE.md §16.7 指定的 helper),并加独立有界超时。
 func (u *LoginUsecase) reconcileFailedSessionWrite(
 	ctx context.Context, playerID uint64, sessJTI string, sessGen uint64, lease data.SessionGenerationLease,
 ) {
 	h := plog.With(ctx)
+	ctx, cancel := context.WithTimeout(plog.Detach(ctx), sessionReconcileTimeout)
+	defer cancel()
+	if lease.SnapshotUnknown {
+		// 覆盖前状态不可知(代际来自不确定 COMMIT 的读回判定)→ 回补两条路都会错误复活
+		// 旧凭据,只能条件墓碑:两侧一致拒绝所有陈旧 jti。
+		u.tombstoneFailedSessionGeneration(ctx, playerID, sessJTI, sessGen, nil)
+		return
+	}
 	deleted, derr := u.sessions.DeleteIfJTI(ctx, playerID, sessJTI)
 	if derr != nil {
 		// ② 不可证明 → 墓碑 fail-closed,不制造「Redis 新 / MySQL 旧」撕裂。
-		tombstoned, terr := u.sessionGen.TombstoneSessionJTI(ctx, playerID, sessJTI)
-		if terr != nil {
-			h.Errorw("msg", "session_write_reconcile_tombstone_failed",
-				"player_id", playerID, "gen", sessGen, "err", terr, "redis_err", derr,
-				"hint", "两存储状态不可证明且墓碑失败;下一次成功登录会原子推进两存储自愈")
-			return
-		}
-		h.Errorw("msg", "session_write_reconcile_unknown_tombstoned",
-			"player_id", playerID, "gen", sessGen, "tombstoned", tombstoned, "err", derr,
-			"hint", "Redis 提交与否不可证明 → 墓碑代际行 fail-closed,旧凭据一律失效")
+		u.tombstoneFailedSessionGeneration(ctx, playerID, sessJTI, sessGen, derr)
 		return
 	}
 	if deleted {
@@ -1384,6 +1394,68 @@ func (u *LoginUsecase) reconcileFailedSessionWrite(
 		h.Infow("msg", "session_generation_restore_noop",
 			"player_id", playerID, "gen", sessGen)
 	}
+}
+
+// sessionReconcileTimeout 是跨存储补偿链的独立预算(脱离请求 ctx 后必须自带上界,
+// 否则补偿会变成无界后台调用)。三步条件写都是单语句 CAS,5s 足够且远小于会话 TTL。
+const sessionReconcileTimeout = 5 * time.Second
+
+// tombstoneFailedSessionGeneration 条件墓碑本次代际行:只命中仍持有本次 jti 的行,
+// 并发新登录已轮换则 no-op(不毒化新会话)。redisErr 仅用于日志区分触发原因。
+func (u *LoginUsecase) tombstoneFailedSessionGeneration(
+	ctx context.Context, playerID uint64, sessJTI string, sessGen uint64, redisErr error,
+) {
+	h := plog.With(ctx)
+	tombstoned, terr := u.sessionGen.TombstoneSessionJTI(ctx, playerID, sessJTI)
+	if terr != nil {
+		h.Errorw("msg", "session_write_reconcile_tombstone_failed",
+			"player_id", playerID, "gen", sessGen, "err", terr, "redis_err", redisErr,
+			"hint", "两存储状态不可证明且墓碑失败;下一次成功登录会原子推进两存储自愈")
+		return
+	}
+	h.Errorw("msg", "session_write_reconcile_unknown_tombstoned",
+		"player_id", playerID, "gen", sessGen, "tombstoned", tombstoned, "err", redisErr,
+		"hint", "两存储一致性不可证明 → 墓碑代际行 fail-closed,旧凭据一律失效")
+}
+
+// resolveAmbiguousSessionGeneration 判定「COMMIT 结果不确定」(R11 复审 P0-1 问题 A)。
+//
+// 本次 jti 是全局唯一的一次性标记,因此读回权威行即可把不确定态判成事实,三种结果:
+//
+//	① 行内 jti == 本次 jti → COMMIT **确实生效**。返回成功继续登录:随后 Redis 条件写
+//	   与凭据交付照常进行,两存储收敛到同一代际、该 jti 被真正交付。这条路径同时消灭了
+//	   审核列出的三种禁止终态(两存储不同代 / 未交付 JTI 成为当前代 / 旧凭据复活)。
+//	   代价:覆盖前快照不可信(随失败事务丢失),故标记 SnapshotUnknown,后续补偿只准墓碑。
+//	② 行不存在,或 jti 已不是本次 → 本次写没落地,或已被更高代际的登录取代(定序输家)。
+//	   直接失败,零补偿:行属于赢家,任何回补/墓碑都会破坏别人的登录。
+//	③ 读回本身失败 → 仍不可判定。条件墓碑(命中则两侧一致拒绝所有旧凭据,未命中即 no-op)
+//	   后 fail-closed 失败本次登录,不留「MySQL 领先且无人可用」的静默态。
+func (u *LoginUsecase) resolveAmbiguousSessionGeneration(
+	ctx context.Context, playerID uint64, sessJTI string, lease data.SessionGenerationLease,
+) (data.SessionGenerationLease, error) {
+	h := plog.With(ctx)
+	// 判定读与补偿都不能跑在可能已取消的请求 ctx 上(同问题 B)。
+	probeCtx, cancel := context.WithTimeout(plog.Detach(ctx), sessionReconcileTimeout)
+	defer cancel()
+
+	currentJTI, generation, found, err := u.sessionGen.LoadSessionGeneration(probeCtx, playerID)
+	if err != nil {
+		h.Errorw("msg", "session_generation_commit_unresolved", "player_id", playerID, "err", err,
+			"hint", "COMMIT 结果不确定且读回失败 → 条件墓碑后 fail-closed")
+		u.tombstoneFailedSessionGeneration(probeCtx, playerID, sessJTI, lease.Generation, err)
+		return data.SessionGenerationLease{}, errcode.NewCause(errcode.ErrUnavailable, err,
+			"session generation commit result unresolved; login rejected")
+	}
+	if !found || currentJTI != sessJTI {
+		h.Warnw("msg", "session_generation_commit_did_not_land", "player_id", playerID,
+			"found", found, "hint", "本次写未落地或已被更高代际登录取代;零补偿失败本次登录")
+		return data.SessionGenerationLease{}, errcode.New(errcode.ErrUnavailable,
+			"session generation commit did not land; retry login")
+	}
+	h.Warnw("msg", "session_generation_commit_ambiguous_confirmed_landed",
+		"player_id", playerID, "gen", generation,
+		"hint", "COMMIT 已生效(仅回包丢失) → 按成功继续,两存储收敛到本代际并交付凭据")
+	return data.SessionGenerationLease{Generation: generation, SnapshotUnknown: true}, nil
 }
 
 // fenceLoginDelivery 登录副作用交付终检(R5 复审 P0-5,INC-20260722-004):

@@ -1731,3 +1731,50 @@ R6 只读复审推翻上一条"P0 5/5 完成"的结论(上一条中"旧流零轮
   仅静态检查,**编译由用户执行**。**诚实边界**:P0-1/P0-2 保持现状待裁决;
   mail/leaderboard 无生产 .example 模板(超出本轮范围);
   **INC-20260722-004 保持未关闭**。新增文件未纳管,待用户提交。
+
+## 2026-07-25 R10 复审整改:P0-1/2/3/4/5 落码 + UE 进场前复核门(P0-6/7)
+
+- **P0-1 login 跨存储模糊回补(Go,已落码测试绿)**:`sessions.Set` 报错后旧实现用
+  `GetJTI` 读回判断,**读回本身失败时无条件回补 MySQL 旧 jti**——若 Redis 实际已提交,
+  就造出「Redis=新 jti / MySQL=旧 jti」跨存储撕裂(§9.22 禁止对不确定结果猜测)。
+  新增 `reconcileFailedSessionWrite`:① 先用按 jti 的 CAS 删 `DeleteIfJTI` 把
+  「Redis 到底提交没有」变成可判定——无错误返回即证明 Redis 不再持有本次 jti,
+  才做条件回补(保住 R9 P0-2 目的);② CAS 删本身失败 = 不可证明 → 改走
+  `TombstoneSessionJTI` 条件墓碑 fail-closed。回归:committed-but-errored 回滚后回补、
+  不可证明走墓碑不回补、墓碑失败不掩盖原始错误。
+- **P0-2 writerlease 长期无主可观测(Go,已落码)**:`Health()` 扩为 `HealthSnapshot`
+  (held/token/竞选失败/激活失败/degraded),hub_allocator HTTP 暴露 `/healthz/writer`
+  (degraded → 503)。**按 audit-residual A1 明确不接 K8s readiness**:失主副本是有意热备,
+  门成"必须是 writer"会让滚动升级死锁、全体无法当选时把写降级放大成整服零端点;
+  `main_test.go` 守护"不得把 /healthz/writer 接进 readinessProbe"。
+- **P0-3 标准生成链 hub 地址(工具,已落码契约测试绿)**:此前只有 login-prod.yaml.example
+  手写 headless 地址,**标准生成链仍产出 ClusterIP 短名**,生产实际配置绕过整条 round_robin
+  修复。新增 `Set-ProdLoginHubHeadlessAddr`(仅 -Prod 机械改写为
+  `dns:///hub-allocator-headless.pandora.svc.cluster.local:50021`);非 -Prod 保持短名
+  (同一产物 compose 共用,FQDN 在 compose 内不可解析)。契约测试双向断言。
+- **P0-4 继任 sweep 接流前硬门 + assignment 持久 fencing(Go,已落码测试绿)**:
+  ① `writerlease.Config.OnElected` 激活钩子——当选后、**宣告持有领导权之前**必须跑成功
+  `AdvanceWriterFencesForToken`,失败即让位重选,消除"已接写、继任推扫未完成"窗口;
+  ② 归属记录内嵌 `HubAssignmentStorageRecord.writer_token`(allocator.proto 31,additive):
+  同一 key 的 WATCH/MULTI/EXEC 天然原子,`current.writer_token > 本届 token` → 零写入拒绝,
+  被继任的旧写者**既不能覆盖也不能删除**继任者写的归属;0 = 旧记录/未启用,双向兼容。
+- **P0-5 首次 writerlease 引导升级(Go+文档,已落码;集群演练待跑)**:新增
+  `hub.writer_lease_mode`(enforce 默认 / warmup 只竞选观测 / off),rollout §5.4 三跳发布合约。
+  **照实说明边界**:旧二进制既不竞选也不读 fence 键,"零写暂停"与"零双写"原理上不可兼得;
+  §5.4 选零双写,每跳窗口 = 一次 Pod 重启(等于迁移前基线),第三跳换 RollingUpdate 后进稳态。
+- **P0-6/P0-7 UE 进场前会话复核门(静态改动,编译由用户执行)**:把既有复核从
+  "spawn 之后补检"前移为"spawn 的前置条件"——**确证前不存在可操作 Pawn**。
+  Hub:`TryOpenAdmissionSpawnGate` 改为先 `StartPreOpenAdmissionRecheck`,确证通过才
+  `FinishOpenAdmissionSpawnGate`;Battle:新增 `SessionRecheckSpawnGate`,`PostLogin` 在
+  `Super::PostLogin` 前入门,starting flow 与 spawn 工厂两道门拦截,确证后
+  `OpenSessionRecheckSpawnGate` 补做唯一一次 starting flow。原 `PostSpawn*` 符号整体更名
+  `Entry*`/`PreOpen*`(语义已变)。**§9.19/20 不卡死自证**:每条终局路径要么开门要么 Kick
+  (含"非会话语义的定性拒绝也开门"、无挂账/无后端子系统直接开门),未知有界重试,耗尽 fail-closed。
+- **P1 proto 生成物漂移**:`match.pb.go` 仍带旧"10 人"描述 → 跑 `proto_gen.ps1` 重生全量 go pb
+  (含本轮新增 hub `writer_token`)。
+- **验证**:go.work 全 31 个 module `go build` + `go test` 绿;
+  `gen_cluster_prod_progress_contract_test.ps1` PASS。**未跑**:UE 编译(仓库规定由用户执行)、
+  §23 验收矩阵与故障注入、集群冒烟(headless LB 分发 / writerlease 三跳演练)。
+- **诚实边界**:P0-6/7 只是窄版屏障,§9.22 的 PENDING→ADMITTED 全量屏障仍属阶段 B/D;
+  复核返回与开门之间仍有进程内 check-then-act 窗口(窗口内无可操作 Pawn)。
+  未过 UE 编译与集群验收前,**不得声称这些 P0 已关闭**。

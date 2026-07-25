@@ -66,7 +66,7 @@ P0 不能仅凭“代码已改”“普通单测通过”或“服务重新 Read
 
 | Incident ID | 日期 | 严重级别 | 类型 | 状态 | 服务/主题 | 文档 |
 |---|---|---|---|---|---|---|
-| INC-20260724-001 | 2026-07-24 | P0 | availability | 根因确认 | 战斗中退出后进不去：直接根因=战斗 DS 分配不可用（battle fleet churn 至 ready=0 + k8s/Agones 控制面超时，主因系本人反复删重建 battle DS），叠加客户端恢复循环重复发 StartMatch（4002 自撞）+ 玩家等 DS 期间被 liveness 判离线葬送在途 match；原"孤儿 start-claim"假设已被日志推翻 | [事故报告](2026-07-24-p0-matchmaker-orphan-start-claim-freeze.md) |
+| INC-20260724-001 | 2026-07-24 | P0 | availability | 修复实施中(未关闭) | 战斗中退出后进不去：DS 分配不可用（fleet churn 至 ready=0 + 控制面超时）叠加 matchmaker 成局最终门 **结构性 100% 假阳性**（MATCHING 投影零保活，30s TTL 后必然全员误判离线；实测 31.07s 判死）+ ALLOCATING 期玩家无出口；已落码 FIX-1（两道 presence 判死门回退关闭）+ FIX-2（pre-checkpoint 取消出口），单测绿、真集群未验证。原"孤儿 start-claim"与"travel churn 致 presence 失效"两假设均被推翻 | [事故报告](2026-07-24-p0-matchmaker-orphan-start-claim-freeze.md) |
 | INC-20260722-004 | 2026-07-22 | P0 | security / session-fencing / near-miss | 修复实施中(未关闭) | push 旧/被顶号会话 token 仍能订阅私有推送流(建流无 jti 现行性校验,流寿命无界) | [事故报告](2026-07-22-p0-push-stale-session-subscribe.md) |
 | INC-20260722-003 | 2026-07-22 | P0 | data / near-miss | 修复实施中(未关闭) | inventory Bag journal sweep 可删除 checkpoint 未覆盖的恢复尾部 | [事故报告](2026-07-22-p0-inventory-bag-journal-sweep.md) |
 | INC-20260722-002 | 2026-07-22 | P0 | split-brain / near-miss | 修复实施中(未关闭) | hub_allocator 在 locator UNKNOWN/key miss 时继续切线，Owner Authority 尚未全链路接线 | [事故报告](2026-07-22-p0-hub-allocator-locator-fail-open.md) |

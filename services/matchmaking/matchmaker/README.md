@@ -192,8 +192,12 @@ Kafka 不可用时 match 滞留 active,`advanceAllocationsOnce` 每 tick 幂等�
   状态——仍排队则 CAS 条件删票 + 释放全体归属;已被撮合进 match 则等价于**拒绝确认**(走第 4 步失败流程)。
   用 `DeleteTicketIfUnmatched`(WATCH CAS)防"读到未撮合就盲删"撞上并发 `ReserveTicket`(会导致同人两场)。
 - `ReleaseMatch`(`match.go:1037`):battle_result 结算落库后调用,**主动彻底释放**本局 claim + 票据 +
-  match 镜像,玩家回 Hub 即可立刻再匹配(否则要等 TTL 30min 自然过期,期间再匹配被 SETNX 撞残留 claim
-  报 `ErrMatchAlreadyMatching`)。幂等,重复 / 已释放均返回 OK。
+  match 镜像,玩家回 Hub 即可立刻再匹配。幂等,重复 / 已释放均返回 OK。
+  ⚠️ **这是唯一释放点,不会自愈**:claim / 票据 / match 在非终态下是**无 TTL 的持久状态**
+  (`MatchRepo.ClaimPlayer` 契约:「网络断开或进程停机绝不能靠 TTL 暗中释放玩家」;`ticket_ttl` /
+  `match_ttl` 只在显式终态后用于留存)。`ReleaseMatch` 没跑成功,玩家会**永久**卡在
+  `ErrMatchAlreadyMatching`(4002),不是"等 30 分钟就好"——所以失败必须由 battle_result outbox
+  持续重试到成功。
 
 ## 为什么点匹配不是马上返回「匹配成功」
 
@@ -258,7 +262,7 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
 | `team_size` | `5` | 一方人数(`need = 2 × team_size`);钳到 `[1, MaxLevelTeamSize]` 防 OOM/panic。副本可经关卡表 `team_size` 覆盖 |
 | `confirm_timeout` | `15s` | 确认期时长 |
 | `match_interval` | `2s` | 后台撮合循环扫描间隔 |
-| `ticket_ttl` / `match_ttl` | `30min` | 票据 / match Redis key TTL(防僵尸) |
+| `ticket_ttl` / `match_ttl` | `30min` | **仅显式终态后的留存时长**;非终态的票据 / claim / match 是无 TTL 的持久状态,只能被显式取消 / 失败 / `ReleaseMatch` 释放 |
 | `mmr_base_window` | `200` | 初始 MMR 窗口半宽 |
 | `mmr_widen_per_sec` | `20` | 每等待 1s 窗口放宽量 |
 | `mmr_max_window` | `2000` | 窗口放宽上限 |
@@ -267,13 +271,52 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
 | `game_mode` | `5v5_ranked` | 撮合池命名空间 + 透传 ds_allocator(PVE 实例为 `pve_coop`) |
 | `optimistic_retry` | `3` | WATCH/MULTI/EXEC 乐观锁重试次数 |
 | `battle_gate_fail_open` | `false` | locator 查询失败时是否放行入队(生产必须 false) |
-| `liveness_gate_enabled` | `false` | 是否启用在线保活两道离线门(需 Hub DS 先上报 `player_ids`) |
+| `liveness_gate_enabled` | `false` | 是否启用在线保活两道离线门。**INC-20260724-001 后全部实跑配置已回退为 `false`,重开前置见下方《成局最终门的证据契约》** |
 | `walk_in` | `false` | 「即时开局 / walk-in」分叉:PVP=false 走撮合;**PVE 实例=true**(单人/整队直进副本,见「PVE 实例」节)。旧键 `enable_solo_match` 仍兼容读取(OR 并入)并打废弃 Warn |
 | `auto_confirm_match` | `false` | 撮合(versus)路径跳过确认期:默认 false 保留真实确认;dev/压测设 true。与 walk-in 无关 |
 | `leader.enabled` | `false` | 撮合循环单写者选举(多副本必开) |
 
 **信任域隔离**(`Validate` 强校验):`match_resume_auth_secret`(Login 恢复读)、`allocation_abort_auth_secret`
 (割当补偿)、玩家 JWT `secret` 三者密钥**必须互不相同**,否则启动拒绝。
+
+## 成局最终门的证据契约(INC-20260724-001)
+
+`liveness_gate_enabled` 控制的两道门——成局最终门 `findOfflineMembers` 与队列扫除
+`livenessSweepOnce`——**当前一律关闭**,因为它们赖以判死的证据对目标人群结构性失效。
+
+**为什么必须关(机械证明,非经验判断)**
+
+| 环节 | 事实 | 位置 |
+|---|---|---|
+| MATCHING 投影唯一写者 | matchmaker `notifyMatching`,成局那一刻写一次,TTL 30s | `internal/biz/match.go` |
+| Hub DS 心跳续期 | **只对 `state==3`(HUB) 续期**,MATCHING(=4) 直接 `continue` | `player_locator/internal/data/location.go:241` |
+| Hub DS 改写回 HUB | 被 `guardTransition` 拒(`ErrLocatorConflict`) | `player_locator/internal/biz/locator.go:224-229` |
+| MATCHING 释放通道 | **不存在** | 全仓 grep 无释放点 |
+
+⇒ 成局最终门查询的正是「已成局 match 的成员」(MATCHING 态):**30s 内零真阳性,30s 后全假阳性**。
+本事故实测 `solo_match_found → 判死 = 31.07s`(30s TTL + 一个 2s tick),与玩家是否在线无关。
+连带:MATCHING key 过期后 `RefreshHubLocations` 只 `EXPIRE` 不创建,记录无法重建,
+该玩家此后恒判离线,再排队的票据也会被队列扫除误删 —— **故两道门必须一起关**。
+
+**重开前置(缺一不可)**
+
+1. MATCHING 投影具备**创建 / 续期 / 释放**完整三段闭环(注意:放开续期而不补释放,会让匹配失败的
+   玩家 presence 被 Hub 心跳无限续成 MATCHING、永远回不到 HUB,那是更严重的 §9.20 级卡死);
+2. 判死证据改用**权威信号**而非 presence(§9.22:key miss 只说明 presence 不可见,不能单独证明
+   玩家已离开,更不得冒充 `OFFLINE`);
+3. 具备可秒级回滚的开关与 blanket-false 护栏(证据源整体失效时不得一次性判死全部对局)。
+
+**关闭后的残余覆盖缺口(诚实登记,不得宣称无损)**
+
+- 放弃「不给残局白拉 DS」的意图:每个残局多浪费一次分配。兜底 = PVP `confirm_timeout` 淘汰不响应者、
+  ds_allocator 15s 心跳 abandoned 回收(§9.4);单人 PVE 无第三方受害者。
+- 掉线者死票留在队列会被凑局,其余成员多吃一轮 FAILED(票据退回队列,保留排队时长)。
+
+**配套的玩家出口**:关门后 ALLOCATING 阶段不再有任何自动终止路径,故 `ConfirmMatch` 增加了
+**pre-checkpoint 取消**(仅 `BattleTarget==nil` 且 phase∈{PENDING,REQUESTING} 允许 reject,
+走既有 `failMatch` 无过错退票;ABORTING / 已 checkpoint / READY / 未知阶段一律 fail-closed)。
+两者**必须同批存在**,只关门不补出口 = 把误杀换成永久卡死。
+post-checkpoint 的 ALLOCATING 停滞仍无界,属已登记剩余风险(事故档 §10 A9)。
 
 ## 本地启动
 

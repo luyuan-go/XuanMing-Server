@@ -192,7 +192,7 @@ Heartbeat(hub_pod_name, player_count, player_ids, state, ...)
 ```
 RunHeartbeatSweep (每 5s)
 ├─ sweepStaleOwnerAdmitted       清 census 准入缓存死实例项(内存卫生,写者门控之前无条件执行)
-├─ [writerFence] 非写者副本跳 tick;当选后 AdvanceWriterFences 一次性推扫全 pod fence 水位
+├─ [writerFence] 非写者副本跳 tick;AdvanceWriterFences 仅作再断言(推扫已前移为接流前硬门)
 ├─ reconcileOwnerCleanups        崩溃恢复:补跑 index-first transfer/release cleanup saga
 ├─ reconcileShardTopology        Fleet 发现对账:播种/清理分片镜像,同步令牌代际
 ├─ sweepOnce                     ★ last_heartbeat_ms 超阈值的分片 → 标 draining + 移出 active
@@ -202,6 +202,14 @@ RunHeartbeatSweep (每 5s)
 - **单写者**:多副本经 etcd `writerlease` 选举(`hub_allocator/writer`),仅当选副本可写;存储级最终防线是
   `data/writer_fence.go` 的同事务单调 fencing token 比较,迟到旧写者零写入(R9 P0-7,
   [`session-generation-rollout.md`](../../../docs/design/session-generation-rollout.md) §5)。
+  R10 复审 P0-4 起再收紧两处:①**接流前硬门**——当选后必须先跑成功
+  `AdvanceWriterFencesForToken`(`writerlease.Config.OnElected`)才宣告持有领导权,消除
+  "已接写、继任推扫未完成"窗口;②**每玩家持久水位**——归属记录携带 `writer_token`
+  (`allocator.proto` 31),被继任的旧写者既不能覆盖也不能删除继任者写的归属。
+- **档位与首次引导升级**:`hub.writer_lease_mode`(`enforce` 默认 / `warmup` 只竞选观测 /
+  `off` 仅历史 Recreate 部署);从不含 writerlease 的旧镜像首次升级必须按 rollout §5.4 三跳执行。
+- **长期无主观测**:HTTP 端口 `/healthz/writer` 输出 held/token/竞选与激活失败计数/`degraded`
+  (**故意不接 readiness**,失主副本是热备;理由见 `internal/server/http.go`)。
 - `sweepOnce` 只标从未心跳过的 mock 种子分片(score=0)之外的**真正超时**分片,避免误标(不变量 §4)。
 
 ### 5. TransferToLine —— 玩家主动切线

@@ -50,7 +50,16 @@ var (
 
 	fleetUsageRatioGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pandora_ds_allocator_fleet_usage_ratio",
-		Help: "战斗 DS Fleet 容量占用比 allocated/replicas(0~1;replicas=0 时置 1)",
+		Help: "战斗 DS Fleet 容量占用比 allocated/replicas(0~1;replicas=0 时置 1,有意不配容量的 canary 置 0)",
+	}, []string{"fleet"})
+
+	// fleetDesiredGauge 暴露 spec.replicas(期望副本数),供 Grafana 把「有意缩到 0 的 canary」
+	// 从 ready==0 的 critical 规则里排除(INC-20260724-001 降噪)。
+	// 只在解码到 spec.replicas 时才 Set —— 没解码到就不写,让告警规则退化为原判据继续告警,
+	// 而不是被一个默认 0 值静默(§9.22:不得把 UNKNOWN 冒充成确定值)。
+	fleetDesiredGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "pandora_ds_allocator_fleet_desired_replicas",
+		Help: "战斗 DS Fleet 期望副本数(Fleet spec.replicas;未解码到时不上报该序列)",
 	}, []string{"fleet"})
 )
 
@@ -59,6 +68,7 @@ func init() {
 	metrics.Register(fleetReadyGauge)
 	metrics.Register(fleetAllocatedGauge)
 	metrics.Register(fleetUsageRatioGauge)
+	metrics.Register(fleetDesiredGauge)
 }
 
 // FleetCapacityLister 由 data.AgonesGameServerAllocator 实现(GET Fleet status)。
@@ -147,10 +157,14 @@ func (w *CapacityWatcher) pollOnce(ctx context.Context) {
 		fleetReadyGauge.WithLabelValues(c.Fleet).Set(float64(c.Ready))
 		fleetAllocatedGauge.WithLabelValues(c.Fleet).Set(float64(c.Allocated))
 		fleetUsageRatioGauge.WithLabelValues(c.Fleet).Set(ratio)
+		if c.DesiredKnown {
+			fleetDesiredGauge.WithLabelValues(c.Fleet).Set(float64(c.Desired))
+		}
 
 		kv := []any{
 			"fleet", c.Fleet, "replicas", c.Replicas, "ready", c.Ready,
 			"allocated", c.Allocated, "usage_ratio", ratio, "warn_ratio", w.warnRatio,
+			"desired", c.Desired, "desired_known", c.DesiredKnown, "canary", c.Canary,
 		}
 		switch w.observe(c) {
 		case eventExhausted:
@@ -204,7 +218,21 @@ func (w *CapacityWatcher) observe(c data.FleetCapacity) string {
 }
 
 // levelFor 计算水位档:ready==0 = 打满(exhausted);占用比 ≥ warnRatio = 接近上限(warn)。
+//
+// INC-20260724-001 降噪:**未做金丝雀发布时 canary Fleet 常态 desired=0**,
+// 旧逻辑 ready==0 先于一切判定 ⇒ 恒判 exhausted,每 5m 一条 Error + Grafana critical 长期
+// firing,把真实的 stable ready=0 信号淹没(事故当天 13:12:38 那条极可能就被当噪音略过)。
+// 故:仅当**确定**知道 desired==0 且该 Fleet 属 canary 轨时,才认定"本就没配容量"而静默。
+//
+// 两条刻意的保守边界(防止把真问题也静音):
+//   - DesiredKnown==false(没解码到 spec.replicas)→ 维持旧行为照常判 exhausted。
+//     不确定不得冒充"已知为 0"(§9.22)。
+//   - stable 轨 desired==0(运维/脚本误把 stable 缩到 0)→ **照常 exhausted 告警**。
+//     那确实会让新对局分配必失败,是真问题,不能因为"是故意缩的"就不报。
 func levelFor(c data.FleetCapacity, warnRatio float64) capacityLevel {
+	if deliberatelyUnprovisioned(c) {
+		return capacityOK
+	}
 	if c.Ready == 0 {
 		return capacityExhausted
 	}
@@ -214,9 +242,20 @@ func levelFor(c data.FleetCapacity, warnRatio float64) capacityLevel {
 	return capacityOK
 }
 
+// deliberatelyUnprovisioned:该 Fleet 是「有意不配容量」而非「被负载打满」。
+// 当前只认 canary 轨 desired==0 这一种(见 levelFor 注释里的两条保守边界)。
+func deliberatelyUnprovisioned(c data.FleetCapacity) bool {
+	return c.Canary && c.DesiredKnown && c.Desired == 0
+}
+
 // usageRatio = allocated/replicas;replicas==0(Fleet 缩到 0)按 1.0 计(零容量即满)。
+// 例外:有意不配容量的 canary(desired==0)按 0 计 —— 它没有"占用比"可言,
+// 记 1.0 会让 Grafana 面板上一条常态空跑的 canary 永远顶在 100%。
 func usageRatio(c data.FleetCapacity) float64 {
 	if c.Replicas == 0 {
+		if deliberatelyUnprovisioned(c) {
+			return 0
+		}
 		return 1.0
 	}
 	return float64(c.Allocated) / float64(c.Replicas)

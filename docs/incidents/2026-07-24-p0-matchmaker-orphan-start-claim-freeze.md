@@ -1,6 +1,6 @@
 # [INC-20260724-001][P0] 战斗中退出后回不到战斗、又匹配不了（matchmaker start-claim 疑似孤儿）
 
-> **状态**：根因确认（2026-07-24，基于 matchmaker-pve / ds_allocator 服务端日志；见 §0 更正与 §5.1。原始"孤儿 start-claim"主假设已被证据推翻，按事故纪律保留原文并标注更正）
+> **状态**：根因确认 / 修复实施中（未关闭）。2026-07-24 基于 matchmaker-pve / ds_allocator 服务端日志确认根因；同日完成代码级机械证明（见 §5.1 更正二）并落码 FIX-1 + FIX-2（服务端，本机单测绿、未在真集群验证）。原始"孤儿 start-claim"主假设与"travel churn 致 presence 失效"归因**均已被证据推翻**，按事故纪律保留原文并标注更正。
 > **类型**：`availability`（no-freeze 红线，违反 §9.19 / §9.20 / §9.23）
 > **环境**：本机 k8s（测试，集群 192.168.2.28，namespace `pandora`）
 > **首次发生时间（UTC）**：2026-07-24 13:14:04（首个 4002；真实卡死起点可能更早，见时间线）
@@ -194,6 +194,35 @@ battle 结算 / abandoned 补偿
 
 结构性隐患（本次未触发但仍需治理）：非终态 start-claim 只能 saga 显式清、不随 TTL 自愈，若某条退局路径漏调 `ReleaseMatch`，会构成真正的无限期 4002 卡死——单列为 §10 行动项 A2。
 
+---
+
+#### 更正二（2026-07-24，代码级机械证明，推翻上面第 3 条的归因）
+
+上面第 3 条把 liveness 判死归因为「客户端在 travel/恢复循环里被判离线」。**该归因错误**：travel churn 只是放大器，**不是必要条件**。本门对「已成局 match 的成员」这一人群**结构上不可能判对**，机械证明（全部经本人逐行核对 HEAD 代码）：
+
+1. MATCHING 投影的**唯一写者**是 matchmaker 自己的 `notifyMatching`，只在成局那一刻写一次，TTL 30s（`match.go:329-336`）。
+2. Hub DS 心跳捎带 `player_ids` 的续期链**显式只认 HUB 态**：`int32(state) != 3 /* LOCATION_STATE_HUB */ || podStr != hubPod { continue }`（`services/runtime/player_locator/internal/data/location.go:241`）。而 MATCHING 是 `LocationStateMatching = 4`（`biz/locator.go:45`）⇒ **MATCHING 记录永不续期**。
+3. Hub DS 想把它改写回 HUB 也被拒：`case LocationStateMatching: if in.State == LocationStateHub → ErrLocatorConflict`（`biz/locator.go:224-229`）。
+4. locator 侧**没有任何 MATCHING 释放通道**（全仓 grep `LocationStateMatching` 只有写入与守卫，无释放）。
+
+⇒ **成局后 30s 内查不到任何缺席（零真阳性）；超过 30s 后必然全员缺席（全假阳性）。** 与玩家是否真的在线、是否在 travel 完全无关——玩家静止不动坐在主城也必被判死。
+
+事故算术精确闭合：`13:14:11.347 solo_match_found` → `13:14:42.417 match_liveness_failed` = **31.07s = 30s locator TTL + 一个 2s 撮合 tick**。
+
+**第二受害面（同一缺陷的连带）**：MATCHING key 到期消失后，`RefreshHubLocations` 只 `EXPIRE` 不创建（`data/location.go:245`）⇒ locator 记录无法重建，该玩家此后对两道门恒判离线，连「匹配失败后重新排队」的新票据也会被 `livenessSweepOnce` 在 ≤10s 内误删。**故两道门必须一起关。**
+
+**代码注释早已预言本事故**：`internal/conf/conf.go:83-86` 原文——「两道门把『locator 无 HUB 位置记录』判为离线……UE Hub DS 生产端尚未上报该字段前开启，**会把全部在线玩家在 locator TTL（30s）后误判离线、扫掉排队票据**。**必须等 Hub DS 侧联发后才可开启**」。代码默认值是 `false`，而实跑 yaml 被设成 `true`。2026-07-08 的实机验证覆盖的是 **HUB 态**续期链（对排队玩家有效），**不覆盖成局最终门查询的 MATCHING 态成员**。
+
+#### N2（本档原未记录的既有冻结路径，与本次修复强耦合）
+
+**ALLOCATING 期玩家无法取消**，且该阶段无任何自动终态：
+
+- `ConfirmMatch` 对 `stageAllocating` 的 reject 直接 `ErrInvalidState`（`match.go:1230-1233`，修复前）；`CancelMatch → rejectOrReapOrphan`（`match.go:990-995`）只吞 `ErrMatchNotFound/ErrMatchDeclined`，`ErrInvalidState` 原样返回给玩家。
+- `expireOnce` 对 `stageAllocating` 显式 keepActive、绝不判失败（`match.go:2981-2985` 原文：「ALLOCATING 是 durable job。外部结果可能未知（尤其 allocation_uncertain），本地时间绝不能把未知推断成失败并重排」）。
+- 分配重试无最大次数、无阶段总时限。
+
+⇒ **liveness 误杀门是修复前唯一会终止 ALLOCATING 的路径。** 单独关闭它而不补出口，会把「31 秒被误杀」换成「永久卡死」，触碰 §9.20 与 AGENTS.md §10 红线。因此 FIX-1（关门）与 FIX-2（补出口）**必须同批**。
+
 ### 5.2 触发条件
 
 - 玩家在一局（单人 PVE 形态）**战斗中途退出**（切后台/杀进程/断线），使该局走向异常结束或结算。
@@ -251,9 +280,15 @@ battle 结算 / abandoned 补偿
 
 | 项目 | 状态 | 代码/配置 | 验证 |
 |---|---|---|---|
-| 定位退局未清 claim 的根因（phase 流水 + ReleaseMatch 调用/失败证据） | 待做 | — | — |
-| 补齐/加固退局→ReleaseMatch 的可靠触发或服务端兜底清理 | 待设计 | — | — |
+| 定位退局未清 claim 的根因（phase 流水 + ReleaseMatch 调用/失败证据） | **已完成**（证伪：无孤儿，见 §5.1 更正一/二） | — | 服务端日志 |
+| **FIX-1：两道 presence 判死门回退为关闭**（配置回落到 `conf.go` 代码默认值 `false`），并在两处门与配置注释写明机械原因与重开前置 | **已落码待部署验证** | `services/matchmaking/matchmaker/etc/matchmaker-{dev,pve}.yaml`、`matchmaker-prod.yaml.example`（纳管源头 3 份；`run/**` 共 8 份为 `.gitignore` 的生成副本，由 `gen_cluster_config.ps1` 从源头重生）；`internal/biz/match.go` 成局门与 `livenessSweepOnce` 注释 | V1-1 绿；V1-3/V1-4 未跑 |
+| **FIX-2：ALLOCATING 期 pre-checkpoint 取消出口**（仅 `BattleTarget==nil` 且 phase∈{PENDING,REQUESTING} 允许 reject，走既有 `failMatch` 无过错退票；ABORTING/已 checkpoint/READY/未知阶段一律 fail-closed） | **已落码待部署验证** | `internal/biz/match.go`：`ConfirmMatch` reject 分支 + 新增 `cancelableUncheckpointedAllocation` 守卫 | V2-1/V2-2/V2-3 绿（修复前 V2-1 实测失败）；`-race` **阻断** |
+| 补齐/加固退局→ReleaseMatch 的可靠触发或服务端兜底清理 | 已证伪，无需（A5 扫描：saga 链完整） | — | — |
 | 登录/owner 恢复链对 matchmaker 残留态的一致性核对（评估必要性） | 待设计 | — | — |
+| S1 客户端恢复循环（post-travel 身份保留 + ACK deadline + 句柄恢复） | 待落码（UE 侧，需用户编译） | — | — |
+| **FIX-5：sweep 队头公平性 + 单轮墙钟预算** —— 5 种「永久墓碑 / 靠重试收敛」状态在进入分支工作**之前**先 `TouchActive` 让出队头（顺序关键：ZAdd→工作→可能 ZRem，避免对账成功后被回插）；单轮预算取既有 `sweep_interval`，`processed>0` 保证每轮至少推进一项，超预算 break 并打 `allocation_sweep_round_budget_exhausted` | **已落码待部署验证** | `services/battle/ds_allocator/internal/biz/allocator.go`：`sweepOnce` + 新增 `stuckReconcileState` / `sweepRoundBudget` | V5-1 绿（5 个子例修复前全部实测失败）；`-race` **阻断** |
+| **FIX-6：容量告警去噪 + 5001 语义收窄** —— `FleetCapacity` 增 `Desired`/`DesiredKnown`/`Canary`（`spec.replicas` 用指针解码，区分「缺失」与「显式 0」）；仅 canary 轨 `DesiredKnown && Desired==0` 短路为 OK，**stable 缩到 0 照常 exhausted 告警**；新增 `pandora_ds_allocator_fleet_desired_replicas` gauge（未解码到就不上报该序列）；Grafana 用 `unless` 而非 `and`（gauge 缺失时退化为继续告警）；fleet 未配置由 5001 改 5002 | **已落码待部署验证** | `internal/data/agones_allocator.go`、`internal/biz/capacity.go`、`deploy/grafana/provisioning/alerting/rules.yaml` | V6 五例绿（2 例修复前实测失败）；V6-5/6-6/6-7 人工未跑 |
+| **FIX-7：运维纪律文档** —— 联调迭代 DS 镜像必须走 canary 轨、stable `ready` 不得为 0、禁止高频 delete 代替滚动更新 | **已落码** | `docs/design/agones-dev.md` §2.3「关键点与不变量」新增小节 | 文档 |
 
 ### 7.3 防复发规则
 
@@ -264,13 +299,33 @@ battle 结算 / abandoned 补偿
 
 | 验证 | 修复前结果 | 修复后结果 | 环境/命令 | 证据 |
 |---|---|---|---|---|
-| 针对性单测（退局后 claim 必被清 / 重入 StartMatch 不撞 4002） | 未建 | — | — | — |
-| 集成回归（战斗中退出→重登→匹配 E2E） | 未建 | — | — | — |
-| `go test -race` | 未跑 | — | — | — |
-| fatal/OOM/SIGKILL / battle pod 删除注入 | 未跑 | — | — | — |
-| 玩家 E2E（本次为手工触发，未脚本化） | 手工复现一次 | 重启后解卡 | 本机 k8s | 客户端日志 |
+| V1-1 `TestLivenessGate_DisabledByDefault_NoOfflineJudgement`（既有） | 绿 | **绿** | `go test ./internal/biz/` | 全量套件通过 |
+| V1-3 DS 池 ready=0 持续 ≥90s，日志不再出现 `match_liveness_failed` / `liveness_sweep_reaped_ticket` | 出现 | **未跑** | 故障注入（须按 §9.21 只降 replicas，禁止强杀 Allocated DS） | — |
+| V1-4 全量配置面 grep + 集群 ConfigMap 实测生效 | — | **未跑**（仅完成仓库内 grep：纳管 3 份已改，`run/**` 8 份待重生） | 人工 | 本档 §7.2 |
+| V2-1 `TestConfirmMatchRejectDuringUncheckpointedAllocatingCancels`（PENDING/REQUESTING 两子例） | **实测失败**（`errcode=12 ... cannot reject`，临时短路守卫复现） | **绿** | `go test ./internal/biz/ -run TestConfirmMatchReject` | `internal/biz/allocation_cancel_test.go` |
+| V2-2 `TestConfirmMatchRejectAfterCheckpointStillRejected`（守既有边界不被误伤） | 绿 | **绿** | 同上 | 同上 |
+| V2-2b `TestConfirmMatchRejectDuringAbortingOrUnknownPhaseRejected`（ABORTING/未知阶段 fail-closed） | 绿 | **绿** | 同上 | 同上 |
+| V2-3 `TestConfirmMatchCancelAndCheckpointAreMutuallyExclusive`（取消 vs checkpoint 只能一个赢、无撕裂态） | 绿 | **绿** | 同上 | 同上 |
+| `go build ./... && go vet ./...`（matchmaker） | 绿 | **绿** | — | — |
+| matchmaker 全量单测 | 绿 | **绿** | `go test ./... -count=1` | biz/conf/data/service/cmd 全 ok |
+| `go test -race` | 未跑 | **阻断**：本机 Windows 无 gcc，`-race` 需 CGO（`cgo: C compiler "gcc" not found`）。须在支持 CGO 的 Linux/CI 执行，**不得记为已验证**（§16.7） | — | — |
+| V5-1 `TestSweepDefersStuckReconcileStatesOffQueueHead`（5 种墓碑状态各一子例） | **实测失败**（5/5 子例，score 恒为 0 不让队头） | **绿** | `go test ./internal/biz/ -run TestSweep` | `ds_allocator/internal/biz/sweep_fairness_test.go` |
+| V5-1b `TestSweepDoesNotDeferAbandonedCompensation`（§9.4 补偿最后一棒不被退避） | 绿 | **绿** | 同上 | 同上 |
+| V5-2 `TestSweepRoundBudgetFromExistingInterval`（预算复用既有配置项，不新增） | 绿 | **绿** | 同上 | 同上 |
+| V6-1 `TestLevelForCanaryDesiredZeroIsQuiet` | **实测失败** | **绿** | `go test ./internal/biz/ -run TestLevelFor` | `capacity_desired_test.go` |
+| V6-2 `TestLevelForDesiredUnknownStillExhausted`（解码不到 spec 时保守告警） | 绿 | **绿** | 同上 | 同上 |
+| V6-3 `TestLevelForStableDesiredZeroStillExhausted`（stable 缩零不被静音） | 绿 | **绿** | 同上 | 同上 |
+| V6-3b `TestLevelForCanaryWithDesiredStillReportsExhausted`（canary 真跑金丝雀时打满照常告警） | 绿 | **绿** | 同上 | 同上 |
+| V6-5 `TestObserveCanaryDesiredZeroEmitsNoEvent`（连续多轮静默） | **实测失败** | **绿** | 同上 | 同上 |
+| ds_allocator 全量单测 + build + vet | 绿 | **绿** | `go test ./... -count=1` | 全 ok |
+| V6-6/V6-7 人工：canary 常态 0 副本 ≥10min 无 Error；用"压满"而非 scale 造 stable ready=0 确认 critical 正常触发；desired gauge 缺失时仍能 firing | 未跑 | **未跑** | 真集群 + Grafana | — |
+| V5-5 人工：反向代理让 K8s API 持续超时 ≥5min，观测 active ZSET 长度与 abandoned 补偿延迟分布 | 未跑 | **未跑** | 故障注入 | — |
+| 集成回归（战斗中退出→重登→匹配 E2E） | 未建 | **未跑** | — | — |
+| V2-5 E2E：DS 缺容 ≥60s，玩家点取消 → 立刻回到可点匹配 | 未跑（修复前不可取消） | **未跑** | 真集群人工 | — |
+| fatal/OOM/SIGKILL / battle pod 删除注入 | 未跑 | **未跑** | — | — |
+| 玩家 E2E（本次为手工触发，未脚本化） | 手工复现一次 | 重启后解卡（属临时止血，非修复验证） | 本机 k8s | 客户端日志 |
 
-未执行项保留，不删除。
+未执行项保留，不删除。**当前所有"绿"仅为本机单测/静态检查，未在真集群加载新产物验证，不构成事故关闭依据（§16.9）。**
 
 ## 9. 部署、回滚与观察
 
@@ -287,7 +342,12 @@ battle 结算 / abandoned 补偿
 |---|---|---|---|---|---|
 | A1 | P0 | 挖 matchmaker/ds_allocator 服务端日志定位根因 | 本人 | **已完成**（根因确认，见 §5.1） | 本 INC |
 | A2 | P0 | 客户端 `UMyDsRecoveryCoordinator`：DS 未就绪只应带 deadline/退避地**等待同一 operation**，不得重复发 StartMatch 新建 operation（4002 自撞）；不得在等待分配期间因 travel 循环把自己判成离线葬送在途 match（§9.19/§9.23 收敛） | 待指定 | 待做 | 本 INC |
-| A3 | P0 | matchmaker 成局最终门 liveness（`findOfflineMembers`，`liveness_gate_enabled=true`）**已确认误杀在途局**：玩家在 DS travel/恢复期 locator presence 短暂失效即被判离线、其 match 被 reap。需区分"真离线"与"travel 短暂不可见"（如宽限窗 / 结合 owner lease / 仅对真正长期离线判死），或在 DS 未就绪的成局阶段放宽此门。判死后清理已确认干净（`failMatch`） | 待指定 | 待做（根因已确认） | 本 INC |
+| A3 | P0 | matchmaker 成局最终门 liveness **已确认结构性 100% 假阳性**（非"偶发误判"，见 §5.1 更正二）。~~需区分"真离线"与"travel 短暂不可见"（宽限窗）~~ —— **该方向已否决**：缺席在本场景是时间的确定函数，重复采样不产生新信息，宽限窗只把误杀时刻从 T+30s 推到 T+30s+N，等于把门关掉却假装它开着（§14 空壳）。**已按 FIX-1 关闭两道门**（配置回落到代码默认值） | 本人 | **已落码待部署验证** | 本 INC |
+| A3b | P0 | N2：ALLOCATING 期玩家无出口（见 §5.1）。**已按 FIX-2 落码** pre-checkpoint 取消 | 本人 | **已落码待部署验证** | 本 INC |
+| A9 | P1 | **剩余风险：post-checkpoint 的 ALLOCATING 停滞仍无界**（已签票 / `notifyBattleStrict` / READY CAS / push 持续失败这一段，FIX-2 不覆盖）。不得因 FIX-2 落地就宣称 §9.20 已全量满足 | 待指定 | 待评估 | 本 INC |
+| A10 | P1 | **关门的已知代价（诚实登记，不得包装成无损）**：① 放弃"别给残局白拉 DS"的意图，每个残局多浪费一次分配（兜底：PVP `confirm_timeout=15s` 淘汰不响应者；单人 PVE 无第三方受害者；残局由 ds_allocator 15s 心跳 abandoned 回收，§9.4）；② 掉线者的死票会留在队列被凑局，其余成员多吃一轮 FAILED（票据退回队列、保留排队时长） | 待指定 | 已登记 | 本 INC |
+| A11 | P1 | **`-race` 在本机不可执行**（Windows 无 gcc / CGO），V2-3 并发用例须在支持 CGO 的 Linux/CI 补跑；未跑前不得声称并发正确性已验证（§16.7） | 待指定 | 阻断 | 本 INC |
+| A12 | P2 | 滚动升级窗口：`AllocationPhase==UNSPECIFIED` 的历史记录（若存在）在 FIX-2 下不可取消（fail-closed 保守拒绝，等于维持修复前行为）。当前两个写入点均设 PENDING，预期不产生此类记录，排空后自然消失 | 待指定 | 已登记 | 本 INC |
 | A4 | P1 | ds_allocator 对 k8s API/Agones 控制面超时的韧性：`allocation_uncertain_exact_release` 在 API 持续 `context deadline exceeded` 下卡 ~40s 的行为是否合理，是否需更快 fail + 明确回传 matchmaker 让其带退避重排 | 待指定 | 待评估 | 本 INC |
 | A5 | P1 | 结构性隐患：全仓扫描 `ReleaseMatch`/`CancelMatch` 调用点与失败分支，确认无退局路径漏调导致非终态 claim 永久残留（本次未触发但会造成无限期 4002） | 待指定 | 待做 | 本 INC |
 | A6 | P1 | 运维/容量纪律：测试/联调期间不得把 battle-stable fleet churn 到 ready=0，删/重建 DS 前确保有最小可分配副本，避免同时加压 k8s 控制面（本次主因） | 本人 | 待落规范 | 本 INC |

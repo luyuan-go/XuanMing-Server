@@ -18,9 +18,23 @@ package data
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
+
+// ErrCommitAmbiguous 标记「COMMIT 结果不确定」:MySQL 可能已经提交,但 Commit() 因连接
+// 中断 / 代理断链 / deadline 返回错误(R11 复审 P0-1 问题 A)。这是唯一必须与「确定没提交」
+// 区分开的失败:确定没提交时直接失败即一致,而不确定时若直接失败,MySQL 可能已经带着
+// 一个**从未交付给客户端的 jti** 推进了代际,把仍在线的上一代会话错误地 fence 出去。
+//
+// 调用方(biz)见到它必须用本次 jti 作唯一标记读回权威(LoadSessionGeneration)把不确定
+// 态**判定**掉,而不是猜。用 errors.Is 检出(errcode.NewCause 保留 Unwrap 链)。
+var ErrCommitAmbiguous = errors.New("session generation commit result unknown")
+
+// IsCommitAmbiguous 判定错误是否为「COMMIT 结果不确定」。
+func IsCommitAmbiguous(err error) bool { return errors.Is(err, ErrCommitAmbiguous) }
 
 // SessionGenerationLease 一次 PersistSessionJTI 的分配结果:本次代际 + 覆盖前的行
 // 状态快照。Redis 条件写失败(基础设施错误)时,Login 用它做条件回补
@@ -33,6 +47,12 @@ type SessionGenerationLease struct {
 	PrevJTI string
 	// HadPrev 覆盖前该玩家是否已有代际行(false=本次为首登插入)。
 	HadPrev bool
+	// SnapshotUnknown 表示本次代际是从「不确定的 COMMIT」读回确认的(R11 复审 P0-1):
+	// 代际与 jti 可信,但**覆盖前的行状态无从得知**(快照随失败的事务一起丢了)。
+	// 此时禁止条件回补(RestoreSessionJTI):回补要么错误复活上一代 jti、要么误删行让
+	// SetRole 走缺行兼容路径——两者都是审核明令禁止的「旧凭据错误复活」。
+	// 需要补偿时只能条件墓碑(TombstoneSessionJTI):两侧一致拒绝所有旧凭据,fail-closed。
+	SnapshotUnknown bool
 }
 
 // SessionGenerationRepo 持久化玩家当前会话代际(jti + 单调 generation)到 MySQL,
@@ -50,6 +70,12 @@ type SessionGenerationRepo interface {
 	// 返回是否实际回补。仅用于「MySQL 已提交、Redis 条件写基础设施失败」的补偿,
 	// 失败只记日志(下一次成功登录仍会原子推进两个存储自愈)。
 	RestoreSessionJTI(ctx context.Context, playerID uint64, failedJTI string, lease SessionGenerationLease) (bool, error)
+
+	// LoadSessionGeneration 读回玩家当前代际行(R11 复审 P0-1 问题 A 的判定读):
+	// PersistSessionJTI 返回 ErrCommitAmbiguous 时,调用方用本次 jti 作唯一标记读回,
+	// 把「到底提交没有」变成可判定事实。found=false = 无行(必然没提交,或已被并发登录
+	// 清理);jti != 本次 jti = 本次写没落地、或已被更高代际的登录取代。
+	LoadSessionGeneration(ctx context.Context, playerID uint64) (jti string, generation uint64, found bool, err error)
 
 	// TombstoneSessionJTI 登出墓碑(R8 收口,P2):仅当行内 sess_jti 仍等于本次登出
 	// 的 jti 时,把它推进一代并改写为哨兵值(永不命中真 jti)——登出后 MySQL 行
@@ -101,15 +127,41 @@ ON DUPLICATE KEY UPDATE generation = generation + 1, sess_jti = VALUES(sess_jti)
 		return SessionGenerationLease{}, errcode.New(errcode.ErrInternal, "mysql read session generation: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return SessionGenerationLease{}, errcode.New(errcode.ErrInternal, "commit session generation: %v", err)
+		// R11 复审 P0-1 问题 A:COMMIT 可能**已经生效**而只是回包丢了。不猜、不当成
+		// 「没提交」——标记为不确定交给 biz 用 jti 读回判定(见 ErrCommitAmbiguous)。
+		// 快照(PrevJTI/HadPrev)一并返回:若判定为已提交,后续补偿仍需要它。
+		return lease, errcode.NewCause(errcode.ErrInternal,
+			fmt.Errorf("%w: %v", ErrCommitAmbiguous, err), "commit session generation: %v", err)
 	}
 	return lease, nil
+}
+
+// LoadSessionGeneration 单语句读回当前行。用于把不确定的 COMMIT 判定成事实。
+func (r *MySQLSessionGenerationRepo) LoadSessionGeneration(ctx context.Context, playerID uint64) (string, uint64, bool, error) {
+	var jti string
+	var generation uint64
+	switch err := r.db.QueryRowContext(ctx,
+		`SELECT sess_jti, generation FROM player_session_generations WHERE player_id = ?`,
+		playerID).Scan(&jti, &generation); err {
+	case nil:
+		return jti, generation, true, nil
+	case sql.ErrNoRows:
+		return "", 0, false, nil
+	default:
+		return "", 0, false, errcode.New(errcode.ErrInternal, "mysql load session generation: %v", err)
+	}
 }
 
 // RestoreSessionJTI 单语句条件回补:行仍是本次登录写入的 (failedJTI, generation)
 // 才把 sess_jti 改回覆盖前的值(无旧行则删行);generation 不回退,单调性不破坏。
 // 并发新登录已推进代际时 WHERE 不命中 = no-op。
 func (r *MySQLSessionGenerationRepo) RestoreSessionJTI(ctx context.Context, playerID uint64, failedJTI string, lease SessionGenerationLease) (bool, error) {
+	if lease.SnapshotUnknown {
+		// R11 复审 P0-1:快照不可信时回补两条路都是错的(错误复活上一代 jti / 误删行)。
+		// 由调用方改走条件墓碑;这里 fail-closed 拒绝,防止将来有人误接。
+		return false, errcode.New(errcode.ErrInternal,
+			"session generation restore refused: pre-write snapshot unknown; tombstone instead")
+	}
 	var res sql.Result
 	var err error
 	if lease.HadPrev {

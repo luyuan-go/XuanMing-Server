@@ -73,14 +73,14 @@ groups:
           service: ds_allocator
         annotations:
           summary: '战斗 DS Fleet {{ $labels.fleet }} 无空闲副本(ready=0),新对局分配将失败'
-          description: '已触顶 FleetAutoscaler maxReplicas(25-fleetautoscaler-battle.yaml),立即调大;玩家匹配成功但可能进不了战斗'
+          description: '已触顶 FleetAutoscaler maxReplicas(25-fleetautoscaler-battle.yaml),立即调大;玩家匹配成功但可能进不了战斗。INC-20260724-001 降噪:desired(spec.replicas)==0 的 Fleet 被排除——未做金丝雀发布时 canary 常态 0 副本,旧规则让它长期 firing 淹没了 stable 的真实告警。用 unless 而非 and:若 allocator 未上报 desired 序列(旧版本/回滚),规则退化为原判据继续告警,不会被静默。多副本滚动期只要任一副本上报 desired==0 即排除该 fleet 全部序列。'
         data:
           - refId: A
             relativeTimeRange: { from: 120, to: 0 }
             datasourceUid: pandora-prometheus
             model:
               editorMode: code
-              expr: max by (fleet) (pandora_ds_allocator_fleet_ready)
+              expr: max by (fleet) (pandora_ds_allocator_fleet_ready) unless on (fleet) (max by (fleet) (pandora_ds_allocator_fleet_desired_replicas) == 0)
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200

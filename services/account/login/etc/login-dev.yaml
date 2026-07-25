@@ -130,12 +130,6 @@ login:
     auth_secret: "pandora-dev-match-resume-auth-key-v1!"
     auth_audience: "matchmaker:5v5_ranked"
 
-  # Battle→Hub physical departure authority. In placement enforce this must
-  # point at ds_allocator; Login first fences the old ticket in locator, then
-  # waits for an exact DS eviction/UID-teardown proof through this RPC.
-  battle_allocator:
-    addr: "127.0.0.1:50020"
-
 # UE DS → login.VerifyDSTicket 在线入场鉴权。默认 off/legacy，保留既有内部 Verify 行为；
 # 集群生成器在 Model B 激活产物里原子切成 enforce/redis，并注入与 assignment 相同的 fence。
 ds_auth:

@@ -2090,6 +2090,34 @@ func (u *AllocatorUsecase) RunHeartbeatSweep(ctx context.Context) {
 // legacy 天然上界靠 UpdateBattleKeepTTL(KEEPTTL)。Model B 则在任何外部 Release 前
 // 把 TERMINATING auth+battle 置为永久，只有 ReleaseExpected 与 lifecycle 投递都明确
 // 成功后才由 ExpireTerminatedExpected 恢复有界 TTL；未知结果宁可不可用也不丢 fence。
+// stuckReconcileState 列出「靠重试收敛、外部依赖不可用时会原地打转」的 sweep 状态。
+// 这些项在每轮被处理前先退避,让出队头,避免饿死队尾的 §9.4 abandoned 补偿
+// (INC-20260724-001)。
+//
+// 刻意**不含** stateAbandoned+epoch==0 的 resume 分支:那条本身就是 §9.4 补偿的最后一棒,
+// 让它保持最高优先级重试;它不产生外部 GSA POST,单次耗时也远小于上面几种。
+func stuckReconcileState(state string) bool {
+	switch state {
+	case stateAllocationUncertain, stateAllocationReconciling, stateAllocationEmptyFence,
+		statePreactiveReleasing, stateAllocationAbort:
+		return true
+	}
+	return false
+}
+
+// sweepRoundBudget 返回单轮 sweep 的墙钟预算。
+//
+// 上界口径(可断言):预算只在**开始下一项之前**检查,故单轮实际上界是
+// `SweepInterval + 单项最坏耗时`,不是 `SweepInterval`——单项最坏 ≈
+// LIST + getPod + DELETE + waitExpectedInstanceGone,各自受 allocate_timeout 约束。
+// 写清这一点是为了让验收断言写得出来,而不是放宽成无意义的"大概不会太久"。
+func (u *AllocatorUsecase) sweepRoundBudget() time.Duration {
+	if d := u.cfg.SweepInterval.Std(); d > 0 {
+		return d
+	}
+	return 5 * time.Second
+}
+
 func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 	if err := u.reconcileActiveIndexIfDue(ctx); err != nil {
 		return err
@@ -2099,7 +2127,21 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	roundStart := time.Now()
+	budget := u.sweepRoundBudget()
+	processed := 0
 	for _, mid := range stale {
+		// 单轮墙钟预算(INC-20260724-001):控制面持续超时时单项可耗时数十秒,
+		// 无预算的一轮会把下一 tick 直接叠上来,且队尾的 §9.4 abandoned 补偿被无限推后。
+		// processed > 0 保证每轮至少推进一项(预算再小也不会活锁);未处理项留在 active
+		// ZSET,下一 tick 继续(outbox 语义,进程重启即恢复)。
+		if processed > 0 && time.Since(roundStart) >= budget {
+			plog.With(ctx).Warnw("msg", "allocation_sweep_round_budget_exhausted",
+				"processed", processed, "deferred_to_next_tick", len(stale)-processed,
+				"budget", budget.String(), "elapsed_ms", time.Since(roundStart).Milliseconds())
+			break
+		}
+		processed++
 		// 先于 authority-mode 分支识别永久 fence：这样同版本但仍跑 legacy 配置的
 		// writer 也只读跳过，不能把 uncertain 改成 abandoned 后 Release/Delete。
 		inflight, found, readErr := u.repo.GetBattle(ctx, mid)
@@ -2107,6 +2149,24 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			plog.With(ctx).Warnw("msg", "allocation_sweep_read_failed",
 				"match_id", mid, "err", readErr)
 			continue
+		}
+		// sweep 公平性(INC-20260724-001):下面几种是「永久墓碑 / 靠重试收敛」状态,
+		// 外部依赖(k8s/Agones 控制面)持续不可用时它们永远收敛不了,而其 active ZSET
+		// score 不变 ⇒ 恒排在 RangeStaleBattles 的队头,串行吃掉整轮预算,把队尾
+		// abandoned 对局的 §9.4 补偿无限推后(事故当天控制面超时约 40s 期间正是此形态)。
+		// 故在进入分支工作**之前**先把 score 推到当前时刻(退避约一个 HeartbeatTimeout)。
+		//
+		// ⚠️ 顺序是正确性关键:ZAdd(退避)→ 对账工作 →(成功则)ZRem,最终态仍是「已移除」。
+		// 反过来在工作之后 TouchActive 会把刚被 RemoveActive 的项**重新插回** active 集合。
+		//
+		// 已知代价(诚实登记):削弱 RunHeartbeatSweep 开头「重启即扫」的意图 ——
+		// 上个进程刚退避过的项,重启后最多一个 HeartbeatTimeout 内不在结果集。
+		// 这些是永久墓碑不会消失,只是可见性延迟,不丢补偿。
+		if found && stuckReconcileState(inflight.GetState()) {
+			if terr := u.repo.TouchActive(ctx, mid, time.Now().UnixMilli()); terr != nil {
+				plog.With(ctx).Warnw("msg", "allocation_sweep_defer_failed",
+					"match_id", mid, "state", inflight.GetState(), "err", terr)
+			}
 		}
 		if found && (inflight.State == stateAllocationUncertain ||
 			inflight.State == stateAllocationReconciling) {

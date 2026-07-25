@@ -38,12 +38,21 @@ type fakeRepo struct {
 	setAssignErr error
 	// advanceFenceCalls 记录 AdvanceWriterFences 调用次数（继任者水位推扫测试用）。
 	advanceFenceCalls int
+	// advanceFenceTokens 记录接流前激活钩子传入的显式 token（R10 P0-4 硬门）。
+	advanceFenceTokens []uint64
 }
 
 func (f *fakeRepo) AdvanceWriterFences(_ context.Context) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.advanceFenceCalls++
+	return nil
+}
+
+func (f *fakeRepo) AdvanceWriterFencesForToken(_ context.Context, token uint64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.advanceFenceTokens = append(f.advanceFenceTokens, token)
 	return nil
 }
 

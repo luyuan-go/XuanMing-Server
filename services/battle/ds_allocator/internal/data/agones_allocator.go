@@ -542,7 +542,11 @@ func (a *AgonesGameServerAllocator) allocateOnceWithMetadata(
 		dedicatedFleet = a.mapFleets[mapID].canary
 	}
 	if generalFleet == "" {
-		return "", "", errcode.New(errcode.ErrDSNoAvailable,
+		// INC-20260724-001 L8:fleet 名未配置是**配置错误**,不是容量事实。
+		// 报 ErrDSNoAvailable(5001) 会把它混进"无空闲副本"的容量口径,让运维照着扩容排查。
+		// 上游 matchmaker 对 5001/5002 处理完全一致(都算确定性失败),故改码不影响行为,
+		// 只把语义归位。
+		return "", "", errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: no %s fleet configured", releaseTrack)
 	}
 	selectorLabels := func(fleet string) map[string]string {
@@ -929,10 +933,26 @@ type FleetCapacity struct {
 	Replicas  uint32 // status.replicas:当前总副本数(容量上限)
 	Ready     uint32 // status.readyReplicas:空闲可分配
 	Allocated uint32 // status.allocatedReplicas:已被对局占用
+
+	// Desired = spec.replicas:运维/autoscaler **期望**的副本数,与 status 三项来自同一次 GET。
+	// 用于区分「被负载打满(desired>0 且 ready==0)」与「本就没配容量(desired==0)」——
+	// INC-20260724-001:未做金丝雀发布时 canary Fleet 常态 desired=0,旧逻辑把它恒判 exhausted,
+	// 每 5 分钟一条 Error + Grafana critical 长期 firing,把真实的 stable ready=0 信号淹没了。
+	Desired uint32
+	// DesiredKnown 显式区分「解码到 spec.replicas 且为 0」与「没解码到」。
+	// 不得让解码失败静默取零值 —— 那正是 §9.22 禁止的「把 UNKNOWN 冒充成确定值」。
+	DesiredKnown bool
+	// Canary 标记该 Fleet 属金丝雀轨。只有 canary 轨的 desired==0 才是常态(可静默);
+	// stable 轨被缩到 0 仍必须照常告警(否则运维误缩零会被静音)。
+	Canary bool
 }
 
-// fleetStatusResponse 只声明容量巡检用到的 Fleet status 字段。
+// fleetStatusResponse 只声明容量巡检用到的 Fleet spec/status 字段。
 type fleetStatusResponse struct {
+	Spec struct {
+		// 指针:区分「字段缺失」与「显式为 0」。
+		Replicas *uint32 `json:"replicas"`
+	} `json:"spec"`
 	Status struct {
 		Replicas          uint32 `json:"replicas"`
 		ReadyReplicas     uint32 `json:"readyReplicas"`
@@ -966,6 +986,34 @@ func (a *AgonesGameServerAllocator) WatchedFleets() []string {
 	return append(out, dedicated...)
 }
 
+// canaryFleets 返回「只属金丝雀轨」的 Fleet 名集合。
+//
+// 同名兜底:若配置把 stable 与 canary 指到同一个 Fleet(误配),该名字按 **stable** 处理
+// (与 WatchedFleets 里 stable 先入的去重顺序一致),不享受 canary 的 desired==0 静默,
+// 宁可多报也不静音真实容量问题。
+func (a *AgonesGameServerAllocator) canaryFleets() map[string]bool {
+	stable := map[string]bool{}
+	if a.fleetName != "" {
+		stable[a.fleetName] = true
+	}
+	for _, route := range a.mapFleets {
+		if route.stable != "" {
+			stable[route.stable] = true
+		}
+	}
+	canary := map[string]bool{}
+	add := func(name string) {
+		if name != "" && !stable[name] {
+			canary[name] = true
+		}
+	}
+	add(a.canaryFleetName)
+	for _, route := range a.mapFleets {
+		add(route.canary)
+	}
+	return canary
+}
+
 // ListFleetCapacities GET 每个受管 Fleet 的 status,返回容量快照。
 // 单个 Fleet 查询失败不影响其余(部分成功也返回),错误经 errors.Join 汇总供上层打日志。
 func (a *AgonesGameServerAllocator) ListFleetCapacities(ctx context.Context) ([]FleetCapacity, error) {
@@ -973,6 +1021,7 @@ func (a *AgonesGameServerAllocator) ListFleetCapacities(ctx context.Context) ([]
 		out  []FleetCapacity
 		errs []error
 	)
+	canaryTrack := a.canaryFleets()
 	for _, fleet := range a.WatchedFleets() {
 		url := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/fleets/%s",
 			a.apiServer, a.namespace, fleet)
@@ -991,12 +1040,17 @@ func (a *AgonesGameServerAllocator) ListFleetCapacities(ctx context.Context) ([]
 			errs = append(errs, fmt.Errorf("agones: decode fleet %s: %w", fleet, err))
 			continue
 		}
-		out = append(out, FleetCapacity{
+		capacity := FleetCapacity{
 			Fleet:     fleet,
 			Replicas:  resp.Status.Replicas,
 			Ready:     resp.Status.ReadyReplicas,
 			Allocated: resp.Status.AllocatedReplicas,
-		})
+			Canary:    canaryTrack[fleet],
+		}
+		if resp.Spec.Replicas != nil {
+			capacity.Desired, capacity.DesiredKnown = *resp.Spec.Replicas, true
+		}
+		out = append(out, capacity)
 	}
 	return out, errors.Join(errs...)
 }

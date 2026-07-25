@@ -22,8 +22,19 @@
 ## 1. 阶段 A — 低爆炸半径、可本地验证(建议先做)
 
 > **进度(2026-07-24)**:A2 已落码(build 绿,待集群冒烟);A1 判定为已被现有日志升级覆盖;A3 归 ops + 可选探针。详见下。
+>
+> **进度更新(2026-07-25,R10 复审整改)**:
+> - **A1 落码**:`/healthz/writer` 已上线(`internal/server/http.go` `WriterHealthHolder`),
+>   `Health()` 扩为 `HealthSnapshot`(held/token/竞选失败/**激活失败**/degraded);readiness 仍不挂钩,
+>   并由 `main_test.go` 守护"不得把 /healthz/writer 接进 readinessProbe"。
+> - **A2 收口**:此前只有 `login-prod.yaml.example` 手写 headless 地址,**标准生成链仍产出 ClusterIP 短名**
+>   ——即生产实际配置绕过了整条 round_robin 修复。已加 `Set-ProdLoginHubHeadlessAddr`(-Prod 机械改写)
+>   + 契约测试双向断言(prod=headless / dev=短名,compose 不可解析 FQDN)。集群冒烟仍是关闭条件。
+> - **阶段 E 落码**:`hub.writer_lease_mode`(enforce|warmup|off)+ rollout §5.4 三跳发布合约。
+> - **P0#6 的 assignment fencing 部分落码**(不等 owner authority):归属记录内嵌 `writer_token`
+>   持久水位 + 继任推扫升级为**接流前硬门**。详见下方阶段 D 的更新。
 
-### A1. writerlease 就绪可观测(P0#4)——**基本已覆盖(现有日志升级)**
+### A1. writerlease 就绪可观测(P0#4)——**已落码(观测端点上线,readiness 仍不挂钩)**
 - 复核后判定:`writerlease` 已有 `campaignErrEscalateAfter=15`(~30s 连续竞选失败即从 Warn 升 Error),
   日志即可驱动"持续无主"告警——这就是生产可观测路径。本仓库**无自定义 Prometheus 指标模式**,
   为此新起一套指标是新增机制(§15.3 不预设)。故 A1 不再单独落指标;若将来引入指标体系,再把
@@ -73,9 +84,31 @@
    Unavailable、login 不清会话、客户端稍后重登可恢复(§23);恢复 etcd 后自动收敛。
 > 4 步全绿 = P0#5 可关闭;否则保持 OPEN。`assignHubMaxAttempts=3`,若 replicas>3 先调高再验第 3 步。
 
-## 2. 阶段 B — 进场屏障(spawn 前复核,P0#1/#2)
+## 2. 阶段 B — 进场屏障(spawn 前复核,P0#1/#2)——**窄版已落码(2026-07-25),§22 全量屏障仍待阶段 D**
 
-- **现状**:Hub/Battle 均先开 gate/Spawn,再异步复核会话(有 R9 自愈:定性失效清退)。残余=
+> **2026-07-25 落码(R10 复审 P0-6/P0-7)**:不等 owner authority,先把**既有**的会话复核从
+> "spawn 之后补检"前移为"spawn 的前置条件"。这不是 §9.22 的 PENDING→ADMITTED 屏障,但确实
+>消灭了审核指出的那个窗口:**复核未确证前不存在可操作 Pawn**。
+> - **Hub**(`PandoraHubGameMode.cpp`):`TryOpenAdmissionSpawnGate` 在旧连接全部物理离场后
+>   不再直接开门,而是先 `StartPreOpenAdmissionRecheck`(同 identity 幂等重发 ACK);确证通过才
+>   `FinishOpenAdmissionSpawnGate`(flush 旧 Departure → 移除 gate → 补做唯一一次 starting flow →
+>   客户端信号 + locator)。定性拒绝/预算耗尽 → `FailAdmission` 清退(此时尚无 Pawn);
+>   本地/PIE 无 DSBackend → 直接开门(不留无人驱动的等待)。
+> - **Battle**(`PandoraDSGameModeBase.cpp`):新增 `SessionRecheckSpawnGate`,`PostLogin` 在
+>   `Super::PostLogin` **之前**把有远端权威挂账的连接入门;`HandleStartingNewPlayer_Implementation`
+>   与 `SpawnDefaultPawnAtTransform_Implementation` 两道门在确证前一律不生成 Pawn;
+>   复核确证 → `OpenSessionRecheckSpawnGate` 补做 starting flow 并登记 Pawn claims。
+>   原 `PostSpawn*` 系列符号整体更名为 `Entry*`(语义已变,避免名不副实)。
+> - **不卡死自证(§9.19/20)**:复核每条终局路径要么开门、要么 Kick——成功开门;定性会话失效
+>   Kick;非会话语义的定性拒绝**也开门**(不误杀但必须放行);未知结果有界重试;预算耗尽
+>   fail-closed Kick。无挂账/无后端子系统一律直接开门。
+> - **诚实残余**:复核返回与开门之间仍有进程内 check-then-act 窗口(与 login `fenceLoginDelivery`
+>   同构),但窗口内没有可操作 Pawn,且长度从"等旧连接物理离场的秒级"缩到一次调用返回。
+>   要彻底消灭仍需下面的 §22 屏障(阶段 D 之后)。
+> - **验证状态**:**UE 编译与 §23 验收矩阵均未跑**(本仓库规定 UE 编译由用户执行)。
+>   未过编译与故障注入前不得声称 P0#1/#2 已关闭。
+
+- **现状(改动前)**:Hub/Battle 均先开 gate/Spawn,再异步复核会话(有 R9 自愈:定性失效清退)。残余=
   开 gate 到复核确证之间的可玩窗口。要"消灭窗口"必须在 **spawn 前**完成 owner/session 确证,
   但纯前置又可能卡住进场(撞 §19/20 不卡死)。
 - **方案(§22 admit barrier)**:落 §9.22 的 `PENDING→ADMITTED` 屏障——新 DS 在屏障打开前只
@@ -111,7 +144,16 @@
   §8 lease-fencing 门**。分服务灰度:①login **query-first** 组合 owner(§23);②allocator 分配/出票
   以 owner epoch 为准;③DS Admission 直接提交 owner Admit(退役 census 近似,owner_authority.go 已注);
   ④确认新路径稳定后逐一退旧门。每步保留回退(弱→强开关),异常回落弱依赖。
-- **assignment fencing(P0#6)化解**:**不需要迁 Redis key scheme**。per-player `owner_record` 本身就是
+- **assignment fencing(P0#6)已先行落码(2026-07-25,不依赖 owner authority)**:同样**不需要迁 key scheme**
+  ——把水位记进**归属记录自身**(`HubAssignmentStorageRecord.writer_token`,additive 字段 31)。同一 key 的
+  WATCH/MULTI/EXEC 天然原子,比较与写入在同一线性化点,于是 per-player 键也有了持久 fence:
+  `current.writer_token > 本届 token` → 零写入 `ErrWriterSuperseded`,旧写者**既不能覆盖也不能删除**
+  继任者写的归属。同时把继任推扫从"后台 tick 懒执行"升级为 `writerlease.Config.OnElected` 的
+  **接流前硬门**(推扫成功才宣告持有领导权),消除"已接流、继任未完成"窗口。
+  测试:`internal/data/writer_fence_test.go`(前任覆盖/删除双拒 + 零变更 + legacy 兼容)、
+  `pkg/dsauthfence/writerlease/writerlease_test.go`(激活期间恒不持有 / 激活失败让位)。
+  下方 owner-epoch 方案仍是 contract 阶段的终局形态,两者不冲突(水位是过渡期的存储级兜底)。
+- **owner authority 化解路径(仍待 contract 切换)**:per-player `owner_record` 本身就是
   每玩家**线性一致 fence**(MySQL FOR UPDATE);assignment 分配 / 出票在 contract 阶段挂 owner epoch
   校验(Begin/Admit 全等),旧 writer 失租后其 epoch 必被新 owner 的 CAS 推进,迟到 CAS/出票在 owner
   层被 `ErrOwnerEpochConflict`/`ErrOwnerIdentityMismatch` 拒——即得 fencing。writer_fence.go 的
@@ -119,13 +161,19 @@
 - **验证**:owner 服务的 epoch CAS / 屏障单测(应已有,待核)+ **强依赖切换后**的脑裂"一人一 DS"
   故障注入 + 故障切换不回滚(§9.22 硬要求,需真实 MySQL/TiDB + 分区注入,集成环境,非本机)。
 
-## 5. 阶段 E — 首次 writerlease 引导升级(P0#7)
+## 5. 阶段 E — 首次 writerlease 引导升级(P0#7)——**已落码(2026-07-25);集群演练待跑**
 
 - **问题**:从 writerlease-**无感**旧镜像首次升级,新旧并存=无 fence 双写;Recreate 又停唯一旧 Pod。
-- **方案**:引入一个**中间过渡版本**——先只竞选、观测 token 单调、**仍按旧路径写**(或全程只读预热),
-  确认继任链健康后,再滚动到"按 writerlease 写"的版本。即把一次危险切换拆成"预热继任→切写"两跳,
-  每跳都满足不停服 + 单写。写进发布合约(取代现有 Recreate 硬要求),`online_manifest_contract` 同步。
-- **验证**:三版本(旧无感 / 中间预热 / 目标)两两滚动组合的编排演练。
+- **落地**:`hub.writer_lease_mode`(`enforce|warmup|off`,留空=enforce 保持现网行为)+
+  `docs/design/session-generation-rollout.md` §5.4 三跳发布合约:
+  跳 1 Recreate 只换镜像跑 `warmup`(**写路径与旧二进制逐字节同行为**,只竞选观测,可零代价回滚镜像);
+  跳 2 Recreate 只改配置到 `enforce`(回滚 = 改回 warmup,不必回滚镜像);
+  跳 3 单独 apply `RollingUpdate`(不重建 Pod,零中断),此后稳态不停服。
+- **必须照实说的边界(不是遗漏,是原理)**:旧二进制既不竞选也不读 fence 键,新写者无法让它停手,
+  所以这一次性迁移上"零写暂停"与"零双写"**不可兼得**。§5.4 选零双写:每跳窗口 = 一次 Pod 重启,
+  等于迁移前每次发布的基线,不新增代价;玩家不掉线、对局不中断。原方案设想的"预热版本可在
+  RollingUpdate 下与旧版并存"并不成立(两者都按旧路径写 = 仍是双写)。
+- **验证**:§5.4 的三跳验收项(集群内,本机无法代跑)。未跑完前本阶段按 OPEN 记录。
 
 ## 6. 阶段 F — team_size 在队固化(P1#10)——**需 Codex**
 

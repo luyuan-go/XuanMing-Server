@@ -51,10 +51,12 @@ match:
   allocation_abort_auth_secret: "__ALLOCATION_ABORT_AUTH_SECRET_32B__"
   allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"
   # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 livenessSweep + 成局最终门 findOfflineMembers)。
-  # ❗ 前提：UE Hub DS 心跳捎带 player_ids 续期 locator HUB 位置，且 hub_allocator 必须配 locator_addr
-  # (转发续期的必经一环)，否则在线玩家 30s 后会被误判离线、扫掉排队票据。
-  # 2026-07-08 dev 实机联调 + 端到端验收通过后默认开启；回归异常(在线玩家 locator TTL 单调掉 0)先关此开关再排查。
-  liveness_gate_enabled: true
+  # ❗ INC-20260724-001 后回退为 false(= conf.go 代码默认值)。2026-07-08 验证的 HUB 态续期链有效,
+  # 但成局最终门查的是 MATCHING(=4) 态成员,该态既无续期写者也无释放通道(仅 state==3 会被
+  # RefreshHubLocations 续期) ⇒ 成局超过 locator TTL(30s)后全员必然假阳性判死;且 MATCHING key
+  # 过期后无法重建,该玩家再排队的票据也会被 livenessSweep 误删。故两道门一起关。
+  # 重开前置与决策待办见 matchmaker-dev.yaml 同项注释 + 事故档 D2。
+  liveness_gate_enabled: false
   map_id: 1
   game_mode: "5v5_ranked"
   confirm_timeout: "15s"

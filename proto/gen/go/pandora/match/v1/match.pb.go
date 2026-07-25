@@ -1476,7 +1476,7 @@ type MatchStorageRecord struct {
 	state             protoimpl.MessageState      `protogen:"open.v1"`
 	MatchId           uint64                      `protobuf:"varint,1,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
 	Stage             MatchStage                  `protobuf:"varint,2,opt,name=stage,proto3,enum=pandora.match.v1.MatchStage" json:"stage,omitempty"`
-	Members           []*MatchMemberStorageRecord `protobuf:"bytes,3,rep,name=members,proto3" json:"members,omitempty"`                              // 10 人(team_a 5 + team_b 5)
+	Members           []*MatchMemberStorageRecord `protobuf:"bytes,3,rep,name=members,proto3" json:"members,omitempty"`                              // 双方成员共 2*teamSize 人(teamSize 按 map_id 读关卡表,如 1v1/5v5)
 	TicketIds         []uint64                    `protobuf:"varint,4,rep,packed,name=ticket_ids,json=ticketIds,proto3" json:"ticket_ids,omitempty"` // 组成本 match 的 ticket(失败退回用)
 	CreatedAtMs       int64                       `protobuf:"varint,5,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
 	ConfirmDeadlineMs int64                       `protobuf:"varint,6,opt,name=confirm_deadline_ms,json=confirmDeadlineMs,proto3" json:"confirm_deadline_ms,omitempty"` // 确认期截止(active ZSET score)

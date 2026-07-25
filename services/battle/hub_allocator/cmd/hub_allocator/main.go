@@ -522,7 +522,10 @@ func main() {
 	}
 
 	grpcSrv := server.NewGRPCServer(&cfg, svc, sessGate)
-	httpSrv := server.NewHTTPServer(&cfg)
+	// writerHealth 由下方写者租约启动后注入(/healthz/writer 只做观测,不参与流量门,
+	// 理由见 internal/server/http.go 的 WriterHealthHolder 注释)。
+	writerHealth := &server.WriterHealthHolder{}
+	httpSrv := server.NewHTTPServer(&cfg, writerHealth)
 
 	// 任何后台 reconcile/sweep 与 RPC server 启动前先取得 capability。失败进程零业务写。
 	if cfg.DSAuth.AuthorityModeRedis() {
@@ -564,27 +567,53 @@ func main() {
 		// 副本可写(biz 入口 gate),存储层在同一 Redis 事务内比较/推进单调 fencing
 		// token(data/writer_fence.go),迟到旧写者零写入。etcd 已是本模式硬依赖
 		// (上方 AcquireRuntime),此处不新增依赖类别;启动失败 fail-fast。
-		hostname, _ := os.Hostname()
-		writerLease, wlErr := writerlease.Start(context.Background(), writerlease.Config{
-			Endpoints:   cfg.DSAuth.Fence.EtcdEndpoints,
-			Election:    "hub_allocator/writer",
-			Identity:    fmt.Sprintf("%s/%d", hostname, os.Getpid()),
-			LeaseTTLSec: int(cfg.DSAuth.Fence.EtcdLeaseTTLSec),
-			DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
-		})
-		if wlErr != nil {
-			helper.Errorw("msg", "hub_writer_lease_start_failed", "err", wlErr)
+		// 档位(R10 P0-5,rollout §5.4):enforce=稳态;warmup=只竞选不接线(首次引导
+		// 升级的第一跳);off=不启动(仅历史 Recreate 单副本)。非法值 fail-fast。
+		writerMode, wmErr := cfg.Hub.ResolveWriterLeaseMode()
+		if wmErr != nil {
+			helper.Errorw("msg", "hub_writer_lease_mode_invalid", "err", wmErr)
 			os.Exit(1)
 		}
-		defer func() { _ = writerLease.Close() }()
-		uc.SetWriterFence(writerLease)
-		repo.SetWriterFence(writerLease)
-		if authRepo, ok := hubAuthRepo.(*data.RedisHubAuthRepo); ok {
-			authRepo.SetWriterFence(writerLease)
+		if writerMode == conf.WriterLeaseOff {
+			helper.Warnw("msg", "hub_writer_lease_disabled",
+				"hint", "writer_lease_mode=off:单写者不再由运行时协议保证,只允许单副本 Recreate 部署;RollingUpdate 下必须改回 enforce")
+		} else {
+			hostname, _ := os.Hostname()
+			identity := fmt.Sprintf("%s/%d", hostname, os.Getpid())
+			leaseCfg := writerlease.Config{
+				Endpoints:   cfg.DSAuth.Fence.EtcdEndpoints,
+				Election:    "hub_allocator/writer",
+				Identity:    identity,
+				LeaseTTLSec: int(cfg.DSAuth.Fence.EtcdLeaseTTLSec),
+				DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
+			}
+			if writerMode == conf.WriterLeaseEnforce {
+				// 接流前硬门(R10 P0-4):当选后先把**全部已知 pod** 的 fence 水位推进到
+				// 本届 token,成功才宣告持有领导权。此前推扫挂在后台 sweep tick 上懒执行,
+				// 于是"当选即接写、推扫尚未完成"的窗口里,前任在未被触碰的 {pod} slot 上
+				// 仍能写。钩子失败 = 让位重选,本副本恒不持有(写请求继续可重试拒绝)。
+				leaseCfg.OnElected = func(ctx context.Context, token uint64) error {
+					return repo.AdvanceWriterFencesForToken(ctx, token)
+				}
+			}
+			writerLease, wlErr := writerlease.Start(context.Background(), leaseCfg)
+			if wlErr != nil {
+				helper.Errorw("msg", "hub_writer_lease_start_failed", "err", wlErr)
+				os.Exit(1)
+			}
+			defer func() { _ = writerLease.Close() }()
+			if writerMode == conf.WriterLeaseEnforce {
+				uc.SetWriterFence(writerLease)
+				repo.SetWriterFence(writerLease)
+				if authRepo, ok := hubAuthRepo.(*data.RedisHubAuthRepo); ok {
+					authRepo.SetWriterFence(writerLease)
+				}
+			}
+			writerHealth.Set(writerLease, writerMode)
+			helper.Infow("msg", "hub_writer_lease_started",
+				"election", "hub_allocator/writer", "identity", identity, "mode", writerMode,
+				"hint", "enforce:未当选副本拒写(可重试)+接流前推扫硬门+存储级 fencing;warmup:只竞选观测 token 单调,不改写路径")
 		}
-		helper.Infow("msg", "hub_writer_lease_started",
-			"election", "hub_allocator/writer", "identity", fmt.Sprintf("%s/%d", hostname, os.Getpid()),
-			"hint", "未当选副本拒写(可重试);存储级 fencing 同事务拦迟到旧写")
 	}
 
 	// 7. 后台心跳超时扫描(随进程生命周期启停)

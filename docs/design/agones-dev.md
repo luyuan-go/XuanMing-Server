@@ -233,9 +233,32 @@ Stable/Canary 是四个物理 Fleet，而不是同池随机挑 Pod。Battle 对 
 - **无空闲 DS**:Fleet 池被占满(`state != Allocated`)→ `ErrDSNoAvailable(5001)` → matchmaker
   `onAllConfirmed` 收到错误 → `onMatchFailed` 整场失败、票据退回队列。生产需配 FleetAutoscaler
   或足够 `replicas` 兜底。
+  **5001 只表示容量事实**(INC-20260724-001 收窄):`fleet 名未配置`这类配置错误改回
+  `ErrDSAllocationFailed(5002)`,避免混进"无空闲副本"口径让运维照着扩容排查。
+  matchmaker 对 5001/5002 处理一致(都算确定性失败),故该收窄不改变上游行为。
 - **故障补偿**:DS 崩溃/心跳超时(15s)→ `ds_allocator` `RunHeartbeatSweep` 标 `abandoned` +
   `GameServerAllocation` 对应 GameServer Release + 发 `pandora.ds.lifecycle` 给 battle_result 段位
   回滚(不变量 §4,W4 ⑧ at-least-once)。
+
+#### 联调 / 测试期迭代 DS 镜像的运维纪律（INC-20260724-001 后新增，强制）
+
+事故主因复盘:为排查掉落问题反复 `kubectl delete gameserver` + 重建 battle DS,把
+`pandora-battle-stable` churn 到 `ready=0`,同时给 k8s apiserver 加压,导致 Agones 分配与释放
+双双 `context deadline exceeded`,玩家匹配成功却分不到 DS、在途对局被葬送。**这是本可避免的操作副作用。**
+
+1. **迭代 DS 镜像必须走 canary 轨**,不要动 stable:
+   用 `tools/scripts/start.ps1` 的 `-CanaryBattleDsImage` + `-BattleCanaryReplicas` 预热金丝雀池,
+   stable 全程保留可分配容量。这与 §9.21「Canary 必须先预热 Ready 后才接小比例新分配」同源。
+2. **任何时刻 `pandora-battle-stable` 的 `ready` 不得为 0**。删/重建 DS 前先确认仍有最小可分配副本;
+   宁可多留一个副本,也不要出现"全池为空"的窗口。
+3. **禁止删除或强杀仍承载玩家的 Allocated DS**(§9.21 原文)。确认 `state != Allocated` 只是必要条件,
+   不是充分条件——高频 churn 会与玩家的异常退局叠加放大清理缺口。
+4. **不要用高频删除代替滚动更新**。连续 delete/create 会把 apiserver 打到超时,
+   而 Agones 分配、释放确认、owner lease 续租全部经由同一个 apiserver:
+   控制面一慢,`allocation_uncertain` 会积压,`ds_allocator` 的 sweep 与 §9.4 补偿一并变慢。
+5. **观察信号**:`ds_fleet_capacity_exhausted`(Error)、Grafana「战斗DS容量打满无空闲」critical。
+   注意该告警自 INC-20260724-001 起会排除 `desired(spec.replicas)==0` 的 Fleet ——
+   未做金丝雀发布时 canary 常态 0 副本属正常,**stable 出现该告警一律当真**。
 
 ### 2.4 本机 Windows Battle DS 调试模式（2026-06-16，与 Agones 并列的第二种启动方式）
 
@@ -328,39 +351,48 @@ sequenceDiagram
     Note over DA: ds_allocator 自身退出时 Close() 杀光在管 DS 防孤儿
 ```
 
-### 2.5 UE 5.8 Launcher / 源码版 / Installed Build 网络兼容性（2026-06-16）
+### 2.5 UE 5.8 Launcher / 源码版 / Installed Build 网络兼容性（2026-06-16 原记录，2026-07-25 按 5.8 更新）
 
-UE 客户端能否连上 DS,核心看 `FNetworkVersion` 的输入是否一致,尤其是
-`CompatibleChangelist`、UE 版本号和 `IsLicenseeVersion`。当前已确认:
+> ⚠️ **联机前提已变（5.8）**：本节原来的「两边 `CompatibleChangelist` 一致才兼容」是 5.7 时代结论。
+> 5.8 起客户端在 `FPandoraGameModule` 覆盖了 `FNetworkVersion`（`GetLocalNetworkVersionOverride`），
+> NetCL 改为只按 `StrCrc32("Pandora_<PandoraNetProtocolVersion>_<EngineNetworkProtocolVersion>")` 计算，
+> **不再含引擎构建 CL**，因此「发行版客户端 ↔ 源码版 / Installed Build DS」不再依赖 CL 一致。
+> 联机契约以 Pandora-Client 仓库 `Doc/客户端/框架/网络/客户端网络版本互通.md` 为准；下面的 CL 对齐分析仅作历史背景。
 
-| 引擎 | CompatibleChangelist |
+UE 客户端能否连上 DS,核心看 `FNetworkVersion` 的输入。**本机实测的 5.8.0 Launcher**
+（`E:\Program Files\UE_5.8\Engine\Build\Build.version`）:
+
+| 字段 | 本机 5.8.0 Launcher 实测 |
 |---|---:|
-| Launcher `UE_5.8` | `47537391` |
-| 源码版 `D:\UnrealEngine` | `47537391` |
+| Major/Minor/Patch | `5.8.0` |
+| CompatibleChangelist 字段 | `0`（为 0 时 `FNetworkVersion` 回退用 `Changelist`） |
+| Changelist | `55116800` |
+| IsLicenseeVersion | `0` |
+| BranchName | `++UE5+Release-5.8` |
+| 有效 NetCL | `55116800`（与 `客户端网络版本互通.md` 记录一致） |
 
-因此当前个人联调阶段可以使用 **Launcher UE_5.8 客户端 + 源码版 `D:\UnrealEngine` DS**,
-前提是**不改引擎源码、不改 `Build.version`、不重新同步到不同 CL**。在这个前提下,
-两边 `CompatibleChangelist` 一致,网络兼容。
+源码版 `D:\UnrealEngine` 的 5.8 `Build.version` **本机不存在,未核实**（5.7 时代记录曾为
+`CompatibleChangelist=47537391`，5.8 起该值已不参与联机判定）。
 
-Installed Build 不是天然不兼容。它从源码版引擎产出,默认会继承源码版的版本信息;只要产出后的
-`Build.version` 仍保持 `CompatibleChangelist=47537391`,就仍可与 Launcher `UE_5.8` 客户端兼容。
-风险在于 BuildGraph 产 Installed Build 时可能显式写入或改写 changelist;如果产出结果变成其它
-`CompatibleChangelist`,就可能与 Launcher 客户端网络版本不一致。
+**5.8 联机不再靠 CL 对齐**：客户端已覆盖 `FNetworkVersion`,「发行版客户端 + 源码版 / Installed Build DS」
+只要两端二进制都带该 override 即互通（override 红线见 `客户端网络版本互通.md`）。原来「Installed Build 的
+`CompatibleChangelist` 必须与 Launcher 一致」的约束在启用 override 后不再适用;未启 override 的旧包之间才需对齐有效 NetCL。
 
 阶段纪律:
 
 | 阶段 | 客户端引擎 | 服务器引擎 | 兼容性要求 |
 |---|---|---|---|
-| 个人打通链路 | Launcher `UE_5.8` | 源码版 `D:\UnrealEngine` | 已验证 CL 一致;不改引擎源码 / `Build.version` |
+| 个人打通链路 | Launcher `UE_5.8` | 源码版 `D:\UnrealEngine` | 5.8 靠客户端 `FNetworkVersion` override 互通,不再靠 CL 一致;两端二进制都要带该 override |
 | 团队规模化 | 同一个 Installed Build | 同一个 Installed Build | 推荐方案,单一引擎天然一致 |
-| 不推荐但可临时用 | Launcher `UE_5.8` | Installed Build | 必须人工确认产物 `CompatibleChangelist=47537391` |
+| 不推荐但可临时用 | Launcher `UE_5.8` | Installed Build | 带 override 即可;未启 override 的旧包才需人工对齐有效 NetCL |
 
 **一劳永逸的团队方案**:一旦团队上 Installed Build,客户端和服务器都用同一个 Installed Build 出包,
 不要长期维护「客户端 Launcher、服务器 Installed Build」两套引擎。这样只有一个引擎版本源,
 不会再靠人工对齐网络版本。
 
-验收要求:每次产出 Installed Build 或更换 DS 引擎前,检查产物 `Build.version` 的
-`CompatibleChangelist` 是否仍与当前客户端引擎一致;不一致时先停下确认,不要直接进入联调。
+验收要求（5.8）:客户端启用 `FNetworkVersion` override 后,联机不再要求 Launcher 与 DS 引擎的
+`CompatibleChangelist` 一致;但跨引擎大版本(`EngineNetworkProtocolVersion` 变化)仍天然互斥。换 DS 引擎大版本或
+怀疑握手不一致时,以 `客户端网络版本互通.md` 的验证方法(看 `Welcomed by server` / `OutdatedClient`)为准。
 
 ---
 

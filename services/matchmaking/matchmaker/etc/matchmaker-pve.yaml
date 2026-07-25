@@ -68,8 +68,10 @@ match:
   allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"
   battle_gate_fail_open: false
   # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 + 成局最终门)。
-  # UE Hub DS player_ids 保活链 2026-07-08 已实机联调验证,故开启;回归失败先关再排查(见 matchmaker-dev.yaml)。
-  liveness_gate_enabled: true
+  # ❗ INC-20260724-001 后回退为 false(= conf.go 代码默认值):MATCHING 投影无续期写者也无释放通道,
+  # 成局超过 locator TTL(30s)后全员必然被判离线(本事故实测 31.07s 判死,玩家静止不动亦然)。
+  # 完整机械证明、重开前置与决策待办见 matchmaker-dev.yaml 同项注释。
+  liveness_gate_enabled: false
   # map_id: PVE 默认副本(客户端 StartMatchRequest.map_id=0 时的兜底;对齐 g_关卡.xlsx,7=SonglinTown 松林镇副本)
   map_id: 7
   # game_mode: PVE 撮合池命名空间 + 透传 ds_allocator(DS env PANDORA_GAME_MODE / Agones label)

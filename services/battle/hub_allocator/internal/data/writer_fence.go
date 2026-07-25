@@ -17,28 +17,43 @@
 // 不构成账本冲突。fence key 故意**不设 TTL、RemoveShard 也不删**:fencing 水位必须
 // 比业务记录长寿,否则删除即复位,迟到旧写者可借尸还魂。
 //
-// 覆盖边界(rollout §5 明示的诚实残差):per-player assignment key
-// (pandora:hub:player:<id>)无 hashtag、与任何 {pod} slot 不可同事务,无法加存储级
-// fence(迁移现网数据风险更大);该路径由四层组合收口:
+// per-player assignment key(pandora:hub:player:<id>)无 hashtag、与任何 {pod} slot 不可
+// 同事务,用不了上面的 {pod} 水位键。该路径由五层组合收口(R10 复审 P0-4 补 ③ 的硬门
+// 语义与 ⑤ 的持久水位;此前只有 ①②④ + 懒执行的 ③,存在"已接流但继任未完成"窗口):
 //
 //	① biz 入口 writer gate(失主副本快速拒写);
 //	② 既有 CompareAndSwapAssignment 精确前置快照 CAS;
-//	③ 继任者水位推扫(AdvanceWriterFences):新写者当选后主动把**全部已知 pod** 的
-//	   fence 推进到本届 token,消灭逐 slot 懒推进留下的「未触碰 pod」盲区——推扫完成
-//	   后前任在任何 {pod} slot 上的席位预留/账本写全部被拒,其签出的票在 Admission
-//	   点必然找不到席位;
+//	③ 继任者水位推扫(AdvanceWriterFencesForToken)是**接流前硬门**:新写者当选后、
+//	   对外宣告持有领导权**之前**必须先把**全部已知 pod** 的 fence 推进到本届 token
+//	   (writerlease.Config.OnElected)。推扫失败即让位重选,本副本 Current() 恒不持有,
+//	   写请求继续被拒。推扫完成后前任在任何 {pod} slot 上的席位预留/账本写全部被拒,
+//	   其签出的票在 Admission 点必然找不到席位;
 //	④ biz 出票前写者复核(票据只在「入口到返回全程持有租约」时交付,失主瞬间在途
-//	   的请求不返回票,ErrUnavailable 引导重试路由到新写者)。
+//	   的请求不返回票,ErrUnavailable 引导重试路由到新写者);
+//	⑤ **每玩家持久水位**:归属记录自身携带 HubAssignmentStorageRecord.writer_token
+//	   (allocator.proto 31)。同一 key 的 WATCH/MULTI/EXEC 天然原子,故比较与写入在同
+//	   一线性化点;current.writer_token > 本届 token → 零写入 ErrWriterSuperseded。
+//	   旧记录 / 未启用 fencing 时该字段为 0,按"尚无水位"放行(滚动升级双向兼容)。
+//	   R11 复审补两处交错(此前 ⑤ 只在"继任者的记录仍存在"时成立):
+//	   ⑤a **删除写墓碑,不裸 DEL**:裸 DEL 把水位随业务记录一起抹掉,于继任者
+//	      「创建 → 合法删除」之后,失主旧写者看到键不存在即可用旧 token 重建归属。
+//	      改写只带 (player_id, writer_token) 的墓碑:GetAssignment 视为不存在,水位却
+//	      比业务记录长寿(assignmentFenceTombstoneTTL)。
+//	   ⑤b **租约在事务内读**:Current() 此前读在重试循环之外,旧写者暂停任意长后仍
+//	      带陈旧 token 走完事务。放进 Watch 回调后失主至迟在下一 attempt 被发现,
+//	      陈旧上界收敛为 etcd 租约 TTL——正是 ⑤a 墓碑 TTL 的取值依据。
 package data
 
 import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 )
 
 // WriterFence 提供当前写者的 fencing token(dsauthfence/writerlease.Lease 满足此接口;
@@ -56,6 +71,30 @@ func wfenceKey(pod string) string { return fmt.Sprintf("pandora:hub:wfence:{%s}"
 // ErrUnavailable 语义:对调用方可重试(重试会被路由到新写者副本),对本副本是终态拒绝。
 var ErrWriterSuperseded = errcode.New(errcode.ErrUnavailable,
 	"hub allocator writer lease superseded; retry against current writer")
+
+// assignmentFenceTombstoneTTL 是每玩家 fencing 墓碑的存活时间(R11 复审 P0-4 问题 A)。
+//
+// 墓碑只需活过「旧写者仍可能以为自己持有租约」的最长时间。CompareAndSwapAssignment /
+// DeleteAssignmentIfPodMatches 在**事务内**读 fence.Current(),因此旧写者带进 EXEC 的
+// token 至多陈旧 = etcd 租约剩余寿命(writerlease.DefaultLeaseTTLSec=15s)+ 一次 EXEC 往返。
+// 5 分钟 ≈ 20× 租约 TTL,给足时钟偏移与 GC/暂停余量;墓碑自然过期后旧写者的租约必然
+// 早已失效,in-tx Current() 返回不持有,水位不再需要。
+//
+// 取有限 TTL 而非持久键:墓碑数量 = 曾有归属的玩家数,持久化会无界增长(§9.24)。
+const assignmentFenceTombstoneTTL = 5 * time.Minute
+
+// isAssignmentFenceTombstone 判定归属记录是否只是 fencing 墓碑。真实归属必有
+// hub_pod_name(分片身份是归属的本体);墓碑只带 player_id + writer_token。
+// 故无需新增 proto 字段即可与真实归属区分,滚动升级双向兼容(旧副本读到墓碑时
+// hub_pod_name 为空,同样不会把它当成可用归属)。
+func isAssignmentFenceTombstone(rec *hubv1.HubAssignmentStorageRecord) bool {
+	return rec != nil && rec.GetHubPodName() == ""
+}
+
+// newAssignmentFenceTombstone 构造墓碑:除水位与 player_id 外一律零值。
+func newAssignmentFenceTombstone(playerID, token uint64) *hubv1.HubAssignmentStorageRecord {
+	return &hubv1.HubAssignmentStorageRecord{PlayerId: playerID, WriterToken: token}
+}
 
 // noopAdvance 供未启用 fence / 无需推进时占位。
 func noopAdvance(redis.Pipeliner) {}
@@ -118,6 +157,23 @@ func (r *RedisHubRepo) AdvanceWriterFences(ctx context.Context) error {
 	if !held {
 		return ErrWriterSuperseded
 	}
+	return r.advanceWriterFencesTo(ctx, mine)
+}
+
+// AdvanceWriterFencesForToken 用显式 token 推扫(R10 复审 P0-4 接流前硬门):写者租约的
+// 激活钩子在「已当选、尚未宣告持有」的窗口里调用,此时 fence.Current() 故意还不返回
+// held——推扫成功才是获得写权的前置条件,不能反过来依赖写权。token 必须 >0。
+// 与 AdvanceWriterFences 同为幂等只进不退,可安全重试。
+func (r *RedisHubRepo) AdvanceWriterFencesForToken(ctx context.Context, token uint64) error {
+	if token == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "hub writer fence advance requires a non-zero token")
+	}
+	return r.advanceWriterFencesTo(ctx, token)
+}
+
+// advanceWriterFencesTo 是两个入口的公共实现:枚举全部已知 pod(分片 SET ∪ 待清理
+// saga 源 pod)并逐 slot 只进不退推进水位。
+func (r *RedisHubRepo) advanceWriterFencesTo(ctx context.Context, mine uint64) error {
 	pods := map[string]struct{}{}
 	shardPods, err := r.rdb.SMembers(ctx, shardsSetKey).Result()
 	if err != nil {

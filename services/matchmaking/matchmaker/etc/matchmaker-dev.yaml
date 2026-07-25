@@ -68,10 +68,19 @@ match:
   # 注意：若本地只单独跑 matchmaker，要么清空上面 locator_addr，要么把此项设为 true，否则 StartMatch 会返回 ERR_UNAVAILABLE
   battle_gate_fail_open: false
   # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 livenessSweep + 成局最终门 findOfflineMembers)。
-  # 前提:UE Hub DS 心跳捎带 player_ids 续期 locator HUB 位置——2026-07-08 已实机联调验证
-  # (两真实客户端,locator TTL 稳定 25~30s 回升),故开启。若保活链回归失败(在线玩家 TTL
-  # 单调掉 0),先关此开关再排查,否则会误判在线玩家离线、扫掉排队票据。
-  liveness_gate_enabled: true
+  # ❗ INC-20260724-001 后回退为 false(= conf.go 代码默认值),原因是这两道门的证据来源结构性失效:
+  #   2026-07-08 实机验证的是 **HUB 态**续期(Hub DS 心跳捎带 player_ids),该链确实有效;
+  #   但成局最终门查的是**已成局 match 的成员**,他们的 locator 态是 MATCHING(=4),而
+  #   RefreshHubLocations 只对 state==3(HUB) 续期(player_locator data/location.go),
+  #   MATCHING 记录既无续期写者也无释放通道 ⇒ 成局后 30s 内零真阳性、超过 30s 全员必然假阳性。
+  #   事故算术闭合:solo_match_found 13:14:11.347 → match_liveness_failed 13:14:42.417 = 31.07s
+  #   (30s locator TTL + 一个 2s 撮合 tick),玩家静止不动也必被判死。
+  #   连带:MATCHING key 过期后 locator 无记录,而 RefreshHubLocations 只 EXPIRE 不创建,
+  #   该玩家此后对两道门永久"离线",再排队的票据也会被 livenessSweep 误删 ⇒ 两道门一起关。
+  # 重开前置(缺一不可):① MATCHING 投影具备续期或释放的完整三段闭环;② 判死证据改用权威信号
+  # (§9.22:presence key miss 不能单独证明玩家离开,不得冒充 OFFLINE);③ 具备可秒级回滚的开关。
+  # 决策待办见 docs/incidents/2026-07-24-p0-matchmaker-orphan-start-claim-freeze.md 的 D2。
+  liveness_gate_enabled: false
   # map_id: 战斗地图配置 ID(对齐 g_关卡.xlsx,6=MobaLevel MOBA战斗)
   map_id: 6
   # game_mode: 战斗模式标识,透传给 ds_allocator

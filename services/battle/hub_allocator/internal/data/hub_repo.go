@@ -155,6 +155,9 @@ type HubRepo interface {
 	// AdvanceWriterFences 继任者水位推扫:把全部已知 pod 的写者 fence 推进到本届 token
 	// (writer_fence.go 覆盖边界 ③)。fence 未启用时 no-op;失主/被继任返 ErrWriterSuperseded。
 	AdvanceWriterFences(ctx context.Context) error
+	// AdvanceWriterFencesForToken 同上,但用**显式 token**推扫:供写者租约的「接流前
+	// 激活钩子」在 Current() 尚未宣告持有时调用(R10 P0-4 硬门,见 writer_fence.go)。
+	AdvanceWriterFencesForToken(ctx context.Context, token uint64) error
 }
 
 // ── Redis 实现 ────────────────────────────────────────────────────────────────
@@ -407,10 +410,21 @@ func (r *RedisHubRepo) GetAssignment(ctx context.Context, playerID uint64) (*hub
 	if uerr := proto.Unmarshal(b, rec); uerr != nil {
 		return nil, false, fmt.Errorf("assignment %d bad proto: %w", playerID, uerr)
 	}
+	// fencing 墓碑对业务不可见:玩家确实无归属,只是水位还在(见 writer_fence.go ⑤)。
+	if isAssignmentFenceTombstone(rec) {
+		return nil, false, nil
+	}
 	return rec, true, nil
 }
 
+// SetAssignment 无条件写(旧接口,仅 dev/测试路径)。启用写者 fencing 后它是纯粹的
+// fencing 旁路——无 WATCH 无比较,失主旧写者可借它覆盖继任者的归属——故 fail-closed
+// 拒绝,归属写一律走 CompareAndSwapAssignment(R11 复审 P0-4)。
 func (r *RedisHubRepo) SetAssignment(ctx context.Context, rec *hubv1.HubAssignmentStorageRecord, assignmentTTL time.Duration) error {
+	if r.fence != nil {
+		return errcode.New(errcode.ErrInternal,
+			"assignment unconditional Set is fencing-unsafe; use CompareAndSwapAssignment")
+	}
 	payload, err := proto.Marshal(rec)
 	if err != nil {
 		return err
@@ -432,6 +446,19 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 	for attempt := 0; attempt < casMaxRetry; attempt++ {
 		matched := false
 		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			// 每玩家持久写者水位(R10 复审 P0-4;R11 复审收口两处交错):assignment 键无
+			// hashtag,进不了 {pod} slot 事务,用不了 pandora:hub:wfence:{pod}。水位记在归属
+			// 记录**自身**里——同一 key 的 WATCH/MULTI/EXEC 天然原子,比较与写入同线性化点。
+			//
+			// R11 复审 P0-4 问题 B(检查后执行):租约必须在**事务内**读。此前 Current() 读在
+			// 重试循环之外,旧写者暂停任意长后仍带着陈旧的 mine 走完事务。放进回调后,失主
+			// 至迟在下一次 attempt 被发现;窗口收敛到「本次 EXEC」,其上界即 etcd 租约 TTL。
+			mine, held := uint64(0), true
+			if r.fence != nil {
+				if mine, held = r.fence.Current(); !held {
+					return ErrWriterSuperseded
+				}
+			}
 			var current *hubv1.HubAssignmentStorageRecord
 			b, gerr := tx.Get(ctx, key).Bytes()
 			switch {
@@ -446,23 +473,50 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 				if uerr := proto.Unmarshal(b, current); uerr != nil {
 					return fmt.Errorf("assignment %d bad proto: %w", playerID, uerr)
 				}
-				if expected == nil || !proto.Equal(current, expected) {
+				// 水位只进不退:记录已被更高代写者触碰 → 本副本永久出局(零写入)。
+				// 0 = 本字段上线前的旧记录 / 未启用 fencing,按"尚无水位"放行。
+				if r.fence != nil && current.GetWriterToken() > mine {
+					return ErrWriterSuperseded
+				}
+				// 墓碑 = 业务上无归属、水位仍在。比较按"键不存在"处理,水位比较照旧。
+				if isAssignmentFenceTombstone(current) {
+					if expected != nil {
+						return nil
+					}
+				} else if expected == nil || !proto.Equal(current, expected) {
 					return nil
 				}
 			}
 
 			var payload []byte
-			if next != nil {
+			write := next
+			if next == nil && r.fence != nil {
+				// R11 复审 P0-4 问题 A(删除即复位):裸 DEL 会把水位随业务记录一起抹掉,
+				// 于继任者「创建→合法删除」之后,失主旧写者看到键不存在便能以旧 token 重建
+				// 归属(借尸还魂)。改写 fencing 墓碑:业务上等于无归属(GetAssignment 返回
+				// 不存在),但水位活得比业务记录长,旧写者一定读到更高 token 而零写入。
+				write = newAssignmentFenceTombstone(playerID, mine)
+			}
+			if write != nil {
+				if r.fence != nil && write.GetWriterToken() != mine {
+					// 克隆后盖水位:调用方(biz)可能复用同一 message 做后续比较,
+					// 不能就地改写它的字段。
+					write = proto.Clone(write).(*hubv1.HubAssignmentStorageRecord)
+					write.WriterToken = mine
+				}
 				var merr error
-				payload, merr = proto.Marshal(next)
+				payload, merr = proto.Marshal(write)
 				if merr != nil {
 					return merr
 				}
 			}
 			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				if next == nil {
-					pipe.Del(ctx, key)
-				} else {
+				switch {
+				case write == nil:
+					pipe.Del(ctx, key) // 未启用 fencing:保持旧行为
+				case next == nil:
+					pipe.Set(ctx, key, payload, assignmentFenceTombstoneTTL)
+				default:
 					pipe.Set(ctx, key, payload, assignmentTTL)
 				}
 				return nil
@@ -491,6 +545,14 @@ func (r *RedisHubRepo) DeleteAssignmentIfPodMatches(ctx context.Context, playerI
 	for i := 0; i < casMaxRetry; i++ {
 		deleted := false
 		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			// 与 CompareAndSwapAssignment 同契约(R11 复审 P0-4):事务内读租约,
+			// 删除写墓碑而非裸 DEL,否则本路径同样是「删除即复位」的水位抹除口。
+			mine, held := uint64(0), true
+			if r.fence != nil {
+				if mine, held = r.fence.Current(); !held {
+					return ErrWriterSuperseded
+				}
+			}
 			b, gerr := tx.Get(ctx, key).Bytes()
 			if gerr == redis.Nil {
 				return nil // 已不存在,幂等视为无需删
@@ -502,11 +564,29 @@ func (r *RedisHubRepo) DeleteAssignmentIfPodMatches(ctx context.Context, playerI
 			if uerr := proto.Unmarshal(b, rec); uerr != nil {
 				return fmt.Errorf("assignment %d bad proto: %w", playerID, uerr)
 			}
+			if r.fence != nil && rec.GetWriterToken() > mine {
+				return ErrWriterSuperseded
+			}
+			if isAssignmentFenceTombstone(rec) {
+				return nil // 已是墓碑:业务上无归属,幂等无需删
+			}
 			if rec.HubPodName != pod {
 				return nil // 并发 Assign/Transfer 已指向新分片,不能删
 			}
+			var payload []byte
+			if r.fence != nil {
+				var merr error
+				payload, merr = proto.Marshal(newAssignmentFenceTombstone(playerID, mine))
+				if merr != nil {
+					return merr
+				}
+			}
 			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Del(ctx, key)
+				if payload == nil {
+					pipe.Del(ctx, key) // 未启用 fencing:保持旧行为
+				} else {
+					pipe.Set(ctx, key, payload, assignmentFenceTombstoneTTL)
+				}
 				return nil
 			})
 			if perr == nil {

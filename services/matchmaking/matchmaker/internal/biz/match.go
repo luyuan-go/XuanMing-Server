@@ -1021,10 +1021,13 @@ func (u *MatchUsecase) rejectOrReapOrphan(ctx context.Context, playerID, matchID
 // ── 对局结束释放:ReleaseMatch ────────────────────────────────────────────────
 
 // ReleaseMatch 释放一场已结束(结算 / abandoned)对局的全部撮合状态,由 battle_result 在
-// 结算落库后调用(后端内部接口,不带玩家 JWT)。修复:对局走完 READY → 进战斗 → 结算后,
-// onAllConfirmed 故意保留的 player→ticket 归属(SETNX claim)+ 票据 + match 镜像本只能等
-// TTL(30min)自然过期;期间玩家回 Hub 再次 StartMatch 会被 ClaimPlayer SETNX 撞上残留 claim
-// 报 ErrMatchAlreadyMatching(4002)。此处在结算时主动彻底释放,玩家回 Hub 即可立刻再次匹配。
+// 结算落库后调用(后端内部接口,不带玩家 JWT)。对局走完 READY → 进战斗 → 结算后,
+// onAllConfirmed 故意保留的 player→ticket 归属(SETNX claim)+ 票据 + match 镜像仍是
+// **非终态、无 TTL 的持久状态**(MatchRepo.ClaimPlayer 契约:「网络断开或进程停机绝不能靠 TTL
+// 暗中释放玩家」;ticket_ttl / match_ttl 只在**显式终态后**用于留存)。
+// 因此本接口是这些状态的**唯一释放点**:不调用就不会随时间自愈,玩家回 Hub 再次 StartMatch
+// 会被 ClaimPlayer SETNX 撞上残留 claim,永久报 ErrMatchAlreadyMatching(4002)——释放失败必须
+// 靠 battle_result outbox 持续重试到成功,不能当作"等等就好"。
 //
 // 释放对象全部幂等；任一步失败会聚合返回，让 battle_result outbox 持续重试。
 //   - 每个成员的 player→ticket 归属(仅当其当前 claim 仍指向本局票据时才删,避免误删
@@ -1032,8 +1035,8 @@ func (u *MatchUsecase) rejectOrReapOrphan(ctx context.Context, playerID, matchID
 //   - 本局全部排队票据(ticket record + queue ZSET 残留)
 //   - match 镜像 + active 索引
 //
-// fallbackPlayerIDs:battle_result 从 BattleResult.stats 带来的玩家名单。match 镜像若已过 TTL
-// 消失,仍可凭它兜底清掉残留 claim(只删确属本局的,见 releasePlayerClaim)。
+// fallbackPlayerIDs:battle_result 从 BattleResult.stats 带来的玩家名单。match 镜像若已不存在
+// (已终态留存到期 / 曾被部分释放),仍可凭它兜底清掉残留 claim(只删确属本局的,见 releasePlayerClaim)。
 func (u *MatchUsecase) ReleaseMatch(ctx context.Context, matchID uint64, fallbackPlayerIDs []uint64) error {
 	if matchID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "match_id required")
@@ -1226,7 +1229,31 @@ func (u *MatchUsecase) ConfirmMatch(ctx context.Context, playerID, matchID uint6
 		}
 		if m.Stage == stageAllocating || m.Stage == stageReady {
 			if !accept {
-				return errcode.New(errcode.ErrInvalidState, "match %d locked (stage=%d), cannot reject", matchID, m.Stage)
+				// INC-20260724-001:ALLOCATING 期必须给玩家一个真实出口(§9.20 禁止"按钮不可用 /
+				// 只能杀进程恢复",§9.23 长期无容量时只能停在可退出的形态)。
+				// 背景:DS 缺容 / k8s 控制面超时时分配会长时间重试(ds_allocate_timeout 60s ×
+				// 无墙钟上限),而 expireOnce 对 stageAllocating 显式 keepActive 永不判失败;
+				// 此前唯一会终止 ALLOCATING 的是成局最终门的 presence 误杀,该门已因本事故关闭
+				// ⇒ 不补出口就会把"误杀"换成"永久卡死"。
+				// 边界:仅允许 **未 checkpoint** 的 ALLOCATING 取消(BattleTarget==nil 且
+				// phase ∈ {PENDING,REQUESTING})。已 checkpoint / ABORTING / READY 一律维持
+				// 既有拒绝语义——那时票已签或 DS 已固化,假装取消会让客户端与 READY 推送打架。
+				// 并发安全:本闭包在 UpdateMatchWithLock 的 WATCH/CAS 内,冲突会用新快照重跑;
+				// 与分配 worker 的 checkpointBattleAllocation 互斥——后者写 BattleTarget 前要过
+				// exactUncheckpointedRequestingAllocation(要求 rec 仍是 exact REQUESTING),
+				// 本处一旦把 stage/phase 翻成 FAILED,它必返 ErrMatchConcurrent 且不写 target;
+				// 反之若它先赢,本处重跑会看到 BattleTarget != nil 而拒绝取消。二者只有一个成功。
+				if idx := memberIndex(m.Members, playerID); idx >= 0 && cancelableUncheckpointedAllocation(m) {
+					m.Members[idx].Confirm = confirmRejected
+					m.Stage = stageFailed
+					m.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_FAILED
+					outcome = outcomeFailed
+					snapshot = cloneMatch(m)
+					return nil
+				}
+				return errcode.New(errcode.ErrInvalidState,
+					"match %d locked (stage=%d, alloc_phase=%d), cannot reject",
+					matchID, m.Stage, m.AllocationPhase)
 			}
 			snapshot = cloneMatch(m)
 			outcome = outcomePending
@@ -1515,6 +1542,30 @@ func exactAllocationSnapshot(
 		proto.Equal(rec.GetBattleTarget(), snapshot.GetBattleTarget())
 }
 
+// cancelableUncheckpointedAllocation 判定一个 ALLOCATING job 是否仍处于「未 checkpoint」阶段,
+// 即尚无任何 exact battle target 被固化 —— 此时玩家主动取消不会遗弃一台已交付的 Battle DS。
+//
+// 与 exactUncheckpointedRequestingAllocation 的区别:后者是 worker 拿着自己的 job 快照做
+// 代次比对(证明"还是我那一轮");本函数只对 canonical 记录本身做阶段判定,供没有 job 快照的
+// 玩家 RPC 路径(ConfirmMatch 的 reject 分支)使用,判定必须在 UpdateMatchWithLock 闭包内进行。
+//
+// PENDING:已提交但 worker 尚未取走,必然没有在飞的 AllocateBattle。
+// REQUESTING:可能有在飞请求,但 BattleTarget==nil 证明尚未 checkpoint;若 allocator 其实已经
+// 拉起 DS,该 DS 由 §9.4 的 15s 心跳超时 abandoned 回收 —— 与既有 liveness 判死路径同构,
+// 不新增失败模式。ABORTING/COMPLETED/FAILED 一律不可取消(fence 在途或已终态)。
+func cancelableUncheckpointedAllocation(rec *matchv1.MatchStorageRecord) bool {
+	if rec.GetStage() != stageAllocating || rec.GetBattleTarget() != nil {
+		return false
+	}
+	switch rec.GetAllocationPhase() {
+	case matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_PENDING,
+		matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING:
+		return true
+	default:
+		return false
+	}
+}
+
 func exactUncheckpointedRequestingAllocation(
 	rec *matchv1.MatchStorageRecord,
 	snapshot *matchv1.MatchStorageRecord,
@@ -1673,6 +1724,18 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	// 但白耗一次分配 + 其余 9 人被拉进残局)。
 	// 开关:LivenessGateEnabled 默认关闭(Hub DS player_ids 心跳未联发前会误判全员离线);
 	// 弱依赖:开关关闭 / locator 未配(nil)/ 查询失败 → 跳过校验继续成局,不误杀正常对局。
+	//
+	// ❗ INC-20260724-001:本门的证据来源对「已成局 match 的成员」这一人群**结构性失效**,
+	// 全部实跑配置已回退为 false,重开前必须先修证据链(见 etc/matchmaker-dev.yaml 同项注释)。
+	// 机械原因:走到这里的成员在 locator 里是 MATCHING(=4) 态(notifyMatching 在成局那一刻
+	// 写一次、TTL 30s),而 player_locator 的 RefreshHubLocations 只对 state==3(HUB) 续期,
+	// MATCHING 既无续期写者也无释放通道 ⇒ 成局后 30s 内查不到任何缺席(零真阳性),
+	// 超过 30s 后必然全员缺席(全假阳性)。本事故实测 solo_match_found → 判死 = 31.07s
+	// (30s TTL + 一个 2s 撮合 tick),与玩家是否真的在线无关。
+	// 因此 presence key-miss 不得用于终止已成局 match(§9.22:key miss 只说明 presence
+	// 不可见,不能单独证明玩家已离开,更不得冒充 OFFLINE)。
+	// 另注:本门曾是 stageAllocating 唯一会终止的路径;关闭后玩家出口由 ConfirmMatch 的
+	// pre-checkpoint 取消分支承担(见该处 INC-20260724-001 注释),二者必须同批存在。
 	if job.GetBattleTarget() == nil {
 		if offline := u.findOfflineMembers(ctx, playerIDs); len(offline) > 0 {
 			plog.With(ctx).Warnw("msg", "match_liveness_failed",
@@ -3025,6 +3088,12 @@ const livenessSweepInterval = 10 * time.Second
 // 开关:LivenessGateEnabled 默认关闭——离线判定依赖 Hub DS 心跳捎带 player_ids 续期
 // locator HUB 位置,生产端未联发前开启会把全部在线玩家 30s 后误判离线、扫掉排队票据。
 // 弱依赖:开关关闭 / locator 未配(nil)→ 直接跳过;查询失败 → Warn 后跳过(不误删)。
+//
+// ❗ INC-20260724-001:本扫除与成局最终门共用同一份 presence 证据,已一并回退为关闭。
+// 除成局门那条 MATCHING 不续期的缺陷外,本扫除还有独立的第二受害面:玩家一旦进过
+// MATCHING,该 key 到期消失后 RefreshHubLocations 只 EXPIRE 不创建(见 player_locator
+// data/location.go),locator 记录无法重建 ⇒ 该玩家此后被恒判离线,连"匹配失败后重新
+// 排队"的新票据也会在 ≤10s 内被本扫除误删。重开前置见 etc/matchmaker-dev.yaml 同项注释。
 // 删除守卫:DeleteTicketIfUnmatched(WATCH CAS)——读到 MatchId==0 后、删除前若被
 // 撮合循环并发预留,放弃删除(该票已进 match,交给成局最终门处理),绝不盲删。
 func (u *MatchUsecase) livenessSweepOnce(ctx context.Context) error {

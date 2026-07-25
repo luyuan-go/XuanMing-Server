@@ -122,6 +122,10 @@ hub:
   # locator_addr: player_locator gRPC 地址(玩家切线护栏:战斗/匹配中禁切)。
   # 弱依赖:留空则跳过位置检查。dev 直连 player_locator 服务 gRPC :50006。
   locator_addr: "127.0.0.1:50006"
+  # writer_lease_mode: 写者继任租约档位(enforce|warmup|off;留空=enforce,行为不变)。
+  # 只在"从不含 writerlease 的旧镜像首次升级"时才需要临时改成 warmup 走两跳,
+  # 完整发布合约见 docs/design/session-generation-rollout.md §5.4。
+  writer_lease_mode: "enforce"
   # mock_shard_count: W4 ⑤ MockHubFleetProvider 每 region 种的假分片数
   mock_shard_count: 3
   # mock_hub_addr_host: Mock 分片返回的假 Hub DS host

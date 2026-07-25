@@ -2,6 +2,7 @@
 package conf
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -241,6 +242,41 @@ type HubConf struct {
 	// LocatorAddr player_locator gRPC 地址(玩家切线护栏:战斗/匹配中禁切)。
 	// 弱依赖:留空则跳过位置检查(locator 抖动不硬阻断低危的大厅切线)。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
+
+	// WriterLeaseMode 写者继任租约的接线档位(session-generation-rollout.md §5.4
+	// 首次引导升级,R10 复审 P0-5)。留空 = enforce(保持现网行为,§14 默认不变)。
+	//
+	//	enforce:竞选 + 接流前 fence 推扫硬门 + 注入 biz/repo(当前稳态形态);
+	//	warmup :**只竞选、只观测**——不注入任何 fence,不写 fence 键,不改写路径。
+	//	        用于"从不含 writerlease 的旧镜像首次升级"的第一跳:新旧副本并存时新副本
+	//	        行为与旧副本完全一致(都按旧路径写),同时可在日志里确认继任链健康
+	//	        (elected/token 单调、失主重选)。确认后再滚动到 enforce 的第二跳。
+	//	off    :完全不启动租约(仅限单副本 Recreate 的历史部署;RollingUpdate 下禁用)。
+	//
+	// 取值非法时启动 fail-fast(安全开关不允许静默变形,见 ValidateWriterLeaseMode)。
+	WriterLeaseMode string `yaml:"writer_lease_mode,omitempty" json:"writer_lease_mode,omitempty"`
+}
+
+// 写者继任租约档位取值(WriterLeaseMode)。
+const (
+	WriterLeaseEnforce = "enforce"
+	WriterLeaseWarmup  = "warmup"
+	WriterLeaseOff     = "off"
+)
+
+// ResolveWriterLeaseMode 归一化并校验 writer_lease_mode(空 → enforce)。
+// 非法值返回 error,由 main fail-fast:安全档位配错必须炸,不能静默退化。
+func (c HubConf) ResolveWriterLeaseMode() (string, error) {
+	switch c.WriterLeaseMode {
+	case "", WriterLeaseEnforce:
+		return WriterLeaseEnforce, nil
+	case WriterLeaseWarmup:
+		return WriterLeaseWarmup, nil
+	case WriterLeaseOff:
+		return WriterLeaseOff, nil
+	default:
+		return "", fmt.Errorf("hub.writer_lease_mode %q invalid (want enforce|warmup|off)", c.WriterLeaseMode)
+	}
 }
 
 // Defaults 填默认值。

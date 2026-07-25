@@ -415,6 +415,17 @@ message HubAssignmentStorageRecord {
   uint64 release_cleanup_match_id = 28;
   uint64 release_cleanup_placement_version = 29;
   string release_cleanup_operation_id = 30;
+  // Per-player persistent writer fence (R10 review P0-4).  The per-player
+  // assignment key has no hashtag, so it can never share a Redis transaction
+  // with a {pod} slot and cannot use the pandora:hub:wfence:{pod} watermark.
+  // Instead the record carries the fencing token of the hub_allocator writer
+  // term that last wrote it; assignment CAS rejects any writer whose token is
+  // lower than the stored one.  A superseded writer therefore can no longer
+  // overwrite or delete an ownership record produced by its successor, even on
+  // a key the successor's fence sweep has not touched.
+  // 0 = written before this field existed (or fencing disabled): treated as "no
+  // watermark yet", so rolling upgrades and dev deployments keep working.
+  uint64 writer_token = 31;
 }
 
 // ===== 服务间事件(Kafka 推送,客户端可见 payload)=====

@@ -219,19 +219,23 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 
 ## §7 UE 引擎 / Dedicated Server 构建事实(2026-06-16 实测确认)
 
+> ⚠️ **5.8 更新(2026-07-25)**:本节是 2026-06-16 在原开发机(`D:` / `C:\work` 布局)上的 5.7 时代实测记录,版本标签已改 5.8。两点变化:
+> ① **联机不再靠 CL 对齐** —— 5.8 起客户端在 `FPandoraGameModule` 覆盖了 `FNetworkVersion`,NetCL 不含引擎构建 CL(见 Pandora-Client `Doc/客户端/框架/网络/客户端网络版本互通.md` 与本仓 `agones-dev.md §2.5`);故下方 §7.1 表与 §7.3 交接话术里的 `47537391` / `必须仍为 47537391` 均为 5.7 时代值,**5.8 不再适用**。
+> ② **本机实测的 5.8.0 Launcher 在 `E:\Program Files\UE_5.8`**(不是 `D:\Program Files\Epic Games\...`):`CompatibleChangelist=0`(回退用 `Changelist`)、`Changelist=55116800`、有效 NetCL `55116800`、`BranchName=++UE5+Release-5.8`;源码版 `D:\UnrealEngine` 的 5.8 构建本机不存在,未核实。
+
 ### 7.1 已验证事实(新会话不要重复怀疑)
 
-1. **Launcher 发行版打不了 Dedicated Server**:`D:\Program Files\Epic Games\UE_5.8` 的 `InstalledPlatforms` 只有 `PlatformType=Editor/Game`,**无 `Server`**;Epic 官方设计如此,勾任何 optional component 都补不回来。报错 `Server targets are not currently supported from this engine distribution` 即源于此。
-2. **源码版能打 Server**:`D:\UnrealEngine`,UE 5.8,`BranchName=UE5`,Editor + UBT 已编译,是 source build(无 `Engine\Build\InstalledBuild.txt`)。
-3. **两个引擎网络兼容(已逐字段实测)**:
-   | 字段 | Launcher | 源码版 | 影响联机 |
+1. **Launcher 发行版打不了 Dedicated Server**:`E:\Program Files\UE_5.8` 的 `InstalledPlatforms` 只有 `PlatformType=Editor/Game`,**无 `Server`**;Epic 官方设计如此,勾任何 optional component 都补不回来。报错 `Server targets are not currently supported from this engine distribution` 即源于此。
+2. **源码版能打 Server**:`D:\UnrealEngine`,UE 5.8,`BranchName=UE5`,Editor + UBT 已编译,是 source build(无 `Engine\Build\InstalledBuild.txt`)。**(源码版 5.8 本机不存在,此为原机记录,未在 5.8 重测。)**
+3. **网络兼容(Launcher 侧 5.8.0 本机实测,源码版 5.8 待实测)**:
+   | 字段 | Launcher(本机 5.8.0 实测) | 源码版(5.8 待实测) | 影响联机 |
    |---|---|---|---|
-   | Major/Minor/Patch | 5.8 | 5.8 | 是,一致 |
-   | **CompatibleChangelist** | **47537391** | **47537391** | **核心,一致** |
-   | IsLicenseeVersion | 0 | 0 | 是,一致 |
-   | Changelist | 51494982 | 0 | 否 |
-   | BranchName | `++UE5+Release-5.8` | `UE5` | 否 |
-   - 联机握手(`FNetworkVersion`)= 5.8 + `CompatibleChangelist` + `IsLicenseeVersion`,三者一致 → 兼容。
+   | Major/Minor/Patch | 5.8.0 | 待实测 | 5.8 起由 override 判定 |
+   | **CompatibleChangelist** | **0**(回退用 `Changelist`) | 待实测 | 5.8 已不参与判定 |
+   | IsLicenseeVersion | 0 | 待实测 | — |
+   | Changelist | 55116800 | 待实测 | — |
+   | BranchName | `++UE5+Release-5.8` | 待实测 | — |
+   - 5.8 起客户端覆盖 `FNetworkVersion`,联机不再看两端 CL 是否一致(见 §7 顶部说明与 `agones-dev.md §2.5`);5.7 时代记录为两端 `CompatibleChangelist` 均 `47537391`、版本 `5.7.4`,已失效。
 4. **Linux 工具链已装**:机器级 `LINUX_MULTIARCH_ROOT = C:\UnrealToolchains\v26_clang-20.1.8-rockylinux8`。
 5. **客户端工程**:`C:\work\Pandora-Client-SVN\Pandora\Pandora.uproject`,已有 `Pandora`(Game)/`PandoraEditor`/`PandoraServer`(`Type=TargetType.Server`)。
    当前本机约定:`F:\work\Pandora-Client-SVN\Pandora` 用源码引擎出 WindowsServer DS 包,`C:\work\Pandora-Client-SVN\Pandora` 用发行版 Editor/客户端登录、匹配、进战斗。

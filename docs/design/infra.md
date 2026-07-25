@@ -138,9 +138,12 @@ pandora:<domain>:<entity>:<id>[:<field>]
 #### Team
 | Key | 类型 | TTL | 用途 |
 |---|---|---|---|
-| `pandora:team:<team_id>` | hash | 1h idle | 队伍状态 |
-| `pandora:team:player:<player_id>` | string | 1h idle | 玩家所在队伍 |
-| `pandora:team:invites:<player_id>` | set | 5min | 收到的邀请 |
+| `pandora:team:{<team_id>}` | string(pb) | `active_ttl` 60m(`TouchTeam` 续期)/ 解散后 `disbanded_retention` 5m | 队伍主体 TeamStorageRecord(hashtag 锁 cluster slot) |
+| `pandora:team:player:<player_id>` | string | 跟随队伍(同 `active_ttl`,`TouchTeam` 一并续) | 玩家所在队伍(SETNX claim,落"一人只在一个队") |
+| `pandora:team:invite:<invite_id>` | hash | `invite_ttl` 60s | 邀请令牌(权威):team_id / target_player_id / inviter_id / expires_at_ms |
+| `pandora:team:invite:target:<player_id>` | zset | `invite_ttl` 60s(每次写入刷新) | 被邀请人 pending 邀请索引(member=invite_id,score=expires_at_ms):写入侧限流 + 拉取兜底查询 |
+
+⚠️ hashtag `{<team_id>}` 把队伍主体 key 锁到按 team_id 计算的 Redis Cluster slot(兜底,不可去掉);其余三个 key(`player` / `invite` / `invite:target`)不带 hashtag,按各自 id 分片,与主体不同 slot。
 
 #### Match
 | Key | 类型 | TTL | 用途 |
@@ -212,15 +215,18 @@ pandora.dlq.<original_topic>     # 死信队列
 | `pandora.match.failed` | 4 | 3d | matchmaker | (告警) | 匹配失败/超时 |
 | `pandora.match.progress` ⭐ | 8 | 1h | matchmaker | **push** | 匹配进度推送(key=player_id)|
 | `pandora.team.update` ⭐ | 8 | 1h | team | **push** | 队伍状态变更推送(key=player_id)|
-| `pandora.chat.world` | 16 | 1d | chat | **push** | 世界聊天推送 |
+| `pandora.chat.world` ⭐ | 16 | 1d | chat | **push** | 世界聊天推送(**广播类**,key 为空,push 走 `Broadcast` 而非按 key 路由) |
 | `pandora.chat.team` ⭐ | 8 | 1h | chat | **push** | 队伍聊天推送(key=player_id)|
 | `pandora.chat.private` ⭐ | 8 | 1d | chat | **push** | 私聊推送(key=target_player_id)|
 | `pandora.chat.guild` ⭐ | 8 | 1h | chat | **push** | 公会聊天推送(key=接收方 player_id,逐成员扇出,不落库)|
 | `pandora.chat.group` ⭐ | 8 | 1h | chat | **push** | 临时群聊推送(key=接收方 player_id,逐成员扇出,不落库)|
 | `pandora.guild.event` ⭐ | 4 | 1d | guild | **push** | 公会成员变更通知(入会 / 退会 / 踢人 / 解散,key=接收方 player_id)|
-| `pandora.player.update` | 8 | 7d | player / data_service | **push** + 缓存失效 | 玩家档案变更 |
+| `pandora.player.update` | 8 | 7d | battle_result | player(MMR 入账) | **服务间事件,push 不订阅**;单事件类型 topic(混跑安全,见 `kafkax.TopicPlayerUpdate`)。player 域面向客户端的推送走 `pandora.player.experience` |
 | `pandora.friend.event` ⭐ | 4 | 1d | friend | **push** | 好友请求 / 上线提醒 |
-| `pandora.system.notify` ⭐ | 4 | 7d | 运营 / 各 go | **push** | 系统公告 / 邮件 / 红点 |
+| `pandora.system.notify` | 4 | 7d | (无) | (无) | **规划中,尚未接线**:无 proto 定义、无 producer、不在 `kafkax.PushTopics`;已登记 `kafkax.BroadcastTopics`,上线时按广播类接入 |
+| `pandora.hub.migrate` ⭐ | 4 | 1h | hub_allocator | **push** | 大厅强制整合迁移通知(key=player_id) |
+| `pandora.presence.update` ⭐ | 4 | 1h | player_locator | **push** | 好友在线态订阅推送(key=subscriber_id,去抖合并后批量下发) |
+| `pandora.player.experience` ⭐ | 4 | 1h | player | **push** | 实时经验 / 升级推送(key=player_id,event_type=1) |
 | `pandora.ds.lifecycle` | 4 | 7d | ds_allocator / hub_allocator | 监控 | DS 拉起/回收/崩溃 |
 | `pandora.battle.result` | 16 | 30d | Battle DS | battle_result | ⭐ 核心,at-least-once + 幂等落库 |
 | `pandora.trade.audit` | 4 | 90d | trade | 审计、风控 | 交易日志(append-only) |
@@ -229,7 +235,9 @@ pandora.dlq.<original_topic>     # 死信队列
 | `pandora.leaderboard.settle` | 4 | 90d | leaderboard | 工会 / 活动服务、对账 | 排行榜结算事件(key=settlement_id,含 Top-N;尤其 GUILD 榜由工会服务消费分发) |
 | `pandora.locator.update` | 8 | 1h | hub DS / battle DS | player_locator | 玩家位置变更 |
 
-⭐ = 2026-06-03 新增推送 topic,见 `gateway-decision.md` §5。所有标 ⭐ 的 topic 都被 **pandora-push** 服务消费,统一推 WebSocket 给客户端。
+⭐ = 推送 topic(2026-06-03 起陆续新增),推送架构见 `gateway-decision.md` §6。所有标 ⭐ 的 topic 都被 **pandora-push** 服务消费,经 Envoy 以 **gRPC-Web server stream** 推给客户端(push **不是** WebSocket 服务)。
+
+⚠️ **push 订阅集的权威源是 `pkg/kafkax.PushTopics`**(当前 12 个),本表只是登记视图;新增推送 topic 必须同时改 `pkg/kafkax/topics.go` 与本表。`services/runtime/push/etc/push-prod.yaml.example` 刻意不列 `push.topics` 走默认全量集,避免显式列表漏项。
 
 ### 4.3 分区键约定
 

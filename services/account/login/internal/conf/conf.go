@@ -156,7 +156,7 @@ type LocatorClientConf struct {
 
 // MatchClientConf 是 login 调 matchmaker 的客户端参数(P0 修复 2026-07-15)。
 type MatchClientConf struct {
-	// Addr matchmaker gRPC 端口(默认 127.0.0.1:50008)。
+	// Addr matchmaker gRPC 端口(默认 127.0.0.1:50011)。
 	// 留空 → 不查 matchmaker 耐久权威,仅凭 locator presence 判断在局(dev/local)。
 	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
 

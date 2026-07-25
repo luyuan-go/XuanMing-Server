@@ -52,12 +52,48 @@ type fakeSessionGenRepo struct {
 	// tombstoneCalls 记录每次 TombstoneSessionJTI 收到的 jti(R10 P0-1 不可证明分支)。
 	tombstoneCalls []string
 	tombstoneErr   error
+
+	// ── R11 复审 P0-1 故障注入 ──
+	// ambiguousCommit=true 时 PersistSessionJTI 模拟「COMMIT 已生效但返回错误」:
+	// 按真实实现的口径同时返回快照 lease 与包了 data.ErrCommitAmbiguous 的错误。
+	ambiguousCommit bool
+	// lastJTI 是最近一次 PersistSessionJTI 收到的 jti(判定读回时当作"行内值")。
+	lastJTI string
+	// loadRowJTI 覆盖读回时行内的 jti;为空则回显 lastJTI(= COMMIT 确实生效)。
+	loadRowJTI string
+	// loadNotFound / loadErr 分别模拟"无行"与"读回本身失败"。
+	loadNotFound bool
+	loadErr      error
+	loadCalls    int
+	// ctxSeen 记录每次补偿/判定调用时 ctx 的存活情况,用于断言补偿没跑在已取消的
+	// 请求 ctx 上(R11 复审 P0-1 问题 B)。
+	ctxSeen []genRepoCtxProbe
+}
+
+// genRepoCtxProbe 是一次调用看到的 ctx 状态快照。
+type genRepoCtxProbe struct {
+	Op          string
+	Err         error
+	HasDeadline bool
+}
+
+func (f *fakeSessionGenRepo) probeCtx(ctx context.Context, op string) {
+	_, hasDeadline := ctx.Deadline()
+	f.ctxSeen = append(f.ctxSeen, genRepoCtxProbe{Op: op, Err: ctx.Err(), HasDeadline: hasDeadline})
 }
 
 func (f *fakeSessionGenRepo) PersistSessionJTI(_ context.Context, _ uint64, jti string) (data.SessionGenerationLease, error) {
 	f.called = true
+	f.lastJTI = jti
 	if f.callOrder != nil {
 		*f.callOrder = append(*f.callOrder, "mysql-gen")
+	}
+	if f.ambiguousCommit {
+		// 真实实现在 COMMIT 报错时返回 (快照 lease, 包裹 ErrCommitAmbiguous 的错误)。
+		return data.SessionGenerationLease{Generation: f.gen, PrevJTI: "prev-jti", HadPrev: f.gen > 1},
+			errcode.NewCause(errcode.ErrInternal,
+				fmt.Errorf("%w: connection reset by peer", data.ErrCommitAmbiguous),
+				"commit session generation: connection reset by peer")
 	}
 	if f.err != nil {
 		return data.SessionGenerationLease{}, f.err
@@ -65,11 +101,31 @@ func (f *fakeSessionGenRepo) PersistSessionJTI(_ context.Context, _ uint64, jti 
 	return data.SessionGenerationLease{Generation: f.gen, PrevJTI: "prev-jti", HadPrev: f.gen > 1}, nil
 }
 
-func (f *fakeSessionGenRepo) RestoreSessionJTI(_ context.Context, _ uint64, failedJTI string, lease data.SessionGenerationLease) (bool, error) {
+func (f *fakeSessionGenRepo) LoadSessionGeneration(ctx context.Context, _ uint64) (string, uint64, bool, error) {
+	f.loadCalls++
+	f.probeCtx(ctx, "mysql-load")
+	if f.callOrder != nil {
+		*f.callOrder = append(*f.callOrder, "mysql-load")
+	}
+	if f.loadErr != nil {
+		return "", 0, false, f.loadErr
+	}
+	if f.loadNotFound {
+		return "", 0, false, nil
+	}
+	row := f.loadRowJTI
+	if row == "" {
+		row = f.lastJTI
+	}
+	return row, f.gen, true, nil
+}
+
+func (f *fakeSessionGenRepo) RestoreSessionJTI(ctx context.Context, _ uint64, failedJTI string, lease data.SessionGenerationLease) (bool, error) {
 	f.restoreCalls = append(f.restoreCalls, struct {
 		FailedJTI string
 		Lease     data.SessionGenerationLease
 	}{failedJTI, lease})
+	f.probeCtx(ctx, "mysql-restore")
 	if f.callOrder != nil {
 		*f.callOrder = append(*f.callOrder, "mysql-restore")
 	}
@@ -79,8 +135,9 @@ func (f *fakeSessionGenRepo) RestoreSessionJTI(_ context.Context, _ uint64, fail
 	return true, nil
 }
 
-func (f *fakeSessionGenRepo) TombstoneSessionJTI(_ context.Context, _ uint64, jti string) (bool, error) {
+func (f *fakeSessionGenRepo) TombstoneSessionJTI(ctx context.Context, _ uint64, jti string) (bool, error) {
 	f.tombstoneCalls = append(f.tombstoneCalls, jti)
+	f.probeCtx(ctx, "mysql-tombstone")
 	if f.callOrder != nil {
 		*f.callOrder = append(*f.callOrder, "mysql-tombstone")
 	}

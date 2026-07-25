@@ -152,15 +152,18 @@ Redis 条件写、fenceLoginDelivery 交付终检、Transfer 前后终检、ACK 
   仍有进程内窗口;窗口内交付的是"已再次被轮换"的凭据,后续任何过门请求都会被拒,
   不构成持续能力(见 login.go 注释)。
 
-## 5. hub-allocator 写者继任协议(succession lease + fencing)——**稳态已实现;首次升级仍开放**(R9 CLOSED,2026-07-24 复审重开一处)
+## 5. hub-allocator 写者继任协议(succession lease + fencing)——稳态已实现;首次引导升级见 §5.4
 
-> **2026-07-24 复审补注(勿据本节旧"CLOSED"表述声称首次升级已闭合)**:writerlease 继任协议
-> 对**已运行 writerlease-aware 版本之间的滚动更新**成立(稳态不停服 + 单写)。但**从尚未包含
-> writerlease 的旧镜像首次升级到本协议版本**时,旧 Pod 不理解继任租约,与新 Pod 并存即出现无
-> fence 保护的双写窗口;而本文档他处与发布合约又要求 Recreate(会停唯一旧 Pod)。"不停服 + 单写"
-> 在这一次性迁移上仍无仓库内闭环路径,属仍开放的架构项(原 P0-7 残余),须专项设计一次性
-> writerlease 引导迁移(如:先发一个"只竞选不写、观测 token 单调"的中间版本预热继任,再切写)。
-> 稳态部分见下;首次引导迁移的方案未落地前不得对外声称本节全量 CLOSED。
+> **2026-07-25 更新(R10 复审 P0-5)**:首次引导升级的仪式已在 §5.4 落定并可执行(`hub.writer_lease_mode`
+> 三档 + 三跳发布)。**但请照实理解它的边界**:从"无 fence 的旧写者"迁到"有 fence 的新写者",
+> "零写暂停"与"零双写窗口"在原理上不可兼得(旧二进制既不竞选也不读 fence 键,新写者无法让它停手)。
+> §5.4 选的是**零双写**:每跳都在 `Recreate` 下完成,窗口 = 一次 Pod 重启(与迁移前每次发布的
+> 基线完全相同,不新增代价),第三跳换到 RollingUpdate 之后才进入稳态不停服。
+> 未按 §5.4 完成三跳前,不得把 hub-allocator 直接置于 RollingUpdate。
+>
+> **2026-07-24 复审补注(保留为背景)**:writerlease 继任协议对**已运行 writerlease-aware 版本
+> 之间的滚动更新**成立(稳态不停服 + 单写);从尚未包含 writerlease 的旧镜像首次升级时,旧 Pod
+> 不理解继任租约,与新 Pod 并存即出现无 fence 保护的双写窗口。
 
 历史背景:`deploy/k8s/services/services.yaml` 中 hub-allocator 曾显式
 `strategy: Recreate` + replicas=1,与「不停服更新」硬约束(PROGRESS.md
@@ -206,22 +209,37 @@ ReleaseAssignmentSeatExact、RecordInstanceTeardownProof。
 诚实残余(记录在案,非漏洞):
 
 - **每玩家 assignment 键**(`pandora:hub:player:<id>`,无 hashtag)不与
-  fence 键同 slot,无法纳入同一事务;该键由四层组合收口:
+  fence 键同 slot,无法纳入同一 {pod} 事务;该键由五层组合收口
+  (③⑤ 为 2026-07-25 R10 复审 P0-4 收紧):
   ① 业务闸门(入口拒非写者);② 既有精确 CAS(CompareAndSwapAssignment);
-  ③ **继任者水位推扫**(`AdvanceWriterFences`):新写者当选后,心跳清扫循环
-  把**全部已知 pod**(分片 SET ∪ saga 源 pod)的 fence 一次性推进到本届
-  token,消灭逐 slot 懒推进的「未触碰 pod」盲区——推扫完成后,前任在任何
-  {pod} slot 上的席位预留/账本写全部被拒,其签出的票在 Admission 点必然
-  找不到席位;④ **出票前写者复核**(`confirmWriterForTicket`):票据只在
-  「入口到返回全程持有租约」时交付,入口后失主的在途请求不返回票
-  (可重试 `ErrUnavailable`,重试路由到新写者重签)。残余缩窄为:失主
-  通知送达(session.Done)与出票复核之间的瞬时窗口内,前任可能写下一条
-  assignment 记录——该记录数据合法(席位是其在任内合法预留的),继任者
-  下次 CAS 接续或 TTL 回收,且票据未交付,无玩家可凭其进场。
+  ③ **继任者水位推扫是接流前硬门**(`AdvanceWriterFencesForToken` 挂在
+  `writerlease.Config.OnElected`):当选之后、**对外宣告持有领导权之前**必须先把
+  **全部已知 pod**(分片 SET ∪ saga 源 pod)的 fence 一次性推进到本届 token;
+  推扫失败即让位重选,该副本 `Current()` 恒不持有,写请求继续可重试拒绝。
+  此前推扫挂在心跳清扫 tick 上懒执行,"当选即接写、推扫尚未完成"之间前任在
+  未被触碰的 {pod} slot 上仍能写——该窗口已消除;④ **出票前写者复核**
+  (`confirmWriterForTicket`):票据只在「入口到返回全程持有租约」时交付,入口后
+  失主的在途请求不返回票(可重试 `ErrUnavailable`,重试路由到新写者重签);
+  ⑤ **每玩家持久水位**:归属记录自身携带
+  `HubAssignmentStorageRecord.writer_token`(`allocator.proto` 31)。同一 key 的
+  WATCH/MULTI/EXEC 天然原子,比较与写入在同一线性化点:`current.writer_token >
+  本届 token` → 零写入 `ErrWriterSuperseded`。被继任的旧写者因此**既不能覆盖也不能
+  删除**继任者写下的归属记录,即使继任者的推扫尚未触碰过任何相关 slot。
+  旧记录 / 未启用 fencing 时该字段为 0,按"尚无水位"放行(滚动升级双向兼容)。
+  残余缩窄为:失主通知送达(session.Done)与出票复核之间的瞬时窗口内,前任可能
+  写下一条 assignment 记录——该记录数据合法(席位是其在任内合法预留的)、水位是
+  自己那一届,继任者下次 CAS 因水位更高必然覆盖成功,且票据未交付,无玩家可凭其进场。
 - 滚动重叠期间打到非写者副本的写请求收到可重试 `ErrUnavailable`,
-  不是零感知——是「重试即成功」而非「必然成功」。
-- readiness 探针未与租约挂钩(避免非写者被摘除读流量);如后续把写读
-  分离到不同 Service,可再考虑基于租约的探针。
+  不是零感知——是「重试即成功」而非「必然成功」。生产 login 必须经
+  `dns:///hub-allocator-headless...:50021` + round_robin 拨号,否则重试会被 L4
+  钉在同一个非写者副本(标准生成链已机械收口,见 `gen_cluster_config.ps1`
+  `Set-ProdLoginHubHeadlessAddr`)。
+- readiness 探针**故意**不与租约挂钩:失主副本是有意的热备(拒写但可秒级接管),
+  把 readiness 门成"必须是 writer"会让滚动升级死锁(新副本要 Ready 才能让旧副本
+  Resign,旧副本不 Resign 新副本就当不上 writer),全体无法当选时更会把"写降级"
+  放大成"整服零端点"。长期无主改由 **`/healthz/writer`**(hub_allocator HTTP 端口)
+  暴露:`held/token/consecutive_campaign_errs/consecutive_activation_errs/degraded`,
+  `degraded=true` 持续超过 lease TTL 兜底窗口即应告警(R10 复审 P0-2)。
 - dsauthfence V3 的「单 Hub 写者」契约语义收窄为「单活跃届次写者」,
   由 fence 水位保证,V3 激活仪式本身不变。
 
@@ -241,6 +259,50 @@ ReleaseAssignmentSeatExact、RecordInstanceTeardownProof。
 
 备选(接受一次主动停机窗口时):`kubectl -n pandora scale deploy hub-allocator
 --replicas=0` → apply 新 manifest → 自动拉起。两法等价,两步法不产生额外窗口,优先。
+
+### 5.4 首次引导升级三跳(R10 复审 P0-5 收口,取代 §5.3 的两步法)
+
+**先说清原理边界,别按"零代价"理解**:旧二进制既不参与竞选、也不读 fence 键,新写者
+没有任何手段让它停手。因此"从无 fence 写者迁到有 fence 写者"这一次性迁移上,
+**零写暂停**与**零双写窗口**不可兼得——只能二选一。本仪式选**零双写**:每一跳都在
+现有 `strategy: Recreate` 下完成,窗口 = 一次 Pod 重启,与迁移前每次发布的基线完全相同
+(不新增代价;玩家不掉线、对局不中断,只是控制面写在这几秒内返回可重试 `ErrUnavailable`)。
+
+`hub.writer_lease_mode` 三档(`internal/conf`,留空 = `enforce` 保持现网行为):
+
+| 档位 | 竞选 | 注入 biz/repo fence | 写路径 | 用途 |
+|---|---|---|---|---|
+| `off` | 否 | 否 | 旧路径 | 仅历史单副本 Recreate 部署;RollingUpdate 下禁用 |
+| `warmup` | **是** | **否** | 旧路径(与旧二进制逐字节同行为) | 首次引导升级第一跳:先在生产观测继任链健康,不改写路径 |
+| `enforce` | 是 | 是 | 入口 gate + 接流前推扫硬门 + 存储级 fencing | 稳态 |
+
+三跳:
+
+1. **跳 1(Recreate,只换镜像,`writer_lease_mode: warmup`)**——新二进制的写路径与旧二进制
+   **完全一致**(不注入 fence、不写 fence 键、不拒非写者),Recreate 仍保证零重叠,所以这一跳
+   既不引入双写也不引入新的失败模式。观测期内确认:
+   - 日志恰好一个 Pod 打 `writerlease elected token=…`,重启后 token **严格变大**;
+   - `SIGTERM` 时打 `resigned … (shutdown)`,新 Pod 亚秒接任;
+   - `curl <pod>:51021/healthz/writer` → `enabled:true, mode:"warmup", held:true, degraded:false`;
+     临时封锁 etcd 应看到 `consecutive_campaign_errs` 增长且 `degraded` 转 true,恢复后自愈。
+   观测多久由运维定(建议至少跨一次正常发布 + 一次 Pod 重启)。**这一跳可随时回滚镜像,零数据影响**
+   ——warmup 没有写下任何 fence 键。
+2. **跳 2(Recreate,只改配置 `writer_lease_mode: enforce`)**——fencing 与入口闸门正式生效:
+   当选副本先推扫全 pod fence 水位成功才接流,归属记录开始携带 `writer_token`。仍是 Recreate,
+   零重叠零双写。回滚 = 把配置改回 `warmup` 再滚一次(**不需要回滚镜像**);已写下的 fence 键与
+   `writer_token` 都只是"只进不退的水位",对 warmup/旧路径写者无副作用。
+3. **跳 3(单独 apply `strategy: RollingUpdate{maxSurge:1, maxUnavailable:0}`)**——k8s `spec.strategy`
+   不属于 pod template,单独修改**不重建 Pod**,零中断。此后所有升级都是不停服滚动,单写者由
+   运行时协议保证。
+
+与 §5.3 的关系:§5.3 把"换镜像"与"开 fencing"绑在同一跳,回滚只能回滚镜像;§5.4 把两者拆开,
+故障面更小、回滚更便宜,窗口代价相同。**优先按 §5.4 执行**。
+
+**验收(集群内,本机无法代跑)**:跳 1 的三条观测项;跳 2 后确认 `elected` 日志之后才出现首个
+`AssignHub` 成功、`hub_writer_fence_swept`/`writerlease elected` 顺序正确、`/healthz/writer`
+的 `consecutive_activation_errs` 为 0;跳 3 后按 §5.1 的滚动重叠冒烟(两 Pod 期间只有一个打
+`elected`,非写者返回可重试 `ErrUnavailable`,login 经 round_robin 重试成功)。
+未跑完验收前,本节按 OPEN 记录。
 
 ## 6. 存量库检查(dbcheck)
 

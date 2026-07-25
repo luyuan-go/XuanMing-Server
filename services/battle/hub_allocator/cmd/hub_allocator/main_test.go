@@ -52,6 +52,19 @@ func TestKubernetesDeploymentRollingUpdateRequiresWriterLease(t *testing.T) {
 		!strings.Contains(source, "repo.SetWriterFence(") {
 		t.Fatal("RollingUpdate is only safe with the writer succession lease wired into usecase and repos (R9 P0-7)")
 	}
+	// R10 复审 P0-4:继任者 fence 推扫必须是**接流前硬门**(当选后、宣告持有前跑完),
+	// 不能退回后台 sweep tick 上的懒执行——那会留下"已接写、继任未完成"的双写窗口。
+	if !strings.Contains(source, "leaseCfg.OnElected = func(") ||
+		!strings.Contains(source, "repo.AdvanceWriterFencesForToken(ctx, token)") {
+		t.Fatal("writer lease must gate writability on the successor fence sweep (R10 P0-4)")
+	}
+	// R10 复审 P0-2:长期无主必须可观测(/healthz/writer;**不接 readiness**,热备语义)。
+	if !strings.Contains(source, "writerHealth.Set(writerLease, writerMode)") {
+		t.Fatal("writer lease health must be exposed for alerting (R10 P0-2)")
+	}
+	if strings.Contains(section, "readinessProbe") && strings.Contains(section, "/healthz/writer") {
+		t.Fatal("/healthz/writer is an observability endpoint; wiring it into readiness deadlocks rolling upgrades")
+	}
 }
 
 func TestHubWriterStagesCapabilityButCannotServeBeforePolicyV3(t *testing.T) {

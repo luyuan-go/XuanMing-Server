@@ -53,8 +53,36 @@ const (
 	// campaignErrEscalateAfter:连续竞选失败达此次数后日志从 Warn 升级 Error
 	// (复审 P0-6:无限重试不能 fail-silent——长时间无写者必须可告警)。按默认
 	// 2s 退避,15 次 ≈ 30s 无主,超过 lease TTL 兜底接任窗口即异常。
+	// 激活钩子(OnElected)连续失败复用同一阈值:两者都表现为"长期无可写副本"。
 	campaignErrEscalateAfter = 15
 )
+
+// HealthSnapshot 是竞选/激活健康度快照(R10 复审 P0-2:长期无主必须可观测)。
+// held/token 是当前对外宣告的持有状态;两组计数分别定位"选不上"与"选上了但激活不过"。
+type HealthSnapshot struct {
+	// Held/Token 与 Current() 同源(激活钩子成功后才为 true)。
+	Held  bool
+	Token uint64
+	// ConsecutiveCampaignErrs/LastCampaignErr:连续竞选失败次数与最近原因(当选清零)。
+	ConsecutiveCampaignErrs uint64
+	LastCampaignErr         string
+	// ConsecutiveActivationErrs/LastActivationErr:当选后激活钩子连续失败次数与最近原因
+	// (激活成功清零)。>0 表示本副本能当选但**尚未获得写权**,写请求仍被拒。
+	ConsecutiveActivationErrs uint64
+	LastActivationErr         string
+	// EscalateAfter 是日志升级/告警建议阈值(连续失败达此值 ≈ 超过 lease TTL 兜底窗口)。
+	EscalateAfter uint64
+}
+
+// Degraded 报告"本副本长期既非写者、也无法成为写者"。运维告警/观测端点用它把
+// 无限重试的热备语义与真正的持续无主区分开(不接 K8s readiness——见 Config.OnElected
+// 与 docs/design/audit-residual-architecture-20260724.md A1:热备副本必须保持可服务)。
+func (h HealthSnapshot) Degraded() bool {
+	if h.Held {
+		return false
+	}
+	return h.ConsecutiveCampaignErrs >= h.EscalateAfter || h.ConsecutiveActivationErrs >= h.EscalateAfter
+}
 
 // Config 是继任租约配置。
 type Config struct {
@@ -70,6 +98,19 @@ type Config struct {
 	LeaseTTLSec int
 	// DialTimeout 留空用 DefaultDialTimeout。
 	DialTimeout time.Duration
+	// OnElected 是**接流前硬门**(R10 复审 P0-4):当选之后、对外宣告持有领导权之前
+	// 必须成功跑完的激活动作。返回 nil 才 `Current() → held`,业务写路径与存储级
+	// fencing 才会放行本副本。
+	//
+	// 存在意义:继任者的 fence 水位推扫(hub_allocator AdvanceWriterFences)此前挂在
+	// 后台 sweep tick 上懒执行,于是"当选瞬间"到"推扫完成"之间本副本已经在接写,而
+	// 前任在**尚未被推扫触碰的 {pod} slot** 上仍能写入——正是审核指出的"继任 sweep
+	// 不是接流前硬门"。放进本钩子后,推扫成为获得写权的前置条件。
+	//
+	// 契约:必须幂等(同一 token 可能重试)、必须尊重 ctx(失主/进程退出即取消)、
+	// 失败按普通竞选失败处理(让位 → 退避 → 重新竞选),不退出进程;连续失败可经
+	// Health() 观测。token 与本届 Current() 将要宣告的 fencing token 相同。
+	OnElected func(ctx context.Context, token uint64) error
 }
 
 // Term 是一届领导任期:token 单调、失主通知、主动让位。
@@ -103,20 +144,35 @@ type Lease struct {
 	consecutiveCampaignErrs atomic.Uint64
 	// lastCampaignErr:最近一次竞选失败原因(atomic.Value[string];当选清空)。
 	lastCampaignErr atomic.Value
+	// consecutiveActivationErrs/lastActivationErr:当选后激活钩子(Config.OnElected)
+	// 连续失败次数与最近原因(激活成功清零;R10 P0-4 接流前硬门可观测)。
+	consecutiveActivationErrs atomic.Uint64
+	lastActivationErr         atomic.Value
 
 	cancel    context.CancelFunc
 	done      chan struct{}
 	closeOnce sync.Once
 }
 
-// Health 返回竞选健康度快照(复审 P0-6:竞选无限重试不得 fail-silent,运维/探针
-// 可轮询此接口把「长期无主」暴露为告警)。consecutiveErrs>0 且持续增长 = etcd
-// 不可达/配置错误,lastErr 携带最近失败原因。
-func (l *Lease) Health() (consecutiveErrs uint64, lastErr string) {
-	if v, ok := l.lastCampaignErr.Load().(string); ok {
-		lastErr = v
+// Health 返回竞选/激活健康度快照(复审 P0-6 + R10 P0-2:无限重试不得 fail-silent,
+// 运维观测端点可轮询此接口把「长期无主」暴露为告警)。计数持续增长 = etcd 不可达 /
+// 配置错误 / 激活动作(如继任者 fence 推扫)持续失败。
+func (l *Lease) Health() HealthSnapshot {
+	token, held := l.Current()
+	snap := HealthSnapshot{
+		Held:                      held,
+		Token:                     token,
+		ConsecutiveCampaignErrs:   l.consecutiveCampaignErrs.Load(),
+		ConsecutiveActivationErrs: l.consecutiveActivationErrs.Load(),
+		EscalateAfter:             campaignErrEscalateAfter,
 	}
-	return l.consecutiveCampaignErrs.Load(), lastErr
+	if v, ok := l.lastCampaignErr.Load().(string); ok {
+		snap.LastCampaignErr = v
+	}
+	if v, ok := l.lastActivationErr.Load().(string); ok {
+		snap.LastActivationErr = v
+	}
+	return snap
 }
 
 // Current 返回 (fencing token, 是否持有领导权)。数据层把 token 写进同 slot fence key
@@ -159,7 +215,7 @@ func StartWithBackend(ctx context.Context, backend Backend, cfg Config) *Lease {
 	normalize(&cfg)
 	runCtx, cancel := context.WithCancel(ctx)
 	l := &Lease{backend: backend, identity: cfg.Identity, cancel: cancel, done: make(chan struct{})}
-	go l.run(runCtx, cfg.Election)
+	go l.run(runCtx, cfg.Election, cfg.OnElected)
 	return l
 }
 
@@ -178,7 +234,7 @@ func normalize(cfg *Config) {
 	}
 }
 
-func (l *Lease) run(ctx context.Context, election string) {
+func (l *Lease) run(ctx context.Context, election string, onElected func(context.Context, uint64) error) {
 	defer close(l.done)
 	for ctx.Err() == nil {
 		term, err := l.backend.Campaign(ctx, l.identity)
@@ -203,6 +259,32 @@ func (l *Lease) run(ctx context.Context, election string) {
 		}
 		l.consecutiveCampaignErrs.Store(0)
 		l.lastCampaignErr.Store("")
+		// 接流前硬门(R10 P0-4):当选 ≠ 可写。激活钩子(继任者 fence 水位推扫等)
+		// 必须先跑成功,本副本才对外宣告持有领导权;失败就让位重选,期间 Current()
+		// 保持不持有,写请求继续被拒(可重试),绝不出现"已接流但继任未完成"的窗口。
+		if onElected != nil {
+			if aerr := l.activate(ctx, term, onElected); aerr != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				fails := l.consecutiveActivationErrs.Add(1)
+				l.lastActivationErr.Store(aerr.Error())
+				if fails >= campaignErrEscalateAfter {
+					klog.Errorf("[writerlease] activation failing persistently election=%s identity=%s token=%d consecutive=%d err=%v — elected but never writable, check storage/etcd",
+						election, l.identity, term.Token(), fails, aerr)
+				} else {
+					klog.Warnf("[writerlease] activation failed election=%s identity=%s token=%d consecutive=%d err=%v — resigning to retry",
+						election, l.identity, term.Token(), fails, aerr)
+				}
+				resignTerm(term)
+				if !sleepCtx(ctx, recampaignBackoff) {
+					return
+				}
+				continue
+			}
+			l.consecutiveActivationErrs.Store(0)
+			l.lastActivationErr.Store("")
+		}
 		l.current.Store(term.Token())
 		klog.Infof("[writerlease] elected election=%s identity=%s token=%d", election, l.identity, term.Token())
 		select {
@@ -223,6 +305,32 @@ func (l *Lease) run(ctx context.Context, election string) {
 			return
 		}
 	}
+}
+
+// activate 在"已当选、未宣告"的窗口里跑激活钩子。钩子 ctx 同时受进程退出与本届失主
+// 驱动:任期一旦失效立即取消,避免用已作废的 token 继续对存储做推进。
+func (l *Lease) activate(ctx context.Context, term Term, onElected func(context.Context, uint64) error) error {
+	actCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		select {
+		case <-term.Lost():
+			cancel()
+		case <-stop:
+		}
+	}()
+	if err := onElected(actCtx, term.Token()); err != nil {
+		return err
+	}
+	// 钩子成功但任期在此期间已失效 → 不得宣告持有(否则用作废 token 接流)。
+	select {
+	case <-term.Lost():
+		return errors.New("writerlease: term lost during activation")
+	default:
+	}
+	return nil
 }
 
 func resignTerm(term Term) {

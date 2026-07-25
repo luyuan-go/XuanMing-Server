@@ -1621,8 +1621,10 @@ func (u *HubUsecase) RunHeartbeatSweep(ctx context.Context) {
 					plog.With(ctx).Infow("msg", "hub_heartbeat_sweep_resumed_writer")
 					wasWriter = true
 				}
-				// 继任者水位推扫:每届当选后把全部已知 pod 的 fence 一次性推进到本届
-				// token,消灭懒推进的「未触碰 pod」盲区;失败下个 tick 重试,不阻塞扫描。
+				// 继任者水位推扫的**再断言**:R10 P0-4 起推扫已前移为接流前硬门
+				// (writerlease.Config.OnElected,当选后宣告持有前必须跑成功),故正常情况下
+				// 这里恒是 cur==mine 的零写入 no-op。保留它是为 fence 已注入但未走激活钩子
+				// 的装配(dev/测试/warmup 误配)兜底;失败下个 tick 重试,不阻塞扫描。
 				if token != sweptToken {
 					if err := u.repo.AdvanceWriterFences(ctx); err != nil {
 						plog.With(ctx).Warnw("msg", "hub_writer_fence_sweep_failed", "token", token, "err", err)
