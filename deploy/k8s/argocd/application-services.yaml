@@ -35,7 +35,9 @@ spec:
     # ⚠️ 这是 **GitHub 远端地址**，与本地目录名无关（本地叫 XuanMing-Server 还是
     #    Pandora-Server 都不影响这里）。但按 CLAUDE.md §13「Xuanming 已废弃命名」，
     #    若将来把 GitHub 仓库也改名，**必须同步改这一行**，否则 Argo CD 拉不到代码。
-    repoURL: https://github.com/luyuan-cpp/XuanMing-Server.git
+    # 2026-07-25：仓库 owner 已从 luyuan-cpp 迁到 luyuan-go（push 时 GitHub 返回
+    #    "This repository moved"）。这里直接用规范地址，不依赖重定向。
+    repoURL: https://github.com/luyuan-go/XuanMing-Server.git
     targetRevision: main
     path: deploy/k8s/services
 
