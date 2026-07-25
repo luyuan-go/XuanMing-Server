@@ -232,6 +232,106 @@ func TestActivationHookGatesWritability(t *testing.T) {
 	})
 }
 
+// R11 复审 P0-2 缺口 1/2:激活钩子**永久阻塞**(不是返回错误)必须在有界时间内转成
+// 计数中的失败并让位。修复前 activate 用 context.WithCancel 无期限,阻塞时:本副本
+// 永远不可写、同时占着 leader key 不让位 → 全集群无写者,而 degraded 恒 false 静默。
+//
+// 断言:① 阻塞被期限打断并计入 ConsecutiveActivationErrs;② 任期被让位(不霸占
+// leader key);③ 连续阻塞最终把 Degraded() 抬成 true(告警可见);④ 全程不持有。
+func TestBlockedActivationIsBoundedResignsAndDegrades(t *testing.T) {
+	terms := make([]*fakeTerm, 0, 32)
+	for i := 0; i < 32; i++ {
+		terms = append(terms, newFakeTerm(uint64(300+i)))
+	}
+	backend := &fakeBackend{terms: terms}
+	blocked := make(chan struct{})
+	defer close(blocked)
+	var hookCalls atomic.Uint64
+	lease := StartWithBackend(context.Background(), backend, Config{
+		Election: "hub_allocator/writer",
+		// 钩子永久阻塞,只由期限打断(真实形态:etcd/Redis 卡住不返回错误)。
+		OnElected: func(ctx context.Context, _ uint64) error {
+			hookCalls.Add(1)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-blocked:
+				return nil
+			}
+		},
+		ActivationTimeout: 30 * time.Millisecond,
+	})
+	defer func() { _ = lease.Close() }()
+
+	waitFor(t, "blocked activation counted as failure", func() bool {
+		return lease.Health().ConsecutiveActivationErrs >= 1
+	})
+	if _, held := lease.Current(); held {
+		t.Fatal("a blocked activation must never announce held")
+	}
+	if !terms[0].wasResigned() {
+		t.Fatal("a blocked activation must resign its term; holding the leader key starves every other replica")
+	}
+	// 让位后必须继续重新竞选(热备语义:不退出进程、不放弃)。等一个 recampaignBackoff。
+	waitFor(t, "activation retried after resigning", func() bool { return hookCalls.Load() >= 2 })
+	// 计数持续累加即可抬起 Degraded(阈值语义见 TestDegradedPredicate;这里只证明阻塞
+	// 确实进入了同一条计数通道,不再是"永久阻塞 → 计数恒 0 → 静默")。
+	snap := lease.Health()
+	if snap.EscalateAfter == 0 {
+		t.Fatal("health snapshot must expose the alerting threshold")
+	}
+	if snap.LastActivationErr == "" {
+		t.Fatal("blocked activation must record a reason for the operator")
+	}
+}
+
+// Degraded() 是告警表达式的语义本体(此前全仓零测试覆盖)。它必须:持有写权时恒 false
+// (热备/正常写者不报警),不持有且竞选或激活连续失败达阈值时 true。
+func TestDegradedPredicate(t *testing.T) {
+	cases := []struct {
+		name string
+		snap HealthSnapshot
+		want bool
+	}{
+		{"holding writer is never degraded", HealthSnapshot{
+			Held: true, ConsecutiveCampaignErrs: 99, ConsecutiveActivationErrs: 99, EscalateAfter: 15}, false},
+		{"healthy hot standby is not degraded", HealthSnapshot{EscalateAfter: 15}, false},
+		{"campaign failing below threshold", HealthSnapshot{
+			ConsecutiveCampaignErrs: 14, EscalateAfter: 15}, false},
+		{"campaign failing at threshold", HealthSnapshot{
+			ConsecutiveCampaignErrs: 15, EscalateAfter: 15}, true},
+		{"activation failing at threshold", HealthSnapshot{
+			ConsecutiveActivationErrs: 15, EscalateAfter: 15}, true},
+	}
+	for _, c := range cases {
+		if got := c.snap.Degraded(); got != c.want {
+			t.Fatalf("%s: Degraded()=%v want %v (%+v)", c.name, got, c.want, c.snap)
+		}
+	}
+}
+
+// 钩子吞掉 ctx 错误、期限已到却返回 nil 时,同样不许宣告持有(否则用作废 token 接流)。
+func TestActivationSwallowingDeadlineStillNotHeld(t *testing.T) {
+	terms := []*fakeTerm{newFakeTerm(401), newFakeTerm(402)}
+	backend := &fakeBackend{terms: terms}
+	lease := StartWithBackend(context.Background(), backend, Config{
+		Election: "hub_allocator/writer",
+		OnElected: func(ctx context.Context, _ uint64) error {
+			<-ctx.Done()
+			return nil // 故意吞掉期限错误
+		},
+		ActivationTimeout: 20 * time.Millisecond,
+	})
+	defer func() { _ = lease.Close() }()
+
+	waitFor(t, "swallowed deadline counted as failure", func() bool {
+		return lease.Health().ConsecutiveActivationErrs >= 1
+	})
+	if _, held := lease.Current(); held {
+		t.Fatal("activation that ran past its budget must not announce held even if it returns nil")
+	}
+}
+
 // 激活失败 = 让位重选,期间恒不持有;失败可经 Health() 观测(Degraded 用于告警)。
 func TestActivationFailureNeverAnnouncesHeld(t *testing.T) {
 	terms := make([]*fakeTerm, 0, 4)

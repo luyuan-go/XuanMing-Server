@@ -371,15 +371,18 @@ func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCou
 // 同 slot,一个 mini-tx;全局 shards/active 不同 slot,拆为独立命令。全部幂等,残留由 ListShards
 // 自愈 + active 扫到已删镜像跳过兜底。
 func (r *RedisHubRepo) RemoveShard(ctx context.Context, pod string) error {
-	// per-pod 同 slot:镜像 + 成员索引一起删。
-	if _, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.Del(ctx, shardKey(pod))
-		pipe.Del(ctx, membersKey(pod))
-		return nil
-	}); err != nil {
+	// per-pod 同 slot:镜像 + 成员索引一起删,受写者水位保护(R11 复审 P0-4 续)。
+	// 删分片是不可回收的破坏性写:失主旧写者删掉继任者刚建立的分片会让在场玩家的
+	// 心跳/席位全部失去镜像,故必须与水位同事务比较。
+	if err := r.fencedPodTx(ctx, pod, []string{shardKey(pod), membersKey(pod)},
+		func(pipe redis.Pipeliner) {
+			pipe.Del(ctx, shardKey(pod))
+			pipe.Del(ctx, membersKey(pod))
+		}); err != nil {
 		return err
 	}
-	// 全局索引:独立命令(不同 slot)。
+	// 全局索引:独立命令(不同 slot,进不了上面的事务)。走到这里说明本副本刚通过了同 pod
+	// 的水位比较,是当届写者;残留由 ListShards 自愈 + active 扫到已删镜像跳过兜底。
 	if err := r.rdb.SRem(ctx, shardsSetKey, pod).Err(); err != nil {
 		return err
 	}
@@ -618,26 +621,37 @@ func (r *RedisHubRepo) GetTeamShard(ctx context.Context, teamID uint64) (string,
 	return pod, true, nil
 }
 
+// SetTeamShard 写「队伍→分片」提示键。teamKey 无 hashtag,与任何 {pod} 水位不同 slot,
+// 做不成原子 fencing;该键是带 TTL 的**软提示**(只影响队友是否被优先安排到同分片,不参与
+// 准入/归属/容量判定),失主旧写者写脏它最多让一次组队分流不理想,TTL 到期即自愈。
+// 故降级为入口级写者校验(R11 复审 P0-4 续)。
 func (r *RedisHubRepo) SetTeamShard(ctx context.Context, teamID uint64, pod string, assignmentTTL time.Duration) error {
+	if err := r.requireWriterHeld(); err != nil {
+		return err
+	}
 	return r.rdb.Set(ctx, teamKey(teamID), pod, assignmentTTL).Err()
 }
 
 func (r *RedisHubRepo) AddShardMember(ctx context.Context, pod string, playerID uint64, assignmentTTL time.Duration) error {
+	// membersKey 与 pod 同 hashtag,可原子 fencing。虽然注释说成员索引漂移不影响正确性
+	// (强制整合有 DS drain 心跳双通道兜底),但它是服务端权威搬迁的枚举源,失主旧写者
+	// 往里加/删成员会让整合扫到错误的玩家集合,能原子挡就挡(R11 复审 P0-4 续)。
 	key := membersKey(pod)
-	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+	return r.fencedPodTx(ctx, pod, []string{key}, func(pipe redis.Pipeliner) {
 		pipe.SAdd(ctx, key, strconv.FormatUint(playerID, 10))
 		if assignmentTTL > 0 {
 			pipe.Expire(ctx, key, assignmentTTL)
 		} else {
 			pipe.Persist(ctx, key)
 		}
-		return nil
 	})
-	return err
 }
 
 func (r *RedisHubRepo) RemoveShardMember(ctx context.Context, pod string, playerID uint64) error {
-	return r.rdb.SRem(ctx, membersKey(pod), strconv.FormatUint(playerID, 10)).Err()
+	key := membersKey(pod)
+	return r.fencedPodTx(ctx, pod, []string{key}, func(pipe redis.Pipeliner) {
+		pipe.SRem(ctx, key, strconv.FormatUint(playerID, 10))
+	})
 }
 
 func (r *RedisHubRepo) ListShardMembers(ctx context.Context, pod string) ([]uint64, error) {
@@ -660,19 +674,35 @@ func (r *RedisHubRepo) RegisterTransferCleanup(ctx context.Context, sourcePod st
 	if strings.TrimSpace(sourcePod) == "" || !ref.valid() {
 		return errcode.New(errcode.ErrInvalidArg, "complete Hub transfer cleanup ref required")
 	}
+	// R11 复审 P0-4 续:cleanup 索引是「CAS 成功后绝不会缺 reconciler 索引」这条不变量的
+	// 载体(见 transferCleanupKey 注释),失主旧写者动它会让 saga 变孤儿或被提前摘掉,
+	// 属正确性相关,必须受水位约束。
+	// 全局 pod 索引跨 slot,进不了 per-pod 事务,只能入口级校验;它是持久 superset,
+	// 多写一个 pod 只让 reconciler 多扫一轮,不破坏不变量。
+	if err := r.requireWriterHeld(); err != nil {
+		return err
+	}
 	// Global index first. If either command has an unknown result, callers must
 	// not publish assignment; any orphan is removed by the reconciler.
 	if err := r.rdb.SAdd(ctx, transferCleanupPodsKey, sourcePod).Err(); err != nil {
 		return err
 	}
-	return r.rdb.SAdd(ctx, transferCleanupKey(sourcePod), encodeTransferCleanupRef(ref)).Err()
+	key := transferCleanupKey(sourcePod)
+	return r.fencedPodTx(ctx, sourcePod, []string{key}, func(pipe redis.Pipeliner) {
+		pipe.SAdd(ctx, key, encodeTransferCleanupRef(ref))
+	})
 }
 
 func (r *RedisHubRepo) RemoveTransferCleanup(ctx context.Context, sourcePod string, ref TransferCleanupRef) error {
 	if strings.TrimSpace(sourcePod) == "" || !ref.valid() {
 		return errcode.New(errcode.ErrInvalidArg, "complete Hub transfer cleanup ref required")
 	}
-	return r.rdb.SRem(ctx, transferCleanupKey(sourcePod), encodeTransferCleanupRef(ref)).Err()
+	// 摘索引=宣告该 ref 的清理已完成。失主旧写者摘掉继任者仍在处理的 ref 会让旧 owner
+	// 的 seat/session 永远没人退,故与注册同受水位约束(R11 复审 P0-4 续)。
+	key := transferCleanupKey(sourcePod)
+	return r.fencedPodTx(ctx, sourcePod, []string{key}, func(pipe redis.Pipeliner) {
+		pipe.SRem(ctx, key, encodeTransferCleanupRef(ref))
+	})
 }
 
 func (r *RedisHubRepo) ListTransferCleanupPods(ctx context.Context) ([]string, error) {
@@ -696,9 +726,16 @@ func (r *RedisHubRepo) ListTransferCleanups(ctx context.Context, sourcePod strin
 	return out, nil
 }
 
+// TryTransferCooldown / ClearTransferCooldown 操作 per-player 冷却占坑键。该键无 hashtag,
+// 与任何 {pod} 水位不同 slot,做不成原子 fencing;它是**防刷限流**键(带 TTL,不参与准入、
+// 归属或容量判定),失主旧写者动它最多让某个玩家多切一次线或少等一会儿,TTL 到期自愈。
+// 故降级为入口级写者校验(R11 复审 P0-4 续)。
 func (r *RedisHubRepo) TryTransferCooldown(ctx context.Context, playerID uint64, cooldown time.Duration) (bool, error) {
 	if cooldown <= 0 {
 		return true, nil // 不限流
+	}
+	if err := r.requireWriterHeld(); err != nil {
+		return false, err
 	}
 	// SET key 1 NX EX cooldown:占坑成功=首次切线;已存在=冷却中。
 	ok, err := r.rdb.SetNX(ctx, transferCooldownKey(playerID), "1", cooldown).Result()
@@ -709,6 +746,9 @@ func (r *RedisHubRepo) TryTransferCooldown(ctx context.Context, playerID uint64,
 }
 
 func (r *RedisHubRepo) ClearTransferCooldown(ctx context.Context, playerID uint64) error {
+	if err := r.requireWriterHeld(); err != nil {
+		return err
+	}
 	return r.rdb.Del(ctx, transferCooldownKey(playerID)).Err()
 }
 

@@ -33,16 +33,22 @@ type PlayerConf struct {
 	// 与 login demo-skip 风格一致;关闭时 SelectHero 返回 ERR_PLAYER_FEATURE_DISABLED)。
 	HeroSelectionEnabled bool `yaml:"hero_selection_enabled,omitempty" json:"hero_selection_enabled,omitempty"`
 
-	// LoadoutCustomizeEnabled 出战装备预设 / 天赋树自定义功能开关(默认 false,demo 阶段跳过;
+	// LoadoutCustomizeEnabled 出战装备预设 / 天赋树自定义功能开关(默认 false;
 	// 关闭时 SetEquipment / SetTalents / ResetTalents 返回 ERR_PLAYER_FEATURE_DISABLED;
 	// 授予类 GrantTalentPoints 由系统驱动不受此开关影响)。
 	//
-	// ⚠️ 安全(2026-06-17 审查):SetEquipment 目前**只校验槽位不重复 + item_config_id 非 0**,
-	// 未校验玩家是否拥有该装备 / item 是否为装备 / 槽位是否匹配。因 GetLoadout 会把装备转成
-	// Battle DS 初始 GameplayEffect,启用后等于客户端可给自己配任意装备。
-	// **在接 inventory/配置表做拥有权 + 类型 + 槽位校验前,严禁对客户端开放**:
-	// (1) 生产保持 false;(2) 不在 Envoy 暴露 player.v1.PlayerService 路由(当前未暴露)。
+	// 2026-07-25:2026-06-17 审查提出的三项校验已补齐,本开关不再是唯一防线——
+	//   - isEquip / slotMatch:读 configtable 道具表(d_道具.xlsx「装备部位」列),零 RPC;
+	//   - ownEquipment:经 inventory.CheckItemsOwned 系统 RPC 确认持有(见 InventoryAddr);
+	//   - SetTalents:读 configtable 专精表校验等级上限 / 前置 / 总消耗。
+	// 三条依赖任一缺失(表未加载 / InventoryAddr 未配)一律 fail-closed 拒绝,不会退化成放行。
+	// 因此打开本开关的前提是 **config_table.dir 已就绪 + inventory_addr 已配置**。
 	LoadoutCustomizeEnabled bool `yaml:"loadout_customize_enabled,omitempty" json:"loadout_customize_enabled,omitempty"`
+
+	// InventoryAddr inventory 服务 gRPC 端点(host:port,内网直连无 JWT)。
+	// SetEquipment 的拥有权校验依赖它;留空 = 拥有权校验器不接线,SetEquipment 直接
+	// fail-closed 返回内部错误(不会静默跳过校验)。LoadoutCustomizeEnabled=true 时必配。
+	InventoryAddr string `yaml:"inventory_addr,omitempty" json:"inventory_addr,omitempty"`
 
 	// ConsumeTopics 本服订阅的 kafka topic(默认 [player.update])。
 	ConsumeTopics []string `yaml:"consume_topics,omitempty" json:"consume_topics,omitempty"`

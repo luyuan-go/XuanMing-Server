@@ -504,6 +504,189 @@ func TestWriterFence_UnconditionalSetAssignmentRejectedWhenFenced(t *testing.T) 
 	}
 }
 
+// R11 复审 P0-4 续:assignment 之外的写入口同样不许被失主旧写者穿过。
+//
+// **两级契约,不许混为一谈**(键的 slot 决定能做到哪一级):
+//
+//	A 级(原子 fencing):键与 pod 同 hashtag,水位比较与业务写同一 EXEC。
+//	  既挡"已知失主",也挡"被更高 token 继任"。归属/席位/账本/清理索引必须是 A 级。
+//	B 级(入口级校验):键无 hashtag(per-team 提示、per-player 冷却),进不了 {pod} 事务。
+//	  只挡"已知失主";旧写者若尚未察觉失租仍能写进去。**仅允许**用于带 TTL、
+//	  丢失即自愈、不参与准入/归属/容量判定的键。
+//
+// 本测试把两级分开断言,防止下一轮把 B 级当 A 级宣称收口(或反过来把 B 级当漏洞重报)。
+func TestWriterFence_ShardWritePathsRejectStaleWriter(t *testing.T) {
+	ctx := context.Background()
+	const pod = "pandora-hub-global-1"
+	const playerID = uint64(2001)
+	const teamID = uint64(3001)
+	ref := TransferCleanupRef{PlayerID: playerID, TargetAssignmentID: "target-a"}
+
+	cases := []struct {
+		name string
+		// atomic=true 即 A 级:落后 token 也必须被拒。
+		atomic bool
+		// seed 建立"继任者已写入"的既有状态(用无 fence 的仓库完成,避开被拒)。
+		seed func(t *testing.T, repo *RedisHubRepo)
+		call func(repo *RedisHubRepo) error
+		// key 是必须零变化的目标键(空串=只检查返回码)。
+		key string
+	}{
+		{
+			name: "RemoveShard", atomic: true, key: shardKey(pod),
+			seed: func(t *testing.T, repo *RedisHubRepo) {
+				if err := repo.CreateShard(ctx, sampleShard(pod, 1, 0), testTTL); err != nil {
+					t.Fatalf("seed shard: %v", err)
+				}
+			},
+			call: func(repo *RedisHubRepo) error { return repo.RemoveShard(ctx, pod) },
+		},
+		{
+			name: "AddShardMember", atomic: true, key: membersKey(pod),
+			call: func(repo *RedisHubRepo) error {
+				return repo.AddShardMember(ctx, pod, playerID, testTTL)
+			},
+		},
+		{
+			name: "RemoveShardMember", atomic: true, key: membersKey(pod),
+			seed: func(t *testing.T, repo *RedisHubRepo) {
+				if err := repo.AddShardMember(ctx, pod, playerID, testTTL); err != nil {
+					t.Fatalf("seed member: %v", err)
+				}
+			},
+			call: func(repo *RedisHubRepo) error {
+				return repo.RemoveShardMember(ctx, pod, playerID)
+			},
+		},
+		{
+			// 注意:本入口的**全局 pod 索引**(跨 slot)只有 B 级保护,旧写者可能多加一个
+			// pod 名。那是持久 superset,只让 reconciler 多扫一轮,不破坏不变量;这里断言的
+			// 是承载不变量的 per-pod ref 集合零变化。
+			name: "RegisterTransferCleanup", atomic: true, key: transferCleanupKey(pod),
+			call: func(repo *RedisHubRepo) error {
+				return repo.RegisterTransferCleanup(ctx, pod, ref)
+			},
+		},
+		{
+			name: "RemoveTransferCleanup", atomic: true, key: transferCleanupKey(pod),
+			seed: func(t *testing.T, repo *RedisHubRepo) {
+				if err := repo.RegisterTransferCleanup(ctx, pod, ref); err != nil {
+					t.Fatalf("seed cleanup ref: %v", err)
+				}
+			},
+			call: func(repo *RedisHubRepo) error {
+				return repo.RemoveTransferCleanup(ctx, pod, ref)
+			},
+		},
+		{
+			name: "SetTeamShard", atomic: false, key: teamKey(teamID),
+			call: func(repo *RedisHubRepo) error {
+				return repo.SetTeamShard(ctx, teamID, pod, testTTL)
+			},
+		},
+		{
+			name: "ClearTransferCooldown", atomic: false, key: transferCooldownKey(playerID),
+			call: func(repo *RedisHubRepo) error {
+				return repo.ClearTransferCooldown(ctx, playerID)
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			repo, mr := newRepo(t)
+			if c.seed != nil {
+				c.seed(t, repo) // 无 fence 建种子:继任者已经写好的既有状态
+			}
+			before, _ := mr.Get(c.key)
+			// 继任者(第 9 届)已推扫过本 pod 的水位;本副本仍以为自己是第 7 届写者。
+			mr.Set(wfenceKey(pod), "9")
+			repo.SetWriterFence(&fakeWriterFence{token: 7, held: true})
+
+			err := c.call(repo)
+			if c.atomic {
+				if errcode.As(err) != errcode.ErrUnavailable {
+					t.Fatalf("A 级入口必须拒绝落后 token,got %v", err)
+				}
+				if after, _ := mr.Get(c.key); after != before {
+					t.Fatalf("被拒的写改动了 %s: %q → %q", c.key, before, after)
+				}
+			} else if err != nil {
+				// B 级契约的诚实边界:尚未察觉失租的旧写者**能**写进去。
+				// 若这里开始返回错误,说明有人把它升级成了 A 级——好事,但契约变了,
+				// 必须同步 writer_fence.go 的分级注释与本用例。
+				t.Fatalf("B 级入口在「以为持有」时不应报错(契约已变?),got %v", err)
+			}
+
+			// 两级共有的下界:已知失主的副本一律零写入。
+			repo.SetWriterFence(&fakeWriterFence{token: 9, held: false})
+			lostBefore, _ := mr.Get(c.key)
+			if err := c.call(repo); errcode.As(err) != errcode.ErrUnavailable {
+				t.Fatalf("已知失主的副本必须被拒,got %v", err)
+			}
+			if after, _ := mr.Get(c.key); after != lostBefore {
+				t.Fatalf("失主副本改动了 %s: %q → %q", c.key, lostBefore, after)
+			}
+		})
+	}
+}
+
+// 冷却占坑走 (bool, error) 签名:失主副本不得返回"占坑成功"(B 级下界)。
+func TestWriterFence_TryTransferCooldownRejectsLostLease(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	const playerID = uint64(2002)
+	repo.SetWriterFence(&fakeWriterFence{token: 9, held: false})
+
+	ok, err := repo.TryTransferCooldown(ctx, playerID, testTTL)
+	if ok || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("失主副本不得占到冷却坑: ok=%v err=%v", ok, err)
+	}
+	if mr.Exists(transferCooldownKey(playerID)) {
+		t.Fatal("被拒的冷却占坑不得建键")
+	}
+}
+
+// 当届写者必须能正常通过所有入口,并顺带把水位推进到本届(只进不退)。
+func TestWriterFence_CurrentWriterPassesAllShardWritePaths(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	const pod = "pandora-hub-global-2"
+	const playerID = uint64(2003)
+	repo.SetWriterFence(&fakeWriterFence{token: 11, held: true})
+
+	if err := repo.CreateShard(ctx, sampleShard(pod, 1, 0), testTTL); err != nil {
+		t.Fatalf("CreateShard: %v", err)
+	}
+	if err := repo.AddShardMember(ctx, pod, playerID, testTTL); err != nil {
+		t.Fatalf("AddShardMember: %v", err)
+	}
+	if err := repo.RegisterTransferCleanup(ctx, pod,
+		TransferCleanupRef{PlayerID: playerID, TargetAssignmentID: "t-1"}); err != nil {
+		t.Fatalf("RegisterTransferCleanup: %v", err)
+	}
+	if err := repo.RemoveTransferCleanup(ctx, pod,
+		TransferCleanupRef{PlayerID: playerID, TargetAssignmentID: "t-1"}); err != nil {
+		t.Fatalf("RemoveTransferCleanup: %v", err)
+	}
+	if err := repo.RemoveShardMember(ctx, pod, playerID); err != nil {
+		t.Fatalf("RemoveShardMember: %v", err)
+	}
+	if err := repo.SetTeamShard(ctx, 3002, pod, testTTL); err != nil {
+		t.Fatalf("SetTeamShard: %v", err)
+	}
+	if v, _ := mr.Get(wfenceKey(pod)); v != "11" {
+		t.Fatalf("current writer must advance the fence to its own term, got %q", v)
+	}
+	if err := repo.RemoveShard(ctx, pod); err != nil {
+		t.Fatalf("RemoveShard: %v", err)
+	}
+	// 水位是持久键:RemoveShard 删业务镜像但绝不能把水位一起删掉。
+	if v, _ := mr.Get(wfenceKey(pod)); v != "11" {
+		t.Fatalf("RemoveShard must not erase the fence watermark, got %q", v)
+	}
+}
+
 func TestWriterFence_AuthRepoInitAndTeardownProofFenced(t *testing.T) {
 	ctx := context.Background()
 	repo, mr := newAuthRepo(t)

@@ -296,6 +296,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     kCategoryFieldNumber = 5,
     kDisableUiShortcutFieldNumber = 6,
     kShowInMatchListFieldNumber = 7,
+    kAllowExitFieldNumber = 9,
+    kTeamSizeFieldNumber = 8,
   };
   // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
   void clear_name() ;
@@ -382,12 +384,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
   void _internal_set_show_in_match_list(bool value);
 
   public:
+  // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
+  void clear_allow_exit() ;
+  [[nodiscard]] bool allow_exit() const;
+  void set_allow_exit(bool value);
+
+  private:
+  bool _internal_allow_exit() const;
+  void _internal_set_allow_exit(bool value);
+
+  public:
+  // uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
+  void clear_team_size() ;
+  [[nodiscard]] ::uint32_t team_size() const;
+  void set_team_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_team_size() const;
+  void _internal_set_team_size(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.LevelRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 64,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 72,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -422,6 +444,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     int category_;
     bool disable_ui_shortcut_;
     bool show_in_match_list_;
+    bool allow_exit_;
+    ::uint32_t team_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -942,6 +966,54 @@ inline bool LevelRow::_internal_show_in_match_list() const {
 inline void LevelRow::_internal_set_show_in_match_list(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.show_in_match_list_ = value;
+}
+
+// uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
+inline void LevelRow::clear_team_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t LevelRow::team_size() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.team_size)
+  return _internal_team_size();
+}
+inline void LevelRow::set_team_size(::uint32_t value) {
+  _internal_set_team_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.team_size)
+}
+inline ::uint32_t LevelRow::_internal_team_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_size_;
+}
+inline void LevelRow::_internal_set_team_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_size_ = value;
+}
+
+// bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
+inline void LevelRow::clear_allow_exit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_exit_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool LevelRow::allow_exit() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.allow_exit)
+  return _internal_allow_exit();
+}
+inline void LevelRow::set_allow_exit(bool value) {
+  _internal_set_allow_exit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.allow_exit)
+}
+inline bool LevelRow::_internal_allow_exit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allow_exit_;
+}
+inline void LevelRow::_internal_set_allow_exit(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_exit_ = value;
 }
 
 // -------------------------------------------------------------------

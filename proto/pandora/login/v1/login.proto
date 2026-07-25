@@ -149,6 +149,43 @@ enum ResumePlacementState {
   RESUME_PLACEMENT_STATE_STABLE = 2;
 }
 
+// ResumeEntryState 是 §9.23「单一入口最小状态集」。统一进场入口只返回这五种之一,
+// 客户端 UMyDsRecoveryCoordinator 按它决定:去选角 / 退避重查 / 幂等 no-op 或 Travel /
+// 重新认证 / 停在终态 UI。
+//
+// 与 ResumePlacementState 的分工:entry_state 回答「客户端现在该做什么」,
+// placement_state 只在 TARGET 下细分「owner 是 PENDING 还是已 ADMITTED」。
+enum ResumeEntryState {
+  RESUME_ENTRY_STATE_UNSPECIFIED = 0;
+  // 未选角:不得提前分配 Hub、占座或签进场票(§9.23)。
+  RESUME_ENTRY_STATE_ROLE_REQUIRED = 1;
+  // 需要退避重查:权威不可达、结果不确定、或准入屏障未开。必须保留 session 与原
+  // operation_id,由同一 coordinator 的 watchdog 按 retry_after_ms 到期重查。
+  RESUME_ENTRY_STATE_WAIT = 2;
+  // 已有明确归属目标:exact target + owner_epoch + placement_state 有效。
+  RESUME_ENTRY_STATE_TARGET = 3;
+  // 会话已过期/被撤销,必须重新认证(不是暂时失败,不得自动重试)。
+  RESUME_ENTRY_STATE_REAUTH = 4;
+  // 终态(封禁、强制版本不兼容等):停在可见 UI,不重试。
+  RESUME_ENTRY_STATE_TERMINAL = 5;
+}
+
+// ResumeWaitReason 让 WAIT 可诊断、可给用户文案,并区分「安全等待」与「故障等待」。
+// §9.23 要求 WAIT 必须带原因与 retry_after,不能是无出口的静默等待。
+enum ResumeWaitReason {
+  RESUME_WAIT_REASON_UNSPECIFIED = 0;
+  // owner 权威不可达 / 结果不确定 → 必须 fail-closed 等待,禁止冒充 OFFLINE 或默认 Hub。
+  RESUME_WAIT_REASON_OWNER_UNKNOWN = 1;
+  // 新 owner 的 admit_not_before 屏障未开(旧 DS 最晚安全截止时间之前)。
+  RESUME_WAIT_REASON_ADMIT_BARRIER = 2;
+  // 撮合中(权威 match stage 已在 match_stage 字段给出)。
+  RESUME_WAIT_REASON_MATCHING = 3;
+  // 角色权威查询失败:查询缺失不等于 role=0,不得据此推导未选角。
+  RESUME_WAIT_REASON_ROLE_UNKNOWN = 4;
+  // 分配失败 / 暂无容量。
+  RESUME_WAIT_REASON_NO_CAPACITY = 5;
+}
+
 message ResumeContext {
   ResumeRoute route = 1;
   uint64 match_id = 2;
@@ -171,6 +208,18 @@ message ResumeContext {
   // BATTLE route 及持有活跃撮合 claim 的 HUB route 时按权威填;0 = 未指定/默认,
   // 客户端保留 DS 握手后按地图包名反查关卡表的兜底路径。
   uint32 map_id = 14;
+  // ── §9.23 query-first 全量字段(R11 复审 架构 P0)────────────────────────────
+  // owner_epoch:每玩家单调不回退的归属代次(§9.22 权威本体,区别于 ds_instance_epoch /
+  // writer epoch / session epoch)。客户端必须用 (entry_state, exact target, owner_epoch)
+  // 三元组判定「当前连接是否已精确匹配 owner」,匹配则幂等 no-op,不得再 Travel/占座。
+  uint64 owner_epoch = 15;
+  // retry_after_ms:WAIT 时的建议退避(0 = 由客户端用自己的退避+jitter 兜底)。
+  // ADMIT_BARRIER 时由权威的 admit_not_before 推导,保证客户端不会在屏障开前空转重试。
+  uint32 retry_after_ms = 16;
+  // entry_state:§9.23 最小状态集。老客户端读不到本字段时按 route/placement_state 兼容运行。
+  ResumeEntryState entry_state = 17;
+  // wait_reason:entry_state=WAIT 时的原因(诊断 + 用户文案)。
+  ResumeWaitReason wait_reason = 18;
 }
 
 message GetResumeContextRequest {

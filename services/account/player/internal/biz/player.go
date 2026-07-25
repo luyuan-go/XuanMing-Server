@@ -45,20 +45,91 @@ type PlayerUsecase struct {
 	// expLevels 提供当前策划等级经验曲线。生产实现包装 configtable.Store 的原子快照；
 	// 玩家等级经验只从 j_玩家等级经验.xlsx 读取，不保留 YAML 双数据源。
 	expLevels experienceLevelSource
+
+	// itemRules 提供道具表判定(SetEquipment 的 isEquip / slotMatch)。
+	// nil = 道具表未加载 → SetEquipment fail-closed 拒绝,不放行未校验的出战预设。
+	itemRules itemRuleSource
+
+	// talentRules 提供专精表判定(SetTalents 的等级上限 / 前置 / 总消耗)。
+	// nil = 专精表未加载 → SetTalents fail-closed 拒绝。
+	talentRules talentRuleSource
+
+	// itemOwnership 查玩家是否持有指定道具(SetEquipment 的 ownEquipment)。
+	// 生产实现是 inventory.CheckItemsOwned 的 gRPC 客户端;nil = 未接线 → fail-closed 拒绝。
+	itemOwnership ItemOwnershipChecker
 }
 
-// SetConfigTables 注入启动时已成功加载、并注册等级曲线整表校验器的配置表容器。
-// Store 热更以整批不可变快照原子切换；单次经验事务先取一份曲线副本，不会跨版本混算。
+// SetConfigTables 注入启动时已成功加载、并注册整表校验器的配置表容器。
+// Store 热更以整批不可变快照原子切换；单次事务先取一份快照，不会跨版本混算。
 func (u *PlayerUsecase) SetConfigTables(store *configtable.Store) {
 	if store == nil {
 		u.expLevels = nil
+		u.itemRules = nil
+		u.talentRules = nil
 		return
 	}
 	u.expLevels = configTableExperienceLevels{store: store}
+	u.itemRules = configTableItemRules{store: store}
+	u.talentRules = configTableTalentRules{store: store}
 }
+
+// ItemOwnershipChecker 查询玩家在 inventory 域的持有情况(跨服务,SetEquipment 拥有权校验)。
+//
+// 返回入参集合中确实持有的子集;查询失败必须返回 error 而不是空集,
+// 否则调用方无法区分「一件都没有」与「没查成」,fail-closed 就无从谈起。
+type ItemOwnershipChecker interface {
+	CheckItemsOwned(ctx context.Context, playerID uint64, itemConfigIDs []uint32) ([]uint32, error)
+}
+
+// SetItemOwnershipChecker 注入拥有权查询实现(由 main 接 inventory gRPC 客户端)。
+// 传 nil 等于关闭 SetEquipment(fail-closed),不会退化成「不校验就放行」。
+func (u *PlayerUsecase) SetItemOwnershipChecker(c ItemOwnershipChecker) { u.itemOwnership = c }
 
 type experienceLevelSource interface {
 	ExperienceCurve() []uint64
+}
+
+// itemRuleSource 是 SetEquipment 需要的道具表判定(生产实现读 configtable 原子快照)。
+type itemRuleSource interface {
+	MatchesSlot(itemConfigID uint32, slot uint32) bool
+}
+
+// talentRuleSource 是 SetTalents 需要的专精表判定(生产实现读 configtable 原子快照)。
+type talentRuleSource interface {
+	ValidateAllocation(levels map[uint32]uint32) (uint32, error)
+}
+
+type configTableItemRules struct {
+	store *configtable.Store
+}
+
+// MatchesSlot 每次调用取一份当前快照:表热更是整批原子切换,单次校验内不会跨版本。
+// 表缺失时返回 false(fail-closed),等价于「这件装备不能装进这个槽」。
+func (s configTableItemRules) MatchesSlot(itemConfigID uint32, slot uint32) bool {
+	if s.store == nil {
+		return false
+	}
+	tables := s.store.Tables()
+	if tables == nil || tables.Item == nil {
+		return false
+	}
+	return tables.Item.MatchesSlot(itemConfigID, slot)
+}
+
+type configTableTalentRules struct {
+	store *configtable.Store
+}
+
+// ValidateAllocation 表缺失时返回错误(fail-closed),不静默按「无约束」放行。
+func (s configTableTalentRules) ValidateAllocation(levels map[uint32]uint32) (uint32, error) {
+	if s.store == nil {
+		return 0, errcode.New(errcode.ErrInternal, "config table store unavailable")
+	}
+	tables := s.store.Tables()
+	if tables == nil || tables.Talent == nil {
+		return 0, errcode.New(errcode.ErrInternal, "talent table unavailable")
+	}
+	return tables.Talent.ValidateAllocation(levels)
 }
 
 type configTableExperienceLevels struct {
@@ -365,13 +436,17 @@ func (u *PlayerUsecase) GetAttributes(ctx context.Context, playerID uint64) ([]d
 // 边界(ds-arch.md §0.5):装备预设 / 天赋是大厅态持久化,开战前转成初始 GameplayEffect;
 // 战斗内买装 / 换装 / 用道具走 UE GAS,不经 gRPC。
 
-// SetEquipment 全量替换出战装备预设(功能开关关闭 → ErrPlayerFeatureDisabled;槽位重复 / 配置非法 → ErrInvalidArg)。
+// SetEquipment 全量替换出战装备预设(功能开关关闭 → ErrPlayerFeatureDisabled;
+// 槽位重复 / 非装备 / 部位不匹配 → ErrInvalidArg;未持有 → ErrPermissionDeny)。
 //
-// ⚠️ 安全限制(2026-06-17 审查):此处**只校验槽位不重复 + item_config_id 非 0**,
-// 尚未校验玩家是否拥有该装备 / item 是否为装备类型 / 槽位是否匹配。GetLoadout 会把装备转成
-// Battle DS 初始效果,故在接 inventory/配置表做拥有权+类型+槽位校验前,**不可对客户端开放**
-// (靠 LoadoutCustomizeEnabled 默认 false + player.v1 不在 Envoy 暴露双重关闭,见 conf.go 说明)。
-// TODO(配置表就绪后):校验 ownEquipment(playerID,item) + isEquip(item) + slotMatch(item,slot)。
+// 权威校验三项(2026-07-25 补齐,原 2026-06-17 审查 TODO):
+//  1. isEquip(item)      —— 道具表 equip_slot > 0 才是装备;
+//  2. slotMatch(item,slot) —— 道具表 equip_slot 必须与提交的槽位号完全一致;
+//  3. ownEquipment(player,item) —— 经 inventory.CheckItemsOwned 确认玩家确实持有。
+//
+// 前两项读 configtable 内存快照(零 RPC),第三项跨服务查 inventory。任一依赖缺失一律
+// fail-closed 拒绝:GetLoadout 会把预设转成 Battle DS 的初始 GameplayEffect,
+// 校验链不完整时放行 = 客户端可给自己配任意装备。
 func (u *PlayerUsecase) SetEquipment(ctx context.Context, playerID uint64, slots []data.EquipmentSlot) error {
 	if playerID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "player_id required")
@@ -384,10 +459,21 @@ func (u *PlayerUsecase) SetEquipment(ctx context.Context, playerID uint64, slots
 		if s.ItemConfigID == 0 {
 			return errcode.New(errcode.ErrInvalidArg, "item_config_id required for slot %d", s.Slot)
 		}
+		// 槽位号与道具表「装备部位」列同一编号空间,该列约定 0 = 不可穿戴,
+		// 因此预设里的 slot 必须 >= 1:slot 0 永远匹配不到任何装备,只会变成一条恒失败的记录。
+		if s.Slot == 0 {
+			return errcode.New(errcode.ErrInvalidArg, "slot must be positive (0 means not equippable in item table)")
+		}
 		if _, dup := seen[s.Slot]; dup {
 			return errcode.New(errcode.ErrInvalidArg, "duplicate slot %d", s.Slot)
 		}
 		seen[s.Slot] = struct{}{}
+	}
+	if err := u.validateEquipmentAgainstConfig(slots); err != nil {
+		return err
+	}
+	if err := u.validateEquipmentOwnership(ctx, playerID, slots); err != nil {
+		return err
 	}
 	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return err
@@ -396,6 +482,67 @@ func (u *PlayerUsecase) SetEquipment(ctx context.Context, playerID uint64, slots
 		return err
 	}
 	plog.With(ctx).Debugw("msg", "set_equipment", "player_id", playerID, "slots", len(slots))
+	return nil
+}
+
+// validateEquipmentAgainstConfig 用道具表判定「是不是装备 + 部位对不对」(第 1、2 项)。
+// 表未加载时 fail-closed:宁可拒掉这次改装,也不放行一份没校验过的预设。
+func (u *PlayerUsecase) validateEquipmentAgainstConfig(slots []data.EquipmentSlot) error {
+	if len(slots) == 0 {
+		return nil
+	}
+	rules := u.itemRules
+	if rules == nil {
+		return errcode.New(errcode.ErrInternal, "item config table unavailable")
+	}
+	for _, s := range slots {
+		if !rules.MatchesSlot(s.ItemConfigID, s.Slot) {
+			// 不区分「不存在 / 不是装备 / 部位不符」三种原因:对外统一是一条非法预设,
+			// 细分只会给探测配置表提供信号。日志侧仍可按 item/slot 定位。
+			return errcode.New(errcode.ErrInvalidArg,
+				"item %d cannot be equipped in slot %d", s.ItemConfigID, s.Slot)
+		}
+	}
+	return nil
+}
+
+// validateEquipmentOwnership 经 inventory 系统 RPC 确认玩家持有全部待装备道具(第 3 项)。
+//
+// 查询失败(依赖不可用 / 超时)按 §9.22 fail-closed:返回错误让客户端重试,
+// 绝不把「查不到」当成「持有」。
+func (u *PlayerUsecase) validateEquipmentOwnership(ctx context.Context, playerID uint64, slots []data.EquipmentSlot) error {
+	if len(slots) == 0 {
+		return nil
+	}
+	checker := u.itemOwnership
+	if checker == nil {
+		return errcode.New(errcode.ErrInternal, "item ownership checker unavailable")
+	}
+
+	// 同一件装备可能被提交到多个槽位(前面只查了槽位不重复),去重后再查。
+	uniq := make(map[uint32]struct{}, len(slots))
+	ids := make([]uint32, 0, len(slots))
+	for _, s := range slots {
+		if _, dup := uniq[s.ItemConfigID]; dup {
+			continue
+		}
+		uniq[s.ItemConfigID] = struct{}{}
+		ids = append(ids, s.ItemConfigID)
+	}
+
+	owned, err := checker.CheckItemsOwned(ctx, playerID, ids)
+	if err != nil {
+		return err
+	}
+	ownedSet := make(map[uint32]struct{}, len(owned))
+	for _, id := range owned {
+		ownedSet[id] = struct{}{}
+	}
+	for _, id := range ids {
+		if _, ok := ownedSet[id]; !ok {
+			return errcode.New(errcode.ErrPermissionDeny, "item %d not owned by player %d", id, playerID)
+		}
+	}
 	return nil
 }
 
@@ -433,7 +580,12 @@ func (u *PlayerUsecase) GrantTalentPoints(ctx context.Context, playerID uint64, 
 }
 
 // SetTalents 全量重置天赋分配(功能开关关闭 → ErrPlayerFeatureDisabled;
-// talent_id 重复 / level<=0 → ErrInvalidArg;sum(level) 超额 → ErrPlayerInsufficientPoints)。
+// talent_id 重复 / 不存在 / level<=0 / 超等级上限 / 前置未达标 → ErrInvalidArg;
+// 总消耗超额 → ErrPlayerInsufficientPoints)。
+//
+// 权威校验按专精表(2026-07-25 接入 z_专精.xlsx):节点存在、等级不超 max_level、
+// 前置节点在**本次方案内**达标、总消耗按 Σ 等级 × cost_per_level 计算后交 repo 与可用点比对。
+// 表未加载一律 fail-closed:此前只校验「id 非 0 + level > 0 + 不重复」,客户端填 level=999 能直接写进库。
 func (u *PlayerUsecase) SetTalents(ctx context.Context, playerID uint64, talents []data.TalentLevel) (int, error) {
 	if playerID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
@@ -441,7 +593,7 @@ func (u *PlayerUsecase) SetTalents(ctx context.Context, playerID uint64, talents
 	if !u.cfg.LoadoutCustomizeEnabled {
 		return 0, errcode.New(errcode.ErrPlayerFeatureDisabled, "loadout customize disabled")
 	}
-	seen := make(map[uint32]struct{}, len(talents))
+	levels := make(map[uint32]uint32, len(talents))
 	for _, t := range talents {
 		if t.TalentID == 0 {
 			return 0, errcode.New(errcode.ErrInvalidArg, "talent_id required")
@@ -449,15 +601,37 @@ func (u *PlayerUsecase) SetTalents(ctx context.Context, playerID uint64, talents
 		if t.Level <= 0 {
 			return 0, errcode.New(errcode.ErrInvalidArg, "level must be positive: talent=%d", t.TalentID)
 		}
-		if _, dup := seen[t.TalentID]; dup {
+		if _, dup := levels[t.TalentID]; dup {
 			return 0, errcode.New(errcode.ErrInvalidArg, "duplicate talent_id %d", t.TalentID)
 		}
-		seen[t.TalentID] = struct{}{}
+		levels[t.TalentID] = uint32(t.Level)
+	}
+
+	totalCost, err := u.talentAllocationCost(levels)
+	if err != nil {
+		return 0, err
 	}
 	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return 0, err
 	}
-	return u.repo.SetTalents(ctx, playerID, talents)
+	return u.repo.SetTalents(ctx, playerID, talents, totalCost)
+}
+
+// talentAllocationCost 用专精表校验整份分配并算出总消耗点数。
+// 表未加载时 fail-closed;表判定非法时统一归为 ErrInvalidArg(具体原因带在消息里)。
+func (u *PlayerUsecase) talentAllocationCost(levels map[uint32]uint32) (uint32, error) {
+	if len(levels) == 0 {
+		return 0, nil
+	}
+	rules := u.talentRules
+	if rules == nil {
+		return 0, errcode.New(errcode.ErrInternal, "talent config table unavailable")
+	}
+	cost, err := rules.ValidateAllocation(levels)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInvalidArg, "invalid talent allocation: %v", err)
+	}
+	return cost, nil
 }
 
 // ResetTalents 清空天赋分配(功能开关关闭 → ErrPlayerFeatureDisabled)。

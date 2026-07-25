@@ -567,7 +567,20 @@ spec:
   strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
   selector: { matchLabels: { app: hub-allocator } }
   template:
-    metadata: { labels: { app: hub-allocator, pandora.dev/ds-auth-writer-epoch: "2" } }
+    # R11 复审 P0-2:写者状态必须可被抓取端自动采集,不能只靠人工逐 Pod 直连。运维面
+    # HTTP 51021 同时提供 /metrics 与写者健康页;此前 containerPort 只声明 50021,
+    # Service 也只暴露 50021,集群内根本没有到写者指标的路径。
+    # prometheus.io/* 注解供 pod service-discovery 抓取(写者指标见 internal/server/http.go)。
+    metadata:
+      labels: { app: hub-allocator, pandora.dev/ds-auth-writer-epoch: "2" }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51021"
+        prometheus.io/path: /metrics
+        # R11 复审 P0-5 机械门禁:必须与本 Deployment 的 spec.strategy.type 逐字一致
+        # (main_test.go 的清单契约测试钉住)。进程读它做 fail-closed 校验:
+        # RollingUpdate × writer_lease_mode!=enforce 直接启动失败,不留无保护双写组合。
+        pandora.dev/deploy-strategy: "RollingUpdate"
     spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
@@ -578,8 +591,11 @@ spec:
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
             - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
+            - { name: PANDORA_DEPLOY_STRATEGY, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/deploy-strategy']" } } }
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50021 } ]
+          ports:
+            - { name: grpc, containerPort: 50021 }
+            - { name: http-metrics, containerPort: 51021 }
           readinessProbe: { grpc: { port: 50021 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts:
             - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: hub-allocator.yaml, readOnly: true }
@@ -593,7 +609,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: hub-allocator, namespace: pandora }
-spec: { selector: { app: hub-allocator }, ports: [ { port: 50021, targetPort: 50021 } ] }
+spec:
+  selector: { app: hub-allocator }
+  ports:
+    - { name: grpc, port: 50021, targetPort: 50021 }
+    # 运维面(/metrics + /healthz/writer)。仅集群内可达,不经 Envoy 对外暴露。
+    - { name: http-metrics, port: 51021, targetPort: 51021 }
 ---
 # P0#5:hub-allocator round_robin 客户端 LB 用的 headless Service(clusterIP:None → DNS 返回
 # 全部 **Ready** Pod IP)。login 经 dns:///hub-allocator-headless.pandora.svc.cluster.local:50021

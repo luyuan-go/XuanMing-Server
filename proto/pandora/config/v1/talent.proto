@@ -1,0 +1,50 @@
+// Pandora 配置表:专精(天赋)表。
+//
+// 源表:Pandora-Client-SVN/Table/角色/z_专精.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/talent.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途(服务端权威校验,不是展示):player.SetTalents 据此校验
+//   ①节点存在 ②等级不超上限 ③前置节点等级达标 ④总消耗不超可用专精点,
+// 在此表接入之前服务端只校验了「id 非 0 + level > 0 + 不重复」,客户端填 level=999 也能写进库。
+//
+// ⚠️ 当前 z_专精.xlsx 是可用脚手架而非策划终稿:节点数值(等级上限/每级消耗/前置关系)
+// 待策划确认后整表替换,proto 契约与服务端校验逻辑不随数值变动。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// TalentRow 专精表一行(列序 = 字段号序 = 表头 A..G)。
+message TalentRow {
+  // ID(主键,即 player.v1.TalentNode.talent_id)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 名称(策划可读名)
+  string name = 2 [(excel_col) = "名称", (excel_required) = true];
+  // 描述文本
+  string description = 3 [(excel_col) = "描述"];
+  // 等级上限(该节点最高可点到的等级;必须 >= 1,否则该节点无法被点出)
+  uint32 max_level = 4 [(excel_col) = "等级上限", (excel_required) = true];
+  // 每级消耗的专精点(总消耗 = Σ 等级 × 每级消耗;空值默认 1)
+  uint32 cost_per_level = 5 [(excel_col) = "每级消耗", (excel_default) = "1"];
+  // 前置专精 ID(0=无前置)。
+  // 这里**不能**用 (excel_fk):生成器明确拒绝自引用外键(见 tablegen/discover.go),
+  // 因此「前置存在 + 前置等级不超前置上限 + 依赖无环」由手写伴生文件的
+  // TalentTable.ValidateTree 在加载期整表校验(与 PlayerLevelExp.ValidateCurve 同款做法)。
+  uint32 require_talent_id = 6 [(excel_col) = "前置专精", (excel_default) = "0"];
+  // 前置专精需达到的等级(仅在「前置专精」非 0 时有意义)
+  uint32 require_talent_level = 7 [(excel_col) = "前置等级", (excel_default) = "0"];
+}
+
+// TalentTableData 专精整表容器(dist/talent.json 的根对象;excel_file 注解 = 导表登记)。
+message TalentTableData {
+  option (excel_file) = "角色/z_专精.xlsx";
+  // 源表第 1 行表头、2~3 行留给列说明,数据自第 4 行起(与道具表 / 玩家等级经验表同版式)。
+  option (excel_data_start_row) = 4;
+
+  repeated TalentRow rows = 1;
+}

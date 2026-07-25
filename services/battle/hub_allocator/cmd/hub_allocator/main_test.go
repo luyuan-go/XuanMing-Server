@@ -65,6 +65,32 @@ func TestKubernetesDeploymentRollingUpdateRequiresWriterLease(t *testing.T) {
 	if strings.Contains(section, "readinessProbe") && strings.Contains(section, "/healthz/writer") {
 		t.Fatal("/healthz/writer is an observability endpoint; wiring it into readiness deadlocks rolling upgrades")
 	}
+	// R11 复审 P0-5:机械门禁必须真的能生效。进程看不到 spec.strategy,只能读注入的
+	// annotation;若 annotation 与真实 strategy 漂移,门禁就成了纸面上的。这里把两者钉死。
+	declared := ""
+	switch {
+	case strings.Contains(section, "type: RollingUpdate"):
+		declared = "RollingUpdate"
+	case strings.Contains(section, "type: Recreate"):
+		declared = "Recreate"
+	default:
+		t.Fatal("hub-allocator Deployment must declare an explicit strategy type")
+	}
+	if !strings.Contains(section, `pandora.dev/deploy-strategy: "`+declared+`"`) {
+		t.Fatalf("pandora.dev/deploy-strategy annotation must match spec.strategy.type (%s);"+
+			" the runtime double-write guard reads the annotation, so drift disables it:\n%s", declared, section)
+	}
+	if !strings.Contains(section, "PANDORA_DEPLOY_STRATEGY") {
+		t.Fatal("the strategy annotation must be injected as PANDORA_DEPLOY_STRATEGY for the startup guard to see it")
+	}
+	if !strings.Contains(source, `os.Getenv("PANDORA_DEPLOY_STRATEGY")`) ||
+		!strings.Contains(source, "hub_writer_lease_rollingupdate_without_enforce") {
+		t.Fatal("main must fail-closed on RollingUpdate × writer_lease_mode!=enforce (R11 P0-5)")
+	}
+	// R11 复审 P0-2:长期无主必须能被抓取端自动采集,不能只有 JSON 健康页。
+	if !strings.Contains(section, "containerPort: 51021") {
+		t.Fatal("the ops HTTP port must be declared so in-cluster scraping can reach the writer metrics (R11 P0-2)")
+	}
 }
 
 func TestHubWriterStagesCapabilityButCannotServeBeforePolicyV3(t *testing.T) {

@@ -58,3 +58,32 @@ if ($failed.Count -gt 0) {
     exit 1
 }
 Write-Host "`n[ OK ] 全部 $($modules.Count) 个模块 build + test 通过。" -ForegroundColor Green
+
+# ---- 集群配置生成器契约测试(R11 复审 P0-3)----
+#
+# 为什么必须进 CI:这些 ps1 断言的是**生成器产物**的方向性契约(如 -Prod 必须把 login 的
+# hub_allocator 地址改写成 dns:///hub-allocator-headless FQDN、非 -Prod 必须保留短名)。
+# 生成的集群配置 **不入版本库**(.gitignore 的 run/),所以除了这些断言之外没有任何东西
+# 能挡住生成器回归 —— 而在此之前 CI 只跑 go test,这些脚本一次都没被执行过,
+# 等于"有测试但不是门禁"。
+#
+# 只登记**当前绿**的脚本。基线即红的(gen_cluster_b1_contract_test 卡在未实现的
+# placement 分权 key 注入)不登记:把已知红的脚本塞进 CI 只会让整条流水线长期红,
+# 从而掩盖真实回归。要登记它必须先把那条特性做完或明确退役。
+$contractTests = @(
+    'tools/scripts/tests/gen_cluster_prod_progress_contract_test.ps1'
+)
+$contractFailed = @()
+foreach ($rel in $contractTests) {
+    $path = Join-Path $ProjectRoot ($rel -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $path)) { $contractFailed += "$rel(缺文件)"; continue }
+    Write-Host "`n===== 契约测试 $rel =====" -ForegroundColor Magenta
+    & pwsh -NoProfile -File $path
+    if ($LASTEXITCODE -ne 0) { $contractFailed += $rel }
+}
+if ($contractFailed.Count -gt 0) {
+    Write-Host "`n[ERR ] 以下契约测试未通过:" -ForegroundColor Red
+    $contractFailed | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+    exit 1
+}
+Write-Host "[ OK ] 契约测试全部通过($($contractTests.Count) 个)。" -ForegroundColor Green

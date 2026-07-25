@@ -1,0 +1,66 @@
+// Pandora 配置表:道具表。
+//
+// 源表:Pandora-Client-SVN/Table/道具/d_道具.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/item.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途(服务端权威校验,不是展示):
+//   - player.SetEquipment:按 equip_slot 判定「是不是装备」「部位对不对」,
+//     不再只信客户端传来的槽位(见 services/account/player/internal/biz/player.go);
+//   - 拥有权校验走 inventory 系统 RPC,不在本表范围。
+// 客户端 CfgItem(UE DataTable)与本表同源导出,展示口径与服务端校验口径因此不会漂移。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// ItemType 道具类型(对齐 d_道具.xlsx「类型」列取值,JSON 里用数字)。
+enum ItemType {
+  ITEM_TYPE_UNSPECIFIED = 0;
+  ITEM_TYPE_CONSUMABLE  = 1; // 消耗品(可使用,如食物/药水)
+  ITEM_TYPE_MATERIAL    = 2; // 材料
+  ITEM_TYPE_EQUIPMENT   = 3; // 装备(可穿戴,装备部位 > 0)
+  ITEM_TYPE_QUEST       = 4; // 任务道具
+  ITEM_TYPE_CURRENCY    = 5; // 货币
+}
+
+// ItemRow 道具表一行(列序 = 字段号序 = 表头 A..K)。
+message ItemRow {
+  // ID(主键,即全链路 item_config_id)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 名称(策划可读名)
+  string name = 2 [(excel_col) = "名称", (excel_required) = true];
+  // 类型(枚举数字;0=UNSPECIFIED 不允许)
+  ItemType type = 3 [(excel_col) = "类型", (excel_required) = true];
+  // 品质(0 起的色阶下标,掉落物外观与背包底色共用)
+  uint32 quality = 4 [(excel_col) = "品质", (excel_default) = "0"];
+  // 堆叠上限(装备必须为 1:堆叠合并会改写实例 guid,破坏强化/词条跟随)
+  uint32 max_stack_size = 5 [(excel_col) = "堆叠上限", (excel_required) = true];
+  // 售价(单件出售金币)
+  uint32 sell_price = 6 [(excel_col) = "售价", (excel_default) = "0"];
+  // 图标(UE 贴图资产路径)
+  string icon = 7 [(excel_col) = "图标", (excel_prefix) = "/"];
+  // 描述文本
+  string description = 8 [(excel_col) = "描述文本"];
+  // 可使用(0=否;副本内使用食物/水等需与「使用回血量」同时成立)
+  bool usable = 9 [(excel_col) = "可使用", (excel_default) = "0"];
+  // 使用回血量(副本内使用回复的血量;> 0 且「可使用」时才允许使用)
+  uint32 use_heal_hp = 10 [(excel_col) = "使用回血量", (excel_default) = "0"];
+  // 装备部位(0=不可穿戴;> 0 为部位编号,同部位同时只能穿一件。
+  //   服务端 SetEquipment 用它做「是不是装备 + 部位是否匹配」两项权威校验,
+  //   客户端 UMyBagComponent::ServerEquipItem 用同一列做副本内穿戴校验)
+  uint32 equip_slot = 11 [(excel_col) = "装备部位", (excel_default) = "0"];
+}
+
+// ItemTableData 道具整表容器(dist/item.json 的根对象;excel_file 注解 = 导表登记)。
+message ItemTableData {
+  option (excel_file) = "道具/d_道具.xlsx";
+  // 源表第 1 行表头、2~3 行留给列说明,数据自第 4 行起(与玩家等级经验表同版式)。
+  option (excel_data_start_row) = 4;
+
+  repeated ItemRow rows = 1;
+}

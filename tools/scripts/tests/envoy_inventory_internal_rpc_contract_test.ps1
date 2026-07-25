@@ -17,7 +17,9 @@ $systemMethods = @(
     'EnsureAuctionEscrow',
     'SettleAuctionMatch',
     'SettlePlayerTrade',
-    'ReleaseEscrow'
+    'ReleaseEscrow',
+    # 2026-07-25:player.SetEquipment 拥有权校验用的系统查询,玩家可调即可探测他人背包。
+    'CheckItemsOwned'
 )
 $catchAll = 'prefix: "/pandora.inventory.v1.InventoryService/"'
 $catchAllIndex = $manifest.LastIndexOf($catchAll, [StringComparison]::Ordinal)

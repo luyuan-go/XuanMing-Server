@@ -68,12 +68,12 @@ func (r *MySQLPlayerRepo) GrantTalentPoints(ctx context.Context, playerID uint64
 	return unspent, false, nil
 }
 
-// SetTalents 全量重置天赋(事务:锁 players 行,校验 sum(level)<=total,替换 player_talents)。
-func (r *MySQLPlayerRepo) SetTalents(ctx context.Context, playerID uint64, talents []TalentLevel) (int, error) {
-	var sum int32
-	for _, t := range talents {
-		sum += t.Level
-	}
+// SetTalents 全量重置天赋(事务:锁 players 行,校验 totalCost<=total,替换 player_talents)。
+//
+// totalCost 是 biz 按专精表算好的总消耗(Σ 等级 × cost_per_level),这里不再按 sum(level) 推算:
+// 每级消耗是配置表列,repo 看不到配置,自行推算会在 cost_per_level≠1 时算少扣。
+func (r *MySQLPlayerRepo) SetTalents(ctx context.Context, playerID uint64, talents []TalentLevel, totalCost uint32) (int, error) {
+	sum := int64(totalCost)
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -89,7 +89,8 @@ func (r *MySQLPlayerRepo) SetTalents(ctx context.Context, playerID uint64, talen
 	if err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "lock player=%d: %v", playerID, err)
 	}
-	if int(sum) > total {
+	// 用 int64 比较:totalCost 是 uint32,32 位平台上 int(sum) 会截断成负数而"通过"校验。
+	if sum > int64(total) {
 		return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "insufficient talent points player=%d need=%d have=%d", playerID, sum, total)
 	}
 

@@ -26,6 +26,7 @@ package writerlease
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,6 +56,22 @@ const (
 	// 2s 退避,15 次 ≈ 30s 无主,超过 lease TTL 兜底接任窗口即异常。
 	// 激活钩子(OnElected)连续失败复用同一阈值:两者都表现为"长期无可写副本"。
 	campaignErrEscalateAfter = 15
+	// DefaultActivationTimeoutSec 是激活钩子(OnElected)的独立总期限
+	// (R11 复审 P0-2 缺口 1)。
+	//
+	// 必须有界的理由:激活期间本副本**已经当选并持有 etcd leader key**,却还没对外
+	// 宣告持有(Current() 仍返回不持有)。钩子若永久阻塞而不是返回错误:
+	//   ① 本副本永远不可写;
+	//   ② 它同时占着 leader key 不让位,其它副本的 Campaign 全部排在后面——
+	//      **整个集群进入无写者状态**,而失败计数器一次都不会 +1(计数只在 err != nil
+	//      分支),degraded 恒为 false,长期无主完全静默。
+	// 加上期限后阻塞会转成 context.DeadlineExceeded 返回错误,走既有的
+	// 「让位 → 退避 → 重新竞选」路径,计数器与 degraded 才能动起来。
+	//
+	// 取值:激活钩子是有界工作(hub_allocator 是把全部已知 pod 的 fence 水位推一遍),
+	// 30s = 2× lease TTL,足够慢 etcd 完成,又保证无主状态在租约兜底窗口的同数量级内
+	// 变成可观测。
+	DefaultActivationTimeoutSec = 30
 )
 
 // HealthSnapshot 是竞选/激活健康度快照(R10 复审 P0-2:长期无主必须可观测)。
@@ -111,6 +128,9 @@ type Config struct {
 	// 失败按普通竞选失败处理(让位 → 退避 → 重新竞选),不退出进程;连续失败可经
 	// Health() 观测。token 与本届 Current() 将要宣告的 fencing token 相同。
 	OnElected func(ctx context.Context, token uint64) error
+	// ActivationTimeout 是 OnElected 的独立总期限,留空用 DefaultActivationTimeoutSec。
+	// 见该常量注释:阻塞型激活是"当选却不可写、又不让位"的最坏形态,必须有界。
+	ActivationTimeout time.Duration
 }
 
 // Term 是一届领导任期:token 单调、失主通知、主动让位。
@@ -215,7 +235,7 @@ func StartWithBackend(ctx context.Context, backend Backend, cfg Config) *Lease {
 	normalize(&cfg)
 	runCtx, cancel := context.WithCancel(ctx)
 	l := &Lease{backend: backend, identity: cfg.Identity, cancel: cancel, done: make(chan struct{})}
-	go l.run(runCtx, cfg.Election, cfg.OnElected)
+	go l.runWithActivationTimeout(runCtx, cfg.Election, cfg.OnElected, cfg.ActivationTimeout)
 	return l
 }
 
@@ -232,9 +252,17 @@ func normalize(cfg *Config) {
 	if cfg.Identity == "" {
 		cfg.Identity = "unknown"
 	}
+	if cfg.ActivationTimeout <= 0 {
+		cfg.ActivationTimeout = time.Duration(DefaultActivationTimeoutSec) * time.Second
+	}
 }
 
 func (l *Lease) run(ctx context.Context, election string, onElected func(context.Context, uint64) error) {
+	l.runWithActivationTimeout(ctx, election, onElected, time.Duration(DefaultActivationTimeoutSec)*time.Second)
+}
+
+func (l *Lease) runWithActivationTimeout(ctx context.Context, election string,
+	onElected func(context.Context, uint64) error, activationTimeout time.Duration) {
 	defer close(l.done)
 	for ctx.Err() == nil {
 		term, err := l.backend.Campaign(ctx, l.identity)
@@ -263,7 +291,7 @@ func (l *Lease) run(ctx context.Context, election string, onElected func(context
 		// 必须先跑成功,本副本才对外宣告持有领导权;失败就让位重选,期间 Current()
 		// 保持不持有,写请求继续被拒(可重试),绝不出现"已接流但继任未完成"的窗口。
 		if onElected != nil {
-			if aerr := l.activate(ctx, term, onElected); aerr != nil {
+			if aerr := l.activate(ctx, term, onElected, activationTimeout); aerr != nil {
 				if ctx.Err() != nil {
 					return
 				}
@@ -307,10 +335,13 @@ func (l *Lease) run(ctx context.Context, election string, onElected func(context
 	}
 }
 
-// activate 在"已当选、未宣告"的窗口里跑激活钩子。钩子 ctx 同时受进程退出与本届失主
-// 驱动:任期一旦失效立即取消,避免用已作废的 token 继续对存储做推进。
-func (l *Lease) activate(ctx context.Context, term Term, onElected func(context.Context, uint64) error) error {
-	actCtx, cancel := context.WithCancel(ctx)
+// activate 在"已当选、未宣告"的窗口里跑激活钩子。钩子 ctx 同时受进程退出、本届失主与
+// **独立总期限**驱动:任期一旦失效立即取消,避免用已作废的 token 继续对存储做推进;
+// 期限到了则把"永久阻塞"转成可计数、可告警的错误(R11 复审 P0-2:阻塞时本副本占着
+// leader key 又不可写,会把全集群拖成静默无主)。
+func (l *Lease) activate(ctx context.Context, term Term, onElected func(context.Context, uint64) error,
+	timeout time.Duration) error {
+	actCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	stop := make(chan struct{})
 	defer close(stop)
@@ -323,6 +354,10 @@ func (l *Lease) activate(ctx context.Context, term Term, onElected func(context.
 	}()
 	if err := onElected(actCtx, term.Token()); err != nil {
 		return err
+	}
+	// 钩子"返回 nil 但其实是被期限打断"的情况(钩子吞掉了 ctx 错误)同样不许宣告持有。
+	if actCtx.Err() != nil {
+		return fmt.Errorf("writerlease: activation exceeded its %s budget: %w", timeout, actCtx.Err())
 	}
 	// 钩子成功但任期在此期间已失效 → 不得宣告持有(否则用作废 token 接流)。
 	select {

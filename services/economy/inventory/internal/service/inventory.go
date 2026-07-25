@@ -290,3 +290,23 @@ func (s *InventoryService) MoveInstance(ctx context.Context, req *inventoryv1.Mo
 func toProtoCode(err error) commonv1.ErrCode {
 	return commonv1.ErrCode(errcode.As(err))
 }
+
+// CheckItemsOwned 批量拥有权查询(系统接口,仅后端内部可调)。
+//
+// 调用方是 player 服务的 SetEquipment 拥有权校验。与 GrantItems 同一条鉴权口径:
+// 经 Envoy 的客户端调用必带 JWT(callerID>0)→ 一律拒,防玩家自查/探测他人背包;
+// 合法调用者是后端内部服务直连(无 x-pandora-player-id 头 → callerID==0)。
+// 路由层还有一道 Envoy 精确 403 兜底,双保险。
+func (s *InventoryService) CheckItemsOwned(ctx context.Context, req *inventoryv1.CheckItemsOwnedRequest) (*inventoryv1.CheckItemsOwnedResponse, error) {
+	if pmw.PlayerIDFromContext(ctx) != 0 {
+		return &inventoryv1.CheckItemsOwnedResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	owned, err := s.uc.CheckItemsOwned(ctx, req.GetPlayerId(), req.GetItemConfigIds())
+	if err != nil {
+		return &inventoryv1.CheckItemsOwnedResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.CheckItemsOwnedResponse{
+		Code:               commonv1.ErrCode_OK,
+		OwnedItemConfigIds: owned,
+	}, nil
+}

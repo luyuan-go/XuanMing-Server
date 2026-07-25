@@ -70,10 +70,10 @@ type ResumeContextResult struct {
 	GameMode   string
 	// MapID 本局副本编号(透传 matchmaker 权威,0=未指定/默认;语义见 login.proto ResumeContext.map_id)。
 	MapID uint32
-	// ── owner 权威 placement 叠加(§9.23 query-first,owner-authority.md migrate ①;默认关)──
-	// 仅在 owner 查询成功且 owner 路由与既有解析一致时叠加,**不改变 Route 决策**(migrate 阶段
-	// 新旧双门并行,不会误路由);客户端据此做 §9.23 的 TARGET/ADMITTED 幂等 no-op。
-	// §9.23 全量还缺 owner_epoch / retry_after / 统一状态枚举——需 proto 扩展(Codex),属 contract 阶段。
+	// ── owner 权威 placement(§9.23 query-first;R11 复审 架构 P0 起 owner 是路由第一权威)──
+	// 开关 login.owner_query_first=true 时:owner 有归属记录即由它决定 Route 与 exact target,
+	// locator/matchmaker 降为富化;owner 不可达返回 WAIT/UNKNOWN 而**不回落**旧路由。
+	// 客户端用 (EntryState, exact target, OwnerEpoch) 三元组判定幂等 no-op(§9.23)。
 	PlacementState  loginv1.ResumePlacementState
 	OperationID     string
 	DSPodName       string
@@ -82,6 +82,12 @@ type ResumeContextResult struct {
 	HubAssignmentID string
 	AllocationID    string
 	ReleaseTrack    string
+	// OwnerEpoch 每玩家单调归属代次(§9.22 权威本体);0 = 无 owner 记录 / 未启用 query-first。
+	OwnerEpoch uint64
+	// EntryState / WaitReason / RetryAfterMs 是 §9.23 最小状态集(见 login.proto 同名字段)。
+	EntryState   loginv1.ResumeEntryState
+	WaitReason   loginv1.ResumeWaitReason
+	RetryAfterMs uint32
 }
 
 // BattleTicketIssuer 把所有 login 侧 Battle 票据签发统一到带 roster 权威门的入口。
@@ -820,16 +826,60 @@ func (u *LoginUsecase) GetResumeContext(ctx context.Context, sessionToken string
 	if cerr := u.requireCurrentSession(ctx, playerID, claims.ID); cerr != nil {
 		return ResumeContextResult{}, cerr
 	}
+	// §9.23 query-first(R11 复审 架构 P0):**owner 先问**,它是归属的唯一权威。
+	//   · 有归属记录 → owner 定 Route 与 exact target;locator/matchmaker 只补富化字段。
+	//   · 查询不可判定 → WAIT/UNKNOWN,绝不回落 locator 路由(presence key miss 不能证明
+	//     玩家已离开旧 DS,更不能授权进入另一台 DS)。
+	//   · 明确"无归属" → 落到首次进场链(角色 → 撮合 → 首个 Hub)。
+	if u.ownerQueryFirst && u.ownerPlacement != nil {
+		decided, owned := u.resolveResumeFromOwner(ctx, playerID)
+		if decided {
+			if owned.EntryState == loginv1.ResumeEntryState_RESUME_ENTRY_STATE_WAIT {
+				return owned, nil // 权威不可达 / 屏障未开:客户端按 retry_after 重查
+			}
+			return u.enrichResumeFromMatchAuthority(ctx, playerID, owned), nil
+		}
+	}
 	out, rerr := u.resolveResumeRoute(ctx, playerID)
 	if rerr != nil {
 		return out, rerr
 	}
-	// §9.23 query-first 叠加(migrate ①,默认关):owner 权威确认同路由时补 exact placement,
-	// 不改路由决策;owner 查询失败/无记录/路由不一致 → 保持既有 out(新旧双门并行)。
-	if u.ownerQueryFirst && u.ownerPlacement != nil {
-		out = u.overlayOwnerPlacement(ctx, playerID, out)
-	}
 	return out, nil
+}
+
+// enrichResumeFromMatchAuthority 在 owner 已定路由后,补充**非归属**的展示/恢复字段
+// (权威 match stage / game_mode / map_id)。它绝不改 Route、target、owner_epoch 或状态:
+// 撮合权威只回答"这个玩家在撮合流程的哪一步",不回答"他归谁管"。
+// 富化失败只降级为字段缺失(客户端有 DS 握手后反查关卡表的兜底路径),不影响进场判定。
+func (u *LoginUsecase) enrichResumeFromMatchAuthority(ctx context.Context, playerID uint64,
+	out ResumeContextResult) ResumeContextResult {
+	if u.matchResolver == nil {
+		return out
+	}
+	ma, err := u.matchResolver.ResolvePlayerMatchContext(ctx, playerID)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "resume_match_enrichment_unavailable",
+			"player_id", playerID, "err", err,
+			"hint", "只影响 match_stage/game_mode/map_id 展示字段,不影响 owner 定的进场判定")
+		return out
+	}
+	// 只有活跃 claim 才是可恢复的撮合会话;终态/漂移记录不该带给客户端。
+	if ma.State != matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE {
+		return out
+	}
+	if out.MatchID == 0 {
+		out.MatchID = ma.MatchID
+	}
+	if out.MatchStage == loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_UNSPECIFIED {
+		out.MatchStage = resumeStageFromMatchStage(ma.Stage)
+	}
+	if out.GameMode == "" {
+		out.GameMode = ma.GameMode
+	}
+	if out.MapID == 0 {
+		out.MapID = ma.MapID
+	}
+	return out
 }
 
 // resolveResumeRoute 是恢复路由的既有解析(presence/match 权威;§9.23 query-first 叠加前的基线)。

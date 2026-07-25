@@ -52,8 +52,16 @@ player:
   max_nickname_len: 32
   # hero_selection_enabled: 出战英雄选择开关(demo 阶段默认 false 跳过选英雄;联调养成时置 true)
   hero_selection_enabled: false
-  # loadout_customize_enabled: 出战装备预设 / 天赋树自定义开关(demo 阶段默认 false;联调养成时置 true)
-  loadout_customize_enabled: false
+  # loadout_customize_enabled: 出战装备预设 / 天赋树自定义开关。
+  # 2026-07-25 三项权威校验补齐后放开:
+  #   - isEquip / slotMatch 读 config_table 道具表(零 RPC);
+  #   - ownEquipment 经 inventory.CheckItemsOwned 系统 RPC(依赖下面的 inventory_addr);
+  #   - SetTalents 读 config_table 专精表校验等级上限 / 前置 / 总消耗。
+  # 任一依赖缺失(表未加载 / inventory_addr 未配)一律 fail-closed 拒绝,不会退化成放行。
+  loadout_customize_enabled: true
+  # inventory_addr: inventory 服务 gRPC 直连(内网无 JWT);SetEquipment 拥有权校验依赖它。
+  # 留空 → SetEquipment 一律返回内部错误(不会静默跳过校验)。
+  inventory_addr: "inventory:50015"
   # consume_topics: 订阅 topic(留空走默认 [pandora.player.update])
   consume_topics:
     - "pandora.player.update"

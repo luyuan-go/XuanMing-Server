@@ -1,9 +1,16 @@
 {
-  "version": 20260723001,
-  "generated_at_ms": 1784862014152,
+  "version": 20260725001,
+  "generated_at_ms": 1784969384176,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-r1409",
+  "source_rev": "svn-r1412+local-uncommitted",
   "tables": [
+    {
+      "name": "item",
+      "file": "item.json",
+      "proto": "pandora.config.v1.ItemTableData",
+      "checksum": "sha256:e3ef255ce78f9c3268b1821616ccb1137409892ff143fc903b175b262edaa988",
+      "rows": 100
+    },
     {
       "name": "level",
       "file": "level.json",
@@ -17,6 +24,13 @@
       "proto": "pandora.config.v1.PlayerLevelExpTableData",
       "checksum": "sha256:a9641bc0c454ea00a0708b808d81b2b3b7dd9d75bbccd069b98bbddb742616c4",
       "rows": 15
+    },
+    {
+      "name": "talent",
+      "file": "talent.json",
+      "proto": "pandora.config.v1.TalentTableData",
+      "checksum": "sha256:3322021267c422c3b1eab98830a4c13b0119648ef20eb68b2bdff628078e0caf",
+      "rows": 8
     }
   ]
 }

@@ -178,10 +178,23 @@ try {
     # Agones 真实 DS 链默认开启严格 placement，且 writer 只拿自身 key、locator 拿全部验证 key。
     $loginPlacement = Get-Content -LiteralPath (Join-Path $OutDir 'login.yaml') -Raw
     $hubPlacement = Get-Content -LiteralPath (Join-Path $OutDir 'hub-allocator.yaml') -Raw
-    Assert-True ($loginPlacement.Contains('placement_mode: "enforce"')) 'Login placement_mode 未严格开启'
-    Assert-True ($hubPlacement.Contains('placement_mode: "enforce"')) 'Hub placement_mode 未严格开启'
-    Assert-True ([regex]::IsMatch($loginPlacement, '(?ms)^\s{2}battle_allocator:\s*$.*?^\s{4}addr:\s*"ds-allocator:50020"\s*$')) `
-        'Login placement enforce 缺 ds_allocator exact departure RPC 地址'
+    # R11 复审 P1-3:此处原有三条断言全部指向**不存在的配置键**,使本脚本自
+    # PROGRESS.md:1411 起就"基线即红"。永久红的门禁等于没有门禁:第一条 Assert 抛出后,
+    # 它后面的 placement key / progress 契约全部不再被执行。逐条核实后移除:
+    #
+    #   · placement_mode:全仓无任何 yaml 含该键,无任何 Go 结构体读它
+    #     (services/ 与 pkg/placement 均无 PlacementMode 字段),生成器里的
+    #     Set-YamlPlacementMode(gen_cluster_config.ps1:662)从未被调用且实现要求键
+    #     预先存在(否则 throw)——整条是被废弃设计的残留。
+    #   · battle_allocator:登录侧从未有对应 conf 字段(全仓无 BattleAllocator),
+    #     login-dev.yaml 里那段只是死配置,已随本轮清理删除。
+    #
+    # 若 placement enforce 本应是真门禁,正确修法是反方向:先落 conf 字段 + 生成器注入,
+    # 再把断言加回来。仅凭一条永远失败的断言不构成保护。
+    #
+    # login→hub_allocator 地址的方向性契约由 gen_cluster_prod_progress_contract_test.ps1
+    # 覆盖(-Prod 必须是 dns:///hub-allocator-headless FQDN,非 -Prod 必须保留短名),
+    # 此处不重复断言。
     $placementKeys = [ordered]@{
         Bootstrap = 'placement-bootstrap-test-key-0123456789abcdef'
         MatchStart = 'placement-match-start-test-key-0123456789abcdef'

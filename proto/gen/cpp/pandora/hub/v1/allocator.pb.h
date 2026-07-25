@@ -4881,6 +4881,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
     kTransferSourceAuthWriterEpochFieldNumber = 26,
     kReleaseCleanupMatchIdFieldNumber = 28,
     kReleaseCleanupPlacementVersionFieldNumber = 29,
+    kWriterTokenFieldNumber = 31,
   };
   // string hub_pod_name = 2 [json_name = "hubPodName"];
   void clear_hub_pod_name() ;
@@ -5242,11 +5243,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
   void _internal_set_release_cleanup_placement_version(::uint64_t value);
 
   public:
+  // uint64 writer_token = 31 [json_name = "writerToken"];
+  void clear_writer_token() ;
+  [[nodiscard]] ::uint64_t writer_token() const;
+  void set_writer_token(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_writer_token() const;
+  void _internal_set_writer_token(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.hub.v1.HubAssignmentStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 30,
+      ::google::protobuf::internal::TcParseTable<5, 31,
                           0, 285,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5305,6 +5316,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
     ::uint32_t transfer_source_auth_writer_epoch_;
     ::uint64_t release_cleanup_match_id_;
     ::uint64_t release_cleanup_placement_version_;
+    ::uint64_t writer_token_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -14915,6 +14927,30 @@ inline void HubAssignmentStorageRecord::set_allocated_release_cleanup_operation_
     _impl_.release_cleanup_operation_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubAssignmentStorageRecord.release_cleanup_operation_id)
+}
+
+// uint64 writer_token = 31 [json_name = "writerToken"];
+inline void HubAssignmentStorageRecord::clear_writer_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writer_token_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+}
+inline ::uint64_t HubAssignmentStorageRecord::writer_token() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.writer_token)
+  return _internal_writer_token();
+}
+inline void HubAssignmentStorageRecord::set_writer_token(::uint64_t value) {
+  _internal_set_writer_token(value);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.writer_token)
+}
+inline ::uint64_t HubAssignmentStorageRecord::_internal_writer_token() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.writer_token_;
+}
+inline void HubAssignmentStorageRecord::_internal_set_writer_token(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writer_token_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -8,6 +8,7 @@ package biz
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -282,6 +283,174 @@ func TestLogin_RedisCommittedButErrored_RollsBackThenRestores(t *testing.T) {
 	}
 	if len(gen.tombstoneCalls) != 0 {
 		t.Fatalf("provable state must not take the fail-closed tombstone branch, got %v", gen.tombstoneCalls)
+	}
+}
+
+// ─── R11 复审 P0-1 问题 A:COMMIT 已成功但返回错误 ────────────────────────────
+//
+// 关闭标准要求故障注入覆盖该交错,并证明最终不存在:两存储不同代 / 未交付 JTI 成为
+// 当前代 / 旧凭据错误复活。三个分支各一条测试。
+
+// ① 读回判定「COMMIT 确实生效」→ 登录必须继续走完,凭据真正交付,两存储收敛同代际。
+// 修复前:直接 ErrUnavailable 失败,MySQL 停在带着未交付 jti 的新代际,仍在线的上一代
+// 会话被 SetRole 代际门错误拒绝。
+func TestLogin_AmbiguousCommitLanded_ResolvesAndDelivers(t *testing.T) {
+	var order []string
+	sessions := &genOrderSessionRepo{callOrder: &order}
+	gen := &fakeSessionGenRepo{gen: 6, ambiguousCommit: true, callOrder: &order}
+	uc := newGenUsecase(t, sessions, gen)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	if err != nil || res == nil {
+		t.Fatalf("a COMMIT that actually landed must not fail the login: err=%v res=%+v", err, res)
+	}
+	if gen.loadCalls != 1 {
+		t.Fatalf("ambiguity must be resolved by exactly one authoritative read-back, got %d", gen.loadCalls)
+	}
+	if !sessions.setCalled || sessions.gotGen != 6 {
+		t.Fatalf("Redis must be written with the confirmed generation, setCalled=%v gen=%d",
+			sessions.setCalled, sessions.gotGen)
+	}
+	// 未交付 JTI 成为当前代:被消灭——凭据交付了,Redis 持有的就是同一代 jti。
+	if _, found, _ := sessions.GetJTI(context.Background(), 42); !found {
+		t.Fatal("the confirmed generation must be delivered to Redis (no undelivered current jti)")
+	}
+	if len(gen.restoreCalls) != 0 || len(gen.tombstoneCalls) != 0 {
+		t.Fatalf("a resolved-landed commit needs no compensation, restore=%d tombstone=%v",
+			len(gen.restoreCalls), gen.tombstoneCalls)
+	}
+	if len(order) != 3 || order[0] != "mysql-gen" || order[1] != "mysql-load" || order[2] != "redis-set" {
+		t.Fatalf("order must be persist → read-back → redis, got %v", order)
+	}
+}
+
+// ② 读回判定「本次写没落地 / 已被更高代际取代」→ 零补偿失败,绝不动别人的行。
+func TestLogin_AmbiguousCommitDidNotLand_FailsWithZeroCompensation(t *testing.T) {
+	sessions := &genOrderSessionRepo{}
+	gen := &fakeSessionGenRepo{gen: 6, ambiguousCommit: true, loadNotFound: true}
+	uc := newGenUsecase(t, sessions, gen)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	if err == nil || res != nil {
+		t.Fatalf("a commit that did not land must fail the login: err=%v res=%+v", err, res)
+	}
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("failure must be retryable ErrUnavailable, got %v", err)
+	}
+	if sessions.setCalled {
+		t.Fatal("Redis must not be written when the sequencing write did not land")
+	}
+	if len(gen.restoreCalls) != 0 || len(gen.tombstoneCalls) != 0 {
+		t.Fatalf("nothing landed → zero compensation; restore=%d tombstone=%v",
+			len(gen.restoreCalls), gen.tombstoneCalls)
+	}
+
+	// 同分支:行存在但已属于并发赢家(更高代际)——同样零补偿。
+	sessions2 := &genOrderSessionRepo{}
+	gen2 := &fakeSessionGenRepo{gen: 6, ambiguousCommit: true, loadRowJTI: "winner-jti"}
+	uc2 := newGenUsecase(t, sessions2, gen2)
+	if _, err := uc2.Login(context.Background(), "acc", "pw", "device-A"); err == nil {
+		t.Fatal("losing the sequencing race must fail the login")
+	}
+	if len(gen2.restoreCalls) != 0 || len(gen2.tombstoneCalls) != 0 {
+		t.Fatalf("must never compensate a row owned by the winner, restore=%d tombstone=%v",
+			len(gen2.restoreCalls), gen2.tombstoneCalls)
+	}
+}
+
+// ③ 读回本身也失败 → 仍不可判定:条件墓碑 + fail-closed 失败,不留「MySQL 领先且
+// 无人可用」的静默态,也不得错误复活上一代 jti(禁止 Restore)。
+func TestLogin_AmbiguousCommitUnresolvable_TombstonesFailClosed(t *testing.T) {
+	sessions := &genOrderSessionRepo{}
+	gen := &fakeSessionGenRepo{
+		gen: 6, ambiguousCommit: true,
+		loadErr: errcode.New(errcode.ErrInternal, "mysql unreachable"),
+	}
+	uc := newGenUsecase(t, sessions, gen)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	if err == nil || res != nil {
+		t.Fatalf("unresolvable commit must fail the login: err=%v res=%+v", err, res)
+	}
+	if sessions.setCalled {
+		t.Fatal("Redis must not be written while the sequencing result is unknown")
+	}
+	if len(gen.tombstoneCalls) != 1 {
+		t.Fatalf("unresolvable state must tombstone exactly once, got %v", gen.tombstoneCalls)
+	}
+	if len(gen.restoreCalls) != 0 {
+		t.Fatal("unknown pre-write snapshot must never be restored (would revive an old credential)")
+	}
+}
+
+// ④ 判定为已生效后若 Redis 条件写再失败:快照不可信,补偿只准墓碑,禁止回补。
+func TestLogin_AmbiguousCommitLandedThenRedisFails_TombstonesNotRestores(t *testing.T) {
+	sessions := &unprovableSessionRepo{}
+	gen := &fakeSessionGenRepo{gen: 6, ambiguousCommit: true}
+	uc := newGenUsecase2(t, sessions, gen)
+
+	if _, err := uc.Login(context.Background(), "acc", "pw", "device-A"); err == nil {
+		t.Fatal("redis failure after a resolved commit must still fail the login")
+	}
+	if len(gen.restoreCalls) != 0 {
+		t.Fatalf("snapshot is unknown after an ambiguous commit; restore is forbidden, got %d",
+			len(gen.restoreCalls))
+	}
+	if len(gen.tombstoneCalls) != 1 {
+		t.Fatalf("must fall back to the conditional tombstone, got %v", gen.tombstoneCalls)
+	}
+}
+
+// ─── R11 复审 P0-1 问题 B:Redis Set 返回时请求已取消 ─────────────────────────
+//
+// 触发原因常常就是 handler deadline / 客户端断连,补偿若继续用请求 ctx 会整条立刻失败,
+// 只剩日志,不确定态原样留在库里。补偿必须跑在脱离取消、自带上界的 ctx 上。
+func TestLogin_RequestCancelled_CompensationRunsOnDetachedContext(t *testing.T) {
+	sessions := &unprovableSessionRepo{}
+	gen := &fakeSessionGenRepo{gen: 9}
+	uc := newGenUsecase2(t, sessions, gen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 请求 ctx 在 Redis 写返回时已取消
+	if _, err := uc.Login(ctx, "acc", "pw", "device-A"); err == nil {
+		t.Fatal("infra failure must fail the login")
+	}
+	if len(gen.ctxSeen) == 0 {
+		t.Fatal("compensation must still run when the request ctx is dead")
+	}
+	for _, probe := range gen.ctxSeen {
+		if probe.Err != nil {
+			t.Fatalf("%s ran on a cancelled ctx (%v): compensation is detached by contract",
+				probe.Op, probe.Err)
+		}
+		if !probe.HasDeadline {
+			t.Fatalf("%s ran without a deadline: detached compensation must stay bounded", probe.Op)
+		}
+	}
+	if len(gen.tombstoneCalls) != 1 {
+		t.Fatalf("unprovable Redis state must still tombstone once, got %v", gen.tombstoneCalls)
+	}
+}
+
+// 判定读同样不得跑在已取消的请求 ctx 上:否则「COMMIT 是否生效」永远判不出来。
+func TestLogin_RequestCancelled_AmbiguityProbeRunsOnDetachedContext(t *testing.T) {
+	sessions := &genOrderSessionRepo{}
+	gen := &fakeSessionGenRepo{gen: 6, ambiguousCommit: true}
+	uc := newGenUsecase(t, sessions, gen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := uc.Login(ctx, "acc", "pw", "device-A"); err != nil {
+		t.Fatalf("a landed commit must resolve even when the request ctx is dead: %v", err)
+	}
+	if gen.loadCalls != 1 {
+		t.Fatalf("read-back must happen exactly once, got %d", gen.loadCalls)
+	}
+	for _, probe := range gen.ctxSeen {
+		if probe.Err != nil || !probe.HasDeadline {
+			t.Fatalf("%s ctx must be detached and bounded, err=%v hasDeadline=%v",
+				probe.Op, probe.Err, probe.HasDeadline)
+		}
 	}
 }
 

@@ -1,6 +1,6 @@
 # Pandora 配置表热更流水线
 
-> **状态**:核心链路已落地(2026-07-21;现有 `level` + `player_level_exp` 两表,§10 有落点清单),方向 2026-06-30 拍板
+> **状态**:核心链路已落地(2026-07-21;2026-07-25 增 `item` + `talent`,现有四表,§10 有落点清单),方向 2026-06-30 拍板
 > **本文档地位**:策划配置表(`Table`)→ JSON → 服务端热加载 的契约与目录约定。
 > **关联规范**:`CLAUDE.md §5`(proto 优先 / 配置表 ID `uint32`)、`infra.md`(资源命名)、`pandora-arch.md §11`(决策行)。
 > **一句话**:这是**配置发布 / 热更流水线**,不是分布式配置中心;Apollo / Nacos **现在不接**,以后只可能当"发布通知 / 版本号",不当大量表 JSON 的主存储。
@@ -191,12 +191,20 @@ F:\work\XuanMing-Server\configtable\dist\
 > 三处标准化改造:全批快照 + `atomic.Pointer` 原子切换(旧为普通指针赋值)、失败返回 error 保留旧表
 > (旧为 `log.Fatalf`)、manifest 驱动整批 all-or-nothing(旧为逐表独立加载)。
 
-1. [x] 各表 proto message:`proto/pandora/config/v1/level.proto`(关卡表)与
-       `player_level_exp.proto`(玩家等级经验表,源 `角色/j_玩家等级经验.xlsx`)。
+1. [x] 各表 proto message:`proto/pandora/config/v1/` 下 `level.proto`(关卡表)、
+       `player_level_exp.proto`(玩家等级经验表,源 `角色/j_玩家等级经验.xlsx`)、
+       `item.proto`(道具表,源 `道具/d_道具.xlsx`)、`talent.proto`(专精表,源 `角色/z_专精.xlsx`)。
+       后两张 2026-07-25 接入,专供 player 服务做出战养成的权威校验(见「已接线服务」)。
+       ⚠️ 专精源表目前是可用脚手架(8 个节点、每级消耗均为 1),数值待策划出终稿后整表替换;
+       proto 契约与服务端校验逻辑不随数值变动。
 2. [x] `configtable-gen` 生成器:`tools/configtable-gen`(Go,独立 module;stdlib 自实现 xlsx 最小读取器,
        无 Python 依赖)。§7 校验齐;产物确定性序列化(protojson Compact→Indent);version 自动单调
        (YYYYMMDD*1000+seq);同内容幂等不写盘。当前批次 `configtable/dist` 为
-       v20260722002 / `svn-r1306`(`level` 9 行、`player_level_exp` 15 行)。
+       v20260725001 / `svn-r1412+local-uncommitted`(`item` 100 行、`level` 9 行、
+       `player_level_exp` 15 行、`talent` 8 行)。
+       ⚠️ 该批次的 `source_rev` 带 `+local-uncommitted`:生成时 `d_道具.xlsx` 处于 SVN 修改态、
+       `z_专精.xlsx` 尚未纳管,产物无法从 r1412 复现。**发布前必须先提交两张源表,再用真实 rev 重跑生成器**。
+       注意生成器只拒空白 / `unknown` 占位,不会替你发现"源表没提交",这道门靠人。
 3. [x] 服务端加载器:`pkg/configtable`(manifest 校验 + checksum + 行数断言 + 运行时 `DiscardUnknown` +
        version 单调防回退 + 全批成功才 `atomic.Pointer` 切换 + 未知新表跳过告警/脏文件告警)。
 4. [~] reload 入口:gRPC `ConfigTableAdminService.ReloadConfigTable` 已落(matchmaker/player 内部
@@ -212,7 +220,11 @@ F:\work\XuanMing-Server\configtable\dist\
 - matchmaker:`config_table.dir` 开关,空=不启用;启用后启动强依赖 fail-closed,StartMatch 校验
   map_id ∈ 关卡表且 category=战斗,否则 `ERR_MATCH_INVALID_MAP`。当前集群模板仍未默认打开该开关。
 - player:配置表为启动强依赖;从 `player_level_exp` 生成本次经验事务的曲线副本,加载/热更均执行
-  整表不变量校验,并拒绝降低最高等级。Compose 只读挂 `configtable/dist`;K8s 由
+  整表不变量校验,并拒绝降低最高等级。**2026-07-25 起同时强依赖 `item` + `talent` 两表**:
+  加载校验器要求两表存在且 `talent` 整树校验(前置存在 / 前置等级不超上限 / 依赖无环)通过,
+  缺表或坏树整批不切换。运行期 `SetEquipment` 用 `item.MatchesSlot` 做 isEquip + slotMatch,
+  `SetTalents` 用 `talent.ValidateAllocation` 做等级上限 + 前置 + 总消耗(Σ 等级 × 每级消耗);
+  两条写路径在表不可用时一律 fail-closed 拒绝,不退化成放行。Compose 只读挂 `configtable/dist`;K8s 由
   `pandora-configtable` ConfigMap 整目录挂到 `/app/configtable/active`。YAML `exp_curve` 已删除。
   `start.ps1` 发布该 ConfigMap 时先冻结并校验完整候选,再以 version 单调、同版本表内容精确一致、
   `resourceVersion` CAS 和 UID 回读门禁前向切换;同版本只允许在表运行语义不变时同步

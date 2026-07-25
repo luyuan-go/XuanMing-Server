@@ -271,12 +271,10 @@ func (f *fakeRepo) GrantTalentPoints(_ context.Context, playerID uint64, points 
 	return f.talentTotal[playerID] - f.talentUsed(playerID), false, nil
 }
 
-func (f *fakeRepo) SetTalents(_ context.Context, playerID uint64, talents []data.TalentLevel) (int, error) {
-	var sum int32
-	for _, t := range talents {
-		sum += t.Level
-	}
-	if int(sum) > f.talentTotal[playerID] {
+// SetTalents 复刻 MySQL 语义:点数按 biz 传入的 totalCost 扣(不再自己按 sum(level) 推算,
+// 每级消耗是配置表列,repo 层看不到)。
+func (f *fakeRepo) SetTalents(_ context.Context, playerID uint64, talents []data.TalentLevel, totalCost uint32) (int, error) {
+	if int64(totalCost) > int64(f.talentTotal[playerID]) {
 		return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "insufficient")
 	}
 	m := map[uint32]int32{}
@@ -284,7 +282,7 @@ func (f *fakeRepo) SetTalents(_ context.Context, playerID uint64, talents []data
 		m[t.TalentID] = t.Level
 	}
 	f.talents[playerID] = m
-	return f.talentTotal[playerID] - int(sum), nil
+	return f.talentTotal[playerID] - int(totalCost), nil
 }
 
 func (f *fakeRepo) ResetTalents(_ context.Context, playerID uint64) (int, error) {
@@ -402,8 +400,87 @@ func newUCHero(repo data.PlayerRepo) *PlayerUsecase {
 	return NewPlayerUsecase(repo, conf.PlayerConf{BaseMMR: 1500, MMRFloor: 0, DefaultNicknamePrefix: "Player_", MaxNicknameLen: 32, HeroSelectionEnabled: true})
 }
 
+// stubItemRules 是道具表判定的测试替身:itemConfigID → 装备部位(0 / 缺失 = 不可穿戴)。
+type stubItemRules struct {
+	slotByItem map[uint32]uint32
+}
+
+func (s stubItemRules) MatchesSlot(itemConfigID uint32, slot uint32) bool {
+	if slot == 0 {
+		return false
+	}
+	got, ok := s.slotByItem[itemConfigID]
+	return ok && got == slot
+}
+
+// stubTalentNode 是专精表一行的测试替身。
+type stubTalentNode struct {
+	maxLevel uint32
+	cost     uint32
+	reqID    uint32
+	reqLevel uint32
+}
+
+// stubTalentRules 复刻 configtable.TalentTable.ValidateAllocation 的判定口径
+// (节点存在 / 不超上限 / 前置在本次方案内达标 / 总消耗 = Σ 等级 × 每级消耗)。
+type stubTalentRules struct {
+	nodes map[uint32]stubTalentNode
+}
+
+func (s stubTalentRules) ValidateAllocation(levels map[uint32]uint32) (uint32, error) {
+	var total uint32
+	for id, lv := range levels {
+		node, ok := s.nodes[id]
+		if !ok {
+			return 0, fmt.Errorf("专精 %d 不在配置表中", id)
+		}
+		if lv > node.maxLevel {
+			return 0, fmt.Errorf("专精 %d 等级 %d 超过上限 %d", id, lv, node.maxLevel)
+		}
+		if node.reqID != 0 && levels[node.reqID] < node.reqLevel {
+			return 0, fmt.Errorf("专精 %d 前置未达标", id)
+		}
+		total += lv * node.cost
+	}
+	return total, nil
+}
+
+// stubOwnership 是拥有权查询的测试替身;owned 为 nil 表示"请求什么就持有什么"。
+type stubOwnership struct {
+	owned map[uint32]bool
+	err   error
+}
+
+func (s stubOwnership) CheckItemsOwned(_ context.Context, _ uint64, ids []uint32) ([]uint32, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.owned == nil {
+		return ids, nil
+	}
+	var out []uint32
+	for _, id := range ids {
+		if s.owned[id] {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+// newUCLoadout 构造开启出战养成的 usecase,并注入三项权威校验依赖的测试替身。
+// 不注入的话 SetEquipment / SetTalents 会按设计 fail-closed 拒绝(表未加载)。
 func newUCLoadout(repo data.PlayerRepo) *PlayerUsecase {
-	return NewPlayerUsecase(repo, conf.PlayerConf{BaseMMR: 1500, MMRFloor: 0, DefaultNicknamePrefix: "Player_", MaxNicknameLen: 32, HeroSelectionEnabled: true, LoadoutCustomizeEnabled: true})
+	uc := NewPlayerUsecase(repo, conf.PlayerConf{BaseMMR: 1500, MMRFloor: 0, DefaultNicknamePrefix: "Player_", MaxNicknameLen: 32, HeroSelectionEnabled: true, LoadoutCustomizeEnabled: true})
+	uc.itemRules = stubItemRules{slotByItem: map[uint32]uint32{
+		1001: 1,
+		1002: 2,
+	}}
+	uc.talentRules = stubTalentRules{nodes: map[uint32]stubTalentNode{
+		5001: {maxLevel: 5, cost: 1},
+		5002: {maxLevel: 3, cost: 2, reqID: 5001, reqLevel: 2},
+	}}
+	uc.SetItemOwnershipChecker(stubOwnership{})
+	return uc
 }
 
 func TestUpdateMMR_AppliesDelta(t *testing.T) {
@@ -756,7 +833,7 @@ func TestGetLoadout_Snapshot(t *testing.T) {
 
 func TestSetEquipment_FeatureDisabled(t *testing.T) {
 	uc := newUCHero(newFakeRepo()) // LoadoutCustomizeEnabled=false
-	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 1001}})
+	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001}})
 	if errcode.As(err) != errcode.ErrPlayerFeatureDisabled {
 		t.Fatalf("disabled toggle should be ErrPlayerFeatureDisabled, got %v", err)
 	}
@@ -764,7 +841,7 @@ func TestSetEquipment_FeatureDisabled(t *testing.T) {
 
 func TestSetEquipment_DuplicateSlot(t *testing.T) {
 	uc := newUCLoadout(newFakeRepo())
-	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 1001}, {Slot: 0, ItemConfigID: 1002}})
+	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001}, {Slot: 0, ItemConfigID: 1002}})
 	if errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("duplicate slot should be ErrInvalidArg, got %v", err)
 	}
@@ -781,7 +858,7 @@ func TestSetEquipment_RequiresItemConfig(t *testing.T) {
 func TestSetEquipment_SuccessThenGet(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUCLoadout(repo)
-	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 1001}, {Slot: 1, ItemConfigID: 1002}}); err != nil {
+	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001}, {Slot: 2, ItemConfigID: 1002}}); err != nil {
 		t.Fatalf("set equipment err: %v", err)
 	}
 	slots, err := uc.GetEquipment(context.Background(), 100)
@@ -845,7 +922,7 @@ func TestSetTalents_SuccessThenResetAndLoadout(t *testing.T) {
 	if err := uc.SelectHero(context.Background(), 100, 7); err != nil {
 		t.Fatalf("select err: %v", err)
 	}
-	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 1001}}); err != nil {
+	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001}}); err != nil {
 		t.Fatalf("set equipment err: %v", err)
 	}
 	if _, err := uc.GrantTalentPoints(context.Background(), 100, 5, "g1"); err != nil {

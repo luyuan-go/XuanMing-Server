@@ -1,0 +1,83 @@
+package configtable
+
+import (
+	"fmt"
+
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
+)
+
+// item.go — ItemTable 手写伴生文件。
+// 首次由 configtable-gen 创建(仅当文件不存在),此后归人维护,生成器不再覆盖。
+// 表私有的逐行业务校验写在 validateItemRow;域方法(业务语义查询)也加在本文件。
+//
+// 视图结构与通用访问 API(All/ByID/Exists/Count/ByIDs/RandOne/Where/First)在
+// item_table.gen.go(tools/configtable-gen 生成,勿手改)。
+
+// validateItemRow 逐行业务校验(生成的 newItemTable 调用;
+// 主键非零/唯一已由生成代码兜住,类型/必填/枚举已由生成器在导表阶段校验)。
+//
+// 与生成阶段校验重复是有意的 fail-closed:服务端不信任产物一定出自本生成器。
+// 整表任一行不过即拒新版本、保留旧表(§9.15 加载失败不切换),坏配置挡在加载边界。
+func validateItemRow(row *configpb.ItemRow) error {
+	if row.GetName() == "" {
+		return fmt.Errorf("名称(name)为空")
+	}
+	if row.GetType() == configpb.ItemType_ITEM_TYPE_UNSPECIFIED {
+		return fmt.Errorf("类型(type)未填")
+	}
+	if row.GetMaxStackSize() == 0 {
+		return fmt.Errorf("堆叠上限(max_stack_size)为 0,该道具无法进入任何背包")
+	}
+
+	// 装备类不变量:「装备部位 > 0」与「类型 = 装备」必须同时成立。
+	// 否则 player.SetEquipment 会出现互相矛盾的判定(按 type 说不是装备、按 equip_slot 说能穿),
+	// 客户端 CfgItem 与服务端校验的口径也会就此分叉。
+	isEquipType := row.GetType() == configpb.ItemType_ITEM_TYPE_EQUIPMENT
+	hasSlot := row.GetEquipSlot() > 0
+	if isEquipType != hasSlot {
+		return fmt.Errorf("装备类不一致:类型(type=%v)与装备部位(equip_slot=%d)必须同时成立或同时不成立",
+			row.GetType(), row.GetEquipSlot())
+	}
+	// 装备必须不可堆叠:堆叠合并会改写实例 guid,破坏强化 / 词条跟随。
+	// 与客户端 UMyBagComponent::ServerEquipItem 的运行期校验是同一条约束,
+	// 在这里挡住 = 把「客户端运行时才报错」提前成「坏表拒绝加载」。
+	if hasSlot && row.GetMaxStackSize() != 1 {
+		return fmt.Errorf("装备部位 > 0 的道具堆叠上限必须为 1,实为 %d", row.GetMaxStackSize())
+	}
+
+	// 配成「可使用但回血 0」的消耗品在副本内点了没有任何效果,属策划配置事故,不静默放行。
+	if row.GetUsable() && row.GetUseHealHp() == 0 {
+		return fmt.Errorf("可使用(usable)为真但使用回血量(use_heal_hp)为 0,该道具使用后无任何效果")
+	}
+	return nil
+}
+
+// IsEquipment 判断道具是否为可穿戴装备;行不存在返回 false(fail-closed)。
+func (t *ItemTable) IsEquipment(itemConfigID uint32) bool {
+	row, ok := t.byID[itemConfigID]
+	return ok && row.GetEquipSlot() > 0
+}
+
+// EquipSlotOf 取道具的装备部位;行不存在或不可穿戴返回 0。
+func (t *ItemTable) EquipSlotOf(itemConfigID uint32) uint32 {
+	row, ok := t.byID[itemConfigID]
+	if !ok {
+		return 0
+	}
+	return row.GetEquipSlot()
+}
+
+// MatchesSlot 判断道具能否装进指定部位:必须存在、可穿戴、且部位号完全一致。
+//
+// 这是 player.SetEquipment「是不是装备 + 部位对不对」两项校验的唯一入口。
+// 未知道具一律不匹配(fail-closed),不给热更缺行留后门。
+func (t *ItemTable) MatchesSlot(itemConfigID uint32, slot uint32) bool {
+	if slot == 0 {
+		return false
+	}
+	row, ok := t.byID[itemConfigID]
+	if !ok {
+		return false
+	}
+	return row.GetEquipSlot() == slot
+}

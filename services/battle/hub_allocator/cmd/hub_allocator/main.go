@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -573,6 +574,35 @@ func main() {
 		if wmErr != nil {
 			helper.Errorw("msg", "hub_writer_lease_mode_invalid", "err", wmErr)
 			os.Exit(1)
+		}
+		// R11 复审 P0-5:机械门禁。writer_lease_mode != enforce 时单写者**只**由部署策略
+		// (单副本 Recreate)保证;若部署实际是 RollingUpdate,滚动重叠窗口里新旧副本都
+		// 照常写 = 无保护双写(§9.1 一人一 hub、§9.22 单写者直接破)。此前仓库里没有任何
+		// 机制阻止 warmup/off × RollingUpdate 这个组合——warmup 连 off 的告警都没有。
+		//
+		// 进程看不到 spec.strategy,故由 Deployment 把策略作为 annotation 注入 env
+		// (deploy/k8s/services/services.yaml + main_test.go 的清单契约测试钉住 annotation
+		// 与真实 strategy 一致)。读不到 env 时不猜:按未知处理,只告警不阻断(dev/本机
+		// 裸跑没有该 env,阻断会把开发环境一起打死)。
+		if strategy := strings.TrimSpace(os.Getenv("PANDORA_DEPLOY_STRATEGY")); strategy != "" {
+			switch {
+			case !strings.EqualFold(strategy, "RollingUpdate"):
+				helper.Infow("msg", "hub_writer_lease_strategy_checked",
+					"strategy", strategy, "mode", writerMode)
+			case writerMode != conf.WriterLeaseEnforce:
+				helper.Errorw("msg", "hub_writer_lease_rollingupdate_without_enforce",
+					"strategy", strategy, "mode", writerMode,
+					"hint", "RollingUpdate × writer_lease_mode!=enforce = 滚动重叠期无保护双写;"+
+						"要么把 writer_lease_mode 改 enforce,要么把 Deployment 改回单副本 Recreate(rollout §5.4 引导升级每跳 Recreate)")
+				os.Exit(1)
+			default:
+				helper.Infow("msg", "hub_writer_lease_strategy_checked",
+					"strategy", strategy, "mode", writerMode)
+			}
+		} else {
+			helper.Warnw("msg", "hub_writer_lease_strategy_unknown",
+				"mode", writerMode,
+				"hint", "PANDORA_DEPLOY_STRATEGY 未注入(本机裸跑/旧清单):无法机械校验 RollingUpdate×非 enforce 组合")
 		}
 		if writerMode == conf.WriterLeaseOff {
 			helper.Warnw("msg", "hub_writer_lease_disabled",

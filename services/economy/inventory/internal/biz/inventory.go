@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sort"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -595,4 +596,71 @@ func safeMulInt64(a, b int64) (int64, bool) {
 		return 0, false
 	}
 	return c, true
+}
+
+// MaxCheckItemsOwned 是一次 CheckItemsOwned 可查询的道具配置数上限(§9.18 读取侧上限)。
+//
+// 唯一调用方 player.SetEquipment 一次最多提交装备部位数量个配置(个位数),
+// 取 64 留足余量;超限直接拒而不是静默截断——截断会把「未查」伪装成「未持有」,
+// 让拥有权校验在超长请求下静默放行或静默误拒。
+const MaxCheckItemsOwned = 64
+
+// CheckItemsOwned 批量查询玩家持有情况,返回入参集合中**确实持有**的子集(去重,升序)。
+//
+// 「持有」= 可堆叠计数 > 0(player_items)或存在该配置的装备实例(player_item_instance),
+// 两条路任一成立即算持有:装备走实例模型,消耗品走堆叠计数,调用方不必关心底层形态。
+//
+// 实现刻意复用既有 GetInventory / ListInstances 而不新写一条定向 SQL(§15.2 最少复杂度):
+// 单玩家背包被容量与堆叠行数有界,而本接口只在大厅态改出战预设时调用,属低频路径。
+func (u *InventoryUsecase) CheckItemsOwned(ctx context.Context, playerID uint64, itemConfigIDs []uint32) ([]uint32, error) {
+	if playerID == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if len(itemConfigIDs) == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "item_config_ids required")
+	}
+	if len(itemConfigIDs) > MaxCheckItemsOwned {
+		return nil, errcode.New(errcode.ErrInvalidArg,
+			"too many item_config_ids: %d > %d", len(itemConfigIDs), MaxCheckItemsOwned)
+	}
+	want := make(map[uint32]bool, len(itemConfigIDs))
+	for _, id := range itemConfigIDs {
+		if id == 0 {
+			return nil, errcode.New(errcode.ErrInvalidArg, "item_config_id required")
+		}
+		want[id] = true
+	}
+
+	_, items, err := u.repo.GetInventory(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	owned := make(map[uint32]bool, len(want))
+	for _, it := range items {
+		if it.Count > 0 && want[it.ItemConfigID] {
+			owned[it.ItemConfigID] = true
+		}
+	}
+
+	// 未启用实例背包时不读 player_item_instance(既有库可能尚未迁移出该表,
+	// 与 GetInventoryFull 同一条件),此时装备类道具只能靠堆叠计数判定。
+	if u.cfg.Capacity > 0 {
+		instances, ierr := u.repo.ListInstances(ctx, playerID)
+		if ierr != nil {
+			return nil, ierr
+		}
+		for _, inst := range instances {
+			if want[inst.ItemConfigID] {
+				owned[inst.ItemConfigID] = true
+			}
+		}
+	}
+
+	result := make([]uint32, 0, len(owned))
+	for id := range owned {
+		result = append(result, id)
+	}
+	// map 遍历顺序不稳定,定序返回,让调用方与用例拿到确定结果。
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	return result, nil
 }

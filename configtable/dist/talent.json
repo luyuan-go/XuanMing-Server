@@ -1,0 +1,70 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "name": "强击",
+      "description": "每级提升物理攻击力",
+      "max_level": 5,
+      "cost_per_level": 1
+    },
+    {
+      "id": 2,
+      "name": "坚韧",
+      "description": "每级提升最大生命值",
+      "max_level": 5,
+      "cost_per_level": 1
+    },
+    {
+      "id": 3,
+      "name": "疾行",
+      "description": "每级提升移动速度",
+      "max_level": 3,
+      "cost_per_level": 1
+    },
+    {
+      "id": 4,
+      "name": "聚能",
+      "description": "每级提升技能急速",
+      "max_level": 3,
+      "cost_per_level": 1,
+      "require_talent_id": 1,
+      "require_talent_level": 3
+    },
+    {
+      "id": 5,
+      "name": "破甲",
+      "description": "每级提升护甲穿透",
+      "max_level": 3,
+      "cost_per_level": 1,
+      "require_talent_id": 1,
+      "require_talent_level": 5
+    },
+    {
+      "id": 6,
+      "name": "铁壁",
+      "description": "每级降低受到的伤害",
+      "max_level": 3,
+      "cost_per_level": 1,
+      "require_talent_id": 2,
+      "require_talent_level": 3
+    },
+    {
+      "id": 7,
+      "name": "迅捷步",
+      "description": "每级降低技能冷却",
+      "max_level": 2,
+      "cost_per_level": 1,
+      "require_talent_id": 3,
+      "require_talent_level": 3
+    },
+    {
+      "id": 8,
+      "name": "专精精通",
+      "description": "每级提升全部基础属性",
+      "max_level": 1,
+      "cost_per_level": 1,
+      "require_talent_id": 4,
+      "require_talent_level": 3
+    }
+  ]
+}

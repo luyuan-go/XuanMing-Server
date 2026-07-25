@@ -17,22 +17,46 @@ type Tables struct {
 	Version   uint64
 	SourceRev string
 
+	// Item 配置表 item(道具/d_道具.xlsx)
+	Item *ItemTable
+
 	// Level 配置表 level(关卡/g_关卡.xlsx)
 	Level *LevelTable
 
 	// PlayerLevelExp 配置表 player_level_exp(角色/j_玩家等级经验.xlsx)
 	PlayerLevelExp *PlayerLevelExpTable
+
+	// Talent 配置表 talent(角色/z_专精.xlsx)
+	Talent *TalentTable
 }
 
 // specByName 清单表名 → 解析构建注册(Store.Load 消费)。
 var specByName = map[string]tableSpec{
+	"item":             {protoName: "pandora.config.v1.ItemTableData", build: buildItemTable},
 	"level":            {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable},
 	"player_level_exp": {protoName: "pandora.config.v1.PlayerLevelExpTableData", build: buildPlayerLevelExpTable},
+	"talent":           {protoName: "pandora.config.v1.TalentTableData", build: buildTalentTable},
 }
 
 // validateCrossTables 批内跨表引用完整性((excel_fk);生成阶段已校验,
 // 服务端加载再 fail-closed 兜底,全过才允许整批切换)。
 func validateCrossTables(dst *Tables) error {
+	return nil
+}
+
+func buildItemTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.ItemTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 item 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 item 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newItemTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Item = t
 	return nil
 }
 
@@ -65,5 +89,21 @@ func buildPlayerLevelExpTable(raw []byte, mt ManifestTable, dst *Tables) error {
 		return err
 	}
 	dst.PlayerLevelExp = t
+	return nil
+}
+
+func buildTalentTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.TalentTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 talent 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 talent 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newTalentTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Talent = t
 	return nil
 }

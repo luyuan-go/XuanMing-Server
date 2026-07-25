@@ -96,8 +96,11 @@ type PlayerRepo interface {
 	GetEquipment(ctx context.Context, playerID uint64) ([]EquipmentSlot, error)
 	// GrantTalentPoints 幂等授予天赋点(total_talent_points += points)。命中幂等键 → (当前可点, true, nil)。
 	GrantTalentPoints(ctx context.Context, playerID uint64, points int32, idempotencyKey string) (unspent int, already bool, err error)
-	// SetTalents 全量重置天赋(事务:校验 sum(level)<=total,替换 player_talents)。点数不足 → ErrPlayerInsufficientPoints。
-	SetTalents(ctx context.Context, playerID uint64, talents []TalentLevel) (unspent int, err error)
+	// SetTalents 全量重置天赋(事务:校验 totalCost<=total,替换 player_talents)。点数不足 → ErrPlayerInsufficientPoints。
+	//
+	// totalCost 由 biz 按专精表算好后传入(Σ 等级 × cost_per_level),repo 不再自己按 sum(level) 推算:
+	// 每级消耗是配置表列,repo 层看不到配置,自行推算会在 cost_per_level≠1 时算少扣。
+	SetTalents(ctx context.Context, playerID uint64, talents []TalentLevel, totalCost uint32) (unspent int, err error)
 	// ResetTalents 清空天赋(返回 total = 全部可点)。
 	ResetTalents(ctx context.Context, playerID uint64) (unspent int, err error)
 	// GetTalents 读已点天赋 + 可点天赋点(total - SUM(level))。

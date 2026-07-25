@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/luyuancpp/pandora/pkg/dsauthfence/writerlease"
 	"github.com/luyuancpp/pandora/pkg/metrics"
@@ -57,24 +58,94 @@ type writerHealthBody struct {
 	Degraded                  bool   `json:"degraded"`
 }
 
+// ── Prometheus 指标(R11 复审 P0-2 缺口 3)──────────────────────────────────
+//
+// JSON 端点只能人工 curl,告警系统无法表达"全集群都没有写者"。真正的全局信号是
+// **没有任何副本上报 held=1**,这需要指标而不是健康页:
+//
+//	sum(pandora_hub_allocator_writer_held) == 0  持续 > lease TTL 兜底窗口  → 长期无主
+//
+// 这一条同时覆盖 Campaign 永久阻塞(held 恒 0)、激活永久阻塞(held 恒 0)与全体竞选
+// 失败三种形态,不依赖任何"函数返回了错误"的前提。
+var (
+	writerHeldGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "pandora_hub_allocator_writer_held",
+		Help: "1 = this replica currently holds the hub_allocator writer lease (announced, post-activation).",
+	})
+	writerDegradedGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "pandora_hub_allocator_writer_degraded",
+		Help: "1 = this replica is neither the writer nor able to become one (campaign/activation failing persistently).",
+	})
+	writerTokenGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "pandora_hub_allocator_writer_token",
+		Help: "Current fencing token of this replica's writer term (0 = not held).",
+	})
+	writerCampaignErrsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "pandora_hub_allocator_writer_campaign_errors",
+		Help: "Consecutive writer-lease campaign failures (reset on election).",
+	})
+	writerActivationErrsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "pandora_hub_allocator_writer_activation_errors",
+		Help: "Consecutive writer-lease activation failures (elected but not yet writable; reset on success).",
+	})
+	writerLeaseEnabledGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "pandora_hub_allocator_writer_lease_enabled",
+		Help: "1 = writer succession lease is wired on this replica (0 = legacy/off; single-writer relies on the deploy strategy).",
+	})
+)
+
+func init() {
+	metrics.Register(writerHeldGauge)
+	metrics.Register(writerDegradedGauge)
+	metrics.Register(writerTokenGauge)
+	metrics.Register(writerCampaignErrsGauge)
+	metrics.Register(writerActivationErrsGauge)
+	metrics.Register(writerLeaseEnabledGauge)
+}
+
+// snapshot 取一次快照并同步刷新指标(/metrics 与 /healthz/writer 同源,不会漂移)。
+// 未注入租约时明示 enabled=false 并把 held 记为 0——**不能**报成"健康"(此前 nil 租约
+// 返回 200 + degraded:false,把"根本没启用单写者保护"伪装成健康,R11 复审指出的 fail-open)。
+func (h *WriterHealthHolder) snapshot() writerHealthBody {
+	if h.lease == nil {
+		writerLeaseEnabledGauge.Set(0)
+		writerHeldGauge.Set(0)
+		writerDegradedGauge.Set(0)
+		writerTokenGauge.Set(0)
+		return writerHealthBody{Enabled: false, Mode: h.mode}
+	}
+	snap := h.lease.Health()
+	body := writerHealthBody{
+		Enabled:                   true,
+		Mode:                      h.mode,
+		Held:                      snap.Held,
+		Token:                     snap.Token,
+		ConsecutiveCampaignErrs:   snap.ConsecutiveCampaignErrs,
+		LastCampaignErr:           snap.LastCampaignErr,
+		ConsecutiveActivationErrs: snap.ConsecutiveActivationErrs,
+		LastActivationErr:         snap.LastActivationErr,
+		EscalateAfter:             snap.EscalateAfter,
+		Degraded:                  snap.Degraded(),
+	}
+	writerLeaseEnabledGauge.Set(1)
+	writerHeldGauge.Set(boolGauge(body.Held))
+	writerDegradedGauge.Set(boolGauge(body.Degraded))
+	writerTokenGauge.Set(float64(body.Token))
+	writerCampaignErrsGauge.Set(float64(body.ConsecutiveCampaignErrs))
+	writerActivationErrsGauge.Set(float64(body.ConsecutiveActivationErrs))
+	return body
+}
+
+func boolGauge(v bool) float64 {
+	if v {
+		return 1
+	}
+	return 0
+}
+
 // ServeHTTP 输出快照。状态码:degraded → 503,其余 → 200(含"健康热备")。
 func (h *WriterHealthHolder) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-	body := writerHealthBody{}
-	if h.lease != nil {
-		snap := h.lease.Health()
-		body = writerHealthBody{
-			Enabled:                   true,
-			Mode:                      h.mode,
-			Held:                      snap.Held,
-			Token:                     snap.Token,
-			ConsecutiveCampaignErrs:   snap.ConsecutiveCampaignErrs,
-			LastCampaignErr:           snap.LastCampaignErr,
-			ConsecutiveActivationErrs: snap.ConsecutiveActivationErrs,
-			LastActivationErr:         snap.LastActivationErr,
-			EscalateAfter:             snap.EscalateAfter,
-			Degraded:                  snap.Degraded(),
-		}
-	}
+	body := h.snapshot()
 	w.Header().Set("Content-Type", "application/json")
 	if body.Degraded {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -83,9 +154,15 @@ func (h *WriterHealthHolder) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 }
 
 // NewHTTPServer 构造 HTTP server,注册 /metrics 与 /healthz/writer。
+// /metrics 前置刷新写者指标:抓取端只抓 /metrics 也能拿到最新写者状态,
+// 无需再依赖有人去 curl /healthz/writer。
 func NewHTTPServer(cfg *conf.Config, writerHealth *WriterHealthHolder) *khttp.Server {
 	srv := phttp.MustNewServer(cfg.Server.Http)
-	srv.Handle("/metrics", metrics.MustHandler())
+	promHandler := metrics.MustHandler()
+	srv.Handle("/metrics", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writerHealth.snapshot()
+		promHandler.ServeHTTP(w, r)
+	}))
 	srv.Handle("/healthz/writer", writerHealth)
 	return srv
 }

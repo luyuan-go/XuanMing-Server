@@ -78,9 +78,22 @@ func TestFilesShape(t *testing.T) {
 	}
 }
 
+// defByName 按表名取定义。不能用 defs[0]:Discover 按表名定序,新增一张字典序更靠前的表
+// (如 item)就会把断言指向别的表,让本用例无谓变红。
+func defByName(t *testing.T, defs []tablegen.TableDef, name string) tablegen.TableDef {
+	t.Helper()
+	for _, d := range defs {
+		if d.Name == name {
+			return d
+		}
+	}
+	t.Fatalf("未发现配置表 %q", name)
+	return tablegen.TableDef{}
+}
+
 func TestCompanionStubShape(t *testing.T) {
 	defs := discover(t)
-	stub, err := CompanionStub(defs[0])
+	stub, err := CompanionStub(defByName(t, defs, "level"))
 	if err != nil {
 		t.Fatal(err)
 	}

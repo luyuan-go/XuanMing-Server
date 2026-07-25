@@ -51,11 +51,11 @@ constexpr LevelRow::ParseTableT_ LevelRow::InternalGenerateParseTable_(const ::_
     {
       PROTOBUF_FIELD_OFFSET(LevelRow, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -94,6 +94,20 @@ constexpr LevelRow::ParseTableT_ LevelRow::InternalGenerateParseTable_(const ::_
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LevelRow, _impl_.show_in_match_list_), 6>(),
        {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.show_in_match_list_)}},
+      // uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.team_size_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.team_size_)}},
+      // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LevelRow, _impl_.allow_exit_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.allow_exit_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -111,10 +125,14 @@ constexpr LevelRow::ParseTableT_ LevelRow::InternalGenerateParseTable_(const ::_
       {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.disable_ui_shortcut_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool show_in_match_list = 7 [json_name = "showInMatchList", (.pandora.config.v1.excel_col) = "\345\214\271\351\205\215\345\210\227\350\241\250\346\230\276\347\244\272", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.show_in_match_list_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.team_size_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.allow_exit_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
-      "\32\0\4\12\17\0\0\0"
+      "\32\0\4\12\17\0\0\0\0\0\0\0\0\0\0\0"
       "pandora.config.v1.LevelRow"
       "name"
       "asset_path"
@@ -140,7 +158,9 @@ inline constexpr LevelRow::Impl_::Impl_(
         id_{0u},
         category_{static_cast< ::pandora::config::v1::LevelCategory >(0)},
         disable_ui_shortcut_{false},
-        show_in_match_list_{false} {}
+        show_in_match_list_{false},
+        allow_exit_{false},
+        team_size_{0u} {}
 
 template <typename>
 constexpr LevelRow::LevelRow(::_pbi::ConstantInitialized,
@@ -397,7 +417,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_._has_bits_),
-        10, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.asset_path_),
@@ -405,6 +425,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.category_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.disable_ui_shortcut_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.show_in_match_list_),
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.team_size_),
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.allow_exit_),
         3,
         0,
         1,
@@ -412,6 +434,8 @@ const ::uint32_t
         4,
         5,
         6,
+        8,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -422,7 +446,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::config::v1::LevelRow)},
-        {17, sizeof(::pandora::config::v1::LevelTableData)},
+        {21, sizeof(::pandora::config::v1::LevelTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -433,7 +457,7 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2flevel_2eproto[] ABS
     protodesc_cold) = {
     "\n\035pandora/config/v1/level.proto\022\021pandora"
     ".config.v1\032\035pandora/config/v1/excel.prot"
-    "o\"\270\003\n\010LevelRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
+    "o\"\245\004\n\010LevelRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
     "id\022(\n\004name\030\002 \001(\tB\024\362\222\031\014\345\205\263\345\215\241\345\220\215\347\247\260\370\222\031\001R\004"
     "name\0228\n\nasset_path\030\003 \001(\tB\031\362\222\031\014\345\205\263\345\215\241\350\265\204\346"
     "\272\220\370\222\031\001\212\223\031\001/R\tassetPath\022<\n\017game_mode_clas"
@@ -444,13 +468,16 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2flevel_2eproto[] ABS
     "\222\031\027\347\246\201\346\255\242ui\345\277\253\346\215\267\351\224\256\345\274\200\345\205\263\202\223\031\0011R\021disable"
     "UiShortcut\022H\n\022show_in_match_list\030\007 \001(\010B\033"
     "\362\222\031\022\345\214\271\351\205\215\345\210\227\350\241\250\346\230\276\347\244\272\202\223\031\0010R\017showInMatch"
-    "List\"_\n\016LevelTableData\022/\n\004rows\030\001 \003(\0132\033.p"
-    "andora.config.v1.LevelRowR\004rows:\034\352\222\031\024\345\205\263"
-    "\345\215\241/g_\345\205\263\345\215\241.xlsx\220\223\031\001*\242\001\n\rLevelCategory\022"
-    "\036\n\032LEVEL_CATEGORY_UNSPECIFIED\020\000\022\030\n\024LEVEL"
-    "_CATEGORY_LOGIN\020\001\022\036\n\032LEVEL_CATEGORY_ROLE"
-    "_SELECT\020\002\022\034\n\030LEVEL_CATEGORY_MAIN_CITY\020\003\022"
-    "\031\n\025LEVEL_CATEGORY_BATTLE\020\004b\006proto3"
+    "List\0222\n\tteam_size\030\010 \001(\rB\025\362\222\031\014\351\230\237\344\274\215\344\272\272\346\225"
+    "\260\202\223\031\0010R\010teamSize\0227\n\nallow_exit\030\t \001(\010B\030\362\222"
+    "\031\017\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272\202\223\031\0010R\tallowExit\"_\n\016Lev"
+    "elTableData\022/\n\004rows\030\001 \003(\0132\033.pandora.conf"
+    "ig.v1.LevelRowR\004rows:\034\352\222\031\024\345\205\263\345\215\241/g_\345\205\263\345\215"
+    "\241.xlsx\220\223\031\001*\242\001\n\rLevelCategory\022\036\n\032LEVEL_CA"
+    "TEGORY_UNSPECIFIED\020\000\022\030\n\024LEVEL_CATEGORY_L"
+    "OGIN\020\001\022\036\n\032LEVEL_CATEGORY_ROLE_SELECT\020\002\022\034"
+    "\n\030LEVEL_CATEGORY_MAIN_CITY\020\003\022\031\n\025LEVEL_CA"
+    "TEGORY_BATTLE\020\004b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fconfig_2fv1_2flevel_2eproto_deps[1] = {
@@ -460,7 +487,7 @@ static ::absl::once_flag descriptor_table_pandora_2fconfig_2fv1_2flevel_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fconfig_2fv1_2flevel_2eproto = {
     false,
     false,
-    794,
+    903,
     descriptor_table_protodef_pandora_2fconfig_2fv1_2flevel_2eproto,
     "pandora/config/v1/level.proto",
     &descriptor_table_pandora_2fconfig_2fv1_2flevel_2eproto_once,
@@ -522,9 +549,9 @@ LevelRow::LevelRow(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, show_in_match_list_) -
+           offsetof(Impl_, team_size_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::show_in_match_list_));
+               sizeof(Impl_::team_size_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.config.v1.LevelRow)
 }
@@ -541,9 +568,9 @@ inline void LevelRow::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, show_in_match_list_) -
+           offsetof(Impl_, team_size_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::show_in_match_list_));
+               sizeof(Impl_::team_size_));
 }
 LevelRow::~LevelRow() {
   // @@protoc_insertion_point(destructor:pandora.config.v1.LevelRow)
@@ -607,11 +634,12 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
       _impl_.game_mode_class_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000078U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.show_in_match_list_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.show_in_match_list_));
+        reinterpret_cast<char*>(&_impl_.allow_exit_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.allow_exit_));
   }
+  _impl_.team_size_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -701,6 +729,24 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
     }
   }
 
+  // uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_team_size() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_team_size(), target);
+    }
+  }
+
+  // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_allow_exit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          9, this_._internal_allow_exit(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -726,7 +772,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_name().empty()) {
@@ -774,6 +820,21 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
         total_size += 2;
       }
     }
+    // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_allow_exit() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+   {
+    // uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_team_size() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_team_size());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -792,7 +853,7 @@ void LevelRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_name().empty()) {
         _this->_internal_set_name(from._internal_name());
@@ -840,6 +901,16 @@ void LevelRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.show_in_match_list_ = from._impl_.show_in_match_list_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_allow_exit() != 0) {
+        _this->_impl_.allow_exit_ = from._impl_.allow_exit_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_team_size() != 0) {
+      _this->_impl_.team_size_ = from._impl_.team_size_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -864,8 +935,8 @@ void LevelRow::InternalSwap(LevelRow* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.asset_path_, &other->_impl_.asset_path_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_class_, &other->_impl_.game_mode_class_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.show_in_match_list_)
-      + sizeof(LevelRow::_impl_.show_in_match_list_)
+      PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.team_size_)
+      + sizeof(LevelRow::_impl_.team_size_)
       - PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

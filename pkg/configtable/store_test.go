@@ -42,6 +42,43 @@ func samplePlayerLevelExpData() *configpb.PlayerLevelExpTableData {
 	}}
 }
 
+// sampleItemData / sampleTalentData 是 store 用例的最小合法道具 / 专精表。
+// Store.Load 要求 manifest 覆盖本进程注册的**全部**表(缺一整批拒绝),
+// 因此每批产物都要带上这两张表,否则用例连加载都过不去。
+func sampleItemData() *configpb.ItemTableData {
+	return &configpb.ItemTableData{Rows: []*configpb.ItemRow{
+		{Id: 10001, Name: "测试消耗品", Type: configpb.ItemType_ITEM_TYPE_CONSUMABLE,
+			MaxStackSize: 99, Usable: true, UseHealHp: 50},
+		{Id: 10003, Name: "测试装备", Type: configpb.ItemType_ITEM_TYPE_EQUIPMENT,
+			MaxStackSize: 1, EquipSlot: 1},
+	}}
+}
+
+func sampleTalentData() *configpb.TalentTableData {
+	return &configpb.TalentTableData{Rows: []*configpb.TalentRow{
+		{Id: 1, Name: "强击", MaxLevel: 5, CostPerLevel: 1},
+		{Id: 4, Name: "聚能", MaxLevel: 3, CostPerLevel: 1, RequireTalentId: 1, RequireTalentLevel: 3},
+	}}
+}
+
+func marshalItem(t *testing.T, data *configpb.ItemTableData) []byte {
+	t.Helper()
+	raw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal item: %v", err)
+	}
+	return raw
+}
+
+func marshalTalent(t *testing.T, data *configpb.TalentTableData) []byte {
+	t.Helper()
+	raw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal talent: %v", err)
+	}
+	return raw
+}
+
 func sampleLevelData() *configpb.LevelTableData {
 	return &configpb.LevelTableData{Rows: []*configpb.LevelRow{
 		{Id: 1, Name: "登录", AssetPath: "/Game/Level/Login/Lvl_Login.Lvl_Login",
@@ -80,10 +117,19 @@ func writeBatchWithPlayerLevel(t *testing.T, dir string, version uint64, levelRa
 	if err := os.WriteFile(filepath.Join(dir, "player_level_exp.json"), playerLevelRaw, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	itemRaw := marshalItem(t, sampleItemData())
+	if err := os.WriteFile(filepath.Join(dir, "item.json"), itemRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	talentRaw := marshalTalent(t, sampleTalentData())
+	if err := os.WriteFile(filepath.Join(dir, "talent.json"), talentRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	m := &Manifest{
 		Version:   version,
 		Generator: "configtable-gen@test",
 		SourceRev: "test",
+		// level 必须留在下标 0:多个用例用 m.Tables[0] 篡改校验和 / proto 名 / 路径来验拒绝路径。
 		Tables: []ManifestTable{
 			{
 				Name: "level", File: "level.json",
@@ -93,6 +139,16 @@ func writeBatchWithPlayerLevel(t *testing.T, dir string, version uint64, levelRa
 				Name: "player_level_exp", File: "player_level_exp.json",
 				Proto:    "pandora.config.v1.PlayerLevelExpTableData",
 				Checksum: checksumOf(playerLevelRaw), Rows: playerLevelRows,
+			},
+			{
+				Name: "item", File: "item.json",
+				Proto: "pandora.config.v1.ItemTableData", Checksum: checksumOf(itemRaw),
+				Rows:  uint32(len(sampleItemData().GetRows())),
+			},
+			{
+				Name: "talent", File: "talent.json",
+				Proto: "pandora.config.v1.TalentTableData", Checksum: checksumOf(talentRaw),
+				Rows:  uint32(len(sampleTalentData().GetRows())),
 			},
 		},
 	}

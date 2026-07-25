@@ -221,7 +221,14 @@ if ($srcPkg) {
     if ($LASTEXITCODE -ge 8) { throw "robocopy 同步 Linux DS 包失败（exit=$LASTEXITCODE）：$srcPkg" }
     $global:LASTEXITCODE = 0
 } else {
-    Write-Host "[build-image-minikube] 未发现同级客户端仓库的 Linux DS 包，沿用已暂存的 stage\LinuxServer" -ForegroundColor Yellow
+    # 主来源已改为制品库，这里的回退措辞要跟着改，否则会把人往"找同级客户端仓库"的旧思路上带。
+    Write-Host "[build-image-minikube] !! 未解析到任何 DS 包来源，沿用已暂存的 stage\LinuxServer（来源未知，可能是陈旧包）" -ForegroundColor Yellow
+    Write-Host "[build-image-minikube] !! 常见原因：PANDORA_ARTIFACT_ROOT 未设/设错（当前='$($env:PANDORA_ARTIFACT_ROOT)'），或制品库里还没有 Server_Linux_Development 产物。" -ForegroundColor Yellow
+    Write-Host "[build-image-minikube] !! 排查：pwsh tools\devops\preflight-buildmachine.ps1   发布：客户端仓库跑 Tool\Build\PublishPackages.ps1" -ForegroundColor Yellow
+    if (Test-Path -LiteralPath (Join-Path $StageDir 'Pandora\Binaries\Linux\PandoraServer')) {
+        $sf = Get-Item -LiteralPath (Join-Path $StageDir 'Pandora\Binaries\Linux\PandoraServer')
+        Write-Host ("[build-image-minikube] !! 本次将用 stage 里的：PandoraServer {0:N1} MB  {1:yyyy-MM-dd HH:mm:ss}" -f ($sf.Length / 1MB), $sf.LastWriteTime) -ForegroundColor Yellow
+    }
 }
 
 if (-not (Test-Path $StageDir)) {

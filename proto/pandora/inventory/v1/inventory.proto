@@ -131,6 +131,19 @@ service InventoryService {
   // 防"bag 域已入 + 托管行残留被释放/领取"造成实例双持。行必须 destined to 该玩家;
   // 行缺失 = 已消费,no-op 幂等。系统接口,仅后端内部直连。
   rpc ConsumeTransferEscrow(ConsumeTransferEscrowRequest) returns (ConsumeTransferEscrowResponse);
+
+  // CheckItemsOwned 批量查询玩家是否持有指定配置道具(系统接口,仅后端内部直连)。
+  //
+  // 唯一用途:player.SetEquipment 的**拥有权**校验——出战装备预设会被 GetLoadout 转成
+  // Battle DS 的初始 GameplayEffect,不校验拥有权等于客户端可以给自己配任意装备。
+  // 「持有」= 可堆叠计数 > 0 或存在该配置的装备实例,两条路任一成立即算持有。
+  //
+  // 为什么不复用 GetInventory:后者是客户端 RPC,以 Envoy 注入的 JWT 身份为准,
+  // 后端内部直连(callerID==0)会被判 ERR_UNAUTHORIZED,player 服务调不通。
+  // 本 RPC 反过来只认内部直连,带玩家 JWT 一律拒(与 GrantItems 同口径),且不在 Envoy 暴露。
+  //
+  // 只回「请求集合中确实持有的子集」,不回数量、不回实例 id,避免把背包细节外溢到其它域。
+  rpc CheckItemsOwned(CheckItemsOwnedRequest) returns (CheckItemsOwnedResponse);
 }
 
 // EscrowSide 冻结方向(对齐 auction OrderSide:SELL=1 冻道具 / BUY=2 冻金币)。
@@ -210,6 +223,20 @@ message GrantItemsRequest {
 message GrantItemsResponse {
   pandora.common.v1.ErrCode code = 1;
   int64 gold = 2;  // 发放后金币余额
+}
+
+// CheckItemsOwnedRequest 批量拥有权查询(系统接口)。
+// item_config_ids 去重后逐个判定;条数上限由服务端裁决(§9.18 读取侧上限),
+// 超限返回 ERR_INVALID_ARG,不做静默截断——截断会让"未持有"被误判成"持有集合里没有"。
+message CheckItemsOwnedRequest {
+  uint64 player_id            = 1;
+  repeated uint32 item_config_ids = 2;
+}
+
+message CheckItemsOwnedResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // 请求集合中玩家**确实持有**的子集(去重,升序);请求里其余 id 即为未持有。
+  repeated uint32 owned_item_config_ids = 2;
 }
 
 // UseItemRequest 大厅态使用消耗品(数量不足 → ERR_INVENTORY_INSUFFICIENT;

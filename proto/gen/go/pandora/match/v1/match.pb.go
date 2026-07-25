@@ -1,7 +1,9 @@
 // Pandora MatchService 协议。
 //
-// 职责(docs/design/go-services.md §2.8):撮合 5v5
-// 流程:enqueue → MMR 撮合 → 凑齐 10 → 确认期(15s)→ 全确认 → 拉 DS → 发 ds_addr
+// 职责(docs/design/go-services.md §2.8):按关卡配置的每方人数撮合
+// (team_size 逐关卡可配,见 g_关卡.xlsx / configtable level 表;PVE 单人副本 team_size=1,
+//  PVP 默认 5v5。**不要**再把 5v5 / 10 人写进契约,撮合人数是数据不是常量。)
+// 流程:enqueue → MMR 撮合 → 凑齐 2×team_size → 确认期(15s)→ 全确认 → 拉 DS → 发 ds_addr
 //
 // ⚠️ 推送架构(ds-arch.md §0.8):
 //   go-zero zrpc 不支持 gRPC server stream。
@@ -38,7 +40,7 @@ type MatchStage int32
 const (
 	MatchStage_MATCH_STAGE_UNSPECIFIED MatchStage = 0
 	MatchStage_MATCH_STAGE_QUEUEING    MatchStage = 1
-	MatchStage_MATCH_STAGE_FOUND       MatchStage = 2 // 凑齐 10 人
+	MatchStage_MATCH_STAGE_FOUND       MatchStage = 2 // 已凑齐本关卡所需人数(2×team_size,逐关卡可配)
 	MatchStage_MATCH_STAGE_CONFIRM     MatchStage = 3 // 等待玩家确认
 	MatchStage_MATCH_STAGE_ALLOCATING  MatchStage = 4 // 拉 DS 中
 	MatchStage_MATCH_STAGE_READY       MatchStage = 5 // DS 就绪,可以连
@@ -1110,7 +1112,8 @@ type MatchProgress struct {
 	BattleDsAddr string `protobuf:"bytes,5,opt,name=battle_ds_addr,json=battleDsAddr,proto3" json:"battle_ds_addr,omitempty"`
 	BattleTicket string `protobuf:"bytes,6,opt,name=battle_ticket,json=battleTicket,proto3" json:"battle_ticket,omitempty"`
 	// FOUND / CONFIRM 时填
-	TeamA []uint64 `protobuf:"varint,7,rep,packed,name=team_a,json=teamA,proto3" json:"team_a,omitempty"` // 5 人 player_id
+	// 每方 team_size 个 player_id(逐关卡可配;单人 PVE 副本为 1,PVP 默认 5)。
+	TeamA []uint64 `protobuf:"varint,7,rep,packed,name=team_a,json=teamA,proto3" json:"team_a,omitempty"`
 	TeamB []uint64 `protobuf:"varint,8,rep,packed,name=team_b,json=teamB,proto3" json:"team_b,omitempty"`
 	// [proto] 本局副本编号(g_关卡.xlsx 关卡 id,uint32 配置表 ID,CLAUDE.md §9.12)。
 	// 权威源 MatchTicketStorageRecord/MatchStorageRecord.map_id;票据/对局已知即填。

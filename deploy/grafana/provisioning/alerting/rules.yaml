@@ -136,3 +136,53 @@ groups:
               conditions:
                 - evaluator: { type: lt, params: [1] }
               refId: C
+
+      # ── Hub 归属/容量账本长期无写者(critical)──────────────────────────────
+      # R11 复审 P0-2:hub_allocator 是 assignment/容量账本的单写者,写权由 etcd 继任
+      # 租约授予(pkg/dsauthfence/writerlease)。此前"长期无主"只能人工逐 Pod 直连健康
+      # 页发现——尤其竞选或激活钩子**永久阻塞**(而非返回错误)时,失败计数器一次都不
+      # 会动,degraded 恒 false,日志也不再输出,完全静默。
+      #
+      # 判据取全局而非单副本:失主副本是**有意的热备**(拒写但可秒级接管),单副本
+      # held=0 属正常。真正的故障是**没有任何副本上报 held=1**——同时覆盖竞选阻塞、
+      # 激活阻塞、全体竞选失败三种形态,不依赖"某个函数返回了错误"这个前提。
+      #
+      # for: 1m > lease TTL 兜底接任窗口(15s)+ 滚动让位(亚秒),正常发布不误报。
+      # noDataState/execErrState=Alerting:指标序列消失(进程全挂/抓取中断)同样是
+      # "无法证明有写者",必须响,不能被 NoData 静默成 OK(同上条 ds_allocator 教训)。
+      # 未启用继任租约时(legacy/off,单写由部署策略保证)enabled=0,用 unless 排除,
+      # 避免 dev/单副本 Recreate 部署常态 firing。
+      - uid: pandora-hub-allocator-no-writer
+        title: Hub账本长期无写者
+        condition: C
+        for: 1m
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: critical
+          service: hub_allocator
+        annotations:
+          summary: 'hub_allocator 无任何副本持有写者租约,Hub 归属/容量写入全部被拒'
+          description: '玩家 AssignHub / Transfer / Admission 将持续失败(可重试错误)。检查 etcd 可达性与选举 key /pandora/writerlease/hub_allocator/writer;逐 Pod 看 pandora_hub_allocator_writer_campaign_errors 与 _activation_errors 区分"选不上"与"选上了激活不过"。激活连续失败 = 继任者 fence 水位推扫未完成,此时拒写是正确的 fail-closed,但必须尽快恢复。'
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: pandora-prometheus
+            model:
+              editorMode: code
+              expr: sum (pandora_hub_allocator_writer_held) unless (max (pandora_hub_allocator_writer_lease_enabled) == 0)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+              refId: C

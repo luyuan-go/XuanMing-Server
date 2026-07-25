@@ -1,7 +1,9 @@
 // Pandora MatchService 协议。
 //
-// 职责(docs/design/go-services.md §2.8):撮合 5v5
-// 流程:enqueue → MMR 撮合 → 凑齐 10 → 确认期(15s)→ 全确认 → 拉 DS → 发 ds_addr
+// 职责(docs/design/go-services.md §2.8):按关卡配置的每方人数撮合
+// (team_size 逐关卡可配,见 g_关卡.xlsx / configtable level 表;PVE 单人副本 team_size=1,
+//  PVP 默认 5v5。**不要**再把 5v5 / 10 人写进契约,撮合人数是数据不是常量。)
+// 流程:enqueue → MMR 撮合 → 凑齐 2×team_size → 确认期(15s)→ 全确认 → 拉 DS → 发 ds_addr
 //
 // ⚠️ 推送架构(ds-arch.md §0.8):
 //   go-zero zrpc 不支持 gRPC server stream。

@@ -99,6 +99,64 @@ func newAssignmentFenceTombstone(playerID, token uint64) *hubv1.HubAssignmentSto
 // noopAdvance 供未启用 fence / 无需推进时占位。
 func noopAdvance(redis.Pipeliner) {}
 
+// fencedPodTx 在 {pod} slot 上跑一个受写者水位保护的 WATCH/MULTI/EXEC(R11 复审 P0-4 续:
+// 收口 assignment 之外的同类写入口)。水位比较、业务写与水位推进落在同一个 EXEC,
+// 失主副本或落后 token 一律零写入 ErrWriterSuperseded。
+//
+// keys 必须全部与 pod 同 hashtag(shardKey / membersKey / transferCleanupKey 均满足),
+// 否则 Redis Cluster 会 CROSSSLOT 拒绝整个事务。
+//
+// 未启用 fence(dev / 单副本 Recreate)时退化为原来的无 WATCH TxPipelined,行为逐字不变——
+// 不引入新的乐观锁冲突重试。
+func (r *RedisHubRepo) fencedPodTx(ctx context.Context, pod string, keys []string,
+	mutate func(pipe redis.Pipeliner)) error {
+	if r.fence == nil {
+		_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			mutate(pipe)
+			return nil
+		})
+		return err
+	}
+	watch := fencedWatchKeys(keys, pod, r.fence)
+	const casMaxRetry = 8
+	for attempt := 0; attempt < casMaxRetry; attempt++ {
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advance, gerr := guardWriterFence(ctx, tx, pod, r.fence)
+			if gerr != nil {
+				return gerr
+			}
+			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				mutate(pipe)
+				advance(pipe)
+				return nil
+			})
+			return perr
+		}, watch...)
+		if err == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
+			continue
+		}
+		return err
+	}
+	return errcode.New(errcode.ErrUnavailable, "hub fenced pod tx contention on pod %s", pod)
+}
+
+// requireWriterHeld 是**入口级**写者校验,用于键无法与任何 {pod} 水位同事务的写路径
+// (无 hashtag 的 per-team 提示键、per-player 冷却键、以及跨 slot 的全局索引)。
+//
+// 它严格弱于 guardWriterFence:只挡"本副本已知失主",挡不住"检查通过后才失租"。
+// 因此只允许用在**丢失即自愈、且不参与准入/归属判定**的键上,每个调用点必须注释写明
+// 为什么做不成原子 fencing。归属、席位、容量账本一律不得降级到本函数。
+func (r *RedisHubRepo) requireWriterHeld() error {
+	if r.fence == nil {
+		return nil
+	}
+	if _, held := r.fence.Current(); !held {
+		return ErrWriterSuperseded
+	}
+	return nil
+}
+
 // guardWriterFence 在 Watch 回调内做 fence 比较,返回「推进闭包」供写事务在同一
 // EXEC 内推进水位。调用方必须把 wfenceKey(pod) 加入 WATCH 集(见 fencedWatchKeys),
 // 否则比较与推进之间的并发继任会绕过乐观锁。

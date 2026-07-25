@@ -160,6 +160,16 @@ type AllocatorUsecase struct {
 	activeIndexReconciler    data.BattleActiveIndexReconciler
 	lastActiveIndexReconcile time.Time
 
+	// sweepDeferUntil 是 sweep 队头公平性的**进程内**退避表(INC-20260724-001)。
+	// key=match_id,value=(登记退避时观察到的 state, 可再次尝试的最早时刻)。
+	// 只有 sweepOnce 读写,而 sweepOnce 只由 RunHeartbeatSweep 单协程驱动
+	// (与 lastActiveIndexReconcile 同一并发域),故不加锁。
+	//
+	// 它是**纯调度提示、非权威**:不参与准入 / 归属 / 扣减任何决策,丢失只会让某项早一轮
+	// 被重试(方向安全),因此不构成 §9.22 意义上的影子状态。权威仍是 active ZSET。
+	// 为什么不写进 ZSET score,见 sweepOnce 内的三条硬约束注释。
+	sweepDeferUntil map[uint64]sweepDeferral
+
 	// killOrphanOnStop:心跳判定某 DS 该停机(orphan / pod_mismatch / 终态)时,是否由后端主动
 	// 回收该 pod。local 模式打开——本机 UE DS 没有 Agones,收到 stop 指令不会自杀,残留进程会
 	// 幽灵般占着监听端口污染下一局;打开后 stop 时异步调 alloc.Release kill 掉它。Agones 模式默认
@@ -2090,6 +2100,54 @@ func (u *AllocatorUsecase) RunHeartbeatSweep(ctx context.Context) {
 // legacy 天然上界靠 UpdateBattleKeepTTL(KEEPTTL)。Model B 则在任何外部 Release 前
 // 把 TERMINATING auth+battle 置为永久，只有 ReleaseExpected 与 lifecycle 投递都明确
 // 成功后才由 ExpireTerminatedExpected 恢复有界 TTL；未知结果宁可不可用也不丢 fence。
+// sweepDeferral 是一次队头退避的记录。state 参与失效校验:记录状态一变(被并发 RPC 推进、
+// 或已进入 §9.4 补偿链、或 abort fence / auth quarantine 要求立即对账)立即作废退避,
+// 不让调度优化拖慢真正的终态收敛。
+type sweepDeferral struct {
+	state string
+	until time.Time
+}
+
+// noteSweepDeferral 登记一次队头退避。退避窗口复用既有 HeartbeatTimeout(默认 15s
+// = 3 个 SweepInterval),不新增配置项。
+func (u *AllocatorUsecase) noteSweepDeferral(ctx context.Context, matchID uint64, state string, now time.Time) {
+	backoff := u.cfg.HeartbeatTimeout.Std()
+	if backoff <= 0 {
+		backoff = 15 * time.Second
+	}
+	if u.sweepDeferUntil == nil {
+		u.sweepDeferUntil = make(map[uint64]sweepDeferral)
+	}
+	u.sweepDeferUntil[matchID] = sweepDeferral{state: state, until: now.Add(backoff)}
+	plog.With(ctx).Debugw("msg", "allocation_sweep_head_of_line_deferred",
+		"match_id", matchID, "state", state, "backoff", backoff.String())
+}
+
+// sweepDeferralActive 判定该项本轮是否让出队头。到期、或状态已变(见 sweepDeferral.state
+// 的作用)即作废并立即重试。
+func (u *AllocatorUsecase) sweepDeferralActive(matchID uint64, state string, now time.Time) bool {
+	d, ok := u.sweepDeferUntil[matchID]
+	if !ok {
+		return false
+	}
+	if d.state != state || !now.Before(d.until) {
+		delete(u.sweepDeferUntil, matchID)
+		return false
+	}
+	return true
+}
+
+// pruneSweepDeferrals 清掉已到期的退避项,防表随历史 match_id 无界增长
+// (§9.18 内存容器有界纪律;与同包 sweepStaleOwnerAdmitted 同源)。
+// 表容量上界 = 一个退避窗口内被判为「卡住墓碑」的对局数,远小于 active 集合。
+func (u *AllocatorUsecase) pruneSweepDeferrals(now time.Time) {
+	for matchID, d := range u.sweepDeferUntil {
+		if !now.Before(d.until) {
+			delete(u.sweepDeferUntil, matchID)
+		}
+	}
+}
+
 // stuckReconcileState 列出「靠重试收敛、外部依赖不可用时会原地打转」的 sweep 状态。
 // 这些项在每轮被处理前先退避,让出队头,避免饿死队尾的 §9.4 abandoned 补偿
 // (INC-20260724-001)。
@@ -2129,6 +2187,7 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 	}
 	roundStart := time.Now()
 	budget := u.sweepRoundBudget()
+	u.pruneSweepDeferrals(roundStart)
 	processed := 0
 	for _, mid := range stale {
 		// 单轮墙钟预算(INC-20260724-001):控制面持续超时时单项可耗时数十秒,
@@ -2150,23 +2209,27 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 				"match_id", mid, "err", readErr)
 			continue
 		}
-		// sweep 公平性(INC-20260724-001):下面几种是「永久墓碑 / 靠重试收敛」状态,
+		// sweep 队头公平性(INC-20260724-001):下面几种是「永久墓碑 / 靠重试收敛」状态,
 		// 外部依赖(k8s/Agones 控制面)持续不可用时它们永远收敛不了,而其 active ZSET
-		// score 不变 ⇒ 恒排在 RangeStaleBattles 的队头,串行吃掉整轮预算,把队尾
-		// abandoned 对局的 §9.4 补偿无限推后(事故当天控制面超时约 40s 期间正是此形态)。
-		// 故在进入分支工作**之前**先把 score 推到当前时刻(退避约一个 HeartbeatTimeout)。
+		// score 不变 ⇒ 恒排在 RangeStaleBattles(无 LIMIT、score 升序)结果最前面,
+		// 串行吃掉整轮预算,把队尾 abandoned 对局的 §9.4 补偿无限推后
+		// (事故当天控制面超时约 40s 期间正是此形态)。故让它们本轮让出队头。
 		//
-		// ⚠️ 顺序是正确性关键:ZAdd(退避)→ 对账工作 →(成功则)ZRem,最终态仍是「已移除」。
-		// 反过来在工作之后 TouchActive 会把刚被 RemoveActive 的项**重新插回** active 集合。
-		//
-		// 已知代价(诚实登记):削弱 RunHeartbeatSweep 开头「重启即扫」的意图 ——
-		// 上个进程刚退避过的项,重启后最多一个 HeartbeatTimeout 内不在结果集。
-		// 这些是永久墓碑不会消失,只是可见性延迟,不丢补偿。
+		// ⚠️ 退避记在**进程内**,绝不能写进 active ZSET score —— 三条硬约束:
+		//   ① score 的权威语义是 last_heartbeat_ms(data/battle.go:106 接口注释),
+		//      挪作调度时间戳会让「score ≤ 阈值 ⇔ 心跳超时」判据失效;
+		//   ② data/battle_abort.go:289(abort fence)与 data/battle_auth.go:1150
+		//      (auth quarantine)用 score==0 表示「下一轮 sweep 必须立即对账/回收」,
+		//      data/battle_active_reconciler.go:143 专门用 ZADD NX 保护该哨兵 ——
+		//      写退避会把这个高危态的立即对账降级成延迟对账;
+		//   ③ TouchActive 是无条件 ZADD(data/battle.go:935,无 NX/XX/GT),
+		//      迟到的退避写会把已被 RemoveActive 的终态项复活回补偿 outbox,重复投递 lifecycle。
+		// 进程内表还顺带保住了 RunHeartbeatSweep 开头「重启即扫」的既定意图(重启即清空)。
 		if found && stuckReconcileState(inflight.GetState()) {
-			if terr := u.repo.TouchActive(ctx, mid, time.Now().UnixMilli()); terr != nil {
-				plog.With(ctx).Warnw("msg", "allocation_sweep_defer_failed",
-					"match_id", mid, "state", inflight.GetState(), "err", terr)
+			if u.sweepDeferralActive(mid, inflight.GetState(), roundStart) {
+				continue
 			}
+			u.noteSweepDeferral(ctx, mid, inflight.GetState(), roundStart)
 		}
 		if found && (inflight.State == stateAllocationUncertain ||
 			inflight.State == stateAllocationReconciling) {

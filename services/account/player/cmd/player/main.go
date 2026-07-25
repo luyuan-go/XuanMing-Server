@@ -107,6 +107,20 @@ func main() {
 			return fmt.Errorf("玩家最高等级不允许从 %d 降到 %d",
 				current.PlayerLevelExp.MaxLevel(), tb.PlayerLevelExp.MaxLevel())
 		}
+
+		// 出战养成两张权威表(2026-07-25):SetEquipment 靠道具表判 isEquip/slotMatch,
+		// SetTalents 靠专精表判等级上限/前置/总消耗。缺表则这两条写路径只能 fail-closed 拒绝,
+		// 所以在加载边界就拒掉,不让服务带着半张表进入可服务状态。
+		if tb.Item == nil {
+			return fmt.Errorf("缺少 item 配置表(SetEquipment 的装备/部位校验依赖它)")
+		}
+		if tb.Talent == nil {
+			return fmt.Errorf("缺少 talent 配置表(SetTalents 的等级上限/前置/消耗校验依赖它)")
+		}
+		// 前置关系是自引用外键,生成器不做自引用 FK 校验,只能在这里整表校验一次。
+		if err := tb.Talent.ValidateTree(); err != nil {
+			return err
+		}
 		return nil
 	})
 	loadResult, err := ctStore.Load(cfg.ConfigTable.Dir, 0)
@@ -150,6 +164,20 @@ func main() {
 	schemaCancel()
 	uc := biz.NewPlayerUsecase(repo, cfg.Player)
 	uc.SetConfigTables(ctStore)
+
+	// 出战装备预设的拥有权校验器(2026-07-25):经 inventory 系统 RPC CheckItemsOwned 判定。
+	// 未配 inventory_addr 时不接线 —— SetEquipment 随即 fail-closed 拒绝(见 biz 说明),
+	// 不会退化成"不校验就放行",因此这里只警告不退出;真正的门在 loadout_customize_enabled。
+	if cfg.Player.InventoryAddr != "" {
+		checker := data.NewGrpcItemOwnershipChecker(cfg.Player.InventoryAddr)
+		defer func() { _ = checker.Close() }()
+		uc.SetItemOwnershipChecker(checker)
+		helper.Infow("msg", "item_ownership_checker_grpc", "inventory_addr", cfg.Player.InventoryAddr)
+	} else if cfg.Player.LoadoutCustomizeEnabled {
+		helper.Warnw("msg", "item_ownership_checker_missing",
+			"hint", "loadout_customize_enabled=true 但未配 player.inventory_addr → SetEquipment 将一律拒绝")
+	}
+
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)

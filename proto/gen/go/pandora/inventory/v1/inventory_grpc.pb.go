@@ -50,6 +50,7 @@ const (
 	InventoryService_ClaimTransferInstances_FullMethodName = "/pandora.inventory.v1.InventoryService/ClaimTransferInstances"
 	InventoryService_ReleaseTransferEscrow_FullMethodName  = "/pandora.inventory.v1.InventoryService/ReleaseTransferEscrow"
 	InventoryService_ConsumeTransferEscrow_FullMethodName  = "/pandora.inventory.v1.InventoryService/ConsumeTransferEscrow"
+	InventoryService_CheckItemsOwned_FullMethodName        = "/pandora.inventory.v1.InventoryService/CheckItemsOwned"
 )
 
 // InventoryServiceClient is the client API for InventoryService service.
@@ -142,6 +143,18 @@ type InventoryServiceClient interface {
 	// 防"bag 域已入 + 托管行残留被释放/领取"造成实例双持。行必须 destined to 该玩家;
 	// 行缺失 = 已消费,no-op 幂等。系统接口,仅后端内部直连。
 	ConsumeTransferEscrow(ctx context.Context, in *ConsumeTransferEscrowRequest, opts ...grpc.CallOption) (*ConsumeTransferEscrowResponse, error)
+	// CheckItemsOwned 批量查询玩家是否持有指定配置道具(系统接口,仅后端内部直连)。
+	//
+	// 唯一用途:player.SetEquipment 的**拥有权**校验——出战装备预设会被 GetLoadout 转成
+	// Battle DS 的初始 GameplayEffect,不校验拥有权等于客户端可以给自己配任意装备。
+	// 「持有」= 可堆叠计数 > 0 或存在该配置的装备实例,两条路任一成立即算持有。
+	//
+	// 为什么不复用 GetInventory:后者是客户端 RPC,以 Envoy 注入的 JWT 身份为准,
+	// 后端内部直连(callerID==0)会被判 ERR_UNAUTHORIZED,player 服务调不通。
+	// 本 RPC 反过来只认内部直连,带玩家 JWT 一律拒(与 GrantItems 同口径),且不在 Envoy 暴露。
+	//
+	// 只回「请求集合中确实持有的子集」,不回数量、不回实例 id,避免把背包细节外溢到其它域。
+	CheckItemsOwned(ctx context.Context, in *CheckItemsOwnedRequest, opts ...grpc.CallOption) (*CheckItemsOwnedResponse, error)
 }
 
 type inventoryServiceClient struct {
@@ -322,6 +335,16 @@ func (c *inventoryServiceClient) ConsumeTransferEscrow(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *inventoryServiceClient) CheckItemsOwned(ctx context.Context, in *CheckItemsOwnedRequest, opts ...grpc.CallOption) (*CheckItemsOwnedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckItemsOwnedResponse)
+	err := c.cc.Invoke(ctx, InventoryService_CheckItemsOwned_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InventoryServiceServer is the server API for InventoryService service.
 // All implementations should embed UnimplementedInventoryServiceServer
 // for forward compatibility.
@@ -412,6 +435,18 @@ type InventoryServiceServer interface {
 	// 防"bag 域已入 + 托管行残留被释放/领取"造成实例双持。行必须 destined to 该玩家;
 	// 行缺失 = 已消费,no-op 幂等。系统接口,仅后端内部直连。
 	ConsumeTransferEscrow(context.Context, *ConsumeTransferEscrowRequest) (*ConsumeTransferEscrowResponse, error)
+	// CheckItemsOwned 批量查询玩家是否持有指定配置道具(系统接口,仅后端内部直连)。
+	//
+	// 唯一用途:player.SetEquipment 的**拥有权**校验——出战装备预设会被 GetLoadout 转成
+	// Battle DS 的初始 GameplayEffect,不校验拥有权等于客户端可以给自己配任意装备。
+	// 「持有」= 可堆叠计数 > 0 或存在该配置的装备实例,两条路任一成立即算持有。
+	//
+	// 为什么不复用 GetInventory:后者是客户端 RPC,以 Envoy 注入的 JWT 身份为准,
+	// 后端内部直连(callerID==0)会被判 ERR_UNAUTHORIZED,player 服务调不通。
+	// 本 RPC 反过来只认内部直连,带玩家 JWT 一律拒(与 GrantItems 同口径),且不在 Envoy 暴露。
+	//
+	// 只回「请求集合中确实持有的子集」,不回数量、不回实例 id,避免把背包细节外溢到其它域。
+	CheckItemsOwned(context.Context, *CheckItemsOwnedRequest) (*CheckItemsOwnedResponse, error)
 }
 
 // UnimplementedInventoryServiceServer should be embedded to have
@@ -471,6 +506,9 @@ func (UnimplementedInventoryServiceServer) ReleaseTransferEscrow(context.Context
 }
 func (UnimplementedInventoryServiceServer) ConsumeTransferEscrow(context.Context, *ConsumeTransferEscrowRequest) (*ConsumeTransferEscrowResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConsumeTransferEscrow not implemented")
+}
+func (UnimplementedInventoryServiceServer) CheckItemsOwned(context.Context, *CheckItemsOwnedRequest) (*CheckItemsOwnedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckItemsOwned not implemented")
 }
 func (UnimplementedInventoryServiceServer) testEmbeddedByValue() {}
 
@@ -798,6 +836,24 @@ func _InventoryService_ConsumeTransferEscrow_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_CheckItemsOwned_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckItemsOwnedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).CheckItemsOwned(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_CheckItemsOwned_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).CheckItemsOwned(ctx, req.(*CheckItemsOwnedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InventoryService_ServiceDesc is the grpc.ServiceDesc for InventoryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -872,6 +928,10 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ConsumeTransferEscrow",
 			Handler:    _InventoryService_ConsumeTransferEscrow_Handler,
+		},
+		{
+			MethodName: "CheckItemsOwned",
+			Handler:    _InventoryService_CheckItemsOwned_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

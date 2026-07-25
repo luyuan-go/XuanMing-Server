@@ -38,8 +38,30 @@ func writeLevelBatch(t *testing.T, dir string, version uint64, rows []*configpb.
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Store.Load 要求 manifest 覆盖本进程注册的**全部**表(缺一整批拒绝),
+	// 所以即使 matchmaker 只用关卡表,批次也必须带上道具 / 专精表。
+	itemRows := []*configpb.ItemRow{
+		{Id: 10001, Name: "测试消耗品", Type: configpb.ItemType_ITEM_TYPE_CONSUMABLE,
+			MaxStackSize: 99, Usable: true, UseHealHp: 50},
+	}
+	itemRaw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.
+		Marshal(&configpb.ItemTableData{Rows: itemRows})
+	if err != nil {
+		t.Fatal(err)
+	}
+	talentRows := []*configpb.TalentRow{
+		{Id: 1, Name: "强击", MaxLevel: 5, CostPerLevel: 1},
+	}
+	talentRaw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.
+		Marshal(&configpb.TalentTableData{Rows: talentRows})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	levelSum := sha256.Sum256(levelRaw)
 	playerLevelExpSum := sha256.Sum256(playerLevelExpRaw)
+	itemSum := sha256.Sum256(itemRaw)
+	talentSum := sha256.Sum256(talentRaw)
 	manifest := map[string]any{
 		"version":   version,
 		"generator": "test",
@@ -56,6 +78,18 @@ func writeLevelBatch(t *testing.T, dir string, version uint64, rows []*configpb.
 				"checksum": "sha256:" + hex.EncodeToString(playerLevelExpSum[:]),
 				"rows":     len(playerLevelExpRows),
 			},
+			{
+				"name": "item", "file": "item.json",
+				"proto":    "pandora.config.v1.ItemTableData",
+				"checksum": "sha256:" + hex.EncodeToString(itemSum[:]),
+				"rows":     len(itemRows),
+			},
+			{
+				"name": "talent", "file": "talent.json",
+				"proto":    "pandora.config.v1.TalentTableData",
+				"checksum": "sha256:" + hex.EncodeToString(talentSum[:]),
+				"rows":     len(talentRows),
+			},
 		},
 	}
 	mraw, err := json.Marshal(manifest)
@@ -66,6 +100,12 @@ func writeLevelBatch(t *testing.T, dir string, version uint64, rows []*configpb.
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "player_level_exp.json"), playerLevelExpRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "item.json"), itemRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "talent.json"), talentRaw, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, configtable.ManifestFileName), mraw, 0o644); err != nil {

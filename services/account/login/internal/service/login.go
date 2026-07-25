@@ -92,7 +92,7 @@ func (s *LoginService) GetResumeContext(ctx context.Context, req *loginv1.GetRes
 func resumeContextToProto(in biz.ResumeContextResult) *loginv1.ResumeContext {
 	return &loginv1.ResumeContext{Route: in.Route, MatchId: in.MatchID,
 		MatchStage: in.MatchStage, GameMode: in.GameMode, MapId: in.MapID,
-		// §9.23 query-first owner placement 叠加(migrate ①;未启用时全为零值,与旧行为一致)。
+		// §9.23 query-first owner placement(未启用 owner_query_first 时全为零值,与旧行为一致)。
 		PlacementState:  in.PlacementState,
 		OperationId:     in.OperationID,
 		DsPodName:       in.DSPodName,
@@ -101,6 +101,12 @@ func resumeContextToProto(in biz.ResumeContextResult) *loginv1.ResumeContext {
 		HubAssignmentId: in.HubAssignmentID,
 		AllocationId:    in.AllocationID,
 		ReleaseTrack:    in.ReleaseTrack,
+		// R11 复审 架构 P0:这三项此前 data 层取回后被 biz 静默丢弃,客户端拿不到
+		// §9.23 要求的 (state, exact target, owner_epoch) 三元组,幂等 no-op 无从判定。
+		OwnerEpoch:   in.OwnerEpoch,
+		RetryAfterMs: in.RetryAfterMs,
+		EntryState:   in.EntryState,
+		WaitReason:   in.WaitReason,
 	}
 }
 
