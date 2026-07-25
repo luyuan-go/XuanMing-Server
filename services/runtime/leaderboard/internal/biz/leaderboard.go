@@ -279,6 +279,10 @@ func (u *LeaderboardUsecase) SettleBoard(ctx context.Context, b data.BoardKey, t
 		return nil, err
 	}
 	if already {
+		// §9.2 结算幂等:重复 SettleBoard(重试 / 重复调度 / 多副本)命中,回放快照不重复发奖。
+		// SettleBoard 是稀有管理操作,INFO 量级极低;可区分"首次结算"与"幂等重放"以排查疑似重复发奖。
+		plog.With(ctx).Infow("msg", "lb_settle_idempotent_hit",
+			"settlement_id", existing.SettlementID, "board", b.String())
 		// 幂等命中:本次不重复发奖,从 MySQL 快照回放 winners(不能从 Redis 取——首次结算
 		// reset_after=true 已清空榜;Redis 是计算层、可 evict / TTL,快照才是结算权威记录)。
 		snapWinners, lerr := u.loadSnapshotWinners(ctx, existing.SettlementID)
@@ -378,10 +382,17 @@ func (u *LeaderboardUsecase) grantRewards(ctx context.Context, settlementID uint
 		}
 		if gerr := u.granter.Grant(ctx, w.EntityID, grantKey, items); gerr != nil {
 			plog.With(ctx).Errorw("msg", "lb_reward_grant_failed", "settlement_id", settlementID, "entity", w.EntityID, "err", gerr)
-			_ = u.repo.MarkReward(ctx, grantKey, data.RewardFailed, nowMs())
+			if merr := u.repo.MarkReward(ctx, grantKey, data.RewardFailed, nowMs()); merr != nil {
+				plog.With(ctx).Warnw("msg", "lb_mark_reward_failed", "settlement_id", settlementID,
+					"entity", w.EntityID, "target_status", "FAILED", "err", merr)
+			}
 			continue
 		}
-		_ = u.repo.MarkReward(ctx, grantKey, data.RewardGranted, nowMs())
+		if merr := u.repo.MarkReward(ctx, grantKey, data.RewardGranted, nowMs()); merr != nil {
+			// 发奖成功但标 GRANTED 失败 → 该行滞留 PENDING,被补扫再次 Grant(幂等键兜住不双发,但状态漂移)。
+			plog.With(ctx).Warnw("msg", "lb_mark_reward_failed", "settlement_id", settlementID,
+				"entity", w.EntityID, "target_status", "GRANTED", "err", merr)
+		}
 	}
 }
 

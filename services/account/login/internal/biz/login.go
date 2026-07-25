@@ -298,7 +298,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	if err != nil {
 		// 账号不存在:开发期“假注册” / 免密任一开关打开 → 首登自动注册(不阻断登录)。
 		if errcode.As(err) != errcode.ErrLoginAccountNotFound || !(u.devAutoRegister || u.devSkipPassword) {
-			h.Warnw("msg", "login_account_not_found", "account", account)
+			h.Debugw("msg", "login_account_not_found", "account", account)
 			return nil, err
 		}
 		playerID, err = u.ensureAccount(ctx, account, passwordHash)
@@ -312,7 +312,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		// 账号已存在 + 免密模式 → 跳过密码校验。
 		h.Warnw("msg", "login_dev_skip_password", "account", account, "player_id", playerID)
 	} else if verr := passwd.Verify(expected, passwordHash); verr != nil {
-		h.Warnw("msg", "login_password_mismatch", "account", account, "player_id", playerID)
+		h.Debugw("msg", "login_password_mismatch", "account", account, "player_id", playerID)
 		return nil, errcode.New(errcode.ErrLoginPasswordMismatch, "password mismatch")
 	}
 
@@ -625,7 +625,7 @@ func (u *LoginUsecase) queryBattleLocation(ctx context.Context, playerID uint64)
 			return bl, nil
 		}
 		lastErr = err
-		h.Warnw("msg", "battle_location_query_retry", "err", err,
+		h.Debugw("msg", "battle_location_query_retry", "err", err,
 			"player_id", playerID, "attempt", attempt+1, "max", battleLocationQueryRetries)
 	}
 	return data.BattleLocation{}, lastErr
@@ -1253,7 +1253,7 @@ func (u *LoginUsecase) Logout(ctx context.Context, sessionToken string) error {
 	claims, err := u.verifier.VerifySession(sessionToken)
 	if err != nil {
 		// token 不合法不算业务错(可能客户端 token 过期了),直接返 OK
-		h.Warnw("msg", "logout_verify_session_failed", "err", err)
+		h.Debugw("msg", "logout_verify_session_failed", "err", err)
 		return nil
 	}
 	playerID := claims.PlayerID()
@@ -1320,7 +1320,7 @@ func (u *LoginUsecase) RequireTicketSessionCurrent(ctx context.Context, playerID
 			return errcode.New(errcode.ErrUnauthorized,
 				"ticket lacks session binding (sjti); reissue required")
 		}
-		plog.With(ctx).Warnw("msg", "ticket_missing_session_binding_compat_allow",
+		plog.With(ctx).Infow("msg", "ticket_missing_session_binding_compat_allow",
 			"player_id", playerID,
 			"hint", "混版兼容窗;签发面排空+等满票据最大 TTL 后开 login.require_ticket_sjti 收口")
 		return nil

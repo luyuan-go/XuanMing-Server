@@ -372,6 +372,9 @@ func (u *AuctionUsecase) submit(ctx context.Context, ownerID uint64, side data.S
 		return nil, cerr
 	}
 	if !confirmed {
+		// 已冻结的权威 PENDING 单在两步之间凭空消失 = 严重状态一致性异常;显式 ERROR 带 order_id 取证。
+		plog.With(ctx).Errorw("msg", "auction_confirm_escrow_lost",
+			"market_id", marketID, "order_id", rec.OrderID, "step", "confirm_pending")
 		return nil, errcode.New(errcode.ErrInternal, "confirm escrow lost pending order %d", rec.OrderID)
 	}
 	rec.EscrowVerified = true
@@ -391,6 +394,8 @@ func (u *AuctionUsecase) submit(ctx context.Context, ownerID uint64, side data.S
 				return nil, gerr
 			}
 			if !found {
+				plog.With(ctx).Errorw("msg", "auction_activated_order_disappeared",
+					"market_id", marketID, "order_id", rec.OrderID)
 				return nil, errcode.New(errcode.ErrInternal, "activated order %d disappeared", rec.OrderID)
 			}
 			return toProtoOrder(current), nil
@@ -441,6 +446,9 @@ func (u *AuctionUsecase) match(ctx context.Context, incoming *data.OrderRecord) 
 				break
 			}
 			if conflicts >= 64 {
+				// CAS/TOCTOU 失败方重试耗尽:热点 market / 异常替身竞争,玩家挂单反复 Busy。
+				plog.With(ctx).Warnw("msg", "auction_reserve_conflicts_exhausted",
+					"market_id", incoming.MarketID, "order_id", incoming.OrderID, "conflicts", conflicts)
 				return errcode.New(errcode.ErrAuctionMarketBusy, "too many concurrent reserve conflicts market=%d", incoming.MarketID)
 			}
 			continue
@@ -475,7 +483,7 @@ func (u *AuctionUsecase) addBookCache(ctx context.Context, o *data.OrderRecord) 
 	cacheCtx, cancel := context.WithTimeout(plog.Detach(ctx), bookCacheWriteTimeout)
 	defer cancel()
 	if err := u.book.Add(cacheCtx, o.MarketID, o.Side, o.OrderID, o.Price); err != nil {
-		plog.With(ctx).Warnw("msg", "auction_book_cache_add_failed",
+		plog.With(ctx).Debugw("msg", "auction_book_cache_add_failed",
 			"market_id", o.MarketID, "order_id", o.OrderID, "err", err)
 	}
 }
@@ -487,7 +495,7 @@ func (u *AuctionUsecase) removeBookCache(ctx context.Context, o *data.OrderRecor
 	cacheCtx, cancel := context.WithTimeout(plog.Detach(ctx), bookCacheWriteTimeout)
 	defer cancel()
 	if err := u.book.Remove(cacheCtx, o.MarketID, o.Side, o.OrderID); err != nil {
-		plog.With(ctx).Warnw("msg", "auction_book_cache_remove_failed",
+		plog.With(ctx).Debugw("msg", "auction_book_cache_remove_failed",
 			"market_id", o.MarketID, "order_id", o.OrderID, "err", err)
 	}
 }
@@ -548,7 +556,10 @@ func (u *AuctionUsecase) pruneOwnerSlots(ctx context.Context, ownerID uint64) (i
 	for _, slot := range slots {
 		o, found, getErr := u.repo.GetOrder(ctx, slot.MarketID, slot.OrderID)
 		if getErr != nil {
-			// 状态查询不确定时绝不释放名额(fail-closed)。
+			// 状态查询不确定时绝不释放名额(fail-closed)。持续读失败会让玩家卡在 max_active_orders
+			// 上限却清不出名额,DEBUG 留线索(LOG_LEVEL=debug 排查"为何清不掉某 slot")。
+			plog.With(ctx).Debugw("msg", "auction_prune_order_read_failed",
+				"owner_id", ownerID, "market_id", slot.MarketID, "order_id", slot.OrderID, "err", getErr)
 			continue
 		}
 		if found && (o.Status == data.StatusPending || o.Status == data.StatusOpen || o.Status == data.StatusPartial) {

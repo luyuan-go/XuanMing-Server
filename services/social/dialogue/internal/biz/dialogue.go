@@ -22,6 +22,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	dialoguev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/dialogue/v1"
 
 	"github.com/luyuancpp/pandora/services/social/dialogue/internal/data"
@@ -93,6 +94,10 @@ func (u *DialogueUsecase) StartDialogue(ctx context.Context, playerID uint64, np
 		return nil, err
 	}
 	if !created {
+		// snowflake 预生成的 dialogue_id 已被占用 = 唯一键冲突,几乎只可能由 snowflake node_id
+		// 重号(多副本配置错)引起;对客户端屏蔽为 NotFound,服务端 WARN 暴露真实原因。
+		plog.With(ctx).Warnw("msg", "dialogue_id_conflict",
+			"dialogue_id", newDialogueID, "player_id", playerID, "npc_id", npcID)
 		return nil, errcode.New(errcode.ErrDialogueNotFound, "dialogue_id %d already in use", newDialogueID)
 	}
 
@@ -126,15 +131,27 @@ func (u *DialogueUsecase) ChooseOption(ctx context.Context, playerID, dialogueID
 	}
 	// R5:非本人会话按不存在处理,不泄露他人会话。
 	if !found || s.PlayerID != playerID {
+		if found && s.PlayerID != playerID {
+			// 有人拿 dialogue_id 访问他人会话(IDOR / 越权探测);对客户端屏蔽为 NotFound,
+			// 服务端 WARN 留证,否则无法发现有人在猜别人的 dialogue_id。
+			plog.With(ctx).Warnw("msg", "dialogue_cross_player_access",
+				"dialogue_id", dialogueID, "caller_id", playerID, "owner_id", s.PlayerID)
+		}
 		return nil, errcode.New(errcode.ErrDialogueNotFound, "dialogue %d not found", dialogueID)
 	}
 
 	tree, ok := u.trees.GetTree(s.NpcID)
 	if !ok {
+		// 活跃会话的对话树消失 = 滚动更新换配置 / 配置漂移;对客户端是 NotFound,服务端 WARN 暴露内部一致性。
+		plog.With(ctx).Warnw("msg", "dialogue_tree_missing_active_session",
+			"dialogue_id", dialogueID, "npc_id", s.NpcID)
 		return nil, errcode.New(errcode.ErrDialogueNotFound, "no dialogue tree for npc %d", s.NpcID)
 	}
 	node, ok := tree.Nodes[s.NodeID]
 	if !ok {
+		// 会话推进到不存在的节点 = 配置漂移或内部 bug,同上 WARN 暴露。
+		plog.With(ctx).Warnw("msg", "dialogue_node_missing_active_session",
+			"dialogue_id", dialogueID, "npc_id", s.NpcID, "node_id", s.NodeID)
 		return nil, errcode.New(errcode.ErrDialogueNotFound, "node %q missing for npc %d", s.NodeID, s.NpcID)
 	}
 

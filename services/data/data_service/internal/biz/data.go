@@ -78,6 +78,9 @@ func (u *DataUsecase) ReadPlayer(ctx context.Context, playerID uint64) (*datav1.
 	// 2) 读 MySQL。
 	pd, found, err := u.store.Read(ctx, playerID)
 	if err != nil {
+		// MySQL 是事实源:读失败经 service 层 in-band Code + nil error 返回,access log 记 rpc_ok,
+		// 若不在此显式 ERROR,源库读故障线上零可见(§16 禁止静默吞错)。
+		plog.With(ctx).Errorw("msg", "player_read_failed", "player_id", playerID, "err", err)
 		return nil, false, err
 	}
 	if !found {
@@ -119,6 +122,16 @@ func (u *DataUsecase) WritePlayer(ctx context.Context, pd *datav1.PlayerData, up
 
 	newVersion, err := u.store.Write(ctx, pd, updateFields)
 	if err != nil {
+		// 版本不匹配是良性乐观锁竞争(DEBUG);其余是源库写故障,必须 ERROR(否则经 in-band
+		// Code 返回被 access log 记成 rpc_ok,与良性冲突无法区分,§9 单 owner 下频繁冲突还可能
+		// 暴露并发写者)。
+		if errcode.As(err) == errcode.ErrDataVersionMismatch {
+			plog.With(ctx).Debugw("msg", "player_write_version_mismatch",
+				"player_id", pd.GetPlayerId(), "expect_version", pd.GetVersion())
+		} else {
+			plog.With(ctx).Errorw("msg", "player_write_failed",
+				"player_id", pd.GetPlayerId(), "version", pd.GetVersion(), "err", err)
+		}
 		return 0, err
 	}
 

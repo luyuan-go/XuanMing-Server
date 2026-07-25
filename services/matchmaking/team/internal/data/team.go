@@ -28,6 +28,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	teamv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/team/v1"
 )
 
@@ -250,6 +251,9 @@ func (r *RedisTeamRepo) UpdateWithLock(
 		// 其他 redis 错误 — 不重试
 		return txErr
 	}
+	// WATCH/MULTI/EXEC 乐观锁重试耗尽(§16 TOCTOU / 重试耗尽盲点):某热点队伍被并发写打爆;
+	// 经 in-band 码返回被 access log 记成泛化失败,无 team_id → WARN 留证以识别热点争用。
+	plog.With(ctx).Warnw("msg", "team_update_lock_exhausted", "team_id", teamID, "max_retry", maxRetry)
 	return errcode.New(errcode.ErrTeamConcurrent, "team %d update concurrent retry exhausted", teamID)
 }
 

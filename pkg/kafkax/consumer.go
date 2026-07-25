@@ -284,7 +284,11 @@ func (k *KeyOrderedConsumer) processMessage(ctx context.Context, msg *sarama.Con
 //   - DLQ 投递失败 → 不 ack(由 ConsumeClaim 重放,保证不可丢事件不丢)。
 func (k *KeyOrderedConsumer) toDLQ(ctx context.Context, msg *sarama.ConsumerMessage) bool {
 	if k.dlq == nil {
-		return true // 无 DLQ 通道:沿用旧行为 log + ack(已在调用点 log)
+		// 未配 DLQ 的 loss-tolerant 消费者:消息被丢弃并 ack。调用点日志说"→ DLQ"实则无 DLQ,
+		// 运维照此去 DLQ 会白找;此处显式记真实去向(消息被丢弃),让"丢弃的 kafka 消息"可观测。
+		klog.Warnf("[kafkax] message DROPPED (no DLQ configured) topic=%s partition=%d offset=%d key=%s",
+			msg.Topic, msg.Partition, msg.Offset, string(msg.Key))
+		return true // 无 DLQ 通道:沿用旧行为 log + ack
 	}
 	// 原样保留全部原消息 header(event_type 等,回放不再被当 legacy)+ 溯源 header。
 	headers := make([]sarama.RecordHeader, 0, len(msg.Headers)+3)

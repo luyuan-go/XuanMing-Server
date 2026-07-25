@@ -49,6 +49,8 @@ func (u *DataUsecase) playerDataOwner(playerID uint64) (PlayerDataOwner, bool) {
 	}
 	loc, err := u.router.Route(playerID)
 	if err != nil {
+		// 分片部署下 Route 失败 = cellroute/etcd 表故障,落点观测变盲。per-write 路径,DEBUG 避免刷屏。
+		u.log.Debugw("msg", "player_data_route_failed", "player_id", playerID, "err", err)
 		return PlayerDataOwner{}, false
 	}
 	return PlayerDataOwner{RegionID: loc.RegionID, CellID: loc.CellID}, true

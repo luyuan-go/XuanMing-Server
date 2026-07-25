@@ -146,8 +146,12 @@ func (es *etcdSource) watchLoop(ctx context.Context) {
 				switch ev.Type {
 				case clientv3.EventTypePut:
 					es.rules[pattern] = string(ev.Kv.Value)
+					// killswitch 真正"生效"的时刻:某 RPC 被关停。此前只在全量 reload 打 rules=N 计数,
+					// "某 RPC 何时被关停/恢复"这一关键运维事件不可观测。切换频率极低,打全上下文零噪音。
+					klog.Warnf("[killswitch] rule APPLIED (kill) op=%s reason=%q", pattern, string(ev.Kv.Value))
 				case clientv3.EventTypeDelete:
 					delete(es.rules, pattern)
+					klog.Infof("[killswitch] rule CLEARED (restore) op=%s", pattern)
 				}
 			}
 			snapshot := es.copyRules()

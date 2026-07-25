@@ -166,6 +166,9 @@ func (u *FriendUsecase) AcceptFriend(ctx context.Context, playerID, requestID ui
 		return err
 	}
 	if !accepted {
+		// CAS/TOCTOU 失败方:预检后到取锁前请求被 Block / 另一次 accept 并发处理(request_id 轮换
+		// 或 status≠pending)。翻成 NotFound 给客户端,DEBUG 留证以区分"真不存在"与"并发竞争丢工作"。
+		plog.With(ctx).Debugw("msg", "friend_accept_lost", "request_id", requestID, "player_id", playerID)
 		return errcode.New(errcode.ErrFriendNotFound, "no acceptable request: %d", requestID)
 	}
 

@@ -28,6 +28,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	tradev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/trade/v1"
 )
 
@@ -201,6 +202,9 @@ func (r *RedisTradeRepo) UpdateWithLock(
 		// 其他 redis 错误 — 不重试。
 		return txErr
 	}
+	// WATCH/MULTI/EXEC 乐观锁重试耗尽:热点订单锁竞争(§16 TOCTOU / 重试耗尽盲点),
+	// 经 in-band 码返回被 access log 记成泛化失败,无法与其它失败区分 → WARN 带 order_id + 竞争强度。
+	plog.With(ctx).Warnw("msg", "trade_update_lock_exhausted", "order_id", orderID, "max_retry", maxRetry)
 	return errcode.New(errcode.ErrTradeLockFailed, "order %d update concurrent retry exhausted", orderID)
 }
 

@@ -16,6 +16,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	inventoryv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/inventory/v1"
 	tradev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/trade/v1"
@@ -67,6 +68,11 @@ func (g *GrpcResourceLedger) Settle(ctx context.Context, order *tradev1.Order, i
 			"trade settle insufficient order=%d seller=%d buyer=%d",
 			idempotencyKey, order.GetSellerId(), order.GetBuyerId())
 	default:
+		// inventory 返回未预期结算码(非 OK / 非 INSUFFICIENT):可能是永久错误(如 INVALID_ARG),
+		// 但上游 driveSettlement 会把它当"瞬时可重试"→ 客户端无限重试 Confirm。独立 WARN 以区分。
+		plog.With(ctx).Warnw("msg", "trade_settle_unexpected_code",
+			"order_id", idempotencyKey, "code", int32(resp.GetCode()),
+			"seller_id", order.GetSellerId(), "buyer_id", order.GetBuyerId())
 		return errcode.New(errcode.Code(resp.GetCode()),
 			"trade settle failed order=%d code=%d", idempotencyKey, int32(resp.GetCode()))
 	}
