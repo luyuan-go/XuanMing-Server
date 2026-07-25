@@ -78,7 +78,20 @@ type KafkaConsumer struct {
 
 	// wake 跨 Pod 唤醒信号发布端(R5 复审 P2-10);nil = 未装配,跨 Pod 只剩兜底轮询。
 	wake WakePublisher
+
+	// 依赖降级日志限流(模式 C):handle 是**每条 kafka 消息**执行一次的热路径,
+	// Redis / pub-sub 一挂就会按消息速率刷屏(定向消息速率 × Pod 数,delivery 那条还
+	// 要乘 kafkax 进程内重试次数)。这三个限流器把「逐条打」压成「首错 + 每
+	// degradeLogWindowMs 一条 + 期间累计计数 + 恢复时一条」,信号不丢、行数有界。
+	// 每实例(= 每 topic)各一份,无 key ⇒ 内存天然有界;handle 按 partition 并发,
+	// plog.Window 内部用 atomic 保证并发安全。
+	wakeFailLog     plog.Window
+	bufferFailLog   plog.Window
+	bcastDroppedLog plog.Window
 }
+
+// degradeLogWindowMs 是依赖降级日志的最小重打间隔(毫秒)。
+const degradeLogWindowMs = 5000
 
 // SetWakePublisher 注入跨 Pod 唤醒信号发布端(main 装配;nil-safe)。
 func (k *KafkaConsumer) SetWakePublisher(w WakePublisher) { k.wake = w }
@@ -188,8 +201,18 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 		}
 		sent, failed := k.cm.Broadcast(frame)
 		if failed > 0 {
-			h.Warnw("msg", "push_broadcast_partial_dropped",
-				"topic", msg.Topic, "sent", sent, "dropped", failed)
+			// 广播箱满即丢是显式契约(离线不补推);但世界频道 20 msg/s × 每 Pod 独立
+			// consumer group 下,一个慢客户端就能持续刷屏。限流后首条即带累计丢弃帧数,
+			// 比逐条打更能回答「跟不上广播的规模有多大」。
+			total := k.bcastDroppedLog.AddExtra(int64(failed))
+			if ok, msgs := k.bcastDroppedLog.Admit(time.Now().UnixMilli(), degradeLogWindowMs); ok {
+				h.Warnw("msg", "push_broadcast_partial_dropped",
+					"topic", msg.Topic, "sent", sent, "dropped", failed,
+					"dropped_total", total, "msgs_with_drop", msgs)
+			}
+		} else if n, dropped := k.bcastDroppedLog.Recovered(); n > 0 {
+			h.Infow("msg", "push_broadcast_drop_recovered",
+				"topic", msg.Topic, "msgs_with_drop", n, "dropped_total", dropped)
 		}
 		return nil
 	}
@@ -256,15 +279,25 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 	// kafka 重投(ack 前崩溃 / rebalance)会给同一业务事件分配新游标 → 可能重复投递,
 	// at-least-once 诚实契约(push.proto),业务侧幂等/按业务 ID 判重。
 	if _, err := k.offline.AssignAndBuffer(ctx, playerID, frame); err != nil {
+		// 指标逐次 Inc(告警走指标不走日志行数);日志按窗口限流:本条是 Error 级且
+		// 返 errcode 会被 kafkax 按 RetryPolicy 重试,每次重试都会再走一遍 handle,
+		// Redis 一挂就是「定向消息速率 ×(1+MaxRetries)」行 Error。
+		// 重试/DLQ/返回码等不丢帧的正确性行为一字不动,只压日志。
 		OfflineAppendFailed.WithLabelValues(msg.Topic).Inc()
-		h.Errorw(
-			"msg", "push_delivery_buffer_failed",
-			"topic", msg.Topic,
-			"player_id", playerID,
-			"code", errcode.ErrPushOfflineCorrupted,
-			"err", err,
-		)
+		if ok, streak := k.bufferFailLog.Admit(time.Now().UnixMilli(), degradeLogWindowMs); ok {
+			h.Errorw(
+				"msg", "push_delivery_buffer_failed",
+				"topic", msg.Topic,
+				"player_id", playerID,
+				"code", errcode.ErrPushOfflineCorrupted,
+				"streak", streak,
+				"err", err,
+			)
+		}
 		return errcode.New(errcode.ErrPushOfflineCorrupted, "delivery buffer failed: %v", err)
+	}
+	if n, _ := k.bufferFailLog.Recovered(); n > 0 {
+		h.Infow("msg", "push_delivery_buffer_recovered", "topic", msg.Topic, "failed_total", n)
 	}
 	// 唤醒(R5 复审 P2-10 + 复审 P1-5):先本地快路径唤醒,再**无条件**发跨 Pod 唤醒
 	// 信号。不能以「本地有 slot」抑制跨 Pod 信号——本地 slot 可能是半死连接/已被顶号
@@ -274,7 +307,14 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 	k.cm.SendTo(playerID)
 	if k.wake != nil {
 		if werr := k.wake.PublishWake(ctx, playerID); werr != nil {
-			h.Warnw("msg", "push_wake_publish_failed", "player_id", playerID, "err", werr)
+			// best-effort 通道(帧已入缓冲,30s 兜底轮询必达),但每条定向消息都发一次:
+			// Redis pub/sub failover 期会按消息速率刷屏 → 限流为首错 + 每窗口一条。
+			if ok, streak := k.wakeFailLog.Admit(time.Now().UnixMilli(), degradeLogWindowMs); ok {
+				h.Warnw("msg", "push_wake_publish_failed",
+					"topic", msg.Topic, "player_id", playerID, "streak", streak, "err", werr)
+			}
+		} else if n, _ := k.wakeFailLog.Recovered(); n > 0 {
+			h.Infow("msg", "push_wake_publish_recovered", "topic", msg.Topic, "failed_total", n)
 		}
 	}
 	return nil

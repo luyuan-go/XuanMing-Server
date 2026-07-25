@@ -285,8 +285,10 @@ func (p *KeyOrderedProducer) SendRawWithHeaders(ctx context.Context, key string,
 //  2. 每个目标 player_id 用 SendRaw 发一次,kafka key = strconv.FormatUint(playerID, 10),
 //     一致性哈希保证同玩家事件落同一 partition,partition 内 sarama 保序(不变量 §9)
 //
-//  3. 失败 log+continue 不阻断:某玩家发失败不能影响其他玩家;返回 (sent, lastErr),
-//     调用方决定是否汇报(本批 W3 ④ 只让业务侧调用方记日志,不上抛业务错误)
+//  3. 失败累加+continue 不阻断:某玩家发失败不能影响其他玩家;返回 (sent, lastErr),
+//     调用方决定是否汇报(不上抛业务错误)。本层只在**批结束后**汇总一条失败日志
+//     (topic 维度 + failed/targets 分布,见 logPushBatchFailure);业务侧另记自己的
+//     上下文(team_id / match_id / reason),两头各一条、都不按人数刷屏。
 //
 // 调用示例(team 服务广播队员变更):
 //
@@ -299,20 +301,43 @@ func (p *KeyOrderedProducer) PushToPlayers(
 	toPlayerIDs []uint64,
 	payload []byte,
 ) (sent int, lastErr error) {
+	var failed int
+	var firstErr error
+	var samplePID uint64
 	for _, pid := range toPlayerIDs {
 		if pid == callerPlayerID {
 			// 原则 2:不发给发起方;callerPlayerID=0 时该条件永不满足 → 全发(原则 3 例外)
 			continue
 		}
 		if err := p.SendRaw(ctx, strconv.FormatUint(pid, 10), payload); err != nil {
-			klog.Warnf("[kafkax] push_to_players send_failed topic=%s player_id=%d err=%v",
-				p.topic, pid, err)
+			failed++
+			if firstErr == nil {
+				firstErr, samplePID = err, pid
+			}
 			lastErr = err
 			continue
 		}
 		sent++
 	}
+	p.logPushBatchFailure(len(toPlayerIDs), sent, failed, samplePID, 0, firstErr)
 	return sent, lastErr
+}
+
+// logPushBatchFailure 在扇出循环结束后按批汇总一条失败日志(模式 C:循环内逐个打会按
+// 名单人数刷屏——本函数的契约就是「hub 广播 500 人/实例」的统一入口,broker 抖动时
+// 逐条打 = 500 行/次广播)。聚合行比逐条更有用:直接给出「N 个目标里失败 M 个」。
+// failed==0 时不打;eventType==0 时不带该字段(与 PushToPlayers 语义一致)。
+func (p *KeyOrderedProducer) logPushBatchFailure(targets, sent, failed int, samplePID uint64, eventType uint32, firstErr error) {
+	if failed == 0 {
+		return
+	}
+	if eventType == 0 {
+		klog.Warnf("[kafkax] push_to_players send_failed topic=%s targets=%d sent=%d failed=%d sample_player_id=%d first_err=%v",
+			p.topic, targets, sent, failed, samplePID, firstErr)
+		return
+	}
+	klog.Warnf("[kafkax] push_to_players send_failed topic=%s targets=%d sent=%d failed=%d sample_player_id=%d event_type=%d first_err=%v",
+		p.topic, targets, sent, failed, samplePID, eventType, firstErr)
 }
 
 // PushToPlayersWithEventType 与 PushToPlayers 相同(排除 caller、按 player_id 路由分发),
@@ -327,22 +352,29 @@ func (p *KeyOrderedProducer) PushToPlayersWithEventType(
 	payload []byte,
 	eventType uint32,
 ) (sent int, lastErr error) {
+	var failed int
+	var firstErr error
+	var samplePID uint64
 	// pid 是当前处理的目标玩家 ID,同时会被编码成 Kafka key 以维持玩家内事件顺序。
 	for _, pid := range toPlayerIDs {
 		// 发起方通过 RPC 响应获得结果,默认不重复接收自己触发的推送。
 		if pid == callerPlayerID {
 			continue
 		}
-		// 单个玩家发送失败只记录并继续,避免一个坏目标阻断同批其他玩家。
+		// 单个玩家发送失败只累加并继续,避免一个坏目标阻断同批其他玩家;
+		// 失败详情按批汇总(见 logPushBatchFailure),不在循环内逐条打日志。
 		if err := p.SendRawWithEventType(ctx, strconv.FormatUint(pid, 10), payload, eventType); err != nil {
-			klog.Warnf("[kafkax] push_to_players send_failed topic=%s player_id=%d event_type=%d err=%v",
-				p.topic, pid, eventType, err)
+			failed++
+			if firstErr == nil {
+				firstErr, samplePID = err, pid
+			}
 			lastErr = err
 			continue
 		}
 		// sent 只统计已由底层 producer 确认成功的目标数。
 		sent++
 	}
+	p.logPushBatchFailure(len(toPlayerIDs), sent, failed, samplePID, eventType, firstErr)
 	return sent, lastErr
 }
 

@@ -13,6 +13,7 @@ package data
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -36,7 +37,16 @@ type OnlineStatusReader interface {
 type GrpcOnlineStatusReader struct {
 	conn   *grpc.ClientConn
 	client locatorv1.PlayerLocatorServiceClient
+
+	// locator 降级日志限流(模式 C):BatchOnline 由 ListFriends / RecommendFriends 调用,
+	// ListFriends 是社交面板高频只读路径;locator 是弱依赖(失败即全部按离线,请求仍成功、
+	// access log 记 rpc_ok),所以这条 Warn 是"在线态降级"的唯一信号,不能删——但整体
+	// 不可达时逐请求打会按 QPS 刷屏,故限流为首错 + 每窗口一条 + 累计数。
+	degradeLog plog.Window
 }
+
+// locatorLogWindowMs 是 locator 降级日志的最小重打间隔(毫秒)。
+const locatorLogWindowMs = 5000
 
 // NewGrpcOnlineStatusReader 用现成的 *grpc.ClientConn 包出 reader。
 // 调用方负责 conn 生命周期(main.go defer conn.Close())。
@@ -62,12 +72,21 @@ func (g *GrpcOnlineStatusReader) BatchOnline(ctx context.Context, playerIDs []ui
 	h := plog.With(ctx)
 	resp, err := g.client.BatchGetLocation(ctx, &locatorv1.BatchGetLocationRequest{PlayerIds: playerIDs})
 	if err != nil {
-		h.Warnw("msg", "locator_batch_get_location_failed", "count", len(playerIDs), "err", err)
+		if ok, streak := g.degradeLog.Admit(time.Now().UnixMilli(), locatorLogWindowMs); ok {
+			h.Warnw("msg", "locator_batch_get_location_failed",
+				"count", len(playerIDs), "streak", streak, "err", err)
+		}
 		return out
 	}
 	if resp.GetCode() != commonv1.ErrCode_OK {
-		h.Warnw("msg", "locator_batch_get_location_not_ok", "count", len(playerIDs), "code", resp.GetCode())
+		if ok, streak := g.degradeLog.Admit(time.Now().UnixMilli(), locatorLogWindowMs); ok {
+			h.Warnw("msg", "locator_batch_get_location_not_ok",
+				"count", len(playerIDs), "streak", streak, "code", resp.GetCode())
+		}
 		return out
+	}
+	if n, _ := g.degradeLog.Recovered(); n > 0 {
+		h.Infow("msg", "locator_batch_get_location_recovered", "failed_total", n)
 	}
 	for pid, loc := range resp.GetLocations() {
 		state := loc.GetState()

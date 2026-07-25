@@ -218,15 +218,28 @@ func (u *ChatUsecase) sendTeam(ctx context.Context, senderID uint64, msg *chatv1
 		return 0, errcode.New(errcode.ErrChatChannelInvalid, "sender %d not in team %d", senderID, teamID)
 	}
 
+	// 模式 C:kafka 弱依赖失败时逐成员打 Warn 会按成员数刷屏(消息本身已落库、RPC 仍返回
+	// 成功,access log 记 rpc_ok,所以这条是"接收方漏推"的唯一信号,不能删)。改为循环内
+	// 累加、循环后一条:既保留信号,又给出"N 个成员里漏了几个"。
+	var failed int
+	var firstErr error
+	var sampleTo uint64
 	for _, m := range members {
 		if m == senderID {
 			continue // 原则 2:不回发自己
 		}
 		evt := &chatv1.ChatPushEvent{Message: msg, ToPlayerId: m}
 		if perr := u.pusher.PushTeam(ctx, m, evt); perr != nil {
-			plog.With(ctx).Warnw("msg", "chat_team_push_failed",
-				"to_player_id", m, "team_id", teamID, "err", perr)
+			failed++
+			if firstErr == nil {
+				firstErr, sampleTo = perr, m
+			}
 		}
+	}
+	if failed > 0 {
+		plog.With(ctx).Warnw("msg", "chat_team_push_failed",
+			"team_id", teamID, "members", len(members), "failed", failed,
+			"sample_to_player_id", sampleTo, "first_err", firstErr)
 	}
 	return msg.GetMessageId(), nil
 }
@@ -267,15 +280,26 @@ func (u *ChatUsecase) sendGuild(ctx context.Context, senderID uint64, msg *chatv
 		return 0, errcode.New(errcode.ErrChatChannelInvalid, "sender %d not in guild %d", senderID, guildID)
 	}
 
+	// 模式 C:公会成员上限 100(§9.18),kafka 一挂单条公会消息就能刷 100 行 → 批末汇总一条。
+	var failed int
+	var firstErr error
+	var sampleTo uint64
 	for _, m := range members {
 		if m == senderID {
 			continue // 原则 2:不回发自己
 		}
 		evt := &chatv1.ChatPushEvent{Message: msg, ToPlayerId: m}
 		if perr := u.pusher.PushGuild(ctx, m, evt); perr != nil {
-			plog.With(ctx).Warnw("msg", "chat_guild_push_failed",
-				"to_player_id", m, "guild_id", guildID, "err", perr)
+			failed++
+			if firstErr == nil {
+				firstErr, sampleTo = perr, m
+			}
 		}
+	}
+	if failed > 0 {
+		plog.With(ctx).Warnw("msg", "chat_guild_push_failed",
+			"guild_id", guildID, "members", len(members), "failed", failed,
+			"sample_to_player_id", sampleTo, "first_err", firstErr)
 	}
 	return msg.GetMessageId(), nil
 }
@@ -316,15 +340,26 @@ func (u *ChatUsecase) sendGroup(ctx context.Context, senderID uint64, msg *chatv
 		return 0, errcode.New(errcode.ErrChatChannelInvalid, "sender %d not in group %d", senderID, groupID)
 	}
 
+	// 模式 C:临时群成员上限 50(§9.18),kafka 一挂单条群消息刷 50 行 → 批末汇总一条。
+	var failed int
+	var firstErr error
+	var sampleTo uint64
 	for _, m := range members {
 		if m == senderID {
 			continue // 原则 2:不回发自己
 		}
 		evt := &chatv1.ChatPushEvent{Message: msg, ToPlayerId: m}
 		if perr := u.pusher.PushGroup(ctx, m, evt); perr != nil {
-			plog.With(ctx).Warnw("msg", "chat_group_push_failed",
-				"to_player_id", m, "group_id", groupID, "err", perr)
+			failed++
+			if firstErr == nil {
+				firstErr, sampleTo = perr, m
+			}
 		}
+	}
+	if failed > 0 {
+		plog.With(ctx).Warnw("msg", "chat_group_push_failed",
+			"group_id", groupID, "members", len(members), "failed", failed,
+			"sample_to_player_id", sampleTo, "first_err", firstErr)
 	}
 	return msg.GetMessageId(), nil
 }

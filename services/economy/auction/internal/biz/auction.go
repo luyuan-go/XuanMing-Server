@@ -122,7 +122,18 @@ type AuctionUsecase struct {
 	// 恶意刷不同 marketID 会让 map 无界增长(内存 DoS)。条带碰撞只是不同
 	// market 偶尔串行,跨实例正确性仍由 marketLocker(per-market Redis 锁)兜底。
 	locks [marketLockStripes]sync.Mutex
+
+	// 退化期日志限流(模式 C):这两处都在**每请求**路径上,退化时会按 QPS 刷屏。
+	// 与上面条带锁同理,不按 market_id 分桶(客户端可控字段,分桶会被恶意刷成内存 DoS);
+	// plog.Window 无 key、常量内存、并发安全。
+	//   - misroutedLog:路由抖动 / rebalance 期非 owner 实例处理请求(仅观测,锁兜底正确性);
+	//   - auditDropLog:audit 队列满丢弃(audit 不承担资产正确性,丢弃是既定契约)。
+	misroutedLog plog.Window
+	auditDropLog plog.Window
 }
+
+// auctionDegradeLogWindowMs 是退化期日志的最小重打间隔(毫秒)。
+const auctionDegradeLogWindowMs = 5000
 
 // marketLockStripes 是进程内 market 条带锁数量(内存恒定,与 market 基数无关)。
 const marketLockStripes = 256
@@ -241,8 +252,17 @@ func (u *AuctionUsecase) guardMarket(ctx context.Context, marketID uint32) (func
 	// 路由观测:多实例部署时,非 owner 实例处理某 market 说明路由抖动 / rebalance,
 	// 仅告警(marketLocker 仍兜底正确性),不阻断 —— 转发由边缘 / 服务发现处理(基础设施)。
 	if u.marketRouter != nil && !u.marketRouter.OwnsMarket(marketID) {
-		plog.With(ctx).Warnw("msg", "auction_market_not_owned",
-			"market_id", marketID, "self", u.marketRouter.Self(), "owner", u.marketRouter.Owner(marketID))
+		// guardMarket 在每个写路径入口调用:rebalance / 路由抖动期会对成千上万条误路由
+		// 请求逐条打 → 限流为首错 + 每窗口一条 + 累计数(稳态几乎不触发)。
+		if ok, streak := u.misroutedLog.Admit(time.Now().UnixMilli(), auctionDegradeLogWindowMs); ok {
+			plog.With(ctx).Warnw("msg", "auction_market_not_owned",
+				"market_id", marketID, "self", u.marketRouter.Self(),
+				"owner", u.marketRouter.Owner(marketID), "streak", streak)
+		}
+	} else if u.marketRouter != nil {
+		if n, _ := u.misroutedLog.Recovered(); n > 0 {
+			plog.With(ctx).Infow("msg", "auction_market_routing_recovered", "misrouted_total", n)
+		}
 	}
 
 	m := u.lockMarket(marketID)
@@ -916,9 +936,18 @@ func (u *AuctionUsecase) pushAudit(ctx context.Context, o *auctionv1.AuctionOrde
 	}
 	select {
 	case u.auditQueue <- copyOrder:
+		if n, dropped := u.auditDropLog.Recovered(); n > 0 {
+			plog.With(ctx).Infow("msg", "auction_audit_queue_recovered", "dropped_total", dropped, "windows", n)
+		}
 	default:
-		plog.With(ctx).Warnw("msg", "auction_audit_queue_full_drop",
-			"order_id", o.GetOrderId(), "capacity", cap(u.auditQueue))
+		// broker 慢 / 挂时队列持续打满,每个后续 submit/cancel/expire 都会丢弃 → 逐条打会
+		// 按 QPS 洪泛。限流后首条即带累计丢弃数,比逐条更能回答「丢了多少 audit」。
+		total := u.auditDropLog.AddExtra(1)
+		if ok, streak := u.auditDropLog.Admit(time.Now().UnixMilli(), auctionDegradeLogWindowMs); ok {
+			plog.With(ctx).Warnw("msg", "auction_audit_queue_full_drop",
+				"order_id", o.GetOrderId(), "capacity", cap(u.auditQueue),
+				"dropped_total", total, "streak", streak)
+		}
 	}
 }
 
@@ -1192,6 +1221,30 @@ func (u *AuctionUsecase) ReconcilePendingSideEffects(ctx context.Context) (settl
 	if batch <= 0 {
 		batch = 100
 	}
+	// 模式 C:本函数是周期性 reconcile,下面 5 个循环原先对**每个失败元素**各打一条 Error。
+	// inventory / MySQL 故障时每分片每轮最多 batch(默认 100)条全失败,且每轮对同一批 backlog
+	// 重打 → Error 洪泛。改为按阶段累加、轮末汇总一条:既给出各阶段失败分布(比逐条更能
+	// 判断是哪一环卡住),又不随 backlog 规模刷屏。retErr / defer 重试等行为一字不动。
+	var releaseFailed, recoverPendingFailed, recoverUnverifiedFailed, recoverMatchPendingFailed int
+	var sampleOrderID uint64
+	noteOrderFail := func(orderID uint64) {
+		if sampleOrderID == 0 {
+			sampleOrderID = orderID
+		}
+	}
+	defer func() {
+		total := releaseFailed + recoverPendingFailed + recoverUnverifiedFailed + recoverMatchPendingFailed
+		if total == 0 {
+			return
+		}
+		plog.With(ctx).Errorw("msg", "auction_side_effect_reconcile_failed",
+			"batch", batch, "failed_total", total,
+			"release_failed", releaseFailed,
+			"recover_pending_failed", recoverPendingFailed,
+			"recover_unverified_failed", recoverUnverifiedFailed,
+			"recover_match_pending_failed", recoverMatchPendingFailed,
+			"sample_order_id", sampleOrderID, "first_err", retErr)
+	}()
 	terminalRepairs, err := u.repo.ListTerminalOrdersForRepair(ctx, batch)
 	if err != nil {
 		return 0, 0, err
@@ -1218,7 +1271,8 @@ func (u *AuctionUsecase) ReconcilePendingSideEffects(ctx context.Context) (settl
 	for _, o := range orders {
 		ok, rerr := u.releaseOrder(ctx, o.MarketID, o.OrderID)
 		if rerr != nil {
-			plog.With(ctx).Errorw("msg", "auction_reconcile_release_failed", "order_id", o.OrderID, "err", rerr)
+			releaseFailed++
+			noteOrderFail(o.OrderID)
 			if retErr == nil {
 				retErr = rerr
 			}
@@ -1233,7 +1287,8 @@ func (u *AuctionUsecase) ReconcilePendingSideEffects(ctx context.Context) (settl
 	for _, o := range pendingOrders {
 		if rerr := u.recoverPendingOrder(ctx, o); rerr != nil {
 			u.deferOrderReconcile(ctx, o.MarketID, o.OrderID)
-			plog.With(ctx).Errorw("msg", "auction_recover_pending_order_failed", "order_id", o.OrderID, "err", rerr)
+			recoverPendingFailed++
+			noteOrderFail(o.OrderID)
 			if retErr == nil {
 				retErr = rerr
 			}
@@ -1246,7 +1301,8 @@ func (u *AuctionUsecase) ReconcilePendingSideEffects(ctx context.Context) (settl
 	for _, o := range unverifiedOrders {
 		if rerr := u.recoverUnverifiedActiveOrder(ctx, o); rerr != nil {
 			u.deferOrderReconcile(ctx, o.MarketID, o.OrderID)
-			plog.With(ctx).Errorw("msg", "auction_recover_unverified_order_failed", "order_id", o.OrderID, "err", rerr)
+			recoverUnverifiedFailed++
+			noteOrderFail(o.OrderID)
 			if retErr == nil {
 				retErr = rerr
 			}
@@ -1259,7 +1315,8 @@ func (u *AuctionUsecase) ReconcilePendingSideEffects(ctx context.Context) (settl
 	for _, o := range matchPendingOrders {
 		if rerr := u.recoverMatchPendingOrder(ctx, o); rerr != nil {
 			u.deferOrderReconcile(ctx, o.MarketID, o.OrderID)
-			plog.With(ctx).Errorw("msg", "auction_recover_match_pending_failed", "order_id", o.OrderID, "err", rerr)
+			recoverMatchPendingFailed++
+			noteOrderFail(o.OrderID)
 			if retErr == nil {
 				retErr = rerr
 			}
@@ -1275,7 +1332,8 @@ func (u *AuctionUsecase) ReconcilePendingSideEffects(ctx context.Context) (settl
 			for _, orderID := range []uint64{m.SellOrderID, m.BuyOrderID} {
 				ok, rerr := u.releaseOrder(ctx, m.MarketID, orderID)
 				if rerr != nil {
-					plog.With(ctx).Errorw("msg", "auction_reconcile_release_failed", "order_id", orderID, "err", rerr)
+					releaseFailed++
+					noteOrderFail(orderID)
 					if retErr == nil {
 						retErr = rerr
 					}

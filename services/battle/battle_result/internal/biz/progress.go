@@ -142,6 +142,12 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		batchExp       uint64
 		batchItems     uint32
 	)
+	// 模式 C:漏配 / 非白名单事实原先在事件循环内**逐条**打 Warn——一张漏配的怪物经验表
+	// 会让「该怪每次击杀 × 每个玩家 × 每场对局」都刷一行。改为按 config_id 去重收集
+	// (distinct 计数 + 样例 ID),批末汇总一条:既能定位是哪个 ID 漏配,又不随击杀数刷屏。
+	unconfiguredMonsters := map[uint32]struct{}{}
+	notWhitelistedItems := map[uint32]struct{}{}
+	var sampleMonsterID, sampleItemID uint32
 	for _, e := range events {
 		seq := e.GetSeq()
 		if seq == 0 || seq <= prevSeq {
@@ -191,8 +197,13 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			expPer, ok := u.cfg.MonsterExpOf(fact.MonsterKill.GetMonsterConfigId())
 			if !ok {
 				skippedFact++
-				plog.With(ctx).Warnw("msg", "progress_monster_exp_unconfigured",
-					"match_id", matchID, "monster_config_id", fact.MonsterKill.GetMonsterConfigId())
+				id := fact.MonsterKill.GetMonsterConfigId()
+				if _, seen := unconfiguredMonsters[id]; !seen {
+					unconfiguredMonsters[id] = struct{}{}
+					if sampleMonsterID == 0 {
+						sampleMonsterID = id
+					}
+				}
 				continue
 			}
 			expByPlayer[playerID] += expPer * uint64(cnt)
@@ -205,8 +216,12 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			itemID := fact.ItemPickup.GetItemConfigId()
 			if itemID == 0 || !u.cfg.IsDroppable(itemID) {
 				skippedFact++
-				plog.With(ctx).Warnw("msg", "progress_pickup_not_whitelisted",
-					"match_id", matchID, "player_id", playerID, "item_config_id", itemID)
+				if _, seen := notWhitelistedItems[itemID]; !seen {
+					notWhitelistedItems[itemID] = struct{}{}
+					if sampleItemID == 0 {
+						sampleItemID = itemID
+					}
+				}
 				continue
 			}
 			// 每拾取事实一行出箱(Seq=事实自身 seq,uk 天然唯一):单事实 count 已被
@@ -245,6 +260,16 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 				"hint", "新 DS 事实类型早于 battle_result 升级放量(违反 Go 先行纪律),本场已停流,停流后实时奖励永久丢失")
 			return 0, errcode.New(errcode.ErrInvalidState, "unknown progress fact seq=%d: upgrade battle_result fleet before enabling new DS fact types (stream stopped; remaining realtime rewards for this match are permanently lost)", seq)
 		}
+	}
+
+	// 漏配 / 非白名单汇总(模式 C):按 config_id 去重后每批至多一条。distinct 计数暴露
+	// 「漏了几个 ID」,样例 ID 给出排查落点;非白名单还可能是失陷 DS 在刷拾取,故保持 Warn。
+	if len(unconfiguredMonsters) > 0 || len(notWhitelistedItems) > 0 {
+		plog.With(ctx).Warnw("msg", "progress_facts_skipped",
+			"match_id", matchID, "skipped_facts", skippedFact,
+			"unconfigured_monster_ids", len(unconfiguredMonsters), "sample_monster_config_id", sampleMonsterID,
+			"not_whitelisted_item_ids", len(notWhitelistedItems), "sample_item_config_id", sampleItemID,
+			"hint", "怪物经验表漏配 / 掉落白名单漏项,或失陷 DS 上报未授权事实")
 	}
 
 	if newSeq == lastSeq {

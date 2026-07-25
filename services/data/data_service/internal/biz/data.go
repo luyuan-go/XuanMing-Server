@@ -13,6 +13,7 @@ package biz
 
 import (
 	"context"
+	"time"
 
 	klog "github.com/go-kratos/kratos/v2/log"
 
@@ -37,7 +38,18 @@ type DataUsecase struct {
 	// 分片部署时由 main 经 SetCellRouter 注入,写(WritePlayer)后额外打一条玩家数据 owner 落点
 	// 观测(供分片上线核对玩家数据落点 == 玩家 owner cell,§4.2 line 142)。nil-safe。
 	router *cellroute.Router
+
+	// 缓存降级日志限流(模式 C):cache 是弱依赖(失败只影响命中率,不影响正确性),但
+	// ReadPlayer 是本服务最热 RPC——Redis 抖动时逐请求打 Warn 会按 QPS 刷屏,且一次读可能
+	// 叠 get+set 两条。限流为「首错 + 每窗口一条 + 累计数」,恢复时打一条界定降级区间。
+	// 读写两侧分开计数,便于区分是读挂还是写挂;无 key ⇒ 常量内存(player_id 是高基数,
+	// 按 key 分桶会让内存随玩家数无界增长)。
+	cacheReadLog  plog.Window
+	cacheWriteLog plog.Window
 }
+
+// cacheLogWindowMs 是缓存降级日志的最小重打间隔(毫秒)。
+const cacheLogWindowMs = 5000
 
 // NewDataUsecase 构造。cache 允许为 nil(缓存未配置时退化为直连 MySQL)。
 func NewDataUsecase(store data.PlayerStore, cache data.PlayerCache, cfg conf.DataConf, logger klog.Logger) *DataUsecase {
@@ -69,9 +81,17 @@ func (u *DataUsecase) ReadPlayer(ctx context.Context, playerID uint64) (*datav1.
 	// 1) 查缓存。读失败只告警,继续回落 MySQL。
 	if u.cache != nil {
 		if pd, hit, err := u.cache.Get(ctx, playerID); err != nil {
-			u.log.WithContext(ctx).Warnw("msg", "cache_get_failed", "player_id", playerID, "err", err)
-		} else if hit {
-			return pd, true, nil
+			if ok, streak := u.cacheReadLog.Admit(time.Now().UnixMilli(), cacheLogWindowMs); ok {
+				u.log.WithContext(ctx).Warnw("msg", "cache_get_failed",
+					"player_id", playerID, "streak", streak, "err", err)
+			}
+		} else {
+			if n, _ := u.cacheReadLog.Recovered(); n > 0 {
+				u.log.WithContext(ctx).Infow("msg", "cache_get_recovered", "failed_total", n)
+			}
+			if hit {
+				return pd, true, nil
+			}
 		}
 	}
 
@@ -138,7 +158,10 @@ func (u *DataUsecase) WritePlayer(ctx context.Context, pd *datav1.PlayerData, up
 	// 写后删缓存(避免读到旧版本)。删失败只告警,缓存随 TTL 自然失效。
 	if u.cache != nil {
 		if err := u.cache.Del(ctx, pd.GetPlayerId()); err != nil {
-			u.log.WithContext(ctx).Warnw("msg", "cache_del_after_write_failed", "player_id", pd.GetPlayerId(), "err", err)
+			if ok, streak := u.cacheWriteLog.Admit(time.Now().UnixMilli(), cacheLogWindowMs); ok {
+				u.log.WithContext(ctx).Warnw("msg", "cache_del_after_write_failed",
+					"player_id", pd.GetPlayerId(), "streak", streak, "err", err)
+			}
 		}
 	}
 	// 分片:PlayerData 行是 owner 数据,锁定玩家 owner cell(PlayerDataShardKey=player_id,
@@ -168,7 +191,14 @@ func (u *DataUsecase) fillCache(ctx context.Context, pd *datav1.PlayerData) {
 		return
 	}
 	if err := u.cache.Set(ctx, pd, u.cfg.CacheTTL.Std()); err != nil {
-		u.log.WithContext(ctx).Warnw("msg", "cache_set_failed", "player_id", pd.GetPlayerId(), "err", err)
+		// 回填失败只影响命中率;ReadPlayer 每次 miss 都会走这里,Redis 挂时与 get 侧叠加成
+		// 每请求两条 → 同样限流(与 del-after-write 共用写侧计数器)。
+		if ok, streak := u.cacheWriteLog.Admit(time.Now().UnixMilli(), cacheLogWindowMs); ok {
+			u.log.WithContext(ctx).Warnw("msg", "cache_set_failed",
+				"player_id", pd.GetPlayerId(), "streak", streak, "err", err)
+		}
+	} else if n, _ := u.cacheWriteLog.Recovered(); n > 0 {
+		u.log.WithContext(ctx).Infow("msg", "cache_write_recovered", "failed_total", n)
 	}
 }
 

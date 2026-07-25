@@ -7,9 +7,17 @@ package biz
 
 import (
 	"context"
+	"time"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
 )
+
+// ownerLeaseWeakLog / ownerLeaseLogWindowMs:租约双写弱依赖失败的日志限流(模式 C)。
+// 包级变量:该信号是**进程级依赖健康度**(owner 权威可达性),不需要按实例分桶;
+// plog.Window 无 key、常量内存、并发安全。
+var ownerLeaseWeakLog plog.Window
+
+const ownerLeaseLogWindowMs = 5000
 
 // OwnerLeaseRenewer 把已授权 DS 实例心跳代写进 owner 权威的实例租约。
 // 由 owner 服务 gRPC 客户端实现;可为 nil(未配 owner_addr → 不双写,migrate 前行为不变)。
@@ -45,7 +53,12 @@ func renewOwnerLeaseGate(ctx context.Context, renewer OwnerLeaseRenewer, require
 	if required {
 		return err
 	}
-	plog.With(ctx).Warnw("msg", "owner_lease_renew_failed_weak",
-		"pod", podName, "uid", instanceUID, "epoch", instanceEpoch, "err", err)
+	// 模式 C:本门在**每次授权心跳**返回前执行(每 pod ~5s),owner 权威抖动时按 pod 数刷屏,
+	// 而这是被双门(旧 last_heartbeat_ms 再入门)兜住的弱依赖 → 首错 + 每窗口一条 + 累计数。
+	if ok, streak := ownerLeaseWeakLog.Admit(time.Now().UnixMilli(), ownerLeaseLogWindowMs); ok {
+		plog.With(ctx).Warnw("msg", "owner_lease_renew_failed_weak",
+			"pod", podName, "uid", instanceUID, "epoch", instanceEpoch,
+			"streak", streak, "err", err)
+	}
 	return nil
 }

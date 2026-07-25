@@ -93,15 +93,36 @@ func ownerBeginPlayersWeak(ctx context.Context, auth OwnerAuthority, players []u
 	}
 	budgetCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	for _, playerID := range players {
+	// 模式 C:owner 是显式弱依赖(失败时旧路由门照跑),但本循环按玩家扇出,
+	// owner 抖动时逐玩家打 Warn 会按批人数刷屏。改为批内累加、批末汇总一条。
+	var queryFailed, beginFailed int
+	var firstErr error
+	var samplePlayer uint64
+	noteFail := func(playerID uint64, err error) {
+		if firstErr == nil {
+			firstErr, samplePlayer = err, playerID
+		}
+	}
+	defer func() {
+		if queryFailed+beginFailed == 0 {
+			return
+		}
+		plog.With(ctx).Warnw("msg", "owner_begin_weak_failed",
+			"players", len(players), "query_failed", queryFailed, "begin_failed", beginFailed,
+			"sample_player_id", samplePlayer, "first_err", firstErr,
+			"hint", "migrate 弱依赖,旧路由门照跑")
+	}()
+	for i, playerID := range players {
 		if budgetCtx.Err() != nil {
 			plog.With(ctx).Warnw("msg", "owner_begin_budget_exhausted",
-				"remaining_players", len(players), "hint", "migrate 弱依赖,跳过剩余玩家")
+				"players", len(players), "done", i, "remaining_players", len(players)-i,
+				"hint", "migrate 弱依赖,跳过剩余玩家")
 			return
 		}
 		rec, err := auth.QueryOwner(budgetCtx, playerID)
 		if err != nil {
-			plog.With(ctx).Warnw("msg", "owner_begin_query_failed_weak", "player_id", playerID, "err", err)
+			queryFailed++
+			noteFail(playerID, err)
 			continue
 		}
 		skip, expectEpoch := decideOwnerBegin(rec, ownerType, target)
@@ -109,7 +130,8 @@ func ownerBeginPlayersWeak(ctx context.Context, auth OwnerAuthority, players []u
 			continue
 		}
 		if err := auth.BeginTransition(budgetCtx, playerID, expectEpoch, uuid.NewString(), ownerType, target); err != nil {
-			plog.With(ctx).Warnw("msg", "owner_begin_failed_weak", "player_id", playerID, "err", err)
+			beginFailed++
+			noteFail(playerID, err)
 		}
 	}
 }
@@ -156,6 +178,26 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 	}
 	budgetCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
+	// 模式 C:本函数由**每次心跳**(每 ~5s/pod)对 pod 上全部在场玩家(Hub 可达 ~500 人)
+	// 调用,owner 抖动时逐玩家打 Warn = pod 数 × 500 / 5s 条刷屏。批末汇总一条。
+	var queryFailed, admitFailed, healFailed int
+	var firstErr error
+	var samplePlayer uint64
+	noteFail := func(playerID uint64, err error) {
+		if firstErr == nil {
+			firstErr, samplePlayer = err, playerID
+		}
+	}
+	defer func() {
+		if queryFailed+admitFailed+healFailed == 0 {
+			return
+		}
+		plog.With(ctx).Warnw("msg", "owner_admit_census_weak_failed",
+			"players", len(players), "query_failed", queryFailed, "admit_failed", admitFailed,
+			"heal_begin_failed", healFailed,
+			"sample_player_id", samplePlayer, "first_err", firstErr,
+			"hint", "migrate 弱依赖,再入屏障双门兜底")
+	}()
 	now := time.Now()
 	for _, playerID := range players {
 		key := selfUID + "|" + fmt.Sprintf("%d", playerID)
@@ -172,7 +214,8 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 		}
 		rec, err := auth.QueryOwner(budgetCtx, playerID)
 		if err != nil {
-			plog.With(ctx).Warnw("msg", "owner_admit_query_failed_weak", "player_id", playerID, "err", err)
+			queryFailed++
+			noteFail(playerID, err)
 			continue
 		}
 		if rec.OwnerType != ownerType || rec.PodName != selfPod || rec.InstanceUID != selfUID {
@@ -183,7 +226,8 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 				if tgt, ok := resolveTarget(budgetCtx, playerID); ok && tgt.PodName == selfPod && tgt.InstanceUID == selfUID {
 					if skip, expectEpoch := decideOwnerBegin(rec, ownerType, tgt); !skip {
 						if berr := auth.BeginTransition(budgetCtx, playerID, expectEpoch, uuid.NewString(), ownerType, tgt); berr != nil {
-							plog.With(ctx).Warnw("msg", "owner_census_heal_begin_failed_weak", "player_id", playerID, "err", berr)
+							healFailed++
+							noteFail(playerID, berr)
 						}
 					}
 				}
@@ -208,7 +252,8 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 		case retryAfter > 0:
 			// 屏障未开:预期中的 WAIT,下次心跳重试,不告警刷屏。
 		default:
-			plog.With(ctx).Warnw("msg", "owner_admit_failed_weak", "player_id", playerID, "err", aerr)
+			admitFailed++
+			noteFail(playerID, aerr)
 		}
 	}
 }

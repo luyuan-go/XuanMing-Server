@@ -40,7 +40,18 @@ type GuildUsecase struct {
 	pusher   GuildEventPusher // 弱依赖,可为 nil
 	cfg      conf.GuildConf
 	cacheTTL time.Duration
+
+	// 缓存降级日志限流(模式 C):GetGuild / GetMyGuild 是「全服共享热 key」的高 QPS 只读
+	// 入口,Redis 一抖就按请求量刷屏,且一次请求可能叠 get + 回填 set 两条。缓存是显式弱
+	// 依赖(失败只掉命中率,权威读走 MySQL),但仍是 Redis 健康度的信号 → 不删、限流。
+	// 读 / 写两侧分开计数便于区分故障面;无 key ⇒ 常量内存(guild_id / player_id 高基数,
+	// 按 key 分桶会随实体数无界增长)。
+	cacheReadLog  plog.Window
+	cacheWriteLog plog.Window
 }
+
+// guildCacheLogWindowMs 是缓存降级日志的最小重打间隔(毫秒)。
+const guildCacheLogWindowMs = 5000
 
 // NewGuildUsecase 构造。cache / pusher 均允许为 nil(弱依赖未配置时降级)。
 func NewGuildUsecase(repo data.GuildRepo, cache data.GuildCache, pusher GuildEventPusher, cfg conf.GuildConf) *GuildUsecase {
@@ -346,10 +357,18 @@ func (u *GuildUsecase) SetOfficer(ctx context.Context, leaderID, targetID uint64
 func (u *GuildUsecase) GetGuild(ctx context.Context, guildID uint64) (*guildv1.Guild, error) {
 	if u.cache != nil {
 		if g, ok, err := u.cache.GetGuild(ctx, guildID); err != nil {
-			// Redis 读故障:记录后回落 MySQL(缓存弱依赖,不报错给上层)。
-			plog.With(ctx).Warnw("msg", "guild_cache_get_failed", "guild_id", guildID, "err", err)
-		} else if ok {
-			return toGuildView(g), nil
+			// Redis 读故障:记录后回落 MySQL(缓存弱依赖,不报错给上层)。限流见结构体注释。
+			if adm, streak := u.cacheReadLog.Admit(time.Now().UnixMilli(), guildCacheLogWindowMs); adm {
+				plog.With(ctx).Warnw("msg", "guild_cache_get_failed",
+					"guild_id", guildID, "streak", streak, "err", err)
+			}
+		} else {
+			if n, _ := u.cacheReadLog.Recovered(); n > 0 {
+				plog.With(ctx).Infow("msg", "guild_cache_read_recovered", "failed_total", n)
+			}
+			if ok {
+				return toGuildView(g), nil
+			}
 		}
 	}
 	g, ok, err := u.repo.GetGuild(ctx, guildID)
@@ -368,10 +387,16 @@ func (u *GuildUsecase) GetGuild(ctx context.Context, guildID uint64) (*guildv1.G
 func (u *GuildUsecase) GetMyGuild(ctx context.Context, playerID uint64) (*guildv1.Guild, error) {
 	if u.cache != nil {
 		if guildID, ok, err := u.cache.GetMemberGuildID(ctx, playerID); err != nil {
-			plog.With(ctx).Warnw("msg", "guild_member_cache_get_failed", "player_id", playerID, "err", err)
+			if adm, streak := u.cacheReadLog.Admit(time.Now().UnixMilli(), guildCacheLogWindowMs); adm {
+				plog.With(ctx).Warnw("msg", "guild_member_cache_get_failed",
+					"player_id", playerID, "streak", streak, "err", err)
+			}
 		} else if ok {
 			if g, ok2, err2 := u.cache.GetGuild(ctx, guildID); err2 != nil {
-				plog.With(ctx).Warnw("msg", "guild_cache_get_failed", "guild_id", guildID, "err", err2)
+				if adm, streak := u.cacheReadLog.Admit(time.Now().UnixMilli(), guildCacheLogWindowMs); adm {
+					plog.With(ctx).Warnw("msg", "guild_cache_get_failed",
+						"guild_id", guildID, "streak", streak, "err", err2)
+				}
 			} else if ok2 {
 				return toGuildView(g), nil
 			}
@@ -518,7 +543,10 @@ func (u *GuildUsecase) invalidateMember(ctx context.Context, playerID uint64) {
 		return
 	}
 	if err := u.cache.DelMember(ctx, playerID); err != nil {
-		plog.With(ctx).Warnw("msg", "guild_member_cache_del_failed", "player_id", playerID, "err", err)
+		if adm, streak := u.cacheWriteLog.Admit(time.Now().UnixMilli(), guildCacheLogWindowMs); adm {
+			plog.With(ctx).Warnw("msg", "guild_member_cache_del_failed",
+				"player_id", playerID, "streak", streak, "err", err)
+		}
 	}
 }
 
@@ -528,7 +556,13 @@ func (u *GuildUsecase) fillGuildCache(ctx context.Context, g *data.GuildRow) {
 		return
 	}
 	if err := u.cache.SetGuild(ctx, g, u.cacheTTL); err != nil {
-		plog.With(ctx).Warnw("msg", "guild_cache_set_failed", "guild_id", g.GuildID, "err", err)
+		// 读 miss 回填在热读路径上:Redis 宕机时 get 失败紧跟 set 也失败,同一请求叠两条 → 限流。
+		if adm, streak := u.cacheWriteLog.Admit(time.Now().UnixMilli(), guildCacheLogWindowMs); adm {
+			plog.With(ctx).Warnw("msg", "guild_cache_set_failed",
+				"guild_id", g.GuildID, "streak", streak, "err", err)
+		}
+	} else if n, _ := u.cacheWriteLog.Recovered(); n > 0 {
+		plog.With(ctx).Infow("msg", "guild_cache_write_recovered", "failed_total", n)
 	}
 }
 
@@ -538,7 +572,10 @@ func (u *GuildUsecase) fillMemberCache(ctx context.Context, playerID, guildID ui
 		return
 	}
 	if err := u.cache.SetMemberGuildID(ctx, playerID, guildID, u.cacheTTL); err != nil {
-		plog.With(ctx).Warnw("msg", "guild_member_cache_set_failed", "player_id", playerID, "err", err)
+		if adm, streak := u.cacheWriteLog.Admit(time.Now().UnixMilli(), guildCacheLogWindowMs); adm {
+			plog.With(ctx).Warnw("msg", "guild_member_cache_set_failed",
+				"player_id", playerID, "streak", streak, "err", err)
+		}
 	}
 }
 

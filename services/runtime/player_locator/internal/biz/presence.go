@@ -306,10 +306,23 @@ func (h *PresenceHub) step(ctx context.Context, now time.Time) {
 	if h.pusher == nil {
 		return
 	}
+	// 模式 C:本 flush 由 ticker(默认 1s)驱动,对每个有缓冲变更的订阅者各推一次。
+	// push 不可用时逐订阅者打 Warn = 每秒数百条同因日志 → 改为本轮累加、轮末汇总一条。
+	var failed, failedChanges int
+	var firstErr error
+	var sampleSub uint64
 	for _, b := range batches {
 		if err := h.pusher.PushPresence(ctx, b.sub, b.changes); err != nil {
-			plog.With(ctx).Warnw("msg", "presence_push_failed",
-				"subscriber_id", b.sub, "changes", len(b.changes), "err", err)
+			failed++
+			failedChanges += len(b.changes)
+			if firstErr == nil {
+				firstErr, sampleSub = err, b.sub
+			}
 		}
+	}
+	if failed > 0 {
+		plog.With(ctx).Warnw("msg", "presence_push_failed",
+			"subscribers", len(batches), "failed", failed, "failed_changes", failedChanges,
+			"sample_subscriber_id", sampleSub, "first_err", firstErr)
 	}
 }
