@@ -58,9 +58,16 @@ pipeline {
                     def sourceDir = "${effectiveRoot}\\${sub}"
                     def dryArg = params.DRY_RUN ? ' -DryRun' : ''
 
-                    // 凭据由 publish-to-minio.ps1 自行解析（环境变量优先，其次 tools/devops/.env）；
-                    // 任何情况下都不出现在流水线脚本或命令行里。
-                    bat "pwsh -NoProfile -ExecutionPolicy Bypass -File \"${script}\" -SourceDir \"${sourceDir}\"${rootArg}${dryArg}"
+                    // 凭据由 publish-to-minio.ps1 自行解析，任何情况下都不出现在流水线脚本或命令行里。
+                    // 注意：本流水线运行时脚本是 Jenkins 工作区里的检出副本，同目录不会有 .env
+                    //（.env 是机器本地文件、已 gitignore）。因此显式把节点上真实的后端仓库
+                    // 工作副本里的 .env 指过去；PANDORA_PROTO_SERVER_ROOT 已在节点环境变量中配置。
+                    def serverRoot = env.PANDORA_PROTO_SERVER_ROOT?.trim()
+                    def envArg = serverRoot ? " -EnvFile \"${serverRoot}\\tools\\devops\\.env\"" : ''
+                    if (!serverRoot) {
+                        echo '[warn] 节点未配置 PANDORA_PROTO_SERVER_ROOT，将依赖环境变量提供 MinIO 凭据。'
+                    }
+                    bat "pwsh -NoProfile -ExecutionPolicy Bypass -File \"${script}\" -SourceDir \"${sourceDir}\"${rootArg}${envArg}${dryArg}"
                 }
             }
         }

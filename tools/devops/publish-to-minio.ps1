@@ -37,6 +37,9 @@ param(
     [string]$Bucket,
     [string]$AccessKey,
     [string]$SecretKey,
+    # 显式指定 .env 位置。CI 场景必需：脚本被检出到 Jenkins 工作区后，
+    # $PSScriptRoot 指向工作区副本，而 .env 是机器本地文件（已 gitignore）不在其中。
+    [string]$EnvFile,
     # compose 网络名与服务名；非默认部署时可覆盖
     [string]$Network = 'pandora-devops_default',
     [string]$Endpoint = 'http://minio:9000',
@@ -68,9 +71,19 @@ if (-not $SourceDir.StartsWith($ArtifactRoot, [StringComparison]::OrdinalIgnoreC
 $relative = $SourceDir.Substring($ArtifactRoot.Length).TrimStart('\', '/') -replace '\\', '/'
 
 # ── 配置解析（凭据不落盘、不进仓库）──
-$envFile = Join-Path $PSScriptRoot '.env'
+# .env 定位优先级。CI 与本机开发的差别在于：CI 里脚本是被检出到 Jenkins 工作区的副本，
+# 同目录不会有 .env（它是机器本地文件、已 gitignore），必须回退到真正的后端仓库工作副本。
+$envCandidates = @()
+if ($EnvFile) { $envCandidates += $EnvFile }
+$envCandidates += (Join-Path $PSScriptRoot '.env')
+if ($env:PANDORA_DEVOPS_ENV) { $envCandidates += $env:PANDORA_DEVOPS_ENV }
+# 节点上已配置 PANDORA_PROTO_SERVER_ROOT 指向后端仓库根，tools/devops 就在其下
+if ($env:PANDORA_PROTO_SERVER_ROOT) { $envCandidates += (Join-Path $env:PANDORA_PROTO_SERVER_ROOT 'tools\devops\.env') }
+
+$envFile = $envCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+if ($envFile) { Info "读取配置：$envFile" }
 $envMap = @{}
-if (Test-Path -LiteralPath $envFile) {
+if ($envFile) {
     Get-Content -LiteralPath $envFile | ForEach-Object {
         if ($_ -match '^\s*([^#=]+)=(.*)$') { $envMap[$Matches[1].Trim()] = $Matches[2].Trim() }
     }
@@ -85,7 +98,16 @@ $AccessKey = Resolve-Setting $AccessKey 'MINIO_ROOT_USER' $null
 $SecretKey = Resolve-Setting $SecretKey 'MINIO_ROOT_PASSWORD' $null
 $Bucket    = Resolve-Setting $Bucket    'MINIO_BUCKET' 'pandora-artifacts'
 if (-not $AccessKey -or -not $SecretKey) {
-    throw "缺少 MinIO 凭据。请用 -AccessKey/-SecretKey，或设置 MINIO_ROOT_USER/MINIO_ROOT_PASSWORD，或在 $envFile 中提供。"
+    $tried = ($envCandidates | Where-Object { $_ }) -join "`n    "
+    throw @"
+缺少 MinIO 凭据。按以下任一方式提供（都不会进仓库）：
+  1) 参数        -AccessKey / -SecretKey
+  2) 环境变量    MINIO_ROOT_USER / MINIO_ROOT_PASSWORD（CI 可用 Jenkins 凭据注入）
+  3) .env 文件   -EnvFile <路径>，或让下列任一路径存在
+
+已尝试过的 .env 路径：
+    $tried
+"@
 }
 
 Info "源目录  : $SourceDir"
