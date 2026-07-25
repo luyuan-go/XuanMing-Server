@@ -65,14 +65,18 @@ setx PANDORA_ARTIFACT_ROOT "D:\artifacts"
 ### ⚠️ 制品根必须是文件系统路径，不能是 URL
 
 发布与解析脚本用的是 **文件系统 API**（`robocopy` / `Test-Path` / `Get-FileHash` / `Move-Item`）。
-把制品根设成 `ftp://...` 之类**不会报错，只会静默失效**（`Test-Path` 直接返回 `False`，
+把制品根设成 URL **不会报错，只会静默失效**（`Test-Path` 直接返回 `False`，
 表现为「找不到任何制品」），是最难排查的一类故障。
 
 - ✅ 本地路径：`D:\artifacts`
 - ✅ SMB 共享 UNC：`\\主机\共享\artifacts`（`robocopy` 原生支持）
-- ❌ `ftp://` / `http://` 等 URL
+- ❌ 任何 URL 形式
 
 自检脚本会对 URL 形态直接判 FAIL。
+
+> **团队怎么拿包**：制品根是本机的**权威制品库**，不直接对外。
+> 分发走 MinIO —— `artifacts-sync` 流水线会在构建成功后自动把已发布产物同步上去，
+> 详见 [`publish-to-minio.ps1`](./publish-to-minio.ps1) 与 [`Jenkinsfile.artifacts-sync`](./Jenkinsfile.artifacts-sync)。
 
 ---
 

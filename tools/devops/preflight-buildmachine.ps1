@@ -101,7 +101,7 @@ if ($env:PANDORA_ARTIFACT_ROOT) {
         # URL 形态直接判死，不再做存在性检查（那只会输出误导性的"发布时会自动创建"）
         Bad "制品根被设成了 URL：$env:PANDORA_ARTIFACT_ROOT"
         Write-Host "         发布/解析脚本用的是文件系统 API（robocopy / Test-Path / Move-Item），" -ForegroundColor Red
-        Write-Host "         ftp:// 之类不是文件系统：Test-Path 直接返回 False，结果是'找不到任何制品'而非报错，极难排查。" -ForegroundColor Red
+        Write-Host "         URL 不是文件系统路径：Test-Path 直接返回 False，结果是'找不到任何制品'而非报错，极难排查。" -ForegroundColor Red
         Write-Host "         请改用本地路径，或 SMB 共享的 UNC 路径（\\主机\共享\artifacts）。" -ForegroundColor Red
     } elseif (Test-Path -LiteralPath $env:PANDORA_ARTIFACT_ROOT) {
         Ok "PANDORA_ARTIFACT_ROOT = $env:PANDORA_ARTIFACT_ROOT（存在）"
