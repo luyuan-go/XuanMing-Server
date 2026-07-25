@@ -23,6 +23,10 @@
 
 ---
 
+> 🆕 **要在新机器上做打包发布？** 看 [`BUILD-MACHINE-SETUP.md`](./BUILD-MACHINE-SETUP.md)
+> （引擎 clone+注册、Linux 工具链、环境变量、自检、打包三步、已知坑），
+> 配套自检：`pwsh tools/devops/preflight-buildmachine.ps1 -ClientRepo <客户端路径>`
+
 ## 前置
 
 - **Docker Desktop（Windows）/ Docker Engine（Linux）**，自带 `docker compose` v2
