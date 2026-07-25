@@ -1,0 +1,68 @@
+// 制品分发流水线：把本地制品库里已发布的产物同步到 MinIO，供团队下载。
+//
+// 为什么独立成一条流水线，而不是塞进构建流水线：
+//   - 职责分离：构建流水线负责「产出 + 发布进权威制品库」，本流水线只负责「分发」。
+//     分发失败不该让一次成功的构建变红，构建流水线也不该因为分发逻辑变长变脆。
+//   - 可复用：客户端 UE 包、后端镜像离线包都发到同一个制品根，这里一次同步全覆盖。
+//   - 可单独重跑：分发出问题时重跑本任务即可，不必重新走几十分钟的打包。
+//
+// 权威关系：本地制品目录是**权威制品库**（原子发布、不可变、带 sha256sums）；
+//           MinIO 是**分发副本**，桶上已配生命周期规则自动过期，不参与发布决策。
+pipeline {
+    agent { label 'windows' }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    triggers {
+        // 客户端构建成功后自动同步；构建失败不触发（没有新产物可分发）。
+        upstream(upstreamProjects: 'client-dev,backend-dev', threshold: hudson.model.Result.SUCCESS)
+    }
+
+    parameters {
+        string(
+            name: 'ARTIFACT_ROOT_OVERRIDE',
+            defaultValue: '',
+            trim: true,
+            description: 'Optional artifact root override. Empty preserves the agent PANDORA_ARTIFACT_ROOT and then falls back to F:\\work\\artifacts.'
+        )
+        string(
+            name: 'SUBPATH',
+            defaultValue: 'snapshots',
+            trim: true,
+            description: 'Subtree under the artifact root to sync. Use snapshots, releases, or a specific version directory.'
+        )
+        booleanParam(
+            name: 'DRY_RUN',
+            defaultValue: false,
+            description: 'List what would be uploaded without transferring anything.'
+        )
+    }
+
+    stages {
+        stage('Sync to MinIO') {
+            steps {
+                script {
+                    // 本流水线定义在后端仓库内，脚本与它同目录，用 WORKSPACE 定位即可，
+                    // 不依赖 agent 上的绝对路径。
+                    def script = "${env.WORKSPACE}\\tools\\devops\\publish-to-minio.ps1"
+
+                    def artifactRoot = params.ARTIFACT_ROOT_OVERRIDE?.trim()
+                    def rootArg = artifactRoot ? " -ArtifactRoot \"${artifactRoot}\"" : ''
+                    def effectiveRoot = artifactRoot ?: (env.PANDORA_ARTIFACT_ROOT ?: 'F:\\work\\artifacts')
+
+                    def sub = params.SUBPATH?.trim() ?: 'snapshots'
+                    def sourceDir = "${effectiveRoot}\\${sub}"
+                    def dryArg = params.DRY_RUN ? ' -DryRun' : ''
+
+                    // 凭据由 publish-to-minio.ps1 自行解析（环境变量优先，其次 tools/devops/.env）；
+                    // 任何情况下都不出现在流水线脚本或命令行里。
+                    bat "pwsh -NoProfile -ExecutionPolicy Bypass -File \"${script}\" -SourceDir \"${sourceDir}\"${rootArg}${dryArg}"
+                }
+            }
+        }
+    }
+}
