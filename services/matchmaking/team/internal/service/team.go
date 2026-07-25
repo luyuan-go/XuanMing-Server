@@ -39,7 +39,7 @@ func NewTeamService(uc *biz.TeamUsecase, sf snowflakeGen) *TeamService {
 	return &TeamService{uc: uc, sf: sf}
 }
 
-// ── 8 RPC ─────────────────────────────────────────────────────────────────────
+// ── 9 RPC ─────────────────────────────────────────────────────────────────────
 
 // CreateTeam 创建队伍。player_id 以 JWT ctx 为准(R5)。
 func (s *TeamService) CreateTeam(ctx context.Context, _ *teamv1.CreateTeamRequest) (*teamv1.CreateTeamResponse, error) {

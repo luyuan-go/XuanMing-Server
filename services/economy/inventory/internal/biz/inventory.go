@@ -1,6 +1,6 @@
 // Package biz 是 inventory 服务的业务逻辑层(W5 ③,2026-06-18)。
 //
-// 职责(docs/design/go-services.md §2.9 economy 域):
+// 职责(docs/design/go-services.md 服务清册 economy 域;inventory 暂无专章,§2.9 是 trade):
 //   - 背包道具持有 / 货币余额读
 //   - 系统驱动幂等发放(GrantItems:战后掉落 / 活动 / 购买到账)
 //   - 大厅态道具使用(UseItem:开箱 / 经验书)与出售换金币(SellItem)

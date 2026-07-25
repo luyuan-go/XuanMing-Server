@@ -1,0 +1,12 @@
+# 声明式 CI 所需最小插件集（版本由镜像固化）
+configuration-as-code
+job-dsl
+workflow-aggregator
+pipeline-stage-view
+git
+subversion
+credentials-binding
+docker-workflow
+matrix-auth
+timestamper
+ws-cleanup

@@ -70,6 +70,18 @@ type ResumeContextResult struct {
 	GameMode   string
 	// MapID 本局副本编号(透传 matchmaker 权威,0=未指定/默认;语义见 login.proto ResumeContext.map_id)。
 	MapID uint32
+	// ── owner 权威 placement 叠加(§9.23 query-first,owner-authority.md migrate ①;默认关)──
+	// 仅在 owner 查询成功且 owner 路由与既有解析一致时叠加,**不改变 Route 决策**(migrate 阶段
+	// 新旧双门并行,不会误路由);客户端据此做 §9.23 的 TARGET/ADMITTED 幂等 no-op。
+	// §9.23 全量还缺 owner_epoch / retry_after / 统一状态枚举——需 proto 扩展(Codex),属 contract 阶段。
+	PlacementState  loginv1.ResumePlacementState
+	OperationID     string
+	DSPodName       string
+	DSInstanceUID   string
+	DSInstanceEpoch uint32
+	HubAssignmentID string
+	AllocationID    string
+	ReleaseTrack    string
 }
 
 // BattleTicketIssuer 把所有 login 侧 Battle 票据签发统一到带 roster 权威门的入口。
@@ -95,6 +107,10 @@ type LoginUsecase struct {
 	roleRepo    data.PlayerRoleRepo // 选角权威化(2026-07-08):player_roles 仓储,可为 nil(降级无选角)
 	// ownerReleaser:owner 迁移登出释放(owner-authority.md migrate ⑤;弱依赖,nil=未启用)。
 	ownerReleaser OwnerReleaser
+	// ownerPlacement / ownerQueryFirst:§9.23 query-first placement 叠加(migrate ①;
+	// nil 或 ownerQueryFirst=false 时完全不查 owner,恢复上下文行为与现状一致)。
+	ownerPlacement  OwnerPlacementQuerier
+	ownerQueryFirst bool
 	sf            *snowflake.Node
 	hubDSAddr     string // 回退用静态 hub DS 地址(hub_allocator 未配 / 调用失败时)
 	hubRegion     string // 传给 hub_allocator.AssignHub 的 region(空=allocator 选最空分片)
@@ -323,12 +339,10 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 最终都收敛到最高代际那次登录;输掉定序的登录(条件写被拒)直接失败,不交付凭据,
 	// 不再出现「Redis=B、MySQL=A」的撕裂(旧实现先写 Redis 再无条件覆盖 MySQL 的缺陷)。
 	//
-	// 部分失败口径(R9 复审 P0-2 收口):MySQL 已提交、Redis 写失败(网络类错误)时本次
-	// 登录失败并做条件回补(RestoreSessionJTI)——把 MySQL 行内 sess_jti 回写为覆盖前的
-	// 值(generation 不回退),消除「上一代合法会话被 SetRole 代际强制门误拒到下一次
-	// 成功登录」的撕裂窗口。回补是 CAS:并发新登录已推进代际则 no-op;回补本身失败仅
-	// 记日志(方向仍是 fail-closed,不产生任何"旧会话获得新权威"的口子,下一次成功
-	// 登录原子推进两个存储自愈)。定序失败(ErrSessionSuperseded)不回补:行已属于赢家。
+	// 部分失败口径(R9 复审 P0-2 收口 + R10 复审 P0-1 消歧):MySQL 已提交、Redis 写失败
+	// (网络类错误)时本次登录失败,并由 reconcileFailedSessionWrite 把「Redis 到底提交
+	// 没有」这个不确定态**判定**掉再决定回补/墓碑(见该函数注释)。定序失败
+	// (ErrSessionSuperseded)不进入该路径:行已属于赢家,回补会回滚别人的登录。
 	sessTTL := u.signer.SessionTTL()
 	var sessGen uint64
 	var sessGenLease data.SessionGenerationLease
@@ -348,21 +362,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 			// 其余为基础设施错误。两者都不得交付凭据。
 			h.Warnw("msg", "session_set_failed", "err", err, "player_id", playerID, "gen", sessGen)
 			if u.sessionGen != nil && errcode.As(err) != errcode.ErrSessionSuperseded {
-				// 复审 P0-3:「Redis 报错 ≠ Redis 未提交」——Lua 已执行、应答网络丢失时
-				// Redis 实际已持有本次新 jti。回补前先读回:Redis 已收敛到本次 jti 则
-				// 跳过 MySQL 回补(两存储向前收敛到新 jti,登录仍失败不交付凭据,重登
-				// 原子推进自愈);读回失败/不匹配才走原条件回补。避免造出
-				// 「Redis=新 jti、MySQL=旧 jti」的跨存储撕裂。
-				if curJTI, found, gerr := u.sessions.GetJTI(ctx, playerID); gerr == nil && found && curJTI == sessJTI {
-					h.Warnw("msg", "session_set_error_but_committed_skip_restore",
-						"player_id", playerID, "gen", sessGen)
-				} else if restored, rerr := u.sessionGen.RestoreSessionJTI(ctx, playerID, sessJTI, sessGenLease); rerr != nil {
-					h.Errorw("msg", "session_generation_restore_failed", "err", rerr,
-						"player_id", playerID, "gen", sessGen)
-				} else if !restored {
-					h.Infow("msg", "session_generation_restore_noop",
-						"player_id", playerID, "gen", sessGen)
-				}
+				u.reconcileFailedSessionWrite(ctx, playerID, sessJTI, sessGen, sessGenLease)
 			}
 			return nil, err
 		}
@@ -814,6 +814,20 @@ func (u *LoginUsecase) GetResumeContext(ctx context.Context, sessionToken string
 	if cerr := u.requireCurrentSession(ctx, playerID, claims.ID); cerr != nil {
 		return ResumeContextResult{}, cerr
 	}
+	out, rerr := u.resolveResumeRoute(ctx, playerID)
+	if rerr != nil {
+		return out, rerr
+	}
+	// §9.23 query-first 叠加(migrate ①,默认关):owner 权威确认同路由时补 exact placement,
+	// 不改路由决策;owner 查询失败/无记录/路由不一致 → 保持既有 out(新旧双门并行)。
+	if u.ownerQueryFirst && u.ownerPlacement != nil {
+		out = u.overlayOwnerPlacement(ctx, playerID, out)
+	}
+	return out, nil
+}
+
+// resolveResumeRoute 是恢复路由的既有解析(presence/match 权威;§9.23 query-first 叠加前的基线)。
+func (u *LoginUsecase) resolveResumeRoute(ctx context.Context, playerID uint64) (ResumeContextResult, error) {
 	if u.notifier == nil {
 		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}, nil
 	}
@@ -1312,6 +1326,64 @@ func (u *LoginUsecase) RequireTicketSessionCurrent(ctx context.Context, playerID
 		return nil
 	}
 	return u.requireCurrentSession(ctx, playerID, ticketSessJTI)
+}
+
+// reconcileFailedSessionWrite 收口「MySQL 代际已提交、Redis 条件写报错」留下的跨存储
+// 不确定态(R10 复审 P0-1)。前置:调用方已判定这是基础设施错误(非 ErrSessionSuperseded),
+// 本次登录必定失败且不交付任何凭据。
+//
+// 难点:「Redis 报错 ≠ Redis 未提交」。Lua 已执行、应答在网络上丢失时 Redis 实际已持有
+// 本次新 jti。旧实现用 GetJTI 读回判断,但**读回本身也可能失败**——此时旧实现落到
+// else 分支无条件回补 MySQL 旧 jti,即在「Redis=新 jti」的可能性下造出
+// 「Redis=新、MySQL=旧」的跨存储撕裂(§9.22:结果不确定必须 fail-closed,禁止猜测)。
+//
+// 本实现不猜,而是把不确定态**消灭**掉:
+//
+//	① sessions.DeleteIfJTI(sessJTI) 是按 jti 的 CAS 删。返回无错误即证明「Redis 此刻
+//	   不再持有本次 jti」——要么本就没提交(未命中),要么已提交并被本次 CAS 精确撤销
+//	   (deleted=true;并发新登录已轮换则不命中,绝不误删新会话)。此时把 MySQL 条件
+//	   回补到覆盖前的 jti 是**可证明一致**的,保留了 R9 P0-2 的目的(不误拒上一代
+//	   合法会话的 SetRole)。
+//	② DeleteIfJTI 本身失败(Redis 不可达)= 仍无法证明 Redis 状态。此时禁止回补,改为
+//	   条件墓碑 MySQL 本次代际行:任何陈旧 jti 都不再匹配,两侧一致地拒绝所有旧凭据
+//	   (fail-closed)。墓碑是 CAS,只命中本次登录写入的行,并发新登录已轮换则 no-op。
+//	   玩家下一次成功登录原子推进两个存储自愈(客户端对本次失败拿到的是可重试错误)。
+//
+// 全部为 best-effort 补偿:补偿本身失败只记 Error(登录已失败,不会因此交付能力)。
+func (u *LoginUsecase) reconcileFailedSessionWrite(
+	ctx context.Context, playerID uint64, sessJTI string, sessGen uint64, lease data.SessionGenerationLease,
+) {
+	h := plog.With(ctx)
+	deleted, derr := u.sessions.DeleteIfJTI(ctx, playerID, sessJTI)
+	if derr != nil {
+		// ② 不可证明 → 墓碑 fail-closed,不制造「Redis 新 / MySQL 旧」撕裂。
+		tombstoned, terr := u.sessionGen.TombstoneSessionJTI(ctx, playerID, sessJTI)
+		if terr != nil {
+			h.Errorw("msg", "session_write_reconcile_tombstone_failed",
+				"player_id", playerID, "gen", sessGen, "err", terr, "redis_err", derr,
+				"hint", "两存储状态不可证明且墓碑失败;下一次成功登录会原子推进两存储自愈")
+			return
+		}
+		h.Errorw("msg", "session_write_reconcile_unknown_tombstoned",
+			"player_id", playerID, "gen", sessGen, "tombstoned", tombstoned, "err", derr,
+			"hint", "Redis 提交与否不可证明 → 墓碑代际行 fail-closed,旧凭据一律失效")
+		return
+	}
+	if deleted {
+		// Redis 确实已提交本次 jti(应答丢失),已被 CAS 精确撤销;无人持有该 jti。
+		h.Warnw("msg", "session_write_reconcile_committed_rolled_back",
+			"player_id", playerID, "gen", sessGen)
+	}
+	// ① Redis 已确证不持有本次 jti → 条件回补 MySQL(generation 不回退)。
+	restored, rerr := u.sessionGen.RestoreSessionJTI(ctx, playerID, sessJTI, lease)
+	switch {
+	case rerr != nil:
+		h.Errorw("msg", "session_generation_restore_failed", "err", rerr,
+			"player_id", playerID, "gen", sessGen)
+	case !restored:
+		h.Infow("msg", "session_generation_restore_noop",
+			"player_id", playerID, "gen", sessGen)
+	}
 }
 
 // fenceLoginDelivery 登录副作用交付终检(R5 复审 P0-5,INC-20260722-004):

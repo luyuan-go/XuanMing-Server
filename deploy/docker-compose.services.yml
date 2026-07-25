@@ -145,7 +145,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   # PVE 直进匹配实例:与 matchmaker 同一份源码/同构建参数(镜像层全缓存),仅配置不同——
-  # game_mode=pve_coop + enable_solo_match=true(单人/整队直进副本,不排队)。
+  # game_mode=pve_coop + walk_in=true(单人/整队直进副本,不排队)。
   # Envoy 按 header `x-pandora-game-mode: pve` 分流到本实例(host.docker.internal:50018)。
   matchmaker-pve:
     <<: *svc-base

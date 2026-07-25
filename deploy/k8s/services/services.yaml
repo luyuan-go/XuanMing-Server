@@ -302,7 +302,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: matchmaker-pve, namespace: pandora, labels: { app: matchmaker-pve } }
 spec:
-  # PVE 直进匹配实例:与 matchmaker 同二进制、不同配置(game_mode=pve_coop + enable_solo_match)。
+  # PVE 直进匹配实例:与 matchmaker 同二进制、不同配置(game_mode=pve_coop + walk_in)。
   # 每张票据独立成局不跑共享池撮合循环,但扩 >1 副本前同样建议开 match.leader.enabled。
   replicas: 1
   selector: { matchLabels: { app: matchmaker-pve } }

@@ -153,7 +153,7 @@ RunMatchLoop (每 2s)
 - **仍有人未确认** → `stage=CONFIRM`,推 CONFIRM 进度给全体。
 - 锁定态(ALLOCATING/READY)后:accept 幂等成功;reject 诚实报错(全员已确认不可反悔)。
 
-> `EnableSoloMatch`(PVE walk-in 生产路径,见下方「PVE 实例 / walk-in 直进路径」)/ `AutoConfirmMatch`
+> `WalkIn`(PVE walk-in 生产路径,见下方「PVE 实例 / walk-in 直进路径」)/ `AutoConfirmMatch`
 >(versus 路径 dev/压测)会跳过客户端确认,但**仍先建 CONFIRM 态、落全部票据/claim,再 CAS ALLOCATING**
 >(`queueAcceptedMatchAllocation`,`match.go:1297`)——保证崩溃不会给半成局拉起 Battle DS。
 
@@ -218,7 +218,7 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
 
 | | PVP 实例(`matchmaker-dev.yaml`) | PVE 实例(`matchmaker-pve.yaml`) |
 |---|---|---|
-| `enable_solo_match` | `false`(走撮合) | **`true`(walk-in 直进)** |
+| `walk_in` | `false`(走撮合) | **`true`(walk-in 直进)** |
 | `game_mode` / 端口 | `5v5_ranked` / `:50011` | `pve_coop` / `:50018` |
 | 成局方式 | 凑齐 `2×team_size` + 确认期 | 每张票(单人/整队)立即成局(`formSoloMatch`) |
 | 等对手 / 确认期 / MMR | 有 | **无**(直接建 `confirmAccepted`,跳过) |
@@ -227,10 +227,15 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
 - **仍是已受理型**:PVE 省掉的是「撮合」,但**拉 Battle DS 加载副本的延迟省不掉**(`ds_allocate_timeout` 60s,
   冷加载几十秒,与 PVP 相同)。所以 `StartMatch` 照样返回 `ticket_id`,进场靠 READY push;`formSoloMatch`
   也由后台 `RunMatchLoop` 驱动(≤1 tick 调度,相对 DS 冷加载可忽略),不做成同步 RPC 返回 `ds_addr`。
-- **命名债**:`enable_solo_match` 名字含 "solo"、历史注释曾写「测试专用」,实际语义是「即时开局 / walk-in」
-  (整队也直进,且是 PVE 生产路径)。正名建议(`walk_in` / `formation_mode` 枚举)见
-  [`decision-dungeon-entry-modes.md`](../../../docs/design/decision-dungeon-entry-modes.md);未来「PVE 匹配补人 /
-  机器人补位」是该分叉点上的新 formation,同样不影响 PVP。
+- **正名与旧键兼容(2026-07-25)**:本开关原名 `enable_solo_match`(名字含 "solo"、注释曾写「测试专用」,
+  与「入口是否撮合」的真实语义和 PVE 生产用途都不符),已正名为 **`walk_in`**。按 §9.21
+  expand→migrate→contract,`conf.Defaults()` 仍读旧键并 **OR 并入** `walk_in`(漏迁移的部署若被静默判
+  false,PVE 会退化成「等对手撮合」而 PVE 无单边成局逻辑 → 玩家永远等不到人),启动时打
+  `deprecated_config_key` Warn;线上不再出现该 Warn 后才可删除旧字段。函数名 `formSoloMatch` 与
+  `solo_match_found` 日志键**有意未改**(可观测性契约,被事故档案时间线引用)。详见
+  [`decision-dungeon-entry-modes.md`](../../../docs/design/decision-dungeon-entry-modes.md)。
+- **未来扩展**:「PVE 匹配补人 / 机器人补位」是该分叉点上的新 formation(单边成局,凑齐 `team_size`
+  即开一队,或等真人超时后用 bot 补满),同样只加在 PVE 侧,不影响 PVP 的 versus 撮合。
 
 ## 关键设计点 / 不变量
 
@@ -263,7 +268,7 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
 | `optimistic_retry` | `3` | WATCH/MULTI/EXEC 乐观锁重试次数 |
 | `battle_gate_fail_open` | `false` | locator 查询失败时是否放行入队(生产必须 false) |
 | `liveness_gate_enabled` | `false` | 是否启用在线保活两道离线门(需 Hub DS 先上报 `player_ids`) |
-| `enable_solo_match` | `false` | 「即时开局 / walk-in」分叉:PVP=false 走撮合;**PVE 实例=true**(单人/整队直进副本,见「PVE 实例」节) |
+| `walk_in` | `false` | 「即时开局 / walk-in」分叉:PVP=false 走撮合;**PVE 实例=true**(单人/整队直进副本,见「PVE 实例」节)。旧键 `enable_solo_match` 仍兼容读取(OR 并入)并打废弃 Warn |
 | `auto_confirm_match` | `false` | 撮合(versus)路径跳过确认期:默认 false 保留真实确认;dev/压测设 true。与 walk-in 无关 |
 | `leader.enabled` | `false` | 撮合循环单写者选举(多副本必开) |
 
@@ -281,7 +286,7 @@ go run ./services/matchmaking/matchmaker/cmd/matchmaker -conf services/matchmaki
 ```
 
 > 起 **PVE 实例**改用 `-conf services/matchmaking/matchmaker/etc/matchmaker-pve.yaml`
->(`enable_solo_match: true`,walk-in 直进,端口 :50018)。`auto_confirm_match` 仅用于撮合路径的
+>(`walk_in: true`,walk-in 直进,端口 :50018)。`auto_confirm_match` 仅用于撮合路径的
 > dev/压测省人工确认,PVP 正式对局保持 false。
 
 ## 关联文档
@@ -291,6 +296,6 @@ go run ./services/matchmaking/matchmaker/cmd/matchmaker -conf services/matchmaki
 - [`scale-cellular-20m.md`](../../../docs/design/scale-cellular-20m.md) §4.4 — 两级 region 撮合与 battle placement
 - [`decision-revisit-global-matchmaker.md`](../../../docs/design/decision-revisit-global-matchmaker.md) — 跨 region 溢出阈值 / 段位桶
 - [`decision-revisit-matchmaker-single-writer.md`](../../../docs/design/decision-revisit-matchmaker-single-writer.md) — 撮合循环单写者选举
-- [`decision-dungeon-entry-modes.md`](../../../docs/design/decision-dungeon-entry-modes.md) — PVP 撮合 vs PVE walk-in / `enable_solo_match` 正名建议
+- [`decision-dungeon-entry-modes.md`](../../../docs/design/decision-dungeon-entry-modes.md) — PVP 撮合 vs PVE walk-in / `walk_in` 正名与旧键兼容契约
 - [`owner-authority.md`](../../../docs/design/owner-authority.md) — 进场归属 / owner_epoch(§22/§23 的权威本体)
 - [`battle-reconnect.md`](../../../docs/design/battle-reconnect.md) — READY 后进 Battle DS 的重连 / no-freeze 契约

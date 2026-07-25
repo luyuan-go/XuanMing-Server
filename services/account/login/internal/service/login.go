@@ -91,7 +91,17 @@ func (s *LoginService) GetResumeContext(ctx context.Context, req *loginv1.GetRes
 
 func resumeContextToProto(in biz.ResumeContextResult) *loginv1.ResumeContext {
 	return &loginv1.ResumeContext{Route: in.Route, MatchId: in.MatchID,
-		MatchStage: in.MatchStage, GameMode: in.GameMode, MapId: in.MapID}
+		MatchStage: in.MatchStage, GameMode: in.GameMode, MapId: in.MapID,
+		// §9.23 query-first owner placement 叠加(migrate ①;未启用时全为零值,与旧行为一致)。
+		PlacementState:  in.PlacementState,
+		OperationId:     in.OperationID,
+		DsPodName:       in.DSPodName,
+		DsInstanceUid:   in.DSInstanceUID,
+		DsInstanceEpoch: in.DSInstanceEpoch,
+		HubAssignmentId: in.HubAssignmentID,
+		AllocationId:    in.AllocationID,
+		ReleaseTrack:    in.ReleaseTrack,
+	}
 }
 
 // SelectRole 立即完成型(选角权威化 2026-07-08,见 login.proto SelectRole 注释)。

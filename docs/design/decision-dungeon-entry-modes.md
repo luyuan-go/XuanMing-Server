@@ -18,16 +18,22 @@ matchmaker 透传 → ds_allocator 按 map_id 起图/传 label)。剩下的玩�
 
 ## 2. 澄清:服务端现状已有两条路(配置开关)
 
-matchmaker 侧已存在两种成局方式,由 `enable_solo_match` 决定
+matchmaker 侧已存在两种成局方式,由 `walk_in` 决定
 (见 `services/matchmaking/matchmaker/etc/matchmaker-dev.yaml`):
 
 | 模式 | 配置 | 行为 |
 |---|---|---|
-| **撮合模式(matchmade)** | `enable_solo_match: false` | 一张票(单人/整队)**不够**开局,要凑满 `2×team_size` 人(A/B 两边对战结构)+ 全员确认(confirm)才拉 DS。这是 PVP 的正路。 |
-| **即时开局(walk-in / instant-start)** | `enable_solo_match: true` | 每张票**立即成局、跳过确认、直接 AllocateBattle 拉 DS**。这就是「不匹配直接进」。代码路径为 `formSoloMatch`(biz/match.go)。 |
+| **撮合模式(matchmade)** | `walk_in: false` | 一张票(单人/整队)**不够**开局,要凑满 `2×team_size` 人(A/B 两边对战结构)+ 全员确认(confirm)才拉 DS。这是 PVP 的正路。 |
+| **即时开局(walk-in / instant-start)** | `walk_in: true` | 每张票**立即成局、跳过确认、直接 AllocateBattle 拉 DS**。这就是「不匹配直接进」。代码路径为 `formSoloMatch`(biz/match.go)。 |
 
-> 命名债:`enable_solo_match` 注释写的是「本地端到端测试专用」,但其语义本质是「即时开局」。
-> 生产 PVE 用它完全合理;后续建议正名为 `instant_start` / `walk_in`,避免「这是测试开关」的误解。
+> **命名债已还(2026-07-25)**:原键名 `enable_solo_match` 注释写的是「本地端到端测试专用」,
+> 但其语义本质是「入口是否撮合」,且它正是 PVE 的生产开关 —— 已正名为 **`walk_in`**(§5 的建议落地)。
+> 兼容契约(§9.21 expand→migrate→contract,当前处于 **migrate**):`conf.Defaults()` 仍读旧键并
+> **OR 并入** `walk_in`(漏迁移的部署若被静默判 false,PVE 会退化成「等对手撮合」而 PVE 无单边成局
+> 逻辑,玩家永远等不到人),启动时打 `deprecated_config_key` Warn;线上不再出现该 Warn 后,才可进入
+> contract 阶段删除 `EnableSoloMatch` 字段及其兼容测试。
+> **未改**:`formSoloMatch` 函数名与 `solo_match_found` 日志键 —— 日志键是可观测性契约(被
+> `docs/incidents/2026-07-24-p0-matchmaker-orphan-start-claim-freeze.md` 时间线当证据引用),不做无谓 churn。
 
 结论:**「直接进副本」不是要新写的功能,代码已存在**,只是当前当 dev 开关用、尚未作为正式 PVE 入口部署。
 
@@ -53,14 +59,14 @@ graph LR
 那一层薄薄地分叉即可,下游全共享。
 
 我们当前架构正是这个形状——`ds_allocator.AllocateBattle` 就是统一开局层,matchmaker 只是它的一个调用方;
-`enable_solo_match` 就是「入口是否撮合」的分叉开关。
+`walk_in` 就是「入口是否撮合」的分叉开关。
 
 ## 4. 拍板结论
 
 **入口分离、开局层合并。** 落到既定「一个 game_mode 一个 matchmaker 部署」的部署模型:
 
-- **PVP 部署**:`enable_solo_match: false`,照旧撮合(凑对手 + confirm)。
-- **PVE 部署**:`enable_solo_match: true` + `game_mode: "pve_coop"`,单人/整队带 `map_id`
+- **PVP 部署**:`walk_in: false`,照旧撮合(凑对手 + confirm)。
+- **PVE 部署**:`walk_in: true` + `game_mode: "pve_coop"`,单人/整队带 `map_id`
   **直接开局**,天然避开跨副本混桌。**零新代码,配置即得。**
 
 不要把「直接进」和「匹配进」塞进同一撮合池用条件分支硬切——按 game_mode 分部署,
@@ -71,10 +77,12 @@ graph LR
 - **PVE 匹配补人(matchmade co-op)**:当前**不做**。现有撮合只产出 A/B 两边对战结构,
   没有「3 人队自动补 2 个路人进同一边打怪」的单边成局逻辑。若将来要「路人本」,需给 matchmaker
   加单边(co-op)成局路径。按标准做法**先上「组好队直接进」,补人是后续增强**,不阻塞当前 PVE 落地。
-- **`enable_solo_match` 正名**:建议后续改为 `instant_start`(或 `walk_in`)并更新注释,消除「测试专用」误解。
+- ~~**`enable_solo_match` 正名**:建议后续改为 `instant_start`(或 `walk_in`)并更新注释,消除「测试专用」误解。~~
+  **已完成(2026-07-25)**:正名为 `walk_in`,注释改写为「入口是否撮合」语义并点明 PVE 生产用途;
+  旧键保留兼容 + 启动 Warn,详见 §2 的兼容契约。
 
 ## 6. 待办(落地 PVE 入口)
 
-- [ ] 新增 PVE matchmaker 部署配置(`matchmaker-pve.yaml`:`game_mode: "pve_coop"` + `enable_solo_match: true`)。
+- [x] 新增 PVE matchmaker 部署配置(`matchmaker-pve.yaml`:`game_mode: "pve_coop"` + `walk_in: true`)。
 - [ ] 客户端 PVE 入口路由到 PVE matchmaker,请求带所选 `map_id`。
 - [ ] UE 侧 DS 读 map_id → g_关卡.xlsx → ServerTravel(见 `副本选择_UE侧交接_Codex.md`)。

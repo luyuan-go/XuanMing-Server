@@ -314,9 +314,18 @@ func main() {
 		"confirm_timeout", cfg.Match.ConfirmTimeout.String(),
 		"match_interval", cfg.Match.MatchInterval.String(),
 		"team_size", cfg.Match.TeamSize,
-		"enable_solo_match", cfg.Match.EnableSoloMatch,
+		"walk_in", cfg.Match.WalkIn,
 		"auto_confirm_match", cfg.Match.AutoConfirmMatch,
 	)
+
+	// 废弃键告警:enable_solo_match 已于 2026-07-25 正名为 walk_in,Defaults() 仍兼容读取旧键
+	// (漏迁移时保住 PVE 的 walk-in 行为)。这条 Warn 是 contract 阶段删除旧字段前的迁移进度信号——
+	// 线上不再出现它,才说明所有部署的 yaml / ConfigMap 都已改用新键。
+	if cfg.Match.EnableSoloMatch {
+		helper.Warnw("msg", "deprecated_config_key",
+			"key", "match.enable_solo_match", "replacement", "match.walk_in",
+			"hint", "旧键仍生效(已并入 walk_in),请迁移配置后再删除")
+	}
 
 	// 10. Kratos App
 	app := kratos.New(

@@ -1,0 +1,150 @@
+# Pandora DevOps 本地一键栈
+# 起：Jenkins controller(CI) + registry:2(镜像库) + MinIO(制品对象存储)
+# 用法见同目录 README.md；不要手改端口/口令，改 .env
+name: pandora-devops
+
+services:
+  # ─────────────────────────────────────────────────────────────
+  # CI 执行器：Jenkins controller（编排层）
+  # 真正的 UE cook / Go 编译 由「宿主机 agent」执行（见 README「构建 agent」）——
+  # UE 无法在 Linux 容器里 cook，controller 只负责调度。
+  # ─────────────────────────────────────────────────────────────
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    image: pandora/jenkins-controller:local
+    container_name: pandora-jenkins
+    restart: unless-stopped
+    environment:
+      - JENKINS_ADMIN_ID=${JENKINS_ADMIN_ID:-admin}
+      - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-admin123}
+      - JENKINS_PUBLIC_URL=${JENKINS_PUBLIC_URL:-http://localhost:8080/}
+      - CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
+      # 跳过 setup 向导——用 JCasC 声明式初始化，保证「另一台机器」结果一致
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    ports:
+      - "${JENKINS_HTTP_PORT:-8080}:8080"
+      - "${JENKINS_AGENT_PORT:-50000}:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./jenkins/casc.yaml:/var/jenkins_home/casc.yaml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/login"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # ─────────────────────────────────────────────────────────────
+  # 镜像库：registry:2（Harbor 的轻量替代，pandora-images.tar 的正确归宿）
+  # localhost 默认被 Docker 视为 insecure-ok，push 无需改 daemon 配置。
+  # ─────────────────────────────────────────────────────────────
+  registry:
+    image: registry:2
+    container_name: pandora-registry
+    restart: unless-stopped
+    environment:
+      - REGISTRY_STORAGE_DELETE_ENABLED=true
+    ports:
+      - "${REGISTRY_PORT:-5000}:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+
+  registry-ui:
+    image: joxit/docker-registry-ui:main
+    container_name: pandora-registry-ui
+    restart: unless-stopped
+    # 可选组件：默认不起（需 docker hub 镜像）。起法: docker compose --profile extras up -d
+    profiles: ["extras"]
+    environment:
+      - SINGLE_REGISTRY=true
+      - REGISTRY_TITLE=Pandora Registry
+      - DELETE_IMAGES=true
+      - SHOW_CONTENT_DIGEST=true
+      - NGINX_PROXY_PASS_URL=http://registry:5000
+    ports:
+      - "${REGISTRY_UI_PORT:-8082}:80"
+    depends_on:
+      - registry
+
+  # ─────────────────────────────────────────────────────────────
+  # 制品对象存储：MinIO（S3 兼容，存 UE 打包大 zip）
+  # ─────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: pandora-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-pandora}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-pandora-minio-secret}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # 一次性初始化：建桶 + 挂保留策略（跑完即退出）
+  minio-init:
+    image: minio/mc:latest
+    container_name: pandora-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-pandora}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-pandora-minio-secret}
+      - MINIO_BUCKET=${MINIO_BUCKET:-pandora-artifacts}
+      - MINIO_EXPIRE_DAYS=${MINIO_EXPIRE_DAYS:-30}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
+          echo 'waiting for minio...'; sleep 2;
+        done
+        mc mb --ignore-existing "local/$$MINIO_BUCKET"
+        mc ilm rule add --expire-days "$$MINIO_EXPIRE_DAYS" "local/$$MINIO_BUCKET" || echo 'lifecycle rule skipped (non-fatal)'
+        echo "minio bootstrap done: bucket=$$MINIO_BUCKET expire=$${MINIO_EXPIRE_DAYS}d"
+    restart: "no"
+
+  # ─────────────────────────────────────────────────────────────
+  # 通用制品库：Sonatype Nexus 3（可选，默认不起）
+  #
+  # ⚠️ 职责与本栈已有组件【重叠】，按 CLAUDE.md §15「不做预设性复杂化」默认关闭：
+  #   - 存 docker 镜像 → 已有 registry:2（或升级 Harbor）
+  #   - 存大二进制/UE 包 → 已有 MinIO
+  # 只有当你确实需要 Nexus 独有能力（maven/npm/nuget 私服、代理远程仓库并缓存）时才起。
+  # 起法：docker compose -f docker-compose.stack.yml --profile nexus up -d
+  # 首启慢（镜像 ~700MB + JVM 预热 2-3 分钟）；初始密码见下方 README 说明。
+  # ─────────────────────────────────────────────────────────────
+  nexus:
+    image: sonatype/nexus3:latest
+    container_name: pandora-nexus
+    restart: unless-stopped
+    profiles: ["nexus"]
+    environment:
+      # 本地开发按需限制堆，避免默认配置吃满内存
+      - INSTALL4J_ADD_VM_PARAMS=-Xms1g -Xmx1g -XX:MaxDirectMemorySize=2g
+    ports:
+      - "${NEXUS_PORT:-8081}:8081"
+    volumes:
+      - nexus_data:/nexus-data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/service/rest/v1/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 120s
+
+volumes:
+  jenkins_home:
+  registry_data:
+  minio_data:
+  nexus_data:

@@ -1,0 +1,48 @@
+# Jenkins Configuration as Code —— 声明式初始化。
+# 变量来自容器环境（compose 从 .env 注入）。改了就是「另一台机器一键复现」的保证。
+jenkins:
+  systemMessage: "Pandora DevOps —— 由 tools/devops JCasC provisioned。构建在宿主机 agent 上跑。"
+  # controller 不做执行器：真正的 UE cook / Go 编译挂宿主机 agent
+  numExecutors: 0
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+security:
+  # 关闭 CLI over Remoting（默认安全实践）
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: false
+
+unclassified:
+  location:
+    url: "${JENKINS_PUBLIC_URL}"
+
+# ── 可选：自动播种 4 条流水线 ──
+# SCM 地址与凭据是「每环境的秘密」，不写死在仓库里。
+# 想让 Jenkins 一起步就带出 4 个 job，取消下面注释并在 Jenkins 里补好
+# credentials（SVN 账号 / git 凭据），或改用「New Item → Pipeline from SCM」手建。
+#
+# jobs:
+#   - script: >
+#       pipelineJob('client-dev') {
+#         definition { cpsScmFlowDefinition {
+#           scm { subversion { locations { location {
+#             remote('${CLIENT_SVN_URL}'); credentialsId('svn-cred');
+#             local('.'); depthOption('infinity'); ignoreExternalsOption(true)
+#           }}}}
+#           scriptPath('Tool/Build/Jenkinsfile'); lightweight(false)
+#         }}
+#       }
+#   - script: >
+#       pipelineJob('backend-dev') {
+#         definition { cpsScmFlowDefinition {
+#           scm { git { remote { url('${BACKEND_GIT_URL}'); credentials('git-cred') } branch('*/main') } }
+#           scriptPath('Jenkinsfile'); lightweight(true)
+#         }}
+#       }

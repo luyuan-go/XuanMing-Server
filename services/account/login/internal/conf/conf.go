@@ -45,6 +45,12 @@ type LoginConf struct {
 	// Query+Release(compare-delete 自己,失败仅告警,不影响登出)。
 	OwnerAddr string `yaml:"owner_addr,omitempty" json:"owner_addr,omitempty"`
 
+	// OwnerQueryFirst 开启 §9.23 恢复上下文 query-first owner placement 叠加(owner-authority.md
+	// migrate ①)。默认 false = 恢复路径不查 owner,行为与现状一致(安全默认);true 时在既有
+	// presence/match 路由解析之上叠加 owner 权威 exact placement(仅同路由叠加,不改路由决策)。
+	// 需先配 owner_addr。owner 覆盖式权威 + §9.23 全量属 contract 阶段(须集成故障注入后再切)。
+	OwnerQueryFirst bool `yaml:"owner_query_first,omitempty" json:"owner_query_first,omitempty"`
+
 	// DeviceRetentionDays account_devices 设备绑定行保留天数(默认 90,§9.24)。
 	// device_id 由客户端上报,单账号可无限堆新行;按 last_login_at 超期批删兜底有界,
 	// 被删设备下次登录 TouchDevice upsert 自然重建。account_bans 不清理(运营合规审计,

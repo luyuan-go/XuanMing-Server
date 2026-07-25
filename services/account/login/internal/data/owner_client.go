@@ -27,6 +27,23 @@ type OwnerReleaseView struct {
 	OperationID string
 }
 
+// OwnerPlacementView 是 §9.23 query-first 所需的完整 owner placement 快照
+// (login 恢复上下文用;比 OwnerReleaseView 多带 exact 实例身份 + 阶段 + 租约)。
+// OwnerType/Phase 用 int8 对齐 owner.proto 枚举(0 none/1 hub/2 battle;phase 1 pending/2 admitted)。
+type OwnerPlacementView struct {
+	OwnerEpoch               uint64
+	OwnerType                int8
+	Phase                    int8
+	PodName                  string
+	InstanceUID              string
+	InstanceEpoch            uint32
+	AssignmentOrAllocationID string
+	ReleaseTrack             string
+	OperationID              string
+	AdmitNotBeforeMs         int64
+	LeaseDeadlineMs          int64
+}
+
 // GrpcOwnerReleaser 用 owner 服务 gRPC client 实现 biz.OwnerReleaser。
 type GrpcOwnerReleaser struct {
 	conn *grpc.ClientConn
@@ -63,6 +80,36 @@ func (g *GrpcOwnerReleaser) QueryOwner(ctx context.Context, playerID uint64) (Ow
 		OwnerEpoch:  rec.GetOwnerEpoch(),
 		OwnerType:   int8(rec.GetOwnerType()),
 		OperationID: rec.GetOperationId(),
+	}, nil
+}
+
+// QueryOwnerPlacement 读完整 owner placement 快照(§9.23 query-first 依据)。
+// 与 QueryOwner 走同一 RPC,但保留 exact 实例身份 / 阶段 / 租约,供 login 恢复上下文叠加。
+// 查询失败由调用方按 UNKNOWN 处理(owner-authority.md:禁冒充 OFFLINE)。
+func (g *GrpcOwnerReleaser) QueryOwnerPlacement(ctx context.Context, playerID uint64) (OwnerPlacementView, error) {
+	callCtx, cancel := context.WithTimeout(ctx, ownerRPCTimeout)
+	defer cancel()
+	resp, err := g.cli.QueryOwner(callCtx, &ownerv1.QueryOwnerRequest{PlayerId: playerID})
+	if err != nil {
+		return OwnerPlacementView{}, err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return OwnerPlacementView{}, errcode.New(errcode.Code(resp.GetCode()), "owner query rejected player=%d", playerID)
+	}
+	rec := resp.GetRecord()
+	tgt := rec.GetTarget()
+	return OwnerPlacementView{
+		OwnerEpoch:               rec.GetOwnerEpoch(),
+		OwnerType:                int8(rec.GetOwnerType()),
+		Phase:                    int8(rec.GetPhase()),
+		PodName:                  tgt.GetPodName(),
+		InstanceUID:              tgt.GetInstanceUid(),
+		InstanceEpoch:            tgt.GetInstanceEpoch(),
+		AssignmentOrAllocationID: tgt.GetAssignmentOrAllocationId(),
+		ReleaseTrack:             tgt.GetReleaseTrack(),
+		OperationID:              rec.GetOperationId(),
+		AdmitNotBeforeMs:         rec.GetAdmitNotBeforeMs(),
+		LeaseDeadlineMs:          rec.GetLeaseDeadlineMs(),
 	}, nil
 }
 

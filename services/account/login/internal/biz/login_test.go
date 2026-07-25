@@ -86,8 +86,16 @@ func (f *fakeSessionRepo) GetJTI(_ context.Context, playerID uint64) (string, bo
 	return j, ok && j != "", nil
 }
 
-func (f *fakeSessionRepo) DeleteIfJTI(_ context.Context, _ uint64, _ string) (bool, error) {
-	return true, nil
+// DeleteIfJTI 与生产实现同语义的 CAS 删(仅当前 jti 相等才删),不是恒真桩:
+// R10 P0-1 的会话写补偿链按「删是否命中」判定 Redis 是否已提交,桩会掩盖真实分支。
+func (f *fakeSessionRepo) DeleteIfJTI(_ context.Context, playerID uint64, jti string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if cur, ok := f.jti[playerID]; ok && cur == jti {
+		delete(f.jti, playerID)
+		return true, nil
+	}
+	return false, nil
 }
 
 type loginBattleAuthorizerFake struct {

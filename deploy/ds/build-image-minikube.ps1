@@ -17,6 +17,14 @@
 #   pwsh deploy/ds/build-image-minikube.ps1 -Image battle        # 只建 battle
 #   pwsh deploy/ds/build-image-minikube.ps1 -Profile pandora-agones # 指定 minikube profile
 #   pwsh deploy/ds/build-image-minikube.ps1 -SourcePkg <客户端>\Packages\Server_Linux_Development\LinuxServer  # 显式指定 UE Linux 包
+#   pwsh deploy/ds/build-image-minikube.ps1 -BuildOnHost -PushRegistry              # 宿主构建 + 推制品 registry（localhost:5000）
+#   pwsh deploy/ds/build-image-minikube.ps1 -BuildOnHost -PushRegistry -RegistryHost harbor.xxx:5000  # 推到别的 registry
+#
+# 推制品 registry（-PushRegistry，发布线③制品库层）：
+#   必须配合 -BuildOnHost。非宿主模式下 docker CLI 被 minikube docker-env 指向 minikube
+#   内置 daemon，'localhost:5000' 会解析到 minikube VM 内部而非宿主 registry 容器，
+#   造成"push 看着成功、制品库里没有"。脚本对此 fail-closed 直接报错，不静默推错地方。
+#   registry 由 tools/devops 栈提供：pwsh XuanMing-Server/tools/devops/up.ps1
 #
 # UE Linux DS 包来源（不写死路径，按下列优先级解析）：
 #   1) 显式 -SourcePkg 参数
@@ -41,10 +49,33 @@ param(
     # minikube 内置 daemon 往往没有 ubuntu:22.04 基础镜像也拉不到公网 → FROM 失败；
     # 宿主 docker 有 ubuntu + apt 缓存层，离线只重跑 COPY 层即可。构建完由调用方
     # （start.ps1 的 Sync-ImagesToMinikube）用 minikube image load 落进集群。
-    [switch]$BuildOnHost
+    [switch]$BuildOnHost,
+    # 构建完把镜像推到制品 registry（tools/devops 的 registry:2，发布线③制品库层）。
+    # 必须配合 -BuildOnHost：详见下方 Push-One 的说明（minikube 内置 daemon 的
+    # localhost 是 VM 自己，不是宿主 registry，会推丢）。
+    [switch]$PushRegistry,
+    [string]$RegistryHost = 'localhost:5000'
 )
 
 $ErrorActionPreference = 'Stop'
+
+# 前置校验放最前面：fail fast，别等 robocopy 同步完几 GB 才报错。
+# -PushRegistry 只能在宿主 daemon 模式下用：非 -BuildOnHost 时本会话 docker CLI 被
+# minikube docker-env 指向 minikube 内置 daemon，push 由那个 daemon 发起，
+# 'localhost:5000' 解析到 minikube VM 自己而非宿主机的 registry 容器 → 静默推错地方。
+# 宁可明确报错，也不做"看着成功、制品库里啥也没有"的假成功。
+if ($PushRegistry -and -not $BuildOnHost) {
+    throw "-PushRegistry 必须配合 -BuildOnHost 使用。原因：非宿主构建时 docker CLI 指向 minikube 内置 daemon，'$RegistryHost' 会解析到 minikube VM 内部，推不到宿主 registry。正确用法：pwsh deploy/ds/build-image-minikube.ps1 -BuildOnHost -PushRegistry"
+}
+# registry 探活也放最前：与其同步几 GB 包、构建十几分钟后才卡在 push，不如现在就报。
+if ($PushRegistry) {
+    try {
+        Invoke-WebRequest -Uri "http://$RegistryHost/v2/" -TimeoutSec 5 -UseBasicParsing | Out-Null
+        Write-Host "[build-image-minikube] 制品 registry 可达：$RegistryHost" -ForegroundColor DarkGray
+    } catch {
+        throw "制品 registry '$RegistryHost' 不可达：$($_.Exception.Message)。先起 DevOps 栈：pwsh XuanMing-Server/tools/devops/up.ps1"
+    }
+}
 
 $ScriptDir = $PSScriptRoot
 $StageDir = Join-Path $ScriptDir 'stage\LinuxServer'
@@ -162,13 +193,44 @@ function Build-One {
     if ($LASTEXITCODE -ne 0) {
         throw "docker build 失败：$fullTag"
     }
-    Write-Host "[build-image-minikube] 完成（已落在 minikube）：$fullTag" -ForegroundColor Green
+    $where = if ($BuildOnHost) { '宿主 docker daemon' } else { 'minikube' }
+    Write-Host "[build-image-minikube] 完成（已落在 $where）：$fullTag" -ForegroundColor Green
+}
+
+# 推到制品 registry（发布线③制品库层，tools/devops 的 registry:2）。
+# 只在宿主 daemon 模式下被调用（开头已 fail-closed 校验），localhost 才是宿主机。
+function Push-One {
+    param([string]$Name)
+    $localTag = "pandora/$Name-ds:$Tag"
+    $remoteTag = "$RegistryHost/pandora/$Name-ds:$Tag"
+
+    Write-Host "[build-image-minikube] docker tag $localTag -> $remoteTag" -ForegroundColor Cyan
+    & docker tag $localTag $remoteTag
+    if ($LASTEXITCODE -ne 0) { throw "docker tag 失败：$localTag -> $remoteTag" }
+
+    Write-Host "[build-image-minikube] docker push $remoteTag" -ForegroundColor Cyan
+    & docker push $remoteTag
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker push 失败：$remoteTag。确认 registry 在跑：pwsh XuanMing-Server/tools/devops/up.ps1"
+    }
+
+    # 发布 manifest 应记 digest 而非 tag：tag 可被覆盖，digest 不可变（见 docs/design/release-pipeline.md）。
+    $digest = & docker image inspect $remoteTag --format '{{range .RepoDigests}}{{println .}}{{end}}' 2>$null |
+        Where-Object { $_ -like "$RegistryHost/*" } | Select-Object -First 1
+    if ($digest) {
+        Write-Host "[build-image-minikube] 已推送（把这行 digest 记进发布 manifest）：$digest" -ForegroundColor Green
+    } else {
+        Write-Host "[build-image-minikube] 已推送：$remoteTag（未解析到 digest）" -ForegroundColor Yellow
+    }
 }
 
 switch ($Image) {
-    'battle' { Build-One 'battle' }
-    'hub' { Build-One 'hub' }
-    'both' { Build-One 'battle'; Build-One 'hub' }
+    'battle' { Build-One 'battle'; if ($PushRegistry) { Push-One 'battle' } }
+    'hub' { Build-One 'hub'; if ($PushRegistry) { Push-One 'hub' } }
+    'both' {
+        Build-One 'battle'; if ($PushRegistry) { Push-One 'battle' }
+        Build-One 'hub'; if ($PushRegistry) { Push-One 'hub' }
+    }
 }
 
 Write-Host ""

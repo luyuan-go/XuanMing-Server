@@ -82,9 +82,10 @@ match:
   match_ttl: "30m"  # 仅显式终态后的留存；非终态 match 持久
   # team_size: PVE 单队人数上限(1~5 人整队直进;StartMatch 拒绝超编队伍)
   team_size: 5
-  # enable_solo_match: PVE 核心开关——每张票(单人/整队)立即成局直接拉 DS,不撮合不确认。
+  # walk_in: PVE 核心开关——每张票(单人/整队)立即成局直接拉 DS,不撮合不确认。
   # 「组好队直接进副本」的 walk-in 标准路径;PVP 实例保持 false 走撮合。
-  enable_solo_match: true
+  # (2026-07-25 由 enable_solo_match 正名;旧键仍被兼容读取,新配置一律用 walk_in)
+  walk_in: true
   # auto_confirm_match: solo 路径本就跳过确认,此值不生效;保留 true 防误配
   auto_confirm_match: true
   # MMR 窗口参数:solo 直进不撮合,不生效;保留默认

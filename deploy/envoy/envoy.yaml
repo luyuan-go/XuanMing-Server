@@ -297,7 +297,7 @@ static_resources:
                   body:
                     inline_string: "internal rpc"
               # PVE 匹配实例路由:客户端带 header `x-pandora-game-mode: pve` → PVE matchmaker(:50018,
-              # game_mode=pve_coop + enable_solo_match=true,单人/整队直进副本);不带 = 默认 PVP 撮合实例。
+              # game_mode=pve_coop + walk_in=true,单人/整队直进副本);不带 = 默认 PVP 撮合实例。
               # 设计既定「一个 game_mode 一个 matchmaker 部署」;同一 gRPC 服务名靠 header 分流是 Envoy 标准做法。
               # 安全:此头只选择实例,player_id 仍以 JWT sub 为准(两实例同一 jwt_authn 规则),伪造头最多进错池。
               - match:
@@ -816,7 +816,7 @@ static_resources:
                 port_value: 50011
 
   # ===== match_pve_cluster(PVE matchmaker 实例,header x-pandora-game-mode: pve 分流)=====
-  # 同一个 matchmaker 二进制,配置 matchmaker-pve.yaml(game_mode=pve_coop + enable_solo_match=true,
+  # 同一个 matchmaker 二进制,配置 matchmaker-pve.yaml(game_mode=pve_coop + walk_in=true,
   # 单人/整队直进副本,副本由 StartMatchRequest.map_id 选)。未起 PVE 实例时带头请求会 UNAVAILABLE,
   # 不影响默认 PVP 路径。
   - name: match_pve_cluster

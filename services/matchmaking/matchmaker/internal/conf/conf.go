@@ -106,12 +106,18 @@ type MatchConf struct {
 	// TeamSize 一方人数(MOBA 5v5,一方 5 人)。
 	TeamSize int `yaml:"team_size,omitempty" json:"team_size,omitempty"`
 
-	// EnableSoloMatch 是「即时开局 / walk-in」分叉开关:开启后 matchOnce 对每张票走 formSoloMatch——
+	// WalkIn 是「即时开局 / walk-in」分叉开关:开启后 matchOnce 对每张票走 formSoloMatch——
 	// 单人或整队立即成局、跳过撮合与确认、直接拉起 Battle DS,不与陌生人凑对手。
 	//   - PVP 实例(matchmaker-dev.yaml):false —— 走正常撮合(凑齐 2×TeamSize + 确认期)。
 	//   - PVE 实例(matchmaker-pve.yaml,game_mode=pve_coop):true —— 「组好队 / 单人直进副本」的生产核心路径。
-	// 命名债:名字含 solo 且历史注释曾写「测试专用」,实际语义是「入口是否撮合」;
-	// 详见 docs/design/decision-dungeon-entry-modes.md(建议后续正名 walk_in / instant_start)。
+	// 2026-07-25 由 enable_solo_match 正名而来(decision-dungeon-entry-modes.md §5):旧名含 solo
+	// 且历史注释写「测试专用」,与其「入口是否撮合」的真实语义不符,也掩盖了它是 PVE 生产开关的事实。
+	WalkIn bool `yaml:"walk_in,omitempty" json:"walk_in,omitempty"`
+
+	// EnableSoloMatch 是 WalkIn 的**废弃旧键名**,保留仅为滚动升级期兼容(§9.21 expand→migrate→contract
+	// 的 migrate 阶段):新二进制可能先于 ConfigMap / yaml 上线,此时旧部署里只有 enable_solo_match。
+	// Defaults() 把它**并入**(OR)WalkIn,不做覆盖——见那里的 fail-safe 方向说明。
+	// 契约:新配置一律写 walk_in;待全部部署迁移完毕后删除本字段(contract 阶段)。
 	EnableSoloMatch bool `yaml:"enable_solo_match,omitempty" json:"enable_solo_match,omitempty"`
 
 	// AutoConfirmMatch 只作用于撮合(versus)路径:开启后凑齐成局即视为全员已确认、跳过确认期直接拉 DS。
@@ -160,6 +166,13 @@ type LeaderConf struct {
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发 panic。
 func (c *Config) Defaults() {
+	// 旧键兼容(walk_in 的前身 enable_solo_match,2026-07-25 正名)。用 OR 并入而非覆盖:
+	// 漏迁移的部署若被静默判成 false,PVE 实例会从「单人/整队直进副本」退化为「排队等对手撮合」,
+	// 而 PVE 侧根本没有单边成局逻辑(只产 A/B 对战结构),玩家会永远等不到人——比误开 walk-in
+	// 严重得多,故 fail-safe 方向取「保住 walk-in」。旧字段值不清空,留给 main.go 打废弃告警。
+	if c.Match.EnableSoloMatch {
+		c.Match.WalkIn = true
+	}
 	if c.Match.DSAllocateTimeout == 0 {
 		c.Match.DSAllocateTimeout = config.Duration(60 * time.Second)
 	}

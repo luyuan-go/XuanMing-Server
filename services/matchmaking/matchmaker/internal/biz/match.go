@@ -2574,7 +2574,7 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 	}
 	sort.SliceStable(tickets, func(i, j int) bool { return tickets[i].AvgMmr < tickets[j].AvgMmr })
 
-	if u.cfg.EnableSoloMatch {
+	if u.cfg.WalkIn {
 		for _, t := range tickets {
 			if err := u.formSoloMatch(ctx, t); err != nil {
 				plog.With(ctx).Warnw("msg", "form_solo_match_failed", "ticket_id", t.TicketId, "err", err)
@@ -2740,7 +2740,9 @@ func (u *MatchUsecase) greedyFormMatches(
 	}
 }
 
-// formSoloMatch 是「即时开局 / walk-in」成局路径(EnableSoloMatch=true 时 matchOnce 逐票调用):
+// formSoloMatch 是「即时开局 / walk-in」成局路径(WalkIn=true 时 matchOnce 逐票调用):
+// 函数名与其 solo_match_found 日志键沿用旧称未改——日志键是可观测性契约(被 2026-07-24 事故档案
+// 时间线当证据引用),正名只落在配置键 walk_in 上,避免无谓 churn。
 // 单张队伍票据(单人或整队)直接成局、跳过撮合与确认,不与陌生人凑对手。
 // PVE 实例(matchmaker-pve.yaml,game_mode=pve_coop)的生产核心路径 =「组好队 / 单人直进副本」;
 // 非仅测试用(历史注释误导,正名建议见 docs/design/decision-dungeon-entry-modes.md)。

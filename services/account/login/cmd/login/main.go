@@ -239,7 +239,12 @@ func main() {
 		ownerReleaser := data.NewGrpcOwnerReleaser(cfg.Login.OwnerAddr)
 		defer func() { _ = ownerReleaser.Close() }()
 		loginUC.SetOwnerReleaser(ownerReleaser)
-		helper.Infow("msg", "owner_release_enabled", "owner_addr", cfg.Login.OwnerAddr)
+		// §9.23 query-first placement 叠加(migrate ①):同一 owner 客户端兼任查询器;
+		// 默认关(owner_query_first=false)时恢复路径不查 owner,行为不变。
+		loginUC.SetOwnerPlacementQuerier(ownerReleaser)
+		loginUC.SetOwnerQueryFirst(cfg.Login.OwnerQueryFirst)
+		helper.Infow("msg", "owner_release_enabled", "owner_addr", cfg.Login.OwnerAddr,
+			"owner_query_first", cfg.Login.OwnerQueryFirst)
 	}
 	loginUC.SetRequireHubAssignmentBinding(cfg.Login.RequireHubAssignmentBinding)
 	loginUC.SetMatchContextResolver(matchResolver)

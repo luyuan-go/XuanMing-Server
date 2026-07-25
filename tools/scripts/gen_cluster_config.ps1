@@ -1157,7 +1157,7 @@ $Services = @(
     @{ Name = 'mail';           Conf = 'services/social/mail/etc/mail-dev.yaml';                   Port = 50009 }
     @{ Name = 'team';           Conf = 'services/matchmaking/team/etc/team-dev.yaml';              Port = 50010 }
     @{ Name = 'matchmaker';     Conf = 'services/matchmaking/matchmaker/etc/matchmaker-dev.yaml';  Port = 50011 }
-    # PVE 直进匹配实例:同 matchmaker 二进制、不同配置(game_mode=pve_coop + enable_solo_match)。
+    # PVE 直进匹配实例:同 matchmaker 二进制、不同配置(game_mode=pve_coop + walk_in)。
     @{ Name = 'matchmaker-pve'; Conf = 'services/matchmaking/matchmaker/etc/matchmaker-pve.yaml';  Port = 50018 }
     @{ Name = 'trade';          Conf = 'services/economy/trade/etc/trade-dev.yaml';                Port = 50012 }
     @{ Name = 'dialogue';       Conf = 'services/social/dialogue/etc/dialogue-dev.yaml';           Port = 50013 }
@@ -1249,6 +1249,27 @@ function Set-ServiceClusterConfigTableDir([string]$serviceName, [string]$text) {
     }
     $location.Lines[$location.SecretIndex] = $location.Prefix + '"/app/configtable/active"' + $location.Suffix
     return ($location.Lines -join $location.Newline)
+}
+
+# -Prod 机械把 login 的 hub_allocator 地址改成 headless + dns:/// 方案(P0#5 收口,2026-07-25)。
+# hub_allocator 是单写者:同一时刻只有当选副本能写,其余副本对写请求返回可重试 UNAVAILABLE。
+# 走 ClusterIP(`hub-allocator:50021`)时 gRPC 用 passthrough 解析 + L4 长连接,会被**钉在**某一
+# 个 Pod;钉到热备副本时 AssignHub 的就地重试全落同一 Pod = 白重试(audit-residual A2)。
+# login 侧已改用 grpcclient.MustDialInsecureRoundRobin,但只有目标是 `dns:///<headless FQDN>`
+# 时 round_robin 才拿得到全部 Ready Pod IP。此前只有 login-prod.yaml.example 手写了该地址,
+# **标准生成链仍产出 ClusterIP 短名**——即生产实际配置绕过了整条修复链,故在此机械收口。
+#
+# 只在 -Prod 生效:同一份产物 docker-compose 与 k8s 共用(见文件头),headless FQDN 在
+# compose 里无法解析;-Prod 的部署目标固定是 deploy/k8s(namespace=pandora,与
+# services.yaml 的 hub-allocator-headless Service 一致)。
+function Set-ProdLoginHubHeadlessAddr([string]$text) {
+    $pattern = '(?m)^([ \t]{4})addr:[ \t]*"hub-allocator:50021"[ \t]*(?:#.*)?$'
+    $anchorCount = [regex]::Matches($text, $pattern).Count
+    if ($anchorCount -ne 1) {
+        throw "[FATAL] login 模板 hub.addr 锚点异常(count=$anchorCount;-HostAllocators 与 -Prod 不可同用),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text, $pattern,
+        '${1}addr: "dns:///hub-allocator-headless.pandora.svc.cluster.local:50021"', 1)
 }
 
 function Set-ProdPlayerExperienceOff([string]$text) {
@@ -1712,6 +1733,7 @@ try {
         if ($s.Name -eq 'auction') { $out = Set-AuctionClusterSafety $out }
         if ($Prod -and $s.Name -eq 'battle-result') { $out = Set-ProdBattleResultProgressOff $out }
         if ($Prod -and $s.Name -eq 'push') { $out = Set-ProdPushSessionGateOn $out }
+        if ($Prod -and $s.Name -eq 'login') { $out = Set-ProdLoginHubHeadlessAddr $out }
         if ($Prod -and ($UnarySessionGateServiceNames -contains $s.Name)) {
             $out = Set-ProdUnarySessionGateOn $s.Name $out
         }

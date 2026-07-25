@@ -49,6 +49,9 @@ type fakeSessionGenRepo struct {
 		FailedJTI string
 		Lease     data.SessionGenerationLease
 	}
+	// tombstoneCalls 记录每次 TombstoneSessionJTI 收到的 jti(R10 P0-1 不可证明分支)。
+	tombstoneCalls []string
+	tombstoneErr   error
 }
 
 func (f *fakeSessionGenRepo) PersistSessionJTI(_ context.Context, _ uint64, jti string) (data.SessionGenerationLease, error) {
@@ -76,7 +79,14 @@ func (f *fakeSessionGenRepo) RestoreSessionJTI(_ context.Context, _ uint64, fail
 	return true, nil
 }
 
-func (f *fakeSessionGenRepo) TombstoneSessionJTI(_ context.Context, _ uint64, _ string) (bool, error) {
+func (f *fakeSessionGenRepo) TombstoneSessionJTI(_ context.Context, _ uint64, jti string) (bool, error) {
+	f.tombstoneCalls = append(f.tombstoneCalls, jti)
+	if f.callOrder != nil {
+		*f.callOrder = append(*f.callOrder, "mysql-tombstone")
+	}
+	if f.tombstoneErr != nil {
+		return false, f.tombstoneErr
+	}
 	return true, nil
 }
 
@@ -182,25 +192,20 @@ func TestLogin_RestoreFailure_DoesNotMaskOriginalError(t *testing.T) {
 }
 
 // committedButErroredSessionRepo:Set 报网络类错误但写入**实际已提交**(Lua 已执行、
-// 应答丢失),GetJTI 读回本次写入的 jti。
+// 应答丢失);数据实际落进内嵌 fake 的 map,故 DeleteIfJTI 会真命中。
 type committedButErroredSessionRepo struct {
 	fakeSessionRepo
-	lastJTI string
 }
 
-func (f *committedButErroredSessionRepo) Set(_ context.Context, _ uint64, _, jti, _ string, _ time.Duration, _ uint64) error {
-	f.lastJTI = jti
+func (f *committedButErroredSessionRepo) Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration, gen uint64) error {
+	_ = f.fakeSessionRepo.Set(ctx, playerID, token, jti, deviceID, ttl, gen) // 已提交
 	return errcode.New(errcode.ErrUnavailable, "redis reply lost after commit")
 }
 
-func (f *committedButErroredSessionRepo) GetJTI(_ context.Context, _ uint64) (string, bool, error) {
-	return f.lastJTI, f.lastJTI != "", nil
-}
-
-// 复审 P0-3:「Redis 报错但实际已提交」时禁止回补 MySQL——否则造出 Redis=新 jti、
-// MySQL=旧 jti 的跨存储撕裂。读回收敛:Redis 已持有本次 jti → 跳过回补,登录仍失败
-// 零凭据,两存储向前收敛,下一次登录原子推进自愈。
-func TestLogin_RedisCommittedButErrored_SkipsRestore(t *testing.T) {
+// R10 复审 P0-1:「Redis 报错但实际已提交」时不得停在撕裂态(Redis=无人持有的新 jti、
+// MySQL=旧 jti)。补偿链先用按 jti 的 CAS 删精确撤销本次已提交写(证明 Redis 不再持有
+// 本次 jti),再条件回补 MySQL——两存储一致回到上一代,登录仍失败零凭据。
+func TestLogin_RedisCommittedButErrored_RollsBackThenRestores(t *testing.T) {
 	sessions := &committedButErroredSessionRepo{}
 	gen := &fakeSessionGenRepo{gen: 6}
 	uc := newGenUsecase2(t, sessions, gen)
@@ -212,8 +217,66 @@ func TestLogin_RedisCommittedButErrored_SkipsRestore(t *testing.T) {
 	if errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("login must surface the original infra failure, got: %v", err)
 	}
+	if _, found, _ := sessions.GetJTI(context.Background(), 42); found {
+		t.Fatal("the committed-but-undelivered jti must be CAS-removed from Redis")
+	}
+	if len(gen.restoreCalls) != 1 {
+		t.Fatalf("after proving Redis no longer holds the jti, MySQL must be restored once, got %d", len(gen.restoreCalls))
+	}
+	if len(gen.tombstoneCalls) != 0 {
+		t.Fatalf("provable state must not take the fail-closed tombstone branch, got %v", gen.tombstoneCalls)
+	}
+}
+
+// unprovableSessionRepo:Set 与 DeleteIfJTI 双双报错 —— Redis 是否已提交**不可证明**。
+type unprovableSessionRepo struct {
+	fakeSessionRepo
+}
+
+func (f *unprovableSessionRepo) Set(context.Context, uint64, string, string, string, time.Duration, uint64) error {
+	return errcode.New(errcode.ErrUnavailable, "redis unreachable")
+}
+
+func (f *unprovableSessionRepo) DeleteIfJTI(context.Context, uint64, string) (bool, error) {
+	return false, errcode.New(errcode.ErrUnavailable, "redis unreachable")
+}
+
+// R10 复审 P0-1 核心回归:Redis 状态不可证明时禁止猜「未提交」去回补旧 jti
+// (那会在 Redis 实际已提交的分支上造出 Redis=新 / MySQL=旧 的跨存储撕裂,§9.22)。
+// 必须走条件墓碑:任何陈旧 jti 都不再匹配,两侧一致 fail-closed。
+func TestLogin_RedisStateUnprovable_TombstonesInsteadOfRestore(t *testing.T) {
+	var order []string
+	sessions := &unprovableSessionRepo{}
+	gen := &fakeSessionGenRepo{gen: 9, callOrder: &order}
+	uc := newGenUsecase2(t, sessions, gen)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	if err == nil || res != nil {
+		t.Fatalf("infra failure must fail the login with zero credentials, err=%v res=%+v", err, res)
+	}
 	if len(gen.restoreCalls) != 0 {
-		t.Fatalf("Redis already converged to the new jti — restore must be skipped, got %d calls", len(gen.restoreCalls))
+		t.Fatalf("unprovable Redis state must never restore the previous jti, got %d restore calls", len(gen.restoreCalls))
+	}
+	if len(gen.tombstoneCalls) != 1 {
+		t.Fatalf("unprovable Redis state must tombstone exactly once, got %v", gen.tombstoneCalls)
+	}
+	if len(order) != 2 || order[0] != "mysql-gen" || order[1] != "mysql-tombstone" {
+		t.Fatalf("tombstone must follow the failed Redis write, got order=%v", order)
+	}
+}
+
+// 墓碑本身失败只影响日志:登录仍以原始基础设施错误失败,不得掩盖或改写错误。
+func TestLogin_TombstoneFailure_DoesNotMaskOriginalError(t *testing.T) {
+	sessions := &unprovableSessionRepo{}
+	gen := &fakeSessionGenRepo{gen: 4, tombstoneErr: errcode.New(errcode.ErrInternal, "mysql down too")}
+	uc := newGenUsecase2(t, sessions, gen)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	if res != nil {
+		t.Fatalf("no credentials on failure, got %+v", res)
+	}
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("login must surface the original Redis failure, got: %v", err)
 	}
 }
 

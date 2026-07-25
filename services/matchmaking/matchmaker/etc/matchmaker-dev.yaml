@@ -86,8 +86,10 @@ match:
   match_ttl: "30m"
   # team_size: 本地端到端测试使用 1v1;正式 5v5 改回 5
   team_size: 1
-  # enable_solo_match: 单客户端测试专用;两个队伍联调时保持 false,否则每个队伍都会单独开一局
-  enable_solo_match: false
+  # walk_in: 即时开局(不撮合直接开局)。PVP 实例必须 false —— 否则每张票都单独开一局,不再凑对手。
+  # PVE 实例(matchmaker-pve.yaml)才置 true;单客户端本地联调如需跳过凑人可临时开,联调完改回。
+  # (2026-07-25 由 enable_solo_match 正名;旧键仍被兼容读取,新配置一律用 walk_in)
+  walk_in: false
   # auto_confirm_match: 本地端到端测试专用;撮合后跳过确认期,直接拉 Battle DS
   auto_confirm_match: true
   # mmr_base_window: 初始 MMR 撮合窗口半宽

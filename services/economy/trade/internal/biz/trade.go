@@ -1,6 +1,6 @@
 // Package biz 是 trade 服务的业务逻辑层(2026-06-16)。
 //
-// 职责(docs/design/go-services.md §2.12):
+// 职责(docs/design/go-services.md §2.9):
 //   - 玩家间交易两阶段确认状态机
 //   - 订单存 Redis(data.TradeRepo,WATCH/MULTI/EXEC 乐观锁)
 //   - 结算走 ResourceLedger 原子扣减 + 幂等键 = order_id(不变量 §9.7)
