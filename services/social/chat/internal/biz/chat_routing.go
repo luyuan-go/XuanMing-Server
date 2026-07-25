@@ -70,6 +70,14 @@ func (u *ChatUsecase) privatePeers(senderID, targetID uint64) (PrivatePeers, boo
 func (u *ChatUsecase) logPrivateRouting(ctx context.Context, senderID, targetID uint64) {
 	peers, ok := u.privatePeers(senderID, targetID)
 	if !ok {
+		// router 已注入且双方 id 非 0 时,!ok 只可能是 cellroute.Route 解析失败(路由表缺失/
+		// 降级)——此前 err 被完全吞掉,跨 region 私聊落点观测会静默变盲,排障时无法区分
+		// 「单 Cell 本就不打」与「router 解析炸了不打」。DEBUG 级即可(观测用途)。
+		if u.router != nil && senderID != 0 && targetID != 0 {
+			plog.With(ctx).Debugw("msg", "chat_private_route_failed",
+				"sender_id", senderID, "target_id", targetID,
+				"hint", "cellroute 解析失败,跨 region 私聊落点观测降级")
+		}
 		return
 	}
 	if peers.CrossRegionPrivate() {

@@ -16,6 +16,7 @@ package killswitch
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -110,7 +111,14 @@ func (fs *fileSource) reload() {
 		return
 	}
 	fs.mgr.Replace(rules)
-	klog.Infof("[killswitch] file reloaded %s rules=%d", fs.path, len(rules))
+	// 只打条数无法回答「当前关停了哪些 op」——排障时运维得去翻文件/etcd。规则集很小,
+	// 直接列出生效的 operation 清单(零噪音、纯收益)。
+	ops := make([]string, 0, len(rules))
+	for pattern := range rules {
+		ops = append(ops, pattern)
+	}
+	sort.Strings(ops)
+	klog.Infof("[killswitch] file reloaded %s rules=%d killed_ops=%v", fs.path, len(rules), ops)
 }
 
 // parseRules 解析 yaml 成规范化规则 map(key 去前导 "/")。

@@ -323,7 +323,13 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 	}, ttl); err != nil {
 		// 入队失败(满员/解散/冲突),回滚 claim 释放玩家。CAS:仅当索引仍指向本队才删,
 		// 防误删并发路径刚写入的新归属。
-		_ = u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID)
+		// 回滚删除失败会留下"claim 指向一支没真进的队"的残留索引,把玩家锁在无法重新组队的
+		// 状态(靠 claimPlayerHealingOrphan 下次自愈)。LeaveTeam / Kick 的同类清理失败都有
+		// Warn,唯独此回滚路径原先静默 → 补齐(不变量 §1 残留索引可观测)。
+		if derr := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); derr != nil {
+			plog.With(ctx).Warnw("msg", "team_accept_rollback_index_delete_failed",
+				"player_id", playerID, "team_id", teamID, "err", derr)
+		}
 		return nil, err
 	}
 
@@ -386,7 +392,7 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 
 	// 删 player index。CAS:仅当索引仍指向本队才删,防误删玩家并发加入新队的归属。
 	if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); err != nil {
-		plog.With(ctx).Warnw("msg", "team_leave_delete_player_index_failed", "player_id", playerID, "err", err)
+		plog.With(ctx).Warnw("msg", "team_leave_delete_player_index_failed", "player_id", playerID, "team_id", teamID, "err", err)
 	}
 
 	// 匹配联动:离队成员若正在排队/确认期 → 撤销整张票据(best-effort,不阻断离队)
@@ -444,7 +450,7 @@ func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerI
 
 	// 删 target player index。CAS:仅当索引仍指向本队才删,防误删被踢者并发加入新队的归属。
 	if err := u.repo.DeletePlayerIndexIfMatches(ctx, targetPlayerID, teamID); err != nil {
-		plog.With(ctx).Warnw("msg", "team_kick_delete_player_index_failed", "player_id", targetPlayerID, "err", err)
+		plog.With(ctx).Warnw("msg", "team_kick_delete_player_index_failed", "player_id", targetPlayerID, "team_id", teamID, "err", err)
 	}
 
 	// 匹配联动:被踢成员若正在排队/确认期 → 撤销整张票据(best-effort,不阻断踢人)
@@ -599,6 +605,10 @@ func (u *TeamUsecase) claimPlayerHealingOrphan(ctx context.Context, playerID, te
 		return err
 	}
 	if found && existTeam.State != stateDisbanded {
+		// 真冲突(玩家确在他队):排查「为什么玩家进不去队」时需要知道他当前卡在哪支队,
+		// 而 access log 只有错误码 3004。DEBUG 级即可(正常业务拒绝,量不大)。
+		plog.With(ctx).Debugw("msg", "team_claim_conflict",
+			"player_id", playerID, "existing_team_id", existTeamID, "existing_state", existTeam.State)
 		return errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", playerID, existTeamID)
 	}
 
@@ -616,7 +626,9 @@ func (u *TeamUsecase) claimPlayerHealingOrphan(ctx context.Context, playerID, te
 		return err
 	}
 	if !claimed {
-		// 清理与重试之间有人抢先真建队 → 诚实报冲突。
+		// 清理与重试之间有人抢先真建队 → 诚实报冲突(自愈后仍撞上,属并发竞争)。
+		plog.With(ctx).Debugw("msg", "team_claim_conflict_after_heal",
+			"player_id", playerID, "existing_team_id", retryTeamID)
 		return errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", playerID, retryTeamID)
 	}
 	return nil

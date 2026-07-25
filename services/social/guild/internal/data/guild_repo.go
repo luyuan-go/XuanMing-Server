@@ -24,6 +24,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 )
 
 // 公会职位(与 proto GuildRole 数值一致)。
@@ -823,9 +824,22 @@ func (r *MySQLGuildRepo) tx(ctx context.Context, fn func(tx *sql.Tx) error) erro
 	for attempt := 0; attempt <= txMaxRetries; attempt++ {
 		lastErr = r.txOnce(ctx, fn)
 		if lastErr == nil || !isRetryableTxErr(lastErr) || ctx.Err() != nil {
+			if attempt > 0 && lastErr == nil {
+				// 重试后成功:说明确实发生过死锁/锁等待超时并自愈。
+				plog.With(ctx).Debugw("msg", "guild_tx_retry_succeeded", "attempts", attempt+1)
+			}
 			return lastErr
 		}
+		// 本包把 guilds 父行作为所有公会写的唯一串行化闸门,高并发下父行竞争会触发
+		// 1213 死锁 / 1205 锁等待超时并静默重放。此前整个重试链零日志:父行热点导致的
+		// 死锁风暴、重试放大延迟完全查不到(且耗尽后的 ErrInternal 经 in-band 码返回
+		// 也不会被 access log 记 ERROR)。
+		plog.With(ctx).Warnw("msg", "guild_tx_retryable_conflict",
+			"attempt", attempt+1, "max_retries", txMaxRetries, "err", lastErr)
 	}
+	// 重试耗尽:父行竞争持续存在,调用方将拿到 ErrInternal。
+	plog.With(ctx).Warnw("msg", "guild_tx_retries_exhausted",
+		"attempts", txMaxRetries+1, "err", lastErr)
 	return lastErr
 }
 

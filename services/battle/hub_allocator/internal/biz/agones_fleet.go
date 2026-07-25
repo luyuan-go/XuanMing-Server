@@ -806,7 +806,7 @@ func (a *AgonesHubFleetProvider) ensureDSToken(ctx context.Context, gs *gameServ
 				plog.With(ctx).Warnw("msg", "hub_ds_token_conflict_reget_failed", "pod", cur.Metadata.Name, "err", gerr)
 				return 0, 0, gerr
 			}
-			plog.With(ctx).Infow("msg", "hub_ds_token_patch_conflict_retry", "pod", cur.Metadata.Name, "attempt", attempt+1)
+			plog.With(ctx).Debugw("msg", "hub_ds_token_patch_conflict_retry", "pod", cur.Metadata.Name, "attempt", attempt+1)
 			cur = refreshed
 			continue
 		}

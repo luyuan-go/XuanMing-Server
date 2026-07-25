@@ -144,8 +144,13 @@ func runTransitionLogSweep(ctx context.Context, uc *biz.OwnerUsecase, helper *kl
 			return
 		case <-ticker.C:
 			sweepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			if _, err := uc.RunTransitionLogSweep(sweepCtx, batch); err != nil {
+			if n, err := uc.RunTransitionLogSweep(sweepCtx, batch); err != nil {
 				helper.Errorw("msg", "owner_transition_log_sweep_failed", "err", err)
+			} else if n > 0 {
+				// §9.24 要求 sweep 有界清理可观测:删除行数此前被丢弃,只有失败可见,
+				// 成功清理完全无痕——无法确认 owner_transition_log 真在排空、批量是否打满
+				// (打满 = 积压,需调大 batch/interval)。
+				helper.Infow("msg", "owner_transition_log_swept", "deleted_rows", n, "batch", batch)
 			}
 			cancel()
 		}

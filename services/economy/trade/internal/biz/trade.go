@@ -231,6 +231,10 @@ func (u *TradeUsecase) pruneDeadOrderSlots(ctx context.Context, playerID uint64)
 	for _, id := range ids {
 		o, ok, gerr := u.repo.GetOrder(ctx, id)
 		if gerr != nil {
+			// fail-closed 正确,但 redis 抖动时清理会静默退化为 no-op:玩家可能持续撞
+			// ERR_TRADE_ORDER_LIMIT 而无任何线索指向「清理被读失败挡住」→ DEBUG 留证。
+			plog.With(ctx).Debugw("msg", "trade_prune_order_read_failed",
+				"player_id", playerID, "order_id", id, "err", gerr)
 			continue // 单条读失败不阻断扫描(fail-closed:查不到状态不清理)
 		}
 		if ok && o.GetState() == tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED {

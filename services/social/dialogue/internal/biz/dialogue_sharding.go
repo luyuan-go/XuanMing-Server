@@ -63,6 +63,13 @@ func (u *DialogueUsecase) sessionOwner(playerID uint64) (SessionLocation, bool) 
 func (u *DialogueUsecase) logSessionPlacement(ctx context.Context, dialogueID, playerID uint64) {
 	loc, ok := u.sessionOwner(playerID)
 	if !ok {
+		// router 已注入且 player_id 非 0 时,!ok 只可能是 cellroute.Route 解析失败(路由表
+		// 缺 player→region/cell 映射):此前静默吞错,分片部署下落点校验变盲还查不到原因。
+		if u.router != nil && playerID != 0 {
+			plog.With(ctx).Debugw("msg", "dialogue_session_route_failed",
+				"dialogue_id", dialogueID, "player_id", playerID,
+				"hint", "cellroute 解析失败,会话落点观测降级")
+		}
 		return
 	}
 	plog.With(ctx).Debugw("msg", "dialogue_session_placement",
