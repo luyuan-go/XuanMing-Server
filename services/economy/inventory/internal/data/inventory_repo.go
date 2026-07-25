@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 )
 
 // ItemStack 是背包里某配置道具的持有堆叠。
@@ -292,6 +293,9 @@ func claimLedger(ctx context.Context, tx *sql.Tx, playerID uint64, idempotencyKe
 			return false, 0, 0, errcode.New(errcode.ErrInternal, "read ledger player=%d key=%s: %v", playerID, idempotencyKey, qerr)
 		}
 		if storedFP != fingerprint {
+			// 同键不同请求内容:发放/扣减/结算的完整性冲突(防 key 复用串改账),fail-closed 留证。
+			plog.With(ctx).Warnw("msg", "inventory_idempotency_conflict",
+				"player_id", playerID, "idempotency_key", idempotencyKey, "op", "ledger")
 			return false, 0, 0, errcode.New(errcode.ErrInventoryIdempotencyConflict,
 				"idempotency_key reused for different request player=%d key=%s", playerID, idempotencyKey)
 		}

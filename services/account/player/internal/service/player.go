@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
@@ -38,12 +39,24 @@ import (
 func selfPlayerID(ctx context.Context, reqPlayerID uint64) (uint64, commonv1.ErrCode) {
 	callerID := pmw.PlayerIDFromContext(ctx)
 	if callerID == 0 {
+		logAuthzDeny(ctx, "self_write_unauthenticated", callerID, reqPlayerID)
 		return 0, commonv1.ErrCode_ERR_UNAUTHORIZED
 	}
 	if reqPlayerID != 0 && reqPlayerID != callerID {
+		logAuthzDeny(ctx, "self_write_player_id_mismatch", callerID, reqPlayerID)
 		return 0, commonv1.ErrCode_ERR_PERMISSION_DENY
 	}
 	return callerID, commonv1.ErrCode_OK
+}
+
+// logAuthzDeny 记录鉴权拒绝(IDOR 尝试 / 越权调系统 RPC / 未鉴权直连写口)。
+//
+// 这些是安全 fail-closed 分支,却以 response Code + nil transport error 返回 → 统一
+// access log 记 rpc_ok(DEBUG),线上对「伪造 player_id 改他人存档」「带玩家 JWT 调系统
+// RPC」的尝试零可见性。本文件大段注释都在防 IDOR,拒绝事件必须可审计。
+func logAuthzDeny(ctx context.Context, reason string, callerID, reqPlayerID uint64) {
+	plog.With(ctx).Warnw("msg", "player_authz_denied",
+		"reason", reason, "caller_id", callerID, "req_player_id", reqPlayerID)
 }
 
 // resolvePlayerID 读接口双模取权威 player_id:
@@ -61,6 +74,8 @@ func resolvePlayerID(ctx context.Context, reqPlayerID uint64) (uint64, commonv1.
 		return reqPlayerID, commonv1.ErrCode_OK
 	}
 	if reqPlayerID != 0 && reqPlayerID != callerID {
+		// 客户端试图读他人存档(IDOR 探测)。
+		logAuthzDeny(ctx, "read_other_player_denied", callerID, reqPlayerID)
 		return 0, commonv1.ErrCode_ERR_PERMISSION_DENY
 	}
 	return callerID, commonv1.ErrCode_OK
@@ -68,7 +83,9 @@ func resolvePlayerID(ctx context.Context, reqPlayerID uint64) (uint64, commonv1.
 
 // systemOnly 系统接口鉴权:经 Envoy 的客户端(callerID>0)一律拒,合法调用者是后端内部直连。
 func systemOnly(ctx context.Context) commonv1.ErrCode {
-	if pmw.PlayerIDFromContext(ctx) != 0 {
+	if callerID := pmw.PlayerIDFromContext(ctx); callerID != 0 {
+		// 带玩家 JWT 调系统 RPC(UpdateMMR / Grant* / UnlockHero / AddExperience 等)= 越权尝试。
+		logAuthzDeny(ctx, "system_rpc_by_client", callerID, 0)
 		return commonv1.ErrCode_ERR_PERMISSION_DENY
 	}
 	return commonv1.ErrCode_OK

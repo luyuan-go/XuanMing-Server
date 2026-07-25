@@ -305,7 +305,7 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 	// DS 上报的 dropped_item_config_ids 按 drop 白名单过滤(DS 不可信),与落库同事务提交。
 	var dropOutbox []data.DropOutboxRecord
 	if !abandoned {
-		dropOutbox = u.buildDropOutbox(result)
+		dropOutbox = u.buildDropOutbox(ctx, result)
 	}
 
 	already, settleInfo, err := u.repo.SaveResult(ctx, result, outbox, dropOutbox, terminalRelease, finalProgressSeq)
@@ -501,7 +501,9 @@ func (u *BattleResultUsecase) buildOutbox(result *battlev1.BattleResult, abandon
 // 每玩家最多保留 cfg.MaxDropsPerPlayer() 条(超限截断记 Warn):防异常/恶意 DS 重复上报
 // 海量白名单 ID 撑爆 battle_drop_outbox.item_config_ids VARCHAR(512) 导致整场结算回滚。
 // 无任何白名单内掉落的玩家不产出出箱行。
-func (u *BattleResultUsecase) buildDropOutbox(result *battlev1.BattleResult) []data.DropOutboxRecord {
+// ctx 必须是**请求 ctx**(不是 context.Background):本函数的两条告警是「异常/恶意 DS 上报」
+// 信号,必须能按 trace_id 关联回具体 ReportResult 调用链(不变量 §9.8 所有写都要带 trace_id)。
+func (u *BattleResultUsecase) buildDropOutbox(ctx context.Context, result *battlev1.BattleResult) []data.DropOutboxRecord {
 	maxDrops := u.cfg.MaxDropsPerPlayer()
 	recs := make([]data.DropOutboxRecord, 0, len(result.GetStats()))
 	for _, s := range result.GetStats() {
@@ -526,13 +528,13 @@ func (u *BattleResultUsecase) buildDropOutbox(result *battlev1.BattleResult) []d
 		}
 		if truncated {
 			// 超过每玩家上限 → 截断丢弃并 Warn(大概率是异常/恶意 DS,不能让它打失败整场结算)。
-			plog.With(context.Background()).Warnw("msg", "battle_drop_truncated",
+			plog.With(ctx).Warnw("msg", "battle_drop_truncated",
 				"match_id", result.GetMatchId(), "player_id", s.GetPlayerId(),
 				"reported", len(reported), "kept", len(allowed), "max", maxDrops)
 		}
 		if len(allowed) == 0 {
 			// DS 上报了掉落但全不在白名单 → 记一条 Warn(可能是配置漏项或 DS 越权尝试)。
-			plog.With(context.Background()).Warnw("msg", "battle_drop_all_filtered",
+			plog.With(ctx).Warnw("msg", "battle_drop_all_filtered",
 				"match_id", result.GetMatchId(), "player_id", s.GetPlayerId(), "reported", len(reported))
 			continue
 		}

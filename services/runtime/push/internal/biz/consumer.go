@@ -88,6 +88,7 @@ type KafkaConsumer struct {
 	wakeFailLog     plog.Window
 	bufferFailLog   plog.Window
 	bcastDroppedLog plog.Window
+	routeUnknownLog plog.Window
 }
 
 // degradeLogWindowMs 是依赖降级日志的最小重打间隔(毫秒)。
@@ -253,6 +254,19 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 			"owner_region", owner.RegionID, "owner_cell", owner.CellID)
 		return kafkax.Poison(fmt.Errorf("player %d owned by region=%d cell=%d, not self region=%d cell=%d",
 			playerID, owner.RegionID, owner.CellID, k.selfRegion, k.selfCell))
+	} else if !known && k.router != nil && playerID != 0 {
+		// known=false 在此**只可能**是 router.Route 失败(router 已注入且 player_id 非 0)——
+		// 归属 UNKNOWN 却 fail-open 落到本 cell 的投递缓冲:若本实例不是真 owner,连接不在本
+		// cell = 静默误投并最终丢失。与相邻的 not_owned 毒丸分支(有日志 + DLQ 留证)形成盲区,
+		// 故显式 WARN。行为未改(仍 fail-open 不阻断交付);是否改 fail-closed 毒丸需按
+		// §9.22 单独拍板,不在日志审计范围内。
+		if adm, streak := k.routeUnknownLog.Admit(time.Now().UnixMilli(), degradeLogWindowMs); adm {
+			h.Warnw("msg", "push_player_owner_unknown_fail_open",
+				"player_id", playerID, "topic", msg.Topic,
+				"partition", msg.Partition, "offset", msg.Offset,
+				"self_region", k.selfRegion, "self_cell", k.selfCell, "streak", streak,
+				"hint", "cellroute 路由表抖动/缺失 → 归属未知仍投本 cell,多 Cell 下可能误投")
+		}
 	}
 
 	// 3. 构 PushFrame(payload 直接是业务 Event proto bytes;ts_ms 初值为 kafka 消息

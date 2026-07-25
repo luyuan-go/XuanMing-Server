@@ -23,6 +23,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/rewardclaim"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 )
@@ -116,6 +117,10 @@ func (u *PlayerUsecase) ClaimReward(ctx context.Context, playerID uint64, source
 		}
 		return nil
 	}
+	// 乐观锁重试耗尽(§16 CAS/写竞争耗尽盲点):热点玩家并发领取同一档。经 in-band 码返回
+	// 会被 access log 记成 rpc_ok,竞争风暴无法与偶发冲突区分 → WARN 留证。
+	plog.With(ctx).Warnw("msg", "reward_claim_version_conflicts_exhausted",
+		"player_id", playerID, "reward_id", rewardID, "attempts", maxRewardClaimRetry, "last_err", lastErr)
 	return errcode.New(errcode.ErrPlayerVersionMismatch, "claim reward player=%d id=%d: too many version conflicts: %v", playerID, rewardID, lastErr)
 }
 

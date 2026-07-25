@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 )
 
 // ItemAttribute 是装备实例鉴定后的一条随机属性。
@@ -196,6 +197,9 @@ func (r *MySQLInventoryRepo) GrantInstances(ctx context.Context, playerID uint64
 			return nil, false, errcode.New(errcode.ErrInternal, "read ledger player=%d key=%s: %v", playerID, idempotencyKey, qerr)
 		}
 		if storedFP != fp {
+			// 同键不同请求内容(实例资产发放侧):同 ledger 路径,fail-closed 并留证。
+			plog.With(ctx).Warnw("msg", "inventory_idempotency_conflict",
+				"player_id", playerID, "idempotency_key", idempotencyKey, "op", "instance")
 			return nil, false, errcode.New(errcode.ErrInventoryIdempotencyConflict,
 				"idempotency_key reused for different request player=%d key=%s", playerID, idempotencyKey)
 		}

@@ -372,6 +372,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 					playerID, entry.GetIdempotencyKey(), ferr)
 			}
 			if storedFP != fp {
+				// 同一幂等键被用于不同内容:客户端 bug / 重放攻击 / key 冲突。fail-closed 拒绝,
+				// 但必须留证——这是完整性信号,能发现异常写入方(业务码不被 access log 当故障)。
+				plog.With(ctx).Warnw("msg", "bag_idempotency_conflict",
+					"player_id", playerID, "idempotency_key", entry.GetIdempotencyKey())
 				return 0, errcode.New(errcode.ErrBagIdempotencyConflict,
 					"idempotency_key reused for different content player=%d key=%s", playerID, entry.GetIdempotencyKey())
 			}

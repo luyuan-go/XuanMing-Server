@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	bagv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/bag/v1"
 	mailv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/mail/v1"
 
@@ -230,6 +231,12 @@ func (u *MailUsecase) ClaimMail(ctx context.Context, playerID, mailID uint64, no
 	// 不发放任何附件、不记 claim,禁止静默跳过(否则新形态附件被吞)。
 	stackAtts, instAtts, xferAtts, unknown := partitionAttachments(rec.GetAttachments())
 	if unknown > 0 {
+		// 滚动版本偏斜的 fail-closed 分支(§9.21):新版本写入了旧 reader 不认识的附件形态,
+		// 整封拒发保持未领。这是**必须被运维发现**的信号(说明有旧副本在读新数据),
+		// 但只返回业务码时 access log 只有泛化失败,定位不到是哪封 / 几个未知形态。
+		plog.With(ctx).Warnw("msg", "mail_claim_unknown_attachment",
+			"player_id", playerID, "mail_id", mailID, "unknown", unknown,
+			"hint", "疑似滚动升级版本偏斜:旧副本读到新增附件形态,整封 fail-closed 保持未领")
 		return nil, errcode.New(errcode.ErrMailAttachmentUnsupported,
 			"mail %d has %d unrecognized attachment kind(s)", mailID, unknown)
 	}
@@ -272,7 +279,12 @@ func (u *MailUsecase) ClaimMail(ctx context.Context, playerID, mailID uint64, no
 		return nil, err
 	}
 	// 个人邮件置 claimed(系统/公会靠 player_mail_claim 表)
-	_ = u.repo.SetPersonalStatus(ctx, playerID, mailID, data.StatusClaimed)
+	if serr := u.repo.SetPersonalStatus(ctx, playerID, mailID, data.StatusClaimed); serr != nil {
+		// 权威是 claim 表,列表侧幂等纠正;但持续失败会让 player_mail.status 与权威长期漂移
+		// (客户端显示未领实际已领),零可观测无法排查 → DEBUG 留证。
+		plog.With(ctx).Debugw("msg", "mail_set_personal_status_failed",
+			"player_id", playerID, "mail_id", mailID, "target_status", "claimed", "err", serr)
+	}
 	return rec.GetAttachments(), nil
 }
 
@@ -410,6 +422,8 @@ func (u *MailUsecase) MarkMailClaimed(ctx context.Context, playerID, mailID uint
 		return nil
 	}
 	if !intentOpen {
+		// DS 三段式领取的时序违规:journal/GetClaimable 之前就调了 Mark(调用方 bug 或迟到/乱序回调)。
+		plog.With(ctx).Warnw("msg", "mail_mark_without_intent", "player_id", playerID, "mail_id", mailID)
 		return errcode.New(errcode.ErrInvalidArg, "mail %d has no claim intent to mark", mailID)
 	}
 	blob, found, err := u.repo.GetClaimIntent(ctx, playerID, mailID)
@@ -436,7 +450,12 @@ func (u *MailUsecase) MarkMailClaimed(ctx context.Context, playerID, mailID uint
 		return merr
 	}
 	// 个人邮件置 claimed 状态(系统/公会靠 claim 行;失败不影响终态,列表侧幂等纠正)。
-	_ = u.repo.SetPersonalStatus(ctx, playerID, mailID, data.StatusClaimed)
+	if serr := u.repo.SetPersonalStatus(ctx, playerID, mailID, data.StatusClaimed); serr != nil {
+		// 权威是 claim 表,列表侧幂等纠正;但持续失败会让 player_mail.status 与权威长期漂移
+		// (客户端显示未领实际已领),零可观测无法排查 → DEBUG 留证。
+		plog.With(ctx).Debugw("msg", "mail_set_personal_status_failed",
+			"player_id", playerID, "mail_id", mailID, "target_status", "claimed", "err", serr)
+	}
 	return nil
 }
 

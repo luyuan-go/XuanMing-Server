@@ -164,7 +164,7 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 		rec.MatchID = 0
 		rec.BattlePod = ""
 	}
-	if err := u.repo.SetGuarded(ctx, in.PlayerID, rec, u.ttl, optimisticRetry, guardTransition(in)); err != nil {
+	if err := u.repo.SetGuarded(ctx, in.PlayerID, rec, u.ttl, optimisticRetry, guardTransition(ctx, in)); err != nil {
 		return err
 	}
 	// presence fan-out(§13.4):写成功后通知 hub,内部转粗粒度 + 去抖 + 合并 + 只推订阅者。
@@ -215,7 +215,18 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 //     战斗里顶出去,导致 matchmaker 误判空闲、一人两处。
 //
 // 核心心法:旧状态越"重要"(BATTLE 最重),门卫越挑剔,只放跟这局有关的写进来。
-func guardTransition(in LocationInput) func(cur data.LocationRecord, found bool) error {
+func guardTransition(ctx context.Context, in LocationInput) func(cur data.LocationRecord, found bool) error {
+	// reject 统一记 WARN:这些拒绝正是不变量 §1(一人一处可操作 DS)的 fencing 事件
+	// ——stale hub DS 顶掉 MATCHING、旧 DS 迟到心跳跨 match、裸登录顶掉 active BATTLE。
+	// service handler 把 ErrLocatorConflict 转成 in-band Code 后返回 nil error,access log
+	// 只会记 rpc_ok(DEBUG),故必须在拒绝点显式留证,否则线上出「玩家被莫名踢出战斗 /
+	// 顶号」类问题时无日志可查(本服务最大盲点)。
+	reject := func(reason string, cur data.LocationRecord) {
+		plog.With(ctx).Warnw("msg", "locator_guard_rejected",
+			"reason", reason, "player_id", in.PlayerID,
+			"cur_state", cur.State, "cur_match_id", cur.MatchID,
+			"new_state", in.State, "fence_match_id", in.MatchID, "hub_pod", in.HubPod)
+	}
 	return func(cur data.LocationRecord, found bool) error {
 		if !found {
 			return nil
@@ -224,6 +235,7 @@ func guardTransition(in LocationInput) func(cur data.LocationRecord, found bool)
 		case LocationStateMatching:
 			// 撮合确认期只拦可能 stale 的 hub DS 上报。
 			if in.State == LocationStateHub {
+				reject("stale_hub_during_matching", cur)
 				return errcode.New(errcode.ErrLocatorConflict,
 					"player %d in MATCHING(match_id=%d), reject stale HUB report pod=%s",
 					in.PlayerID, cur.MatchID, in.HubPod)
@@ -234,6 +246,7 @@ func guardTransition(in LocationInput) func(cur data.LocationRecord, found bool)
 				// 同局心跳续期放行;不同 match_id = 旧 DS / 旧 allocator 的迟到心跳,
 				// 拒之以免把当前对局位置覆盖成旧对局(指向已死旧 DS,破 §1)。
 				if in.MatchID != cur.MatchID {
+					reject("battle_write_different_match", cur)
 					return errcode.New(errcode.ErrLocatorConflict,
 						"player %d in BATTLE(match_id=%d), reject BATTLE write for different match_id=%d",
 						in.PlayerID, cur.MatchID, in.MatchID)
@@ -243,12 +256,14 @@ func guardTransition(in LocationInput) func(cur data.LocationRecord, found bool)
 			case LocationStateHub:
 				// hub 回流必须带当前战斗的 match_id 令牌。
 				if in.MatchID == 0 || in.MatchID != cur.MatchID {
+					reject("stale_hub_during_battle", cur)
 					return errcode.New(errcode.ErrLocatorConflict,
 						"player %d in BATTLE(match_id=%d), reject stale HUB report pod=%s fence_match_id=%d",
 						in.PlayerID, cur.MatchID, in.HubPod, in.MatchID)
 				}
 			default:
 				// LOGIN_PENDING 等裸写无对局上下文,不得顶掉 active BATTLE。
+				reject("bare_write_evicts_active_battle", cur)
 				return errcode.New(errcode.ErrLocatorConflict,
 					"player %d in BATTLE(match_id=%d), reject non-battle write state=%d (bare login/reconnect cannot evict active battle)",
 					in.PlayerID, cur.MatchID, in.State)
