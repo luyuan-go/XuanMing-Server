@@ -582,9 +582,17 @@ func main() {
 		//
 		// 进程看不到 spec.strategy,故由 Deployment 把策略作为 annotation 注入 env
 		// (deploy/k8s/services/services.yaml + main_test.go 的清单契约测试钉住 annotation
-		// 与真实 strategy 一致)。读不到 env 时不猜:按未知处理,只告警不阻断(dev/本机
-		// 裸跑没有该 env,阻断会把开发环境一起打死)。
-		if strategy := strings.TrimSpace(os.Getenv("PANDORA_DEPLOY_STRATEGY")); strategy != "" {
+		// 与真实 strategy 一致)。
+		//
+		// R11 二轮复审收口:env 缺失时**不能一律只告警**。那让"机械门禁"变成有条件的——
+		// 只要清单漏注入(或有人手工 kubectl run),危险组合就照样放行,而这正是最可能出错的
+		// 场景。判据改成"能不能确认自己跑在受管 k8s 里":k8s 恒注入 KUBERNETES_SERVICE_HOST,
+		// 本机裸跑/dev 一定没有。
+		//   · 受管 k8s 内 + env 缺失 → **fail-closed 退出**(清单回归必须炸,不能靠人看日志);
+		//   · 非 k8s(本机裸跑)+ env 缺失 → 只告警(阻断会把开发环境一起打死)。
+		strategy := strings.TrimSpace(os.Getenv("PANDORA_DEPLOY_STRATEGY"))
+		inManagedK8s := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_HOST")) != ""
+		if strategy != "" {
 			switch {
 			case !strings.EqualFold(strategy, "RollingUpdate"):
 				helper.Infow("msg", "hub_writer_lease_strategy_checked",
@@ -599,10 +607,17 @@ func main() {
 				helper.Infow("msg", "hub_writer_lease_strategy_checked",
 					"strategy", strategy, "mode", writerMode)
 			}
+		} else if inManagedK8s {
+			helper.Errorw("msg", "hub_writer_lease_strategy_annotation_missing",
+				"mode", writerMode,
+				"hint", "受管 k8s 内必须注入 PANDORA_DEPLOY_STRATEGY(取自 Deployment 的 "+
+					"pandora.dev/deploy-strategy annotation);缺失则无法机械校验 RollingUpdate×非 enforce "+
+					"的无保护双写组合,fail-closed 退出。见 deploy/k8s/services/services.yaml")
+			os.Exit(1)
 		} else {
 			helper.Warnw("msg", "hub_writer_lease_strategy_unknown",
 				"mode", writerMode,
-				"hint", "PANDORA_DEPLOY_STRATEGY 未注入(本机裸跑/旧清单):无法机械校验 RollingUpdate×非 enforce 组合")
+				"hint", "非 k8s 环境(本机裸跑/dev):跳过部署策略机械校验")
 		}
 		if writerMode == conf.WriterLeaseOff {
 			helper.Warnw("msg", "hub_writer_lease_disabled",

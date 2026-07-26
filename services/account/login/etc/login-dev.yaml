@@ -60,6 +60,16 @@ login:
   # owner 迁移登出释放(owner-authority.md migrate ⑤):登出成功后弱 Query+Release。
   # dev 一键启动已含 owner 服务(:50017);弱依赖,owner 掉线仅告警不影响登出。
   owner_addr: "127.0.0.1:50017"
+  # §9.23 query-first(R11 复审 架构 P0):owner 作为恢复路由的**第一权威**。
+  #   false(默认)= 旧的 locator-first 路由,行为与历史一致;
+  #   true       = 先查 owner:有归属记录即由它定 Route 与 exact target,locator/matchmaker
+  #                降为富化;owner 不可判定返回 WAIT/UNKNOWN + retry_after,**绝不回落**
+  #                locator 路由(presence key miss 不能证明玩家已离开旧 DS)。
+  # 打开前提(顺序硬约束):① owner 服务在线且 owner_addr 已配;② 客户端已升级到能解码
+  # entry_state/wait_reason/owner_epoch/retry_after_ms 的版本(旧客户端读不到会退化成
+  # 只看 route,WAIT 会被当成 UNKNOWN 而停在重查,不会误进场但体验差);③ 对 owner 做过
+  # 分区注入,确认 WAIT 不回落且客户端能按 retry_after 自动恢复。
+  owner_query_first: false
   mock_hub_ds_addr: "127.0.0.1:7777"
   # Hub 归属绑定激活栅栏。滚动升级期间保持 false；确认所有 hub_allocator 已能签发
   # 完整绑定票后再切 true。true 时 Redis/hub.addr 缺失会令 login 启动失败，且禁止自签回退。

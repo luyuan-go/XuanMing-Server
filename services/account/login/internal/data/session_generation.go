@@ -21,8 +21,36 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/go-sql-driver/mysql"
+
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
+
+// MySQL 事务并发错误码:1213 死锁、1205 锁等待超时。二者发生时 InnoDB 已回滚本事务,
+// 整段事务重放是安全且标准的做法(与 services/social/guild 的 isRetryableTxErr 同口径)。
+const (
+	mysqlErrLockWaitTimeout = 1205
+	mysqlErrDeadlock        = 1213
+)
+
+// persistMaxAttempts 是 PersistSessionJTI 遇并发错误时的有界重试次数。
+//
+// 为什么需要它(R11 复审 P0-1,真 MySQL 实测发现):`SELECT ... FOR UPDATE` 命中**不存在的
+// 行**时 InnoDB 加的是 gap/next-key 锁;多个首登事务先各自拿到同一主键的 gap 锁,再各自要
+// INSERT 的 insert intention 锁 → 互等 → 1213 死锁。这是"先 FOR UPDATE 再 INSERT"的经典
+// 死锁模式,只在**真并发首登**下出现(同玩家多设备同时首登、或客户端重试),fake 测不出来。
+//
+// 3 次足够:死锁的一方必然被 InnoDB 选中回滚,重放时对手已提交、行已存在,
+// FOR UPDATE 退化为普通行锁,不再有 gap 锁竞争。
+const persistMaxAttempts = 3
+
+// isRetryableTxErr 判断是否为可重试的事务并发错误。依赖调用方用 errcode.NewCause 保留
+// 底层 *mysql.MySQLError,errors.As 才能沿 Unwrap 链检出。
+func isRetryableTxErr(err error) bool {
+	var me *mysql.MySQLError
+	return errors.As(err, &me) &&
+		(me.Number == mysqlErrDeadlock || me.Number == mysqlErrLockWaitTimeout)
+}
 
 // ErrCommitAmbiguous 标记「COMMIT 结果不确定」:MySQL 可能已经提交,但 Commit() 因连接
 // 中断 / 代理断链 / deadline 返回错误(R11 复审 P0-1 问题 A)。这是唯一必须与「确定没提交」
@@ -99,10 +127,46 @@ func NewMySQLSessionGenerationRepo(db *sql.DB) *MySQLSessionGenerationRepo {
 // 并发登录在此串行化。旧值快照供 Redis 写失败时条件回补(RestoreSessionJTI)。
 // 首登竞态(两事务都看到无行)下输家的快照可能缺失刚提交的对手行——该窗口极窄且
 // 回补是条件 CAS,最坏退化为删行(= SetRole 缺行兼容路径),下一次成功登录自愈。
+// R11 复审 P0-1(真 MySQL 实测):并发首登会因"先 FOR UPDATE 再 INSERT"的 gap 锁竞争
+// 触发 1213 死锁,故整段事务外套有界重试(见 persistMaxAttempts)。重试耗尽后返回
+// **ErrUnavailable**(可重试语义)而不是 ErrInternal —— 客户端与 UE 侧的
+// IsRetryableLoginFailure 只对可重试语义做自动退避恢复;报成 ErrInternal 会让玩家
+// 卡在登录页(违反不卡玩家)。
 func (r *MySQLSessionGenerationRepo) PersistSessionJTI(ctx context.Context, playerID uint64, jti string) (SessionGenerationLease, error) {
+	var lastErr error
+	for attempt := 0; attempt < persistMaxAttempts; attempt++ {
+		lease, err := r.persistSessionJTIOnce(ctx, playerID, jti)
+		if err == nil {
+			return lease, nil
+		}
+		// COMMIT 结果不确定必须原样上抛:它不是"事务已回滚"的并发错误,
+		// 重放会造成第二次代际推进(把不确定变成确定的多推一代)。
+		if IsCommitAmbiguous(err) || !isRetryableTxErr(err) {
+			return lease, err
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return SessionGenerationLease{}, errcode.NewCause(errcode.ErrUnavailable, lastErr,
+		"session generation contended (deadlock/lock timeout) after %d attempts; retry login",
+		persistMaxAttempts)
+}
+
+// persistSessionJTIOnce 执行一次事务:「SELECT ... FOR UPDATE 快照旧值 → upsert(generation+1) →
+// 读回本行代际 → COMMIT」。行 X 锁持有到 COMMIT,同事务读回的必然是本次分配的代际,
+// 并发登录在此串行化。旧值快照供 Redis 写失败时条件回补(RestoreSessionJTI)。
+// 首登竞态(两事务都看到无行)下输家的快照可能缺失刚提交的对手行——该窗口极窄且
+// 回补是条件 CAS,最坏退化为删行(= SetRole 缺行兼容路径),下一次成功登录自愈。
+//
+// 所有加锁/写库语句都用 errcode.NewCause 保留底层 *mysql.MySQLError,
+// 否则外层 isRetryableTxErr 沿 Unwrap 链检不出 1213/1205。
+func (r *MySQLSessionGenerationRepo) persistSessionJTIOnce(ctx context.Context, playerID uint64, jti string) (SessionGenerationLease, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return SessionGenerationLease{}, errcode.New(errcode.ErrInternal, "begin session generation tx: %v", err)
+		return SessionGenerationLease{}, errcode.NewCause(errcode.ErrInternal, err,
+			"begin session generation tx: %v", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	lease := SessionGenerationLease{}
@@ -114,17 +178,20 @@ func (r *MySQLSessionGenerationRepo) PersistSessionJTI(ctx context.Context, play
 	case sql.ErrNoRows:
 		// 首登:无旧行可快照。
 	default:
-		return SessionGenerationLease{}, errcode.New(errcode.ErrInternal, "mysql snapshot session jti: %v", err)
+		return SessionGenerationLease{}, errcode.NewCause(errcode.ErrInternal, err,
+			"mysql snapshot session jti: %v", err)
 	}
 	const upsert = `INSERT INTO player_session_generations(player_id, sess_jti, generation) VALUES (?, ?, 1)
 ON DUPLICATE KEY UPDATE generation = generation + 1, sess_jti = VALUES(sess_jti)`
 	if _, err := tx.ExecContext(ctx, upsert, playerID, jti); err != nil {
-		return SessionGenerationLease{}, errcode.New(errcode.ErrInternal, "mysql persist session jti: %v", err)
+		return SessionGenerationLease{}, errcode.NewCause(errcode.ErrInternal, err,
+			"mysql persist session jti: %v", err)
 	}
 	if err := tx.QueryRowContext(ctx,
 		`SELECT generation FROM player_session_generations WHERE player_id = ?`,
 		playerID).Scan(&lease.Generation); err != nil {
-		return SessionGenerationLease{}, errcode.New(errcode.ErrInternal, "mysql read session generation: %v", err)
+		return SessionGenerationLease{}, errcode.NewCause(errcode.ErrInternal, err,
+			"mysql read session generation: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		// R11 复审 P0-1 问题 A:COMMIT 可能**已经生效**而只是回包丢了。不猜、不当成

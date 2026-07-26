@@ -1468,6 +1468,36 @@ func (u *LoginUsecase) tombstoneFailedSessionGeneration(
 		"hint", "两存储一致性不可证明 → 墓碑代际行 fail-closed,旧凭据一律失效")
 }
 
+// restoreUnresolvedSessionGeneration 处理「不确定 COMMIT 且读回也失败」:把 MySQL 条件
+// 回补到覆盖前的 jti,使两存储收敛到 Redis 仍持有的那一代(理由见
+// resolveAmbiguousSessionGeneration 的 ③)。
+//
+// 回补是单语句条件 CAS(`WHERE sess_jti=<本次> AND generation=<本次>`),因此:
+//   - B 落地过 → 回到 A;
+//   - B 没落地 / 已被更高代取代 → 不命中即 no-op,绝不动别人的行。
+//
+// 回补本身失败只记 Error:登录已失败、零凭据交付,且下一次成功登录会原子推进两存储自愈。
+func (u *LoginUsecase) restoreUnresolvedSessionGeneration(
+	ctx context.Context, playerID uint64, sessJTI string, lease data.SessionGenerationLease, probeErr error,
+) {
+	h := plog.With(ctx)
+	restored, rerr := u.sessionGen.RestoreSessionJTI(ctx, playerID, sessJTI, lease)
+	switch {
+	case rerr != nil:
+		h.Errorw("msg", "session_generation_unresolved_restore_failed",
+			"player_id", playerID, "gen", lease.Generation, "err", rerr, "probe_err", probeErr,
+			"hint", "MySQL 可能停在从未交付的新代际;下一次成功登录会原子推进两存储自愈")
+	case restored:
+		h.Warnw("msg", "session_generation_unresolved_restored_previous",
+			"player_id", playerID, "gen", lease.Generation, "had_prev", lease.HadPrev,
+			"hint", "不确定 COMMIT 已回补到覆盖前 jti,两存储回到一致(Redis 仍持有的那一代)")
+	default:
+		h.Infow("msg", "session_generation_unresolved_restore_noop",
+			"player_id", playerID, "gen", lease.Generation,
+			"hint", "条件未命中:本次写未落地或已被更高代际登录取代,两存储本就一致")
+	}
+}
+
 // resolveAmbiguousSessionGeneration 判定「COMMIT 结果不确定」(R11 复审 P0-1 问题 A)。
 //
 // 本次 jti 是全局唯一的一次性标记,因此读回权威行即可把不确定态判成事实,三种结果:
@@ -1478,21 +1508,40 @@ func (u *LoginUsecase) tombstoneFailedSessionGeneration(
 //	   代价:覆盖前快照不可信(随失败事务丢失),故标记 SnapshotUnknown,后续补偿只准墓碑。
 //	② 行不存在,或 jti 已不是本次 → 本次写没落地,或已被更高代际的登录取代(定序输家)。
 //	   直接失败,零补偿:行属于赢家,任何回补/墓碑都会破坏别人的登录。
-//	③ 读回本身失败 → 仍不可判定。条件墓碑(命中则两侧一致拒绝所有旧凭据,未命中即 no-op)
-//	   后 fail-closed 失败本次登录,不留「MySQL 领先且无人可用」的静默态。
+//	③ 读回本身失败 → 仍不可判定。**条件回补到覆盖前的 jti**(不是墓碑,见下)后 fail-closed。
+//
+// ③ 为什么是回补而不是墓碑(R11 二轮复审收口):
+//
+//	不确定 COMMIT 的现场是「Redis 仍持有已交付的上一代 A、MySQL 可能已变成从未交付的 B」。
+//	墓碑会把 MySQL 推成哨兵,于是 Redis=A(客户端面照常放行)而 MySQL=墓碑(代际门一律拒),
+//	**撕裂并没有消失,只是换了个形状**:活着的 A 能过大部分 RPC、却过不了 SetRole。
+//	反过来"撤销 Redis 里的 A"更糟——那是因为一次失败的登录尝试去踢掉一个正在正常玩的
+//	活会话(违反不卡玩家)。
+//
+//	正确方向是把 MySQL 拉回 A:数据层在 COMMIT 报错时**连同覆盖前快照一起返回**,所以
+//	A 是拿得到的。条件回补 `WHERE sess_jti=B AND generation=<本次>`:
+//	  · 命中 → B 确实落地过,现在回到 A,与 Redis 一致;
+//	  · 未命中 → 要么 B 没落地(行本来就是 A),要么已被更高代登录取代(行属于赢家,不能动)。
+//	两条路都收敛到「两存储一致」,且不踢任何人。首登(HadPrev=false)时回补退化为删行,
+//	等价于回到"从未登录过"的一致态。
 func (u *LoginUsecase) resolveAmbiguousSessionGeneration(
 	ctx context.Context, playerID uint64, sessJTI string, lease data.SessionGenerationLease,
 ) (data.SessionGenerationLease, error) {
 	h := plog.With(ctx)
 	// 判定读与补偿都不能跑在可能已取消的请求 ctx 上(同问题 B)。
-	probeCtx, cancel := context.WithTimeout(plog.Detach(ctx), sessionReconcileTimeout)
-	defer cancel()
+	// **两者各自独立计时**:共用一个预算时,读回吃满 5s 会让补偿一点执行时间都不剩,
+	// 于是"读不出来就回补"的设计在最需要它的场景里恰好不生效。
+	probeCtx, cancelProbe := context.WithTimeout(plog.Detach(ctx), sessionReconcileTimeout)
+	defer cancelProbe()
 
 	currentJTI, generation, found, err := u.sessionGen.LoadSessionGeneration(probeCtx, playerID)
 	if err != nil {
 		h.Errorw("msg", "session_generation_commit_unresolved", "player_id", playerID, "err", err,
-			"hint", "COMMIT 结果不确定且读回失败 → 条件墓碑后 fail-closed")
-		u.tombstoneFailedSessionGeneration(probeCtx, playerID, sessJTI, lease.Generation, err)
+			"hint", "COMMIT 结果不确定且读回失败 → 条件回补到覆盖前 jti 后 fail-closed")
+		// 独立预算(不继承已被读回耗尽的 probeCtx)。
+		fixCtx, cancelFix := context.WithTimeout(plog.Detach(ctx), sessionReconcileTimeout)
+		defer cancelFix()
+		u.restoreUnresolvedSessionGeneration(fixCtx, playerID, sessJTI, lease, err)
 		return data.SessionGenerationLease{}, errcode.NewCause(errcode.ErrUnavailable, err,
 			"session generation commit result unresolved; login rejected")
 	}

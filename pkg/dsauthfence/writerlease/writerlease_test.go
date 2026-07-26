@@ -285,6 +285,85 @@ func TestBlockedActivationIsBoundedResignsAndDegrades(t *testing.T) {
 	}
 }
 
+// R11 二轮复审:Current() 必须**自带时间过期**,不依赖竞选 goroutine 及时消费 term.Lost()。
+//
+// 缺陷现场:进程被暂停(宿主换页/长 GC/容器 freeze)数十秒后恢复。etcd 侧 session lease
+// 早已过期、任期实际没了,但 `current` 只在竞选 goroutine 观察到 Lost() 后才清零。
+// 恢复瞬间若业务请求 goroutine 先被调度,它就带着作废 token 去写存储 —— 而 assignment
+// 侧的 fencing 墓碑只有有限 TTL,暂停够久时墓碑已过期,拦不住这一笔。
+//
+// 本测试不去真的暂停进程(不可控),而是直接断言"本地截止时间到了就没有写权",
+// 这正是修复的语义本体:无论调度顺序如何,过期后第一笔写就拿不到写权。
+func TestCurrentExpiresByLocalDeadlineWithoutTermLostSignal(t *testing.T) {
+	term := newFakeTerm(77)
+	backend := &fakeBackend{terms: []*fakeTerm{term}}
+	// LeaseTTLSec 取到最小:窗口被钳到 1s,渲染出一个可在测试内观察到的过期。
+	lease := StartWithBackend(context.Background(), backend, Config{
+		Election:    "hub_allocator/writer",
+		LeaseTTLSec: 1,
+	})
+	defer func() { _ = lease.Close() }()
+
+	waitFor(t, "elected", func() bool {
+		_, held := lease.Current()
+		return held
+	})
+
+	// 模拟"进程暂停":直接把本地截止时间推到过去。term.Lost() **故意不关闭** ——
+	// 证明不依赖那个信号。
+	lease.holdUntilUnixNano.Store(nowMonotonicNanos() - int64(time.Second))
+	if token, held := lease.Current(); held || token != 0 {
+		t.Fatalf("本地截止时间过期后必须立即报不持有(不等 term.Lost()),got token=%d held=%v",
+			token, held)
+	}
+	select {
+	case <-term.Lost():
+		t.Fatal("本测试的前提是 term.Lost() 未关闭;否则证明不了不依赖该信号")
+	default:
+	}
+	// Health 也必须跟着变(告警口径与写权判定同源)。
+	if snap := lease.Health(); snap.Held || snap.Token != 0 {
+		t.Fatalf("Health 必须与 Current 同源,got %+v", snap)
+	}
+}
+
+// 健康任期内本地截止时间必须被持续续期,否则会在窗口耗尽后凭空丢失写权。
+func TestHoldDeadlineRenewedWhileTermAlive(t *testing.T) {
+	term := newFakeTerm(78)
+	backend := &fakeBackend{terms: []*fakeTerm{term}}
+	lease := StartWithBackend(context.Background(), backend, Config{
+		Election:    "hub_allocator/writer",
+		LeaseTTLSec: 1, // 窗口 1s、续期间隔 ~333ms
+	})
+	defer func() { _ = lease.Close() }()
+
+	waitFor(t, "elected", func() bool {
+		_, held := lease.Current()
+		return held
+	})
+	first := lease.holdUntilUnixNano.Load()
+	// 等过一个续期间隔:截止时间必须被推后,且始终保持持有。
+	waitFor(t, "hold deadline renewed", func() bool {
+		return lease.holdUntilUnixNano.Load() > first
+	})
+	if _, held := lease.Current(); !held {
+		t.Fatal("健康任期内不得丢失写权(本地续期必须跟上)")
+	}
+}
+
+// TTL 未知(LeaseTTLSec<=0,normalize 会补默认值,此处直接构造)时退化为纯事件等待,
+// 不引入"莫名失去写权"。
+func TestUnknownLeaseTTLKeepsEventOnlyHold(t *testing.T) {
+	l := &Lease{}
+	l.current.Store(9)
+	if token, held := l.Current(); !held || token != 9 {
+		t.Fatalf("未设本地截止时间时必须保持旧行为,got token=%d held=%v", token, held)
+	}
+	if l.holdRenewInterval() != 0 {
+		t.Fatalf("TTL 未知时不应有续期节奏,got %v", l.holdRenewInterval())
+	}
+}
+
 // Degraded() 是告警表达式的语义本体(此前全仓零测试覆盖)。它必须:持有写权时恒 false
 // (热备/正常写者不报警),不持有且竞选或激活连续失败达阈值时 true。
 func TestDegradedPredicate(t *testing.T) {

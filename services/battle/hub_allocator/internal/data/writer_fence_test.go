@@ -469,6 +469,76 @@ func TestWriterFence_AssignmentLeaseLostBetweenAttemptsRejected(t *testing.T) {
 	}
 }
 
+// R11 二轮复审 P0-4 残余窗口:租约在「事务内读 Current() 之后、EXEC 之前」丢失。
+// 该窗口无法用 Redis 消除(per-player 键无 hashtag,进不了 {pod} 水位事务域),故改为
+// **写后自检 + 精确撤销**:限制损害而不是消除窗口。
+//
+// 交错构造:钩子在事务体内(Current() 被调用时)返回 held=true 让本次 EXEC 通过,随后立刻
+// 把 fence 置为失主 —— 等价于"读之后、EXEC 之前失租"的可观测后果。
+func TestWriterFence_AssignmentRevertedWhenLeaseLostAfterExec(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	const playerID = uint64(1005)
+
+	repo.SetWriterFence(&fakeWriterFence{token: 7, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-A"), testTTL); err != nil || !swapped {
+		t.Fatalf("create assignment: swapped=%v err=%v", swapped, err)
+	}
+	stored, _, _ := repo.GetAssignment(ctx, playerID)
+
+	// 事务内读到 held=true(放行 EXEC),读完立刻失租。
+	fence := &hookedWriterFence{token: 7, held: true}
+	fence.onCall = func(f *hookedWriterFence, call int) {
+		if call == 1 {
+			// 本次调用仍返回 held=true(见 Current() 实现:onCall 后才读字段),
+			// 但把状态改成失主,使写后自检看到"已不是写者"。
+			// 注意顺序:这里改的是**下一次读**看到的值。
+			return
+		}
+		f.held = false
+	}
+	repo.SetWriterFence(fence)
+
+	swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, stored,
+		assignmentFixture(playerID, "pod-B"), testTTL)
+	// 写后自检发现失主 → 必须报 ErrWriterSuperseded,而不是"成功"。
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("写后自检发现失主必须报 ErrWriterSuperseded,got swapped=%v err=%v", swapped, err)
+	}
+	// 并且刚写下的 pod-B 必须被精确撤销,恢复成事务前的 pod-A。
+	after, found, _ := repo.GetAssignment(ctx, playerID)
+	if !found || after.GetHubPodName() != "pod-A" {
+		t.Fatalf("失主后的写必须被精确撤销回事务前状态,got found=%v rec=%+v", found, after)
+	}
+}
+
+// 撤销必须精确:若继任者已经覆盖了该键(token 更大),撤销一律不得动它。
+func TestWriterFence_RevertNeverClobbersSuccessorWrite(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	const playerID = uint64(1006)
+
+	// 先由第 9 届继任者写下归属。
+	repo.SetWriterFence(&fakeWriterFence{token: 9, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-SUCCESSOR"), testTTL); err != nil || !swapped {
+		t.Fatalf("successor create: swapped=%v err=%v", swapped, err)
+	}
+	successor, _, _ := repo.GetAssignment(ctx, playerID)
+
+	// 第 7 届失主副本直接调撤销:当前值带 token=9 ≠ 7 → 必须原样保留。
+	repo.SetWriterFence(&fakeWriterFence{token: 7, held: false})
+	if err := repo.revertAssignmentIfWriterLost(ctx, playerID, assignKey(playerID), nil); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("撤销应返回 ErrWriterSuperseded,got %v", err)
+	}
+	after, found, _ := repo.GetAssignment(ctx, playerID)
+	if !found || after.GetHubPodName() != successor.GetHubPodName() ||
+		after.GetWriterToken() != 9 {
+		t.Fatalf("撤销误动了继任者的写:found=%v rec=%+v", found, after)
+	}
+}
+
 // 未启用继任租约(dev / 单副本 Recreate)时删除仍是裸 DEL:不引入墓碑,行为不变。
 func TestWriterFence_LegacyDeleteStaysBareWithoutFence(t *testing.T) {
 	ctx := context.Background()

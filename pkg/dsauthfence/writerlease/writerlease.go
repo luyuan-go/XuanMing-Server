@@ -56,6 +56,13 @@ const (
 	// 2s 退避,15 次 ≈ 30s 无主,超过 lease TTL 兜底接任窗口即异常。
 	// 激活钩子(OnElected)连续失败复用同一阈值:两者都表现为"长期无可写副本"。
 	campaignErrEscalateAfter = 15
+	// holdSafetyMarginSec 是"本地安全截止时间"相对 etcd lease TTL 的提前量
+	// (R11 二轮复审:Current() 自带时间过期)。
+	//
+	// 必须**早于**服务端 lease 真正过期:etcd 侧续租是周期性的,本地不可能精确知道
+	// 服务端何时判定过期;宁可自己先停手,也不要在服务端已经把任期交给别人之后还认为
+	// 自己持有。3s 覆盖一次续租往返 + 时钟抖动;lease TTL 15s 时本地窗口 = 12s。
+	holdSafetyMarginSec = 3
 	// DefaultActivationTimeoutSec 是激活钩子(OnElected)的独立总期限
 	// (R11 复审 P0-2 缺口 1)。
 	//
@@ -160,6 +167,15 @@ type Lease struct {
 	// 0 可安全作哨兵。
 	current atomic.Uint64
 
+	// holdUntilUnixNano:本届"本地安全截止时间"(单调时钟纳秒;0 = 未设置)。
+	// Current() 过了它就地报不持有,不等竞选 goroutine 消费 term.Lost()——覆盖
+	// 「进程长暂停后恢复,业务 goroutine 先于竞选 goroutine 被调度」的交错。
+	// 取值比 etcd lease TTL 更保守(见 holdSafetyMargin)。
+	holdUntilUnixNano atomic.Int64
+
+	// leaseTTLSec:本实例的 etcd session lease TTL(秒),用于推导上面的本地截止时间。
+	leaseTTLSec int64
+
 	// consecutiveCampaignErrs:连续竞选失败次数(当选即清零;复审 P0-6 可观测)。
 	consecutiveCampaignErrs atomic.Uint64
 	// lastCampaignErr:最近一次竞选失败原因(atomic.Value[string];当选清空)。
@@ -199,7 +215,25 @@ func (l *Lease) Health() HealthSnapshot {
 // 做只进不退比较;biz 层用 held 快速拒绝非写者副本上的写请求。
 func (l *Lease) Current() (uint64, bool) {
 	token := l.current.Load()
-	return token, token != 0
+	if token == 0 {
+		return 0, false
+	}
+	// R11 二轮复审:**自带时间过期,不依赖竞选 goroutine 及时消费 term.Lost()**。
+	//
+	// 缺陷现场:整个进程被暂停(宿主换页/GC 长停顿/容器被 freeze)数十秒后恢复。
+	// 此时 etcd 侧的 session lease(TTL 15s)早已过期、任期实际上已经没了,但
+	// `current` 只在竞选 goroutine 观察到 term.Lost() 之后才清零。恢复瞬间调度顺序
+	// 若让业务请求 goroutine 先跑,它就会读到一个**陈旧的 held=true** 并带着作废的
+	// token 去写存储——而 assignment 侧的 fencing 墓碑只有有限 TTL,暂停足够久时
+	// 墓碑已过期,拦不住这一笔。
+	//
+	// 修法是让"持有"本身带时间:任期开始时记下一个比 etcd lease 更保守的本地截止
+	// 时间(单调时钟),过了就地视为不持有。这样无论调度顺序如何,长暂停后的第一笔
+	// 写就已经拿不到写权,不需要任何一方"及时"做事。
+	if deadline := l.holdUntilUnixNano.Load(); deadline != 0 && nowMonotonicNanos() >= deadline {
+		return 0, false
+	}
+	return token, true
 }
 
 // Close 主动让位并停止竞选(进程下线路径)。幂等。
@@ -234,7 +268,14 @@ func Start(ctx context.Context, cfg Config) (*Lease, error) {
 func StartWithBackend(ctx context.Context, backend Backend, cfg Config) *Lease {
 	normalize(&cfg)
 	runCtx, cancel := context.WithCancel(ctx)
-	l := &Lease{backend: backend, identity: cfg.Identity, cancel: cancel, done: make(chan struct{})}
+	l := &Lease{
+		backend:  backend,
+		identity: cfg.Identity,
+		// 本地安全截止时间由 lease TTL 推导(见 holdSafetyMarginSec)。
+		leaseTTLSec: int64(cfg.LeaseTTLSec),
+		cancel:      cancel,
+		done:        make(chan struct{}),
+	}
 	go l.runWithActivationTimeout(runCtx, cfg.Election, cfg.OnElected, cfg.ActivationTimeout)
 	return l
 }
@@ -313,22 +354,25 @@ func (l *Lease) runWithActivationTimeout(ctx context.Context, election string,
 			l.consecutiveActivationErrs.Store(0)
 			l.lastActivationErr.Store("")
 		}
+		// 宣告持有前先设本届本地安全截止时间,使 Current() 自带时间过期
+		// (R11 二轮复审:长暂停后恢复,第一笔写就已经没有写权)。
+		l.beginHold()
 		l.current.Store(term.Token())
 		klog.Infof("[writerlease] elected election=%s identity=%s token=%d", election, l.identity, term.Token())
-		select {
-		case <-term.Lost():
-			// 失主:先撤销本地持有权(Current() 立即转不持有,快速挡住后续写入口),
-			// 再 best-effort 清理旧任期;存储层 fence 兜住撤销瞬间仍在途的迟到写。
+		if shutdown := l.holdUntilTermEnds(ctx, term); shutdown {
 			l.current.Store(0)
-			klog.Warnf("[writerlease] term lost election=%s identity=%s token=%d — stepping down (process stays alive)",
-				election, l.identity, term.Token())
-			resignTerm(term)
-		case <-ctx.Done():
-			l.current.Store(0)
+			l.endHold()
 			resignTerm(term)
 			klog.Infof("[writerlease] resigned election=%s identity=%s (shutdown)", election, l.identity)
 			return
 		}
+		// 失主:先撤销本地持有权(Current() 立即转不持有,快速挡住后续写入口),
+		// 再 best-effort 清理旧任期;存储层 fence 兜住撤销瞬间仍在途的迟到写。
+		l.current.Store(0)
+		l.endHold()
+		klog.Warnf("[writerlease] term lost election=%s identity=%s token=%d — stepping down (process stays alive)",
+			election, l.identity, term.Token())
+		resignTerm(term)
 		if !sleepCtx(ctx, recampaignBackoff) {
 			return
 		}
@@ -367,6 +411,81 @@ func (l *Lease) activate(ctx context.Context, term Term, onElected func(context.
 	}
 	return nil
 }
+
+// nowMonotonicNanos 返回单调时钟纳秒。**必须用单调时钟**:系统时间可被 NTP 回拨,
+// 用它算租约剩余会在回拨瞬间凭空延长写权。time.Since(处理器启动基准) 即单调。
+func nowMonotonicNanos() int64 { return int64(time.Since(processStart)) }
+
+// processStart 是进程内单调基准。time.Now() 返回值带单调读数,Since 只用单调部分。
+var processStart = time.Now()
+
+// beginHold 在宣告持有前设置本届本地安全截止时间。
+// leaseTTLSec 未知(<=0)时退化为不设截止(保持旧行为,不引入"莫名失去写权")。
+func (l *Lease) beginHold() {
+	if l.leaseTTLSec <= 0 {
+		l.holdUntilUnixNano.Store(0)
+		return
+	}
+	window := l.leaseTTLSec - holdSafetyMarginSec
+	if window < 1 {
+		window = 1 // TTL 极小时至少给 1s,否则刚当选就立刻自判过期
+	}
+	l.holdUntilUnixNano.Store(nowMonotonicNanos() + window*int64(time.Second))
+}
+
+// renewHold 在确认本届仍然有效时向后推进本地截止时间(续租的本地投影)。
+func (l *Lease) renewHold() { l.beginHold() }
+
+// holdUntilTermEnds 持有期主循环:等任期失效或进程退出,期间按固定节奏把本地截止时间
+// 往后推。返回 true 表示进程退出(shutdown),false 表示失主。
+//
+// 为什么本地续租是安全的:只要 etcd session 的 keepalive 还在工作,term.Lost() 就不会关闭,
+// 因此"Lost 未关闭"本身就是任期仍有效的证据,本地推进只是它的投影。反过来,进程被暂停时
+// 这个 ticker 同样不会触发,截止时间自然流逝 —— 这正是要覆盖的交错。
+// etcd 已过期但客户端尚未察觉的窗口由 holdSafetyMarginSec 兜住。
+func (l *Lease) holdUntilTermEnds(ctx context.Context, term Term) bool {
+	interval := l.holdRenewInterval()
+	if interval <= 0 {
+		// 未知 TTL(不设本地截止)时退化为原来的纯事件等待。
+		select {
+		case <-term.Lost():
+			return false
+		case <-ctx.Done():
+			return true
+		}
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-term.Lost():
+			return false
+		case <-ctx.Done():
+			return true
+		case <-ticker.C:
+			l.renewHold()
+		}
+	}
+}
+
+// holdRenewInterval 取本地窗口的 1/3(标准 keepalive 比例);TTL 未知时返回 0。
+func (l *Lease) holdRenewInterval() time.Duration {
+	if l.leaseTTLSec <= 0 {
+		return 0
+	}
+	window := l.leaseTTLSec - holdSafetyMarginSec
+	if window < 1 {
+		window = 1
+	}
+	interval := time.Duration(window) * time.Second / 3
+	if interval < 200*time.Millisecond {
+		interval = 200 * time.Millisecond
+	}
+	return interval
+}
+
+// endHold 清掉本地截止时间(让位/失主/退出)。
+func (l *Lease) endHold() { l.holdUntilUnixNano.Store(0) }
 
 func resignTerm(term Term) {
 	rctx, cancel := context.WithTimeout(context.Background(), resignTimeout)

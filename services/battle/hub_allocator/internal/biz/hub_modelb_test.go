@@ -585,6 +585,61 @@ func TestModelB_AcknowledgeAdmissionEmptySJTITolerant(t *testing.T) {
 // R7 收口(P0-2)确定性交错:预检通过后、durable 消费 reservation 完成之间发生顶号轮换。
 // durable 写后复核必须检出 → exact 回退 connected owner + ErrSessionSuperseded,旧会话
 // 永远拿不到 spawn gate;曾短暂建立的 seat 不残留容量。
+// R11 复审 P0-6 确定性交错:**成功响应形成之后**发生轮换。
+//
+// 这一条与下面那条不同,针对的是 DS 的「开门前复核」——DS 在真正开 spawn gate 之前会用
+// **同一 (admission_id, seq)** 幂等重放一次 ACK。危险在于:ledger 对同 identity 的 ACK 是
+// 幂等的(AlreadyAdmitted),如果重放路径直接返回"已准入"而不重跑会话复核,那么
+// 「首次 ACK 成功 → 玩家会话被顶 → DS 重放复核 → 拿到 Admitted=true → 开门」
+// 就会让**已被顶号的会话拿到可操作 Pawn**(违反数据完整性与一人一 DS)。
+//
+// 断言:重放必须重跑复核并返回 SessionSuperseded,绝不因幂等而放行。
+func TestModelB_AcknowledgeAdmissionReplayAfterRotationStillRefused(t *testing.T) {
+	uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const (
+		pod      = "pandora-hub-global-1"
+		playerID = uint64(1001)
+	)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	cred := &HubCredential{
+		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+	}
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	assignment, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("assignment found=%v err=%v", found, err)
+	}
+
+	// 首次 ACK:预检与写后复核都拿到票据代 jti-old → 成功(此刻"成功响应已形成")。
+	// 随后玩家被顶号:重放时两次复核都拿到 jti-new。
+	gate := &ackFakeSessionGate{queue: []string{"jti-old", "jti-old", "jti-new", "jti-new"}}
+	uc.SetSessionGate(gate)
+
+	admissionID := uuid.NewString()
+	first, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		admissionID, 1, "jti-old", cred)
+	if aerr != nil || first == nil || !first.Admitted {
+		t.Fatalf("首次 ACK 应成功(成功响应形成):result=%+v err=%v", first, aerr)
+	}
+
+	// DS 开门前用**同一 identity** 重放。轮换已发生 → 必须拒,不能幂等放行。
+	replay, rerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		admissionID, 1, "jti-old", cred)
+	if errcode.As(rerr) != errcode.ErrSessionSuperseded {
+		t.Fatalf("开门前重放遇轮换必须被拒(否则被顶号会话拿到可操作 Pawn):result=%+v code=%v err=%v",
+			replay, errcode.As(rerr), rerr)
+	}
+	if replay != nil && replay.Admitted {
+		t.Fatal("重放绝不能因 ledger 幂等而返回 Admitted=true")
+	}
+}
+
 func TestModelB_AcknowledgeAdmissionPostWriteRotationReverted(t *testing.T) {
 	uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
 	ctx := context.Background()

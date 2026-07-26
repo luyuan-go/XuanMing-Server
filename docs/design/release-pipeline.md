@@ -3,6 +3,11 @@
 > 2026-07-23 落地。回应「Packages 提交进 SVN / pandora-images.tar 提交进 git」两个反模式,
 > 按业界标准四层分离改造:版本库只放源码,构建产物进制品目录,发布按 manifest 可追溯可回滚。
 > 决策登记:`pandora-arch.md` §11「镜像分发 2026-07-23」行;旧「离线镜像包随仓库同步」过渡方案同日退役。
+>
+> 本文档聚焦**四层架构本身**(§1-§6b:版本库钩子、制品目录脚本、CI 流水线定义、版本化发布)。
+> 业界标准工具(Jenkins/MinIO/Harbor/GoReleaser/ArgoCD)的**实际安装与操作**见 `tools/devops/README.md`
+> (一键 docker compose 栈,含 Jenkins+registry+MinIO,及 Harbor/GoReleaser/ArgoCD 现状);
+> 本文档 §7 只做工具选型的定位与状态摘要,不重复其操作细节。
 
 ## 1. 四层架构
 
@@ -14,8 +19,15 @@
 |---|---|---|
 | 版本库 | 客户端 SVN + 后端 git | Packages/ 已解除纳管+svn:ignore;镜像 tar 已移出 git;服务端钩子拒收回流 |
 | CI | Jenkins | 客户端 `Tool/Build/Jenkinsfile`(已有,本次改造)+ 后端仓根 `Jenkinsfile`(新增) |
-| 制品目录 | 本地/共享盘目录 | `PANDORA_ARTIFACT_ROOT`(默认 `F:\work\artifacts`);将来可平移 FTP/MinIO/Harbor |
+| 制品目录 | 本地/共享盘目录 | `PANDORA_ARTIFACT_ROOT`(默认 `F:\work\artifacts`);已可平移 MinIO/Harbor,见 §7 |
 | 发布 | release manifest | `make_release.ps1` 产出 `releases/<name>.json`,离线交付按 manifest 取制品 |
+
+游戏行业再具体一层的参照:Epic 自家和多数 UE 大厂用 **Perforce**(二进制资产锁文件 + streams)存源码/美术资产,
+SVN 是可接受替代;后端纯 Go 服务用 git 是标准做法,两者都**不需要为了"标准"而换**。
+构建分级(标准做法的一部分,本项目当前两轨对应前两级,第三级用 release 轨的手动 VERSION 触发实现):
+per-commit 快验编译(dev 快照轨,§5)→ nightly 全量 cook(可用 dev 轨 pollSCM 间隔实现,未强制)→ release 打正式包(release 轨)。
+制品库三条铁律里的"digest 寻址"(部署引用 sha256 摘要而非 `latest`)已在 `build-info.json`/`images-manifest.json`
+落地(§2);K8s 侧 digest 寻址需接 Harbor/registry 后由部署清单显式钉 digest,当前离线 tar 模式下按 sha256sums 校验等效替代。
 
 ## 2. 制品目录布局与铁律
 
@@ -89,7 +101,9 @@
   构建机要求:Go 1.26.5、Docker Desktop、pwsh、git、svn 命令行(客户端节点另需 UE 引擎)。
 
 镜像**在线发布**(推 registry)已有独立机制:`start.ps1 -BuildPush`(clean commit 强制 + 不可变 tag 门禁),
-与本离线制品线并行,互不替代;有内网 Harbor 后,离线 tar 流退化为"发布时从 registry 现场导出"。
+与本离线制品线并行,互不替代;`tools/devops` 一键栈已起 `registry:2`(Harbor 轻量替代)作为过渡,
+`deploy/ds/build-image-minikube.ps1 -PushRegistry` 已接线;真正装 Harbor 后按 §7 表格切换即可,
+离线 tar 流届时退化为"发布时从 registry 现场导出"。
 
 ## 6. 分发方式迁移对照
 
@@ -97,7 +111,7 @@
 |---|---|---|
 | 内网机起后端服务 | svn/git 同步拿入库 tar | `fetch_offline_images.ps1`(共享盘设 `PANDORA_ARTIFACT_ROOT`)→ 一键启动照常 |
 | 拿 UE 打包产物 | `svn update` Packages | 制品目录 `client\<branch>\<flavor>\r<rev>\` 直接取(带校验和) |
-| DS 镜像构建取 Linux 包 | 同级仓库 Packages 自动发现 | 不变(本机构建输出仍在 Packages);跨机时 `-SourcePkg` 指到制品路径 |
+| DS 镜像构建取 Linux 包 | 同级仓库 Packages 自动发现 | **已切换(2026-07-25)**:客户端 `Packages\` 已物理删除;`build-image-minikube.ps1` 的 `Resolve-LinuxPkg` 优先级改为 ①`-SourcePkg` ②`PANDORA_DS_LINUX_PKG` ③制品库(两轨扫 `Server_Linux_Development` 最新发布) ④同级 Packages(**已退役**,仅兼容旧机器,回退时打黄字提示去跑 `PublishPackages.ps1`);新增 `-ResolveOnly` 只打印来源不构建,便于验证 |
 | 正式发布 | 无 manifest | `make_release.ps1` → 按 `releases/<name>.json` 交付/回滚 |
 
 ## 6b. 版本化发布(语义版本 + 修复内容)
@@ -124,9 +138,28 @@
 
 版本号三处必须一致:`DefaultGame.ini ProjectVersion` = 后端 `git tag` = `make_release -Version` = `CHANGELOG` 段落。
 
-## 7. 剩余事项(诚实清单)
+## 7. 业界工具选型对照(现状用什么、标准工具在哪)
+
+按环节列出业界主流开源工具,以及本项目**当前真实状态**(不是"以后可以换",很多已经落地,
+见 `tools/devops/README.md` 详细操作,这里只做定位与状态标注):
+
+| 环节 | 业界主流开源工具 | 本项目现状 |
+|---|---|---|
+| CI 构建触发 | **Jenkins**(~24k★,游戏行业事实标准,UE 项目配 `RunUAT BuildCookRun` 最常见)/ **Horde**(Epic 官方,UE5 源码自带,分布式编译+构建自动化+构建产物管理一体)/ GitHub Actions·GitLab CI(代码托管在对应平台时的默认选择) | ✅ **Jenkins 已用 `tools/devops` 一键 docker compose 起(JCasC 声明式初始化,两台机器配置一致)**;两仓 4 条 Jenkinsfile(dev+release)已就绪待挂 job;⚠️ 构建 agent(需装 UE 源码引擎+Go 1.26.5+svn+Docker 的宿主机)未接入,controller 本身 `numExecutors=0` 不亲自编译 |
+| 制品库(存包) | **Harbor**(CNCF 毕业项目,~25k★,自建容器 Registry 首选,镜像扫描/复制/保留策略)/ **Sonatype Nexus Repository OSS**(通用制品库,二进制/zip/docker 都能存)/ **MinIO**(~50k★,自建 S3 对象存储,存 UE 大 zip 合适,生命周期规则自动清老版本) | ✅ **MinIO 已随一键栈起(桶 `pandora-artifacts` 已建,30 天保留策略)**,`releases/` 上传用 `mc cp`(手动,未自动化);✅ 本地目录 `PANDORA_ARTIFACT_ROOT`(§2)持续作为一手产出地;registry:2 已起作 Harbor 轻量替代(`localhost:5000`),DS 镜像构建脚本已接 `-PushRegistry`;📄 Harbor 安装脚本就绪但限 Linux 宿主机,未装;⚙️ Nexus 为 compose 可选 profile,默认关(与 registry/MinIO 职责重叠) |
+| 发布/交付 | **GoReleaser**(~15k★,tag 一打自动交叉编译+打镜像+推 registry+生成 release,贴合纯 Go 后端)/ **ArgoCD**(~20k★,K8s GitOps 部署主流选择,git 里只存部署清单不存镜像) | ✅ **GoReleaser 已配好并实测通过**(`.goreleaser.yaml`,24 个二进制全量构建;`release:` 已 disable,不用 GitHub Releases,产物归宿仍是 `artifacts/` 与 MinIO);✅ **Argo CD 已装进 `pandora-agones` minikube**(v3.4.5,`deploy/k8s/argocd/`);`make_release.ps1` 手写 manifest(§6b)与 GoReleaser/ArgoCD 并行,尚未打通"tag → GoReleaser → ArgoCD 自动同步"的全自动链路 |
+
+一个诚实的提醒:即便工具都已经装起来,**"制品不进版本库、版本可追溯、发布可回滚"这三点核心闭环**(§1-§6b)
+才是大厂做法的本质,Jenkins/Harbor/ArgoCD 只是把这三点自动化、规模化的执行器;闭环脚本本身不依赖这些工具是否已装。
+
+## 8. 剩余事项(诚实清单)
 
 - SVN 服务端钩子需仓库管理员部署(本仓只提供脚本);git 托管平台规则需人配置。
 - git 历史中的 177MB tar 仍在历史里(仅解除跟踪);要瘦身需 `git filter-repo` 重写历史并全员重新克隆,单独拍板。
-- Jenkins 服务本体与构建机 agent 的安装/凭据属环境操作(AGENTS.md §11.1,Codex/人执行)。
-- 制品根迁 FTP/MinIO/Harbor 时:只改 `PANDORA_ARTIFACT_ROOT` 语义(换成 rclone remote),脚本布局不变。
+- **Jenkins controller 已起,但真正编译的构建机 agent 未接入**(UE cook 不能在容器里跑,必须挂宿主机 inbound agent);
+  4 条 Jenkinsfile 未挂 job(凭据需人工一次性配置,见 `tools/devops/README.md` §"接进现有流程")。
+- Harbor 未装(脚本就绪,限 Linux 宿主机);"tag → GoReleaser → ArgoCD"全自动发布链路未打通,
+  当前 `make_release.ps1` 手动 manifest 与三者并行而非串联。
+- MinIO 制品上传(`mc cp`)未接入发布脚本自动化,仍是手动步骤。
+- 制品根迁移到已起的 MinIO/registry 时:只改 `PANDORA_ARTIFACT_ROOT` 语义或本文档制品路径引用,
+  §2-§6 的脚本布局与 build-info/sha256sums 契约不变。

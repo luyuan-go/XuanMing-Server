@@ -22,6 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 )
 
@@ -536,10 +537,110 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 		if err != nil {
 			return false, err
 		}
+		if matched {
+			// R11 二轮复审 P0-4 问题 B 的残余窗口:租约可能在「事务内读 Current() 之后、
+			// EXEC 之前」丢失。该窗口无法用 Redis 消除——per-player 归属键无 hashtag,
+			// 进不了 {pod} 水位键的事务域,而给每个玩家配一把同 slot 水位键需要迁 key
+			// scheme + 回填(§9.16 禁止停服迁移),代价远超一个亚毫秒窗口。
+			//
+			// 标准做法是**不追求消除窗口,而是限制损害**:写后立刻自检租约,若已失主就精确
+			// 撤销"刚才这一笔自己的写",把脏归属的存活时间从"直到下次被触碰"压成一个补偿
+			// 往返。与 login 的 reconcileFailedSessionWrite 同一套模式(写后自检 + 精确补偿)。
+			if serr := r.revertAssignmentIfWriterLost(ctx, playerID, key, expected); serr != nil {
+				return false, serr
+			}
+		}
 		return matched, nil
 	}
 	// 高并发下 WATCH 连续冲突只表示 expected 已不再稳定；交给上层重读最新归属重试，零写入。
 	return false, nil
+}
+
+// revertAssignmentIfWriterLost 写后自检:若本副本此刻已不再持有写者租约,精确撤销刚写下的
+// 那一笔并返回 ErrWriterSuperseded(调用方重试会被路由到新写者)。
+//
+// 精确性保证(绝不误删别人的写):撤销走同一把 key 的 WATCH/MULTI/EXEC,且**只在当前值仍带
+// 我这一届 token 时**才动手。继任者若已覆盖该键,token 更大 → 原样保留退出。
+//
+// 撤销目标:
+//   - expected != nil → 恢复成事务前的那条记录(我的写是覆盖,撤销即还原);
+//   - expected == nil → 我的写是"创建/在墓碑上重建",撤销即回到 fencing 墓碑
+//     (不能裸 DEL:那会抹掉水位,重新打开借尸还魂的门)。
+//
+// fence 未启用时是 no-op。
+func (r *RedisHubRepo) revertAssignmentIfWriterLost(ctx context.Context, playerID uint64, key string,
+	expected *hubv1.HubAssignmentStorageRecord) error {
+	if r.fence == nil {
+		return nil
+	}
+	mine, held := r.fence.Current()
+	if held {
+		return nil // 仍是当届写者:本次写合法,无需撤销
+	}
+	var restore []byte
+	if expected != nil {
+		var merr error
+		if restore, merr = proto.Marshal(expected); merr != nil {
+			return merr
+		}
+	}
+	const casMaxRetry = 3
+	for attempt := 0; attempt < casMaxRetry; attempt++ {
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			b, gerr := tx.Get(ctx, key).Bytes()
+			if gerr == redis.Nil {
+				return nil // 已被继任者删掉,无需撤销
+			}
+			if gerr != nil {
+				return gerr
+			}
+			cur := &hubv1.HubAssignmentStorageRecord{}
+			if uerr := proto.Unmarshal(b, cur); uerr != nil {
+				return fmt.Errorf("assignment %d bad proto: %w", playerID, uerr)
+			}
+			// 只撤销"仍带我这一届 token"的值;继任者已接手则原样保留。
+			if cur.GetWriterToken() != mine {
+				return nil
+			}
+			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				if restore != nil {
+					pipe.Set(ctx, key, restore, assignmentTTLFromRecord(expected))
+				} else {
+					// 回到墓碑:水位必须留存,否则又给"删除即复位"开了门。
+					tomb, merr := proto.Marshal(newAssignmentFenceTombstone(playerID, mine))
+					if merr != nil {
+						return merr
+					}
+					pipe.Set(ctx, key, tomb, assignmentFenceTombstoneTTL)
+				}
+				return nil
+			})
+			return perr
+		}, key)
+		if err == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
+			continue
+		}
+		if err != nil {
+			// 撤销失败不掩盖根因:调用方仍必须拿到"你已不是写者"。脏归属由继任者下一次
+			// 对该玩家的 CAS(更高 token)覆盖收敛。
+			plog.With(ctx).Errorw("msg", "hub_assignment_revert_after_lease_loss_failed",
+				"player_id", playerID, "token", mine, "err", err,
+				"hint", "脏归属等继任者下次 CAS 覆盖;spawn gate 由 Admission 侧会话复核兜住")
+			break
+		}
+		break
+	}
+	return ErrWriterSuperseded
+}
+
+// assignmentTTLFromRecord 给撤销恢复用:墓碑用墓碑 TTL,真实归属沿用长 TTL。
+// 归属键在 strict admitted owner 下无 TTL(0),恢复时保持同语义。
+func assignmentTTLFromRecord(rec *hubv1.HubAssignmentStorageRecord) time.Duration {
+	if isAssignmentFenceTombstone(rec) {
+		return assignmentFenceTombstoneTTL
+	}
+	return 0 // 与 strict admitted owner 无 TTL 的既有语义一致
 }
 
 func (r *RedisHubRepo) DeleteAssignmentIfPodMatches(ctx context.Context, playerID uint64, pod string) (bool, error) {

@@ -358,9 +358,12 @@ func TestLogin_AmbiguousCommitDidNotLand_FailsWithZeroCompensation(t *testing.T)
 	}
 }
 
-// ③ 读回本身也失败 → 仍不可判定:条件墓碑 + fail-closed 失败,不留「MySQL 领先且
-// 无人可用」的静默态,也不得错误复活上一代 jti(禁止 Restore)。
-func TestLogin_AmbiguousCommitUnresolvable_TombstonesFailClosed(t *testing.T) {
+// ③ 读回本身也失败 → 仍不可判定:**条件回补到覆盖前 jti** + fail-closed 失败本次登录。
+//
+// 为什么不是墓碑(R11 二轮复审收口):现场是「Redis 仍持有已交付的上一代 A、MySQL 可能已变成
+// 从未交付的 B」。墓碑把 MySQL 推成哨兵,撕裂并没消失只是换形状——活着的 A 能过客户端面
+// RPC(以 Redis 为权威)却过不了 SetRole(以 MySQL 代际为权威)。回补则让两存储都回到 A。
+func TestLogin_AmbiguousCommitUnresolvable_RestoresPreviousJTIFailClosed(t *testing.T) {
 	sessions := &genOrderSessionRepo{}
 	gen := &fakeSessionGenRepo{
 		gen: 6, ambiguousCommit: true,
@@ -375,11 +378,46 @@ func TestLogin_AmbiguousCommitUnresolvable_TombstonesFailClosed(t *testing.T) {
 	if sessions.setCalled {
 		t.Fatal("Redis must not be written while the sequencing result is unknown")
 	}
-	if len(gen.tombstoneCalls) != 1 {
-		t.Fatalf("unresolvable state must tombstone exactly once, got %v", gen.tombstoneCalls)
+	if len(gen.restoreCalls) != 1 {
+		t.Fatalf("unresolvable state must conditionally restore the previous jti exactly once, got %d",
+			len(gen.restoreCalls))
 	}
-	if len(gen.restoreCalls) != 0 {
-		t.Fatal("unknown pre-write snapshot must never be restored (would revive an old credential)")
+	// 回补必须带**真实快照**(数据层在 COMMIT 报错时连快照一起返回),否则条件 CAS 无从命中。
+	got := gen.restoreCalls[0]
+	if got.Lease.PrevJTI != "prev-jti" || !got.Lease.HadPrev {
+		t.Fatalf("restore must carry the pre-write snapshot, got %+v", got.Lease)
+	}
+	if got.Lease.SnapshotUnknown {
+		t.Fatal("commit-error path has a real snapshot; it must not be marked SnapshotUnknown")
+	}
+	if len(gen.tombstoneCalls) != 0 {
+		t.Fatalf("tombstone would leave Redis=A / MySQL=sentinel torn, got %v", gen.tombstoneCalls)
+	}
+}
+
+// 回补必须跑在**独立预算**上:判定读吃满预算后,补偿仍须有完整时间执行
+// (共用一个 ctx 时"读不出来就回补"恰好在最需要它的场景里不生效)。
+func TestLogin_AmbiguousCommitUnresolvable_RestoreGetsItsOwnBudget(t *testing.T) {
+	sessions := &genOrderSessionRepo{}
+	gen := &fakeSessionGenRepo{
+		gen: 6, ambiguousCommit: true,
+		loadErr: errcode.New(errcode.ErrInternal, "mysql unreachable"),
+	}
+	uc := newGenUsecase(t, sessions, gen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 请求 ctx 早已取消:补偿必须仍能跑
+	if _, err := uc.Login(ctx, "acc", "pw", "device-A"); err == nil {
+		t.Fatal("unresolvable commit must fail the login")
+	}
+	if len(gen.restoreCalls) != 1 {
+		t.Fatalf("restore must still run on a detached budget, got %d", len(gen.restoreCalls))
+	}
+	for _, probe := range gen.ctxSeen {
+		if probe.Err != nil || !probe.HasDeadline {
+			t.Fatalf("%s ctx must be detached and bounded, err=%v hasDeadline=%v",
+				probe.Op, probe.Err, probe.HasDeadline)
+		}
 	}
 }
 
