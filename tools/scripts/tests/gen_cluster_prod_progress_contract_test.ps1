@@ -29,6 +29,7 @@ try {
         -MatchResumeAuthSecret 'prod-match-resume-auth-0123456789abcdef-008' `
         -AllocationAbortAuthSecret 'prod-allocation-abort-auth-0123456789abcdef-009' `
         -OwnerStoreDsn 'prod_owner:prod-owner-pwd-010@tcp(tidb.pandora.svc:4000)/pandora_owner?parseTime=true&loc=UTC' `
+        -AccountStoreDsn 'prod_login:prod-acct-pwd-011@tcp(tidb.pandora.svc:4000)/pandora_account?parseTime=true&loc=UTC' `
         -DsAuthMode enforce -DsAuthorityMode redis -DsFenceEtcdEndpoints 'https://etcd.pandora.svc:2379' `
         -DsFenceKeysetRevision 'pandora-ds-auth-v2-prod-r1' `
         -DsTicketActiveKid ('P' * 43) -DsTicketKeysetRevision 9 *> $null

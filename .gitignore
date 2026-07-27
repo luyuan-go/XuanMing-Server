@@ -95,3 +95,7 @@ third_party/_cache/
 *.crt
 *.p12
 secrets/
+
+# setup-jenkins.ps1 按需从运行中的 Jenkins 下载(/jnlpJars/jenkins-cli.jar)。
+# 入库反而有害：与服务端版本漂移时 CLI 会协议不兼容。
+tools/devops/jenkins/jenkins-cli.jar

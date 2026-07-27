@@ -56,7 +56,9 @@ $jUrl    = "http://localhost:$jPort"
 # 接线参数（占位符 -> 实际值）
 $repoRoot = (Resolve-Path (Join-Path $here '..\..')).Path
 $subst = @{
-    '@@BACKEND_GIT_URL@@'           = Cfg 'BACKEND_GIT_URL' 'https://github.com/luyuan-go/XuanMing-Server.git'
+    # 前后端都从 SVN 拉：^/trunk/Server 与 ^/trunk/Client 同仓同级，是团队权威源。
+    # CI 必须构建权威源而不是任何人的个人 git 仓库，否则测的不是团队真实代码。
+    '@@SVN_SERVER_URL@@'            = Cfg 'SVN_SERVER_URL' 'http://infinity-svn/svn/Pandora-Moba/trunk/Server'
     '@@SVN_CLIENT_URL@@'            = Cfg 'SVN_CLIENT_URL' 'http://infinity-svn/svn/Pandora-Moba/trunk/Client'
     '@@SVN_CREDENTIALS_ID@@'        = Cfg 'SVN_CREDENTIALS_ID' 'svn-cred'
     '@@AGENT_WORKDIR@@'             = Cfg 'AGENT_WORKDIR' 'F:\jenkins-agent'

@@ -14,6 +14,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $env:PANDORA_OWNER_TIDB_DSN = $null
+$env:PANDORA_ACCOUNT_TIDB_DSN = $null
 $ProjectRoot = (Resolve-Path "$PSScriptRoot/../../..").Path
 $Generator = Join-Path $ProjectRoot 'tools/scripts/gen_cluster_config.ps1'
 $OutDirProd = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-sessgate-prod-' + [guid]::NewGuid().ToString('N'))
@@ -46,7 +47,8 @@ try {
         -DsFenceEtcdEndpoints 'https://etcd.pandora.svc:2379' `
         -DsFenceKeysetRevision 'pandora-ds-auth-v2-prod-r1' `
         -DsTicketActiveKid ('P' * 43) -DsTicketKeysetRevision 9 `
-        -OwnerStoreDsn 'prod_owner:prod-owner-pwd-010@tcp(tidb.pandora.svc:4000)/pandora_owner?parseTime=true&loc=UTC' *> $null
+        -OwnerStoreDsn 'prod_owner:prod-owner-pwd-010@tcp(tidb.pandora.svc:4000)/pandora_owner?parseTime=true&loc=UTC' `
+        -AccountStoreDsn 'prod_login:prod-acct-pwd-011@tcp(tidb.pandora.svc:4000)/pandora_account?parseTime=true&loc=UTC' *> $null
     if ($LASTEXITCODE -ne 0) { throw "gen_cluster_config -Prod 生成失败(exit=$LASTEXITCODE)" }
 
     foreach ($name in $SessionGateServices) {

@@ -220,7 +220,8 @@ CREATE TABLE IF NOT EXISTS `sys_mail` (
     `end_ms`     BIGINT          NOT NULL DEFAULT 0 COMMENT '失效止 ms(0 永不过期)',
     `payload`    BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化(标题/正文/附件)',
     `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`mail_id`) /*T![clustered_index] NONCLUSTERED */
+    PRIMARY KEY (`mail_id`) /*T![clustered_index] NONCLUSTERED */,
+    KEY `idx_end` (`end_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
   COMMENT='Pandora 系统邮件(全服一份,登录拉取,TiDB)'
   SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
@@ -233,7 +234,8 @@ CREATE TABLE IF NOT EXISTS `guild_mail` (
     `payload`    BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化',
     `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`mail_id`) /*T![clustered_index] NONCLUSTERED */,
-    KEY `idx_guild` (`guild_id`, `mail_id`)
+    KEY `idx_guild` (`guild_id`, `mail_id`),
+    KEY `idx_end` (`end_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
   COMMENT='Pandora 公会邮件(每公会一份,成员拉取,TiDB)'
   SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
@@ -247,7 +249,8 @@ CREATE TABLE IF NOT EXISTS `player_mail` (
     `payload`    BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化',
     `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`mail_id`) /*T![clustered_index] NONCLUSTERED */,
-    KEY `idx_player_status` (`player_id`, `status`)
+    KEY `idx_player_status` (`player_id`, `status`),
+    KEY `idx_expire` (`expire_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
   COMMENT='Pandora 个人邮件收件箱(写扩散,离线可达,TiDB)'
   SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
@@ -268,7 +271,30 @@ CREATE TABLE IF NOT EXISTS `player_mail_claim` (
     `claimed`        TINYINT         NOT NULL DEFAULT 1 COMMENT '1=终态已领 0=DS 领取意图(bag phase 2)',
     `intent_payload` BLOB            NULL COMMENT 'DS 领取意图(pb MailClaimIntentStorageRecord;直连链为 NULL)',
     `claimed_at`     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`player_id`, `mail_id`) /*T![clustered_index] NONCLUSTERED */
+    PRIMARY KEY (`player_id`, `mail_id`) /*T![clustered_index] NONCLUSTERED */,
+    KEY `idx_mail` (`mail_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
   COMMENT='Pandora 邮件附件领取幂等 + DS 领取意图(player_id+mail_id 唯一,TiDB)'
+  SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
+
+-- player_mail_archive:**2026-07-27 补建 —— 此前整张表漏在 TiDB 版之外**。
+-- mail 已经在 TiDB 上跑(tools/scripts/run_services.ps1 用 mail-dev-tidb.yaml 启动),而
+-- mail_repo.go:479 的 ArchiveAndDeletePersonal 在**同一个事务**里
+-- `INSERT IGNORE INTO player_mail_archive ...` —— 表不存在 → 1146 → 整批事务回滚 →
+-- 保留期 sweep 永远卡在同一批,过期邮件删不掉(未领附件的归档补偿链也断)。
+-- 与 deploy/mysql-init/12-mail-tables.sql:93 逻辑等价;archived_at 索引供 §9.24 保留期清理
+-- (dbcheck 登记 player_mail_archive → idx_archived)。
+CREATE TABLE IF NOT EXISTS `player_mail_archive` (
+    `mail_id`     BIGINT UNSIGNED NOT NULL COMMENT '原个人邮件 ID(snowflake uint64)',
+    `player_id`   BIGINT UNSIGNED NOT NULL COMMENT '收件人',
+    `status`      TINYINT         NOT NULL DEFAULT 1 COMMENT '归档时的状态',
+    `expire_ms`   BIGINT          NOT NULL DEFAULT 0 COMMENT '原过期 ms',
+    `created_ms`  BIGINT          NOT NULL DEFAULT 0 COMMENT '原创建 ms',
+    `payload`     BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化',
+    `archived_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '归档时间(保留期清理列)',
+    PRIMARY KEY (`mail_id`) /*T![clustered_index] NONCLUSTERED */,
+    KEY `idx_player` (`player_id`),
+    KEY `idx_archived` (`archived_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Pandora 个人邮件归档(未领附件先归档再删收件箱,90 天保留期,TiDB)'
   SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;

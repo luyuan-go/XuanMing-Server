@@ -5340,8 +5340,8 @@ function Get-ServiceImages {
     Get-ServiceList | ForEach-Object { "pandora/$($_.Name):dev" }
 }
 
-# 从 git 推导版本烙印信息(编译期注入二进制,实现「线上跑的 ↔ git 某次提交」可追溯)。
-# git 不可用 / 不是 git 仓库时回退占位值,不阻断构建。
+# 推导版本烙印信息(编译期注入二进制,实现「线上跑的 ↔ 源码某次提交」可追溯)。
+# 取不到时回退占位值,不阻断构建 —— 本机裸跑不该因为没有版本库就起不来。
 function Get-VersionInfo {
     $ver    = 'dev'
     $commit = 'unknown'
@@ -5357,8 +5357,19 @@ function Get-VersionInfo {
             Pop-Location
         }
     }
-    # 发布版本号显式覆盖(标准 CI:VERSION 优先于 git describe,免打 tag)。
-    # 由 publish_offline_images.ps1 -Version 设置;Commit 仍保留 git sha 作溯源。
+    # 源码版本由上游注入(publish_offline_images.ps1 已按 SVN/git 判定并算好)。
+    # 这里刻意不再自己探一次 VCS:后端代码同时存在于团队 SVN(^/trunk/Server)与个人 git 仓库,
+    # 从 SVN 检出构建时上面的 git 分支全部软失败,若不接受注入就会静默烙上 dev/unknown。
+    # 只在 git 没能给出结果时采用,保证 git 轨行为完全不变。
+    if ($env:PANDORA_RELEASE_COMMIT) {
+        $injected = $env:PANDORA_RELEASE_COMMIT.Trim()
+        if ($injected) {
+            if ($commit -eq 'unknown') { $commit = $injected }
+            if ($ver    -eq 'dev')     { $ver    = $injected }
+        }
+    }
+    # 发布版本号显式覆盖(标准 CI:VERSION 优先于 describe,免打 tag)。
+    # 由 publish_offline_images.ps1 -Version 设置;Commit 仍保留源码版本作溯源。
     if ($env:PANDORA_RELEASE_VERSION) { $ver = $env:PANDORA_RELEASE_VERSION.Trim() }
     return [pscustomobject]@{ Version = $ver; Commit = $commit; BuildTime = $built }
 }

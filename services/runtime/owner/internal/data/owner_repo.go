@@ -182,7 +182,15 @@ VALUES (?, ?, ?, ?, ?, ?)`
 
 func (r *MySQLOwnerRepo) Query(ctx context.Context, playerID uint64) (OwnerRecord, error) {
 	// 读事务:record + 派生 lease 两读同快照(§9.22 状态按语义拆开,查询不落缓存)。
-	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	//
+	// ⚠️ 不能用 sql.TxOptions{ReadOnly: true}(2026-07-27 审计,实测):go-sql-driver 会把它
+	// 翻成 `START TRANSACTION READ ONLY`,而 TiDB 在默认 tidb_enable_noop_functions=OFF 下
+	// 直接返回 `Error 1235: function READ ONLY has only noop implementation in tidb now`。
+	// owner 生产被 -Prod 机械注入 require_tidb: true 强制连 TiDB,而 Query 是 owner 唯一读路径
+	// —— 保留 ReadOnly 等于 owner 一上生产就 100% 读失败(dev 走单机 MySQL 所以永远测不出来)。
+	// 普通事务同样满足这里需要的「两读同快照」:TiDB 按 start_ts 取快照,InnoDB 按 RR 读视图。
+	// 不要改用 DSN 打开 tidb_enable_noop_functions 绕过 —— 那是让 TiDB 假装接受语义它并不实现。
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return OwnerRecord{}, errcode.New(errcode.ErrInternal, "begin query tx: %v", err)
 	}

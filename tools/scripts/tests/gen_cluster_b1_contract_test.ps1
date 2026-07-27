@@ -2,6 +2,10 @@
 param()
 
 $ErrorActionPreference = 'Stop'
+# 清掉库 DSN 环境变量:生成器参数默认取这两个 env,外部若设置会污染 -Prod 用例
+# (本测试此前是四个 -Prod 契约测试里唯一没做这件事的)。
+$env:PANDORA_OWNER_TIDB_DSN = $null
+$env:PANDORA_ACCOUNT_TIDB_DSN = $null
 $ProjectRoot = (Resolve-Path "$PSScriptRoot/../../..").Path
 $Generator = Join-Path $ProjectRoot 'tools/scripts/gen_cluster_config.ps1'
 $HmacContractLib = Join-Path $ProjectRoot 'tools/scripts/lib/online_manifest_contract.ps1'
@@ -89,7 +93,12 @@ function Assert-B1ProdAllocationAbortRejected {
         '-DsAuthMode', 'enforce', '-DsAuthorityMode', 'redis',
         '-DsFenceEtcdEndpoints', 'etcd.pandora.svc:2379',
         '-DsFenceKeysetRevision', 'pandora-ds-auth-v2-prod-r1',
-        '-DsTicketActiveKid', ('P' * 43), '-DsTicketKeysetRevision', '9')
+        '-DsTicketActiveKid', ('P' * 43), '-DsTicketKeysetRevision', '9',
+        # 恒传**合法**的 owner / account 库 DSN(2026-07-27):本函数的负向用例要证明的是
+        # 「allocation abort key 缺失或用公开 dev key 必须拒绝」。若因缺这两个 DSN 而拒绝,
+        # 用例照样 PASS,却再也证明不了它自己声称的东西 —— 静默空转比测试全红更危险。
+        '-OwnerStoreDsn', 'prod_owner:prod-owner-pwd-010@tcp(tidb.pandora.svc:4000)/pandora_owner?parseTime=true&loc=UTC',
+        '-AccountStoreDsn', 'prod_login:prod-acct-pwd-011@tcp(tidb.pandora.svc:4000)/pandora_account?parseTime=true&loc=UTC')
     if (-not [string]::IsNullOrEmpty($AllocationAbortAuth)) {
         $generatorArgs += @('-AllocationAbortAuthSecret', $AllocationAbortAuth)
     }

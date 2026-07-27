@@ -51,6 +51,17 @@ type LoginConf struct {
 	// 需先配 owner_addr。owner 覆盖式权威 + §9.23 全量属 contract 阶段(须集成故障注入后再切)。
 	OwnerQueryFirst bool `yaml:"owner_query_first,omitempty" json:"owner_query_first,omitempty"`
 
+	// RequireTiDB 是账号库后端强校验门(全服单点扩容,2026-07-27;与 owner.require_tidb 同语义、
+	// 按服务独立激活)。dev 默认 false = 连单机 MySQL 联调不校验;-Prod 产物由
+	// gen_cluster_config.ps1 机械翻转 true,启动期强制两条,任一不符 fail-fast 拒启:
+	//   ① VERSION() 含 -TiDB-:生成器只能校验 DSN 字符串,证不了对端真是 TiDB(双层防线);
+	//   ② accounts.account 的排序规则**实际行为**仍是大小写不敏感 + NO PAD。
+	// ②是 TiDB 特有的静默陷阱:_ci 排序规则只在集群以 new_collations_enabled_on_first_bootstrap
+	// =true 初始化时才真正大小写不敏感,否则只在语法上被接受、语义上按 binary 比较且不报错;
+	// 该参数首次 bootstrap 后不可更改。而 Go 侧对账号串零归一化,唯一性完全由列 collation 决定,
+	// 漂移即「老玩家登不进 + 同名抢注」。故必须行为探针,不能只看版本号(§16 隐蔽 bug)。
+	RequireTiDB bool `yaml:"require_tidb,omitempty" json:"require_tidb,omitempty"`
+
 	// DeviceRetentionDays account_devices 设备绑定行保留天数(默认 90,§9.24)。
 	// device_id 由客户端上报,单账号可无限堆新行;按 last_login_at 超期批删兜底有界,
 	// 被删设备下次登录 TouchDevice upsert 自然重建。account_bans 不清理(运营合规审计,

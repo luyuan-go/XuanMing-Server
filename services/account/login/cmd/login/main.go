@@ -417,7 +417,11 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, d
 	// 自动重放 init SQL;缺表时 SelectRole 落库必炸、Login 读已选角持续告警。fail-fast 并指向迁移 SQL。
 	schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if serr := mysqlx.CheckTables(schemaCtx, db, "deploy/mysql-init/02-account-tables.sql", "player_roles", "player_session_generations"); serr != nil {
+	// 五张表全查(2026-07-27):此前只查 player_roles / player_session_generations 两张,
+	// accounts / account_devices / account_bans 缺表时 login 照常启动、首次登录才炸。
+	if serr := mysqlx.CheckTables(schemaCtx, db, "deploy/mysql-init/02-account-tables.sql",
+		"accounts", "account_devices", "account_bans",
+		"player_roles", "player_session_generations"); serr != nil {
 		h.Errorw("msg", "mysql_schema_check_failed", "err", serr)
 		os.Exit(1)
 	}
@@ -433,6 +437,23 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, d
 		mysqlx.ColumnSpec{Name: "generation", DataType: "bigint", Nullable: "NO"}); serr != nil {
 		h.Errorw("msg", "mysql_schema_check_failed", "err", serr)
 		os.Exit(1)
+	}
+
+	// 账号库后端强校验(全服单点扩容,2026-07-27):-Prod 产物由生成器机械注入 require_tidb: true。
+	// 与生成器侧 DSN 字符串校验构成双层防线 —— DSN 长什么样证不了对端真是 TiDB,也证不了
+	// 排序规则在这个集群上**语义**成立(见 pkg/mysqlx/backend_check.go 里 TiDB 静默回退的说明)。
+	// v7.4 是 utf8mb4_0900_ai_ci 的支持下限;accounts.account 必须仍是大小写不敏感 + NO PAD,
+	// 否则唯一键语义与单机 MySQL 不一致(Go 侧对账号串零归一化,唯一性全靠 collation)。
+	if cfg.Login.RequireTiDB {
+		if verr := mysqlx.AssertTiDBVersionAtLeast(schemaCtx, db, 7, 4); verr != nil {
+			h.Errorw("msg", "account_backend_not_tidb", "err", verr)
+			os.Exit(1)
+		}
+		if verr := mysqlx.AssertColumnCollationSemantics(schemaCtx, db, "accounts", "account", true, true); verr != nil {
+			h.Errorw("msg", "account_collation_semantics_mismatch", "err", verr)
+			os.Exit(1)
+		}
+		h.Infow("msg", "account_backend_tidb_verified")
 	}
 	return data.NewMySQLAccountRepo(db), data.NewMySQLPlayerRoleRepo(db), data.NewMySQLSessionGenerationRepo(db), "mysql", db
 }

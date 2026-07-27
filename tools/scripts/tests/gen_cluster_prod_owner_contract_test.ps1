@@ -15,6 +15,8 @@ $ErrorActionPreference = 'Stop'
 # 清掉本进程的 owner DSN 环境变量:生成器参数默认取 PANDORA_OWNER_TIDB_DSN,
 # 外部若设置会把「缺失必须拒绝」用例兜底成通过(测试以 pwsh -File 独立进程运行,不污染调用方)。
 $env:PANDORA_OWNER_TIDB_DSN = $null
+# 同理清掉 account DSN 环境变量(2026-07-27 新增 -AccountStoreDsn 后,外部设置会污染用例)。
+$env:PANDORA_ACCOUNT_TIDB_DSN = $null
 $ProjectRoot = (Resolve-Path "$PSScriptRoot/../../..").Path
 $Generator = Join-Path $ProjectRoot 'tools/scripts/gen_cluster_config.ps1'
 $OutDirProd = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-prodowner-prod-' + [guid]::NewGuid().ToString('N'))
@@ -44,7 +46,11 @@ function Invoke-ProdGen([string[]]$OwnerDsnArgs, [string]$OutDir) {
         '-DsAuthMode', 'enforce', '-DsAuthorityMode', 'redis',
         '-DsFenceEtcdEndpoints', 'https://etcd.pandora.svc:2379',
         '-DsFenceKeysetRevision', 'pandora-ds-auth-v2-prod-r1',
-        '-DsTicketActiveKid', ('P' * 43), '-DsTicketKeysetRevision', '9')
+        '-DsTicketActiveKid', ('P' * 43), '-DsTicketKeysetRevision', '9',
+        # -Prod 自 2026-07-27 起同时强制 account 库 TiDB DSN。这里恒传**合法**值:
+        # 本测试的负向用例要证明的是「owner DSN 不合规必须拒绝」,若因缺 account DSN 而拒绝,
+        # 用例仍会 PASS 但证明的是另一回事(静默空转)。
+        '-AccountStoreDsn', 'prod_login:prod-acct-pwd-011@tcp(tidb.pandora.svc:4000)/pandora_account?parseTime=true&loc=UTC')
     $prodArgs += $OwnerDsnArgs
     & pwsh -NoProfile -File $Generator @prodArgs *> $null
     return $LASTEXITCODE

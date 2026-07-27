@@ -106,6 +106,11 @@ param(
     # dev 模板连单机 MySQL(无复制天然线性一致)只服务本地联调,MySQL 异步复制主从切换会回滚
     # 已确认写,owner CAS 回滚即可能双 owner,生产禁用。非 -Prod 也可显式覆盖(本地连真 TiDB 测)。
     [string]$OwnerStoreDsn = $env:PANDORA_OWNER_TIDB_DSN,
+    # login 账号库 DSN(全服单点扩容,2026-07-27):pandora_account 是**全国共享的单点**——
+    # 每次登录都要在 player_session_generations 上跑一个定序事务,写 QPS = 全服登录 QPS,
+    # login 无状态可水平扩但这个库摊不了;该库不可用 = 全国 100% 玩家进不去。
+    # -Prod 必须显式提供真 TiDB DSN(pandora_account 库),校验规则与 owner 同构。
+    [string]$AccountStoreDsn = $env:PANDORA_ACCOUNT_TIDB_DSN,
     # Stable/Canary DS 轨道：百分比按服务端确定性 cohort 分桶，seed 是发布配置而非密钥，
     # 但启用灰度后必须稳定不漂移；普通发布与两条 Fleet 共用同一 DSTicket keyset。
     [ValidateRange(0, 100)][int]$BattleCanaryPercent = 0,
@@ -454,6 +459,46 @@ if ($Prod) {
     # 非 -Prod 显式覆盖(本地连真 TiDB 测):只做注入安全校验,不强制 TiDB。
     if ($OwnerStoreDsn -match '[\x00-\x1F\x7F-\x9F]') {
         throw '[FATAL] -OwnerStoreDsn 含控制字符,不能安全写入 YAML。'
+    }
+}
+
+# ===== login 账号库 DSN(全服单点扩容,2026-07-27;校验规则与上面 owner 块同构)=====
+# ⚠️ 本块必须**排在 owner 块之后**:既有 -Prod 契约测试(b1 / owner / ratelimit / session_gate)
+# 的负向用例断言的是「缺 X 必须拒绝」,若新校验插到它们前面,那些用例会改为因「缺 account DSN」
+# 而失败 —— 仍然 PASS,却再也证明不了它自己声称的东西(静默空转)。新增校验一律往后追加。
+#
+# 为什么 -Prod 必须给:①pandora_account 是全服写压力汇聚点(每次登录一个定序事务),单 MySQL
+# 无横向逃生口;②不给就会继承 dev 模板的**公开凭据** pandora_dev_pwd@mysql:3306(见下方
+# $ProdDevCredentialWired 断言)。两条都属发布阻断级。
+if ($Prod) {
+    if ([string]::IsNullOrWhiteSpace($AccountStoreDsn)) {
+        throw '[FATAL] -Prod 必须提供 -AccountStoreDsn 或环境变量 PANDORA_ACCOUNT_TIDB_DSN(login 账号库真 TiDB DSN,pandora_account 库)。' +
+              ' 该库承载全服登录定序事务且不可分片降级,不允许 -Prod 产物继承 dev mysql 配置(公开凭据 pandora_dev_pwd)。'
+    }
+    if ($AccountStoreDsn -match '[\x00-\x1F\x7F-\x9F]') {
+        throw '[FATAL] account DSN 含控制字符(换行/制表等),多为误带的尾部空白,请清理后再注入。'
+    }
+    if ($AccountStoreDsn.Contains('pandora_dev_pwd')) {
+        throw '[FATAL] -Prod 的 account DSN 不能使用公开 dev 凭据(pandora_dev_pwd)。请换成 CI/CD 注入的真 TiDB 凭据。'
+    }
+    if ($AccountStoreDsn.Contains('mysql:3306') -or $AccountStoreDsn.Contains('127.0.0.1:3307')) {
+        throw '[FATAL] -Prod 的 account DSN 指向 dev MySQL(mysql:3306 / 127.0.0.1:3307)。生产必须连 TiDB(deploy/tidb-init/03-account-tidb.sql)。'
+    }
+    if ($AccountStoreDsn -cnotmatch '/pandora_account(?:[?]|$)') {
+        throw '[FATAL] -Prod 的 account DSN 必须指向 pandora_account 库(形如 user:pwd@tcp(tidb-host:4000)/pandora_account?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci)。'
+    }
+    # accounts.account 的唯一性语义由列 collation 决定(Go 侧对账号串零归一化)。dev 单机 MySQL
+    # 用 utf8mb4_0900_ai_ci(大小写/口音不敏感 + NO PAD);DSN 若改成 utf8mb4_bin,连接级
+    # collation 翻转会让「大小写不同的同名账号」被当成两个账号,老玩家登不进、且可被抢注。
+    # 这里只挡住显式写错的情形;真正的把关是 login 启动期对**列**做行为探针(§16 隐蔽 bug)。
+    if ($AccountStoreDsn -match 'collation=utf8mb4_bin') {
+        throw '[FATAL] -Prod 的 account DSN 不能用 collation=utf8mb4_bin:accounts.account 是客户端上报的账号名且带唯一键,' +
+              'Go 侧无归一化,大小写敏感化会让存量玩家登不进并开出同名抢注口子。请沿用 utf8mb4_0900_ai_ci(TiDB v7.4+ 原生支持)。'
+    }
+} elseif (-not [string]::IsNullOrWhiteSpace($AccountStoreDsn)) {
+    # 非 -Prod 显式覆盖(本地连真 TiDB 测):只做注入安全校验,不强制 TiDB。
+    if ($AccountStoreDsn -match '[\x00-\x1F\x7F-\x9F]') {
+        throw '[FATAL] -AccountStoreDsn 含控制字符,不能安全写入 YAML。'
     }
 }
 
@@ -1375,6 +1420,101 @@ function Set-ProdOwnerRequireTiDB([string]$text) {
     return [regex]::Replace($text, $pattern, '${1}require_tidb: true', 1)
 }
 
+# ===== -Prod 产物 dev 数据库凭据门禁(2026-07-27 审计发现)=====
+# 现状(实测):-Prod 产物里除 owner 外的**全部**服务都原样继承 dev 模板的公开凭据
+# `pandora:pandora_dev_pwd@tcp(mysql:3306)/...`。生成器对 JWT/DS/placement 各类密钥都有
+# 严格注入与拒绝复用,唯独数据库凭据没有任何把关 —— 密钥防线再严,库口令是公开的等于没锁。
+#
+# 一次性给 10 个库都加注入参数属于「泛化成统一机制」,与 §15 冲突,也需要先定生产存储拓扑
+# (几个 TiDB 集群、哪个库落哪),不是本次能替用户拍板的。故按 expand→migrate→contract:
+#   · $ProdDbCredentialWired  = 已接线 DSN 注入的服务 → **硬断言**不得残留 dev 凭据;
+#   · $ProdDbCredentialDebt   = 尚未接线的服务 → 显式登记为已知欠账,每接线一个删一行。
+# 清单删空后把本函数改成对全部产物无条件断言,并删掉 $ProdDbCredentialDebt。
+# 这样既 fail-closed 守住已完成的部分,又让剩余欠账无法被静默遗忘(不是注释里的 TODO,
+# 而是每次 -Prod 生成都会打印的清单)。
+$ProdDbCredentialWired = @('owner', 'login')
+$ProdDbCredentialDebt = @(
+    'player', 'data-service', 'friend', 'chat', 'guild', 'mail',
+    'inventory', 'auction', 'leaderboard', 'battle-result'
+)
+
+function Assert-ProdDbCredentials([string]$StageDir) {
+    if (-not $Prod) { return }
+    $leaked = @()
+    foreach ($name in $ProdDbCredentialWired) {
+        $path = Join-Path $StageDir "$name.yaml"
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "[FATAL] -Prod 产物缺少 $name.yaml,无法校验数据库凭据。"
+        }
+        if ((Get-Content -LiteralPath $path -Raw).Contains('pandora_dev_pwd')) {
+            $leaked += $name
+        }
+    }
+    if ($leaked.Count -gt 0) {
+        throw "[FATAL] -Prod 产物残留公开 dev 数据库凭据(pandora_dev_pwd):$($leaked -join ', ')。" +
+              ' 这些服务已接线 DSN 注入,出现该串说明注入未生效或模板被改,拒绝发布。'
+    }
+    # 未接线服务:逐次生成都把欠账打出来,防止「没人记得还有 10 个库用公开口令」。
+    $stillDebt = @()
+    foreach ($name in $ProdDbCredentialDebt) {
+        $path = Join-Path $StageDir "$name.yaml"
+        if ((Test-Path -LiteralPath $path) -and (Get-Content -LiteralPath $path -Raw).Contains('pandora_dev_pwd')) {
+            $stillDebt += $name
+        }
+    }
+    if ($stillDebt.Count -gt 0) {
+        Write-Host ("[WARN] -Prod 产物仍有 {0} 个服务使用公开 dev 数据库凭据(尚未接线 DSN 注入):{1}" -f `
+            $stillDebt.Count, ($stillDebt -join ', ')) -ForegroundColor Yellow
+        Write-Host '       上线前必须逐个接线(参照 -OwnerStoreDsn / -AccountStoreDsn),或确认这些库不在本次发布范围。' -ForegroundColor Yellow
+    }
+}
+
+# login 账号库 DSN 注入(全服单点扩容):整行替换 login.yaml 的 node.mysql_client.dsn。
+# 与 Set-OwnerStoreDsn 同构:旧值必须仍含 dev 凭据特征,证明是权威 dev 模板值,
+# 拒绝静默覆盖未知配置(防重复生成/手工改过的产物被无声吃掉)。
+function Set-AccountStoreDsn([string]$Text, [string]$NewDsn) {
+    $location = Get-YamlSectionSecretLocation 'login' $Text 'mysql_client' 'dsn'
+    if (-not $location.RawValue.Contains('pandora_dev_pwd')) {
+        throw '[FATAL] login.mysql_client.dsn 不是权威 dev 模板值(未见 dev 凭据特征),拒绝静默覆盖未知配置。'
+    }
+    $location.Lines[$location.SecretIndex] = $location.Prefix + '"' + (ConvertTo-YamlDoubleQuoted $NewDsn) + '"' + $location.Suffix
+    return ($location.Lines -join $location.Newline)
+}
+
+# -Prod 机械打开 login 服务端 TiDB 强校验:与 owner 同构的双层防线 —— 生成器只能校验 DSN
+# 字符串,证不了对端真是 TiDB,故服务端启动再查一次 VERSION() 并对 accounts.account 做
+# collation 行为探针,不符 fail-fast 拒启(见 pkg/mysqlx/backend_check.go)。
+function Set-ProdLoginRequireTiDB([string]$text) {
+    $pattern = '(?m)^([ \t]{2})require_tidb:[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
+    $anchorCount = [regex]::Matches($text, $pattern).Count
+    if ($anchorCount -ne 1) {
+        throw "[FATAL] login 模板 require_tidb 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text, $pattern, '${1}require_tidb: true', 1)
+}
+
+# -Prod 机械关断 login 全部开发期后门(2026-07-27 审计发现:此前 -Prod 产物原样继承
+# dev 模板的三个 true —— 生产**任意账号 + 任意密码都能登录并自动注册**)。
+#   dev_skip_password  true = 跳过 bcrypt 校验,任何密码都放行
+#   dev_auto_register  true = 账号不存在就自动建号(配合上一条 = 任意账号名即可开号)
+#   dev_allow_any_role true = allowed_role_ids 为空时不再 fail-closed,任意 role_id 都收
+# 三项都必须唯一锚点、机械置 false;违例拒绝生成。
+# 注:tools/scripts/release_preflight.ps1 名义上查过 dev_skip_password,但它无任何调用方、
+# 默认路径是失效的历史绝对路径、且 glob '*-prod.yaml' 在本仓匹配 0 个文件(实际是
+# login-prod.yaml.example),更关键的是它扫的是 services/ 下的**模板**而不是发布产物。
+# 因此把关必须做在生成器里。
+function Set-ProdLoginDevSwitchesOff([string]$text) {
+    foreach ($key in @('dev_skip_password', 'dev_auto_register', 'dev_allow_any_role')) {
+        $pattern = '(?m)^([ \t]{2})' + $key + ':[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
+        $anchorCount = [regex]::Matches($text, $pattern).Count
+        if ($anchorCount -ne 1) {
+            throw "[FATAL] login 模板 $key 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+        }
+        $text = [regex]::Replace($text, $pattern, ('${1}' + $key + ': false'))
+    }
+    return $text
+}
+
 # -Prod 全量机械关闭 gRPC reflection(审核 2026-07-22):dev 模板 enable_reflection: true
 # 只供本地 grpcurl 联调;线上开 reflection 会把全部服务面/消息结构暴露给任何可达客户端,
 # 便于探测攻击面。所有服务统一关,不许任何 -Prod 产物继承 dev 宽松档。
@@ -1781,6 +1921,14 @@ try {
             $out = Set-OwnerStoreDsn $out $OwnerStoreDsn
         }
         if ($Prod -and $s.Name -eq 'owner') { $out = Set-ProdOwnerRequireTiDB $out }
+        if ($s.Name -eq 'login' -and -not [string]::IsNullOrWhiteSpace($AccountStoreDsn)) {
+            # -Prod 时 AccountStoreDsn 已强制非空(全服单点校验块);非 -Prod 为显式本地覆盖。
+            $out = Set-AccountStoreDsn $out $AccountStoreDsn
+        }
+        if ($Prod -and $s.Name -eq 'login') {
+            $out = Set-ProdLoginRequireTiDB $out
+            $out = Set-ProdLoginDevSwitchesOff $out
+        }
         $out = Convert-Secret $s.Name $out
         if ($s.Name -eq 'battle-result' -and $DsAuthorityModeToInject -eq 'redis') {
             $out = Set-BattleResultRedisAuthorityIngress $out
@@ -1790,6 +1938,7 @@ try {
         [System.IO.File]::WriteAllText($dst, $out, (New-Object System.Text.UTF8Encoding($false)))
     }
     Sync-EnvoyJwks -TargetDir $stageDir
+    Assert-ProdDbCredentials -StageDir $stageDir
     Assert-GeneratedSet -StageDir $stageDir -ExpectedNames $expectedNames
     Publish-GeneratedSet -StageDir $stageDir -TargetDir $OutDir -ExpectedNames $expectedNames -OwnedNames $ownedNames -BackupDir $backupDir
     $publicationSucceeded = $true

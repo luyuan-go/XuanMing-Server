@@ -85,6 +85,17 @@ login:
   session_generation_enforce: true
   require_ticket_sjti: true
 
+  # 账号库后端强校验(全服单点扩容,2026-07-27)。
+  # false(dev 默认):连本机单机 MySQL 联调,不校验后端类型。
+  # true(-Prod 产物由 gen_cluster_config.ps1 机械翻转):启动期强制
+  #   ① VERSION() 含 -TiDB-(生成器只能校验 DSN 字符串,证不了对端真是 TiDB);
+  #   ② accounts.account 的排序规则**实际行为**仍是大小写不敏感 + NO PAD。
+  # ②不能省:TiDB 的 _ci 排序规则只在集群以 new_collations_enabled_on_first_bootstrap=true
+  # 初始化时才真正大小写不敏感,否则语义上按 binary 比较且**不报错**;该参数首次 bootstrap
+  # 后不可更改。漂移的后果是老玩家用不同大小写登不进(dev_auto_register 若误开还会静默开新号),
+  # 以及大小写变体抢注同名账号。故必须行为探针 fail-closed,不能只看版本号。
+  require_tidb: false
+
   # 开发期免密登录(⚠️ 仅本机 / 联调,严禁上生产):
   #   true  → 跳过密码校验;账号不存在时自动懒注册,返回稳定 player_id
   #           客户端随便填一个账号名就能进,无需独立注册流程

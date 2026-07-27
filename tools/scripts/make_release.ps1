@@ -121,9 +121,19 @@ $clientRefs = @(foreach ($rel in $ClientPackages) {
     [pscustomobject]@{ path = $rel; build_info = $bi }
 })
 
+# ---- 镜像 build-info 字段兼容 ----
+# publish_offline_images.ps1 把版本戳做成自适应 SVN/git 后,字段由 git_sha/git_dirty
+# 改名为 vcs/source_rev/dirty。制品库里已发布的历史目录仍是旧字段名且**不可变**,
+# 所以这里读新名、回退旧名 —— 否则对旧制品发版会静默得到 null(不是报错,是错值)。
+# ?? 只在左值为 $null 时回退:新制品的 dirty=$false 不会被误判成"没有这个字段"。
+$imagesSrcRev = $imagesInfo.source_rev ?? $imagesInfo.git_sha
+$imagesDirty  = $imagesInfo.dirty      ?? $imagesInfo.git_dirty
+$imagesVcs    = $imagesInfo.vcs        ?? 'git'
+if (-not $imagesSrcRev) { throw "镜像 build-info.json 缺少源码版本(source_rev / git_sha 均为空):$imagesDir" }
+
 # ---- dirty 守卫(正规发布不应引用 dirty 来源) ----
 $dirtySources = @()
-if ($imagesInfo.git_dirty) { $dirtySources += "镜像 $ImagesVersion(git dirty)" }
+if ($imagesDirty) { $dirtySources += "镜像 $ImagesVersion($imagesVcs dirty)" }
 foreach ($c in $clientRefs) { if ($c.build_info -and $c.build_info.dirty) { $dirtySources += "UE 包 $($c.path)(svn dirty)" } }
 if ($dirtySources.Count -gt 0 -and -not $AllowDirty) {
     Write-Host '[ERR ] 以下制品来自 dirty 工作副本,正规发布不应引用:' -ForegroundColor Red
@@ -153,8 +163,9 @@ $release = [pscustomobject]@{
     images          = [pscustomobject]@{
         version    = $ImagesVersion
         path       = "releases/images/$ImagesVersion"
-        git_sha    = $imagesInfo.git_sha
-        git_dirty  = $imagesInfo.git_dirty
+        vcs        = $imagesVcs      # svn(团队权威源 ^/trunk/Server)/ git(个人仓库)
+        source_rev = $imagesSrcRev   # SVN 为 r<rev>,git 为 g<sha>
+        dirty      = $imagesDirty
         image_list = $imagesManifest
     }
     client_packages = $clientRefs
@@ -171,7 +182,7 @@ $md = @()
 $md += "# Pandora $Version"
 $md += ""
 $md += "- 发布时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
-$md += "- 镜像版本: $ImagesVersion (git $($imagesInfo.git_sha)$(if($imagesInfo.git_dirty){' dirty'}))"
+$md += "- 镜像版本: $ImagesVersion ($imagesVcs $imagesSrcRev$(if($imagesDirty){' dirty'}))"
 if ($clientRefs.Count -gt 0) {
     $md += "- UE 包:"
     foreach ($c in $clientRefs) { $md += "  - $($c.path)" }

@@ -36,7 +36,9 @@ spec:
       health:
         initialDelaySeconds: 15
         periodSeconds: 10
-        failureThreshold: 3
+        # 实验值,与 20-fleet-battle.yaml 同步(INC-20260727,推导与回收计划见该文件注释;
+        # §9.21 要求 stable/canary 两 Fleet 参数同改同收)。
+        failureThreshold: 12
       template:
         metadata:
           labels:
@@ -122,7 +124,8 @@ spec:
                   memory: 1Gi
                 limits:
                   cpu: "2"
-                  memory: 2Gi
+                  # 实验值,与 20-fleet-battle.yaml 同步(INC-20260727 OOM 定谳与取值推导见该文件注释)。
+                  memory: 12Gi
           volumes:
             # DSTicket v2 公钥 JWKS(只读,公钥非机密,用 ConfigMap 而非 Secret;由启动器/运维从
             # dsticket_keyset.ps1 create-only 投递的 jwks.json，私钥绝不进 DS 镜像/Pod)。

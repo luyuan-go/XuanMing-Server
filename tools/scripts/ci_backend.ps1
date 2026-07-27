@@ -70,8 +70,15 @@ Write-Host "`n[ OK ] 全部 $($modules.Count) 个模块 build + test 通过。" 
 # 只登记**当前绿**的脚本。基线即红的(gen_cluster_b1_contract_test 卡在未实现的
 # placement 分权 key 注入)不登记:把已知红的脚本塞进 CI 只会让整条流水线长期红,
 # 从而掩盖真实回归。要登记它必须先把那条特性做完或明确退役。
+# 2026-07-27:补登记三个此前一直绿却没进门禁的脚本 + 新增的 account 契约测试。
+# 只写进 tools/scripts/README.md 的表格不算门禁 —— 那是文档,这个数组才是 CI 实际执行的清单。
 $contractTests = @(
     'tools/scripts/tests/gen_cluster_prod_progress_contract_test.ps1'
+    'tools/scripts/tests/gen_cluster_prod_owner_contract_test.ps1'
+    'tools/scripts/tests/gen_cluster_prod_ratelimit_contract_test.ps1'
+    'tools/scripts/tests/gen_cluster_session_gate_contract_test.ps1'
+    # -Prod 账号库 TiDB DSN + login 开发后门关断(免密登录曾随 -Prod 产物出厂,见脚本头注释)。
+    'tools/scripts/tests/gen_cluster_prod_account_contract_test.ps1'
 )
 $contractFailed = @()
 foreach ($rel in $contractTests) {

@@ -38,23 +38,60 @@ $ProjectRoot = (Resolve-Path "$ScriptDir/../..").Path
 function Write-Info($m) { Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Write-Ok($m)   { Write-Host "[ OK ] $m" -ForegroundColor Green }
 
-# ---- 1) git 版本戳 ----
+# ---- 1) 版本戳(自适应 SVN / git) ----
+# 后端代码同时存在于团队 SVN(^/trunk/Server,与 ^/trunk/Client 同级)和个人 git 仓库。
+# CI 构建的是 SVN 权威源,开发者本机可能在 git 工作副本里跑,故两种都要支持。
+# SVN 优先:它是团队权威源;且 r<rev> 与客户端包命名一致,前后端版本戳统一。
 Push-Location $ProjectRoot
 try {
-    $sha = (git rev-parse --short=12 HEAD 2>$null | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or -not $sha) { throw '无法读取 git HEAD,发布必须能追溯到源码版本。' }
-    $dirty = @(git status --porcelain 2>$null | Where-Object { $_ }).Count -gt 0
+    # 判定用**命令退出码**,不探测 .svn / .git 目录是否存在:
+    # SVN 1.7+ 只在工作副本**根**保留一个 .svn 目录。CI 若检出 ^/trunk(Server 与 Client 同级)
+    # 而不是 ^/trunk/Server,$ProjectRoot 下就没有 .svn,按目录探测会误判成"不是 SVN 工作副本"
+    # 并落到最后的 throw。svnversion 在工作副本的任意子目录都能正确解析,没有这个盲区。
+    $svnAvailable = [bool](Get-Command svnversion -ErrorAction SilentlyContinue)
+    $svnver = $null
+    if ($svnAvailable) {
+        $svnver = (svnversion . 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $svnver -or $svnver -match 'Unversioned|exported') { $svnver = $null }
+    }
+    $gitAvailable = [bool](Get-Command git -ErrorAction SilentlyContinue)
+    $gitSha = $null
+    if (-not $svnver -and $gitAvailable) {
+        $gitSha = (git rev-parse --short=12 HEAD 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $gitSha) { $gitSha = $null }
+    }
+
+    if ($svnver) {
+        $vcs = 'svn'
+        if ($svnver -notmatch '^(\d+)(:(\d+))?([MSP]*)$') { throw "svnversion 输出无法解析:'$svnver'" }
+        # 混合版本取较大者;M(本地改动)/S(切换)/P(部分检出)任一出现都算 dirty
+        $srcId = 'r' + $(if ($Matches[3]) { $Matches[3] } else { $Matches[1] })
+        $dirty = [bool]$Matches[2] -or [bool]$Matches[4]
+    }
+    elseif ($gitSha) {
+        $vcs   = 'git'
+        $srcId = "g$gitSha"
+        $dirty = @(git status --porcelain 2>$null | Where-Object { $_ }).Count -gt 0
+    }
+    else {
+        # 把"客户端没装"和"这里确实不是工作副本"分开报,否则 CI 上二者症状一样、极难定位。
+        throw @"
+无法取得可追溯的源码版本,拒绝发布。$ProjectRoot 既不是可识别的 SVN 工作副本,也不是 git 仓库。
+  svnversion 可用: $svnAvailable$(if (-not $svnAvailable) { '   ← SVN 命令行客户端未安装或不在 PATH;Jenkins 的 Subversion 插件不提供它' })
+  git 可用       : $gitAvailable
+"@
+    }
 } finally { Pop-Location }
 
 if ($dirty -and -not $AllowDirty) {
-    throw 'git 工作区有未提交改动,发布的镜像无法追溯到确定版本。先提交,或本机联调明确加 -AllowDirty。'
+    throw "$vcs 工作区有未提交改动($srcId),发布的镜像无法追溯到确定版本。先提交,或本机联调明确加 -AllowDirty。"
 }
 # 注意:git 快照版本变量名不能用 $version —— PowerShell 变量名大小写不敏感,$version 与参数
 # $Version 是同一变量,会覆盖用户传入的发布版本号(v0.1.0 → g<sha>),连带污染下面的 channel /
 # folderVer / app_version 判定。用独立名 $snapshotVer 隔离。
-$snapshotVer = if ($dirty) { "g$sha-dirty-" + (Get-Date -Format 'yyyyMMdd-HHmmss') } else { "g$sha" }
+$snapshotVer = if ($dirty) { "$srcId-dirty-" + (Get-Date -Format 'yyyyMMdd-HHmmss') } else { $srcId }
 
-# 频道:有 -Version = 发布版本轨(releases\,目录名=版本号);否则 dev 快照轨(snapshots\,目录名=git sha)
+# 频道:有 -Version = 发布版本轨(releases\,目录名=版本号);否则 dev 快照轨(snapshots\,目录名=SVN r<rev> 或 git g<sha>)
 $channel   = if ($Version) { 'release' } else { 'snapshot' }
 $folderVer = if ($Version) { ($Version -replace '[^A-Za-z0-9._-]', '_') } else { $snapshotVer }
 
@@ -63,8 +100,13 @@ $folderVer = if ($Version) { ($Version -replace '[^A-Za-z0-9._-]', '_') } else {
 # 免打 git tag(标准 CI 做法:显式 VERSION 优先于 git describe)。Commit 字段仍记 git sha 作溯源。
 if ($Version) {
     $env:PANDORA_RELEASE_VERSION = $Version
-    Write-Info "镜像版本注入为 $Version(覆盖 git describe;git sha $sha 仍作溯源)"
+    Write-Info "镜像版本注入为 $Version(覆盖默认版本;源码版本 $srcId 仍作溯源)"
 }
+# 源码版本下传给 start.ps1 的 Get-VersionInfo。必须这样传,不能让 start.ps1 自己再探一次 VCS:
+# 它原本只会 git describe / git rev-parse,在 SVN 检出下是**软回退**(不报错),结果 21 个业务镜像
+# 被静默烙上 version=dev / commit=unknown —— 编译期注入,事后无法从镜像追回是哪次提交。
+# 版本来源收敛在本脚本一处(§15.5 代码路径直达),start.ps1 只消费。
+$env:PANDORA_RELEASE_COMMIT = $srcId
 # 显式传参:数组 splat 传 switch 参数(-Build)会被 PowerShell 误绑成 -BuildMode 的值,必须显式写。
 $exportScript = Join-Path $ScriptDir 'export_images.ps1'
 if ($SkipBuild) { & $exportScript } else { & $exportScript -Build -BuildMode host }
@@ -103,8 +145,9 @@ try {
         version      = $folderVer
         channel      = $channel     # snapshot(dev) / release(发布版本)
         app_version  = $Version    # 注入镜像的发布版本号(v0.1.0);空=未指定,走 git describe 默认
-        git_sha      = $sha
-        git_dirty    = $dirty
+        vcs          = $vcs      # svn(团队权威源 ^/trunk/Server) / git(个人仓库)
+        source_rev   = $srcId    # SVN 为 r<rev>,git 为 g<sha>;与客户端包命名一致
+        dirty        = $dirty
         image_count  = $imagesManifest.Count
         published_at = (Get-Date -Format 'o')
         machine      = $env:COMPUTERNAME

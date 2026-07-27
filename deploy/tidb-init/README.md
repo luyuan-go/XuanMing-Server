@@ -14,16 +14,68 @@
 ## 文件
 
 - `01-social-tidb.sql` —— `pandora_social` 库表的 TiDB 版 DDL(已做 §8.2 雪花主键热点处理;
-  含 friend/chat + guild/group 全部同库表)。
+  含 friend/chat + guild/group + mail 全部同库表)。
+- `02-owner-tidb.sql` —— `pandora_owner` 每玩家 owner 权威(§9.22,生产强制 TiDB)。
+- `03-account-tidb.sql` —— `pandora_account` 登录账号 / 会话代际 / 选角(全服单点扩容,2026-07-27)。
 - `../docker-compose.tidb.yml` —— 本地 TiDB 集群（PD + TiKV + TiDB，单副本，与单 MySQL 并存）。
-- `../../tools/scripts/tidb_up.ps1` —— 一键起集群 + 建账号 + 装载 DDL。
+- `../../tools/scripts/tidb_up.ps1` —— 一键起集群 + 建账号 + 装载**本目录全部** DDL。
+
+> 2026-07-27 修正两处会静默出错的漂移:
+> ① `tidb_up.ps1` 此前**硬编码只装载 `01-social-tidb.sql`**,`02-owner-tidb.sql` 从未被这条链路
+> 装载过;现改为遍历本目录按文件名排序逐个装载(每份 DDL 都自包含,可重复执行)。
+> ② `01-social-tidb.sql` **漏了整张 `player_mail_archive` 表**和四个 sweep 索引
+> (`sys_mail`/`guild_mail` 的 `idx_end`、`player_mail` 的 `idx_expire`、`player_mail_claim` 的
+> `idx_mail`)。而 mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),
+> `mail_repo.go` 的 `ArchiveAndDeletePersonal` 在同事务里写归档表 → 1146 → 整批回滚 →
+> 保留期 sweep 永远卡在同一批。缺索引则让 §9.24 清理走全表扫描,且 `dbcheck` 门禁判红。
 
 ## 一条命令起（推荐）
 
 ```pwsh
-pwsh tools/scripts/tidb_up.ps1          # 起集群 + 建 pandora 账号 + 装载 01-social-tidb.sql
-friend --conf services/social/friend/etc/friend-dev-tidb.yaml   # friend 连 TiDB
+pwsh tools/scripts/tidb_up.ps1          # 起集群 + 建 pandora 账号 + 装载本目录全部 DDL
 ```
+
+装载后各服务连 TiDB:
+
+```pwsh
+login   --conf services/account/login/etc/login-dev-tidb.yaml
+friend  --conf services/social/friend/etc/friend-dev-tidb.yaml
+guild   --conf services/social/guild/etc/guild-dev-tidb.yaml
+chat    --conf services/social/chat/etc/chat-dev-tidb.yaml
+mail    --conf services/social/mail/etc/mail-dev-tidb.yaml
+```
+
+## ⚠️ 生产前置条件:collation 框架必须在建集群时开启(事后不可改)
+
+**这一条比任何 DDL 都优先,配错只能重建集群。**
+
+本目录多处使用列级 `utf8mb4_0900_ai_ci` 保「大小写 / 口音不敏感」的业务语义:
+`guilds.name`、`chat_groups.name`(重名判定)、以及 `pandora_account` 全库
+(尤其 `accounts.account` —— 客户端上报的账号名 + 唯一键,而 Go 侧对账号串**零归一化**)。
+
+它依赖两个条件:
+
+| 条件 | 要求 | 不满足时的表现 |
+|---|---|---|
+| TiDB 版本 | ≥ **v7.4.0** | 更早版本**静默回退**到 `utf8mb4_bin`,不报错 |
+| 新 collation 框架 | 集群首次 bootstrap 时 `new_collations_enabled_on_first_bootstrap = true`(自 v6.0.0 起默认 true) | TiDB 只在**语法上**接受 `_ci`,**语义上按 binary 比较**,不报错 |
+
+第二个参数**只在集群首次 bootstrap 生效,建完集群改不了**。用 TiUP / Operator 建生产集群时
+如果没显式开,后果是:老玩家用与注册时大小写不同的账号名登录会「查无此人」,并且可以用大小写
+变体抢注同名账号 —— 而且**全程不报错**,只在真实玩家登录时暴露。
+
+本地 `docker-compose.tidb.yml` 固定 `pingcap/*:v8.5.1`(≥7.4 且默认开新框架),满足前置。
+生产建集群后请先自查:
+
+```sql
+SELECT VERSION();
+SELECT VARIABLE_VALUE FROM mysql.tidb WHERE VARIABLE_NAME='new_collation_enabled';  -- 必须 True
+SELECT 'A' COLLATE utf8mb4_0900_ai_ci = 'a', 'a ' COLLATE utf8mb4_0900_ai_ci = 'a'; -- 必须 1, 0
+```
+
+不必只靠人工自查:`login` 在 `require_tidb: true`(-Prod 产物机械注入)时会在**启动期**用
+`pkg/mysqlx.AssertColumnCollationSemantics` 对 `accounts.account` 做同样的行为探针,
+不符即 fail-fast 拒启(§16 隐蔽 bug / 验收底线第 3 条 fail-closed 优先)。
 
 停：`pwsh tools/scripts/tidb_up.ps1 -Down`（加 `-Volumes` 清数据）。
 

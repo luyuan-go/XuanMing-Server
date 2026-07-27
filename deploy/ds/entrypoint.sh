@@ -48,15 +48,23 @@ if [[ -n "${MAX_PLAYERS}" ]]; then
   MAP_URL="${MAP_URL}?MaxPlayers=${MAX_PLAYERS}"
 fi
 
-SERVER_SH="/home/pandora/server/PandoraServer.sh"
-if [[ ! -x "${SERVER_SH}" ]]; then
-  # 不同 UE 版本归档脚本名可能不同，做个兜底查找。
-  SERVER_SH="$(find /home/pandora/server -maxdepth 2 -name "*Server.sh" | head -n1 || true)"
-fi
+SERVER_BIN="/home/pandora/server/Pandora/Binaries/Linux/PandoraServer"
+if [[ -x "${SERVER_BIN}" ]]; then
+  # Dockerfile 已在镜像构建期设置执行位。直接启动二进制，避免 UE 归档脚本每次
+  # chmod 都触发 overlayfs 对数百 MB 二进制做 copy-up，拖过 Agones Health 阈值。
+  SERVER_LAUNCH=("${SERVER_BIN}" Pandora)
+else
+  SERVER_SH="/home/pandora/server/PandoraServer.sh"
+  if [[ ! -x "${SERVER_SH}" ]]; then
+    # 不同 UE 版本归档脚本名可能不同，做个兜底查找。
+    SERVER_SH="$(find /home/pandora/server -maxdepth 2 -name "*Server.sh" | head -n1 || true)"
+  fi
 
-if [[ -z "${SERVER_SH}" || ! -e "${SERVER_SH}" ]]; then
-  echo "[entrypoint] 找不到服务器启动脚本(PandoraServer.sh)，请检查 stage/LinuxServer 打包产物。" >&2
-  exit 1
+  if [[ -z "${SERVER_SH}" || ! -e "${SERVER_SH}" ]]; then
+    echo "[entrypoint] 找不到服务器二进制或启动脚本，请检查 stage/LinuxServer 打包产物。" >&2
+    exit 1
+  fi
+  SERVER_LAUNCH=("${SERVER_SH}")
 fi
 
 # UE 的 LogNet 默认会把 Login/Join URL 原样写入 stdout；URL 中含短期 DSTicket，
@@ -65,10 +73,10 @@ fi
 # 之后，避免调试参数意外重新打开含票的 Display/Log 级别。
 #
 # 不在启动日志回显 EXTRA_ARGS：它是运维扩展入口，未来可能承载敏感值。
-echo "[entrypoint] 启动 Pandora DS: ${SERVER_SH} ${MAP_URL} -port=${PORT} -log [LogNet=Warning]"
+echo "[entrypoint] 启动 Pandora DS: ${SERVER_LAUNCH[*]} ${MAP_URL} -port=${PORT} -log [LogNet=Warning]"
 echo "[entrypoint] AGONES_SDK_HTTP_PORT=${AGONES_SDK_HTTP_PORT:-<unset>} AGONES_SDK_GRPC_PORT=${AGONES_SDK_GRPC_PORT:-<unset>}"
 
 # exec 让 DS 成为 PID 1，正确接收 SIGTERM（Agones 回收 Pod 时优雅退出）。
-exec "${SERVER_SH}" "${MAP_URL}" -port="${PORT}" -log ${EXTRA_ARGS} \
+exec "${SERVER_LAUNCH[@]}" "${MAP_URL}" -port="${PORT}" -log ${EXTRA_ARGS} \
   '-ini:Engine:[Core.Log]:LogNet=Warning' \
   '-LogCmds=LogNet Warning'

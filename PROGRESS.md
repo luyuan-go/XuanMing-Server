@@ -1814,3 +1814,112 @@ R6 只读复审推翻上一条"P0 5/5 完成"的结论(上一条中"旧流零轮
   test/vet PASS；pkg/dsauthfence 与 hub_allocator 全模块 test/vet PASS；
   `ds_auth_activation_contract_test.ps1` PASS；`git diff --check` 干净。真 MySQL/Redis HA/
   etcd 分区/SIGKILL/race/多副本部署/UE 编译与玩家路径均未执行，三份事故档案保持未关闭。
+
+## 2026-07-27:全服单点存储审计 —— account 迁 TiDB 落地 + 两个 -Prod 安全 P0(Claude)
+
+**起因**:用户问「全服的东西不能就一个 MySQL 库吧」。对 10 个库域做并行审计 + 对抗验证
+(验证方直接连本机在跑的 `pingcap/tidb:v8.5.1` 做实测,而非查文档推断)。
+
+### 一、审计推翻的结论(先说,避免后人照着错清单干活)
+
+- **「TiDB 不支持 utf8mb4_0900_ai_ci / 带它的 DSN 连不上 / 建表即失败」全部不成立**。
+  v8.5.1 上 `SHOW COLLATION` 显示 Compiled=Yes、NO PAD;`new_collation_enabled=True`;
+  实测 `'a'='A'`=1、`'a '='a'`=0。该 TiDB 上九个 `pandora_*` 库早就用这个 collation 建好在跑。
+  **不要**把 DSN / DDL 改成 `utf8mb4_bin` —— 那才会引入 PAD SPACE 与大小写语义翻转。
+- **「TiDB 无 gap 锁,所以 `WHERE player_id=? FOR UPDATE` 挡不住并发 INSERT」只对范围条件成立**。
+  实测:悲观事务对**不存在的行**做主键点条件 FOR UPDATE 照样阻塞并发 INSERT(~7s 直到提交)。
+  `session_generation.go:161` 那种主键点查不受影响;mail 的 `COUNT(*) ... FOR UPDATE`(二级索引
+  范围条件)才是真穿透。
+- **`session_generation.go` 的 errcode 条不成立**:TiDB 实测回**兼容的 1213**,`isRetryableTxErr`
+  照常生效;且 `biz/login.go:363` 把 `PersistSessionJTI` 的任何错误统一包成 `ErrUnavailable`
+  (可重试),内层 `ErrInternal` 只是 cause,到不了客户端,不违反底线 1。
+- 方法学教训:凡涉及 TiDB 的结论,先跑 `SELECT VERSION()` /
+  `SELECT VARIABLE_VALUE FROM mysql.tidb WHERE VARIABLE_NAME='new_collation_enabled'` /
+  `SHOW COLLATION`,并发语义必须写双 goroutine 探针实测,不能靠文档措辞推断。
+
+### 二、本次修复的两个 -Prod 安全 P0(与 TiDB 无关,但优先级更高)
+
+1. **`-Prod` 产物的 login.yaml 带着 `dev_skip_password: true` + `dev_auto_register: true` +
+   `dev_allow_any_role: true`** —— 即**生产任意账号 + 任意密码都能登录并自动开号**。
+   实跑生成器确证(不是读代码推断)。生成器 `Set-Prod*` 家族此前完全没覆盖这三项;名义检查器
+   `release_preflight.ps1` 三重失效(无调用方 / 默认路径是失效的历史绝对路径 `E:\work\Pandora\services` /
+   glob `*-prod.yaml` 在本仓匹配 0 个文件,且扫模板而非发布产物)。
+   → 新增 `Set-ProdLoginDevSwitchesOff`(三项锚点 count≠1 即拒绝生成)。
+2. **`-Prod` 产物除 owner 外全部 11 个服务带着公开 dev 库口令 `pandora_dev_pwd@mysql:3306`**。
+   生成器对 JWT / DS / placement 各类密钥都有严格注入与拒绝复用,唯独数据库凭据零把关。
+   → 新增 `Assert-ProdDbCredentials`:已接线注入的服务(owner / login)**硬断言**无 dev 凭据;
+   其余 10 个登记在 `$ProdDbCredentialDebt` 里,每次 -Prod 生成打印欠账清单(expand→migrate→
+   contract,清单删空后改成无条件断言)。一次性泛化成统一 `-DbDsn` 机制与 §15 冲突且需先定
+   生产存储拓扑,不在本次替用户拍板。
+
+### 三、owner 的 latent P0(生产首次部署即 100% 失败)
+
+`owner_repo.go:185` 用 `sql.TxOptions{ReadOnly: true}` → go-sql-driver 发
+`START TRANSACTION READ ONLY` → TiDB 在默认 `tidb_enable_noop_functions=OFF` 下返回
+**`Error 1235: function READ ONLY has only noop implementation in tidb now`**。
+owner 生产被 `-Prod` 机械注入 `require_tidb: true` 强制连 TiDB,而 `Query` 是 owner **唯一读路径**
+→ 一上生产 100% 读失败;dev 走 3307 单机 MySQL 所以永远测不出来。
+→ 改 `BeginTx(ctx, nil)`(普通事务按 start_ts 取快照,同样满足「两读同快照」)。
+**不要**用 DSN 打开 `tidb_enable_noop_functions` 绕过。
+
+### 四、account 迁 TiDB 落地(用户要求的主线)
+
+- `deploy/tidb-init/03-account-tidb.sql`(新):雪花 PK 三表 NONCLUSTERED + SHARD_ROW_ID_BITS=4 +
+  PRE_SPLIT_REGIONS=4;`account_devices`/`account_bans` 代理主键 AUTO_RANDOM(已核实 Go 侧不读
+  LastInsertId、不依赖 id 顺序)。**collation 保持 utf8mb4_0900_ai_ci,刻意不跟随 01/02 用
+  utf8mb4_bin** —— 本库有客户端上报的字符串唯一键(`accounts.account`、`account_devices.device_id`)
+  且 Go 侧零归一化,唯一性语义由 collation 决定。
+  **已在真实 TiDB v8.5.1 上装载验证**:五表属性符合预期(SHARD_BITS=4 / NONCLUSTERED /
+  PK_AUTO_RANDOM_BITS=5),`accounts.account` collation 正确,行为探针 CI=true、PAD=false。
+- `pkg/mysqlx/backend_check.go`(新):`AssertTiDBBackend` 从 owner 的 internal **下沉共享**
+  (各服务独立 go module,login 无法 import owner internal;两份实现必然漂移,§15.5);
+  新增 `AssertTiDBVersionAtLeast`(v7.4 下限,解析失败 fail-closed)与
+  `AssertColumnCollationSemantics`(**行为探针**:大小写不敏感 + NO PAD 两个维度)。
+  owner 侧保留同名薄封装,不改既有调用点与测试。
+- `login`:新增 `login.require_tidb`(dev false / -Prod 机械 true),启动期跑上述两条断言;
+  `CheckTables` 从 2 张表补齐到 5 张;新增 `login-dev-tidb.yaml`(login-dev.yaml 逐行副本,仅改端口)。
+- 生成器:新增 `-AccountStoreDsn` / `PANDORA_ACCOUNT_TIDB_DSN`(-Prod 强制),校验规则与 owner 同构
+  并**多一条**:拒绝 `collation=utf8mb4_bin`。校验块**排在 owner 块之后**——插到前面会让既有
+  -Prod 负向用例改为因「缺 account DSN」而失败,仍 PASS 却证明不了自己声称的东西(静默空转)。
+- `tidb_up.ps1`:此前**硬编码只装 `01-social-tidb.sql`**(`02-owner-tidb.sql` 从未被这条链路装载过),
+  改为遍历目录逐个装载 + 循环内判 `$LASTEXITCODE` + 库名从 DDL 提取并与白名单对账 + 装载后回读断言。
+
+### 五、顺带修掉的 social(已在 TiDB 上跑)的实际破损
+
+`deploy/tidb-init/01-social-tidb.sql` **漏了整张 `player_mail_archive` 表**和四个 sweep 索引
+(`sys_mail`/`guild_mail` 的 `idx_end`、`player_mail` 的 `idx_expire`、`player_mail_claim` 的 `idx_mail`)。
+mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mail_repo.go:479` 的
+`ArchiveAndDeletePersonal` 在**同事务**里写归档表 → 1146 → 整批回滚 → 保留期 sweep 永远卡在同一批;
+缺索引则让 §9.24 清理走全表扫描且 `dbcheck` 判红。已补齐并在真实 TiDB 上装载验证(18 表)。
+
+### 六、验证
+
+- `pkg` build/vet PASS;`pkg/mysqlx` 单测 PASS;**对真实 TiDB v8.5.1 的集成探针 PASS**
+  (`PANDORA_TIDB_TEST_DSN=... go test ./mysqlx/... -run RealBackend`)。
+- `owner` / `login` 全模块 `go build` + `go vet` + `go test` PASS。
+- 五个 -Prod 契约测试全 PASS(含新增 `gen_cluster_prod_account_contract_test.ps1`,负向用例断言
+  **错误文本**而非仅退出码);四个此前一直绿却没进门禁的脚本已补登记进 `ci_backend.ps1`
+  的 `$contractTests`(README 表格是文档,那个数组才是 CI 实际执行的清单)。
+- 两份 TiDB DDL 均在真实 v8.5.1 上装载 + 属性回读 + scratch 库清理验证。
+
+### 七、未做 / 已知未关闭(不得当成已完成)
+
+- **`gen_cluster_b1_contract_test` 仍红,且是存量红**:基线(stash 掉本次改动)同样失败于
+  `缺 placement 分权 key`,失败的服务名在基线与改动后都**随机变化**(该断言遍历的是普通 `@{}`
+  哈希表,枚举顺序不定)。本次未引入、也未修复,故未登记进 CI。
+- **其余 10 个服务仍用公开 dev 库口令**(见 `$ProdDbCredentialDebt`),上线前必须逐个接线。
+- **审计确认但本次未修的 TiDB 锁模型 blocker(实测确凿,均属「先 FOR UPDATE 拿锁、再用普通
+  SELECT 读同事务内参与计算的值」这一个共性模式;那个普通 SELECT 必须也加 FOR UPDATE)**:
+  `inventory_repo.go:289`(claimLedger 回读)、`inventory_instance.go:193/206`(返回残缺结果而非报错,
+  最危险)、`bag_repo.go:158/165`、`player/attribute_repo.go:172`(SUM 非加锁读 → 属性点数算错)、
+  `mail_repo.go:414`(`COUNT(*) ... FOR UPDATE` 范围条件 → 上限 TOCTOU 被穿透,应照 friend 的
+  `friend_player_guards` 守卫行改造)。每条都需按 §16.6 补「修复前失败、修复后通过」的回归测试,
+  未纳入本次范围。
+- **审计指出的更高优先级非 TiDB 问题**:`inventory` 的保留期清理每轮**每表只删一批**
+  (`sweep.go:31`,500 行/5min × replicas=1 ≈ 144k 行/天)结构性追不平 `inventory_ledger` 写入,
+  违反 §8 压测断言;`battle` 已因同一问题改成排空循环,`inventory`/`chat`/`auction`/`mail` 未改。
+  **迁存储不改清理速率,积压照样只增不减** —— 这条优先级高于任何「迁 TiDB」讨论。
+- 未跑:真实数据迁移(Dumpling/Lightning)、`dbcheck`(其单 `-dsn` 假设与「owner 已在 TiDB、
+  account 将在 TiDB」的拆库拓扑冲突,**今天就已经过不了**)、k8s/minikube 无 TiDB 故
+  `require_tidb` 路径在本仓任何环境都不会被执行(owner 今天即如此)、`run_services.ps1` 的 login
+  仍指向 `login-dev.yaml`(未默认切 TiDB,避免动到本地链路;需要时手动用 `login-dev-tidb.yaml`)。

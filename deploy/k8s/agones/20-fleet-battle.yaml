@@ -39,7 +39,12 @@ spec:
       health:
         initialDelaySeconds: 15
         periodSeconds: 10
-        failureThreshold: 3
+        # 实验值(INC-20260727 Artic01):health ping 现由 DS 游戏线程 TimerManager 驱动,重图同步
+        # 加载(BlockTillLevelStreamingCompleted)期间 ping 断流,3×10s 窗口会把"正在加载"误判成
+        # 死进程清场。12×10s=120s 覆盖"暖载 17.9s × 冷 IO 数倍"的保守上界(待 Linux cooked 实测
+        # 复核)。回收计划:UPandoraAgonesSubsystem 后台线程 pinger 上线并验证加载期 ping 不断流
+        # 后,本值必须收回 3(真死进程 3 个周期判死,快速补位)。
+        failureThreshold: 12
       template:
         metadata:
           labels:
@@ -125,7 +130,13 @@ spec:
                   memory: 1Gi
                 limits:
                   cpu: "2"
-                  memory: 2Gi
+                  # 实验值(INC-20260727):Artic01(WP 83 cell,server cook 190.7MB)加载中段冲破旧值
+                  # 2Gi 被 memcg OOM 杀(dmesg 9 例,anon-rss≈2Gi 全部顶死限额,CONSTRAINT_MEMCG)。
+                  # 12Gi 为量测用上界(Windows editor 峰值 13GB 的近似;Linux cooked 无 DDC 构建应
+                  # 显著更小),目的=让一局完整跑完以量出真实 memory.peak,再按 peak×1.3~1.5 定正式值。
+                  # requests 维持 1Gi:调度按 requests 不超卖;limits 超卖只影响并发加载重图的突发
+                  # (节点可分配 ~47Gi,约容 3 台同时加载)。资产减负落地后应重测并回调本值。
+                  memory: 12Gi
           volumes:
             # DSTicket v2 公钥 JWKS(只读,公钥非机密,用 ConfigMap 而非 Secret;由启动器/运维从
             # dsticket_keyset.ps1 create-only 投递的 jwks.json，私钥绝不进 DS 镜像/Pod)。
