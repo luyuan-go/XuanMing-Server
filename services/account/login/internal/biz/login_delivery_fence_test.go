@@ -37,6 +37,7 @@ func newFenceUsecase(t *testing.T, sessions interface {
 	Delete(ctx context.Context, playerID uint64) error
 	GetJTI(ctx context.Context, playerID uint64) (string, bool, error)
 	DeleteIfJTI(ctx context.Context, playerID uint64, jti string) (bool, error)
+	FenceFailedSet(ctx context.Context, playerID uint64, jti string, gen uint64, ttl time.Duration) (bool, error)
 }) *LoginUsecase {
 	t.Helper()
 	cfg := auth.Config{Secret: []byte(testSecret)}

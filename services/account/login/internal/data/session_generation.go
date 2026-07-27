@@ -64,40 +64,26 @@ var ErrCommitAmbiguous = errors.New("session generation commit result unknown")
 // IsCommitAmbiguous 判定错误是否为「COMMIT 结果不确定」。
 func IsCommitAmbiguous(err error) bool { return errors.Is(err, ErrCommitAmbiguous) }
 
-// SessionGenerationLease 一次 PersistSessionJTI 的分配结果:本次代际 + 覆盖前的行
-// 状态快照。Redis 条件写失败(基础设施错误)时,Login 用它做条件回补
-// (RestoreSessionJTI),消除「MySQL 已轮换、Redis 仍是上一代」的撕裂窗口
-// (R9 复审 P0-2):撕裂期间上一代合法会话会被 SetRole 代际强制门误拒。
+// SessionGenerationLease 一次 PersistSessionJTI 的分配结果。只保留本次单调代际；
+// 失败补偿不得保存/恢复即时前代 JTI，因为连续未交付登录 A→B→C 中 B 可能从未
+// 被任何客户端持有。失败统一把本代条件改为无能力墓碑。
 type SessionGenerationLease struct {
 	// Generation 本次登录分配到的单调代际(首登=1)。
 	Generation uint64
-	// PrevJTI 覆盖前行内的 sess_jti;HadPrev=false 时无意义。
-	PrevJTI string
-	// HadPrev 覆盖前该玩家是否已有代际行(false=本次为首登插入)。
-	HadPrev bool
-	// SnapshotUnknown 表示本次代际是从「不确定的 COMMIT」读回确认的(R11 复审 P0-1):
-	// 代际与 jti 可信,但**覆盖前的行状态无从得知**(快照随失败的事务一起丢了)。
-	// 此时禁止条件回补(RestoreSessionJTI):回补要么错误复活上一代 jti、要么误删行让
-	// SetRole 走缺行兼容路径——两者都是审核明令禁止的「旧凭据错误复活」。
-	// 需要补偿时只能条件墓碑(TombstoneSessionJTI):两侧一致拒绝所有旧凭据,fail-closed。
-	SnapshotUnknown bool
 }
 
 // SessionGenerationRepo 持久化玩家当前会话代际(jti + 单调 generation)到 MySQL,
 // 供 Login 定序与业务写事务同事务域 fencing。
 type SessionGenerationRepo interface {
 	// PersistSessionJTI 原子推进玩家会话代际并落当前 jti,返回本次登录分配到的
-	// 单调 generation(首登=1)与覆盖前状态。Login 必须在 Redis 会话写入之前调用;
+	// 单调 generation(首登=1)。Login 必须在 Redis 会话写入之前调用;
 	// 失败必须使登录失败(fail-closed),否则定序权威落后于 Redis。
 	PersistSessionJTI(ctx context.Context, playerID uint64, jti string) (SessionGenerationLease, error)
 
-	// RestoreSessionJTI 条件回补(R9 复审 P0-2):仅当行仍是本次登录写入的
-	// (failedJTI, lease.Generation) 时,把 sess_jti 回写为覆盖前的值(HadPrev=false
-	// 则删除整行,回到首登前状态)。generation 保持已推进值不回退,单调性不破坏。
-	// 并发新登录已把行推到更高代际时 WHERE 不命中 = no-op,绝不回滚别人的登录。
-	// 返回是否实际回补。仅用于「MySQL 已提交、Redis 条件写基础设施失败」的补偿,
-	// 失败只记日志(下一次成功登录仍会原子推进两个存储自愈)。
-	RestoreSessionJTI(ctx context.Context, playerID uint64, failedJTI string, lease SessionGenerationLease) (bool, error)
+	// TombstoneFailedSessionJTI 仅当行仍是失败 Login 写入的 (failedJTI,generation)
+	// 时，把 sess_jti 改为无能力哨兵；generation 不回退。更新代际已推进时 no-op。
+	// 绝不恢复即时前代，它可能也是未交付候选。
+	TombstoneFailedSessionJTI(ctx context.Context, playerID uint64, failedJTI string, generation uint64) (bool, error)
 
 	// LoadSessionGeneration 读回玩家当前代际行(R11 复审 P0-1 问题 A 的判定读):
 	// PersistSessionJTI 返回 ErrCommitAmbiguous 时,调用方用本次 jti 作唯一标记读回,
@@ -124,9 +110,9 @@ func NewMySQLSessionGenerationRepo(db *sql.DB) *MySQLSessionGenerationRepo {
 
 // PersistSessionJTI 事务内「SELECT ... FOR UPDATE 快照旧值 → upsert(generation+1) →
 // 读回本行代际 → COMMIT」。行 X 锁持有到 COMMIT,同事务读回的必然是本次分配的代际,
-// 并发登录在此串行化。旧值快照供 Redis 写失败时条件回补(RestoreSessionJTI)。
-// 首登竞态(两事务都看到无行)下输家的快照可能缺失刚提交的对手行——该窗口极窄且
-// 回补是条件 CAS,最坏退化为删行(= SetRole 缺行兼容路径),下一次成功登录自愈。
+// 并发登录在此串行化。SELECT 只承担既有加锁顺序，不再把即时前代当补偿目标。
+// 首登竞态(两事务都看到无行)由 InnoDB 的唯一键冲突/死锁与外层有界重试收敛。
+// 失败补偿只写无能力墓碑并保留已消耗 generation，绝不删除代际行。
 // R11 复审 P0-1(真 MySQL 实测):并发首登会因"先 FOR UPDATE 再 INSERT"的 gap 锁竞争
 // 触发 1213 死锁,故整段事务外套有界重试(见 persistMaxAttempts)。重试耗尽后返回
 // **ErrUnavailable**(可重试语义)而不是 ErrInternal —— 客户端与 UE 侧的
@@ -156,9 +142,9 @@ func (r *MySQLSessionGenerationRepo) PersistSessionJTI(ctx context.Context, play
 
 // persistSessionJTIOnce 执行一次事务:「SELECT ... FOR UPDATE 快照旧值 → upsert(generation+1) →
 // 读回本行代际 → COMMIT」。行 X 锁持有到 COMMIT,同事务读回的必然是本次分配的代际,
-// 并发登录在此串行化。旧值快照供 Redis 写失败时条件回补(RestoreSessionJTI)。
-// 首登竞态(两事务都看到无行)下输家的快照可能缺失刚提交的对手行——该窗口极窄且
-// 回补是条件 CAS,最坏退化为删行(= SetRole 缺行兼容路径),下一次成功登录自愈。
+// 并发登录在此串行化。SELECT 只承担既有加锁顺序，不再捕获补偿快照。
+// 首登竞态(两事务都看到无行)由 InnoDB 的唯一键冲突/死锁与外层有界重试收敛。
+// 失败补偿只写无能力墓碑并保留已消耗 generation，绝不删除代际行。
 //
 // 所有加锁/写库语句都用 errcode.NewCause 保留底层 *mysql.MySQLError,
 // 否则外层 isRetryableTxErr 沿 Unwrap 链检不出 1213/1205。
@@ -170,13 +156,13 @@ func (r *MySQLSessionGenerationRepo) persistSessionJTIOnce(ctx context.Context, 
 	}
 	defer func() { _ = tx.Rollback() }()
 	lease := SessionGenerationLease{}
+	var ignoredPreviousJTI string
 	switch err := tx.QueryRowContext(ctx,
 		`SELECT sess_jti FROM player_session_generations WHERE player_id = ? FOR UPDATE`,
-		playerID).Scan(&lease.PrevJTI); err {
+		playerID).Scan(&ignoredPreviousJTI); err {
 	case nil:
-		lease.HadPrev = true
 	case sql.ErrNoRows:
-		// 首登:无旧行可快照。
+		// 首登:沿用既有 gap-lock + upsert 重试语义。
 	default:
 		return SessionGenerationLease{}, errcode.NewCause(errcode.ErrInternal, err,
 			"mysql snapshot session jti: %v", err)
@@ -196,7 +182,7 @@ ON DUPLICATE KEY UPDATE generation = generation + 1, sess_jti = VALUES(sess_jti)
 	if err := tx.Commit(); err != nil {
 		// R11 复审 P0-1 问题 A:COMMIT 可能**已经生效**而只是回包丢了。不猜、不当成
 		// 「没提交」——标记为不确定交给 biz 用 jti 读回判定(见 ErrCommitAmbiguous)。
-		// 快照(PrevJTI/HadPrev)一并返回:若判定为已提交,后续补偿仍需要它。
+		// 事务内已读出的 generation 一并返回，供调用方条件墓碑本次未交付代际。
 		return lease, errcode.NewCause(errcode.ErrInternal,
 			fmt.Errorf("%w: %v", ErrCommitAmbiguous, err), "commit session generation: %v", err)
 	}
@@ -219,38 +205,25 @@ func (r *MySQLSessionGenerationRepo) LoadSessionGeneration(ctx context.Context, 
 	}
 }
 
-// RestoreSessionJTI 单语句条件回补:行仍是本次登录写入的 (failedJTI, generation)
-// 才把 sess_jti 改回覆盖前的值(无旧行则删行);generation 不回退,单调性不破坏。
-// 并发新登录已推进代际时 WHERE 不命中 = no-op。
-func (r *MySQLSessionGenerationRepo) RestoreSessionJTI(ctx context.Context, playerID uint64, failedJTI string, lease SessionGenerationLease) (bool, error) {
-	if lease.SnapshotUnknown {
-		// R11 复审 P0-1:快照不可信时回补两条路都是错的(错误复活上一代 jti / 误删行)。
-		// 由调用方改走条件墓碑;这里 fail-closed 拒绝,防止将来有人误接。
-		return false, errcode.New(errcode.ErrInternal,
-			"session generation restore refused: pre-write snapshot unknown; tombstone instead")
-	}
-	var res sql.Result
-	var err error
-	if lease.HadPrev {
-		res, err = r.db.ExecContext(ctx,
-			`UPDATE player_session_generations SET sess_jti = ? WHERE player_id = ? AND sess_jti = ? AND generation = ?`,
-			lease.PrevJTI, playerID, failedJTI, lease.Generation)
-	} else {
-		res, err = r.db.ExecContext(ctx,
-			`DELETE FROM player_session_generations WHERE player_id = ? AND sess_jti = ? AND generation = ?`,
-			playerID, failedJTI, lease.Generation)
-	}
+// TombstoneFailedSessionJTI 单语句条件墓碑：行仍是失败 Login 写入的
+// (failedJTI,generation) 才清除能力；generation 保持已消耗值。并发新登录已推进时
+// WHERE 不命中，绝不影响赢家。
+func (r *MySQLSessionGenerationRepo) TombstoneFailedSessionJTI(ctx context.Context, playerID uint64, failedJTI string, generation uint64) (bool, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE player_session_generations SET sess_jti = ? WHERE player_id = ? AND sess_jti = ? AND generation = ?`,
+		sessionTombstoneJTI, playerID, failedJTI, generation)
 	if err != nil {
-		return false, errcode.New(errcode.ErrInternal, "mysql restore session jti: %v", err)
+		return false, errcode.New(errcode.ErrInternal, "mysql tombstone failed session jti: %v", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return false, errcode.New(errcode.ErrInternal, "mysql restore rows affected: %v", err)
+		return false, errcode.New(errcode.ErrInternal, "mysql tombstone failed session rows affected: %v", err)
 	}
 	return n > 0, nil
 }
 
-// sessionTombstoneJTI 登出墓碑哨兵值:非 uuid 格式,永不与真实 jti 碰撞。
+// sessionTombstoneJTI 无能力墓碑哨兵值：用于登出和失败 Login 的条件 fencing；
+// 非 uuid 格式，永不与真实 jti 碰撞。
 const sessionTombstoneJTI = "logged-out"
 
 // TombstoneSessionJTI 单语句条件 UPDATE:行仍持有本次登出的 jti 才推代际改哨兵,

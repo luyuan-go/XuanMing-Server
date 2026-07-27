@@ -28,6 +28,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	pkgmw "github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
@@ -244,7 +245,8 @@ func runRetentionSweep(ctx context.Context, uc *biz.InventoryUsecase, interval t
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			uc.SweepRetention(ctx)
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
+			safego.Run(ctx, "inventory_retention_sweep", func() { uc.SweepRetention(ctx) })
 		}
 	}
 }
@@ -258,11 +260,13 @@ func runBagJournalSweep(ctx context.Context, uc *biz.BagUsecase, helper *klog.He
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			sweepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			if _, err := uc.RunJournalSweep(sweepCtx, batch); err != nil {
-				helper.Errorw("msg", "bag_journal_sweep_failed", "err", err)
-			}
-			cancel()
+			safego.Run(ctx, "bag_journal_sweep", func() {
+				sweepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				if _, err := uc.RunJournalSweep(sweepCtx, batch); err != nil {
+					helper.Errorw("msg", "bag_journal_sweep_failed", "err", err)
+				}
+			})
 		}
 	}
 }

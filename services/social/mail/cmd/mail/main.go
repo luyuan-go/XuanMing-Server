@@ -17,6 +17,7 @@ import (
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
@@ -146,7 +147,8 @@ func runMailSweep(ctx context.Context, uc *biz.MailUsecase, interval time.Durati
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			uc.SweepExpired(ctx, time.Now().UnixMilli())
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
+			safego.Run(ctx, "mail_expired_sweep", func() { uc.SweepExpired(ctx, time.Now().UnixMilli()) })
 		}
 	}
 }

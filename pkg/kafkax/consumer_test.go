@@ -177,3 +177,31 @@ func TestProcessMessage_NoDLQLossTolerantAcks(t *testing.T) {
 		t.Fatal("无 DLQ 通道应 log + ack(返回 true)")
 	}
 }
+
+// handler panic 必须被归一化为毒丸 → DLQ + ack(压测审核【必修-6】/P2-1):
+// 任其展开会崩掉消费 goroutine,重启重放同 offset → CrashLoop 分区永久卡死。
+func TestProcessMessage_HandlerPanicGoesToDLQ(t *testing.T) {
+	dlq := &fakeDLQ{}
+	k := newTestConsumer(func(context.Context, *sarama.ConsumerMessage) error {
+		panic("deterministic handler panic")
+	}, RetryPolicy{MaxRetries: 3}, dlq)
+
+	if !k.processMessage(context.Background(), testMsg()) {
+		t.Fatal("panic 消息投 DLQ 成功后应 ack(否则重放同 offset 再 panic)")
+	}
+	if got := atomic.LoadInt32(&dlq.calls); got != 1 {
+		t.Fatalf("DLQ calls = %d, want 1(panic 即毒丸,不走瞬时错误重试)", got)
+	}
+}
+
+// panic 且 DLQ 投递失败 → 不 ack(消息保留重放;不可丢事件不因 panic 被静默丢弃)。
+func TestProcessMessage_HandlerPanicDLQFailNoAck(t *testing.T) {
+	dlq := &fakeDLQ{failErr: errors.New("dlq down")}
+	k := newTestConsumer(func(context.Context, *sarama.ConsumerMessage) error {
+		panic("boom")
+	}, RetryPolicy{MaxRetries: 1}, dlq)
+
+	if k.processMessage(context.Background(), testMsg()) {
+		t.Fatal("DLQ 投递失败时不得 ack")
+	}
+}

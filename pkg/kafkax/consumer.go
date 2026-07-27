@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -241,7 +242,7 @@ func (k *KeyOrderedConsumer) ConsumeClaim(
 //   - 毒丸(PoisonError)      → 投 DLQ,DLQ 成功 true / 失败 false。
 //   - 业务瞬时错误            → 进程内重试 RetryPolicy.MaxRetries 次;成功 true;耗尽后投 DLQ。
 func (k *KeyOrderedConsumer) processMessage(ctx context.Context, msg *sarama.ConsumerMessage) bool {
-	err := k.handler(ctx, msg)
+	err := k.callHandler(ctx, msg)
 	if err == nil {
 		return true
 	}
@@ -261,7 +262,7 @@ func (k *KeyOrderedConsumer) processMessage(ctx context.Context, msg *sarama.Con
 			return false
 		case <-time.After(backoff):
 		}
-		err = k.handler(ctx, msg)
+		err = k.callHandler(ctx, msg)
 		if err == nil {
 			return true
 		}
@@ -276,6 +277,23 @@ func (k *KeyOrderedConsumer) processMessage(ctx context.Context, msg *sarama.Con
 	klog.Errorf("[kafkax] handler retries exhausted → DLQ topic=%s partition=%d offset=%d key=%s: %v",
 		msg.Topic, msg.Partition, msg.Offset, string(msg.Key), err)
 	return k.toDLQ(ctx, msg)
+}
+
+// callHandler 执行 handler 并把可恢复 panic 归一化为毒丸(压测审核【必修-6】/P2-1)。
+//
+// 解码成功后深层业务的确定性 panic 若任其展开,会崩掉 sarama 消费 goroutine 乃至进程;
+// 重启后重放同 offset → 同 panic → CrashLoop,该分区消费永久卡死。按毒丸投 DLQ + ack
+// 是唯一能前进的路:消息进 DLQ 留证待人工回放,分区继续消费。并发 map 写是 runtime
+// fatal throw,recover 兜不住,不在此列。
+func (k *KeyOrderedConsumer) callHandler(ctx context.Context, msg *sarama.ConsumerMessage) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			klog.Errorf("[kafkax] handler panic → poison topic=%s partition=%d offset=%d key=%s: %v\n%s",
+				msg.Topic, msg.Partition, msg.Offset, string(msg.Key), r, debug.Stack())
+			err = Poison(fmt.Errorf("handler panic: %v", r))
+		}
+	}()
+	return k.handler(ctx, msg)
 }
 
 // toDLQ 把消息投递到死信队列。返回是否应 ack。

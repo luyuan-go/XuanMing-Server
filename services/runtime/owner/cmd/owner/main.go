@@ -26,6 +26,7 @@ import (
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/safego"
 
 	"github.com/luyuancpp/pandora/services/runtime/owner/internal/biz"
 	"github.com/luyuancpp/pandora/services/runtime/owner/internal/conf"
@@ -143,16 +144,19 @@ func runTransitionLogSweep(ctx context.Context, uc *biz.OwnerUsecase, helper *kl
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			sweepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			if n, err := uc.RunTransitionLogSweep(sweepCtx, batch); err != nil {
-				helper.Errorw("msg", "owner_transition_log_sweep_failed", "err", err)
-			} else if n > 0 {
-				// §9.24 要求 sweep 有界清理可观测:删除行数此前被丢弃,只有失败可见,
-				// 成功清理完全无痕——无法确认 owner_transition_log 真在排空、批量是否打满
-				// (打满 = 积压,需调大 batch/interval)。
-				helper.Infow("msg", "owner_transition_log_swept", "deleted_rows", n, "batch", batch)
-			}
-			cancel()
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
+			safego.Run(ctx, "owner_transition_log_sweep", func() {
+				sweepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				if n, err := uc.RunTransitionLogSweep(sweepCtx, batch); err != nil {
+					helper.Errorw("msg", "owner_transition_log_sweep_failed", "err", err)
+				} else if n > 0 {
+					// §9.24 要求 sweep 有界清理可观测:删除行数此前被丢弃,只有失败可见,
+					// 成功清理完全无痕——无法确认 owner_transition_log 真在排空、批量是否打满
+					// (打满 = 积压,需调大 batch/interval)。
+					helper.Infow("msg", "owner_transition_log_swept", "deleted_rows", n, "batch", batch)
+				}
+			})
 		}
 	}
 }

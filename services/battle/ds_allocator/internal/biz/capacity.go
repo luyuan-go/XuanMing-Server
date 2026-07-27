@@ -23,6 +23,7 @@ import (
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/metrics"
+	"github.com/luyuancpp/pandora/pkg/safego"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
@@ -132,14 +133,15 @@ func (w *CapacityWatcher) Run(ctx context.Context) {
 	plog.With(ctx).Infow("msg", "fleet_capacity_watch_started",
 		"interval", w.interval.String(), "warn_ratio", w.warnRatio)
 	// 启动先巡一次,不等首个 tick(服务刚起时就把水位摸清)。
-	w.pollOnce(ctx)
+	// panic 兜底(压测审核【必修-6】同类点位):水位巡检是纯观测,单轮 panic 只丢本轮。
+	safego.Run(ctx, "fleet_capacity_watch", func() { w.pollOnce(ctx) })
 	for {
 		select {
 		case <-ctx.Done():
 			plog.With(ctx).Infow("msg", "fleet_capacity_watch_stopped")
 			return
 		case <-ticker.C:
-			w.pollOnce(ctx)
+			safego.Run(ctx, "fleet_capacity_watch", func() { w.pollOnce(ctx) })
 		}
 	}
 }

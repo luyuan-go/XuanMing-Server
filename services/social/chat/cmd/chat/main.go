@@ -32,6 +32,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	chatv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/chat/v1"
@@ -134,6 +135,17 @@ func main() {
 	// 7. 装配链
 	repo := data.NewMySQLPrivateRepo(db)
 	uc := biz.NewChatUsecase(repo, pusher, teamReader, guildReader, groupReader, cfg.Chat)
+
+	// 世界频道 per-player 冷却(压测审核【必修-5】):复用 node.redis_client(与会话门同一
+	// Redis)。未配 Redis 的骨架联调不限流(Warn 提示);生产 prod 生成器已强制配 Redis。
+	if cfg.Node.RedisClient.Host != "" {
+		rdb := redisx.NewClient(cfg.Node.RedisClient)
+		defer func() { _ = rdb.Close() }()
+		uc.SetWorldRateLimiter(data.NewRedisWorldRateLimiter(rdb))
+		helper.Infow("msg", "world_ratelimit_ready", "cooldown", cfg.Chat.WorldCooldown.Std().String())
+	} else {
+		helper.Warnw("msg", "world_ratelimit_disabled", "hint", "node.redis_client.host empty, world channel unthrottled")
+	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)

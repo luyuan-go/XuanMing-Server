@@ -90,8 +90,8 @@ type HealthSnapshot struct {
 	// ConsecutiveCampaignErrs/LastCampaignErr:连续竞选失败次数与最近原因(当选清零)。
 	ConsecutiveCampaignErrs uint64
 	LastCampaignErr         string
-	// ConsecutiveActivationErrs/LastActivationErr:当选后激活钩子连续失败次数与最近原因
-	// (激活成功清零)。>0 表示本副本能当选但**尚未获得写权**,写请求仍被拒。
+	// ConsecutiveActivationErrs/LastActivationErr:当选后激活钩子、首次/持有期 TTL proof
+	// 连续失败次数与最近原因。只有任期进入 held 后又完成一次稳定续证才清零。
 	ConsecutiveActivationErrs uint64
 	LastActivationErr         string
 	// EscalateAfter 是日志升级/告警建议阈值(连续失败达此值 ≈ 超过 lease TTL 兜底窗口)。
@@ -146,6 +146,10 @@ type Term interface {
 	Token() uint64
 	// Lost 在任期失效(lease 过期/连接丢失)时关闭。
 	Lost() <-chan struct{}
+	// RemainingTTL 向 etcd 服务端确认本届 lease 仍存在并返回剩余寿命。
+	// 本地安全截止时间只能由这份服务端证据续期,不能把“Lost 尚未关闭”误当成
+	// keepalive ACK；确认失败时调用方必须立即自 fencing 并让位。
+	RemainingTTL(ctx context.Context) (time.Duration, error)
 	// Resign 主动让位并释放本届资源(幂等)。
 	Resign(ctx context.Context) error
 }
@@ -163,17 +167,12 @@ type Lease struct {
 	backend  Backend
 	identity string
 
-	// current:0 = 不持有;>0 = 当前任期 fencing token。etcd CreateRevision 恒 >0,
-	// 0 可安全作哨兵。
-	current atomic.Uint64
+	// active 把 token、Lost 信号与本地安全截止放进同一原子快照，避免快速再选时
+	// Current() 混读“旧 token + 新任期 Lost channel”的 ABA 交错。
+	active atomic.Pointer[holdState]
 
-	// holdUntilUnixNano:本届"本地安全截止时间"(单调时钟纳秒;0 = 未设置)。
-	// Current() 过了它就地报不持有,不等竞选 goroutine 消费 term.Lost()——覆盖
-	// 「进程长暂停后恢复,业务 goroutine 先于竞选 goroutine 被调度」的交错。
-	// 取值比 etcd lease TTL 更保守(见 holdSafetyMargin)。
-	holdUntilUnixNano atomic.Int64
-
-	// leaseTTLSec:本实例的 etcd session lease TTL(秒),用于推导上面的本地截止时间。
+	// leaseTTLSec:本实例的 etcd session lease TTL(秒),只用于推导确认节奏/超时；
+	// 可写截止必须来自 Term.RemainingTTL 的服务端实证，不能从配置值自报。
 	leaseTTLSec int64
 
 	// consecutiveCampaignErrs:连续竞选失败次数(当选即清零;复审 P0-6 可观测)。
@@ -184,10 +183,25 @@ type Lease struct {
 	// 连续失败次数与最近原因(激活成功清零;R10 P0-4 接流前硬门可观测)。
 	consecutiveActivationErrs atomic.Uint64
 	lastActivationErr         atomic.Value
+	// activationRunning 把不尊重 ctx 的激活钩子限制为最多一个后台执行体。Go 无法
+	// 强杀 goroutine；超时后本副本会立即让位，后续竞选在旧钩子退出前不再叠加泄漏。
+	activationRunning atomic.Bool
 
 	cancel    context.CancelFunc
 	done      chan struct{}
 	closeOnce sync.Once
+}
+
+// holdState 是一次已激活任期的不可混代快照。validUntilUnixNano 只由 etcd
+// RemainingTTL 成功响应续期；一旦过期，本届任期永久自 fencing，不允许“恢复后续命”。
+type holdState struct {
+	token              uint64
+	lost               <-chan struct{}
+	validUntilUnixNano atomic.Int64
+	// selfFenced 是本届任期的单调终态。一旦任一 goroutine 观察到本地安全截止
+	// 已过，同一 token 永久不可再次 held；迟到的 TTL proof 只能促使主循环让位，
+	// 不能把已经自 fencing 的旧任期续活。
+	selfFenced atomic.Bool
 }
 
 // Health 返回竞选/激活健康度快照(复审 P0-6 + R10 P0-2:无限重试不得 fail-silent,
@@ -214,9 +228,18 @@ func (l *Lease) Health() HealthSnapshot {
 // Current 返回 (fencing token, 是否持有领导权)。数据层把 token 写进同 slot fence key
 // 做只进不退比较;biz 层用 held 快速拒绝非写者副本上的写请求。
 func (l *Lease) Current() (uint64, bool) {
-	token := l.current.Load()
-	if token == 0 {
+	state := l.active.Load()
+	if state == nil || state.token == 0 {
 		return 0, false
+	}
+	if state.selfFenced.Load() {
+		return 0, false
+	}
+	// 直接检查任期 channel，而不是等待竞选 goroutine先消费 Lost 后再清原子值。
+	select {
+	case <-state.lost:
+		return 0, false
+	default:
 	}
 	// R11 二轮复审:**自带时间过期,不依赖竞选 goroutine 及时消费 term.Lost()**。
 	//
@@ -230,10 +253,11 @@ func (l *Lease) Current() (uint64, bool) {
 	// 修法是让"持有"本身带时间:任期开始时记下一个比 etcd lease 更保守的本地截止
 	// 时间(单调时钟),过了就地视为不持有。这样无论调度顺序如何,长暂停后的第一笔
 	// 写就已经拿不到写权,不需要任何一方"及时"做事。
-	if deadline := l.holdUntilUnixNano.Load(); deadline != 0 && nowMonotonicNanos() >= deadline {
+	if deadline := state.validUntilUnixNano.Load(); deadline != 0 && nowMonotonicNanos() >= deadline {
+		state.selfFenced.Store(true)
 		return 0, false
 	}
-	return token, true
+	return state.token, true
 }
 
 // Close 主动让位并停止竞选(进程下线路径)。幂等。
@@ -271,7 +295,7 @@ func StartWithBackend(ctx context.Context, backend Backend, cfg Config) *Lease {
 	l := &Lease{
 		backend:  backend,
 		identity: cfg.Identity,
-		// 本地安全截止时间由 lease TTL 推导(见 holdSafetyMarginSec)。
+		// 配置 TTL 只决定确认节奏；本地安全截止由服务端 RemainingTTL 证明建立。
 		leaseTTLSec: int64(cfg.LeaseTTLSec),
 		cancel:      cancel,
 		done:        make(chan struct{}),
@@ -331,45 +355,35 @@ func (l *Lease) runWithActivationTimeout(ctx context.Context, election string,
 		// 接流前硬门(R10 P0-4):当选 ≠ 可写。激活钩子(继任者 fence 水位推扫等)
 		// 必须先跑成功,本副本才对外宣告持有领导权;失败就让位重选,期间 Current()
 		// 保持不持有,写请求继续被拒(可重试),绝不出现"已接流但继任未完成"的窗口。
-		if onElected != nil {
-			if aerr := l.activate(ctx, term, onElected, activationTimeout); aerr != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				fails := l.consecutiveActivationErrs.Add(1)
-				l.lastActivationErr.Store(aerr.Error())
-				if fails >= campaignErrEscalateAfter {
-					klog.Errorf("[writerlease] activation failing persistently election=%s identity=%s token=%d consecutive=%d err=%v — elected but never writable, check storage/etcd",
-						election, l.identity, term.Token(), fails, aerr)
-				} else {
-					klog.Warnf("[writerlease] activation failed election=%s identity=%s token=%d consecutive=%d err=%v — resigning to retry",
-						election, l.identity, term.Token(), fails, aerr)
-				}
+		// 激活钩子成功还不等于有写权。宣告持有前必须再向 etcd 服务端证明本届
+		// lease 仍有足够剩余寿命，并用这份实际 TTL 建立初始安全截止；否则激活
+		// 期间发生的 keepalive/分区异常会在 Lost 信号尚未到达时凭配置 TTL 误放写。
+		state, aerr := l.prepareHold(ctx, term, onElected, activationTimeout)
+		if aerr != nil {
+			if ctx.Err() != nil {
 				resignTerm(term)
-				if !sleepCtx(ctx, recampaignBackoff) {
-					return
-				}
-				continue
+				return
 			}
-			l.consecutiveActivationErrs.Store(0)
-			l.lastActivationErr.Store("")
+			l.recordActivationFailure(election, term.Token(), aerr)
+			resignTerm(term)
+			if !sleepCtx(ctx, recampaignBackoff) {
+				return
+			}
+			continue
 		}
-		// 宣告持有前先设本届本地安全截止时间,使 Current() 自带时间过期
-		// (R11 二轮复审:长暂停后恢复,第一笔写就已经没有写权)。
-		l.beginHold()
-		l.current.Store(term.Token())
+		// token/Lost/初始安全截止来自同一届任期、一次原子发布。Current() 因而
+		// 不会在快速再选时混读两个任期，也不会在 TTL 证据建立前观察到 held。
+		l.active.Store(state)
 		klog.Infof("[writerlease] elected election=%s identity=%s token=%d", election, l.identity, term.Token())
-		if shutdown := l.holdUntilTermEnds(ctx, term); shutdown {
-			l.current.Store(0)
-			l.endHold()
+		if shutdown := l.holdUntilTermEnds(ctx, election, term, state); shutdown {
+			l.active.CompareAndSwap(state, nil)
 			resignTerm(term)
 			klog.Infof("[writerlease] resigned election=%s identity=%s (shutdown)", election, l.identity)
 			return
 		}
 		// 失主:先撤销本地持有权(Current() 立即转不持有,快速挡住后续写入口),
 		// 再 best-effort 清理旧任期;存储层 fence 兜住撤销瞬间仍在途的迟到写。
-		l.current.Store(0)
-		l.endHold()
+		l.active.CompareAndSwap(state, nil)
 		klog.Warnf("[writerlease] term lost election=%s identity=%s token=%d — stepping down (process stays alive)",
 			election, l.identity, term.Token())
 		resignTerm(term)
@@ -379,16 +393,52 @@ func (l *Lease) runWithActivationTimeout(ctx context.Context, election string,
 	}
 }
 
+func (l *Lease) recordActivationFailure(election string, token uint64, err error) {
+	fails := l.consecutiveActivationErrs.Add(1)
+	l.lastActivationErr.Store(err.Error())
+	if fails >= campaignErrEscalateAfter {
+		klog.Errorf("[writerlease] activation/lease proof failing persistently election=%s identity=%s token=%d consecutive=%d err=%v — no stable writer, check storage/etcd",
+			election, l.identity, token, fails, err)
+	} else {
+		klog.Warnf("[writerlease] activation/lease proof failed election=%s identity=%s token=%d consecutive=%d err=%v — resigning to retry",
+			election, l.identity, token, fails, err)
+	}
+}
+
+func (l *Lease) markHoldStable() {
+	l.consecutiveActivationErrs.Store(0)
+	l.lastActivationErr.Store("")
+}
+
+// prepareHold 完成本届从“etcd 当选”到“可对外写”的全部前置门禁。业务激活钩子与
+// 首次 TTL 证明任一失败都让位，active 始终保持 nil。
+func (l *Lease) prepareHold(ctx context.Context, term Term,
+	onElected func(context.Context, uint64) error, activationTimeout time.Duration) (*holdState, error) {
+	if onElected != nil {
+		if err := l.activate(ctx, term, onElected, activationTimeout); err != nil {
+			return nil, err
+		}
+	}
+	return l.beginHold(ctx, term)
+}
+
 // activate 在"已当选、未宣告"的窗口里跑激活钩子。钩子 ctx 同时受进程退出、本届失主与
 // **独立总期限**驱动:任期一旦失效立即取消,避免用已作废的 token 继续对存储做推进;
 // 期限到了则把"永久阻塞"转成可计数、可告警的错误(R11 复审 P0-2:阻塞时本副本占着
 // leader key 又不可写,会把全集群拖成静默无主)。
 func (l *Lease) activate(ctx context.Context, term Term, onElected func(context.Context, uint64) error,
 	timeout time.Duration) error {
+	if !l.activationRunning.CompareAndSwap(false, true) {
+		return errors.New("writerlease: previous timed-out activation is still running")
+	}
 	actCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		defer l.activationRunning.Store(false)
+		result <- onElected(actCtx, term.Token())
+	}()
 	stop := make(chan struct{})
-	defer close(stop)
 	go func() {
 		select {
 		case <-term.Lost():
@@ -396,7 +446,14 @@ func (l *Lease) activate(ctx context.Context, term Term, onElected func(context.
 		case <-stop:
 		}
 	}()
-	if err := onElected(actCtx, term.Token()); err != nil {
+	var err error
+	select {
+	case err = <-result:
+	case <-actCtx.Done():
+		err = actCtx.Err()
+	}
+	close(stop)
+	if err != nil {
 		return err
 	}
 	// 钩子"返回 nil 但其实是被期限打断"的情况(钩子吞掉了 ctx 错误)同样不许宣告持有。
@@ -419,31 +476,72 @@ func nowMonotonicNanos() int64 { return int64(time.Since(processStart)) }
 // processStart 是进程内单调基准。time.Now() 返回值带单调读数,Since 只用单调部分。
 var processStart = time.Now()
 
-// beginHold 在宣告持有前设置本届本地安全截止时间。
-// leaseTTLSec 未知(<=0)时退化为不设截止(保持旧行为,不引入"莫名失去写权")。
-func (l *Lease) beginHold() {
-	if l.leaseTTLSec <= 0 {
-		l.holdUntilUnixNano.Store(0)
-		return
+// beginHold 在宣告持有前向 etcd 服务端确认本届 lease，并按实际 RemainingTTL 建立
+// 本地安全截止。不能用配置 TTL 代替服务端证据：激活阶段可能已消耗租期，keepalive
+// 也可能已异常而 Lost 信号尚未关闭。
+func (l *Lease) beginHold(ctx context.Context, term Term) (*holdState, error) {
+	state := &holdState{token: term.Token(), lost: term.Lost()}
+	confirmCtx, cancel := context.WithTimeout(ctx, l.ttlProofTimeout())
+	// 以请求发出前的单调时刻为 proof 锚点，而不是响应返回后的“现在”。进程可能
+	// 在 TimeToLive 返回到发布 active 之间被长暂停；若用恢复后的 now + remaining，
+	// 会把暂停前的陈旧 TTL 凭空平移到未来，重新打开旧任期。
+	proofStartedAt := nowMonotonicNanos()
+	remaining, err := term.RemainingTTL(confirmCtx)
+	cancel()
+	if err != nil {
+		return nil, fmt.Errorf("writerlease: initial etcd lease proof failed: %w", err)
 	}
-	window := l.leaseTTLSec - holdSafetyMarginSec
-	if window < 1 {
-		window = 1 // TTL 极小时至少给 1s,否则刚当选就立刻自判过期
+	select {
+	case <-term.Lost():
+		return nil, errors.New("writerlease: term lost before initial lease proof could be published")
+	default:
 	}
-	l.holdUntilUnixNano.Store(nowMonotonicNanos() + window*int64(time.Second))
+	if !l.applyTTLProof(state, remaining, proofStartedAt) {
+		return nil, fmt.Errorf("writerlease: initial etcd lease TTL %s is not above safety margin %s",
+			remaining, time.Duration(holdSafetyMarginSec)*time.Second)
+	}
+	return state, nil
 }
 
-// renewHold 在确认本届仍然有效时向后推进本地截止时间(续租的本地投影)。
-func (l *Lease) renewHold() { l.beginHold() }
+// renewHold 只接受 etcd 服务端 RemainingTTL 的成功响应。remaining 必须大于
+// 安全余量；否则没有足够证据继续写，调用方立即自 fencing。
+func (l *Lease) renewHold(state *holdState, remaining time.Duration) bool {
+	return l.applyTTLProof(state, remaining, nowMonotonicNanos())
+}
+
+// applyTTLProof 用一次服务端证明建立绝对单调截止点。proofStartedAt 取请求发出前，
+// 因而 RPC 耗时或响应后进程暂停只会缩短写权，不会把陈旧 remaining 平移到未来。
+func (l *Lease) applyTTLProof(state *holdState, remaining time.Duration, proofStartedAt int64) bool {
+	if state.selfFenced.Load() {
+		return false
+	}
+	window := remaining - time.Duration(holdSafetyMarginSec)*time.Second
+	if window <= 0 {
+		state.selfFenced.Store(true)
+		return false
+	}
+	deadline := proofStartedAt + int64(window)
+	if nowMonotonicNanos() >= deadline {
+		state.selfFenced.Store(true)
+		return false
+	}
+	state.validUntilUnixNano.Store(deadline)
+	// 与 Current() 的“观察过期→置 selfFenced”并发时，deadline 的迟到写本身
+	// 无害；二次检查保证调用方看到 false 并立即让位，同一 state 永不复活。
+	if state.selfFenced.Load() || nowMonotonicNanos() >= deadline {
+		state.selfFenced.Store(true)
+		return false
+	}
+	return true
+}
 
 // holdUntilTermEnds 持有期主循环:等任期失效或进程退出,期间按固定节奏把本地截止时间
 // 往后推。返回 true 表示进程退出(shutdown),false 表示失主。
 //
-// 为什么本地续租是安全的:只要 etcd session 的 keepalive 还在工作,term.Lost() 就不会关闭,
-// 因此"Lost 未关闭"本身就是任期仍有效的证据,本地推进只是它的投影。反过来,进程被暂停时
-// 这个 ticker 同样不会触发,截止时间自然流逝 —— 这正是要覆盖的交错。
-// etcd 已过期但客户端尚未察觉的窗口由 holdSafetyMarginSec 兜住。
-func (l *Lease) holdUntilTermEnds(ctx context.Context, term Term) bool {
+// 为什么本地续租是安全的:每次推进都先向 etcd 服务端查询本 lease 的 RemainingTTL；
+// “Lost 未关闭”只作快速失效信号，**不**作为 keepalive 成功证据。进程暂停时 ticker
+// 不会触发、截止时间自然流逝；恢复后同一届已过截止便永久自 fencing，不允许续活。
+func (l *Lease) holdUntilTermEnds(ctx context.Context, election string, term Term, state *holdState) bool {
 	interval := l.holdRenewInterval()
 	if interval <= 0 {
 		// 未知 TTL(不设本地截止)时退化为原来的纯事件等待。
@@ -459,11 +557,56 @@ func (l *Lease) holdUntilTermEnds(ctx context.Context, term Term) bool {
 	for {
 		select {
 		case <-term.Lost():
+			// Current() 可能先于竞选 goroutine 观察到本地 deadline 过期并置
+			// selfFenced；若随后 Lost 也关闭，select 可能先走本分支。仍需把这次
+			// 不稳定任期计入 Health，不能因事件先后而漏报。
+			if state.selfFenced.Load() {
+				l.recordActivationFailure(election, state.token,
+					errors.New("writerlease: term lost after local self-fencing"))
+			}
 			return false
 		case <-ctx.Done():
 			return true
 		case <-ticker.C:
-			l.renewHold()
+			// 截止一旦越过，本届永久失效。禁止先过期、后靠 ticker/网络恢复把同一
+			// token “续活”，否则已被继任的旧写者会复活。
+			if deadline := state.validUntilUnixNano.Load(); deadline != 0 && nowMonotonicNanos() >= deadline {
+				state.selfFenced.Store(true)
+				l.active.CompareAndSwap(state, nil)
+				l.recordActivationFailure(election, state.token,
+					errors.New("writerlease: local safety deadline expired"))
+				return false
+			}
+			confirmTimeout := interval
+			if confirmTimeout > 2*time.Second {
+				confirmTimeout = 2 * time.Second
+			}
+			confirmCtx, cancel := context.WithTimeout(ctx, confirmTimeout)
+			proofStartedAt := nowMonotonicNanos()
+			remaining, err := term.RemainingTTL(confirmCtx)
+			cancel()
+			// 确认期间也可能越过旧截止；这种情况下即使响应成功也不复活本届。
+			deadline := state.validUntilUnixNano.Load()
+			if err != nil {
+				state.selfFenced.Store(true)
+			}
+			if deadline != 0 && nowMonotonicNanos() >= deadline {
+				state.selfFenced.Store(true)
+			}
+			proofApplied := err == nil && !state.selfFenced.Load() &&
+				l.applyTTLProof(state, remaining, proofStartedAt)
+			if !proofApplied {
+				l.active.CompareAndSwap(state, nil)
+				proofErr := err
+				if proofErr == nil {
+					proofErr = fmt.Errorf("writerlease: lease proof unusable (remaining=%s, deadline expired or self-fenced)", remaining)
+				}
+				l.recordActivationFailure(election, state.token, proofErr)
+				return false
+			}
+			// 首次证明只允许发布，尚不足以说明 writer 稳定；至少再完成一轮持有期
+			// TTL proof 后才清掉历史连续失败，避免“每届刚 held 就断”永远计数为 0。
+			l.markHoldStable()
 		}
 	}
 }
@@ -484,8 +627,15 @@ func (l *Lease) holdRenewInterval() time.Duration {
 	return interval
 }
 
-// endHold 清掉本地截止时间(让位/失主/退出)。
-func (l *Lease) endHold() { l.holdUntilUnixNano.Store(0) }
+// ttlProofTimeout 给首次证明与持有期续证使用同一有界预算。配置 TTL 未知只会发生在
+// 直接构造 Lease 的单元测试；生产 StartWithBackend 已 normalize，此处仍给安全上界。
+func (l *Lease) ttlProofTimeout() time.Duration {
+	timeout := l.holdRenewInterval()
+	if timeout <= 0 || timeout > 2*time.Second {
+		return 2 * time.Second
+	}
+	return timeout
+}
 
 func resignTerm(term Term) {
 	rctx, cancel := context.WithTimeout(context.Background(), resignTimeout)
@@ -543,6 +693,16 @@ type etcdTerm struct {
 
 func (t *etcdTerm) Token() uint64         { return t.token }
 func (t *etcdTerm) Lost() <-chan struct{} { return t.session.Done() }
+func (t *etcdTerm) RemainingTTL(ctx context.Context) (time.Duration, error) {
+	resp, err := t.session.Client().TimeToLive(ctx, t.session.Lease())
+	if err != nil {
+		return 0, err
+	}
+	if resp == nil || resp.TTL <= 0 {
+		return 0, errors.New("writerlease: etcd lease no longer has positive TTL")
+	}
+	return time.Duration(resp.TTL) * time.Second, nil
+}
 func (t *etcdTerm) Resign(ctx context.Context) error {
 	var err error
 	t.resignOnce.Do(func() {

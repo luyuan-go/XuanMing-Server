@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/placement"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 	teamv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/team/v1"
 
@@ -165,6 +167,16 @@ type MatchUsecase struct {
 	lastLivenessSweep  time.Time
 	lastStartReconcile time.Time
 	lastMatchReconcile time.Time
+
+	// allocSem 是 DS 分配的有界并发信号量(压测审核【必修-3】)。此前
+	// advanceAllocationsOnce 在撮合 leader 单协程内联串行调 advanceAllocation(含最长
+	// ~60s 的分配 RPC),同分片分配吞吐被钳到「1 局 / 单次分配时延」。现改为 tick 内
+	// 有界并发、返回前 join(见 advanceAllocationsParallel):tick 分配耗时从
+	// Σ(每局时延) 降为 max(单局时延)。join 语义同时保证同一 match 绝无跨 tick 并发
+	// 尝试(allocationRetryDelay 2~8s 短于最坏 RPC,无 join 时会叠加尝试)。
+	// 正确性底线仍是 advanceAllocation 入口的 UpdateMatchWithLock CAS
+	// (REQUESTING 抢占 + AllocationNextAttemptAtMs 到期门)+ operation_id 幂等。
+	allocSem chan struct{}
 }
 
 func allocationOperationID() string {
@@ -173,8 +185,13 @@ func allocationOperationID() string {
 
 // NewMatchUsecase 构造 MatchUsecase。locator 可为 nil（弱依赖，不上报位置）。
 func NewMatchUsecase(repo data.MatchRepo, reader TeamReader, pusher MatchEventPusher, allocator DSAllocator, idGen IDGenerator, locator LocationNotifier, cfg conf.MatchConf) *MatchUsecase {
+	workers := cfg.AllocationWorkers
+	if workers <= 0 {
+		workers = 1 // 兜底:未配/非法时退化为串行(等价历史行为)
+	}
 	return &MatchUsecase{repo: repo, reader: reader, pusher: pusher, allocator: allocator, idGen: idGen, locator: locator, cfg: cfg,
-		regionPolicy: DefaultRegionMatchPolicy()}
+		regionPolicy: DefaultRegionMatchPolicy(),
+		allocSem:     make(chan struct{}, workers)}
 }
 
 // SetCellRouter 注入确定性 region 路由器(可选,多 Region 部署用)。
@@ -424,6 +441,21 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 	// 否则任意 map_id 会一路透传成 DS 的 PANDORA_MAP_ID(拉起加载不存在关卡的 DS)。
 	if err := u.validateMapID(mapID); err != nil {
 		return 0, err
+	}
+
+	// 队列准入上限(压测审核【必修-4】,§9.18 精神):撮合循环每 tick 全量处理 queue,
+	// 无准入时突发入队会把 tick 拖过 match_interval 形成正反馈雪崩。软上限即可
+	// (并发窗口内少量超入无害,这是背压不是不变量);长度查询失败放行——canonical 写
+	// 也在同一 Redis,真故障会在 CreateStartOperation 如实失败,不需要在这里预判。
+	if u.cfg.MaxQueueTickets > 0 {
+		if qlen, qerr := u.repo.QueueLen(ctx); qerr != nil {
+			plog.With(ctx).Warnw("msg", "match_queue_len_check_failed", "err", qerr)
+		} else if qlen >= int64(u.cfg.MaxQueueTickets) {
+			plog.With(ctx).Warnw("msg", "match_queue_admission_rejected",
+				"queue_len", qlen, "max", u.cfg.MaxQueueTickets, "team_id", teamID)
+			return 0, errcode.New(errcode.ErrRateLimited,
+				"match queue is full (%d), retry later", qlen)
+		}
 	}
 
 	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID, mapID)
@@ -2252,32 +2284,42 @@ func (u *MatchUsecase) RunMatchLoop(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "match_loop_stopped")
 			return
 		case <-ticker.C:
-			if err := u.reconcileStartOperationsOnce(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "match_start_reconcile_failed", "err", err)
-			}
-			if err := u.advanceStartOperationsOnce(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "match_start_batch_failed", "err", err)
-			}
-			if err := u.matchOnce(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "match_once_failed", "err", err)
-			}
-			if err := u.reconcileActiveOnce(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "match_active_reconcile_failed", "err", err)
-			}
-			if err := u.advanceAllocationsOnce(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "match_allocation_batch_failed", "err", err)
-			}
-			if err := u.expireOnce(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "expire_once_failed", "err", err)
-			}
-			// 队列在线扫除(节流 livenessSweepInterval):掉线玩家的死票主动清,
-			// 不等它被凑进一局再被成局门拦下(白害无辜玩家陪跑一轮 FAILED)。
-			if time.Since(u.lastLivenessSweep) >= livenessSweepInterval {
-				u.lastLivenessSweep = time.Now()
-				if err := u.livenessSweepOnce(ctx); err != nil {
-					plog.With(ctx).Warnw("msg", "liveness_sweep_failed", "err", err)
-				}
-			}
+			u.matchTickOnce(ctx)
+		}
+	}
+}
+
+// matchTickOnce 单个撮合 tick(独立函数使 recover 作用域恰为一轮)。
+//
+// panic 兜底(压测审核【必修-6】):撮合循环此前无 recover,任一 latent panic 直接崩进程
+// = 本分片撮合彻底停摆、玩家匹配卡死(违反 §9.19)。recover 后跳过本轮,下个 tick 继续;
+// 所有状态推进都经 Redis CAS 幂等,重入安全。并发 map 写是 runtime fatal,recover 兜不住。
+func (u *MatchUsecase) matchTickOnce(ctx context.Context) {
+	defer safego.Recover(ctx, "matchmaker_match_loop")
+	if err := u.reconcileStartOperationsOnce(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "match_start_reconcile_failed", "err", err)
+	}
+	if err := u.advanceStartOperationsOnce(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "match_start_batch_failed", "err", err)
+	}
+	if err := u.matchOnce(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "match_once_failed", "err", err)
+	}
+	if err := u.reconcileActiveOnce(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "match_active_reconcile_failed", "err", err)
+	}
+	if err := u.advanceAllocationsOnce(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "match_allocation_batch_failed", "err", err)
+	}
+	if err := u.expireOnce(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "expire_once_failed", "err", err)
+	}
+	// 队列在线扫除(节流 livenessSweepInterval):掉线玩家的死票主动清,
+	// 不等它被凑进一局再被成局门拦下(白害无辜玩家陪跑一轮 FAILED)。
+	if time.Since(u.lastLivenessSweep) >= livenessSweepInterval {
+		u.lastLivenessSweep = time.Now()
+		if err := u.livenessSweepOnce(ctx); err != nil {
+			plog.With(ctx).Warnw("msg", "liveness_sweep_failed", "err", err)
 		}
 	}
 }
@@ -2555,6 +2597,7 @@ func (u *MatchUsecase) advanceAllocationsOnce(ctx context.Context) error {
 		return err
 	}
 	var joined error
+	var allocJobs []*matchv1.MatchStorageRecord
 	for _, mid := range ids {
 		m, found, gerr := u.repo.GetMatch(ctx, mid)
 		if gerr != nil {
@@ -2577,9 +2620,9 @@ func (u *MatchUsecase) advanceAllocationsOnce(ctx context.Context) error {
 		}
 		switch m.Stage {
 		case stageAllocating:
-			if aerr := u.advanceAllocation(ctx, m); aerr != nil {
-				joined = errors.Join(joined, aerr)
-			}
+			// 攒批,listing 循环结束后有界并发推进(压测审核【必修-3】):分配含最长
+			// ~60s 的 RPC,不得在 listing 循环内串行内联(READY 补推会被头阻塞)。
+			allocJobs = append(allocJobs, m)
 		case stageFailed:
 			if m.GetAllocationNextAttemptAtMs() == -1 {
 				if rerr := u.repo.RemoveActive(ctx, mid); rerr != nil {
@@ -2596,6 +2639,47 @@ func (u *MatchUsecase) advanceAllocationsOnce(ctx context.Context) error {
 			}
 		}
 	}
+	if aerr := u.advanceAllocationsParallel(ctx, allocJobs); aerr != nil {
+		joined = errors.Join(joined, aerr)
+	}
+	return joined
+}
+
+// advanceAllocationsParallel 有界并发推进一批 ALLOCATING match(压测审核【必修-3】)。
+//
+// 并发上限 = cap(allocSem)(conf.AllocationWorkers,默认 16);返回前 join 全部完成,
+// 保持「返回即已尝试完毕」的同步契约 —— 错误可 errors.Join 上抛、调用方/测试可确定
+// 断言,且同一 match 绝无跨 tick 并发尝试。tick 分配耗时从 Σ(每局分配时延) 降为
+// max(单局分配时延)。每个 worker 经 safego.Go 兜 panic(【必修-6】同源):单局 panic
+// 只丢本次尝试(durable job 下 tick 重试),不崩撮合进程。
+//
+// ctx 是 RunMatchLoop 的服务生命周期 ctx(非请求 ctx,无 §16.7 逃逸问题);进程退出时
+// 在途分配被取消,由 durable allocation job 语义保证下任 leader 幂等续推。
+func (u *MatchUsecase) advanceAllocationsParallel(ctx context.Context, jobs []*matchv1.MatchStorageRecord) error {
+	if len(jobs) == 0 {
+		return nil
+	}
+	var (
+		wg     sync.WaitGroup
+		mu     sync.Mutex
+		joined error
+	)
+	for _, m := range jobs {
+		wg.Add(1)
+		u.allocSem <- struct{}{} // 阻塞抢槽:池满时在此排队,总量仍被 join 收敛
+		safego.Go(ctx, "matchmaker_allocation_worker", func() {
+			defer func() {
+				<-u.allocSem
+				wg.Done()
+			}()
+			if aerr := u.advanceAllocation(ctx, m); aerr != nil {
+				mu.Lock()
+				joined = errors.Join(joined, aerr)
+				mu.Unlock()
+			}
+		})
+	}
+	wg.Wait()
 	return joined
 }
 

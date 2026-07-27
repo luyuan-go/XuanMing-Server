@@ -28,6 +28,31 @@ func newTestSigner(t *testing.T, now time.Time) (*Signer, *Verifier) {
 	return s, v
 }
 
+func TestConfigRejectsTTLBelowJWTPrecision(t *testing.T) {
+	base := Config{
+		Secret:      []byte("pandora-dev-shared-secret-32bytes!!"),
+		SessionTTL:  time.Hour,
+		DSTicketTTL: 5 * time.Minute,
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(*Config)
+	}{
+		{name: "negative session", edit: func(c *Config) { c.SessionTTL = -time.Second }},
+		{name: "subsecond session", edit: func(c *Config) { c.SessionTTL = time.Millisecond }},
+		{name: "negative ticket", edit: func(c *Config) { c.DSTicketTTL = -time.Second }},
+		{name: "subsecond ticket", edit: func(c *Config) { c.DSTicketTTL = time.Millisecond }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base
+			tc.edit(&cfg)
+			if _, err := NewSigner(cfg); err == nil {
+				t.Fatal("NewSigner must reject TTL below JWT precision")
+			}
+		})
+	}
+}
+
 // signRawDSTicketForTest 直接用底层 jwt 库签 token,绕过 Signer.SignDSTicket 的 pre-check,
 // 用于构造 "dsType=battle 但 match_id=空" 这种恶意载荷,验证 VerifyDSTicket 防御。
 func signRawDSTicketForTest(t *testing.T, s *Signer, playerID uint64, dsType string, matchID uint64) string {

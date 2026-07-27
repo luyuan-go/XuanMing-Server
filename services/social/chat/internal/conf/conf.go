@@ -35,6 +35,13 @@ type ChatConf struct {
 	// 默认空 → 不过滤。仅做最小化屏蔽,真正风控由独立服务接管(后续)。
 	SensitiveWords []string `yaml:"sensitive_words,omitempty" json:"sensitive_words,omitempty"`
 
+	// WorldCooldown 世界频道单玩家发送冷却(默认 3s;<=0 用默认,显式关闭配 -1ns 无意义,
+	// 生产不应关)。压测审核【必修-5】:世界频道每条消息经 kafka 广播 topic 被每个 push Pod
+	// Broadcast 一次,集群级成本 ≈ 发送速率 × 全服在线数;无冷却时单客户端刷屏即可拖垮
+	// push 层的定向推送(READY/私聊)。冷却在 chat 生产侧统一做(push 每 Pod 独立 consumer
+	// group,单 Pod 自限无效)。3s 取自常见世界频道口径,待实测复核。
+	WorldCooldown config.Duration `yaml:"world_cooldown,omitempty" json:"world_cooldown,omitempty"`
+
 	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
 
 	// HistoryRetentionDays 私聊历史(chat_private_messages)保留天数(默认 90)。
@@ -55,6 +62,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Chat.HistoryLimit <= 0 {
 		c.Chat.HistoryLimit = 50
+	}
+	if c.Chat.WorldCooldown <= 0 {
+		c.Chat.WorldCooldown = config.Duration(3 * time.Second)
 	}
 	if c.Chat.HistoryRetentionDays <= 0 {
 		c.Chat.HistoryRetentionDays = 90

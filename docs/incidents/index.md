@@ -66,9 +66,12 @@ P0 不能仅凭“代码已改”“普通单测通过”或“服务重新 Read
 
 | Incident ID | 日期 | 严重级别 | 类型 | 状态 | 服务/主题 | 文档 |
 |---|---|---|---|---|---|---|
+| INC-20260726-003 | 2026-07-26 | P0 | availability / client-state / near-miss | 已修复待验证（未关闭） | UE SelectRole 旧请求被权威换代后门闩未释放；ROLE_REQUIRED 重进选角会永久吞掉后续确认 | [事故报告](2026-07-26-p0-client-select-role-stale-singleflight.md) |
+| INC-20260726-002 | 2026-07-26 | P0 | session-fencing / data / availability / near-miss | 补偿已修复，仍有相邻交付缺口（未关闭） | A/B/C 未交付前代恢复已改无能力墓碑；post-Set placement 失败仍会扣留新 session | [事故报告](2026-07-26-p0-login-session-candidate-delivery.md) |
+| INC-20260726-001 | 2026-07-26 | P0 | split-brain / data / availability / near-miss | 修复实施中（未关闭） | hub_allocator writer lease TTL 盲续/复活；assignment 补偿丢 operation identity/PTTL 与 tombstone ABA；CreateShard 绕 fence；Redis HA 已确认写回档仍 OPEN；canonical green strategy 漂移 | [事故报告](2026-07-26-p0-hub-writer-fencing-near-miss.md) |
 | INC-20260724-001 | 2026-07-24 | P0 | availability | 修复实施中(未关闭) | 战斗中退出后进不去：DS 分配不可用（fleet churn 至 ready=0 + 控制面超时）叠加 matchmaker 成局最终门 **结构性 100% 假阳性**（MATCHING 投影零保活，30s TTL 后必然全员误判离线；实测 31.07s 判死）+ ALLOCATING 期玩家无出口；已落码 FIX-1（两道 presence 判死门回退关闭）+ FIX-2（pre-checkpoint 取消出口），单测绿、真集群未验证。原"孤儿 start-claim"与"travel churn 致 presence 失效"两假设均被推翻 | [事故报告](2026-07-24-p0-matchmaker-orphan-start-claim-freeze.md) |
 | INC-20260722-004 | 2026-07-22 | P0 | security / session-fencing / near-miss | 修复实施中(未关闭) | push 旧/被顶号会话 token 仍能订阅私有推送流(建流无 jti 现行性校验,流寿命无界) | [事故报告](2026-07-22-p0-push-stale-session-subscribe.md) |
 | INC-20260722-003 | 2026-07-22 | P0 | data / near-miss | 修复实施中(未关闭) | inventory Bag journal sweep 可删除 checkpoint 未覆盖的恢复尾部 | [事故报告](2026-07-22-p0-inventory-bag-journal-sweep.md) |
-| INC-20260722-002 | 2026-07-22 | P0 | split-brain / near-miss | 修复实施中(未关闭) | hub_allocator 在 locator UNKNOWN/key miss 时继续切线，Owner Authority 尚未全链路接线 | [事故报告](2026-07-22-p0-hub-allocator-locator-fail-open.md) |
+| INC-20260722-002 | 2026-07-22 | P0 | split-brain / near-miss | 修复实施中(未关闭) | locator 面已 fail-closed；Owner Authority 仍缺 Login+Hub+Battle 同批强 Begin/Admit/Release、稳定 operation/票据身份与 WAIT 恢复，禁止只启用 Hub contract | [事故报告](2026-07-22-p0-hub-allocator-locator-fail-open.md) |
 | INC-20260722-001 | 2026-07-22 | P0 | data / near-miss | 修复实施中(未关闭) | trade 结算成功后 Redis 订单终态可被并发取消撕裂 | [事故报告](2026-07-22-p0-trade-settlement-state-race.md) |
 | INC-20260721-001 | 2026-07-21 | P0 | crash | 根因确认 | ds_allocator Heartbeat 响应 metadata 并发写导致 fatal，租约恢复窗放大为玩家被踢 | [事故报告](2026-07-21-p0-ds-allocator-heartbeat-context-race.md) |

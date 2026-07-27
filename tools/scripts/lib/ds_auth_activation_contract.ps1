@@ -391,6 +391,39 @@ function New-PandoraDsAuthCanonicalGreenObject($LiveDeployment, [string]$App, [s
         }
         $spec.replicas = 1
         $spec.strategy = [pscustomobject]@{ type = 'Recreate' }
+
+        # PANDORA_DEPLOY_STRATEGY 由 Pod annotation 经 downward API 注入进程。
+        # 只改 spec.strategy 而继承旧模板的 RollingUpdate annotation，会让
+        # Recreate 先删旧 Pod 后，新 Pod 因策略门禁 fail-closed，形成全量中断。
+        $templateAnnotations = $spec.template.metadata.annotations
+        if ($null -eq $templateAnnotations) {
+            $templateAnnotations = [pscustomobject]@{}
+            $spec.template.metadata.annotations = $templateAnnotations
+        }
+        if ($null -eq $templateAnnotations.PSObject.Properties['pandora.dev/deploy-strategy']) {
+            $templateAnnotations | Add-Member -NotePropertyName 'pandora.dev/deploy-strategy' -NotePropertyValue 'Recreate'
+        } else {
+            $templateAnnotations.'pandora.dev/deploy-strategy' = 'Recreate'
+        }
+
+        $deployStrategyEnv = @($containers[0].env | Where-Object { [string]$_.name -ceq 'PANDORA_DEPLOY_STRATEGY' })
+        if ($deployStrategyEnv.Count -gt 1) {
+            throw 'canonical green hub-allocator 存在重复 PANDORA_DEPLOY_STRATEGY env。'
+        }
+        $canonicalDeployStrategyEnv = [pscustomobject]@{
+            name = 'PANDORA_DEPLOY_STRATEGY'
+            valueFrom = [pscustomobject]@{
+                fieldRef = [pscustomobject]@{
+                    fieldPath = "metadata.annotations['pandora.dev/deploy-strategy']"
+                }
+            }
+        }
+        if ($deployStrategyEnv.Count -eq 0) {
+            $containers[0].env = @($containers[0].env) + @($canonicalDeployStrategyEnv)
+        } else {
+            $envIndex = [array]::IndexOf(@($containers[0].env), $deployStrategyEnv[0])
+            $containers[0].env[$envIndex] = $canonicalDeployStrategyEnv
+        }
     }
 
     # The one-time epoch activation temporarily pins ds-allocator green to a
@@ -465,11 +498,25 @@ function New-PandoraDsAuthCanonicalGreenObject($LiveDeployment, [string]$App, [s
 }
 
 function Assert-PandoraHubAllocatorSingleWriterDeploymentContract($Deployment) {
+    $containers = @($Deployment.spec.template.spec.containers | Where-Object { [string]$_.name -ceq 'hub-allocator' })
+    $strategyEnv = if ($containers.Count -eq 1) {
+        @($containers[0].env | Where-Object { [string]$_.name -ceq 'PANDORA_DEPLOY_STRATEGY' })
+    } else {
+        @()
+    }
+    $strategyEnvHasLiteralValue = $false
+    if ($strategyEnv.Count -eq 1 -and $null -ne $strategyEnv[0].PSObject.Properties['value']) {
+        $strategyEnvHasLiteralValue = -not [string]::IsNullOrEmpty([string]$strategyEnv[0].value)
+    }
     if ([string]$Deployment.apiVersion -cne 'apps/v1' -or [string]$Deployment.kind -cne 'Deployment' -or
         [string]$Deployment.metadata.name -cnotin @('hub-allocator', 'hub-allocator-ds-auth-green') -or
         [int]$Deployment.spec.replicas -ne 1 -or [string]$Deployment.spec.strategy.type -cne 'Recreate' -or
-        $null -ne $Deployment.spec.strategy.PSObject.Properties['rollingUpdate']) {
-        throw 'hub-allocator placement/successor writer must be exact replicas=1 with Recreate and no rollingUpdate.'
+        $null -ne $Deployment.spec.strategy.PSObject.Properties['rollingUpdate'] -or
+        [string]$Deployment.spec.template.metadata.annotations.'pandora.dev/deploy-strategy' -cne 'Recreate' -or
+        $containers.Count -ne 1 -or $strategyEnv.Count -ne 1 -or
+        $strategyEnvHasLiteralValue -or
+        [string]$strategyEnv[0].valueFrom.fieldRef.fieldPath -cne "metadata.annotations['pandora.dev/deploy-strategy']") {
+        throw 'hub-allocator placement/successor writer must be exact replicas=1 with Recreate, matching Pod annotation/downward-API env, and no rollingUpdate.'
     }
 }
 

@@ -1312,6 +1312,29 @@ function Set-ProdUnarySessionGateOn([string]$svcName, [string]$text) {
     return [regex]::Replace($text, $pattern, '${1}require: true', 1)
 }
 
+# -Prod 机械强制客户端面服务 BBR 自适应限流(压测前审核门禁-A,2026-07-26):
+# dev 模板不写 enable_rate_limit(零值 false)只服务本地联调;生产客户端面服务过载时
+# 必须有 server 侧丢负载(BBR 按 CPU/inflight/RT 自适应,无需阈值),否则登录/聊天洪峰
+# 只能靠 Envoy 隐式熔断 + OOMKill 兜底(个别 Pod 延迟劣化/crash-loop)。
+# 模板已写 enable_rate_limit → 强制 true(锚点必须唯一);未写 → 插到 server.grpc: 首行后。
+$GrpcRateLimitServiceNames = $UnarySessionGateServiceNames + @('login', 'push')
+function Set-ProdGrpcRateLimitOn([string]$svcName, [string]$text) {
+    $explicit = '(?m)^([ \t]+)enable_rate_limit:[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
+    $explicitCount = [regex]::Matches($text, $explicit).Count
+    if ($explicitCount -gt 1) {
+        throw "[FATAL] $svcName 模板 enable_rate_limit 锚点异常(count=$explicitCount),拒绝生成 -Prod 产物。"
+    }
+    if ($explicitCount -eq 1) {
+        return [regex]::Replace($text, $explicit, '${1}enable_rate_limit: true', 1)
+    }
+    $anchor = '(?m)^([ \t]{2}grpc:[ \t]*(\r?\n))'
+    $anchorCount = [regex]::Matches($text, $anchor).Count
+    if ($anchorCount -ne 1) {
+        throw "[FATAL] $svcName 模板 server.grpc 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text, $anchor, '${1}    enable_rate_limit: true${2}', 1)
+}
+
 # -Prod 机械关断幂等历史清理(审核 P1,2026-07-21):dev 开启 exp_history_cleanup_enabled /
 # history_cleanup_enabled 只为覆盖清理代码路径(本地数据可弃)。上游 progress 出箱与
 # kafka 重放目前没有小于留存期的有界重试,生产删收据后迟到重放会重复入账经验/MMR/点数
@@ -1513,6 +1536,14 @@ function Assert-GeneratedSet {
             if (([regex]::Matches($yaml, '(?m)^session_gate:[ \t]*\r?\n[ \t]{2}require:[ \t]*true[ \t]*$')).Count -ne 1 -or
                 [regex]::IsMatch($yaml, '(?m)^session_gate:[ \t]*\r?\n[ \t]{2}require:[ \t]*false')) {
                 throw "[FATAL] -Prod 产物 $($svc.Name) session_gate.require 必须且只能为 true(旧 JWT 全服务吊销门,INC-20260722-004)。"
+            }
+        }
+        # -Prod 产物合约(压测前审核门禁-A):客户端面服务 BBR 限流必须开启,
+        # 任何模板漂移/插入 0 次都在发布前失败,不允许静默放行。
+        if ($Prod -and ($GrpcRateLimitServiceNames -contains $svc.Name)) {
+            if (([regex]::Matches($yaml, '(?m)^[ \t]+enable_rate_limit:[ \t]*true[ \t]*(?:#.*)?$')).Count -ne 1 -or
+                [regex]::IsMatch($yaml, '(?m)^[ \t]+enable_rate_limit:[ \t]*false')) {
+                throw "[FATAL] -Prod 产物 $($svc.Name) enable_rate_limit 必须且只能为 true(压测前审核门禁-A,BBR 过载丢负载)。"
             }
         }
         # -Prod 产物合约(审核 P0):实时成长通道必须被机械关断,
@@ -1736,6 +1767,9 @@ try {
         if ($Prod -and $s.Name -eq 'login') { $out = Set-ProdLoginHubHeadlessAddr $out }
         if ($Prod -and ($UnarySessionGateServiceNames -contains $s.Name)) {
             $out = Set-ProdUnarySessionGateOn $s.Name $out
+        }
+        if ($Prod -and ($GrpcRateLimitServiceNames -contains $s.Name)) {
+            $out = Set-ProdGrpcRateLimitOn $s.Name $out
         }
         if ($Prod -and $s.Name -eq 'player') {
             $out = Set-ProdPlayerExperienceOff $out

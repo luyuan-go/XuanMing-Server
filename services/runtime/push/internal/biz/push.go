@@ -42,6 +42,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	pushv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/push/v1"
 
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/data"
@@ -409,6 +410,11 @@ func (u *PushUsecase) RunSubscribeStream(
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		// panic 兜底(压测审核【必修-6】):看门狗 panic 此前会崩整进程(全 Pod 长连瞬断)。
+		// recover 后看门狗终止,流失去会话复查驱动 → 主动 cancelStream 断本流,客户端重连
+		// 重建看门狗,fail-closed 不留"无人裁决会话"的流。
+		defer cancelStream()
+		defer safego.Recover(ctx, "push_session_watchdog")
 		tick := time.NewTicker(u.sessionRecheckEvery)
 		defer tick.Stop()
 		fails := 0

@@ -33,6 +33,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
 	"github.com/luyuancpp/pandora/services/social/dialogue/internal/biz"
@@ -195,9 +196,12 @@ func runSessionSweep(ctx context.Context, store *data.MemorySessionStore, helper
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if n := store.SweepExpired(time.Now().UnixMilli()); n > 0 {
-				helper.Infow("msg", "dialogue_sessions_swept", "count", n)
-			}
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
+			safego.Run(ctx, "dialogue_session_sweep", func() {
+				if n := store.SweepExpired(time.Now().UnixMilli()); n > 0 {
+					helper.Infow("msg", "dialogue_sessions_swept", "count", n)
+				}
+			})
 		}
 	}
 }

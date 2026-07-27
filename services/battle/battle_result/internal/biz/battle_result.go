@@ -30,6 +30,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 	"google.golang.org/protobuf/proto"
@@ -564,9 +565,12 @@ func (u *BattleResultUsecase) RunOutboxPublisher(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "outbox_publisher_stopped")
 			return
 		case <-ticker.C:
-			if n, err := u.publishOutboxBatch(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "outbox_publish_batch_failed", "published", n, "err", err)
-			}
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,出箱行保留下轮重试。
+			safego.Run(ctx, "battle_outbox_publisher", func() {
+				if n, err := u.publishOutboxBatch(ctx); err != nil {
+					plog.With(ctx).Warnw("msg", "outbox_publish_batch_failed", "published", n, "err", err)
+				}
+			})
 		}
 	}
 }
@@ -636,9 +640,11 @@ func (u *BattleResultUsecase) RunMatchReleasePublisher(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "match_release_publisher_stopped")
 			return
 		case <-ticker.C:
-			if n, err := u.publishMatchReleaseBatch(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "match_release_batch_failed", "released", n, "err", err)
-			}
+			safego.Run(ctx, "battle_match_release_publisher", func() {
+				if n, err := u.publishMatchReleaseBatch(ctx); err != nil {
+					plog.With(ctx).Warnw("msg", "match_release_batch_failed", "released", n, "err", err)
+				}
+			})
 		}
 	}
 }
@@ -700,9 +706,11 @@ func (u *BattleResultUsecase) RunTerminalReleasePublisher(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "terminal_release_publisher_stopped")
 			return
 		case <-ticker.C:
-			if n, err := u.publishTerminalReleaseBatch(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "terminal_release_batch_failed", "finalized", n, "err", err)
-			}
+			safego.Run(ctx, "battle_terminal_release_publisher", func() {
+				if n, err := u.publishTerminalReleaseBatch(ctx); err != nil {
+					plog.With(ctx).Warnw("msg", "terminal_release_batch_failed", "finalized", n, "err", err)
+				}
+			})
 		}
 	}
 }
@@ -803,9 +811,11 @@ func (u *BattleResultUsecase) RunDropPublisher(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "drop_publisher_stopped")
 			return
 		case <-ticker.C:
-			if n, err := u.publishDropBatch(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "drop_publish_batch_failed", "granted", n, "err", err)
-			}
+			safego.Run(ctx, "battle_drop_publisher", func() {
+				if n, err := u.publishDropBatch(ctx); err != nil {
+					plog.With(ctx).Warnw("msg", "drop_publish_batch_failed", "granted", n, "err", err)
+				}
+			})
 		}
 	}
 }

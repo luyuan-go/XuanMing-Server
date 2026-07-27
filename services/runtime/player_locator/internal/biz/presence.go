@@ -20,6 +20,7 @@ import (
 	"time"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/safego"
 )
 
 // biz 层粗粒度在线态(§13.4.4 降采样;与 proto PresenceStatus 数值 1:1,service 层互转)。
@@ -210,10 +211,18 @@ func (h *PresenceHub) Start() {
 			case <-h.stopCh:
 				return
 			case <-t.C:
-				h.step(context.Background(), h.clock())
+				h.stepSafely(context.Background(), h.clock())
 			}
 		}
 	}()
+}
+
+// stepSafely 单轮 tick 的 panic 兜底(压测审核【必修-6】):此前 step panic 会崩整个
+// locator 进程(presence 只是可降级投影,不值一个进程)。recover 后跳过本轮,下 tick 继续;
+// step 持有的 h.mu 在 panic 展开时由 defer 链保证已释放(step 内锁外推送,锁窗口无 I/O)。
+func (h *PresenceHub) stepSafely(ctx context.Context, now time.Time) {
+	defer safego.Recover(ctx, "presence_hub_tick")
+	h.step(ctx, now)
 }
 
 // Close 停止后台 tick 并等其退出。
@@ -227,12 +236,49 @@ func (h *PresenceHub) Close() {
 	<-h.doneCh
 }
 
+// presenceBatch 是一个订阅者本 tick 要收的合并批次。
+type presenceBatch struct {
+	sub     uint64
+	changes []PresenceChangeOut
+}
+
 // step 是单次 tick 的核心(暴露为方法便于单测用受控时钟直接驱动):
 //  1. killswitch 降级判定:降级 → 丢弃在途 pending/buffer,退纯拉;
 //  2. 去抖结算:deadline 到点的 pending,与 lastSent 比对,变化才进合并缓冲;
 //  3. 合并 flush:每个订阅者的缓冲攒成一条 PresenceBatchEvent,锁外推送。
 func (h *PresenceHub) step(ctx context.Context, now time.Time) {
+	batches := h.collectBatches(ctx, now)
+
+	if h.pusher == nil {
+		return
+	}
+	// 模式 C:本 flush 由 ticker(默认 1s)驱动,对每个有缓冲变更的订阅者各推一次。
+	// push 不可用时逐订阅者打 Warn = 每秒数百条同因日志 → 改为本轮累加、轮末汇总一条。
+	var failed, failedChanges int
+	var firstErr error
+	var sampleSub uint64
+	for _, b := range batches {
+		if err := h.pusher.PushPresence(ctx, b.sub, b.changes); err != nil {
+			failed++
+			failedChanges += len(b.changes)
+			if firstErr == nil {
+				firstErr, sampleSub = err, b.sub
+			}
+		}
+	}
+	if failed > 0 {
+		plog.With(ctx).Warnw("msg", "presence_push_failed",
+			"subscribers", len(batches), "failed", failed, "failed_changes", failedChanges,
+			"sample_subscriber_id", sampleSub, "first_err", firstErr)
+	}
+}
+
+// collectBatches 是 step 的持锁段:降级判定 + 去抖结算 + 抽批清缓冲。
+// defer 解锁(而非显式 Unlock):stepSafely 的 recover 兜底要求锁区间内 panic 时
+// 锁必须已释放,否则 Notify/Subscribe 会在悬挂的 mu 上永久阻塞(比崩进程更糟)。
+func (h *PresenceHub) collectBatches(ctx context.Context, now time.Time) []presenceBatch {
 	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	// 1. 洪峰降级(§13.5):退回纯拉,丢弃在途事件。
 	if h.ks != nil {
@@ -243,8 +289,7 @@ func (h *PresenceHub) step(ctx context.Context, now time.Time) {
 			}
 			h.pending = map[uint64]pendingChange{}
 			h.buffer = map[uint64]map[uint64]PresenceChangeOut{}
-			h.mu.Unlock()
-			return
+			return nil
 		}
 		if h.degraded {
 			h.degraded = false
@@ -284,12 +329,8 @@ func (h *PresenceHub) step(ctx context.Context, now time.Time) {
 		}
 	}
 
-	// 3. 合并 flush:抽出本 tick 要推的批次,清空缓冲,锁外推送。
-	type batch struct {
-		sub     uint64
-		changes []PresenceChangeOut
-	}
-	var batches []batch
+	// 3. 抽出本 tick 要推的批次,清空缓冲(推送在锁外做)。
+	var batches []presenceBatch
 	for sub, sb := range h.buffer {
 		if len(sb) == 0 {
 			continue
@@ -298,31 +339,8 @@ func (h *PresenceHub) step(ctx context.Context, now time.Time) {
 		for _, c := range sb {
 			changes = append(changes, c)
 		}
-		batches = append(batches, batch{sub: sub, changes: changes})
+		batches = append(batches, presenceBatch{sub: sub, changes: changes})
 	}
 	h.buffer = map[uint64]map[uint64]PresenceChangeOut{}
-	h.mu.Unlock()
-
-	if h.pusher == nil {
-		return
-	}
-	// 模式 C:本 flush 由 ticker(默认 1s)驱动,对每个有缓冲变更的订阅者各推一次。
-	// push 不可用时逐订阅者打 Warn = 每秒数百条同因日志 → 改为本轮累加、轮末汇总一条。
-	var failed, failedChanges int
-	var firstErr error
-	var sampleSub uint64
-	for _, b := range batches {
-		if err := h.pusher.PushPresence(ctx, b.sub, b.changes); err != nil {
-			failed++
-			failedChanges += len(b.changes)
-			if firstErr == nil {
-				firstErr, sampleSub = err, b.sub
-			}
-		}
-	}
-	if failed > 0 {
-		plog.With(ctx).Warnw("msg", "presence_push_failed",
-			"subscribers", len(batches), "failed", failed, "failed_changes", failedChanges,
-			"sample_subscriber_id", sampleSub, "first_err", firstErr)
-	}
+	return batches
 }

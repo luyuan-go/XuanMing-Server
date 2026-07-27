@@ -117,6 +117,8 @@ type MatchRepo interface {
 	CreateTicketRecord(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
 	// EnqueueTicket 把已写好主体的票据 ZADD 进 queue(score=avg_mmr),撮合循环自此可见。
 	EnqueueTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord) error
+	// QueueLen 返回 queue ZSET 当前票据数(StartMatch 准入上限用,压测审核【必修-4】)。
+	QueueLen(ctx context.Context) (int64, error)
 	// GetTicket 读票据。not found 返 (nil, false, nil)。
 	GetTicket(ctx context.Context, ticketID uint64) (*matchv1.MatchTicketStorageRecord, bool, error)
 	// ReserveTicket 把票据从 queue 移出并持久化(撮合命中:caller 已写好 ticket.match_id)。
@@ -527,6 +529,11 @@ func (r *RedisMatchRepo) DeleteTicketIfUnmatched(ctx context.Context, ticketID u
 		return true, 0, nil
 	}
 	return false, 0, errcode.New(errcode.ErrMatchConcurrent, "delete ticket %d concurrent retry exhausted", ticketID)
+}
+
+// QueueLen 返回 queue ZSET 当前票据数(单命令 O(1);StartMatch 准入上限用,压测审核【必修-4】)。
+func (r *RedisMatchRepo) QueueLen(ctx context.Context) (int64, error) {
+	return r.rdb.ZCard(ctx, r.queueKey).Result()
 }
 
 func (r *RedisMatchRepo) RangeQueueTickets(ctx context.Context) ([]uint64, error) {

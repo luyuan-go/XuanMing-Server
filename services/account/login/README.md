@@ -111,13 +111,15 @@ Login(account, password_hash, device_id)
   `ACTIVE+READY` claim 兜底(`resolveBattleAuthority`,`biz/login.go:651`),再经 `InspectBattleRoute` 三态分诊——
   `Active`=签重连票回原局;`Terminal`=locator 仅 TTL 残留,带原 `match_id` 回流 fence 进 Hub;`Unknown`=`Unavailable` 可重试
   (最长 ~30s 租约到期自愈,永不永久卡死,§9.19 no-freeze)。
-- **会话定序 / 部分失败**(`biz/login.go:321` 起注释):先 MySQL 代际再 Redis 条件写,消灭「Redis=B、MySQL=A」撕裂;
-  MySQL 已提交但 Redis 写失败时走 `reconcileFailedSessionWrite`(R10 P0-1):先用按 jti 的 CAS 删
-  `DeleteIfJTI` 把「Redis 到底提交没有」从不可知变成可判定——无错误返回即证明 Redis 不再持有本次 jti,
-  才做 `RestoreSessionJTI` 条件回补(保住 R9 P0-2 的目的:不误拒上一代合法会话);CAS 删本身失败
-  = 状态不可证明,禁止猜测,改走 `TombstoneSessionJTI` 条件墓碑 fail-closed(任何陈旧 jti 都不再匹配,
-  下一次成功登录原子推进两存储自愈)。旧实现「读回失败即回补」会在 Redis 实际已提交时造出
-  「Redis=新 jti、MySQL=旧 jti」跨存储撕裂。
+- **会话定序 / 部分失败**(`biz/login.go:321` 起注释):先由 MySQL 分配单调
+  generation，再由 Redis Lua 仅接受更高 generation；同 `(jti,generation)` 的
+  lost-reply 重试幂等成功，同 generation 不同 jti 按完整性冲突 fail-closed。
+  Redis 写结果不确定时绝不恢复“即时前代”——连续 A→B→C 登录中，B 也可能从未
+  交付。`reconcileFailedSessionWrite` 分别用独立有界预算写两侧无能力墓碑：MySQL
+  仅条件命中本次 `(jti,generation)`；Redis 在 `current.gen <= failedGen` 时清除
+  token/jti/device/exp 并推进水位，更高代际赢家保持不变。遗留 `_rollback_*` 只在
+  滚动兼容期被清理，不再参与恢复。失败 RPC 返回可重试错误；下一次 Login 用更高
+  generation 原子推进两处权威自愈。
 
 ### 2. IssueDSTicket —— 结算回大厅 / 断线重连补票
 

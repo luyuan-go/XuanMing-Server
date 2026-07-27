@@ -13,7 +13,8 @@
 //
 //	kubectl -n pandora port-forward svc/redis 6379:6379
 //
-// 测试只使用带唯一前缀的键并在结束时清理,不会碰到业务数据。
+// 测试只使用高位随机化 player_id / 唯一 pod 名并在结束时精确清理自己的实体键和
+// 全局索引 member；绝不 DEL/FLUSH 共享全局索引，不会碰到其它业务数据。
 package data
 
 import (
@@ -21,13 +22,24 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
+
+var redis8PlayerSeq atomic.Uint64
+
+// nextRedis8PlayerID 使用高位测试空间 + 进程时间种子，避免两个并行测试进程误连
+// 同一共享 dev Redis 时互相清理固定 player key。
+func nextRedis8PlayerID() uint64 {
+	const lowMask = uint64(1<<62) - 1
+	return uint64(1<<62) | ((uint64(time.Now().UnixNano()) + redis8PlayerSeq.Add(1)) & lowMask)
+}
 
 // newRealRedisRepo 连真 Redis 并返回仓库;未配置地址即 Skip。
 // playerID/pod 由调用方用 t.Name() 派生,避免并行测试互相踩键。
@@ -64,8 +76,8 @@ func cleanupKeys(t *testing.T, rdb *redis.Client, keys ...string) {
 func TestRedis8_AssignmentDeleteThenReviveByStaleWriterRejected(t *testing.T) {
 	ctx := context.Background()
 	repo, rdb := newRealRedisRepo(t)
-	// 用极大 playerID 避开真实业务 ID 空间。
-	const playerID = uint64(1 << 62)
+	// 用唯一的高位 playerID 避开真实业务 ID 空间与并行测试进程。
+	playerID := nextRedis8PlayerID()
 	cleanupKeys(t, rdb, assignKey(playerID))
 
 	// 起点干净(上一次失败的残留不能污染判定)。
@@ -128,7 +140,7 @@ func TestRedis8_AssignmentDeleteThenReviveByStaleWriterRejected(t *testing.T) {
 func TestRedis8_AssignmentLeaseLostBetweenAttemptsRejected(t *testing.T) {
 	ctx := context.Background()
 	repo, rdb := newRealRedisRepo(t)
-	const playerID = uint64(1<<62) + 1
+	playerID := nextRedis8PlayerID()
 	cleanupKeys(t, rdb, assignKey(playerID))
 	if err := rdb.Del(ctx, assignKey(playerID)).Err(); err != nil {
 		t.Fatalf("reset assignment key: %v", err)
@@ -179,10 +191,19 @@ func TestRedis8_AssignmentLeaseLostBetweenAttemptsRejected(t *testing.T) {
 func TestRedis8_ShardWritePathsRejectStaleWriter(t *testing.T) {
 	ctx := context.Background()
 	repo, rdb := newRealRedisRepo(t)
-	pod := fmt.Sprintf("pandora-hub-r11-%d", os.Getpid())
-	const playerID = uint64(1<<62) + 2
+	pod := fmt.Sprintf("pandora-hub-r11-%d-%d", os.Getpid(), time.Now().UnixNano())
+	playerID := nextRedis8PlayerID()
+	// shardsSetKey/activeKey/transferCleanupPodsKey 是共享全局索引，测试绝不能 DEL
+	// 整个 key（误连共享 dev 时会破坏其它分片）。这里只删本测试唯一 pod 的实体键，
+	// 并从全局 set 精确 SREM 自己的 member。
 	cleanupKeys(t, rdb, shardKey(pod), membersKey(pod), wfenceKey(pod),
-		transferCleanupKey(pod), shardsSetKey, activeKey)
+		transferCleanupKey(pod))
+	t.Cleanup(func() {
+		ctx := context.Background()
+		_ = rdb.SRem(ctx, shardsSetKey, pod).Err()
+		_ = rdb.ZRem(ctx, activeKey, pod).Err()
+		_ = rdb.SRem(ctx, transferCleanupPodsKey, pod).Err()
+	})
 
 	// 继任者(第 9 届)已推扫过本 pod 的水位。
 	if err := rdb.Set(ctx, wfenceKey(pod), "9", 0).Err(); err != nil {
@@ -190,6 +211,12 @@ func TestRedis8_ShardWritePathsRejectStaleWriter(t *testing.T) {
 	}
 	repo.SetWriterFence(&fakeWriterFence{token: 7, held: true})
 
+	if err := repo.CreateShard(ctx, sampleShard(pod, 1, 0), testTTL); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("CreateShard 必须拒绝落后 token,got %v", err)
+	}
+	if n, _ := rdb.Exists(ctx, shardKey(pod)).Result(); n != 0 {
+		t.Fatal("被拒的 CreateShard 不得种出分片镜像")
+	}
 	if err := repo.AddShardMember(ctx, pod, playerID, testTTL); errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("AddShardMember 必须拒绝落后 token,got %v", err)
 	}
@@ -215,5 +242,108 @@ func TestRedis8_ShardWritePathsRejectStaleWriter(t *testing.T) {
 	}
 	if v, _ := rdb.Get(ctx, wfenceKey(pod)).Result(); v != "11" {
 		t.Fatalf("current writer must advance the watermark to its own term, got %q", v)
+	}
+}
+
+// 真 Redis 版:EXEC 后失租的补偿必须使用操作捕获 token，并恢复原 TTL；生产
+// writerlease 失主时 Current() 返回 token=0，旧实现因此永远匹配不到刚写的 token=7。
+func TestRedis8_AssignmentPostWriteCompensationUsesCapturedTokenAndTTL(t *testing.T) {
+	ctx := context.Background()
+	repo, rdb := newRealRedisRepo(t)
+	playerID := nextRedis8PlayerID()
+	cleanupKeys(t, rdb, assignKey(playerID))
+	if err := rdb.Del(ctx, assignKey(playerID)).Err(); err != nil {
+		t.Fatalf("reset assignment key: %v", err)
+	}
+	repo.SetWriterFence(&fakeWriterFence{token: 5, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-A"), testTTL); err != nil || !swapped {
+		t.Fatalf("seed assignment: swapped=%v err=%v", swapped, err)
+	}
+	before, _, _ := repo.GetAssignment(ctx, playerID)
+	fence := &hookedWriterFence{token: 7, held: true}
+	fence.onCall = func(f *hookedWriterFence, call int) {
+		if call == 2 {
+			f.token = 0
+			f.held = false
+		}
+	}
+	repo.SetWriterFence(fence)
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, before,
+		assignmentFixture(playerID, "pod-B"), testTTL); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("lost writer must be compensated on real Redis: swapped=%v err=%v", swapped, err)
+	}
+	after, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found || after.GetHubPodName() != "pod-A" || after.GetWriterToken() != 7 {
+		t.Fatalf("real Redis compensation wrong: found=%v rec=%+v err=%v", found, after, err)
+	}
+	ttl, err := rdb.PTTL(ctx, assignKey(playerID)).Result()
+	if err != nil || ttl <= 0 || ttl > testTTL {
+		t.Fatalf("real Redis compensation must preserve finite TTL: ttl=%s err=%v", ttl, err)
+	}
+}
+
+func TestRedis8_AssignmentPostWriteCompensationAcrossFastReelection(t *testing.T) {
+	ctx := context.Background()
+	repo, rdb := newRealRedisRepo(t)
+	playerID := nextRedis8PlayerID()
+	cleanupKeys(t, rdb, assignKey(playerID))
+	if err := rdb.Del(ctx, assignKey(playerID)).Err(); err != nil {
+		t.Fatalf("reset assignment key: %v", err)
+	}
+	repo.SetWriterFence(&fakeWriterFence{token: 5, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-A"), testTTL); err != nil || !swapped {
+		t.Fatalf("seed assignment: swapped=%v err=%v", swapped, err)
+	}
+	before, _, _ := repo.GetAssignment(ctx, playerID)
+	fence := &hookedWriterFence{token: 7, held: true}
+	fence.onCall = func(f *hookedWriterFence, call int) {
+		if call == 2 {
+			f.token = 9
+			f.held = true
+		}
+	}
+	repo.SetWriterFence(fence)
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, before,
+		assignmentFixture(playerID, "pod-B"), testTTL); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("old term must be compensated after fast re-election: swapped=%v err=%v", swapped, err)
+	}
+	after, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found || after.GetHubPodName() != "pod-A" || after.GetWriterToken() != 7 {
+		t.Fatalf("fast re-election compensation wrong: found=%v rec=%+v err=%v", found, after, err)
+	}
+}
+
+func TestRedis8_AssignmentCompensationSurvivesCanceledRequestContext(t *testing.T) {
+	ctx, cancelRequest := context.WithCancel(context.Background())
+	repo, rdb := newRealRedisRepo(t)
+	playerID := nextRedis8PlayerID()
+	cleanupKeys(t, rdb, assignKey(playerID))
+	if err := rdb.Del(ctx, assignKey(playerID)).Err(); err != nil {
+		t.Fatalf("reset assignment key: %v", err)
+	}
+	repo.SetWriterFence(&fakeWriterFence{token: 5, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-A"), testTTL); err != nil || !swapped {
+		t.Fatalf("seed assignment: swapped=%v err=%v", swapped, err)
+	}
+	before, _, _ := repo.GetAssignment(ctx, playerID)
+	fence := &hookedWriterFence{token: 7, held: true}
+	fence.onCall = func(f *hookedWriterFence, call int) {
+		if call == 2 {
+			cancelRequest()
+			f.token = 0
+			f.held = false
+		}
+	}
+	repo.SetWriterFence(fence)
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, before,
+		assignmentFixture(playerID, "pod-B"), testTTL); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("canceled request must still compensate with detached ctx: swapped=%v err=%v", swapped, err)
+	}
+	after, found, err := repo.GetAssignment(context.Background(), playerID)
+	if err != nil || !found || after.GetHubPodName() != "pod-A" {
+		t.Fatalf("canceled request left dirty assignment: found=%v rec=%+v err=%v", found, after, err)
 	}
 }

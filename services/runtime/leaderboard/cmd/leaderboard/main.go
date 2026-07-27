@@ -36,6 +36,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/redisx"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	leaderboardv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/leaderboard/v1"
@@ -216,7 +217,10 @@ func runRewardRetrySweep(ctx context.Context, uc *biz.LeaderboardUsecase) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			uc.RetryUngrantedRewards(ctx, rewardSweepGrace, rewardSweepLimit)
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,补发下轮重试。
+			safego.Run(ctx, "leaderboard_reward_sweep", func() {
+				uc.RetryUngrantedRewards(ctx, rewardSweepGrace, rewardSweepLimit)
+			})
 		}
 	}
 }
@@ -231,17 +235,19 @@ func runRetentionSweep(ctx context.Context, repo *data.MySQLLeaderboardRepo, ret
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cutoffMs := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
-			if n, err := repo.PurgeSnapshotsBefore(ctx, cutoffMs, batch); err != nil {
-				helper.Warnw("msg", "leaderboard_snapshot_purge_failed", "err", err)
-			} else if n > 0 {
-				helper.Infow("msg", "leaderboard_snapshot_purged", "rows", n, "retention_days", retentionDays)
-			}
-			if n, err := repo.PurgeGrantedRewardsBefore(ctx, cutoffMs, batch); err != nil {
-				helper.Warnw("msg", "leaderboard_reward_log_purge_failed", "err", err)
-			} else if n > 0 {
-				helper.Infow("msg", "leaderboard_reward_log_purged", "rows", n, "retention_days", retentionDays)
-			}
+			safego.Run(ctx, "leaderboard_retention_sweep", func() {
+				cutoffMs := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
+				if n, err := repo.PurgeSnapshotsBefore(ctx, cutoffMs, batch); err != nil {
+					helper.Warnw("msg", "leaderboard_snapshot_purge_failed", "err", err)
+				} else if n > 0 {
+					helper.Infow("msg", "leaderboard_snapshot_purged", "rows", n, "retention_days", retentionDays)
+				}
+				if n, err := repo.PurgeGrantedRewardsBefore(ctx, cutoffMs, batch); err != nil {
+					helper.Warnw("msg", "leaderboard_reward_log_purge_failed", "err", err)
+				} else if n > 0 {
+					helper.Infow("msg", "leaderboard_reward_log_purged", "rows", n, "retention_days", retentionDays)
+				}
+			})
 		}
 	}
 }

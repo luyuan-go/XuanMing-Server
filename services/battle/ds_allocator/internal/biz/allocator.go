@@ -31,6 +31,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
@@ -2077,15 +2078,25 @@ func (u *AllocatorUsecase) RunHeartbeatSweep(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "heartbeat_sweep_stopped")
 			return
 		case <-ticker.C:
-			// 压测前审核 P1:census 准入缓存按 last-touch TTL 清死实例项(对齐 hub_allocator)。
-			// 纯本地内存卫生,不经存储、不依赖 writer 身份,故每 tick 无条件先执行——否则本副本
-			// 处理过心跳的已销毁 Battle 实例(UID 永不复用)留下的 admitted 项永不回收,长压测 OOM。
-			// 活实例项每心跳 census 续期,仅超 TTL 未续期(实例已销毁)的项被清。
-			sweepStaleOwnerAdmitted(&u.ownerAdmitted, time.Now().Add(-ownerAdmittedStaleTTL))
-			if err := u.sweepOnce(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "heartbeat_sweep_failed", "err", err)
-			}
+			u.heartbeatSweepTick(ctx)
 		}
+	}
+}
+
+// heartbeatSweepTick 单个清扫 tick(独立函数使 recover 作用域恰为一轮)。
+//
+// panic 兜底(压测审核【必修-6】同类点位):此前 tick 内 latent panic 崩整进程 =
+// DS 崩溃补偿链(§9 不变量 4)停摆、abandoned 对局无人回收。recover 后跳过本轮,
+// 下 tick 继续;sweep 幂等可重入。并发 map 写是 runtime fatal,recover 兜不住。
+func (u *AllocatorUsecase) heartbeatSweepTick(ctx context.Context) {
+	defer safego.Recover(ctx, "ds_heartbeat_sweep")
+	// 压测前审核 P1:census 准入缓存按 last-touch TTL 清死实例项(对齐 hub_allocator)。
+	// 纯本地内存卫生,不经存储、不依赖 writer 身份,故每 tick 无条件先执行——否则本副本
+	// 处理过心跳的已销毁 Battle 实例(UID 永不复用)留下的 admitted 项永不回收,长压测 OOM。
+	// 活实例项每心跳 census 续期,仅超 TTL 未续期(实例已销毁)的项被清。
+	sweepStaleOwnerAdmitted(&u.ownerAdmitted, time.Now().Add(-ownerAdmittedStaleTTL))
+	if err := u.sweepOnce(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "heartbeat_sweep_failed", "err", err)
 	}
 }
 

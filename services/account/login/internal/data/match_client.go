@@ -14,6 +14,7 @@ package data
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -23,6 +24,16 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 )
+
+// matchResolveTimeout 是登录链上 matchmaker 只读权威探测的独立子预算(压测审核【必修-1】)。
+//
+// 每次非战斗登录都会同步查一次本 RPC(封 codex P0-2/3/4 窗口的必要查询,不得移除);
+// matchmaker 是压测下最繁忙的服务,其 P99 慢化若无子预算会吃光 prod 登录 5s deadline。
+// WithTimeout 只收紧不放宽;到期后的错误与原慢失败同路径 —— enforce 档 fail-closed
+// 语义由 biz 层决定,此处不改(审核明示:不得因超时降级为 presence-only),只是把
+// 失败提前、让客户端更快进入退避重试。
+// 取值:只读 Redis 记录查询,健康 P99 几十 ms,取保守偏大值 3s;待实测复核。
+const matchResolveTimeout = 3 * time.Second
 
 // PlayerMatchAuthority 是 ResolvePlayerMatchContext 的最小 client 视角产出。
 type PlayerMatchAuthority struct {
@@ -75,6 +86,8 @@ func NewGrpcMatchContextResolver(conn *grpc.ClientConn, signer *internalrpcauth.
 func (r *GrpcMatchContextResolver) ResolvePlayerMatchContext(
 	ctx context.Context, playerID uint64,
 ) (PlayerMatchAuthority, error) {
+	ctx, cancel := context.WithTimeout(ctx, matchResolveTimeout)
+	defer cancel()
 	if r.signer != nil {
 		signed, serr := r.signer.SignContext(ctx,
 			matchv1.MatchService_ResolvePlayerMatchContext_FullMethodName, playerID)

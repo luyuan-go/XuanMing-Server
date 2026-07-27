@@ -50,6 +50,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -84,16 +85,21 @@ var ErrWriterSuperseded = errcode.New(errcode.ErrUnavailable,
 const assignmentFenceTombstoneTTL = 5 * time.Minute
 
 // isAssignmentFenceTombstone 判定归属记录是否只是 fencing 墓碑。真实归属必有
-// hub_pod_name(分片身份是归属的本体);墓碑只带 player_id + writer_token。
-// 故无需新增 proto 字段即可与真实归属区分,滚动升级双向兼容(旧副本读到墓碑时
-// hub_pod_name 为空,同样不会把它当成可用归属)。
+// hub_pod_name(分片身份是归属的本体);新墓碑额外复用 assignment_id 作为本次删除的
+// operation-scoped 唯一身份。旧墓碑 assignment_id 为空仍可读，因而不改 wire schema、
+// 不依赖新 PB，滚动升级双向兼容；proto unknown fields 也继续由标准 Unmarshal/Marshal 保留。
 func isAssignmentFenceTombstone(rec *hubv1.HubAssignmentStorageRecord) bool {
 	return rec != nil && rec.GetHubPodName() == ""
 }
 
-// newAssignmentFenceTombstone 构造墓碑:除水位与 player_id 外一律零值。
+// newAssignmentFenceTombstone 构造一次删除专属的墓碑。只用 token 无法区分同一任期
+// 内的 A/B 两次删除，会产生 tombstone ABA；assignment_id 使迟到补偿只能匹配自己。
 func newAssignmentFenceTombstone(playerID, token uint64) *hubv1.HubAssignmentStorageRecord {
-	return &hubv1.HubAssignmentStorageRecord{PlayerId: playerID, WriterToken: token}
+	return &hubv1.HubAssignmentStorageRecord{
+		PlayerId:     playerID,
+		WriterToken:  token,
+		AssignmentId: uuid.NewString(),
+	}
 }
 
 // noopAdvance 供未启用 fence / 无需推进时占位。

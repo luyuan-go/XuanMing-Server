@@ -34,6 +34,9 @@ func (f *jtiSessionRepo) GetJTI(_ context.Context, _ uint64) (string, bool, erro
 func (f *jtiSessionRepo) DeleteIfJTI(_ context.Context, _ uint64, _ string) (bool, error) {
 	return true, nil
 }
+func (f *jtiSessionRepo) FenceFailedSet(_ context.Context, _ uint64, _ string, _ uint64, _ time.Duration) (bool, error) {
+	return true, nil
+}
 
 // newSessionJTIUsecase 构造只包含会话现行性门所需依赖的测试用例对象。
 // sessions 控制会话权威状态；strict 控制 B1 严格档与 local/off 兼容档。

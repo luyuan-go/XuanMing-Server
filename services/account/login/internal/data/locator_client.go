@@ -12,6 +12,7 @@ package data
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -20,6 +21,15 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
+
+// locatorProbeTimeout 是登录链上 locator 调用的独立子预算(压测审核【必修-1】)。
+//
+// prod 登录总 deadline 5s,MySQL/Redis 基线已占 1~2s,链上还有 matchmaker 探测与
+// AssignHub;locator 慢化(GC/failover)时若无子预算,单腿就能吃光整条链让登录整体
+// 超时。WithTimeout 只收紧不放宽;到期后的错误路径与原慢失败完全一致(重试/降级
+// 语义由 biz 层决定,此处不改),只是把失败提前、给后续步骤留出预算。
+// 取值:locator 是单键 Redis 读写,健康 P99 几十 ms,取 ~40 倍保守偏大值;待实测复核。
+const locatorProbeTimeout = 2 * time.Second
 
 // BattleLocation 是玩家当前 BATTLE 位置的最小快照(断线重连检测用,
 // docs/design/battle-reconnect.md §2.1)。仅当玩家确实处于 BATTLE 态且 match_id /
@@ -63,6 +73,8 @@ func NewGrpcLocationNotifier(conn *grpc.ClientConn) *GrpcLocationNotifier {
 // 不变量 §1 入口:这一行写完,locator 就把该 player_id 标记为"正在登录",
 // 后续 hub DS 拿到玩家后改 state=HUB;客户端如果重复登录会再次刷此 key + TTL。
 func (n *GrpcLocationNotifier) NotifyLoginPending(ctx context.Context, playerID uint64, deviceID string) error {
+	ctx, cancel := context.WithTimeout(ctx, locatorProbeTimeout)
+	defer cancel()
 	req := &locatorv1.SetLocationRequest{
 		PlayerId: playerID,
 		Location: &locatorv1.Location{
@@ -86,6 +98,8 @@ func (n *GrpcLocationNotifier) NotifyLoginPending(ctx context.Context, playerID 
 // 直接下发原对局的 battle DS 直连信息,而非把玩家丢回大厅。
 // 只有 state==BATTLE 且 match_id!=0 且 battle_pod!="" 才认定"在战斗中";其余一律 InBattle=false。
 func (n *GrpcLocationNotifier) GetBattleLocation(ctx context.Context, playerID uint64) (BattleLocation, error) {
+	ctx, cancel := context.WithTimeout(ctx, locatorProbeTimeout)
+	defer cancel()
 	resp, err := n.client.GetLocation(ctx, &locatorv1.GetLocationRequest{PlayerId: playerID})
 	if err != nil {
 		return BattleLocation{}, errcode.New(errcode.ErrInternal, "locator GetLocation rpc: %v", err)

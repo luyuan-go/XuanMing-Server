@@ -31,6 +31,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 
@@ -1602,51 +1603,61 @@ func (u *HubUsecase) RunHeartbeatSweep(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "hub_heartbeat_sweep_stopped")
 			return
 		case <-ticker.C:
-			// 复审 P1-5:census 准入缓存按 last-touch TTL 清死实例项。本地内存卫生,不经存储、
-			// 不依赖 writer 身份,故置于 writer 门控之前每 tick 无条件执行(否则热备副本自身
-			// 处理过的心跳留下的缓存项永不回收)。活实例项每心跳续期,仅已销毁实例项会被清。
-			sweepStaleOwnerAdmitted(&u.ownerAdmitted, time.Now().Add(-ownerAdmittedStaleTTL))
-			// R9 P0-7:非写者副本跳 tick,避免 RollingUpdate 重叠窗口内双写者并发
-			// reconcile/sweep(存储级 fence 是最终防线,这里是快路径 + 降噪)。
-			if u.writerFence != nil {
-				token, held := u.writerFence.Current()
-				if !held {
-					if wasWriter {
-						plog.With(ctx).Warnw("msg", "hub_heartbeat_sweep_paused_not_writer")
-						wasWriter = false
-					}
-					continue
-				}
-				if !wasWriter {
-					plog.With(ctx).Infow("msg", "hub_heartbeat_sweep_resumed_writer")
-					wasWriter = true
-				}
-				// 继任者水位推扫的**再断言**:R10 P0-4 起推扫已前移为接流前硬门
-				// (writerlease.Config.OnElected,当选后宣告持有前必须跑成功),故正常情况下
-				// 这里恒是 cur==mine 的零写入 no-op。保留它是为 fence 已注入但未走激活钩子
-				// 的装配(dev/测试/warmup 误配)兜底;失败下个 tick 重试,不阻塞扫描。
-				if token != sweptToken {
-					if err := u.repo.AdvanceWriterFences(ctx); err != nil {
-						plog.With(ctx).Warnw("msg", "hub_writer_fence_sweep_failed", "token", token, "err", err)
-					} else {
-						sweptToken = token
-						plog.With(ctx).Infow("msg", "hub_writer_fence_swept", "token", token)
-					}
-				}
+			u.heartbeatSweepTick(ctx, &wasWriter, &sweptToken)
+		}
+	}
+}
+
+// heartbeatSweepTick 单个清扫 tick(独立函数使 recover 作用域恰为一轮)。
+//
+// panic 兜底(压测审核【必修-6】):此前 tick 内任一 latent panic 崩整进程 = 心跳超时
+// 补偿(§9 不变量 4)、fence 水位推扫、owner 清理 saga 全部停摆。recover 后跳过本轮,
+// 下 tick 继续;各步骤均幂等可重入。并发 map 写是 runtime fatal,recover 兜不住。
+func (u *HubUsecase) heartbeatSweepTick(ctx context.Context, wasWriter *bool, sweptToken *uint64) {
+	defer safego.Recover(ctx, "hub_heartbeat_sweep")
+	// 复审 P1-5:census 准入缓存按 last-touch TTL 清死实例项。本地内存卫生,不经存储、
+	// 不依赖 writer 身份,故置于 writer 门控之前每 tick 无条件执行(否则热备副本自身
+	// 处理过的心跳留下的缓存项永不回收)。活实例项每心跳续期,仅已销毁实例项会被清。
+	sweepStaleOwnerAdmitted(&u.ownerAdmitted, time.Now().Add(-ownerAdmittedStaleTTL))
+	// R9 P0-7:非写者副本跳 tick,避免 RollingUpdate 重叠窗口内双写者并发
+	// reconcile/sweep(存储级 fence 是最终防线,这里是快路径 + 降噪)。
+	if u.writerFence != nil {
+		token, held := u.writerFence.Current()
+		if !held {
+			if *wasWriter {
+				plog.With(ctx).Warnw("msg", "hub_heartbeat_sweep_paused_not_writer")
+				*wasWriter = false
 			}
-			if err := u.reconcileOwnerCleanups(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "hub_owner_cleanup_reconcile_failed", "err", err)
-			}
-			if err := u.reconcileShardTopology(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "hub_reconcile_topology_failed", "err", err)
-			}
-			if err := u.sweepOnce(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "hub_heartbeat_sweep_failed", "err", err)
-			}
-			if err := u.reconcileFleetReplicas(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "hub_reconcile_replicas_failed", "err", err)
+			return
+		}
+		if !*wasWriter {
+			plog.With(ctx).Infow("msg", "hub_heartbeat_sweep_resumed_writer")
+			*wasWriter = true
+		}
+		// 继任者水位推扫的**再断言**:R10 P0-4 起推扫已前移为接流前硬门
+		// (writerlease.Config.OnElected,当选后宣告持有前必须跑成功),故正常情况下
+		// 这里恒是 cur==mine 的零写入 no-op。保留它是为 fence 已注入但未走激活钩子
+		// 的装配(dev/测试/warmup 误配)兜底;失败下个 tick 重试,不阻塞扫描。
+		if token != *sweptToken {
+			if err := u.repo.AdvanceWriterFences(ctx); err != nil {
+				plog.With(ctx).Warnw("msg", "hub_writer_fence_sweep_failed", "token", token, "err", err)
+			} else {
+				*sweptToken = token
+				plog.With(ctx).Infow("msg", "hub_writer_fence_swept", "token", token)
 			}
 		}
+	}
+	if err := u.reconcileOwnerCleanups(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "hub_owner_cleanup_reconcile_failed", "err", err)
+	}
+	if err := u.reconcileShardTopology(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "hub_reconcile_topology_failed", "err", err)
+	}
+	if err := u.sweepOnce(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "hub_heartbeat_sweep_failed", "err", err)
+	}
+	if err := u.reconcileFleetReplicas(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "hub_reconcile_replicas_failed", "err", err)
 	}
 }
 

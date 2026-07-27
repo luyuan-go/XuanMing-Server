@@ -97,6 +97,19 @@ type MatchConf struct {
 	// MatchInterval 后台撮合循环的扫描间隔(默认 2s)。
 	MatchInterval config.Duration `yaml:"match_interval,omitempty" json:"match_interval,omitempty"`
 
+	// AllocationWorkers DS 分配的有界并发 worker 数(默认 16;压测审核【必修-3】)。
+	// 分配含最长 ~60s 的 RPC(agones allocate + DS ready_wait),此前在撮合 leader 单协程
+	// 内联串行,吞吐被钳到「1 局/单次分配时延」。16 取审核建议区间(16~64)下限,
+	// 待实测复核;<=0 退化为 1(串行,等价历史行为)。
+	AllocationWorkers int `yaml:"allocation_workers,omitempty" json:"allocation_workers,omitempty"`
+
+	// MaxQueueTickets StartMatch 准入的排队票据数上限(默认 5000;压测审核【必修-4】)。
+	// 撮合循环每 tick 全量拉 queue + 逐票 GET + O(N log N) 排序,队列 ~1e4 时单 tick 耗时
+	// 已逼近 match_interval(2s)→ tick 堆积正反馈雪崩。超限 StartMatch 返回 ERR_RATE_LIMITED
+	// (可重试忙),把无界积压换成有界的显式排队失败(§9.18 精神)。5000 取雪崩阈值一半,
+	// 待实测复核。<=0 = 不限(不推荐,仅联调)。
+	MaxQueueTickets int `yaml:"max_queue_tickets,omitempty" json:"max_queue_tickets,omitempty"`
+
 	// TicketTTL 排队票据 Redis key 的 TTL(默认 30min,防僵尸票据)。
 	TicketTTL config.Duration `yaml:"ticket_ttl,omitempty" json:"ticket_ttl,omitempty"`
 
@@ -181,6 +194,12 @@ func (c *Config) Defaults() {
 	}
 	if c.Match.MatchInterval == 0 {
 		c.Match.MatchInterval = config.Duration(2 * time.Second)
+	}
+	if c.Match.MaxQueueTickets == 0 {
+		c.Match.MaxQueueTickets = 5000
+	}
+	if c.Match.AllocationWorkers == 0 {
+		c.Match.AllocationWorkers = 16
 	}
 	if c.Match.TicketTTL == 0 {
 		c.Match.TicketTTL = config.Duration(30 * time.Minute)

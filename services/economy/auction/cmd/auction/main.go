@@ -37,6 +37,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/redisx"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	auctionv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/auction/v1"
 
@@ -269,14 +270,18 @@ func main() {
 		defer stopReconcile()
 		reconcileInterval := time.Duration(cfg.Auction.SideEffectReconcileIntervalSeconds) * time.Second
 		go func() {
+			// 单轮 panic 兜底(压测审核【必修-6】同类点位):补偿是幂等 at-least-once,
+			// 丢一轮下轮重试;不兜底则单点 panic 崩整个 auction 进程。
 			run := func() {
-				settled, released, rerr := uc.ReconcilePendingSideEffects(reconcileCtx)
-				if rerr != nil {
-					helper.Warnw("msg", "auction_side_effect_reconcile_incomplete", "err", rerr,
-						"settled", settled, "released", released)
-				} else if settled > 0 || released > 0 {
-					helper.Infow("msg", "auction_side_effect_reconcile", "settled", settled, "released", released)
-				}
+				safego.Run(reconcileCtx, "auction_side_effect_reconcile", func() {
+					settled, released, rerr := uc.ReconcilePendingSideEffects(reconcileCtx)
+					if rerr != nil {
+						helper.Warnw("msg", "auction_side_effect_reconcile_incomplete", "err", rerr,
+							"settled", settled, "released", released)
+					} else if settled > 0 || released > 0 {
+						helper.Infow("msg", "auction_side_effect_reconcile", "settled", settled, "released", released)
+					}
+				})
 			}
 			run() // 启动即恢复上次进程遗留，不先空等一个周期。
 			ticker := time.NewTicker(reconcileInterval)
@@ -300,13 +305,15 @@ func main() {
 		defer stopEvents()
 		go func() {
 			run := func() {
-				published, perr := uc.ReconcilePendingMatchEvents(eventCtx)
-				if perr != nil {
-					helper.Warnw("msg", "auction_match_event_reconcile_incomplete", "err", perr,
-						"published", published)
-				} else if published > 0 {
-					helper.Infow("msg", "auction_match_event_reconcile", "published", published)
-				}
+				safego.Run(eventCtx, "auction_match_event_reconcile", func() {
+					published, perr := uc.ReconcilePendingMatchEvents(eventCtx)
+					if perr != nil {
+						helper.Warnw("msg", "auction_match_event_reconcile_incomplete", "err", perr,
+							"published", published)
+					} else if published > 0 {
+						helper.Infow("msg", "auction_match_event_reconcile", "published", published)
+					}
+				})
 			}
 			run()
 			ticker := time.NewTicker(reconcileInterval)
@@ -337,16 +344,18 @@ func main() {
 				case <-retentionCtx.Done():
 					return
 				case <-ticker.C:
-					cutoffMs := time.Now().AddDate(0, 0, -cfg.Auction.RetentionDays).UnixMilli()
-					orders, matches, keys, rerr := repo.PurgeRetention(retentionCtx, cutoffMs, cfg.Auction.RetentionSweepBatch)
-					if rerr != nil {
-						helper.Warnw("msg", "auction_retention_sweep_failed", "err", rerr,
-							"orders", orders, "matches", matches, "idem_keys", keys)
-					} else if orders > 0 || matches > 0 || keys > 0 {
-						helper.Infow("msg", "auction_retention_swept",
-							"orders", orders, "matches", matches, "idem_keys", keys,
-							"retention_days", cfg.Auction.RetentionDays)
-					}
+					safego.Run(retentionCtx, "auction_retention_sweep", func() {
+						cutoffMs := time.Now().AddDate(0, 0, -cfg.Auction.RetentionDays).UnixMilli()
+						orders, matches, keys, rerr := repo.PurgeRetention(retentionCtx, cutoffMs, cfg.Auction.RetentionSweepBatch)
+						if rerr != nil {
+							helper.Warnw("msg", "auction_retention_sweep_failed", "err", rerr,
+								"orders", orders, "matches", matches, "idem_keys", keys)
+						} else if orders > 0 || matches > 0 || keys > 0 {
+							helper.Infow("msg", "auction_retention_swept",
+								"orders", orders, "matches", matches, "idem_keys", keys,
+								"retention_days", cfg.Auction.RetentionDays)
+						}
+					})
 				}
 			}
 		}()
@@ -369,12 +378,14 @@ func main() {
 					case <-sweepCtx.Done():
 						return
 					case <-ticker.C:
-						n, serr := uc.ExpireDueOrders(sweepCtx)
-						if serr != nil {
-							helper.Warnw("msg", "auction_expiry_sweep_failed", "err", serr)
-						} else if n > 0 {
-							helper.Infow("msg", "auction_expiry_sweep", "expired", n)
-						}
+						safego.Run(sweepCtx, "auction_expiry_sweep", func() {
+							n, serr := uc.ExpireDueOrders(sweepCtx)
+							if serr != nil {
+								helper.Warnw("msg", "auction_expiry_sweep_failed", "err", serr)
+							} else if n > 0 {
+								helper.Infow("msg", "auction_expiry_sweep", "expired", n)
+							}
+						})
 					}
 				}
 			}()

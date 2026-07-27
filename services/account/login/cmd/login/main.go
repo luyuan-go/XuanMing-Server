@@ -41,6 +41,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/redisx"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
 	"github.com/luyuancpp/pandora/services/account/login/internal/biz"
@@ -136,11 +137,14 @@ func main() {
 				case <-deviceSweepCtx.Done():
 					return
 				case <-ticker.C:
-					if n, err := data.PurgeStaleDevices(deviceSweepCtx, sdb, retentionDays, 500); err != nil {
-						helper.Warnw("msg", "device_purge_failed", "err", err)
-					} else if n > 0 {
-						helper.Infow("msg", "stale_devices_purged", "rows", n, "retention_days", retentionDays)
-					}
+					// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
+					safego.Run(deviceSweepCtx, "login_device_sweep", func() {
+						if n, err := data.PurgeStaleDevices(deviceSweepCtx, sdb, retentionDays, 500); err != nil {
+							helper.Warnw("msg", "device_purge_failed", "err", err)
+						} else if n > 0 {
+							helper.Infow("msg", "stale_devices_purged", "rows", n, "retention_days", retentionDays)
+						}
+					})
 				}
 			}
 		}(sdb, cfg.Login.DeviceRetentionDays)

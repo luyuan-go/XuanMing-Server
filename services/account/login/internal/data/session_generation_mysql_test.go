@@ -4,8 +4,8 @@
 //
 //	① `SELECT ... FOR UPDATE` 真的把并发 Login 串行化(定序权威成立);
 //	② `ON DUPLICATE KEY UPDATE generation = generation + 1` 真的单调不跳(不回退/不重复);
-//	③ 条件回补 `WHERE sess_jti=? AND generation=?` 真的只在"行仍属于本次写"时命中 ——
-//	   这是"不确定 COMMIT 且读回失败 → 回补到覆盖前 jti"能收敛到一致的全部依据。
+//	③ 条件墓碑 `WHERE sess_jti=? AND generation=?` 真的只在"行仍属于本次写"时命中 ——
+//	   这是"不确定 COMMIT 且读回失败 → 条件无能力墓碑"不误伤赢家的依据。
 //	   若它在并发赢家已改写行之后仍会命中,就会把别人的登录回滚掉(违反不回档)。
 //
 // 门控(沿用仓库既有约定):DSN **必须不带库名**,测试自建随机临时库并在结束时删掉。
@@ -202,9 +202,8 @@ func TestSessionGeneration_MySQL_ContentionSurfacesRetryableCode(t *testing.T) {
 	}
 }
 
-// ② 条件回补的**命中**语义:行仍是本次写入的 (jti, generation) 时回到覆盖前 jti。
-// 这是"不确定 COMMIT + 读回失败 → 回补"能收敛到与 Redis 一致的依据。
-func TestSessionGeneration_MySQL_RestoreHitsOnlyOwnRow(t *testing.T) {
+// ② 失败代际条件墓碑只命中自己的 (jti,generation)，且不回退水位。
+func TestSessionGeneration_MySQL_FailedAttemptTombstonesOwnRow(t *testing.T) {
 	repo := newSessionGenMySQLRepo(t)
 	ctx := context.Background()
 	const playerID = uint64(90002)
@@ -214,39 +213,35 @@ func TestSessionGeneration_MySQL_RestoreHitsOnlyOwnRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("persist A: %v", err)
 	}
-	// B 登录:模拟"COMMIT 落地但回包丢失"——行已是 B,lease 带着覆盖前快照 A。
+	// B 登录:模拟"COMMIT 落地但回包丢失"。
 	leaseB, err := repo.PersistSessionJTI(ctx, playerID, "jti-B")
 	if err != nil {
 		t.Fatalf("persist B: %v", err)
-	}
-	if leaseB.PrevJTI != "jti-A" || !leaseB.HadPrev {
-		t.Fatalf("覆盖前快照必须是 A:%+v", leaseB)
 	}
 	if leaseB.Generation <= leaseA.Generation {
 		t.Fatalf("代际必须严格递增:A=%d B=%d", leaseA.Generation, leaseB.Generation)
 	}
 
-	// 回补:行仍是 (jti-B, genB) → 必须命中并回到 A。
-	restored, err := repo.RestoreSessionJTI(ctx, playerID, "jti-B", leaseB)
-	if err != nil || !restored {
-		t.Fatalf("条件回补应命中:restored=%v err=%v", restored, err)
+	// 墓碑:行仍是 (jti-B, genB) → 必须命中并清能力。
+	fenced, err := repo.TombstoneFailedSessionJTI(ctx, playerID, "jti-B", leaseB.Generation)
+	if err != nil || !fenced {
+		t.Fatalf("条件墓碑应命中:fenced=%v err=%v", fenced, err)
 	}
 	jti, gen, found, err := repo.LoadSessionGeneration(ctx, playerID)
 	if err != nil || !found {
 		t.Fatalf("read back: found=%v err=%v", found, err)
 	}
-	if jti != "jti-A" {
-		t.Fatalf("回补后行内 jti 应为 A(与 Redis 一致),得 %q", jti)
+	if jti != sessionTombstoneJTI {
+		t.Fatalf("失败代际必须变成无能力墓碑,得 %q", jti)
 	}
-	// generation 不回退:单调性是全局不变量,回补只改 jti。
+	// generation 不回退:单调性是全局不变量,墓碑只改 jti。
 	if gen != leaseB.Generation {
-		t.Fatalf("回补不得回退代际:期望仍为 %d,得 %d", leaseB.Generation, gen)
+		t.Fatalf("墓碑不得回退代际:期望仍为 %d,得 %d", leaseB.Generation, gen)
 	}
 }
 
-// ③ 条件回补的**未命中**语义(最关键的一条):并发赢家已把行推到更高代际时,
-// 回补必须 no-op —— 否则就会把别人已经成功的登录回滚掉(违反"不回档")。
-func TestSessionGeneration_MySQL_RestoreNeverClobbersConcurrentWinner(t *testing.T) {
+// ③ 迟到墓碑不得改动并发赢家。
+func TestSessionGeneration_MySQL_FailedAttemptNeverClobbersConcurrentWinner(t *testing.T) {
 	repo := newSessionGenMySQLRepo(t)
 	ctx := context.Background()
 	const playerID = uint64(90003)
@@ -258,19 +253,19 @@ func TestSessionGeneration_MySQL_RestoreNeverClobbersConcurrentWinner(t *testing
 	if err != nil {
 		t.Fatalf("persist B: %v", err)
 	}
-	// 赢家 C 在 B 的补偿之前落地。
+	// 赢家 C 在 B 的墓碑之前落地。
 	leaseC, err := repo.PersistSessionJTI(ctx, playerID, "jti-C")
 	if err != nil {
 		t.Fatalf("persist C: %v", err)
 	}
 
-	// B 迟到回补:WHERE (sess_jti=B AND generation=genB) 已不成立 → 必须 no-op。
-	restored, err := repo.RestoreSessionJTI(ctx, playerID, "jti-B", leaseB)
+	// B 迟到墓碑:WHERE (sess_jti=B AND generation=genB) 已不成立 → 必须 no-op。
+	fenced, err := repo.TombstoneFailedSessionJTI(ctx, playerID, "jti-B", leaseB.Generation)
 	if err != nil {
-		t.Fatalf("回补不应报错(未命中是正常终态):%v", err)
+		t.Fatalf("墓碑不应报错(未命中是正常终态):%v", err)
 	}
-	if restored {
-		t.Fatal("迟到回补命中了赢家的行:会把 C 的登录回滚掉(违反不回档)")
+	if fenced {
+		t.Fatal("迟到墓碑命中了赢家的行")
 	}
 	jti, gen, _, err := repo.LoadSessionGeneration(ctx, playerID)
 	if err != nil {
@@ -281,9 +276,9 @@ func TestSessionGeneration_MySQL_RestoreNeverClobbersConcurrentWinner(t *testing
 	}
 }
 
-// ④ 首登(HadPrev=false)的回补退化为删行,等价于回到"从未登录过"的一致态;
-// 且同样只在行仍属于本次写时命中。
-func TestSessionGeneration_MySQL_RestoreFirstLoginDeletesRow(t *testing.T) {
+// ④ 首登失败墓碑保留 generation 水位；若删行，
+// READ COMMITTED/首登竞争中仍在飞的低代际写可趁“无行”复活。
+func TestSessionGeneration_MySQL_FirstLoginFailureKeepsFence(t *testing.T) {
 	repo := newSessionGenMySQLRepo(t)
 	ctx := context.Background()
 	const playerID = uint64(90004)
@@ -292,15 +287,21 @@ func TestSessionGeneration_MySQL_RestoreFirstLoginDeletesRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("persist: %v", err)
 	}
-	if lease.HadPrev {
-		t.Fatalf("首登不应有覆盖前快照:%+v", lease)
+	fenced, err := repo.TombstoneFailedSessionJTI(ctx, playerID, "jti-first", lease.Generation)
+	if err != nil || !fenced {
+		t.Fatalf("首登墓碑应命中:fenced=%v err=%v", fenced, err)
 	}
-	restored, err := repo.RestoreSessionJTI(ctx, playerID, "jti-first", lease)
-	if err != nil || !restored {
-		t.Fatalf("首登回补应命中(删行):restored=%v err=%v", restored, err)
+	jti, gen, found, err := repo.LoadSessionGeneration(ctx, playerID)
+	if err != nil || !found || jti != sessionTombstoneJTI || gen != lease.Generation {
+		t.Fatalf("首登墓碑后应保留无能力水位:jti=%q gen=%d found=%v err=%v", jti, gen, found, err)
 	}
-	if _, _, found, err := repo.LoadSessionGeneration(ctx, playerID); err != nil || found {
-		t.Fatalf("首登回补后行应不存在:found=%v err=%v", found, err)
+	// 下一次真实 Login 必须从已消耗水位继续 +1；旧 DELETE 实现会重置为 1。
+	next, err := repo.PersistSessionJTI(ctx, playerID, "jti-next")
+	if err != nil {
+		t.Fatalf("persist next login: %v", err)
+	}
+	if next.Generation != lease.Generation+1 {
+		t.Fatalf("next login must advance from the retained fence: previous=%+v next=%+v", lease, next)
 	}
 }
 

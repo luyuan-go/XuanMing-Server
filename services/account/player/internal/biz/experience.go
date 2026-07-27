@@ -19,6 +19,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/safego"
 
 	"github.com/luyuancpp/pandora/services/account/player/internal/data"
 )
@@ -136,18 +137,21 @@ func (u *PlayerUsecase) RunPushOutboxPublisher(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "push_outbox_publisher_stopped")
 			return
 		case <-ticker.C:
-			// 排空循环:满批说明还有积压,立即继续下一批,不等下个 tick
-			// (否则吞吐被钉死在 batch/interval,持续流量下积压只增不减)。
-			for ctx.Err() == nil {
-				n, err := u.publishPushOutboxBatch(ctx)
-				if err != nil {
-					plog.With(ctx).Warnw("msg", "push_outbox_publish_batch_failed", "published", n, "err", err)
-					break
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,出箱行下轮重试。
+			safego.Run(ctx, "player_push_outbox_publisher", func() {
+				// 排空循环:满批说明还有积压,立即继续下一批,不等下个 tick
+				// (否则吞吐被钉死在 batch/interval,持续流量下积压只增不减)。
+				for ctx.Err() == nil {
+					n, err := u.publishPushOutboxBatch(ctx)
+					if err != nil {
+						plog.With(ctx).Warnw("msg", "push_outbox_publish_batch_failed", "published", n, "err", err)
+						break
+					}
+					if n < u.cfg.PushOutboxBatchOrDefault() {
+						break // 未满批 = 已清空
+					}
 				}
-				if n < u.cfg.PushOutboxBatchOrDefault() {
-					break // 未满批 = 已清空
-				}
-			}
+			})
 		}
 	}
 }
@@ -176,22 +180,24 @@ func (u *PlayerUsecase) RunExpHistoryJanitor(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cutoff := time.Now().Add(-u.cfg.ExpHistoryRetentionOrDefault())
-			var total int64
-			for ctx.Err() == nil {
-				n, err := u.repo.PurgeExpHistory(ctx, cutoff, purgeBatch)
-				if err != nil {
-					plog.With(ctx).Warnw("msg", "exp_history_purge_failed", "purged", total, "err", err)
-					break
+			safego.Run(ctx, "player_exp_history_janitor", func() {
+				cutoff := time.Now().Add(-u.cfg.ExpHistoryRetentionOrDefault())
+				var total int64
+				for ctx.Err() == nil {
+					n, err := u.repo.PurgeExpHistory(ctx, cutoff, purgeBatch)
+					if err != nil {
+						plog.With(ctx).Warnw("msg", "exp_history_purge_failed", "purged", total, "err", err)
+						break
+					}
+					total += n
+					if n < purgeBatch {
+						break
+					}
 				}
-				total += n
-				if n < purgeBatch {
-					break
+				if total > 0 {
+					plog.With(ctx).Infow("msg", "exp_history_purged", "rows", total)
 				}
-			}
-			if total > 0 {
-				plog.With(ctx).Infow("msg", "exp_history_purged", "rows", total)
-			}
+			})
 		}
 	}
 }
@@ -229,24 +235,26 @@ func (u *PlayerUsecase) RunHistoryJanitor(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cutoff := time.Now().Add(-u.cfg.HistoryRetentionOrDefault())
-			for _, p := range purges {
-				var total int64
-				for ctx.Err() == nil {
-					n, err := p.fn(ctx, cutoff, purgeBatch)
-					if err != nil {
-						plog.With(ctx).Warnw("msg", "history_purge_failed", "table", p.name, "purged", total, "err", err)
-						break
+			safego.Run(ctx, "player_history_janitor", func() {
+				cutoff := time.Now().Add(-u.cfg.HistoryRetentionOrDefault())
+				for _, p := range purges {
+					var total int64
+					for ctx.Err() == nil {
+						n, err := p.fn(ctx, cutoff, purgeBatch)
+						if err != nil {
+							plog.With(ctx).Warnw("msg", "history_purge_failed", "table", p.name, "purged", total, "err", err)
+							break
+						}
+						total += n
+						if n < purgeBatch {
+							break
+						}
 					}
-					total += n
-					if n < purgeBatch {
-						break
+					if total > 0 {
+						plog.With(ctx).Infow("msg", "history_purged", "table", p.name, "rows", total)
 					}
 				}
-				if total > 0 {
-					plog.With(ctx).Infow("msg", "history_purged", "table", p.name, "rows", total)
-				}
-			}
+			})
 		}
 	}
 }

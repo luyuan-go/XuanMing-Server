@@ -511,6 +511,13 @@ $hubMain = @($liveHubGreen.spec.template.spec.containers | Where-Object name -ce
 $hubMain.name = 'hub-allocator'
 $hubMain.image = 'registry/pandora/hub-allocator@' + $digest
 @($hubMain.env | Where-Object name -ceq 'PANDORA_DS_AUTH_ETCD_CLIENT_IDENTITY')[0].value = 'pandora-hub-allocator'
+# 复现真实 live green：strategy 将被 builder 改成 Recreate，但模板仍携带旧
+# RollingUpdate annotation/env；候选对象必须原子收敛三者，不能让新 Pod 启动后自杀。
+$liveHubGreen.spec.template.metadata.annotations | Add-Member `
+    -NotePropertyName 'pandora.dev/deploy-strategy' -NotePropertyValue 'RollingUpdate'
+$hubMain.env = @($hubMain.env) + @([pscustomobject]@{
+    name = 'PANDORA_DEPLOY_STRATEGY'; value = 'RollingUpdate'
+})
 @($liveHubGreen.spec.template.spec.volumes | Where-Object name -ceq 'ds-auth-etcd-identity')[0].secret.secretName = `
     'pandora-ds-auth-etcd-hub-allocator-r7'
 $hubGreenObject = New-PandoraDsAuthCanonicalGreenObject $liveHubGreen 'hub-allocator' 'r7' `
@@ -521,14 +528,28 @@ $hubStageProof = Assert-PandoraDsAuthV3GreenStageDeploymentContract $hubGreenObj
     'etcd.pandora.internal' '/pandora/acl-negative/' $false
 Assert-True ($hubStageProof.DesiredReplicas -eq 1 -and $hubStageProof.Digest -ceq $newDigest) `
     'server-preview V3 Hub stage contract must bind exact single writer and immutable image digest'
+$hubGreenMain = @($hubGreenObject.spec.template.spec.containers | Where-Object name -ceq 'hub-allocator')[0]
 Assert-True ([int]$hubGreenObject.spec.replicas -eq 1 -and
     [string]$hubGreenObject.spec.strategy.type -ceq 'Recreate' -and
-    $null -eq $hubGreenObject.spec.strategy.PSObject.Properties['rollingUpdate']) `
-    'ordinary canonical green Hub replacement must force replicas=1/Recreate without preserving RollingUpdate'
+    $null -eq $hubGreenObject.spec.strategy.PSObject.Properties['rollingUpdate'] -and
+    [string]$hubGreenObject.spec.template.metadata.annotations.'pandora.dev/deploy-strategy' -ceq 'Recreate' -and
+    @($hubGreenMain.env | Where-Object name -ceq 'PANDORA_DEPLOY_STRATEGY').Count -eq 1 -and
+    [string](@($hubGreenMain.env | Where-Object name -ceq 'PANDORA_DEPLOY_STRATEGY')[0].valueFrom.fieldRef.fieldPath) -ceq `
+        "metadata.annotations['pandora.dev/deploy-strategy']") `
+    'ordinary canonical green Hub replacement must keep strategy, annotation and downward-API env on exact Recreate'
 $badHubGreen = Copy-Object $hubGreenObject
 $badHubGreen.spec.strategy = [pscustomobject]@{ type = 'RollingUpdate'; rollingUpdate = [pscustomobject]@{ maxSurge = 1 } }
 Assert-Throws { Assert-PandoraHubAllocatorSingleWriterDeploymentContract $badHubGreen } `
     'live canonical green Hub RollingUpdate must fail the single-writer contract'
+$badHubAnnotation = Copy-Object $hubGreenObject
+$badHubAnnotation.spec.template.metadata.annotations.'pandora.dev/deploy-strategy' = 'RollingUpdate'
+Assert-Throws { Assert-PandoraHubAllocatorSingleWriterDeploymentContract $badHubAnnotation } `
+    'live canonical green Hub strategy annotation drift must fail before Recreate removes the old Pod'
+$badHubEnv = Copy-Object $hubGreenObject
+@($badHubEnv.spec.template.spec.containers | Where-Object name -ceq 'hub-allocator')[0].env = `
+    @(@($badHubEnv.spec.template.spec.containers | Where-Object name -ceq 'hub-allocator')[0].env | Where-Object name -cne 'PANDORA_DEPLOY_STRATEGY')
+Assert-Throws { Assert-PandoraHubAllocatorSingleWriterDeploymentContract $badHubEnv } `
+    'live canonical green Hub missing strategy downward-API env must fail before mutation'
 Assert-Throws {
     Assert-PandoraDsAuthV3GreenStageDeploymentContract $badHubGreen 'hub-allocator' 'r7' `
         'etcd.pandora.internal' '/pandora/acl-negative/' $false

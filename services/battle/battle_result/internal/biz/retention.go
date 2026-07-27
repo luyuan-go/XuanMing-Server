@@ -26,6 +26,7 @@ import (
 	"time"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/safego"
 )
 
 // RunRetentionSweep 周期跑保留期清理,直到 ctx 取消。
@@ -42,7 +43,8 @@ func (u *BattleResultUsecase) RunRetentionSweep(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			u.sweepRetentionOnce(ctx)
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
+			safego.Run(ctx, "battle_retention_sweep", func() { u.sweepRetentionOnce(ctx) })
 		}
 	}
 }

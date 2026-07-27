@@ -15,6 +15,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	pushv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/push/v1"
 
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/biz"
@@ -55,8 +56,18 @@ func NewPushService(uc *biz.PushUsecase) *PushService {
 //
 // W3 ④ 二次修复(Opus 审查 R1):replay 补推与 KafkaConsumer.SendTo 共享 slot.sendMu 串行化,
 // 防止两个 goroutine 并发 stream.Send 撕坏 HTTP/2 帧。
-func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.PushService_SubscribeServer) error {
+func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.PushService_SubscribeServer) (err error) {
 	ctx := stream.Context()
+
+	// panic 兜底(压测审核【必修-6】):server stream 不经 unary Recovery 中间件,此前任一
+	// latent panic(补推游标运算 / 迟到回调解引用)会崩整进程 = 本 Pod 全部长连瞬断 →
+	// 重连风暴。recover 后只断本 stream(转 ErrInternal,客户端按内部错误退避重连),
+	// 其余连接与进程不受影响。并发 map 写是 runtime fatal,recover 兜不住,不在此列。
+	defer func() {
+		if safego.Recovered(ctx, "push_subscribe", recover()) {
+			err = errcode.ToGRPCError(errcode.New(errcode.ErrInternal, "subscribe stream panic"))
+		}
+	}()
 
 	// server stream 不跑 unary 中间件链,KillSwitch 不会自动生效,这里手动查一次开关。
 	// 命中 Subscribe 关停规则时拒绝建连(返回 ErrServiceDisabled),修好后删规则即恢复。

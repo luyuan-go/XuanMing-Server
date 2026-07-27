@@ -141,6 +141,11 @@ type SessionRepo interface {
 	// DeleteIfJTI 仅当当前 session 的 jti 匹配时才删除(CAS)。
 	// 防止旧设备的迟到 Logout 误删新登录的 session(顶号后新设备被踢)。
 	DeleteIfJTI(ctx context.Context, playerID uint64, jti string) (deleted bool, err error)
+	// FenceFailedSet 收口一次结果不确定的 Set(gen>0)：若 Redis 当前 generation
+	// 不高于失败代际，就清除全部会话能力并把 gen 推到失败代际；更高代际已写入时
+	// no-op，绝不影响赢家。不能恢复“即时前代”——它可能也是从未交付的候选会话。
+	// ttl 给无 key/短 TTL 墓碑提供有界 fencing 窗口，防迟到低代际写复活。
+	FenceFailedSet(ctx context.Context, playerID uint64, jti string, gen uint64, ttl time.Duration) (fenced bool, err error)
 }
 
 // RedisSessionRepo 基于 go-redis/v9 的 SessionRepo 实现。
@@ -157,32 +162,57 @@ func sessKey(playerID uint64) string {
 	return fmt.Sprintf("pandora:sess:%d", playerID)
 }
 
-// setIfNewerGenScript:单 key 原子「代际比较 + 覆盖」(R7 收口,并发 Login 定序)。
+// setIfNewerGenScript:单 key 原子「代际比较 + 覆盖」(R7/R13 收口)。
 // 现存 gen 缺失/更小 → 覆盖并刷 TTL,返回 1;否则零写入返回 0(本次登录已被更新
-// 一代顶掉)。gen 由 MySQL player_session_generations 单调分配,两存储收敛到最高代际。
+// 一代顶掉)。结果不确定时绝不恢复即时前代：A→B→C 交错中即时前代 B 可能从未
+// 交付。补偿统一走 FenceFailedSet，清能力、保留单调水位后由可重试 Login 自愈。
 var setIfNewerGenScript = redis.NewScript(`
 local cur = redis.call('HGET', KEYS[1], 'gen')
-if cur and tonumber(cur) >= tonumber(ARGV[5]) then
-	return 0
+if cur then
+	local cur_gen = tonumber(cur)
+	local next_gen = tonumber(ARGV[5])
+	if cur_gen > next_gen then
+		return 0
+	end
+	if cur_gen == next_gen then
+		-- go-redis 默认会重试网络结果不确定的命令。第一次 EVAL 已落地、仅回包
+		-- 丢失时，重试必须把同一 (jti,gen) 识别为幂等成功；否则会把自己的
+		-- 已确认写误报成被并发登录顶掉。相同 generation 却不同 jti 不可能由
+		-- 正常 MySQL 分配产生，单独返回完整性冲突，不能冒充幂等。
+		if redis.call('HGET', KEYS[1], 'jti') == ARGV[2] then
+			return 2
+		end
+		return -1
+	end
 end
 redis.call('HSET', KEYS[1],
 	'token', ARGV[1], 'jti', ARGV[2], 'device_id', ARGV[3], 'exp_ms', ARGV[4], 'gen', ARGV[5])
+redis.call('HDEL', KEYS[1], '_rollback_token', '_rollback_jti',
+	'_rollback_device_id', '_rollback_exp_ms')
 redis.call('PEXPIRE', KEYS[1], ARGV[6])
 return 1
 `)
 
 func (r *RedisSessionRepo) Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration, gen uint64) error {
+	if ttl < time.Millisecond {
+		return errcode.New(errcode.ErrInvalidArg,
+			"invalid session ttl for player %d: %s (minimum 1ms)", playerID, ttl)
+	}
 	key := sessKey(playerID)
 	expMs := time.Now().Add(ttl).UnixMilli()
 	if gen > 0 {
 		n, err := setIfNewerGenScript.Run(ctx, r.rdb, []string{key},
 			token, jti, deviceID, expMs, gen, ttl.Milliseconds()).Int64()
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "redis sess set: %v", err)
+			return errcode.New(errcode.ErrUnavailable, "redis sess set unavailable: %v", err)
 		}
 		if n == 0 {
 			return errcode.New(errcode.ErrSessionSuperseded,
 				"login superseded by a newer concurrent login (player %d gen %d)", playerID, gen)
+		}
+		if n < 0 {
+			return errcode.New(errcode.ErrUnavailable,
+				"session generation conflict for player %d gen %d; retry login", playerID, gen)
 		}
 		return nil
 	}
@@ -196,9 +226,10 @@ func (r *RedisSessionRepo) Set(ctx context.Context, playerID uint64, token, jti,
 		"exp_ms", expMs,
 	)
 	pipe.HDel(ctx, key, "gen")
+	pipe.HDel(ctx, key, "_rollback_token", "_rollback_jti", "_rollback_device_id", "_rollback_exp_ms")
 	pipe.Expire(ctx, key, ttl)
 	if _, err := pipe.Exec(ctx); err != nil {
-		return errcode.New(errcode.ErrInternal, "redis sess set: %v", err)
+		return errcode.New(errcode.ErrUnavailable, "redis sess set unavailable: %v", err)
 	}
 	return nil
 }
@@ -233,6 +264,39 @@ func (r *RedisSessionRepo) DeleteIfJTI(ctx context.Context, playerID uint64, jti
 	n, err := deleteIfJTIScript.Run(ctx, r.rdb, []string{sessKey(playerID)}, jti).Int64()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return false, errcode.New(errcode.ErrInternal, "redis sess del-if-jti: %v", err)
+	}
+	return n > 0, nil
+}
+
+// fenceFailedSetScript 对结果不确定的失败代际做单调无能力墓碑：
+//   - Redis 仍是失败代际，或还是更老的已交付/未交付代际 → 清能力并推进到失败 gen；
+//   - 更新代际已经写入 → no-op，绝不撤销赢家。
+//
+// 这里故意按 generation <= failedGen fencing，而不只匹配 failedJTI：C 写入结果不确定
+// 且实际未落 Redis 时，Redis 可能仍停在同样未交付的 B；只匹配 C 会把 B 永久留成
+// current。墓碑 TTL 使用本次 session TTL，保证迟到的低代际命令不能在 key 过早过期后
+// 复活。ARGV[1] 保留 failedJTI 作为脚本调用契约/审计参数，不参与“恢复谁”的猜测。
+var fenceFailedSetScript = redis.NewScript(`
+local cur = redis.call('HGET', KEYS[1], 'gen')
+if cur and tonumber(cur) > tonumber(ARGV[2]) then
+	return 0
+end
+redis.call('HDEL', KEYS[1], 'token', 'jti', 'device_id', 'exp_ms',
+	'_rollback_token', '_rollback_jti', '_rollback_device_id', '_rollback_exp_ms')
+redis.call('HSET', KEYS[1], 'gen', ARGV[2])
+redis.call('PEXPIRE', KEYS[1], ARGV[3])
+return 1
+`)
+
+func (r *RedisSessionRepo) FenceFailedSet(ctx context.Context, playerID uint64, jti string, gen uint64, ttl time.Duration) (bool, error) {
+	if jti == "" || gen == 0 || ttl < time.Millisecond {
+		return false, errcode.New(errcode.ErrInvalidArg,
+			"invalid failed-session fence: player %d jti_present=%t gen %d ttl %s",
+			playerID, jti != "", gen, ttl)
+	}
+	n, err := fenceFailedSetScript.Run(ctx, r.rdb, []string{sessKey(playerID)}, jti, gen, ttl.Milliseconds()).Int64()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return false, errcode.New(errcode.ErrUnavailable, "redis sess fence-failed-set unavailable: %v", err)
 	}
 	return n > 0, nil
 }

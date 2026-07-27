@@ -298,6 +298,7 @@ func TestWriterFence_AssignmentCarriesPerPlayerWatermark(t *testing.T) {
 	if _, err = repo.CompareAndSwapAssignment(ctx, playerID, successorRec, nil, 0); errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("superseded writer must be rejected on delete, got %v", err)
 	}
+	repo.SetWriterFence(&fakeWriterFence{token: 9, held: true})
 	after, _, _ := repo.GetAssignment(ctx, playerID)
 	if after.GetHubPodName() != "pod-B" || after.GetWriterToken() != 9 {
 		t.Fatalf("rejected writes must not mutate the successor's assignment, got %+v", after)
@@ -490,13 +491,12 @@ func TestWriterFence_AssignmentRevertedWhenLeaseLostAfterExec(t *testing.T) {
 	// 事务内读到 held=true(放行 EXEC),读完立刻失租。
 	fence := &hookedWriterFence{token: 7, held: true}
 	fence.onCall = func(f *hookedWriterFence, call int) {
-		if call == 1 {
-			// 本次调用仍返回 held=true(见 Current() 实现:onCall 后才读字段),
-			// 但把状态改成失主,使写后自检看到"已不是写者"。
-			// 注意顺序:这里改的是**下一次读**看到的值。
-			return
+		if call == 2 {
+			// 生产 writerlease.Current() 失主后返回 token=0,false。旧补偿错误地拿
+			// 这次 Current 的 0 去匹配刚写下的 token=7，导致永远撤不掉。
+			f.token = 0
+			f.held = false
 		}
-		f.held = false
 	}
 	repo.SetWriterFence(fence)
 
@@ -527,15 +527,244 @@ func TestWriterFence_RevertNeverClobbersSuccessorWrite(t *testing.T) {
 	}
 	successor, _, _ := repo.GetAssignment(ctx, playerID)
 
-	// 第 7 届失主副本直接调撤销:当前值带 token=9 ≠ 7 → 必须原样保留。
+	// 第 7 届失主副本直接调撤销:当前值不是本次 intended → 必须原样保留。
 	repo.SetWriterFence(&fakeWriterFence{token: 7, held: false})
-	if err := repo.revertAssignmentIfWriterLost(ctx, playerID, assignKey(playerID), nil); errcode.As(err) != errcode.ErrUnavailable {
+	intended := assignmentFixture(playerID, "pod-OLD")
+	intended.WriterToken = 7
+	if err := repo.revertAssignmentWrite(ctx, playerID, assignKey(playerID), 7,
+		intended, nil, assignmentTTLState{}); errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("撤销应返回 ErrWriterSuperseded,got %v", err)
 	}
 	after, found, _ := repo.GetAssignment(ctx, playerID)
 	if !found || after.GetHubPodName() != successor.GetHubPodName() ||
 		after.GetWriterToken() != 9 {
 		t.Fatalf("撤销误动了继任者的写:found=%v rec=%+v", found, after)
+	}
+}
+
+func TestWriterFence_GetAssignmentRejectsFutureWriterToken(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	const playerID = uint64(1011)
+	rec := assignmentFixture(playerID, "pod-successor")
+	rec.WriterToken = 9
+	if err := repo.SetAssignment(ctx, rec, testTTL); err != nil {
+		t.Fatalf("seed successor assignment: %v", err)
+	}
+	repo.SetWriterFence(&fakeWriterFence{token: 7, held: true})
+	if got, found, err := repo.GetAssignment(ctx, playerID); errcode.As(err) != errcode.ErrUnavailable || found || got != nil {
+		t.Fatalf("older writer must not trust a future-token assignment: found=%v rec=%+v err=%v", found, got, err)
+	}
+}
+
+// 同进程快速再选时，写后自检可能看到“held=true, token=9”。只看 held 会把第 7 届
+// 刚落下的写误报成功；必须比较本次捕获 token 并撤销第 7 届写。
+func TestWriterFence_AssignmentRevertedAcrossFastReelection(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	const playerID = uint64(1007)
+
+	repo.SetWriterFence(&fakeWriterFence{token: 5, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-A"), testTTL); err != nil || !swapped {
+		t.Fatalf("seed assignment: swapped=%v err=%v", swapped, err)
+	}
+	before, _, _ := repo.GetAssignment(ctx, playerID)
+	fence := &hookedWriterFence{token: 7, held: true}
+	fence.onCall = func(f *hookedWriterFence, call int) {
+		if call == 2 {
+			f.token = 9
+			f.held = true
+		}
+	}
+	repo.SetWriterFence(fence)
+
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, before,
+		assignmentFixture(playerID, "pod-B"), testTTL); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("old-term write must be rejected after fast re-election: swapped=%v err=%v", swapped, err)
+	}
+	after, found, _ := repo.GetAssignment(ctx, playerID)
+	if !found || after.GetHubPodName() != "pod-A" || after.GetWriterToken() != 7 {
+		t.Fatalf("old-term write not precisely reverted: found=%v rec=%+v", found, after)
+	}
+}
+
+// 精确补偿必须比较完整 intended，而不只是 token。同一届另一个请求若已覆盖当前键，
+// 旧请求的迟到补偿绝不能把它回滚。
+func TestWriterFence_RevertNeverClobbersSameTermLaterWrite(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	const playerID = uint64(1008)
+	repo.SetWriterFence(&fakeWriterFence{token: 7, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-LATER"), testTTL); err != nil || !swapped {
+		t.Fatalf("seed later write: swapped=%v err=%v", swapped, err)
+	}
+	oldIntended := assignmentFixture(playerID, "pod-OLD")
+	oldIntended.WriterToken = 7
+	if err := repo.revertAssignmentWrite(ctx, playerID, assignKey(playerID), 7,
+		oldIntended, nil, assignmentTTLState{}); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("stale compensation should report superseded, got %v", err)
+	}
+	after, found, _ := repo.GetAssignment(ctx, playerID)
+	if !found || after.GetHubPodName() != "pod-LATER" {
+		t.Fatalf("stale compensation clobbered same-term later write: found=%v rec=%+v", found, after)
+	}
+}
+
+// 同一任期内的两次删除必须有不同 operation identity。否则交错
+// A: R0→T7 后暂停；C: T7→R1；B: R1→T7；A:迟到补偿
+// 会因两个墓碑字节完全相同而把 B 的合法删除回滚成 R0（tombstone ABA）。
+func TestWriterFence_TombstoneOperationIdentityPreventsSameTermABA(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	const playerID = uint64(1013)
+	repo.SetWriterFence(&fakeWriterFence{token: 7, held: true})
+
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-R0"), testTTL); err != nil || !swapped {
+		t.Fatalf("seed R0: swapped=%v err=%v", swapped, err)
+	}
+	r0, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("read R0: found=%v err=%v", found, err)
+	}
+	if deleted, err := repo.CompareAndSwapAssignment(ctx, playerID, r0, nil, 0); err != nil || !deleted {
+		t.Fatalf("A delete R0: deleted=%v err=%v", deleted, err)
+	}
+	readRaw := func() *hubv1.HubAssignmentStorageRecord {
+		t.Helper()
+		b, err := repo.rdb.Get(ctx, assignKey(playerID)).Bytes()
+		if err != nil {
+			t.Fatalf("read raw tombstone: %v", err)
+		}
+		rec := &hubv1.HubAssignmentStorageRecord{}
+		if err := proto.Unmarshal(b, rec); err != nil {
+			t.Fatalf("unmarshal raw tombstone: %v", err)
+		}
+		return rec
+	}
+	tombA := readRaw()
+	if tombA.GetAssignmentId() == "" {
+		t.Fatal("delete tombstone must carry an operation-scoped identity")
+	}
+
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-R1"), testTTL); err != nil || !swapped {
+		t.Fatalf("C rebuild R1: swapped=%v err=%v", swapped, err)
+	}
+	r1, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("read R1: found=%v err=%v", found, err)
+	}
+	if deleted, err := repo.CompareAndSwapAssignment(ctx, playerID, r1, nil, 0); err != nil || !deleted {
+		t.Fatalf("B delete R1: deleted=%v err=%v", deleted, err)
+	}
+	tombB := readRaw()
+	if tombB.GetAssignmentId() == "" || tombB.GetAssignmentId() == tombA.GetAssignmentId() {
+		t.Fatalf("same-term deletes must have distinct identities: A=%q B=%q",
+			tombA.GetAssignmentId(), tombB.GetAssignmentId())
+	}
+
+	// A 的迟到补偿只允许匹配 tombA；当前是 tombB，必须原样保留。
+	if err := repo.revertAssignmentWrite(ctx, playerID, assignKey(playerID), 7,
+		tombA, r0, assignmentTTLState{}); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("late A compensation should report superseded, got %v", err)
+	}
+	after := readRaw()
+	if !proto.Equal(after, tombB) {
+		t.Fatalf("late A compensation clobbered B tombstone: after=%+v want=%+v", after, tombB)
+	}
+	if rec, found, err := repo.GetAssignment(ctx, playerID); err != nil || found || rec != nil {
+		t.Fatalf("late A compensation revived R0: found=%v rec=%+v err=%v", found, rec, err)
+	}
+}
+
+// 补偿恢复事务前记录时必须恢复其剩余 TTL，不能把 30m saga 记录变成永久键。
+func TestWriterFence_RevertPreservesPreviousAssignmentTTL(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	const playerID = uint64(1009)
+	repo.SetWriterFence(&fakeWriterFence{token: 5, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-A"), testTTL); err != nil || !swapped {
+		t.Fatalf("seed assignment: swapped=%v err=%v", swapped, err)
+	}
+	before, _, _ := repo.GetAssignment(ctx, playerID)
+	fence := &hookedWriterFence{token: 7, held: true}
+	fence.onCall = func(f *hookedWriterFence, call int) {
+		if call == 2 {
+			f.held = false
+		}
+	}
+	repo.SetWriterFence(fence)
+	if _, err := repo.CompareAndSwapAssignment(ctx, playerID, before,
+		assignmentFixture(playerID, "pod-B"), testTTL); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("expected lease-loss compensation, got %v", err)
+	}
+	ttl := mr.TTL(assignKey(playerID))
+	if ttl <= 0 || ttl > testTTL {
+		t.Fatalf("restored assignment TTL must remain finite and no larger than original: %s", ttl)
+	}
+}
+
+// 请求 ctx 在 EXEC 后取消时，补偿必须使用独立有界 ctx；否则 Redis 已落写但撤销请求
+// 天然被 canceled，脏归属会残留到下次触碰。
+func TestWriterFence_RevertUsesDetachedContextAfterRequestCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	repo, _ := newRepo(t)
+	const playerID = uint64(1010)
+	repo.SetWriterFence(&fakeWriterFence{token: 5, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-A"), testTTL); err != nil || !swapped {
+		t.Fatalf("seed assignment: swapped=%v err=%v", swapped, err)
+	}
+	before, _, _ := repo.GetAssignment(ctx, playerID)
+	fence := &hookedWriterFence{token: 7, held: true}
+	fence.onCall = func(f *hookedWriterFence, call int) {
+		if call == 2 {
+			cancel()
+			f.token = 0
+			f.held = false
+		}
+	}
+	repo.SetWriterFence(fence)
+	if _, err := repo.CompareAndSwapAssignment(ctx, playerID, before,
+		assignmentFixture(playerID, "pod-B"), testTTL); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("expected lease-loss compensation, got %v", err)
+	}
+	after, found, _ := repo.GetAssignment(context.Background(), playerID)
+	if !found || after.GetHubPodName() != "pod-A" {
+		t.Fatalf("canceled request prevented detached compensation: found=%v rec=%+v", found, after)
+	}
+}
+
+func TestWriterFence_DeleteIfPodMatchesRevertsWhenLeaseLostAfterExec(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	const playerID = uint64(1012)
+	repo.SetWriterFence(&fakeWriterFence{token: 5, held: true})
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, playerID, nil,
+		assignmentFixture(playerID, "pod-A"), testTTL); err != nil || !swapped {
+		t.Fatalf("seed assignment: swapped=%v err=%v", swapped, err)
+	}
+	fence := &hookedWriterFence{token: 7, held: true}
+	fence.onCall = func(f *hookedWriterFence, call int) {
+		if call == 2 {
+			f.token = 0
+			f.held = false
+		}
+	}
+	repo.SetWriterFence(fence)
+	if deleted, err := repo.DeleteAssignmentIfPodMatches(ctx, playerID, "pod-A"); deleted || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("lost writer delete must be compensated: deleted=%v err=%v", deleted, err)
+	}
+	after, found, _ := repo.GetAssignment(ctx, playerID)
+	if !found || after.GetHubPodName() != "pod-A" || after.GetWriterToken() != 7 {
+		t.Fatalf("lost-writer delete not restored: found=%v rec=%+v", found, after)
+	}
+	if ttl := mr.TTL(assignKey(playerID)); ttl <= 0 || ttl > testTTL {
+		t.Fatalf("restored delete target must preserve finite TTL, got %s", ttl)
 	}
 }
 
@@ -602,6 +831,12 @@ func TestWriterFence_ShardWritePathsRejectStaleWriter(t *testing.T) {
 		// key 是必须零变化的目标键(空串=只检查返回码)。
 		key string
 	}{
+		{
+			name: "CreateShard", atomic: true, key: shardKey(pod),
+			call: func(repo *RedisHubRepo) error {
+				return repo.CreateShard(ctx, sampleShard(pod, 1, 0), testTTL)
+			},
+		},
 		{
 			name: "RemoveShard", atomic: true, key: shardKey(pod),
 			seed: func(t *testing.T, repo *RedisHubRepo) {
@@ -791,4 +1026,3 @@ func TestWriterFence_AuthRepoInitAndTeardownProofFenced(t *testing.T) {
 		t.Fatalf("current-writer teardown proof must pass: %v", err)
 	}
 }
-

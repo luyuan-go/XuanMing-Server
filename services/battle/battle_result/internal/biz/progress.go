@@ -24,6 +24,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/data"
@@ -379,9 +380,11 @@ func (u *BattleResultUsecase) RunProgressPublisher(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "progress_publisher_stopped")
 			return
 		case <-ticker.C:
-			if n, err := u.publishProgressBatch(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "progress_publish_batch_failed", "granted", n, "err", err)
-			}
+			safego.Run(ctx, "battle_progress_publisher", func() {
+				if n, err := u.publishProgressBatch(ctx); err != nil {
+					plog.With(ctx).Warnw("msg", "progress_publish_batch_failed", "granted", n, "err", err)
+				}
+			})
 		}
 	}
 }

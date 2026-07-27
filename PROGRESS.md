@@ -1778,3 +1778,39 @@ R6 只读复审推翻上一条"P0 5/5 完成"的结论(上一条中"旧流零轮
 - **诚实边界**:P0-6/7 只是窄版屏障,§9.22 的 PENDING→ADMITTED 全量屏障仍属阶段 B/D;
   复核返回与开门之间仍有进程内 check-then-act 窗口(窗口内无可操作 Pawn)。
   未过 UE 编译与集群验收前,**不得声称这些 P0 已关闭**。
+
+## 2026-07-26 R13 Codex P0 实施：Login 失败代次墓碑、Hub writer fencing 与 UE 选角门闩
+
+- **授权边界**：用户明确授权 Codex 实现 P0（覆盖 `AGENTS.md §11.1` 分工限制）；未
+  commit/push/tag，未运行 UE 编译。
+- **Login 跨存储补偿纠偏（INC-20260726-002，仍未关闭）**：删除 R12“恢复即时前代”
+  模型，避免 A 已交付、B/C 未交付时把 B 恢复成 current。Redis `Set` 同
+  `(jti,generation)` lost-reply 幂等成功、同代不同 jti fail-closed；普通 Redis Set
+  失败时，MySQL 精确条件墓碑与 Redis `<=failedGen` 无能力墓碑分别使用独立有界预算，
+  更高赢家不受影响。MySQL COMMIT 模糊且读回失败时，只有 MySQL 条件墓碑明确命中才
+  证明 generation 已持久占用并允许继续 fence Redis；no-op/error 不拿可复用的未证实
+  generation 清 Redis。常驻交错覆盖 A→B→C 不恢复 B、B 未落地/C 复用同 generation
+  后 B 迟到消歧不误杀 C、任一侧失败/上下文取消。补充 Session/Fence TTL 数据层边界，
+  JWT 配置拒绝低于 1s 的 TTL。
+- **Hub writer/assignment（INC-20260726-001，仍未关闭）**：writerlease 仅以 etcd
+  `TimeToLive` 证据续本地任期，proof 失败自 fencing；激活有界单飞；assignment 写后
+  使用本次 token/完整 intended/原 PTTL 精确补偿；删除墓碑复用既有 assignment_id 写
+  UUID 防同任期 ABA；`CreateShard` 与 `{pod}` writer fence 同事务；持有期 proof 失败
+  进入 Health。**结构性 P0 仍 OPEN**：受支持的 Redis Sentinel/Cluster 异步复制主切
+  可能回滚已确认写，最终需 §9.22 线性一致 owner authority，不能用 WAIT/min-replicas
+  冒充关闭。
+- **标准生成链**：canonical green 强制单副本 + Recreate，并同步 strategy annotation、
+  downward-API `PANDORA_DEPLOY_STRATEGY`；契约测试拒绝重复 env/漂移，PASS。基础模板仍
+  RollingUpdate；真实三跳发布未演练。
+- **UE 选角 P0（INC-20260726-003，待验证未关闭）**：外部并发提交已到 SVN r1502；
+  在其上仅新增本地改动：当前权威 `ROLE_REQUIRED` 到达时释放旧 SelectRole 的
+  `bSelectRoleInFlight`，避免旧 callback 因 token 失配退出后永久吞掉后续确认。未编译、
+  未运行乱序/双端验收。
+- **Owner Authority 全链复核**：Login/Hub/Battle/matchmaker/票据/UE 尚未形成同批
+  Begin→PENDING→admit_not_before→Admit→PLAYABLE→Release 闭环；保持
+  `owner_query_first` 与 allocator contract 开关关闭，禁止把局部 writer 修复声明成
+  一人一 DS 架构闭环。
+- **验证**：login 全模块 `go test ./... -count=1` + `go vet ./...` PASS；pkg/auth 定向
+  test/vet PASS；pkg/dsauthfence 与 hub_allocator 全模块 test/vet PASS；
+  `ds_auth_activation_contract_test.ps1` PASS；`git diff --check` 干净。真 MySQL/Redis HA/
+  etcd 分区/SIGKILL/race/多副本部署/UE 编译与玩家路径均未执行，三份事故档案保持未关闭。

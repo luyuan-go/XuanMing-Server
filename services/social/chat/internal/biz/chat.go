@@ -55,6 +55,16 @@ type GroupReader interface {
 	GetGroupMembers(ctx context.Context, groupID uint64) ([]uint64, bool, error)
 }
 
+// WorldRateLimiter 世界频道发送冷却判定(压测审核【必修-5】)。
+//
+// 实现须跨副本一致(data.RedisWorldRateLimiter:SET NX PX 原子占窗),因为 chat 可水平
+// 扩展,单进程内存限流会被多副本摊薄。返回 allowed=false 表示冷却期内(调用方拒绝);
+// 判定失败(Redis 抖动)返回 error,由调用方 fail-open 放行——限流是背压手段而非权威门,
+// 依赖故障时牺牲限流保聊天可用(§9.22 fail-closed 只约束权威写决策)。
+type WorldRateLimiter interface {
+	AllowWorld(ctx context.Context, playerID uint64, cooldown time.Duration) (bool, error)
+}
+
 // ChatUsecase 是 chat 服务业务逻辑核心。
 type ChatUsecase struct {
 	repo   data.PrivateRepo
@@ -69,6 +79,10 @@ type ChatUsecase struct {
 	// 区域总线部署时由 main 经 SetCellRouter 注入,sendPrivate 落库后额外打一条私聊跨 region
 	// 投递落点观测(跨 region 走全局桥,同 region 走区域总线)。nil-safe。
 	router *cellroute.Router
+
+	// worldLimiter 世界频道 per-player 冷却(压测审核【必修-5】)。可为 nil:
+	// 未配 Redis 的骨架联调不限流,行为与历史一致;生产 main 必接线。
+	worldLimiter WorldRateLimiter
 }
 
 // NewChatUsecase 构造。pusher / team / guild / group 允许为 nil(弱依赖未配置时降级)。
@@ -89,6 +103,12 @@ func NewChatUsecase(repo data.PrivateRepo, pusher ChatPusher, team TeamReader, g
 // (与 matchmaker / auction / battle_result / friend 一致)。Router 内部读路径无锁,并发安全。
 func (u *ChatUsecase) SetCellRouter(r *cellroute.Router) {
 	u.router = r
+}
+
+// SetWorldRateLimiter 注入世界频道冷却判定(main 按 node.redis_client 装配)。
+// nil-safe:不调用时世界频道不限流(骨架联调),与历史行为一致。
+func (u *ChatUsecase) SetWorldRateLimiter(l WorldRateLimiter) {
+	u.worldLimiter = l
 }
 
 // SendMessage 发一条聊天消息。senderID 由 service 从 JWT ctx 得到(R5)。
@@ -365,7 +385,24 @@ func (u *ChatUsecase) sendGroup(ctx context.Context, senderID uint64, msg *chatv
 }
 
 // sendWorld 世界频道:广播(to_player_id=0,key 空,push 服务 Broadcast,原则 2 例外)。
+//
+// 冷却前置(压测审核【必修-5】):广播成本 ≈ 发送速率 × 全服在线数,必须在生产侧压掉
+// 刷屏;冷却期内直接 ErrRateLimited,不产生任何 kafka 写。限流判定失败 fail-open
+// (见 WorldRateLimiter 契约):牺牲限流保聊天可用,Warn 留证。
 func (u *ChatUsecase) sendWorld(ctx context.Context, msg *chatv1.ChatMessage) (uint64, error) {
+	if u.worldLimiter != nil {
+		cooldown := u.cfg.WorldCooldown.Std()
+		if cooldown > 0 {
+			allowed, lerr := u.worldLimiter.AllowWorld(ctx, msg.GetSenderId(), cooldown)
+			if lerr != nil {
+				plog.With(ctx).Warnw("msg", "chat_world_ratelimit_check_failed",
+					"sender_id", msg.GetSenderId(), "err", lerr)
+			} else if !allowed {
+				return 0, errcode.New(errcode.ErrRateLimited,
+					"world chat cooldown, retry after %s", cooldown)
+			}
+		}
+	}
 	if u.pusher == nil {
 		plog.With(ctx).Warnw("msg", "chat_world_degraded", "hint", "pusher not configured")
 		return msg.GetMessageId(), nil

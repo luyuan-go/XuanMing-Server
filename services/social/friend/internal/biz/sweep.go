@@ -12,6 +12,7 @@ import (
 	"time"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/safego"
 )
 
 // SweepTerminalRequests 跑一轮保留期清理(各至多一批 cfg.SweepBatch),由调用方 ticker 驱动:
@@ -40,7 +41,8 @@ func (u *FriendUsecase) RunRequestSweep(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			u.SweepTerminalRequests(ctx)
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
+			safego.Run(ctx, "friend_request_sweep", func() { u.SweepTerminalRequests(ctx) })
 		}
 	}
 }

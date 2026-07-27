@@ -58,17 +58,22 @@ func (f *fakeAccountRepo) TouchDevice(_ context.Context, _ uint64, _ string) err
 type fakeSessionRepo struct {
 	mu  sync.Mutex
 	jti map[uint64]string
+	gen map[uint64]uint64
 }
 
-func newFakeSessionRepo() *fakeSessionRepo { return &fakeSessionRepo{jti: map[uint64]string{}} }
+func newFakeSessionRepo() *fakeSessionRepo {
+	return &fakeSessionRepo{jti: map[uint64]string{}, gen: map[uint64]uint64{}}
+}
 
-func (f *fakeSessionRepo) Set(_ context.Context, playerID uint64, _, jti, _ string, _ time.Duration, _ uint64) error {
+func (f *fakeSessionRepo) Set(_ context.Context, playerID uint64, _, jti, _ string, _ time.Duration, gen uint64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.jti == nil { // 零值可用:嵌入方(rotatingSessionRepo 等)不经构造函数
 		f.jti = map[uint64]string{}
+		f.gen = map[uint64]uint64{}
 	}
 	f.jti[playerID] = jti
+	f.gen[playerID] = gen
 	return nil
 }
 
@@ -76,6 +81,7 @@ func (f *fakeSessionRepo) Delete(_ context.Context, playerID uint64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.jti, playerID)
+	delete(f.gen, playerID)
 	return nil
 }
 
@@ -86,8 +92,7 @@ func (f *fakeSessionRepo) GetJTI(_ context.Context, playerID uint64) (string, bo
 	return j, ok && j != "", nil
 }
 
-// DeleteIfJTI 与生产实现同语义的 CAS 删(仅当前 jti 相等才删),不是恒真桩:
-// R10 P0-1 的会话写补偿链按「删是否命中」判定 Redis 是否已提交,桩会掩盖真实分支。
+// DeleteIfJTI 与生产实现同语义的 CAS 删(仅当前 jti 相等才删)，覆盖迟到 Logout 场景。
 func (f *fakeSessionRepo) DeleteIfJTI(_ context.Context, playerID uint64, jti string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -96,6 +101,17 @@ func (f *fakeSessionRepo) DeleteIfJTI(_ context.Context, playerID uint64, jti st
 		return true, nil
 	}
 	return false, nil
+}
+
+func (f *fakeSessionRepo) FenceFailedSet(_ context.Context, playerID uint64, _ string, gen uint64, _ time.Duration) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if curGen, ok := f.gen[playerID]; ok && curGen > gen {
+		return false, nil
+	}
+	delete(f.jti, playerID)
+	f.gen[playerID] = gen
+	return true, nil
 }
 
 type loginBattleAuthorizerFake struct {

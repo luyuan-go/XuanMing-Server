@@ -5,7 +5,7 @@
 //	pandora:hub:shard:{<hub_pod_name>}  → HubShardStorageRecord proto bytes(hashtag 锁 slot),TTL=ShardTTL
 //	pandora:hub:shards                  → SET(成员=hub_pod_name),ListHubs / 候选分片遍历
 //	pandora:hub:active                  → ZSET(score=last_heartbeat_ms,member=hub_pod_name),心跳超时扫描
-//	pandora:hub:player:<player_id>      → HubAssignmentStorageRecord proto bytes(不变量 §1 一人一 hub),strict admitted owner 无 TTL
+//	pandora:hub:player:<player_id>      → HubAssignmentStorageRecord proto bytes(不变量 §1 一人一 hub),TTL=AssignmentTTL
 //	pandora:hub:team:<team_id>          → string(hub_pod_name),队友同分片提示,TTL=AssignmentTTL
 //
 // 分片 player_count 写用 WATCH/MULTI/EXEC 乐观锁,冲突重试耗尽返 ErrHubNoAvailable。
@@ -229,10 +229,21 @@ func (r *RedisHubRepo) CreateShard(ctx context.Context, rec *hubv1.HubShardStora
 	if err != nil {
 		return err
 	}
+	key := shardKey(rec.HubPodName)
 	// SET NX:仅初始化,不覆盖既有镜像(CE7 防并发种子互相清心跳/last_verified)。
-	if err := r.rdb.SetNX(ctx, shardKey(rec.HubPodName), payload, shardTTL).Err(); err != nil {
+	// writerlease 启用后，初始化也必须和同 slot 水位在一个 EXEC；否则失主旧写者
+	// 可绕过其它全部 fenced 更新入口，重新种出一个已被继任者移除的 shard。
+	if r.fence == nil {
+		if err := r.rdb.SetNX(ctx, key, payload, shardTTL).Err(); err != nil {
+			return err
+		}
+	} else if err := r.fencedPodTx(ctx, rec.HubPodName, []string{key}, func(pipe redis.Pipeliner) {
+		pipe.SetNX(ctx, key, payload, shardTTL)
+	}); err != nil {
 		return err
 	}
+	// 全局 membership 是可重建的 superset 索引，跨 slot 只能独立幂等补齐；权威 shard
+	// 初始化已在上面的 {pod} 事务中被 writer fence 保护。
 	return r.rdb.SAdd(ctx, shardsSetKey, rec.HubPodName).Err()
 }
 
@@ -418,6 +429,15 @@ func (r *RedisHubRepo) GetAssignment(ctx context.Context, playerID uint64) (*hub
 	if isAssignmentFenceTombstone(rec) {
 		return nil, false, nil
 	}
+	// 读侧不能把“比本副本任期还新的记录”当普通归属继续使用；这表示本副本已经
+	// 被继任但尚未观察到失主。旧 token 记录则可能是上届合法留下的当前归属，不能
+	// 仅因换届就丢弃；它会在本届首次 CAS 时原子升级水位。
+	if r.fence != nil && rec.GetWriterToken() != 0 {
+		mine, held := r.fence.Current()
+		if held && rec.GetWriterToken() > mine {
+			return nil, false, ErrWriterSuperseded
+		}
+	}
 	return rec, true, nil
 }
 
@@ -449,6 +469,9 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 	const casMaxRetry = 8
 	for attempt := 0; attempt < casMaxRetry; attempt++ {
 		matched := false
+		var writtenToken uint64
+		var intended *hubv1.HubAssignmentStorageRecord
+		var previousTTL assignmentTTLState
 		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
 			// 每玩家持久写者水位(R10 复审 P0-4;R11 复审收口两处交错):assignment 键无
 			// hashtag,进不了 {pod} slot 事务,用不了 pandora:hub:wfence:{pod}。水位记在归属
@@ -491,6 +514,13 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 					return nil
 				}
 			}
+			if expected != nil {
+				var terr error
+				previousTTL, terr = readAssignmentTTLState(ctx, tx, key)
+				if terr != nil {
+					return terr
+				}
+			}
 
 			var payload []byte
 			write := next
@@ -514,6 +544,10 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 					return merr
 				}
 			}
+			if r.fence != nil {
+				writtenToken = mine
+				intended = proto.Clone(write).(*hubv1.HubAssignmentStorageRecord)
+			}
 			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				switch {
 				case write == nil:
@@ -535,6 +569,24 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 			continue
 		}
 		if err != nil {
+			// EXEC 可能已生效但响应丢失/请求 ctx 随后取消。用独立有界 ctx 回读；
+			// 若确实是本次写，再按操作捕获的 token 做失租补偿。不能复用请求 ctx，
+			// 否则“已提交 + ctx canceled”会让补偿天然无法发出。
+			if r.fence != nil && writtenToken != 0 && intended != nil {
+				rctx, cancel := newAssignmentReconcileContext()
+				applied, rerr := r.assignmentWriteApplied(rctx, key, intended)
+				if rerr == nil && applied {
+					if serr := r.ensureAssignmentWriteOwned(rctx, playerID, key, writtenToken,
+						intended, expected, previousTTL); serr != nil {
+						cancel()
+						return false, serr
+					}
+				} else if rerr != nil {
+					plog.With(rctx).Errorw("msg", "hub_assignment_ambiguous_write_reconcile_failed",
+						"player_id", playerID, "token", writtenToken, "err", rerr)
+				}
+				cancel()
+			}
 			return false, err
 		}
 		if matched {
@@ -546,7 +598,11 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 			// 标准做法是**不追求消除窗口,而是限制损害**:写后立刻自检租约,若已失主就精确
 			// 撤销"刚才这一笔自己的写",把脏归属的存活时间从"直到下次被触碰"压成一个补偿
 			// 往返。与 login 的 reconcileFailedSessionWrite 同一套模式(写后自检 + 精确补偿)。
-			if serr := r.revertAssignmentIfWriterLost(ctx, playerID, key, expected); serr != nil {
+			rctx, cancel := newAssignmentReconcileContext()
+			serr := r.ensureAssignmentWriteOwned(rctx, playerID, key, writtenToken,
+				intended, expected, previousTTL)
+			cancel()
+			if serr != nil {
 				return false, serr
 			}
 		}
@@ -556,11 +612,86 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 	return false, nil
 }
 
-// revertAssignmentIfWriterLost 写后自检:若本副本此刻已不再持有写者租约,精确撤销刚写下的
+const assignmentReconcileTimeout = 3 * time.Second
+
+// assignmentTTLState 是事务前归属的 TTL 快照。补偿按已流逝时间扣减，不能把原本 30m
+// 的记录恢复成永久键；若补偿时 TTL 已自然耗尽，则只保留 fencing 墓碑。
+type assignmentTTLState struct {
+	known      bool
+	persistent bool
+	remaining  time.Duration
+	sampledAt  time.Time
+}
+
+func readAssignmentTTLState(ctx context.Context, tx *redis.Tx, key string) (assignmentTTLState, error) {
+	ttl, err := tx.PTTL(ctx, key).Result()
+	if err != nil {
+		return assignmentTTLState{}, err
+	}
+	s := assignmentTTLState{known: true, sampledAt: time.Now()}
+	switch {
+	case ttl == -1:
+		s.persistent = true
+	case ttl >= 0:
+		s.remaining = ttl
+	default:
+		return assignmentTTLState{}, fmt.Errorf("assignment key disappeared while sampling TTL: %s", key)
+	}
+	return s, nil
+}
+
+func (s assignmentTTLState) restoreTTL() (time.Duration, bool) {
+	if !s.known || s.persistent {
+		return 0, false
+	}
+	remaining := s.remaining - time.Since(s.sampledAt)
+	if remaining <= 0 {
+		return 0, true
+	}
+	return remaining, false
+}
+
+func newAssignmentReconcileContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), assignmentReconcileTimeout)
+}
+
+func (r *RedisHubRepo) assignmentWriteApplied(ctx context.Context, key string,
+	intended *hubv1.HubAssignmentStorageRecord) (bool, error) {
+	b, err := r.rdb.Get(ctx, key).Bytes()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	current := &hubv1.HubAssignmentStorageRecord{}
+	if err := proto.Unmarshal(b, current); err != nil {
+		return false, err
+	}
+	return proto.Equal(current, intended), nil
+}
+
+// ensureAssignmentWriteOwned 用**本次事务实际写入的 token**做写后自检。当前仍持有且
+// token 未变才算成功；失租或同进程已快速再选到更大 token 都必须撤销旧届写入。
+func (r *RedisHubRepo) ensureAssignmentWriteOwned(ctx context.Context, playerID uint64, key string,
+	writtenToken uint64, intended, expected *hubv1.HubAssignmentStorageRecord,
+	previousTTL assignmentTTLState) error {
+	if r.fence == nil {
+		return nil
+	}
+	currentToken, held := r.fence.Current()
+	if held && currentToken == writtenToken {
+		return nil
+	}
+	return r.revertAssignmentWrite(ctx, playerID, key, writtenToken, intended, expected, previousTTL)
+}
+
+// revertAssignmentWrite 写后自检发现本副本已不再持有**写入那一届**租约时，精确撤销。
 // 那一笔并返回 ErrWriterSuperseded(调用方重试会被路由到新写者)。
 //
 // 精确性保证(绝不误删别人的写):撤销走同一把 key 的 WATCH/MULTI/EXEC,且**只在当前值仍带
-// 我这一届 token 时**才动手。继任者若已覆盖该键,token 更大 → 原样保留退出。
+// 本次 intended 完整相等时**才动手。只比较 token 不够：同一届内另一个并发请求也
+// 带相同 token，按 token 撤销会误删后写。继任者或同届后写一律原样保留。
 //
 // 撤销目标:
 //   - expected != nil → 恢复成事务前的那条记录(我的写是覆盖,撤销即还原);
@@ -568,19 +699,22 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 //     (不能裸 DEL:那会抹掉水位,重新打开借尸还魂的门)。
 //
 // fence 未启用时是 no-op。
-func (r *RedisHubRepo) revertAssignmentIfWriterLost(ctx context.Context, playerID uint64, key string,
-	expected *hubv1.HubAssignmentStorageRecord) error {
+func (r *RedisHubRepo) revertAssignmentWrite(ctx context.Context, playerID uint64, key string,
+	writtenToken uint64, intended, expected *hubv1.HubAssignmentStorageRecord,
+	previousTTL assignmentTTLState) error {
 	if r.fence == nil {
 		return nil
 	}
-	mine, held := r.fence.Current()
-	if held {
-		return nil // 仍是当届写者:本次写合法,无需撤销
-	}
 	var restore []byte
 	if expected != nil {
+		restoreRecord := proto.Clone(expected).(*hubv1.HubAssignmentStorageRecord)
+		// 补偿不能把水位回退到 expected 的旧 token；业务内容恢复，fencing 水位保持
+		// 至少为本次已触达的 token。
+		if restoreRecord.GetWriterToken() < writtenToken {
+			restoreRecord.WriterToken = writtenToken
+		}
 		var merr error
-		if restore, merr = proto.Marshal(expected); merr != nil {
+		if restore, merr = proto.Marshal(restoreRecord); merr != nil {
 			return merr
 		}
 	}
@@ -598,16 +732,25 @@ func (r *RedisHubRepo) revertAssignmentIfWriterLost(ctx context.Context, playerI
 			if uerr := proto.Unmarshal(b, cur); uerr != nil {
 				return fmt.Errorf("assignment %d bad proto: %w", playerID, uerr)
 			}
-			// 只撤销"仍带我这一届 token"的值;继任者已接手则原样保留。
-			if cur.GetWriterToken() != mine {
+			// 只撤销“仍完整等于本次 intended”的值；继任者或同届后写均原样保留。
+			if cur.GetWriterToken() != writtenToken || !proto.Equal(cur, intended) {
 				return nil
 			}
 			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				if restore != nil {
-					pipe.Set(ctx, key, restore, assignmentTTLFromRecord(expected))
+					ttl, expired := previousTTL.restoreTTL()
+					if expired {
+						tomb, merr := proto.Marshal(newAssignmentFenceTombstone(playerID, writtenToken))
+						if merr != nil {
+							return merr
+						}
+						pipe.Set(ctx, key, tomb, assignmentFenceTombstoneTTL)
+					} else {
+						pipe.Set(ctx, key, restore, ttl)
+					}
 				} else {
 					// 回到墓碑:水位必须留存,否则又给"删除即复位"开了门。
-					tomb, merr := proto.Marshal(newAssignmentFenceTombstone(playerID, mine))
+					tomb, merr := proto.Marshal(newAssignmentFenceTombstone(playerID, writtenToken))
 					if merr != nil {
 						return merr
 					}
@@ -625,7 +768,7 @@ func (r *RedisHubRepo) revertAssignmentIfWriterLost(ctx context.Context, playerI
 			// 撤销失败不掩盖根因:调用方仍必须拿到"你已不是写者"。脏归属由继任者下一次
 			// 对该玩家的 CAS(更高 token)覆盖收敛。
 			plog.With(ctx).Errorw("msg", "hub_assignment_revert_after_lease_loss_failed",
-				"player_id", playerID, "token", mine, "err", err,
+				"player_id", playerID, "token", writtenToken, "err", err,
 				"hint", "脏归属等继任者下次 CAS 覆盖;spawn gate 由 Admission 侧会话复核兜住")
 			break
 		}
@@ -634,20 +777,14 @@ func (r *RedisHubRepo) revertAssignmentIfWriterLost(ctx context.Context, playerI
 	return ErrWriterSuperseded
 }
 
-// assignmentTTLFromRecord 给撤销恢复用:墓碑用墓碑 TTL,真实归属沿用长 TTL。
-// 归属键在 strict admitted owner 下无 TTL(0),恢复时保持同语义。
-func assignmentTTLFromRecord(rec *hubv1.HubAssignmentStorageRecord) time.Duration {
-	if isAssignmentFenceTombstone(rec) {
-		return assignmentFenceTombstoneTTL
-	}
-	return 0 // 与 strict admitted owner 无 TTL 的既有语义一致
-}
-
 func (r *RedisHubRepo) DeleteAssignmentIfPodMatches(ctx context.Context, playerID uint64, pod string) (bool, error) {
 	key := assignKey(playerID)
 	const casMaxRetry = 3
 	for i := 0; i < casMaxRetry; i++ {
 		deleted := false
+		var writtenToken uint64
+		var intended, expected *hubv1.HubAssignmentStorageRecord
+		var previousTTL assignmentTTLState
 		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
 			// 与 CompareAndSwapAssignment 同契约(R11 复审 P0-4):事务内读租约,
 			// 删除写墓碑而非裸 DEL,否则本路径同样是「删除即复位」的水位抹除口。
@@ -677,10 +814,20 @@ func (r *RedisHubRepo) DeleteAssignmentIfPodMatches(ctx context.Context, playerI
 			if rec.HubPodName != pod {
 				return nil // 并发 Assign/Transfer 已指向新分片,不能删
 			}
+			if r.fence != nil {
+				var terr error
+				previousTTL, terr = readAssignmentTTLState(ctx, tx, key)
+				if terr != nil {
+					return terr
+				}
+				expected = proto.Clone(rec).(*hubv1.HubAssignmentStorageRecord)
+			}
 			var payload []byte
 			if r.fence != nil {
 				var merr error
-				payload, merr = proto.Marshal(newAssignmentFenceTombstone(playerID, mine))
+				intended = newAssignmentFenceTombstone(playerID, mine)
+				writtenToken = mine
+				payload, merr = proto.Marshal(intended)
 				if merr != nil {
 					return merr
 				}
@@ -703,7 +850,31 @@ func (r *RedisHubRepo) DeleteAssignmentIfPodMatches(ctx context.Context, playerI
 			continue // WATCH 期间归属被改写,重读再判
 		}
 		if err != nil {
+			if r.fence != nil && writtenToken != 0 && intended != nil {
+				rctx, cancel := newAssignmentReconcileContext()
+				applied, rerr := r.assignmentWriteApplied(rctx, key, intended)
+				if rerr == nil && applied {
+					if serr := r.ensureAssignmentWriteOwned(rctx, playerID, key, writtenToken,
+						intended, expected, previousTTL); serr != nil {
+						cancel()
+						return false, serr
+					}
+				} else if rerr != nil {
+					plog.With(rctx).Errorw("msg", "hub_assignment_delete_ambiguous_reconcile_failed",
+						"player_id", playerID, "token", writtenToken, "err", rerr)
+				}
+				cancel()
+			}
 			return false, err
+		}
+		if deleted && r.fence != nil {
+			rctx, cancel := newAssignmentReconcileContext()
+			serr := r.ensureAssignmentWriteOwned(rctx, playerID, key, writtenToken,
+				intended, expected, previousTTL)
+			cancel()
+			if serr != nil {
+				return false, serr
+			}
 		}
 		return deleted, nil
 	}

@@ -400,6 +400,61 @@ R9 只读复审（HEAD `4b5f9adb`）判定 7 条 P0 阻断面，结论"没有修
   本轮无编译证据。
 - 真实并发/混版矩阵/故障注入仍未跑；验收矩阵未跑项未变。事故**未关闭**，待 R10。
 
+### 4.1.8 R12 Login 跨存储补偿更正（2026-07-26，未关闭）
+
+R11 的 `sessions.Set` 失败补偿仍有两个确定性缺陷，静态复审确认属于同一会话
+fencing near-miss：
+
+1. MySQL COMMIT 报错但读回确认已落地时，生产数据层其实已经在 COMMIT 前保存了
+   覆盖前 `sess_jti` 快照；biz 却主动丢掉快照并标成 `SnapshotUnknown`。随后 Redis
+   Set 再失败只墓碑 MySQL，会产生 `Redis=A / MySQL=sentinel` 单边撕裂。
+2. Redis Lua 已执行但响应丢失时，旧补偿 `DeleteIfJTI(B)` 会把整条 session key
+   删除，无法恢复被 B 覆盖的仍在线上一代 A；文档所称“两存储回到上一代”与实现不符。
+   Redis 判定/删除和 MySQL 回补还共用同一 timeout，前者耗尽预算会令后者根本不执行。
+
+R12 实施：
+
+- `PersistSessionJTI` 的覆盖前快照在不确定 COMMIT 读回确认后继续保留，不再制造
+  `SnapshotUnknown` 分支。
+- Redis 条件 Set Lua 在同一玩家 key 内原子保存覆盖前完整 session 到
+  `_rollback_*` 字段；新增 `(jti,generation)` CAS 补偿脚本，命中时恢复旧
+  token/device/**原绝对过期点**；generation 保持已消耗的本次单调值（与 MySQL
+  回补后一致、不回退）。无可恢复旧 session 时清掉 token/jti 等能力字段，但保留
+  只有 gen 的 TTL fencing 水位；MySQL 的 HadPrev=false 分支也不再 DELETE，改为
+  generation 不变的无能力哨兵。两侧都避免仍在飞的低代际写趁 key/行缺失复活；
+  更新代际已覆盖则 no-op。补偿不延长旧会话，也不误回滚并发赢家。
+- 补偿顺序固定为 **MySQL 条件回补命中 → Redis 精确恢复**，两步使用两个独立的
+  detached 有界预算。MySQL 回补失败/未命中不恢复 Redis 旧能力；Redis 不可达时
+  MySQL 已回补真实快照：未提交分支收敛 A/A；已提交但补偿不可判定分支为
+  Redis=B（B 从未交付）/MySQL=A，没有一个已交付凭据能同时越过 Redis 现行性门与
+  MySQL 代际门，保持 fail-closed，下一次成功 Login 自愈。
+
+新增/改写确定性回归覆盖：Set 未提交、Set 已提交但回包丢失、Redis CAS 补偿失败、
+无旧快照时保留水位、A/B/C 三登录迟到低代际不得复活、迟到补偿不得覆盖更新赢家、
+原过期点不延长、两个补偿预算互相独立。
+login module 全量 Go 测试通过；真实 Redis 断链/响应丢失注入、真 MySQL COMMIT
+模糊注入、双设备 E2E、部署产物与观察窗口均未执行，故事故状态保持未关闭。
+
+### 4.1.9 R13 Login 补偿再次纠偏（2026-07-26，未关闭）
+
+R12 的“恢复即时前代”仍不安全：A 已交付、B/C 均未交付时，C 保存的即时前代是
+B；C 回补恢复 B 后，B 的迟到补偿又会被更高 generation 拒绝，最终把从未交付的
+B 永久立为 current。R13 因此删除 `_rollback_*` 恢复机制，改为安全优先的单调
+无能力墓碑：MySQL 只条件命中本次 `(jti,generation)`，Redis 在
+`current.gen <= failedGen` 时清能力并推进水位，更高 generation 赢家 no-op；在
+MySQL COMMIT 已确认的 Redis Set 失败路径，两侧使用独立有界预算且一侧失败/未命中
+不跳过另一侧。旧字段仅在滚动窗口中清理，不再
+参与状态决策。
+
+COMMIT 模糊且读回失败的分支不能盲用 generation 清 Redis：未落地事务的 generation
+可被后续赢家复用。该分支仅在 MySQL 条件墓碑明确命中时继续 Redis fence；no-op/error
+不碰 Redis，并由“B 未落地、C 同代际交付、B 迟到消歧”常驻回归锁死。
+
+常驻 A→B→C→D 确定性交错已证明不会恢复未交付 B，D 以更高 generation 自愈。
+该修复不会假装解决 `sessions.Set` 成功后 placement 失败仍扣留新 session 的相邻
+交付缺口；详情与关闭矩阵见
+[`INC-20260726-002`](2026-07-26-p0-login-session-candidate-delivery.md)。
+
 ### 4.2 回归测试（已落地，全绿）
 
 - `internal/biz/replay_duplicate_test.go`：`TestAuthorizeSubscribe_SessionCurrency`（现行放行/旧 jti 拒/登出拒/require 档缺 jti 拒/权威故障 fail-closed/dev 档语义）、`TestRecheckSession_ExpiryClosesStream`（token 到期关流）、`TestRecheckSession_SupersededAndRetryable`（顶号关流含跨 Pod 语义/权威故障可重试）。

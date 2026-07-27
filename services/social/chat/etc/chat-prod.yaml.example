@@ -8,6 +8,7 @@ server:
   grpc:
     network: tcp
     addr: ":50005"
+    enable_rate_limit: true   # 压测前审核门禁-A:BBR 自适应限流(客户端面服务 prod 必开,过载按 CPU/inflight/RT 丢负载)
     timeout: "3s"
   http:
     network: tcp

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
 )
 
@@ -39,7 +40,8 @@ func (u *ChatUsecase) RunHistorySweep(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			u.SweepHistory(ctx, time.Now().UnixMilli())
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
+			safego.Run(ctx, "chat_history_sweep", func() { u.SweepHistory(ctx, time.Now().UnixMilli()) })
 		}
 	}
 }

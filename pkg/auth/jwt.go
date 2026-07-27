@@ -262,6 +262,14 @@ func (c *Config) Validate() error {
 	if len(c.Secret) < 32 {
 		return fmt.Errorf("auth.Config: Secret too short (got %d bytes, need >=32 for HS256)", len(c.Secret))
 	}
+	// JWT NumericDate 以秒为粒度；小于 1s 的 TTL 可能在签发时就被截断为过期。
+	// 负值不会被 Defaults 修正，也必须在启动期拒绝，避免 Login 写入立即失效的会话。
+	if c.SessionTTL < time.Second {
+		return fmt.Errorf("auth.Config: SessionTTL must be >=1s (got %s)", c.SessionTTL)
+	}
+	if c.DSTicketTTL < time.Second {
+		return fmt.Errorf("auth.Config: DSTicketTTL must be >=1s (got %s)", c.DSTicketTTL)
+	}
 	for i, s := range c.AdditionalSecrets {
 		if len(s) < 32 {
 			return fmt.Errorf("auth.Config: AdditionalSecrets[%d] too short (got %d bytes, need >=32 for HS256)", i, len(s))

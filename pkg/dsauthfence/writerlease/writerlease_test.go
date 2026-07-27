@@ -11,18 +11,33 @@ import (
 
 // fakeTerm 是确定性任期:token 由测试注入,Lost/Resign 可控。
 type fakeTerm struct {
-	token    uint64
-	lost     chan struct{}
-	mu       sync.Mutex
-	resigned bool
+	token        uint64
+	lost         chan struct{}
+	mu           sync.Mutex
+	resigned     bool
+	remainingTTL time.Duration
+	confirmErr   error
+	confirmCalls int
+	confirmFn    func(call int) (time.Duration, error)
 }
 
 func newFakeTerm(token uint64) *fakeTerm {
-	return &fakeTerm{token: token, lost: make(chan struct{})}
+	return &fakeTerm{token: token, lost: make(chan struct{}), remainingTTL: 15 * time.Second}
 }
 
 func (t *fakeTerm) Token() uint64         { return t.token }
 func (t *fakeTerm) Lost() <-chan struct{} { return t.lost }
+func (t *fakeTerm) RemainingTTL(context.Context) (time.Duration, error) {
+	t.mu.Lock()
+	t.confirmCalls++
+	call, fn := t.confirmCalls, t.confirmFn
+	remaining, err := t.remainingTTL, t.confirmErr
+	t.mu.Unlock()
+	if fn != nil {
+		return fn(call)
+	}
+	return remaining, err
+}
 func (t *fakeTerm) Resign(context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -34,6 +49,12 @@ func (t *fakeTerm) wasResigned() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.resigned
+}
+
+func (t *fakeTerm) ttlProofCalls() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.confirmCalls
 }
 
 // fakeBackend 按脚本依次颁发任期;脚本耗尽后 Campaign 阻塞到 ctx 取消。
@@ -232,6 +253,48 @@ func TestActivationHookGatesWritability(t *testing.T) {
 	})
 }
 
+// 业务激活成功后仍必须先取得 etcd 服务端 TTL 证明。证明失败或剩余寿命不高于
+// 安全余量时，本届从未进入 active，避免用配置 TTL 为已经异常的 lease 凭空续命。
+func TestInitialTTLProofGatesWritability(t *testing.T) {
+	cases := []struct {
+		name      string
+		remaining time.Duration
+		proofErr  error
+	}{
+		{name: "proof failed", remaining: 15 * time.Second, proofErr: errors.New("etcd quorum unavailable")},
+		{name: "remaining at margin", remaining: time.Duration(holdSafetyMarginSec) * time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			term := newFakeTerm(12)
+			term.remainingTTL = tc.remaining
+			term.confirmErr = tc.proofErr
+			backend := &fakeBackend{terms: []*fakeTerm{term}}
+			var activated atomic.Bool
+			lease := StartWithBackend(context.Background(), backend, Config{
+				Election: "hub_allocator/writer",
+				OnElected: func(context.Context, uint64) error {
+					activated.Store(true)
+					return nil
+				},
+			})
+			defer func() { _ = lease.Close() }()
+
+			waitFor(t, "business activation succeeded", activated.Load)
+			waitFor(t, "term resigned after initial TTL proof rejection", term.wasResigned)
+			if state := lease.active.Load(); state != nil {
+				t.Fatalf("initial TTL proof rejection must never publish active state, got token=%d", state.token)
+			}
+			if token, held := lease.Current(); held || token != 0 {
+				t.Fatalf("initial TTL proof rejection must never expose held, got token=%d held=%v", token, held)
+			}
+			if snap := lease.Health(); snap.ConsecutiveActivationErrs == 0 || snap.LastActivationErr == "" {
+				t.Fatalf("initial TTL proof rejection must be observable as activation failure, got %+v", snap)
+			}
+		})
+	}
+}
+
 // R11 复审 P0-2 缺口 1/2:激活钩子**永久阻塞**(不是返回错误)必须在有界时间内转成
 // 计数中的失败并让位。修复前 activate 用 context.WithCancel 无期限,阻塞时:本副本
 // 永远不可写、同时占着 leader key 不让位 → 全集群无写者,而 degraded 恒 false 静默。
@@ -311,7 +374,11 @@ func TestCurrentExpiresByLocalDeadlineWithoutTermLostSignal(t *testing.T) {
 
 	// 模拟"进程暂停":直接把本地截止时间推到过去。term.Lost() **故意不关闭** ——
 	// 证明不依赖那个信号。
-	lease.holdUntilUnixNano.Store(nowMonotonicNanos() - int64(time.Second))
+	state := lease.active.Load()
+	if state == nil {
+		t.Fatal("elected lease must expose an active hold state")
+	}
+	state.validUntilUnixNano.Store(nowMonotonicNanos() - int64(time.Second))
 	if token, held := lease.Current(); held || token != 0 {
 		t.Fatalf("本地截止时间过期后必须立即报不持有(不等 term.Lost()),got token=%d held=%v",
 			token, held)
@@ -327,13 +394,57 @@ func TestCurrentExpiresByLocalDeadlineWithoutTermLostSignal(t *testing.T) {
 	}
 }
 
+// Current 一旦观察到本地截止过期，本届必须进入不可逆 self-fenced 终态。否则交错为：
+// 业务 goroutine 先看到过期并拒写 → 续证 goroutine 随后拿到迟到 TTL proof、重写 deadline
+// → 同一 token 再次 held，旧任期发生“死而复生”。
+func TestExpiredHoldCannotBeRevivedByLateTTLProof(t *testing.T) {
+	lost := make(chan struct{})
+	l := &Lease{}
+	state := &holdState{token: 781, lost: lost}
+	state.validUntilUnixNano.Store(nowMonotonicNanos() - int64(time.Second))
+	l.active.Store(state)
+
+	if token, held := l.Current(); held || token != 0 {
+		t.Fatalf("expired hold must reject before late proof: token=%d held=%v", token, held)
+	}
+	if !state.selfFenced.Load() {
+		t.Fatal("Current observing expiry must permanently self-fence the term")
+	}
+	if renewed := l.renewHold(state, 15*time.Second); renewed {
+		t.Fatal("late TTL proof must not renew an already self-fenced term")
+	}
+	if token, held := l.Current(); held || token != 0 {
+		t.Fatalf("same token revived after late proof: token=%d held=%v", token, held)
+	}
+	select {
+	case <-lost:
+		t.Fatal("test requires Lost to remain open; fencing must come from monotonic local state")
+	default:
+	}
+}
+
+// TTL 证明的 remaining 必须锚定请求开始时刻。若进程在服务端响应后、active 发布前
+// 暂停超过证明窗口，恢复后不得用“恢复时刻 + 陈旧 remaining”宣告持有。
+func TestStaleTTLProofCannotBeShiftedForwardAtPublish(t *testing.T) {
+	l := &Lease{}
+	state := &holdState{token: 782, lost: make(chan struct{})}
+	proofStartedAt := nowMonotonicNanos() - int64(20*time.Second)
+	if applied := l.applyTTLProof(state, 15*time.Second, proofStartedAt); applied {
+		t.Fatal("stale TTL proof must not be shifted forward and published as a live hold")
+	}
+	if !state.selfFenced.Load() {
+		t.Fatal("stale proof rejection must permanently self-fence that term")
+	}
+}
+
 // 健康任期内本地截止时间必须被持续续期,否则会在窗口耗尽后凭空丢失写权。
 func TestHoldDeadlineRenewedWhileTermAlive(t *testing.T) {
 	term := newFakeTerm(78)
+	term.remainingTTL = 5 * time.Second
 	backend := &fakeBackend{terms: []*fakeTerm{term}}
 	lease := StartWithBackend(context.Background(), backend, Config{
 		Election:    "hub_allocator/writer",
-		LeaseTTLSec: 1, // 窗口 1s、续期间隔 ~333ms
+		LeaseTTLSec: 5, // 窗口 2s、确认间隔 ~666ms
 	})
 	defer func() { _ = lease.Close() }()
 
@@ -341,13 +452,129 @@ func TestHoldDeadlineRenewedWhileTermAlive(t *testing.T) {
 		_, held := lease.Current()
 		return held
 	})
-	first := lease.holdUntilUnixNano.Load()
+	state := lease.active.Load()
+	if state == nil {
+		t.Fatal("elected lease must expose an active hold state")
+	}
+	first := state.validUntilUnixNano.Load()
 	// 等过一个续期间隔:截止时间必须被推后,且始终保持持有。
 	waitFor(t, "hold deadline renewed", func() bool {
-		return lease.holdUntilUnixNano.Load() > first
+		return state.validUntilUnixNano.Load() > first
 	})
 	if _, held := lease.Current(); !held {
 		t.Fatal("健康任期内不得丢失写权(本地续期必须跟上)")
+	}
+}
+
+// Lost channel 已关闭时，Current 必须自行观察到失主，不能等待竞选 goroutine 先清状态。
+// 这覆盖进程恢复后业务 goroutine 比竞选循环先被调度的确定性交错。
+func TestCurrentObservesClosedLostChannelDirectly(t *testing.T) {
+	lost := make(chan struct{})
+	l := &Lease{}
+	state := &holdState{token: 79, lost: lost}
+	state.validUntilUnixNano.Store(nowMonotonicNanos() + int64(time.Minute))
+	l.active.Store(state)
+	close(lost)
+	if token, held := l.Current(); held || token != 0 {
+		t.Fatalf("closed Lost channel must fence immediately, got token=%d held=%v", token, held)
+	}
+}
+
+// 本地截止只允许由 etcd 服务端 TTL 确认续期。确认失败必须立即自 fencing + Resign，
+// 而不是仅凭 Lost 尚未关闭盲目续命。
+func TestTTLConfirmationFailureSelfFencesAndResigns(t *testing.T) {
+	term := newFakeTerm(80)
+	backend := &fakeBackend{terms: []*fakeTerm{term}}
+	lease := StartWithBackend(context.Background(), backend, Config{
+		Election:    "hub_allocator/writer",
+		LeaseTTLSec: 5,
+	})
+	defer func() { _ = lease.Close() }()
+
+	waitFor(t, "elected", func() bool {
+		token, held := lease.Current()
+		return held && token == 80
+	})
+	term.mu.Lock()
+	term.confirmErr = errors.New("etcd quorum unavailable")
+	term.mu.Unlock()
+	waitFor(t, "self-fenced after failed TTL confirmation", func() bool {
+		_, held := lease.Current()
+		return !held
+	})
+	waitFor(t, "failed proof term resigned", term.wasResigned)
+	if snap := lease.Health(); snap.ConsecutiveActivationErrs == 0 || snap.LastActivationErr == "" {
+		t.Fatalf("holding-period TTL proof failure must be visible in Health, got %+v", snap)
+	}
+}
+
+// 持有期证明失败要跨重选累计，不能在“首次 proof 成功、刚发布 held”时立刻清零；
+// 新任期至少再完成一轮稳定续证后才清掉历史失败。
+func TestHoldingProofFailureClearsOnlyAfterStableRenewal(t *testing.T) {
+	term1 := newFakeTerm(801)
+	term1.remainingTTL = 5 * time.Second
+	term1.confirmFn = func(call int) (time.Duration, error) {
+		if call == 1 {
+			return 5 * time.Second, nil // 首次 proof，允许发布 held
+		}
+		return 0, errors.New("etcd quorum unavailable during hold")
+	}
+	term2 := newFakeTerm(802)
+	term2.remainingTTL = 5 * time.Second
+	lease := StartWithBackend(context.Background(), &fakeBackend{terms: []*fakeTerm{term1, term2}}, Config{
+		Election:    "hub_allocator/writer",
+		LeaseTTLSec: 5,
+	})
+	defer func() { _ = lease.Close() }()
+
+	waitFor(t, "holding proof failure counted", func() bool {
+		return lease.Health().ConsecutiveActivationErrs >= 1
+	})
+	waitFor(t, "failed first term resigned", term1.wasResigned)
+
+	deadline := time.Now().Add(6 * time.Second)
+	for time.Now().Before(deadline) {
+		token, held := lease.Current()
+		snap := lease.Health()
+		if held && token == 802 && term2.ttlProofCalls() >= 2 &&
+			snap.ConsecutiveActivationErrs == 0 && snap.LastActivationErr == "" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("stable successor did not clear hold-proof failure: health=%+v term2_proofs=%d",
+		lease.Health(), term2.ttlProofCalls())
+}
+
+// Go 无法强杀不尊重 ctx 的回调。激活包装必须仍能按期限让位，且在旧执行体退出前
+// 不得每次重选再叠加一个永久阻塞 goroutine。
+func TestActivationIgnoringContextIsBoundedAndSingleFlight(t *testing.T) {
+	terms := []*fakeTerm{newFakeTerm(501), newFakeTerm(502), newFakeTerm(503)}
+	backend := &fakeBackend{terms: terms}
+	release := make(chan struct{})
+	var calls atomic.Uint64
+	lease := StartWithBackend(context.Background(), backend, Config{
+		Election: "hub_allocator/writer",
+		OnElected: func(context.Context, uint64) error {
+			calls.Add(1)
+			<-release // 故意完全忽略 ctx
+			return nil
+		},
+		ActivationTimeout: 20 * time.Millisecond,
+	})
+	defer func() {
+		close(release)
+		_ = lease.Close()
+	}()
+
+	waitFor(t, "non-cooperative activation term resigned", terms[0].wasResigned)
+	if _, held := lease.Current(); held {
+		t.Fatal("timed-out non-cooperative activation must never announce held")
+	}
+	// 至少跨过一次重竞选退避；旧回调仍在时 hook 调用数必须保持 1。
+	time.Sleep(recampaignBackoff + 100*time.Millisecond)
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("timed-out activation must be single-flight, calls=%d", got)
 	}
 }
 
@@ -355,7 +582,7 @@ func TestHoldDeadlineRenewedWhileTermAlive(t *testing.T) {
 // 不引入"莫名失去写权"。
 func TestUnknownLeaseTTLKeepsEventOnlyHold(t *testing.T) {
 	l := &Lease{}
-	l.current.Store(9)
+	l.active.Store(&holdState{token: 9, lost: make(chan struct{})})
 	if token, held := l.Current(); !held || token != 9 {
 		t.Fatalf("未设本地截止时间时必须保持旧行为,got token=%d held=%v", token, held)
 	}

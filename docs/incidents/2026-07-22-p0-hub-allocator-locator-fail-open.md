@@ -173,11 +173,37 @@ HubAllocatorService.TransferToLine
 
 | ID | 严重级别 | 行动项 | 负责人 | 状态 | 目标/关联 Incident |
 |---|---|---|---|---|---|
-| A-001 | P0 | 完成 Hub 切线 Owner Authority 接线与 UNKNOWN 零副作用门禁 | 最高可用 Claude | 待处理 | 本 Incident |
-| A-002 | P0 | 为 error/non-OK/key miss/nil checker 落永久 fail-closed 回归 | 最高可用 Claude | 待处理 | 本 Incident |
+| A-001 | P0 | 按同一发布契约完成 Login + Hub + Battle 的 Owner Authority 强 Begin/Admit/Release、稳定 operation 与 WAIT 恢复闭环 | 最高可用 Claude | 待处理；禁止只开 Hub | 本 Incident |
+| A-002 | P0 | 为 error/non-OK/key miss 落 locator 面 fail-closed 回归 | 最高可用 Claude | 已完成（仅止血层，不等于 Owner Authority 闭环） | 本 Incident |
 | A-003 | P0 | 完成旧 DS 分区恢复、Admission 丢包、迟到写和 Stable/Canary 故障注入 | 最高可用 Claude / Codex 环境执行 | 待处理 | 本 Incident |
 | A-004 | P0 | 核实目标环境版本与历史双归属/重复 assignment 证据 | 人/运维 | 待处理 | 本 Incident |
 | A-005 | P1 | 接通 team READY→MATCHING→IN_BATTLE 并禁止活动队伍并发变更 | 最高可用 Claude | 待处理 | 独立实现缺口 |
+
+### 10.1 2026-07-26 R12 全链激活复审（仍未关闭）
+
+本轮按 §9.22/§9.23 重新检查“是否可以先完成并启用 Hub contract”。结论是否定的，
+因此没有落仅 Hub 的半成品业务修改，`login.owner_query_first` 与 Hub/Battle allocator
+强 contract 档继续保持关闭。确定性阻断如下：
+
+1. `LoginUsecase.Login` 在 Redis/MySQL 会话已轮换后仍先走 locator/match/Hub 分配；
+   locator、重连权威或 Hub 分配失败会直接返回错误。service 的错误响应只带业务码，
+   不带刚建立的新 session，结果是旧在线会话已经失效、调用端却拿不到新 token。
+   §9.23 要求此类暂时故障返回携带同一 session/original operation 的可见 `WAIT`。
+2. 完整 Login、SelectRole、IssueDSTicket、ResolveHub/ResolveBattle 尚未统一 query-first；
+   角色查询错误仍会被折叠成 `role_id=0`，无法区分 `ROLE_UNKNOWN → WAIT` 与确实未选角
+   的 `ROLE_REQUIRED`，并可能在未选角前提前分配 Hub。
+3. Hub `AssignHub`/Admission ACK 虽已有 additive placement 字段，但当前服务没有把稳定
+   operation/owner epoch 贯穿 assignment、票据、强 Begin 与强 Admit；Begin 失败仍是弱依赖。
+4. Battle 的稳定 match operation 尚未透传到 ds_allocator；roster Begin 使用随机 operation
+   且失败照常交付 allocation，Admit 又在玩家可服务后的 census 才弱执行。取消/超时路径也
+   缺少按同一 `(player, owner_epoch, operation, exact target)` 的精确 Release。
+5. 票据/JWT 尚未携带每玩家 owner epoch + operation，不能在现有 pre-Pawn 门前完成强
+   Admit；一个 match 级 epoch 也不能替代每玩家权威代次。
+
+现有 `LoginResponse.resume_context` 的 `WAIT/TARGET/ROLE_REQUIRED` wire 足以承载登录入口
+状态，但它不能单独弥补 allocator、票据、Admission 和取消链缺口。最小不可拆分批次仍需
+同时覆盖 Login、Hub、Battle、matchmaker、JWT/proto、UE 入场门与 coordinated rollout。
+在 UE 未编译、真实 TiDB/多副本分区/回包丢失未验的本轮边界内，架构 P0 不能宣称完成。
 
 ## 11. 关闭审核
 
