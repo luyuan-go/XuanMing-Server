@@ -180,7 +180,78 @@ etcd Campaign(token=N)
 | HWF-4 | P1 | 补偿回读 Redis 不可达时，stale assignment 仍可能保留到继任者触碰/owner 权威覆盖；补可观测与验收 | 待指定 | OPEN | 本档 |
 | HWF-5 | P0 验收门 | canonical green Recreate→enforce→RollingUpdate 演练，核对 annotation/env 与进程门禁 | 待指定 | OPEN | 本档 |
 | HWF-6 | P0 验收门 | Linux `-race`、新镜像部署 provenance、观察窗口 | 待指定 | OPEN | 本档 |
-| HWF-7 | P0 架构阻断 | Redis Sentinel/Cluster 主切期间异步复制可能回滚已确认 assignment/fence 写；当前未配置可证明 durability 的共识提交。不得用 `WAIT`/`min-replicas` 冒充线性一致，最终迁移到 §9.22 owner authority 同事务域闭环 | 待指定 | OPEN | 本档 / `deploy/redis/README.md` 支持模型 |
+| HWF-7 | P0 架构阻断 | Redis Sentinel/Cluster 主切期间异步复制可能回滚已确认 assignment/fence 写；当前未配置可证明 durability 的共识提交。不得用 `WAIT`/`min-replicas` 冒充线性一致，最终迁移到 §9.22 owner authority 同事务域闭环（详见 §10.2） | 待指定 | OPEN | 本档 / `deploy/redis/README.md` 支持模型 / [R13 审核 §8](../reviews/R13-审核-20260726.md#8-架构级单写者闭环分析为什么-redis-ha-层修不了) |
+
+### 10.2 HWF-7 展开：为什么 Redis HA 层无法闭合单写者
+
+#### 不变量前提
+
+本轮全部 fencing 的正确性归结为一条不变量：**水位单调不回退**——`writer_token`、
+`generation`、墓碑一旦被 Redis ACK，永不消失、永不变小。证明链：
+
+```text
+etcd token 严格递增（线性一致，这半边没问题）
+   ↓
+Redis 水位只进不退          ← 全部正确性押在这一条
+   ↓
+迟到旧写者必然读到 ≥ 自己的水位 → 零写入
+```
+
+Redis Sentinel/Cluster 是异步复制：主库 ACK 一笔写 → 还没复制出去就挂了 → 副本晋升 →
+**这笔已确认的写凭空消失**。水位回退。
+
+后果：被 fence 出局的旧写者重读，看到回退后的旧水位 → 比较通过 → 合法写入 →
+**借尸还魂**，且每一步在它自己看来完全合法。应用层无法检测：新主库没有"我丢过写"的
+标记，回退后的状态和从未发生过那笔写的状态在字节上不可区分。
+
+#### 三种常见缓解为什么都不能闭合
+
+| 方案 | 为什么不行 |
+|---|---|
+| **写后回读确认** | 回读发生在主切之前，确认的是"旧主库有这笔写"，证明不了"晋升的副本也有" |
+| **`WAIT N`** | 只保证 N 个副本**收到**，不保证故障切换**选中**的恰好是收到的那个；分区期间旧主还能继续收写。成功 ≠ 写在切换后存活 |
+| **`min-replicas-to-write`** | 只是主库在副本不足时拒写的门槛，复制仍是异步的；`min-replicas-max-lag` 窗口内旧主照常 ACK。降概率 ≠ 给证明 |
+
+三者共同点：把"大概率不丢"包装成"不丢"。验收底线第 3 条要求完整性证明，概率性缓解
+写成关闭就是掩盖——本项 HWF-7 明文禁止这么干。
+
+#### 为什么不能把水位挪到 etcd/MySQL
+
+当前设计的核心价值是**比较与写入在同一原子域**——`guardWriterFence` 的水位比较、
+业务写、水位推进落在同一个 Redis `WATCH/MULTI/EXEC` 里，同 slot，没有 check-then-act 窗口。
+
+把水位搬去 etcd/MySQL，业务数据（assignment、席位、容量账本）还在 Redis：
+
+```text
+① 查 etcd 水位（通过）→ ② 写 Redis 业务数据
+        ↑______这中间失租/被继任______↑
+```
+
+跨存储先查后写——正是 §9.22 点名禁止的 TOCTOU，也正是当前设计花力气消掉的东西。
+
+**fencing 的比较点必须和被保护的写在同一个事务域里**。所以要么水位跟着数据走（现状，
+被 Redis 复制模型拖累），要么数据跟着水位走（真解）。
+
+#### 真正的修法
+
+唯一正解是后者：**把"归属"这个状态本体搬进线性一致事务域**——§9.22 Owner Authority：
+`owner_epoch`、lease 截止、`admit_not_before`、`PENDING→ADMITTED` 在同一个线性一致存储
+（TiDB）里完成 CAS，Redis 里的 assignment 降级为非权威投影。
+
+这不是 hub_allocator 的一个 patch——消费方是全链。INC-20260722-002 §10.1 论证了
+五条确定性阻断（Login 错误折叠/票据不带 epoch/Battle Begin 弱依赖/取消链缺 Release/
+match 级 epoch 不替代每玩家代次），最小不可拆分批次：Login + Hub + Battle + matchmaker +
+JWT/proto + UE 入场门 + coordinated rollout。
+
+#### 现状定位
+
+| 态 | 保护 | 缺口 |
+|---|---|---|
+| 正常态（Redis 不主切） | 进程内 fencing 正确，确定性交错测试覆盖 | 无 |
+| 主切窗口 | Admission 会话复核 fail-closed + assignment 非准入最终权威 + TTL 兜底蒸发 | 窗口内一个 EXEC 的回滚可能被旧写者利用；三道外围门限制损害成有界 |
+| 终态 | §9.22 Owner Authority（[设计文档](../design/owner-authority.md)），TiDB 同事务域 | 全链接线待独立工作流 |
+
+关联审核文档：[R13 审核 §8](../reviews/R13-审核-20260726.md#8-架构级单写者闭环分析为什么-redis-ha-层修不了)
 
 ## 11. 关闭审核
 
