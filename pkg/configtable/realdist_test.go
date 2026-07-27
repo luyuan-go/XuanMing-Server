@@ -25,9 +25,10 @@ func TestLoadRealDistIfPresent(t *testing.T) {
 	if tb.Level.Count() == 0 {
 		t.Fatal("关卡表为空")
 	}
-	// 与 g_关卡.xlsx 的稳定事实对齐:6=MOBA战斗、7=松林镇副本均为战斗类;1=登录不是。
-	if !tb.Level.IsBattleLevel(6) || !tb.Level.IsBattleLevel(7) {
-		t.Fatal("6/7 应为战斗关卡")
+	// 与 g_关卡.xlsx 的稳定事实对齐:6=MOBA战斗、7=松林镇副本、8=Artic01
+	// 均为战斗类;1=登录不是。ID 8 是 PVE 匹配入口的线上准入门，必须由真实 dist 冒烟钉住。
+	if !tb.Level.IsBattleLevel(6) || !tb.Level.IsBattleLevel(7) || !tb.Level.IsBattleLevel(8) {
+		t.Fatal("6/7/8 应为战斗关卡")
 	}
 	if tb.Level.IsBattleLevel(1) {
 		t.Fatal("1(登录)不应为战斗关卡")

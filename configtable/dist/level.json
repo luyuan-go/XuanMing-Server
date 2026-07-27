@@ -55,6 +55,17 @@
       "allow_exit": true
     },
     {
+      "id": 8,
+      "name": "Artic01",
+      "asset_path": "/Game/ScifiArctic/Maps/ExampleLevel_Artic01.ExampleLevel_Artic01",
+      "game_mode_class": "/Script/Pandora.PandoraPveGameMode",
+      "category": 4,
+      "disable_ui_shortcut": true,
+      "show_in_match_list": true,
+      "team_size": 1,
+      "allow_exit": true
+    },
+    {
       "id": 9,
       "name": "PVP战斗",
       "asset_path": "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon.map_dungeon_level_1_dungeon",

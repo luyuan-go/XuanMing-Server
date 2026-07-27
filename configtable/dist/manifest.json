@@ -1,8 +1,8 @@
 {
-  "version": 20260725001,
-  "generated_at_ms": 1784969384176,
+  "version": 20260727001,
+  "generated_at_ms": 1785157280721,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-r1412+local-uncommitted",
+  "source_rev": "svn-r1502",
   "tables": [
     {
       "name": "item",
@@ -15,8 +15,8 @@
       "name": "level",
       "file": "level.json",
       "proto": "pandora.config.v1.LevelTableData",
-      "checksum": "sha256:20f8edd3cc64e5f857b8cce61cc04d17a35a8399cbc5a8e4104e4b013442a79a",
-      "rows": 9
+      "checksum": "sha256:fd3b1cfa70570659e11ab02d8848eea376aaa8c90994ee7154b50cb20e7dff00",
+      "rows": 10
     },
     {
       "name": "player_level_exp",
