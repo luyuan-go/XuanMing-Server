@@ -1998,3 +1998,39 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
 - **剩余(P2 主体,待用户口令/执行)**:containerd+Calico+钉版本集群重建(-Reset,DS auth
   etcd 权威随空盘重置=genesis 合法路径);边缘 Envoy/TiDB/Sentinel 进集群;退役个人路径
   port-forward 桥;sentinel 栈收养重建;告警 provisioning 进集群。
+
+## 2026-07-28 P2 闭环:containerd+Calico 集群重建 + 边缘 Envoy/TiDB/Sentinel/监控全进集群 + 退役宿主桥(Claude)
+
+- **集群重建(用户拍板"修复到闭环",本地数据可弃)**:minikube delete 后按贴近生产形态重建——
+  **containerd 2.2.1 + Calico v3.31.3 + K8s 钉 v1.35.1** + 16C/40Gi(与旧集群实测外层限额一致)+
+  阿里云 kicbase + `--ports=127.0.0.1:8443:31443`(节点端口发布,退役桥的关键)。墙内网络三卡点:
+  containerd 变体 preload 缺失→逐镜像拉 registry.k8s.io 死路(手动从阿里云镜像源拉 7 核心镜像灌入);
+  Calico 由节点自行从 quay 拉齐;Agones 五镜像 us-docker.pkg.dev 墙外(delete 前从旧节点导出,
+  含 argocd/dex/storage-provisioner 共 9 tar 存 F:\work\image-export)。
+- **全量部署 8 轮迭代,抓获并修复 6 个全新路径 bug**(全部提交 worktree 分支):
+  ①分离进程控制台 GBK→kubectl JSON 回读乱码→configtable 写后校验假不一致(修=强制 UTF-8);
+  ②fresh-genesis 门:白名单补 sentinel 三名+副本数声明式(replicas 2/3);③同门:Job 类别被拒→
+  tidb-init 拆独立文件移门后 [3.6/8];④同门:控制面静态 Pod(etcd-pandora-agones 等)因 profile
+  名含 pandora 撞身份正则→按 kube-system+owner=Node 精确豁免 mirror Pod;⑤Hub digest rollout
+  断言过时(R11 前 Recreate 时代)→纳入 RollingUpdate+deploy-strategy 注解契约(writerlease 单写者);
+  ⑥writer digest provenance 写死 :dev→改按 Deployment 实际引用镜像(ds-allocator 钉定 tag)。
+  另:DS 构建防降级门正确拦截制品库旧包(r1553)覆盖 stage 新二进制,用 PANDORA_DS_LINUX_PKG
+  指向 Packages 最新包(04:05 构建)通过——门本身工作正常。
+- **验证全绿**:节点 Ready(containerd);kube-system 9/9;41+ Pod Running;三 GameServer Ready
+  (battle×2/hub×1,canary 归零);**边缘 Envoy 链路实测**:127.0.0.1:8443→NodePort 31443→
+  pandora-edge-envoy(TLS 握手回 mkcert dev 叶子,客户端地址不变);e2e 自动检测集群内边缘并
+  **跳过宿主桥**(零 port-forward,兜底回落逻辑保他人路径);**Prometheus 22/22 targets 全 up**
+  (21 服务注解全量生效,监控闭环);Sentinel master+2 replicas 全被哨兵识别;TiDB v8.5.1 三库
+  (account/owner/social)schema 落库(tidb-init Job Complete);Argo CD v3.4.5 重装+app 注册。
+- **TiDB 自引导鸡生蛋(live 抓获)**:pd 经 advertise(pd:2379)拨自己,Service 默认只发布 Ready
+  endpoints→CrashLoop 死锁;修=pd/tikv/tidb 三 Service `publishNotReadyAddresses: true`
+  (K8s 自引导标准解法);半状态残留(duplicated store)须三件套同批回收重引导。
+- **退役与清退**:宿主 compose envoy+21 条 port-forward 桥退役(脚本保留,自动回落);孤儿 compose
+  tidb/sentinel 栈容器移除(命名卷保留);udp-relay 重建指向新节点。
+- **残余/交接**:告警 provisioning 需带 PANDORA_ALERT_NTFY_URL 重跑部署段(或手动创建 configmap);
+  局域网多机需重建时用 0.0.0.0:8443:31443 端口发布或 -HostBridge;客户端(UE)真机验证=门 C 待用户;
+  worktree 分支 worktree-k8s-closure-20260728 待合 main(主树有已同步的未提交副本)。
+- **功能性终验(gatecheck 合成 E2E,新集群)**:login→CreateTeam→StartMatch(map8)→QUEUEING→
+  ALLOCATING→**READY t+196.1s**(ds 192.168.2.28:7541)+30s 观测窗干净退出。首跑 4 分钟超时属
+  全新节点零页缓存首冷载(首台分配被弃→授权重试链正常运转,不卡玩家链实证);二跑一次通过。
+  TiDB tidb-init 二次 Job Complete(三库 schema);孤儿 compose tidb/sentinel 栈容器已清退。
