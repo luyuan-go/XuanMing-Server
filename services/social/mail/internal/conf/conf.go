@@ -7,6 +7,10 @@ import (
 	"github.com/luyuancpp/pandora/pkg/config"
 )
 
+// DefaultMaxInstancesPerMail 是单封邮件展开后实例件数的默认上限,
+// 由 Defaults() 与 biz.NewMailUsecase 共用,保证「漏配 = 用默认值」而不是「漏配 = 拒绝一切」。
+const DefaultMaxInstancesPerMail = 128
+
 // Config 是 mail 服务的完整配置。
 type Config struct {
 	config.Base `yaml:",inline" mapstructure:",squash"`
@@ -57,6 +61,23 @@ type MailConf struct {
 	// MaxAttachments 单封邮件附件上限(默认 16)。
 	MaxAttachments int `yaml:"max_attachments,omitempty" json:"max_attachments,omitempty"`
 
+	// MaxInstancesPerMail 单封邮件展开后的**实例件数**上限(默认 128,跨全部附件累计)。
+	//
+	// instance 形态附件的 count 是每件独立实例的件数,领取时在 buildClaimIntent 里
+	// 按 count 循环铸 instance_id 并 append 进 intent。此前只校验 count != 0,
+	// 没有上界 —— count 是 uint32,一封 16 附件的邮件理论上能让该循环跑几百亿次,
+	// 在撞到雪花容量墙之前 intent.Items 的 append 就先把内存吃光(§16.5 容量边界)。
+	//
+	// 上限按累计件数算而不是按单附件算:16 × 单附件上限 才是真实的最坏值,
+	// 只卡单附件挡不住"16 个附件各刷满"。
+	// 装备类邮件的现实件数是个位数,128 已有充足余量。
+	//
+	// 零值语义:**不是「禁止一切实例附件」**。Defaults() 与 biz.NewMailUsecase 都会把
+	// <=0 归一化成 DefaultMaxInstancesPerMail —— 一个上限的零值若等于封禁功能,
+	// 任何漏配 / 直接构造 struct 的路径都会静默把正常业务打死(§14.2 默认值必须保证
+	// 现有行为不变)。
+	MaxInstancesPerMail int `yaml:"max_instances_per_mail,omitempty" json:"max_instances_per_mail,omitempty"`
+
 	// InventoryAddr inventory 服务 gRPC 地址(host:port),领取附件入库用。
 	InventoryAddr string `yaml:"inventory_addr,omitempty" json:"inventory_addr,omitempty"`
 
@@ -98,6 +119,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Mail.MaxAttachments <= 0 {
 		c.Mail.MaxAttachments = 16
+	}
+	if c.Mail.MaxInstancesPerMail <= 0 {
+		c.Mail.MaxInstancesPerMail = DefaultMaxInstancesPerMail
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50009"

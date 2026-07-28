@@ -30,12 +30,22 @@ type snowflakeGen interface {
 type GuildService struct {
 	guildv1.UnimplementedGuildServiceServer
 	uc *biz.GuildUsecase
-	sf snowflakeGen
+
+	// guild_id 与 request_id 是两个互不相干的 ID 空间(公会主键 / 入会申请主键),
+	// 各持一个独立发号器,各走各的 step 池。
+	//
+	// ⚠️ 两者共用同一 nodeID,发出的 ID 会逐位相同(见 etcdnode.ProvideSnowflakeN)。
+	// 必须各自留在自己的表 / 唯一键里,禁止混进同一容器比较。
+	guildSF   snowflakeGen
+	requestSF snowflakeGen
 }
 
 // NewGuildService 构造。
-func NewGuildService(uc *biz.GuildUsecase, sf snowflakeGen) *GuildService {
-	return &GuildService{uc: uc, sf: sf}
+//
+// guildSF / requestSF 由 main.go 经 etcdnode.MustProvideSnowflakeN 取得。测试可传同一实例;
+// 生产接线必须分开,否则失去拆分带来的容量隔离。
+func NewGuildService(uc *biz.GuildUsecase, guildSF, requestSF snowflakeGen) *GuildService {
+	return &GuildService{uc: uc, guildSF: guildSF, requestSF: requestSF}
 }
 
 // CreateGuild 创建公会。创建者以 JWT ctx 为准(R5)。
@@ -44,7 +54,7 @@ func (s *GuildService) CreateGuild(ctx context.Context, req *guildv1.CreateGuild
 	if playerID == 0 {
 		return &guildv1.CreateGuildResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
-	guildID, err := s.uc.CreateGuild(ctx, playerID, req.GetName(), s.sf.Generate())
+	guildID, err := s.uc.CreateGuild(ctx, playerID, req.GetName(), s.guildSF.Generate())
 	if err != nil {
 		return &guildv1.CreateGuildResponse{Code: toProtoCode(err)}, nil
 	}
@@ -57,7 +67,7 @@ func (s *GuildService) ApplyJoin(ctx context.Context, req *guildv1.ApplyJoinRequ
 	if playerID == 0 {
 		return &guildv1.ApplyJoinResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
-	requestID, err := s.uc.ApplyJoin(ctx, playerID, req.GetGuildId(), s.sf.Generate())
+	requestID, err := s.uc.ApplyJoin(ctx, playerID, req.GetGuildId(), s.requestSF.Generate())
 	if err != nil {
 		return &guildv1.ApplyJoinResponse{Code: toProtoCode(err)}, nil
 	}

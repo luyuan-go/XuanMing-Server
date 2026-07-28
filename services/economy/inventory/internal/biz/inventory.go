@@ -26,8 +26,13 @@ import (
 )
 
 // snowflakeGen 是 snowflake.Node 的最小接口(生成装备实例 instance_id,W5 ④)。
+//
+// GenerateInto 是批量预留:一次 CAS 拿整段,替代按件数循环调用 Generate。
+// 语义与逐个 Generate 完全一致(严格递增、互不重复、可与 Generate 混用),
+// 只保证「递增 + 唯一」,不保证相邻连续(跨秒会有空洞)。
 type snowflakeGen interface {
 	Generate() uint64
+	GenerateInto(dst []uint64)
 }
 
 // InventoryUsecase 是 inventory 服务业务逻辑核心。
@@ -137,10 +142,10 @@ func (u *InventoryUsecase) GrantInstances(ctx context.Context, playerID uint64, 
 	if u.sf == nil {
 		return nil, errcode.New(errcode.ErrInvalidArg, "instance inventory not enabled (no id generator)")
 	}
+	// 一次 CAS 预留整段,替代循环调用 Generate len(itemConfigIDs) 次。
+	// 产出严格递增且唯一,但不保证连续(跨秒有空洞);此处只按下标一一对应取用。
 	instanceIDs := make([]uint64, len(itemConfigIDs))
-	for i := range itemConfigIDs {
-		instanceIDs[i] = u.sf.Generate()
-	}
+	u.sf.GenerateInto(instanceIDs)
 	detail := fmt.Sprintf("grant_inst n=%d", len(itemConfigIDs))
 	insts, already, err := u.repo.GrantInstances(ctx, playerID, instanceIDs, itemConfigIDs, u.cfg.Capacity, idempotencyKey, detail)
 	if err != nil {

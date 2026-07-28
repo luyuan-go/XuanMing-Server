@@ -1141,6 +1141,13 @@ type seqGen struct{ next uint64 }
 
 func (g *seqGen) Generate() uint64 { g.next++; return g.next }
 
+// GenerateInto 与真实 snowflake.Node 同语义:逐个取,保证严格递增且唯一。
+func (g *seqGen) GenerateInto(dst []uint64) {
+	for i := range dst {
+		dst[i] = g.Generate()
+	}
+}
+
 // newInstanceUC 构造带实例背包(容量 4)+ 鉴定规则(道具 5001 从 3 属性池抽 2 条)的 usecase,
 // 注入确定性 snowflake + 确定性随机源(randIntn 恒返 0 → 洗牌不变、每条取区间下界),便于断言。
 func newInstanceUC() *InventoryUsecase {

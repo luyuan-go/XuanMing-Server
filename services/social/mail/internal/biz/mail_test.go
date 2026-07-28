@@ -595,6 +595,13 @@ type fakeIDGen struct{ next uint64 }
 
 func (g *fakeIDGen) Generate() uint64 { g.next++; return g.next }
 
+// GenerateInto 与真实 snowflake.Node 同语义:逐个取,保证严格递增且唯一。
+func (g *fakeIDGen) GenerateInto(dst []uint64) {
+	for i := range dst {
+		dst[i] = g.Generate()
+	}
+}
+
 // fakeEscrowConsumer 捕获托管消费调用。
 type fakeEscrowConsumer struct {
 	calls [][]uint64
@@ -746,5 +753,52 @@ func TestDSClaimInstanceRequiresIDGen(t *testing.T) {
 	}
 	if _, _, _, gerr := uc.GetClaimableAttachments(context.Background(), 3, id, 1000); errcode.As(gerr) != errcode.ErrInternal {
 		t.Fatalf("want ErrInternal without id gen, got %v", gerr)
+	}
+}
+
+// ── 实例件数上限(§9.18 写入侧上限 / §16.5 容量边界)──────────────────────────
+
+// TestSendMail_RejectsInstanceCountOverLimit 发送侧必须在**入库前**拒掉超限的实例件数:
+// count 是 uint32,没有上界时 buildClaimIntent 会按它循环铸 ID 并 append,内存先被吃光。
+func TestSendMail_RejectsInstanceCountOverLimit(t *testing.T) {
+	cfg := testCfg()
+	cfg.MaxInstancesPerMail = 10
+	uc := NewMailUsecase(newFakeMailRepo(), cfg, &fakeItemGranter{})
+	uc.SetInstanceIDGen(&fakeIDGen{})
+
+	// 单个附件超限。
+	atts := []*mailv1.MailAttachment{instAtt(5001, 11)}
+	if _, err := uc.SendPersonalMail(context.Background(), 100, 1, "t", "b", atts, 0, 1000, ""); err == nil {
+		t.Fatal("单附件超限必须拒绝")
+	}
+
+	// 多个附件各自不超限、累计超限 —— 只卡单附件挡不住这种。
+	atts = []*mailv1.MailAttachment{instAtt(5001, 6), instAtt(5002, 6)}
+	if _, err := uc.SendPersonalMail(context.Background(), 100, 1, "t", "b", atts, 0, 1000, ""); err == nil {
+		t.Fatal("跨附件累计超限必须拒绝")
+	}
+
+	// 边界:恰好等于上限必须放行。
+	atts = []*mailv1.MailAttachment{instAtt(5001, 4), instAtt(5002, 6)}
+	if _, err := uc.SendPersonalMail(context.Background(), 100, 1, "t", "b", atts, 0, 1000, ""); err != nil {
+		t.Fatalf("恰好等于上限应放行: %v", err)
+	}
+}
+
+// TestNewMailUsecase_ZeroLimitFallsBackToDefault 钉死零值语义:
+// 上限漏配必须退回默认值,而不是变成「拒绝一切实例附件」把正常业务静默打死(§14.2)。
+func TestNewMailUsecase_ZeroLimitFallsBackToDefault(t *testing.T) {
+	cfg := testCfg()
+	cfg.MaxInstancesPerMail = 0 // 漏配
+	uc := NewMailUsecase(newFakeMailRepo(), cfg, &fakeItemGranter{})
+	uc.SetInstanceIDGen(&fakeIDGen{})
+
+	if uc.cfg.MaxInstancesPerMail != conf.DefaultMaxInstancesPerMail {
+		t.Fatalf("零值应归一化为 %d, got %d",
+			conf.DefaultMaxInstancesPerMail, uc.cfg.MaxInstancesPerMail)
+	}
+	atts := []*mailv1.MailAttachment{instAtt(5001, 2)}
+	if _, err := uc.SendPersonalMail(context.Background(), 100, 1, "t", "b", atts, 0, 1000, ""); err != nil {
+		t.Fatalf("漏配上限不应拒绝正常邮件: %v", err)
 	}
 }

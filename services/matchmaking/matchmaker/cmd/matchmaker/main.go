@@ -138,8 +138,13 @@ func main() {
 	helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs)
 
 	// 4. Snowflake(node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
-	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	//
+	// ticket_id 与 match_id 是两个独立 ID 空间，各取一个发号器(共用同一 nodeID / lease)。
+	// ⚠️ 共用 nodeID ⇒ 两个空间会发出逐位相同的 ID，禁止跨空间放进同一容器比较
+	// (见 etcdnode.ProvideSnowflakeN)。
+	sfs, sfCloser := etcdnode.MustProvideSnowflakeN(serviceName, cfg.Node.NodeId, cfg.Snowflake, 2)
 	defer func() { _ = sfCloser.Close() }()
+	ticketSF, matchSF := sfs[0], sfs[1]
 
 	// 5. team gRPC reader(弱依赖:team_addr 留空 → 跳过队伍校验)
 	var reader biz.TeamReader
@@ -233,7 +238,7 @@ func main() {
 	} else {
 		helper.Warnw("msg", "locator_addr_empty", "hint", "match state (MATCHING/BATTLE) will not be reported to player_locator")
 	}
-	uc := biz.NewMatchUsecase(repo, reader, pusher, allocator, sf, locator, cfg.Match)
+	uc := biz.NewMatchUsecase(repo, reader, pusher, allocator, matchSF, locator, cfg.Match)
 	if ctStore != nil {
 		uc.SetConfigTables(ctStore)
 	}
@@ -264,7 +269,7 @@ func main() {
 		helper.Errorw("msg", "match_resume_service_auth_init_failed", "err", authErr)
 		os.Exit(1)
 	}
-	svc := service.NewMatchService(uc, sf, resumeAuth)
+	svc := service.NewMatchService(uc, ticketSF, resumeAuth)
 
 	// 8. gRPC + HTTP(配置表启用时同端口挂热更入口,内部接口不经 Envoy)
 	var ctAdmin *service.ConfigTableAdminService

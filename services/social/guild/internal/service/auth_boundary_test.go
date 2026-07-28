@@ -9,10 +9,10 @@ import (
 	guildv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/guild/v1"
 )
 
-// TestGuildProtectedRPCsRequireJWT 覆盖所有依赖玩家身份的公会入口。nil usecase/snowflake
+// TestGuildProtectedRPCsRequireJWT 覆盖所有依赖玩家身份的公会入口。nil usecase / nil 两个 snowflake
 // 能证明无 JWT 请求在触达业务、数据库或生成 ID 前已被拒绝。
 func TestGuildProtectedRPCsRequireJWT(t *testing.T) {
-	svc := NewGuildService(nil, nil)
+	svc := NewGuildService(nil, nil, nil)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -81,7 +81,7 @@ func TestGuildProtectedRPCsRequireJWT(t *testing.T) {
 // TestGuildServiceRejectsZeroIdentifiers 零目标/公会 ID 必须在 service 边界拒绝，
 // 不能进入权限状态机或数据库锁路径。
 func TestGuildServiceRejectsZeroIdentifiers(t *testing.T) {
-	svc := NewGuildService(nil, nil)
+	svc := NewGuildService(nil, nil, nil)
 	authCtx := context.WithValue(context.Background(), plog.CtxKeyPlayerID, uint64(7))
 
 	tests := []struct {

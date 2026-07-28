@@ -17,12 +17,16 @@ import (
 type GroupService struct {
 	groupv1.UnimplementedGroupServiceServer
 	uc *biz.GroupUsecase
-	sf snowflakeGen
+
+	// group_id 独立成一个 ID 空间,与 GuildService 的 guild_id / request_id 各用各的发号器。
+	// ⚠️ 三者共用同一 nodeID,发出的 ID 会逐位相同(见 etcdnode.ProvideSnowflakeN),
+	// 必须各自留在自己的表 / 唯一键里。
+	groupSF snowflakeGen
 }
 
-// NewGroupService 构造。
-func NewGroupService(uc *biz.GroupUsecase, sf snowflakeGen) *GroupService {
-	return &GroupService{uc: uc, sf: sf}
+// NewGroupService 构造。groupSF 必须与 GuildService 用的两个发号器是不同实例。
+func NewGroupService(uc *biz.GroupUsecase, groupSF snowflakeGen) *GroupService {
+	return &GroupService{uc: uc, groupSF: groupSF}
 }
 
 // CreateGroup 建群。建群者以 JWT ctx 为准(R5)。
@@ -31,7 +35,7 @@ func (s *GroupService) CreateGroup(ctx context.Context, req *groupv1.CreateGroup
 	if playerID == 0 {
 		return &groupv1.CreateGroupResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
-	groupID, err := s.uc.CreateGroup(ctx, playerID, req.GetName(), req.GetMemberIds(), s.sf.Generate())
+	groupID, err := s.uc.CreateGroup(ctx, playerID, req.GetName(), req.GetMemberIds(), s.groupSF.Generate())
 	if err != nil {
 		return &groupv1.CreateGroupResponse{Code: toProtoCode(err)}, nil
 	}

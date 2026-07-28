@@ -102,8 +102,13 @@ func main() {
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
 
 	// 4. Snowflake(guild_id / group_id / request_id 生成；node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
-	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	//
+	// guild_id / request_id / group_id 是三个独立 ID 空间，各取一个发号器
+	// (共用同一 nodeID / lease)。⚠️ 共用 nodeID ⇒ 三个空间会发出逐位相同的 ID，
+	// 禁止跨空间放进同一容器比较(见 etcdnode.ProvideSnowflakeN)。
+	sfs, sfCloser := etcdnode.MustProvideSnowflakeN(serviceName, cfg.Node.NodeId, cfg.Snowflake, 3)
 	defer func() { _ = sfCloser.Close() }()
+	guildSF, requestSF, groupSF := sfs[0], sfs[1], sfs[2]
 
 	// 5. Redis(弱依赖:公会资料读缓存 cache-aside;Ping 失败降级直连 MySQL,cache=nil)。
 	//    单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
@@ -147,8 +152,8 @@ func main() {
 	groupRepo := data.NewMySQLGroupRepo(db)
 	guildUC := biz.NewGuildUsecase(guildRepo, guildCache, pusher, cfg.Guild)
 	groupUC := biz.NewGroupUsecase(groupRepo, cfg.Guild)
-	guildSvc := service.NewGuildService(guildUC, sf)
-	groupSvc := service.NewGroupService(groupUC, sf)
+	guildSvc := service.NewGuildService(guildUC, guildSF, requestSF)
+	groupSvc := service.NewGroupService(groupUC, groupSF)
 
 	// 终态入会申请保留期清理:只增终态行 90 天后批删,增长有界(§9.24,biz/sweep.go)。
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())

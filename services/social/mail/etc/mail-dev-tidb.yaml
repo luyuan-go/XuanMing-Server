@@ -25,7 +25,9 @@ server:
     addr: ":51009"
 
 node:
-  node_id: 1
+  # node_id 必须与 inventory 不同(inventory=1,mail=2)。理由见 mail-dev.yaml 同处注释:
+  # instance_id 是跨服务铸造的 ID 空间,两服务同 node_id 会发出逐位相同的号。
+  node_id: 2
   # Redis:会话现行性门只读 login 会话权威 pandora:sess(R5 复审 P0-1,共享实例)。
   redis_client:
     host: "127.0.0.1:6380"

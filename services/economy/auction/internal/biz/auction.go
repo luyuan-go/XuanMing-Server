@@ -98,8 +98,17 @@ type AuctionUsecase struct {
 	slots  data.OwnerSlotLimiter
 	ledger SettlementLedger
 	events AuctionEventPusher // 弱依赖,可为 nil
-	sf     snowflakeGen
 	cfg    conf.AuctionConf
+
+	// order_id 与 match_id 是两个互不相干的 ID 空间(各自独立的表与主键:
+	// auction_orders.order_id / auction_matches.match_id),各持一个独立发号器。
+	// 拆开的实际收益在撮合链:一笔大单跨越 N 档对手盘会在 matchOnce 的循环里
+	// 连铸 N 个 match_id,与并发挂单的 order_id 各走各的 step 池(每池 32768/s)。
+	//
+	// ⚠️ 两者共用同一 nodeID,发出的 ID 会逐位相同(见 etcdnode.ProvideSnowflakeN)。
+	// order_id 与 match_id 必须各自留在自己的表 / 唯一键里,禁止混进同一容器比较。
+	orderSF snowflakeGen
+	matchSF snowflakeGen
 
 	marketLocker MarketLocker // 跨实例单写者锁(nil = 仅进程内串行)
 
@@ -151,7 +160,12 @@ const ownerSlotWriteTimeout = 2 * time.Second
 const auditDispatchTimeout = 5 * time.Second
 
 // NewAuctionUsecase 构造。ledger 为 nil 时退化为 Noop;events 允许 nil。
-func NewAuctionUsecase(repo data.AuctionRepo, book data.BookStore, slots data.OwnerSlotLimiter, ledger SettlementLedger, events AuctionEventPusher, sf snowflakeGen, cfg conf.AuctionConf) *AuctionUsecase {
+// NewAuctionUsecase 构造 auction 业务核心。
+//
+// orderSF / matchSF 是 order_id 与 match_id 两个独立 ID 空间的发号器,由 main.go 经
+// etcdnode.MustProvideSnowflakeN 取得(共用 nodeID、各自独立 step 池)。两者可以传同一个
+// 实例(测试常这么做),但生产接线必须分开,否则失去拆分带来的容量隔离。
+func NewAuctionUsecase(repo data.AuctionRepo, book data.BookStore, slots data.OwnerSlotLimiter, ledger SettlementLedger, events AuctionEventPusher, orderSF, matchSF snowflakeGen, cfg conf.AuctionConf) *AuctionUsecase {
 	if ledger == nil {
 		ledger = NoopSettlementLedger{}
 	}
@@ -182,7 +196,8 @@ func NewAuctionUsecase(repo data.AuctionRepo, book data.BookStore, slots data.Ow
 		slots:      slots,
 		ledger:     ledger,
 		events:     events,
-		sf:         sf,
+		orderSF:    orderSF,
+		matchSF:    matchSF,
 		cfg:        cfg,
 		auditQueue: make(chan *auctionv1.AuctionOrder, cfg.AuditQueueCapacity),
 		auditStop:  make(chan struct{}),
@@ -328,7 +343,7 @@ func (u *AuctionUsecase) submit(ctx context.Context, ownerID uint64, side data.S
 
 	now := nowMs()
 	rec := &data.OrderRecord{
-		OrderID:        u.sf.Generate(),
+		OrderID:        u.orderSF.Generate(),
 		MarketID:       marketID,
 		OwnerID:        ownerID,
 		Side:           side,
@@ -452,7 +467,7 @@ func (u *AuctionUsecase) match(ctx context.Context, incoming *data.OrderRecord) 
 			break // 无同物品非己方对手盘，或最优价不交叉。
 		}
 		m, updatedIncoming, updatedResting, reserved, rerr := u.repo.ReserveMatch(
-			ctx, incoming.MarketID, incoming.OrderID, resting.OrderID, u.sf.Generate(), nowMs())
+			ctx, incoming.MarketID, incoming.OrderID, resting.OrderID, u.matchSF.Generate(), nowMs())
 		if rerr != nil {
 			return rerr
 		}

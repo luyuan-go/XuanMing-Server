@@ -781,7 +781,9 @@ func newTestUsecase(t *testing.T) (*AuctionUsecase, *fakeRepo, *trackLedger) {
 	book := data.NewRedisBookStore(rdb)
 	slots := data.NewRedisOwnerSlotLimiter(rdb)
 	ledger := &trackLedger{}
-	uc := NewAuctionUsecase(repo, book, slots, ledger, nil, &seqGen{n: 1000}, conf.AuctionConf{})
+	// order_id / match_id 两个独立空间各一个发号器。起点相同 = 忠实模拟生产:
+	// 两者共用 nodeID,会发出逐位相同的 ID,业务不得跨空间比较。
+	uc := NewAuctionUsecase(repo, book, slots, ledger, nil, &seqGen{n: 1000}, &seqGen{n: 1000}, conf.AuctionConf{})
 	t.Cleanup(uc.Close)
 	return uc, repo, ledger
 }
@@ -1005,7 +1007,8 @@ func TestSubmit_RegistryHealUsesCanonicalOrderID(t *testing.T) {
 		data.NewRedisOwnerSlotLimiter(rdb),
 		ledger,
 		nil,
-		&seqGen{n: 1000},
+		&seqGen{n: 1000}, // order_id
+		&seqGen{n: 1000}, // match_id(独立空间,序列可与 order_id 重合)
 		conf.AuctionConf{},
 	)
 	t.Cleanup(uc.Close)
@@ -1276,7 +1279,7 @@ func newFailingBookUsecase(t *testing.T) (*AuctionUsecase, *fakeRepo, *trackLedg
 		addErr:    errors.New("test redis add failed"),
 		removeErr: errors.New("test redis remove failed"),
 	}
-	uc := NewAuctionUsecase(repo, book, data.NewRedisOwnerSlotLimiter(rdb), ledger, nil, &seqGen{n: 1000}, conf.AuctionConf{})
+	uc := NewAuctionUsecase(repo, book, data.NewRedisOwnerSlotLimiter(rdb), ledger, nil, &seqGen{n: 1000}, &seqGen{n: 1000}, conf.AuctionConf{})
 	t.Cleanup(uc.Close)
 	return uc, repo, ledger
 }
@@ -1848,7 +1851,7 @@ func TestMatchEventOutbox_WaitsForTerminalEscrowRelease(t *testing.T) {
 
 func TestAuditPush_NeverBlocksMarketOrRepairCaller(t *testing.T) {
 	events := &blockingAuditEvents{entered: make(chan struct{}), release: make(chan struct{})}
-	uc := NewAuctionUsecase(nil, nil, nil, nil, events, &seqGen{}, conf.AuctionConf{AuditQueueCapacity: 1})
+	uc := NewAuctionUsecase(nil, nil, nil, nil, events, &seqGen{}, &seqGen{}, conf.AuctionConf{AuditQueueCapacity: 1})
 	defer uc.Close()
 	defer close(events.release) // 后注册，先释放被阻塞的 worker，再等待 Close。
 
@@ -1990,7 +1993,7 @@ func TestOwnerOrderLimit_PruneReadFailureIsFailClosed(t *testing.T) {
 		t.Fatalf("seed stale slot: ok=%v err=%v", ok, err)
 	}
 	uc := NewAuctionUsecase(repo, data.NewRedisBookStore(rdb), slots, &trackLedger{}, nil,
-		&seqGen{n: 600}, conf.AuctionConf{MaxActiveOrdersPerPlayer: 1})
+		&seqGen{n: 600}, &seqGen{n: 600}, conf.AuctionConf{MaxActiveOrdersPerPlayer: 1})
 	t.Cleanup(uc.Close)
 	if _, err := uc.PlaceOrder(ctx, 89, 101, 200, 1, 10, "fail-closed"); errcode.As(err) != errcode.ErrAuctionOrderLimit {
 		t.Fatalf("uncertain authority must stay full: err=%v code=%d", err, errcode.As(err))

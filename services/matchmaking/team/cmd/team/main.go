@@ -97,8 +97,13 @@ func main() {
 	helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs)
 
 	// 4. Snowflake(node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
-	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	//
+	// team_id 与 invite_id 是两个独立 ID 空间，各取一个发号器(共用同一 nodeID / lease)。
+	// ⚠️ 共用 nodeID ⇒ 两个空间会发出逐位相同的 ID，禁止跨空间放进同一容器比较
+	// (见 etcdnode.ProvideSnowflakeN)。
+	sfs, sfCloser := etcdnode.MustProvideSnowflakeN(serviceName, cfg.Node.NodeId, cfg.Snowflake, 2)
 	defer func() { _ = sfCloser.Close() }()
+	teamSF, inviteSF := sfs[0], sfs[1]
 
 	// 5. Kafka producer → kafkaPusher。
 	// kafka.brokers 非空表示启用队伍推送；此时 producer 是启动强依赖。初始化失败必须在
@@ -140,7 +145,7 @@ func main() {
 	} else if closeCell != nil {
 		defer func() { _ = closeCell() }()
 	}
-	svc := service.NewTeamService(uc, sf)
+	svc := service.NewTeamService(uc, teamSF, inviteSF)
 
 	// 7. gRPC + HTTP
 	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):客户端面请求 jti 必须是 login

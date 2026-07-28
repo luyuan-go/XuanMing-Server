@@ -18,7 +18,15 @@ server:
     addr: ":51009"
 
 node:
-  node_id: 1
+  # node_id 必须与 inventory 不同(inventory=1,mail=2)。
+  # 理由:instance_id 是**跨服务**铸造的 ID 空间 —— inventory 在 GrantInstances 里铸,
+  # mail 在 buildClaimIntent 里也铸;两批实例可能汇进同一玩家的同一个背包段,
+  # 而 snowflake 的唯一性只在「同 node_id 的同一个发号器内」成立。两服务都用 node_id: 1
+  # 时发出的号逐位相同(pkg/snowflake/etcdnode.ProvideSnowflakeN 契约),汇合时会被
+  # data/bag_apply.go 的 duplicate instance 检查 fail-closed 拒掉,玩家领不了那封邮件。
+  # ⚠️ etcd 模式救不了它:etcd 的 nodeID 空间按服务名隔离、跨服务**刻意复用**,
+  # 两服务必须显式共用同一个 etcd_service_name 才能互斥。
+  node_id: 2
   # Redis:会话现行性门只读 login 会话权威 pandora:sess(R5 复审 P0-1,共享实例)。
   redis_client:
     host: "127.0.0.1:6380"

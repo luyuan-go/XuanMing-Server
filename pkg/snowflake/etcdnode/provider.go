@@ -2,6 +2,7 @@ package etcdnode
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 
@@ -44,8 +45,46 @@ func ProvideSnowflake(
 	staticNodeID uint32,
 	sf config.SnowflakeConf,
 ) (*snowflake.Node, io.Closer, error) {
+	nodes, closer, err := ProvideSnowflakeN(ctx, service, staticNodeID, sf, 1)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nodes[0], closer, nil
+}
+
+// ProvideSnowflakeN 与 ProvideSnowflake 完全同一套 nodeID 获取 + fencing 逻辑,
+// 区别只在于返回 n 个**彼此独立**的发号器,它们**共用同一个 nodeID**。
+//
+// 用途:一个服务内有多个互不相干的 ID 空间(如 team 的 team_id 与 invite_id)时,
+// 每个空间各持一个 *snowflake.Node。每个 Node 有自己的 15bit step 池,
+// 因此合计发号上限是 n × 32768/s(实测线性叠加),而不是被切成 n 份。
+//
+// ⚠️ 共用 nodeID 的直接后果:**不同 Node 会发出逐位相同的 ID**——同一秒里
+// 各自的第 K 个号必然相同,这是常态而非小概率。因此:
+//   - 每个 ID 空间的值必须存放在各自独立的表 / key 前缀 / 唯一键里;
+//   - 禁止把两个空间的 ID 放进同一张表、同一个 map 或同一个唯一键;
+//   - **跨服务共享的 ID 空间不适用本函数**(例:instance_id 由 inventory 与 mail
+//     两个服务共同铸造,且 player_item_instance.instance_id 是全局主键)——
+//     那种空间的唯一性只能靠各铸造方持有不同 nodeID 来保证,本地拆多少个 Node 都无效。
+//
+// n 个发号器在每个可观察维度上完全等价(同 nodeID、同布局、各自独立 state),
+// 因此返回切片的下标顺序不承载语义,调用方取哪个都一样。
+//
+// 无论 n 为多少,etcd 模式下都只抢占**一个** nodeID、只维护**一个** lease、
+// 只有**一处** Lost() → 退出,失败面不随 n 增长。
+func ProvideSnowflakeN(
+	ctx context.Context,
+	service string,
+	staticNodeID uint32,
+	sf config.SnowflakeConf,
+	n int,
+) ([]*snowflake.Node, io.Closer, error) {
+	if n <= 0 {
+		return nil, nil, fmt.Errorf("etcdnode: snowflake count must be >= 1, got %d", n)
+	}
+
 	if sf.NodeIDSource != "etcd" {
-		return snowflake.NewNode(uint64(staticNodeID)), noopCloser{}, nil
+		return buildNodes(uint64(staticNodeID), n, nil), noopCloser{}, nil
 	}
 
 	holder, err := Acquire(ctx, Config{
@@ -67,7 +106,23 @@ func ProvideSnowflake(
 		os.Exit(1)
 	}()
 
-	return holder.Node(), holder, nil
+	return buildNodes(holder.NodeID(), n, holder.Node()), holder, nil
+}
+
+// buildNodes 用同一个 nodeID 建 n 个彼此独立的发号器。
+// first 非 nil 时复用它作为第 0 个——Acquire 内部已经建好一个 Node,不必丢弃重建。
+func buildNodes(nodeID uint64, n int, first *snowflake.Node) []*snowflake.Node {
+	nodes := make([]*snowflake.Node, n)
+	if first != nil {
+		nodes[0] = first
+	} else {
+		nodes[0] = snowflake.NewNode(nodeID)
+	}
+	for i := 1; i < n; i++ {
+		// 同 nodeID、各自独立的 state → 各自独立的 step 池。
+		nodes[i] = snowflake.NewNode(nodeID)
+	}
+	return nodes
 }
 
 // MustProvideSnowflake 是 ProvideSnowflake 的便捷版:自管 context,失败(仅 etcd 模式可能)
@@ -88,6 +143,26 @@ func MustProvideSnowflake(
 		os.Exit(1)
 	}
 	return node, closer
+}
+
+// MustProvideSnowflakeN 是 ProvideSnowflakeN 的便捷版,语义与约束见 ProvideSnowflakeN。
+// 服务内每个独立 ID 空间取一个,例如 team 的 team_id / invite_id:
+//
+//	sfs, sfCloser := etcdnode.MustProvideSnowflakeN(serviceName, cfg.Node.NodeId, cfg.Snowflake, 2)
+//	defer func() { _ = sfCloser.Close() }()
+//	teamSF, inviteSF := sfs[0], sfs[1]
+func MustProvideSnowflakeN(
+	service string,
+	staticNodeID uint32,
+	sf config.SnowflakeConf,
+	n int,
+) ([]*snowflake.Node, io.Closer) {
+	nodes, closer, err := ProvideSnowflakeN(context.Background(), service, staticNodeID, sf, n)
+	if err != nil {
+		klog.Errorf("[snowflake] MustProvideSnowflakeN failed service=%s n=%d err=%v", service, n, err)
+		os.Exit(1)
+	}
+	return nodes, closer
 }
 
 // etcdKeyService 决定 etcd key 命名空间:显式配了 etcd_service_name 用它,否则用服务名。

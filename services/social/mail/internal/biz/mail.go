@@ -59,8 +59,13 @@ type TransferEscrowConsumer interface {
 
 // instanceIDGen DS 领取意图展开时给 instance 形态附件铸实例 ID(雪花;一次铸定,
 // 意图落库后重放返回同一批 ID——bag journal 内容指纹去重的前提)。
+//
+// GenerateInto 是批量预留:一次 CAS 拿整段,替代按件数循环调用 Generate。
+// 语义与逐个 Generate 完全一致(严格递增、互不重复、可与 Generate 混用),
+// 只保证「递增 + 唯一」,不保证相邻连续(跨秒会有空洞)。
 type instanceIDGen interface {
 	Generate() uint64
+	GenerateInto(dst []uint64)
 }
 
 // MailUsecase 是 mail 服务业务逻辑核心。
@@ -79,6 +84,12 @@ type MailUsecase struct {
 // NewMailUsecase 构造。granter 为 nil 时仅允许 AllowNoopGrant 配置下空领(测试用)。
 // instGranter 用 setter 注入(SetInstanceGranter),保持构造签名不变。
 func NewMailUsecase(repo data.MailRepo, cfg conf.MailConf, granter ItemGranter) *MailUsecase {
+	// 归一化实例件数上限:零值必须退回默认值,而不是变成「拒绝一切实例附件」。
+	// conf.Defaults() 已覆盖 yaml 路径,这里再兜一次直接构造 MailConf 的调用方
+	// (测试、内嵌装配),避免漏配把正常业务静默打死(§14.2)。
+	if cfg.MaxInstancesPerMail <= 0 {
+		cfg.MaxInstancesPerMail = conf.DefaultMaxInstancesPerMail
+	}
 	return &MailUsecase{repo: repo, cfg: cfg, granter: granter}
 }
 
@@ -381,6 +392,7 @@ func (u *MailUsecase) loadIntentItems(ctx context.Context, playerID, mailID uint
 // 任一附件未识别 → 整封 fail-closed 9606(与直连链同语义,不静默跳过)。
 func (u *MailUsecase) buildClaimIntent(rec *mailv1.MailContentStorageRecord) (*mailv1.MailClaimIntentStorageRecord, error) {
 	intent := &mailv1.MailClaimIntentStorageRecord{}
+	var instanceTotal uint64 // instance 形态跨全部附件的累计件数
 	for i, a := range rec.GetAttachments() {
 		switch {
 		case a.GetStack() != nil:
@@ -395,9 +407,22 @@ func (u *MailUsecase) buildClaimIntent(rec *mailv1.MailContentStorageRecord) (*m
 			if n == 0 {
 				n = 1
 			}
+			// 存量行兜底:同口径上限在发送侧已拦截,但本次改动**之前**入库的邮件
+			// 可能带着无界 count。必须在分配与铸号**之前**判定,宁可整封 fail-closed
+			// 让运营修数据,也不能在这里把内存吃光(§16.5 容量边界)。
+			instanceTotal += uint64(n)
+			if instanceTotal > uint64(u.cfg.MaxInstancesPerMail) {
+				return nil, errcode.New(errcode.ErrInvalidArg,
+					"attachment[%d] instance count exceeds per-mail limit: total=%d max=%d",
+					i, instanceTotal, u.cfg.MaxInstancesPerMail)
+			}
+			// 一次 CAS 预留 n 个 ID,替代循环调用 Generate n 次。
+			// 产出严格递增且唯一,但不保证连续——此处只按下标取用,不依赖连续性。
+			ids := make([]uint64, n)
+			u.idGen.GenerateInto(ids)
 			for j := uint32(0); j < n; j++ {
 				intent.Items = append(intent.Items, &bagv1.BagItem{
-					ItemConfigId: inst.GetItemConfigId(), Count: 1, InstanceId: u.idGen.Generate(),
+					ItemConfigId: inst.GetItemConfigId(), Count: 1, InstanceId: ids[j],
 				})
 			}
 		case a.GetTransfer() != nil:
@@ -601,6 +626,7 @@ func (u *MailUsecase) buildPayload(title, body string, atts []*mailv1.MailAttach
 	// 发送侧校验附件形态:body 必须是已识别分支且 config_id/count 有效,
 	// 拒绝空 body 入库(否则领取侧只能 fail-closed,邮件永远领不了)。
 	seenInstances := map[uint64]bool{}
+	var instanceTotal uint64 // instance 形态跨全部附件的累计件数,对齐 MaxInstancesPerMail
 	for i, a := range atts {
 		var cfgID, cnt uint32
 		switch {
@@ -633,6 +659,19 @@ func (u *MailUsecase) buildPayload(title, body string, atts []*mailv1.MailAttach
 		}
 		if cfgID == 0 || cnt == 0 {
 			return nil, errcode.New(errcode.ErrInvalidArg, "attachment[%d] item_config_id/count required", i)
+		}
+		// instance 形态的 count = 独立实例件数,领取时会按它循环铸 instance_id 并
+		// append 进 intent。必须在**入库前**卡住累计上限:count 是 uint32,没有上界时
+		// 一封邮件就能让 buildClaimIntent 的循环跑到内存耗尽(§9.18 写入侧上限 /
+		// §16.5 容量边界)。发送侧拒掉 = 坏数据永不入库;领取侧另有一道同口径的
+		// fail-closed 兜住存量行。
+		if a.GetInstance() != nil {
+			instanceTotal += uint64(cnt)
+			if instanceTotal > uint64(u.cfg.MaxInstancesPerMail) {
+				return nil, errcode.New(errcode.ErrInvalidArg,
+					"attachment[%d] instance count exceeds per-mail limit: total=%d max=%d",
+					i, instanceTotal, u.cfg.MaxInstancesPerMail)
+			}
 		}
 	}
 	rec := &mailv1.MailContentStorageRecord{Title: title, Body: body, Attachments: atts, InstanceGrantKey: instanceGrantKey}

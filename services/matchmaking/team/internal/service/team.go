@@ -26,7 +26,14 @@ import (
 type TeamService struct {
 	teamv1.UnimplementedTeamServiceServer
 	uc *biz.TeamUsecase
-	sf snowflakeGen
+
+	// team_id 与 invite_id 是两个互不相干的 ID 空间(各自独立的 Redis key 前缀),
+	// 各持一个独立发号器,各走各的 step 池。
+	//
+	// ⚠️ 两者共用同一 nodeID,发出的 ID 会逐位相同(见 etcdnode.ProvideSnowflakeN)。
+	// team_id 与 invite_id 必须各自留在自己的 key 空间里,禁止混进同一个 map / 唯一键比较。
+	teamSF   snowflakeGen
+	inviteSF snowflakeGen
 }
 
 // snowflakeGen 是 snowflake.Node 的最小接口,避免 service 直接依赖 snowflake 包。
@@ -35,8 +42,11 @@ type snowflakeGen interface {
 }
 
 // NewTeamService 构造 TeamService。
-func NewTeamService(uc *biz.TeamUsecase, sf snowflakeGen) *TeamService {
-	return &TeamService{uc: uc, sf: sf}
+//
+// teamSF / inviteSF 由 main.go 经 etcdnode.MustProvideSnowflakeN 取得。测试可传同一实例;
+// 生产接线必须分开,否则失去拆分带来的容量隔离。
+func NewTeamService(uc *biz.TeamUsecase, teamSF, inviteSF snowflakeGen) *TeamService {
+	return &TeamService{uc: uc, teamSF: teamSF, inviteSF: inviteSF}
 }
 
 // ── 9 RPC ─────────────────────────────────────────────────────────────────────
@@ -48,7 +58,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, _ *teamv1.CreateTeamReques
 		return &teamv1.CreateTeamResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 
-	teamID := s.sf.Generate()
+	teamID := s.teamSF.Generate()
 	rec, err := s.uc.CreateTeam(ctx, teamID, playerID)
 	if err != nil {
 		return &teamv1.CreateTeamResponse{Code: toProtoCode(err)}, nil
@@ -70,7 +80,7 @@ func (s *TeamService) Invite(ctx context.Context, req *teamv1.InviteRequest) (*t
 		return &teamv1.InviteResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
 
-	inviteID := s.sf.Generate()
+	inviteID := s.inviteSF.Generate()
 	rec, err := s.uc.Invite(ctx, inviteID, req.GetTeamId(), inviterID, req.GetTargetPlayerId())
 	if err != nil {
 		return &teamv1.InviteResponse{Code: toProtoCode(err)}, nil

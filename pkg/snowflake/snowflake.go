@@ -75,6 +75,66 @@ func (n *Node) Generate() uint64 {
 	}
 }
 
+// GenerateInto 一次 CAS 预留一整段 ID 并填满 dst,替代「循环调用 Generate len(dst) 次」。
+//
+// 与循环调用 Generate 的差别**只在开销,不在语义**:
+//   - 每段只做一次 CAS 和一次取时钟,而不是每个 ID 各一次;高并发下还省掉大量 CAS 重试;
+//   - 产出严格单调递增,且与同一 Node 上其它 Generate / GenerateInto 调用者互不重复
+//     (CAS 成功即独占整段,其它调用者只能从段尾之后继续)。
+//
+// dst 内相邻 ID **不保证连续**:一批跨越秒边界时时间段会跳变,中间有空洞。
+// 调用方只能依赖「严格递增 + 唯一」,不得假设 dst[i+1] == dst[i]+1。
+//
+// 容量与阻塞行为同 Generate:每 Node 每秒 32768 个上限不变;一批超过当前秒剩余额度时,
+// 先填满本秒再阻塞等下一秒继续 —— 与循环调用 Generate 完全一致,不会更差。
+//
+// len(dst) == 0 直接返回,不改动任何状态。
+//
+// ⚠️ dst 由调用方分配:本方法不按外部输入决定分配大小,避免把「客户端可控的数量」
+// 变成内存 DoS 面(§9.18 写入侧上限 / §16.5 容量边界)。批量入口仍须自行校验数量上限。
+func (n *Node) GenerateInto(dst []uint64) {
+	filled := 0
+	for filled < len(dst) {
+		old := n.state.Load()
+		lastTime := old >> timeShift
+		now := nowEpoch()
+
+		// base = 本段第一个 ID;avail = 本秒还能给出的个数(恒 >= 1,故不会空转)
+		var base, avail uint64
+		switch {
+		case now > lastTime:
+			// 时钟前进:换新秒,本段从 step 0 起,整池可用
+			base = now<<timeShift | n.nodeShifted
+			avail = stepMask + 1
+		case old&stepMask < stepMask:
+			// 同一秒(或时钟回拨):从 old+1 起,消费 lastTime 秒剩余的 step 池
+			base = old + 1
+			avail = stepMask - (old & stepMask)
+		default:
+			// 当前秒 step 耗尽:阻塞等真实时钟越过 lastTime 后重试
+			n.waitNextTime(lastTime)
+			continue
+		}
+
+		take := uint64(len(dst) - filled)
+		if take > avail {
+			take = avail
+		}
+		// last 是本段最后一个 ID。两条路径都满足 last >= base > old(新秒时间段更大;
+		// 同秒时 base = old+1),且 take <= avail 保证 step 不会溢出进 node 段。
+		last := base + take - 1
+
+		if !n.state.CompareAndSwap(old, last) {
+			continue // 并发竞争,重读状态再来
+		}
+		// CAS 成功 ⇒ 独占 [base, last],可安全逐个写出
+		for i := uint64(0); i < take; i++ {
+			dst[filled] = base + i
+			filled++
+		}
+	}
+}
+
 // waitNextTime 阻塞直到真实时钟越过 last(秒级粒度,sleep 1ms 轮询)。
 func (n *Node) waitNextTime(last uint64) {
 	for nowEpoch() <= last {

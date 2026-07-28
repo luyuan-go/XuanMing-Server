@@ -161,9 +161,16 @@ func main() {
 	cancel()
 	helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs)
 
-	// 5. Snowflake(order_id / match_id 生成；node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
-	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	// 5. Snowflake(node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
+	//
+	// order_id 与 match_id 是两个独立 ID 空间，各取一个发号器：拍卖是全服最高频写入域，
+	// 一笔大单在撮合循环里会连铸多个 match_id，与并发挂单的 order_id 各走各的 step 池
+	// (每池 32768/s)。两者共用同一 nodeID、同一 lease，失租仍只有一处退出。
+	// ⚠️ 共用 nodeID ⇒ 两个空间会发出逐位相同的 ID，各自留在 auction_orders /
+	// auction_matches 里，禁止混进同一容器比较（见 etcdnode.ProvideSnowflakeN）。
+	sfs, sfCloser := etcdnode.MustProvideSnowflakeN(serviceName, cfg.Node.NodeId, cfg.Snowflake, 2)
 	defer func() { _ = sfCloser.Close() }()
+	orderSF, matchSF := sfs[0], sfs[1]
 
 	// 6. match 事件由 MySQL outbox 保证至少一次；broker 暂时不可用时 producer 可延迟重建，
 	// marker 绝不清除。audit 仍是弱依赖。只有显式本地开关才允许完全禁用 match 事件。
@@ -217,7 +224,7 @@ func main() {
 	repo := data.NewMySQLAuctionRepo(router)
 	book := data.NewRedisBookStore(rdb)
 	ownerSlots := data.NewRedisOwnerSlotLimiter(rdb)
-	uc := biz.NewAuctionUsecase(repo, book, ownerSlots, ledger, events, sf, cfg.Auction)
+	uc := biz.NewAuctionUsecase(repo, book, ownerSlots, ledger, events, orderSF, matchSF, cfg.Auction)
 	defer uc.Close() // 必须先停 audit worker，再由更早注册的 defer 关闭 Kafka producer。
 	if mr, ok := biz.NewMarketRouter(cfg.CellRoute.MarketSelf, cfg.CellRoute.MarketPeerList()); ok {
 		uc.SetMarketRouter(mr)
