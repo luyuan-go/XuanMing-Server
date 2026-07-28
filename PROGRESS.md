@@ -1958,3 +1958,43 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
   空转;取值修订:graceful delete 被 30s 终止宽限主导,目标应为 ~45s,18s 样本属 force-kill 场景);
   A3 冷加载实测数据入档(22/48/49~58/84/>120s 五档)。**仍 OPEN:门 C(真实 UE 客户端×3)、观察窗口、
   INC-002 完整一局 memory.peak、A10 定谳(节点 08:20Z 重启原因+无负载对照)、A11 FogOfWar Ensure**。
+
+## 2026-07-28 本地 K8s 闭环批① + 宿主重启事故恢复(Claude)
+
+- **宿主重启事故(当日)**:重启后 Docker Desktop 反复启动崩溃,根因=本机 360 过滤驱动拦死
+  AF_UNIX socket 文件的删除/改名(Error 1920,连新建 socket 都删不掉)→ 每次退出残留的
+  dockerInference/engine.sock 清不掉,下次启动必崩;连带 settings-store.json 的
+  `CustomWslDistroDir` 被崩溃重置为默认 C: 路径,Docker 挂上全新空盘(daemon 零容器,
+  像整个集群没了)。**处置**:改名 socket 父目录(%LOCALAPPDATA%\Docker\run 与
+  docker-secrets-engine,墓地保留)+ 改回 F:\docker\wsl\DockerDesktopWSL(有 .bak 备份)。
+  466GB 数据盘无损,minikube 43d 集群、MySQL 10 库、Agones 3 GS Ready 全部原样恢复,
+  31 业务 Pod 收敛 Running。**根治需用户在 360 卸载/白名单 Docker,未做前每次异常退出
+  可能须重复绕法**(教训:daemon 空≠数据丢,先查 CustomWslDistroDir 与两处 vhdx;
+  绝不能在空 daemon 上跑 minikube start)。
+- **P0 镜像/清单对齐(worktree-k8s-closure-20260728 分支 1a276cd)**:services.yaml 三行
+  :dev 钉定为 live 实测 tag(matchmaker/matchmaker-pve=geed8ce2c6b5d,
+  ds-allocator=geed8ce2-p03-…-062100,注释含 imageID)——re-apply 不再回滚
+  INC-20260727-001 修复镜像(与 162bafc1 的 fleet yaml 钉定同一目的收口)。
+- **P1 六项 live 问题**:①loki 1174 次 CrashLoop 终结(删 Pod 换新 emptyDir 清坏 WAL,
+  1/1 Ready);②50001 断链=bridge 未跑,重启后重建 21 条 port-forward 全 LISTEN(含 login);
+  ③redis-master allkeys-lru→noeviction 运行时止血(**容器 args 仍旧,重启回漂;根治=用
+  F: 的 docker-compose.redis-sentinel.yml 收养重建,命名卷保数据,按 AGENTS §11.1 由
+  用户/Codex 执行**);④孤儿 redis-cluster 栈(rc-node-1..6+rc-init)已按拍板拆除;
+  ⑤镜像漂移=上条 P0;⑥监控进集群:新增 deploy/k8s/infra/monitoring.yaml(Prometheus
+  kubernetes_sd pod 角色注解驱动 + Grafana 数据源 provisioning,dev-grade emptyDir,
+  版本与 compose 一致),services.yaml 21 个 Deployment 全部加 prometheus.io/* 注解,
+  start.ps1 接线(apply/Down/genesis 白名单)。live 已 apply:三 Pod Ready,hub-allocator
+  抓取点自动发现且 up(其余 20 服务的注解随下次标准部署生效——**不可手动 raw-apply
+  services.yaml**,会抹掉部署期注入的 pandora.dev/image-digest 注解)。告警 provisioning
+  留 compose 侧(依赖 PANDORA_ALERT_NTFY_URL env,进集群需 Secret 注入,单列待办)。
+- **P2 前置(containerd 化,同分支 +a91b28c)**:start.ps1/e2e_k8s.ps1 支持
+  PANDORA_MINIKUBE_PROFILE 显式覆盖与 PANDORA_MINIKUBE_DRIVER/RUNTIME/CNI/K8S_VERSION
+  拓扑参数(仅新建 profile 生效,既有集群空参续跑);节点内镜像 untag/拉取按 runtime 分流
+  (docker CLI vs crictl);镜像存在性/digest 统一 `minikube image ls --format json` 口径
+  (docker runtime live 实测与 docker inspect .Id 一致;裸 hex→sha256: 归一修复系 live
+  验证抓获)。**containerd 分支待 P2 真集群重建(-Reset)首跑验证**;
+  deploy/ds/build-image-minikube.ps1 默认路径依赖 docker-env,containerd 下 fail-fast,
+  须 -BuildOnHost。
+- **剩余(P2 主体,待用户口令/执行)**:containerd+Calico+钉版本集群重建(-Reset,DS auth
+  etcd 权威随空盘重置=genesis 合法路径);边缘 Envoy/TiDB/Sentinel 进集群;退役个人路径
+  port-forward 桥;sentinel 栈收养重建;告警 provisioning 进集群。
