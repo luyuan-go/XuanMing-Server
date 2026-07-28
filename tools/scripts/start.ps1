@@ -4093,10 +4093,15 @@ function Get-MinikubeImageIds([string[]]$MinikubeArgs = @()) {
     try { $list = $json | ConvertFrom-Json } catch { return $null }
     $map = @{}
     foreach ($entry in $list) {
+        $id = [string]$entry.id
+        # image ls --format json 的 id 是裸 64 位 hex(docker runtime 实测 2026-07-28,与
+        # docker image inspect .Id 去前缀后逐位一致);统一补 sha256: 前缀对齐 inspect /
+        # kubelet imageID 口径,已带前缀的形态原样保留。
+        if ($id -cmatch '^[0-9a-f]{64}$') { $id = "sha256:$id" }
         foreach ($tag in @($entry.repoTags)) {
             if ([string]::IsNullOrWhiteSpace($tag)) { continue }
             $name = $tag -replace '^docker\.io/', ''
-            $map[$name] = [string]$entry.id
+            $map[$name] = $id
         }
     }
     return $map
