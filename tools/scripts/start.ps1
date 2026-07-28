@@ -4276,17 +4276,26 @@ function Set-LocalDsAuthImageDigestAnnotations {
         [Parameter(Mandatory = $true)][string]$KubeContext,
         [Parameter(Mandatory = $true)][string]$MinikubeProfile
     )
-    # 修改 template 会触发 rollout；Hub ledger 是单写者，任何 digest patch 前必须
-    # 已由当前清单收敛为 replicas=1 + Recreate，且不能残留 rollingUpdate 配置。
+    # 修改 template 会触发 rollout;Hub ledger 是单写者。两种合法形态(2026-07-28 更新,
+    # 本断言写于 R11 之前,全量流程自 R11 后首跑暴露其过时):
+    #   ① 旧形态:replicas=1 + Recreate 无 rollingUpdate(部署策略保证同刻单进程);
+    #   ② R11 P0-5(2026-07-25)后:RollingUpdate + pandora.dev/deploy-strategy 注解逐字一致
+    #      (main_test.go 清单契约)。单写者由运行时 writerlease(选举+单调 fencing+存储层
+    #      同事务校验)保证,进程读注解 fail-closed:RollingUpdate × writer_lease_mode!=enforce
+    #      直接拒启,不存在无保护双写窗口——单写者约束不得靠部署策略实现(宪法金丝雀条款)。
     $hubLines = @(& kubectl --context $KubeContext -n $K8sNamespace get deployment/hub-allocator -o json 2>&1)
     if ($LASTEXITCODE -ne 0) { throw '读取 Deployment/hub-allocator strategy 失败。' }
     try { $hubDeployment = (($hubLines -join "`n") | ConvertFrom-Json -ErrorAction Stop) }
     catch { throw "Deployment/hub-allocator JSON 非法:$($_.Exception.Message)" }
     $rolling = $hubDeployment.spec.strategy.PSObject.Properties['rollingUpdate']
-    if ([int]$hubDeployment.spec.replicas -ne 1 -or
-        [string]$hubDeployment.spec.strategy.type -cne 'Recreate' -or
-        ($null -ne $rolling -and $null -ne $rolling.Value)) {
-        throw 'Hub digest rollout 前必须为 exact replicas=1 + Recreate 且无 rollingUpdate。'
+    $hubStrategyType = [string]$hubDeployment.spec.strategy.type
+    $hubDeclaredStrategy = [string]$hubDeployment.spec.template.metadata.annotations.'pandora.dev/deploy-strategy'
+    $hubRecreateOk = ([int]$hubDeployment.spec.replicas -eq 1 -and $hubStrategyType -ceq 'Recreate' -and
+        ($null -eq $rolling -or $null -eq $rolling.Value))
+    $hubRollingOk = ([int]$hubDeployment.spec.replicas -eq 1 -and $hubStrategyType -ceq 'RollingUpdate' -and
+        $hubDeclaredStrategy -ceq 'RollingUpdate')
+    if (-not ($hubRecreateOk -or $hubRollingOk)) {
+        throw "Hub digest rollout 前必须为 replicas=1 且『Recreate 无 rollingUpdate』或『RollingUpdate 且 pandora.dev/deploy-strategy 注解逐字一致(writerlease 运行时单写者,R11 P0-5)』;实际 strategy=$hubStrategyType 注解=$hubDeclaredStrategy replicas=$($hubDeployment.spec.replicas)。"
     }
     $writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     foreach ($writer in $writers) {
