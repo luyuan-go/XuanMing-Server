@@ -90,6 +90,9 @@ func NewMailUsecase(repo data.MailRepo, cfg conf.MailConf, granter ItemGranter) 
 	if cfg.MaxInstancesPerMail <= 0 {
 		cfg.MaxInstancesPerMail = conf.DefaultMaxInstancesPerMail
 	}
+	if cfg.MaxStackCountPerAttachment <= 0 {
+		cfg.MaxStackCountPerAttachment = conf.DefaultMaxStackCountPerAttachment
+	}
 	return &MailUsecase{repo: repo, cfg: cfg, granter: granter}
 }
 
@@ -672,6 +675,14 @@ func (u *MailUsecase) buildPayload(title, body string, atts []*mailv1.MailAttach
 					"attachment[%d] instance count exceeds per-mail limit: total=%d max=%d",
 					i, instanceTotal, u.cfg.MaxInstancesPerMail)
 			}
+		}
+		// stack 的 count 是数量不是循环次数,不构成 DoS(inventory 侧按容量 / 堆叠规则拒),
+		// 但 uint32 不设限时一封邮件可声明发放 42 亿个道具、坏数据直到领取才暴露。
+		// 这里只挡明显不合理的输入,真正的经济上限仍由 inventory 权威裁定。
+		if a.GetStack() != nil && uint64(cnt) > uint64(u.cfg.MaxStackCountPerAttachment) {
+			return nil, errcode.New(errcode.ErrInvalidArg,
+				"attachment[%d] stack count %d exceeds limit %d",
+				i, cnt, u.cfg.MaxStackCountPerAttachment)
 		}
 	}
 	rec := &mailv1.MailContentStorageRecord{Title: title, Body: body, Attachments: atts, InstanceGrantKey: instanceGrantKey}

@@ -1244,32 +1244,56 @@ function Convert-DevToCluster([string]$text) {
     return $text
 }
 
-# auction 只要进入 compose / k8s 集群就可能与旧副本或扩容副本并行运行。
-# 集群产物必须使用 etcd 独占 snowflake nodeID,并开启跨实例 market 锁；dev 源配置仍保留
-# static + 单实例锁,避免本机只启动一个服务时额外依赖 etcd。
-function Set-AuctionClusterSafety([string]$text) {
+# MultiReplicaSnowflakeServices 是「集群产物必须用 etcd 独占 snowflake nodeID」的服务清单。
+#
+# 判据只有一条:**该服务在集群里可能同时跑多于一个副本**,且它会发 snowflake ID。
+# static 模式下所有副本共用配置里的同一个 node_id,两个副本的发号器会发出**逐位相同**的 ID
+# (pkg/snowflake/etcdnode.ProvideSnowflakeN 契约,已有单测钉死),直接产出重号。
+#
+#   - auction:滚动更新 / 扩容期新旧副本并行(原 Set-AuctionClusterSafety)。
+#   - login  :deploy/k8s/overlays/online/kustomization.yaml 显式配 replicas=2,
+#             其 snowflake 发 player_id(ensureAccount 首登注册),重号会撞 accounts 主键。
+#
+# ⚠️ CLAUDE.md §9.21 金丝雀发布要求 stable/canary 新旧副本并存 —— 那等价于「同服务 2 副本」。
+# 任何服务一旦纳入金丝雀发布,都必须先加进本清单,否则灰度窗口内必然双活发重号。
+# 新增服务前先确认它真的在发 snowflake ID(player-locator 有 2 副本但不发号,故不在此列)。
+$script:MultiReplicaSnowflakeServices = @('auction', 'login')
+
+# Set-ClusterSnowflakeEtcd 把 dev 的 static snowflake 改写成 etcd 独占 nodeID。
+# dev 源配置保留 static,避免本机只启一个服务时额外依赖 etcd。
+#
+# etcd_service_name 用服务名 = 每个服务各自一套 [0, MaxNodeID) 空间,跨服务刻意复用。
+# ⚠️ 若将来出现**跨服务共享的 ID 空间**(两个服务铸同一种 ID,如 instance_id),
+# 那些服务必须显式共用同一个 etcd_service_name,否则各自的空间会分到相同 nodeID。
+function Set-ClusterSnowflakeEtcd([string]$serviceName, [string]$text) {
     $snowflakeHeaderCount = [regex]::Matches($text, '(?m)^snowflake:[ \t]*$').Count
     $stepBitsCount = [regex]::Matches($text, '(?m)^[ \t]{2}step_bits:[ \t]*\d+[ \t]*$').Count
-    $crossLockCount = [regex]::Matches($text, '(?m)^[ \t]{2}cross_instance_lock:[ \t]*(?:true|false)[ \t]*$').Count
-    if ($snowflakeHeaderCount -ne 1 -or $stepBitsCount -ne 1 -or $crossLockCount -ne 1) {
-        throw "[FATAL] auction 集群安全配置锚点异常:snowflake=$snowflakeHeaderCount step_bits=$stepBitsCount cross_instance_lock=$crossLockCount"
+    if ($snowflakeHeaderCount -ne 1 -or $stepBitsCount -ne 1) {
+        throw "[FATAL] $serviceName snowflake 锚点异常:snowflake=$snowflakeHeaderCount step_bits=$stepBitsCount"
     }
 
     if ([regex]::IsMatch($text, '(?m)^\s{2}node_id_source:')) {
-        throw '[FATAL] auction dev 配置已显式设置 node_id_source,请人工确认集群改写规则后再生成。'
+        throw "[FATAL] $serviceName dev 配置已显式设置 node_id_source,请人工确认集群改写规则后再生成。"
     }
 
-    $text = [regex]::Replace(
+    return [regex]::Replace(
         $text,
         '(?m)^([ \t]{2}step_bits:[ \t]*\d+[ \t]*)$',
-        "`$1`n  node_id_source: etcd`n  etcd_endpoints: [`"etcd:2379`"]`n  etcd_prefix: `"/pandora/snowflake/node/`"`n  etcd_service_name: `"auction`"`n  etcd_lease_ttl_sec: 15",
+        "`$1`n  node_id_source: etcd`n  etcd_endpoints: [`"etcd:2379`"]`n  etcd_prefix: `"/pandora/snowflake/node/`"`n  etcd_service_name: `"$serviceName`"`n  etcd_lease_ttl_sec: 15",
         1)
-    $text = [regex]::Replace(
+}
+
+# auction 另需开启跨实例 market 锁(与 snowflake 无关,单独一条)。
+function Set-AuctionCrossInstanceLock([string]$text) {
+    $crossLockCount = [regex]::Matches($text, '(?m)^[ \t]{2}cross_instance_lock:[ \t]*(?:true|false)[ \t]*$').Count
+    if ($crossLockCount -ne 1) {
+        throw "[FATAL] auction cross_instance_lock 锚点异常:count=$crossLockCount"
+    }
+    return [regex]::Replace(
         $text,
         '(?m)^([ \t]{2}cross_instance_lock:)[ \t]*(?:true|false)[ \t]*$',
         '$1 true',
         1)
-    return $text
 }
 
 # -Prod 机械关断实时成长通道(审核 P0,2026-07-21):生成链以 dev 模板为唯一输入,
@@ -1901,7 +1925,10 @@ try {
         if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player')) {
             $out = Set-ServiceClusterConfigTableDir $s.Name $out
         }
-        if ($s.Name -eq 'auction') { $out = Set-AuctionClusterSafety $out }
+        if ($s.Name -in $script:MultiReplicaSnowflakeServices) {
+            $out = Set-ClusterSnowflakeEtcd $s.Name $out
+        }
+        if ($s.Name -eq 'auction') { $out = Set-AuctionCrossInstanceLock $out }
         if ($Prod -and $s.Name -eq 'battle-result') { $out = Set-ProdBattleResultProgressOff $out }
         if ($Prod -and $s.Name -eq 'push') { $out = Set-ProdPushSessionGateOn $out }
         if ($Prod -and $s.Name -eq 'login') { $out = Set-ProdLoginHubHeadlessAddr $out }

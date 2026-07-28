@@ -11,6 +11,10 @@ import (
 // 由 Defaults() 与 biz.NewMailUsecase 共用,保证「漏配 = 用默认值」而不是「漏配 = 拒绝一切」。
 const DefaultMaxInstancesPerMail = 128
 
+// DefaultMaxStackCountPerAttachment 是单个可堆叠附件 count 的默认上限。
+// 同样由 Defaults() 与 biz.NewMailUsecase 共用,零值退回本值而非「拒绝一切」。
+const DefaultMaxStackCountPerAttachment = 1_000_000
+
 // Config 是 mail 服务的完整配置。
 type Config struct {
 	config.Base `yaml:",inline" mapstructure:",squash"`
@@ -78,6 +82,16 @@ type MailConf struct {
 	// 现有行为不变)。
 	MaxInstancesPerMail int `yaml:"max_instances_per_mail,omitempty" json:"max_instances_per_mail,omitempty"`
 
+	// MaxStackCountPerAttachment 单个可堆叠附件的 count 上限(默认 1000000)。
+	//
+	// 与 MaxInstancesPerMail 性质不同:stack 的 count 是**数量**不是循环次数,不会像
+	// instance 那样撑爆内存 —— inventory 侧按 MaxStack 拆格、容量满即整体拒,且计数
+	// 全程 uint64 无回绕。所以这不是 DoS 面,而是「荒谬值不该进权威存储」的合理性闸:
+	// count 是 uint32,不设限时一封邮件可以声明发放 42 亿个道具,入库后才在领取侧
+	// 被容量拒掉,期间这封邮件一直是坏数据。上限取得很宽松(百万),正常发放远达不到;
+	// 真正的经济上限由 inventory 的容量 / 堆叠规则权威裁定,本值只挡明显不合理的输入。
+	MaxStackCountPerAttachment int `yaml:"max_stack_count_per_attachment,omitempty" json:"max_stack_count_per_attachment,omitempty"`
+
 	// InventoryAddr inventory 服务 gRPC 地址(host:port),领取附件入库用。
 	InventoryAddr string `yaml:"inventory_addr,omitempty" json:"inventory_addr,omitempty"`
 
@@ -122,6 +136,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Mail.MaxInstancesPerMail <= 0 {
 		c.Mail.MaxInstancesPerMail = DefaultMaxInstancesPerMail
+	}
+	if c.Mail.MaxStackCountPerAttachment <= 0 {
+		c.Mail.MaxStackCountPerAttachment = DefaultMaxStackCountPerAttachment
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50009"

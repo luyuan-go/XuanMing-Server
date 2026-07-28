@@ -419,6 +419,62 @@ Envoy 是基础设施组件,**不是 go 服务**。它做:
 - etcd `KeepAlive` 不是普通健康检查,而是 nodeID 独占权的 fencing 信号;KeepAlive channel 关闭、续租失败或确认 lease 丢失时,进程必须立即停止发号并主动退出,不能只打日志继续运行。
 - 不用 Redis `SETNX + TTL + 看门狗` 拼租约:Redis 看门狗只能努力续租,不能证明旧 holder 已停止发号;GC 停顿、网络分区、进程卡死但业务线程仍跑等场景下,租约可能过期并被新进程领走,旧进程恢复后形成同 nodeID 双活。
 
+### 8.2 唯一性的作用域:三条必须记住的规则(2026-07-28)
+
+snowflake 的唯一性**只在「同一个 `*snowflake.Node` 对象内」成立**,不在服务内、不在全局。
+下面三条是从这一条推出的,违反任意一条都会静默发重号(已有单测钉死契约,见
+`pkg/snowflake/etcdnode/provider_test.go`)。
+
+**① 同一进程内多个 ID 空间 → `ProvideSnowflakeN`,共用 nodeID。**
+
+一个服务里互不相干的 ID(team 的 `team_id` / `invite_id`,auction 的 `order_id` / `match_id`)
+各持一个 `*snowflake.Node`,由 [`etcdnode.MustProvideSnowflakeN`](../../pkg/snowflake/etcdnode/provider.go)
+一次取 n 个。它们**共用同一个 nodeID**:一次 `Acquire`、一个 lease、一处失租退出,
+失败面不随 n 增长;每个 Node 有独立 step 池,合计上限 n × 32768/s(实测线性叠加)。
+
+代价是**跨空间会发出逐位相同的 ID**——同一秒里各自的第 K 个号必然相同,这是常态不是小概率。
+所以每个空间的值必须待在各自独立的表 / key 前缀 / 唯一键里,**禁止**把两个空间的 ID
+放进同一张表、同一个 map 或同一个唯一键。
+
+**② 跨服务共享的 ID 空间:etcd 模式救不了,必须显式共用 `etcd_service_name`。**
+
+⚠️ 这条最反直觉。etcd 的 nodeID key 是 `/pandora/snowflake/node/<service>/<id>`,
+**按服务名隔离、跨服务刻意复用**——两个不同服务各自都会分到 nodeID 0。
+所以只要两个服务铸**同一种** ID,把 `node_id_source` 改成 `etcd` 非但不解决问题,
+还会让它们稳定拿到相同的 nodeID。
+
+现存实例:`instance_id` 由 inventory(`GrantInstances`)和 mail(`buildClaimIntent`)
+两处铸造,两批实例可能汇进同一玩家的同一个背包段,被 `data/bag_apply.go` 的
+`duplicate instance` 检查 fail-closed 拒掉(玩家领不了那封邮件)。
+当前修法是 static 下给两服务分配不同 `node_id`(inventory=1,mail=2,配置里有注释);
+若将来切 etcd,两者必须显式共用同一个 `etcd_service_name`。
+
+新增「两个服务铸同一种 ID」的设计前,先问一句:能不能只让**一个**服务铸(§9.22 唯一权威)。
+
+**③ 多副本 ⇒ 必须 etcd。金丝雀发布等价于多副本。**
+
+static 模式下所有副本共用配置里的同一个 `node_id`,两个副本发出的号逐位相同。
+集群产物由 `tools/scripts/gen_cluster_config.ps1` 的 `$MultiReplicaSnowflakeServices`
+清单机械注入 etcd 模式(当前:`auction`、`login`)。判据是「可能同时跑多于一个副本
+**且**会发 snowflake ID」——`player-locator` 有 2 副本但不发号,故不在列。
+
+CLAUDE.md §9.21 的金丝雀发布要求 stable / canary 并存,那就是同服务 2 副本。
+**任何服务纳入灰度发布前,必须先加进该清单**,否则灰度窗口内必然双活发重号。
+
+### 8.3 批量发号 `GenerateInto`(2026-07-28)
+
+按件数循环调用 `Generate` 的地方(inventory `GrantInstances`、mail 附件展开)改用
+[`(*Node).GenerateInto(dst []uint64)`](../../pkg/snowflake/snowflake.go):一次 CAS 预留整段,
+实测 9.2 ns/ID → 0.2 ns/ID。语义与逐个 `Generate` 完全一致(严格递增、唯一、可混用),
+**但不保证相邻连续**——跨秒边界时间段跳变会有空洞,调用方只能依赖「递增 + 唯一」。
+
+参数是调用方给的 `dst` 而非 `GenerateN(count)`:批量数量常来自外部输入,
+让 API 按外部输入决定分配大小等于开一个内存 DoS 面(§9.18 / §16.5)。
+批量入口仍须自行校验数量上限(例:mail 的 `max_instances_per_mail`)。
+
+撮合类循环**不适用**:auction 每个 `match_id` 之间夹着 DB 往返且可能提前退出,
+批量预留会白白浪费 ID。
+
 ## 9. 字符串长度上限(数据库 VARCHAR)
 
 | 字段类型 | 上限 |

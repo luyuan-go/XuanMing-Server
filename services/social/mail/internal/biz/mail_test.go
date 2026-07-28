@@ -802,3 +802,32 @@ func TestNewMailUsecase_ZeroLimitFallsBackToDefault(t *testing.T) {
 		t.Fatalf("漏配上限不应拒绝正常邮件: %v", err)
 	}
 }
+
+// TestSendMail_RejectsStackCountOverLimit stack 的 count 是数量不是循环次数,不构成 DoS,
+// 但 uint32 不设限时坏数据会一直躺在库里直到领取才暴露。上限 + 零值退默认值一起钉死。
+func TestSendMail_RejectsStackCountOverLimit(t *testing.T) {
+	cfg := testCfg()
+	cfg.MaxStackCountPerAttachment = 100
+	uc := NewMailUsecase(newFakeMailRepo(), cfg, &fakeItemGranter{})
+
+	atts := []*mailv1.MailAttachment{stackAtt(1001, 101)}
+	if _, err := uc.SendPersonalMail(context.Background(), 100, 1, "t", "b", atts, 0, 1000, ""); err == nil {
+		t.Fatal("stack count 超限必须拒绝")
+	}
+	atts = []*mailv1.MailAttachment{stackAtt(1001, 100)}
+	if _, err := uc.SendPersonalMail(context.Background(), 100, 1, "t", "b", atts, 0, 1000, ""); err != nil {
+		t.Fatalf("恰好等于上限应放行: %v", err)
+	}
+
+	// 零值必须退回默认值,而不是拒绝一切可堆叠附件。
+	cfg.MaxStackCountPerAttachment = 0
+	uc2 := NewMailUsecase(newFakeMailRepo(), cfg, &fakeItemGranter{})
+	if uc2.cfg.MaxStackCountPerAttachment != conf.DefaultMaxStackCountPerAttachment {
+		t.Fatalf("零值应归一化为 %d, got %d",
+			conf.DefaultMaxStackCountPerAttachment, uc2.cfg.MaxStackCountPerAttachment)
+	}
+	if _, err := uc2.SendPersonalMail(context.Background(), 100, 1, "t", "b",
+		[]*mailv1.MailAttachment{stackAtt(1001, 500)}, 0, 1000, ""); err != nil {
+		t.Fatalf("漏配上限不应拒绝正常邮件: %v", err)
+	}
+}
