@@ -1411,8 +1411,11 @@ function Assert-NoLocalFreshGenesisWriters {
         etcd = 'quay.io/coreos/etcd:v3.6.12'; loki = 'grafana/loki:3.4.1'; alloy = 'grafana/alloy:v1.7.1'
         prometheus = 'prom/prometheus:v2.55.1'; grafana = 'grafana/grafana:11.3.1'
         pd = 'pingcap/pd:v8.5.1'; tikv = 'pingcap/tikv:v8.5.1'; tidb = 'pingcap/tidb:v8.5.1'
-        'redis-master' = 'redis:8.8.0-alpine'; 'redis-replica' = 'redis:8.8.0-alpine'
-        'redis-sentinel' = 'redis:8.8.0-alpine'
+        # Sentinel 栈(2026-07-28 P2):值为 hashtable 时显式声明期望副本数(默认 1);
+        # 校验语义不变——名字/镜像/副本数三者都必须与声明逐项一致,仍是封闭清单。
+        'redis-master' = 'redis:8.8.0-alpine'
+        'redis-replica' = @{ image = 'redis:8.8.0-alpine'; replicas = 2 }
+        'redis-sentinel' = @{ image = 'redis:8.8.0-alpine'; replicas = 3 }
     }
     $writerIdentities = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     function Get-OptionalPropertyValue([object]$Object, [string]$Name) {
@@ -1461,7 +1464,10 @@ function Assert-NoLocalFreshGenesisWriters {
             if (-not [string]::IsNullOrWhiteSpace($deletionTimestamp)) {
                 throw "fresh genesis 前基础设施 workload 正在终止:$kind/$name"
             }
-            if ($images.Count -ne 1 -or $images[0] -cne [string]$allowedImages[$app]) {
+            $allowedEntry = $allowedImages[$app]
+            $expectedImage = if ($allowedEntry -is [System.Collections.IDictionary]) { [string]$allowedEntry['image'] } else { [string]$allowedEntry }
+            $expectedReplicas = if ($allowedEntry -is [System.Collections.IDictionary]) { [int]$allowedEntry['replicas'] } else { 1 }
+            if ($images.Count -ne 1 -or $images[0] -cne $expectedImage) {
                 throw "fresh genesis 前基础设施 workload 镜像/init/ephemeral 容器漂移:$kind/$name"
             }
             $ownerReferenceValue = Get-OptionalPropertyValue -Object $item.metadata -Name 'ownerReferences'
@@ -1470,8 +1476,8 @@ function Assert-NoLocalFreshGenesisWriters {
                 (Get-OptionalPropertyValue -Object $_ -Name 'controller') -eq $true
             })
             if ($kind -ceq 'Deployment') {
-                if ([int]$item.spec.replicas -ne 1 -or $name -cne $app -or $controllerOwner.Count -ne 0) {
-                    throw "fresh genesis 前基础设施 Deployment 结构/replicas 漂移:$name"
+                if ([int]$item.spec.replicas -ne $expectedReplicas -or $name -cne $app -or $controllerOwner.Count -ne 0) {
+                    throw "fresh genesis 前基础设施 Deployment 结构/replicas 漂移:$name(期望 replicas=$expectedReplicas)"
                 }
                 if ($seenInfraDeployments.ContainsKey($app)) {
                     throw "fresh genesis 前基础设施 Deployment 重复:$app"
