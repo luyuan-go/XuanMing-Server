@@ -163,9 +163,14 @@ spec:
             - { name: GF_AUTH_ANONYMOUS_ENABLED, value: "true" }
             - { name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: Admin }
             - { name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true" }
+          # 告警 provisioning(可选):start.ps1 仅在宿主导出 PANDORA_ALERT_NTFY_URL 时创建
+          # pandora-grafana-alerting/pandora-grafana-alert-env;缺席时两者 optional,零告警配置照常起
+          envFrom:
+            - secretRef: { name: pandora-grafana-alert-env, optional: true }
           ports: [ { containerPort: 3000 } ]
           volumeMounts:
             - { name: datasources, mountPath: /etc/grafana/provisioning/datasources, readOnly: true }
+            - { name: alerting, mountPath: /etc/grafana/provisioning/alerting, readOnly: true }
             - { name: data, mountPath: /var/lib/grafana }
           readinessProbe:
             httpGet: { path: /api/health, port: 3000 }
@@ -175,6 +180,8 @@ spec:
       volumes:
         - name: datasources
           configMap: { name: grafana-datasources }
+        - name: alerting
+          configMap: { name: pandora-grafana-alerting, optional: true }
         - name: data
           emptyDir: {}
 ---

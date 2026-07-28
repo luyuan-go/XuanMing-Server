@@ -1410,6 +1410,7 @@ function Assert-NoLocalFreshGenesisWriters {
         zookeeper = 'confluentinc/cp-zookeeper:7.9.7'; kafka = 'confluentinc/cp-kafka:7.9.7'
         etcd = 'quay.io/coreos/etcd:v3.6.12'; loki = 'grafana/loki:3.4.1'; alloy = 'grafana/alloy:v1.7.1'
         prometheus = 'prom/prometheus:v2.55.1'; grafana = 'grafana/grafana:11.3.1'
+        pd = 'pingcap/pd:v8.5.1'; tikv = 'pingcap/tikv:v8.5.1'; tidb = 'pingcap/tidb:v8.5.1'
     }
     $writerIdentities = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     function Get-OptionalPropertyValue([object]$Object, [string]$Name) {
@@ -3863,7 +3864,9 @@ function Apply-AgonesManifests {
             helm repo update 2>$null | Out-Null
             # Agones chart 含 controller/allocator/extensions 等多个第三方镜像；新机器首次冷拉时
             # Helm 默认 5 分钟会先于镜像下载结束而失败。显式放宽到 30 分钟，缓存命中时不增加耗时。
-            helm upgrade --install agones agones/agones --kube-context $KubeContext --namespace agones-system `
+            # 版本钉 1.58.0(2026-07-28):不钉的话每次重建装"当时最新",镜像(us-docker.pkg.dev,
+            # 墙内不可达)与本地缓存/导出全部失配;升级 Agones 必须显式改本行并重验四 Fleet。
+            helm upgrade --install agones agones/agones --version 1.58.0 --kube-context $KubeContext --namespace agones-system `
                 --create-namespace --wait --timeout 30m
             if ($LASTEXITCODE -ne 0) { throw "Agones 安装/修复失败(首次冷拉最多等待 30 分钟)" }
         } else {
@@ -4022,6 +4025,26 @@ function Get-MinikubeStartArgs([string]$Profile) {
     if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_K8S_VERSION)) {
         $startArgs += "--kubernetes-version=$($env:PANDORA_MINIKUBE_K8S_VERSION.Trim())"
     }
+    # PANDORA_MINIKUBE_IMAGE_REPOSITORY:k8s 核心镜像仓库覆盖(墙内 registry.k8s.io 不可达时
+    # 用 registry.cn-hangzhou.aliyuncs.com/google_containers;preload 可达时通常无需设置)。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY)) {
+        $startArgs += "--image-repository=$($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY.Trim())"
+    }
+    # PANDORA_MINIKUBE_BASE_IMAGE:kicbase 节点底图覆盖。既有集群实证用
+    # registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.50(宿主已缓存,
+    # 复用可避免重建时从 gcr.io(墙内不可达)重拉 ~500MB)。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_BASE_IMAGE)) {
+        $startArgs += "--base-image=$($env:PANDORA_MINIKUBE_BASE_IMAGE.Trim())"
+    }
+    # PANDORA_MINIKUBE_PORTS:逗号分隔的 docker 端口发布规格(docker driver 专属,仅创建时生效)。
+    # 例 "127.0.0.1:8443:31443" 把宿主回环 8443 发布到节点 NodePort 31443——集群内边缘 Envoy
+    # (pandora-edge-envoy)的入口,客户端保持连 127.0.0.1:8443 不变;局域网多机联调可改
+    # "0.0.0.0:8443:31443"。既有集群无法追加发布端口,须 -Reset 重建时携带。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_PORTS)) {
+        foreach ($portSpec in ($env:PANDORA_MINIKUBE_PORTS -split ',')) {
+            if (-not [string]::IsNullOrWhiteSpace($portSpec)) { $startArgs += "--ports=$($portSpec.Trim())" }
+        }
+    }
     return $startArgs
 }
 
@@ -4105,6 +4128,55 @@ function Get-MinikubeImageIds([string[]]$MinikubeArgs = @()) {
         }
     }
     return $map
+}
+
+# 把宿主 deploy/envoy/envoy.yaml 机械变换为「集群内客户端面边缘 Envoy」配置(2026-07-28 P2)。
+# 单一事实源:路由/JWT/超时等 1100 行配置只维护宿主一份,进集群走本变换,防两份配置漂移。
+# 变换规则(其余逐字保留):
+#   ① 剥掉 pandora_ds_listener(8444 DS 面):集群内已有加固版 pandora-envoy(16-ds-envoy.yaml,
+#      带 x-pandora-ds-gateway 标记 + 方法白名单),边缘 Pod 不再暴露一个未加固副本;
+#      被它独占引用的 cluster 留着不被引用,Envoy 允许未引用的静态 cluster,无副作用。
+#   ② admin 0.0.0.0→127.0.0.1(与 DS 面同一收紧理由:admin 未鉴权,不得暴露 Pod IP 上)。
+#   ③ 上游 address: host.docker.internal → 同 namespace Service 短名,按同一 socket_address
+#      块里的 port_value 映射(端口=服务一一对应,见 infra.md §6);任何未映射端口 fail-fast。
+function Convert-EdgeEnvoyConfigForCluster([string]$Text) {
+    $portSvc = @{
+        50001 = 'login'; 50002 = 'player'; 50003 = 'data-service'; 50004 = 'friend'; 50005 = 'chat'
+        50006 = 'player-locator'; 50007 = 'leaderboard'; 50008 = 'guild'; 50009 = 'mail'; 50010 = 'team'
+        50011 = 'matchmaker'; 50012 = 'trade'; 50013 = 'dialogue'; 50014 = 'push'; 50015 = 'inventory'
+        50016 = 'auction'; 50017 = 'owner'; 50018 = 'matchmaker-pve'; 50020 = 'ds-allocator'
+        50021 = 'hub-allocator'; 50022 = 'battle-result'
+    }
+    $lines = $Text -split "`r?`n"
+    $out = New-Object 'System.Collections.Generic.List[string]'
+    $inAdmin = $false; $skipDsListener = $false; $pendingAddrIdx = -1; $addrSeen = 0; $replaced = 0
+    foreach ($line in $lines) {
+        if ($line -cmatch '^admin:') { $inAdmin = $true }
+        elseif ($line -cmatch '^static_resources:') { $inAdmin = $false }
+        if ($line -cmatch '^\s*-\s+name:\s+pandora_ds_listener\s*$') { $skipDsListener = $true; continue }
+        if ($skipDsListener) {
+            if ($line -cmatch '^  clusters:') { $skipDsListener = $false } else { continue }
+        }
+        $emit = $line
+        if ($inAdmin -and $line -cmatch '^(\s*address:\s*)0\.0\.0\.0\s*$') { $emit = "$($Matches[1])127.0.0.1" }
+        if ($line -cmatch '^(\s*)address:\s*host\.docker\.internal\s*$') {
+            $addrSeen++
+            if ($pendingAddrIdx -ge 0) { throw 'edge envoy 变换:连续两个 host.docker.internal 地址之间没有 port_value,配置结构与预期不符,拒绝生成。' }
+            $pendingAddrIdx = $out.Count
+        }
+        if ($pendingAddrIdx -ge 0 -and $line -cmatch '^\s*port_value:\s*(\d+)\s*$') {
+            $upPort = [int]$Matches[1]
+            if (-not $portSvc.ContainsKey($upPort)) { throw "edge envoy 变换:上游端口 $upPort 无 Service 映射,请补 Convert-EdgeEnvoyConfigForCluster 的 portSvc 表(infra.md §6)。" }
+            $indent = [regex]::Match($out[$pendingAddrIdx], '^\s*').Value
+            $out[$pendingAddrIdx] = "${indent}address: $($portSvc[$upPort])"
+            $pendingAddrIdx = -1; $replaced++
+        }
+        $out.Add($emit)
+    }
+    if ($skipDsListener) { throw 'edge envoy 变换:pandora_ds_listener 块直到文件尾都没遇到 clusters:,剥除失败,拒绝生成。' }
+    if ($pendingAddrIdx -ge 0) { throw 'edge envoy 变换:最后一个 host.docker.internal 地址没有配套 port_value,拒绝生成。' }
+    if ($addrSeen -eq 0 -or $replaced -ne $addrSeen) { throw "edge envoy 变换:上游地址改写数($replaced)与发现数($addrSeen)不一致或为零,输入不是预期的宿主 envoy 配置。" }
+    return ($out -join "`n")
 }
 
 # 把一组宿主镜像 load 进 minikube。
@@ -4328,7 +4400,19 @@ function Build-DsImagesForMinikube {
     $mkProfile = Get-K8sManagedProfile
     Write-Info "把 DS 镜像 load 进 minikube(profile=$mkProfile,强制刷新 :dev tag)..."
     Sync-ImagesToMinikube -Images @('pandora/battle-ds:dev', 'pandora/hub-ds:dev') -MinikubeArgs @('-p', $mkProfile)
-    Write-Ok "DS 镜像已就绪(pandora/battle-ds:dev / pandora/hub-ds:dev 已在 minikube)"
+    # 2026-07-28:Fleet yaml 钉定不可变 tag(INC-20260727-001 防回滚,20/21/30/31-fleet-*.yaml)。
+    # 钉定镜像不产自本次 :dev 构建——新节点(-Reset 重建)没有会让 GameServer 全量
+    # ImagePullBackOff(下游 e2e 又被 -SkipImageLoad 跳过加载)。从宿主 daemon 一并 load;
+    # 宿主缺失 fail-fast(钉定镜像是已验证产物,不得静默退回 :dev)。
+    $fleetPinned = @(Get-ChildItem (Join-Path $ProjectRoot 'deploy/k8s/agones') -Filter '*fleet*.yaml' |
+        ForEach-Object { Select-String -LiteralPath $_.FullName -Pattern '^\s*image:\s*(pandora/\S+)' |
+            ForEach-Object { $_.Matches[0].Groups[1].Value } } |
+        Where-Object { $_ -notmatch ':dev$' } | Sort-Object -Unique)
+    if ($fleetPinned.Count -gt 0) {
+        Write-Info "Fleet 钉定镜像一并 load:$($fleetPinned -join ', ')"
+        Sync-ImagesToMinikube -Images $fleetPinned -MinikubeArgs @('-p', $mkProfile)
+    }
+    Write-Ok "DS 镜像已就绪(:dev + Fleet 钉定 tag 均已在 minikube)"
 }
 
 # ===== k8s 模式:宿主侧桥接/中继清理(与启动末尾自动跑的 e2e_k8s.ps1 对称)=====
@@ -4378,6 +4462,14 @@ function Invoke-K8s {
     $infraYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/infra.yaml'
     $lokiYaml    = Join-Path $ProjectRoot 'deploy/k8s/infra/loki.yaml'
     $monitoringYaml = Join-Path $ProjectRoot 'deploy/k8s/infra/monitoring.yaml'
+    $tidbYaml       = Join-Path $ProjectRoot 'deploy/k8s/infra/tidb.yaml'
+    $sentinelYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/redis-sentinel.yaml'
+    $edgeEnvoyYaml  = Join-Path $ProjectRoot 'deploy/k8s/infra/edge-envoy.yaml'
+    $tidbInitDir    = Join-Path $ProjectRoot 'deploy/tidb-init'
+    $sentinelEntrypointFile = Join-Path $ProjectRoot 'deploy/redis/sentinel-entrypoint.sh'
+    $grafanaAlertingDir = Join-Path $ProjectRoot 'deploy/grafana/provisioning/alerting'
+    $hostEnvoyConfigFile = Join-Path $ProjectRoot 'deploy/envoy/envoy.yaml'
+    $envoyCertDir   = Join-Path $ProjectRoot 'deploy/envoy'
     $mysqlInit   = Join-Path $ProjectRoot 'deploy/mysql-init'
 
     if ($Down) {
@@ -4429,6 +4521,16 @@ function Invoke-K8s {
         Assert-LastExit 'kubectl delete Loki'
         kubectl --context $mkProfile delete -f $monitoringYaml --ignore-not-found 2>$null
         Assert-LastExit 'kubectl delete Prometheus/Grafana'
+        kubectl --context $mkProfile delete -f $tidbYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete TiDB'
+        kubectl --context $mkProfile delete -f $sentinelYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete Redis Sentinel'
+        kubectl --context $mkProfile delete -f $edgeEnvoyYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete edge Envoy'
+        kubectl --context $mkProfile delete configmap pandora-tidb-init pandora-redis-sentinel-entrypoint `
+            pandora-edge-envoy-config pandora-grafana-alerting -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
+        kubectl --context $mkProfile delete secret pandora-edge-envoy-certs pandora-grafana-alert-env `
+            -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
         # 基础设施:删除除 PVC/etcd-data 外的全部对象，保留 etcd 数据卷。
         $infraManifest = (Get-Content -LiteralPath $infraYaml -Raw)
         $null = Remove-K8sManifestObjectsPreserving -KubeContext $mkProfile -ManifestText $infraManifest `
@@ -4620,6 +4722,34 @@ function Invoke-K8s {
     # 监控(Prometheus kubernetes_sd + Grafana,2026-07-28 进集群):同日志栈,非关键路径只告警
     kubectl @kubectlContextArgs apply -f $monitoringYaml
     if ($LASTEXITCODE -ne 0) { Write-Warn "Prometheus/Grafana 监控栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/monitoring.yaml" }
+    # Grafana 告警 provisioning(2026-07-28 P2):仅当宿主导出 PANDORA_ALERT_NTFY_URL 时进集群
+    # (与 compose 侧 entrypoint 的 env 守卫等价——URL 缺失时装载告警配置会让 Grafana 拒起);
+    # 未设置则跳过,grafana Deployment 的 alerting 挂载/envFrom 均 optional,数据源不受影响。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_ALERT_NTFY_URL)) {
+        kubectl @kubectlContextArgs create configmap pandora-grafana-alerting --from-file=$grafanaAlertingDir -n $K8sNamespace `
+            --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+        if ($LASTEXITCODE -ne 0) { Write-Warn 'pandora-grafana-alerting configmap 失败(不影响业务)' }
+        kubectl @kubectlContextArgs create secret generic pandora-grafana-alert-env `
+            --from-literal=PANDORA_ALERT_NTFY_URL=$env:PANDORA_ALERT_NTFY_URL -n $K8sNamespace `
+            --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+        if ($LASTEXITCODE -ne 0) { Write-Warn 'pandora-grafana-alert-env secret 失败(不影响业务)' }
+    } else {
+        Write-Info 'PANDORA_ALERT_NTFY_URL 未设置,Grafana 告警 provisioning 未进集群(数据源不受影响)。'
+    }
+    # TiDB(pd/tikv/tidb + init Job)与 Redis Sentinel(一主两从三哨):2026-07-28 P2 进集群,
+    # 与线上形态同构;dev 服务仍用单 mysql/redis,本栈非关键路径,失败只告警。
+    # tidb-init Job 不可变,先删旧 Job 再 apply(SQL 幂等,重跑安全)。
+    kubectl @kubectlContextArgs create configmap pandora-tidb-init --from-file=$tidbInitDir -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'pandora-tidb-init configmap 失败(不影响业务)' }
+    kubectl @kubectlContextArgs delete job tidb-init -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
+    kubectl @kubectlContextArgs apply -f $tidbYaml
+    if ($LASTEXITCODE -ne 0) { Write-Warn "TiDB 栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/tidb.yaml" }
+    kubectl @kubectlContextArgs create configmap pandora-redis-sentinel-entrypoint --from-file=$sentinelEntrypointFile -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'pandora-redis-sentinel-entrypoint configmap 失败(不影响业务)' }
+    kubectl @kubectlContextArgs apply -f $sentinelYaml
+    if ($LASTEXITCODE -ne 0) { Write-Warn "Redis Sentinel 栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/redis-sentinel.yaml" }
     Write-Info "等待基础设施就绪(第三方镜像首次冷拉每个最多 1800s/30 分钟)..."
     kubectl @kubectlContextArgs rollout status deploy/mysql     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'mysql 就绪'
     kubectl @kubectlContextArgs rollout status deploy/redis     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'redis 就绪'
@@ -4651,6 +4781,16 @@ function Invoke-K8s {
     # active profile：它可能与已锁定的 kubectl context 不同，导致新业务镜像被 load
     # 到另一个本地集群，而当前集群随后只重启出旧 :dev 镜像。
     Sync-ImagesToMinikube -Images (Get-ServiceImages) -MinikubeArgs @('-p', $mkProfile)
+    # 2026-07-28:services.yaml 里存在钉定不可变 tag 的镜像(INC-20260727-001 防回滚,如
+    # matchmaker geed8ce2c6b5d / ds-allocator geed8ce2-p03-*)。它们不在 :dev 构建清单里,
+    # 但 Deployment 引用它们——新节点(-Reset 重建)没有就会 ImagePullBackOff。从宿主 daemon
+    # 一并 load;宿主缺失即 fail-fast(钉定镜像是已验证产物,绝不静默跳过、绝不退回 :dev)。
+    $pinnedImages = @(Select-String -LiteralPath (Join-Path $servicesDir 'services.yaml') -Pattern '^\s*image:\s*(pandora/\S+)' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value } | Where-Object { $_ -notmatch ':dev$' } | Sort-Object -Unique)
+    if ($pinnedImages.Count -gt 0) {
+        Write-Info "钉定镜像一并 load:$($pinnedImages -join ', ')"
+        Sync-ImagesToMinikube -Images $pinnedImages -MinikubeArgs @('-p', $mkProfile)
+    }
 
     Write-Step "[7/8] 部署业务服务"
     kubectl @kubectlContextArgs apply -k $servicesDir
@@ -4676,6 +4816,39 @@ function Invoke-K8s {
     }
     Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
+
+    Write-Step "[7.5/8] 集群内客户端面边缘 Envoy(pandora-edge-envoy,NodePort 31443)"
+    # 2026-07-28 P2:客户端面 8443 进集群,退役宿主 compose envoy + 21 条 port-forward 桥。
+    # 客户端仍连 127.0.0.1:8443:由 minikube 节点容器的端口发布(PANDORA_MINIKUBE_PORTS,
+    # 创建时 --ports=127.0.0.1:8443:31443)转到 NodePort。旧集群没有该端口发布时本步照常部署,
+    # e2e_k8s.ps1 会探测不到宿主 8443 发布而自动回落宿主桥接(他人路径不变)。
+    $edgeCertPem = Join-Path $envoyCertDir 'cert.pem'
+    $edgeKeyPem  = Join-Path $envoyCertDir 'key.pem'
+    if (-not (Test-Path $edgeCertPem) -or -not (Test-Path $edgeKeyPem)) {
+        Write-Info 'Envoy dev 证书缺失,尝试自动生成(envoy_cert.ps1)...'
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'envoy_cert.ps1')
+    }
+    if (-not (Test-Path $edgeCertPem) -or -not (Test-Path $edgeKeyPem)) {
+        throw 'Envoy dev 证书(deploy/envoy/cert.pem + key.pem)缺失且自动生成失败;边缘 Envoy 无法起 TLS,已中止(修复:pwsh tools/scripts/envoy_cert.ps1)。'
+    }
+    $edgeCfgText = Convert-EdgeEnvoyConfigForCluster (Get-Content -LiteralPath $hostEnvoyConfigFile -Raw)
+    $edgeCfgTmp = Join-Path ([System.IO.Path]::GetTempPath()) "pandora-edge-envoy-$PID.yaml"
+    Set-Content -LiteralPath $edgeCfgTmp -Value $edgeCfgText -Encoding utf8NoBOM
+    kubectl @kubectlContextArgs create configmap pandora-edge-envoy-config --from-file=envoy.yaml=$edgeCfgTmp -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+    Assert-LastExit 'kubectl apply configmap pandora-edge-envoy-config'
+    Remove-Item $edgeCfgTmp -Force -ErrorAction SilentlyContinue
+    kubectl @kubectlContextArgs create secret generic pandora-edge-envoy-certs `
+        --from-file=cert.pem=$edgeCertPem --from-file=key.pem=$edgeKeyPem -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+    Assert-LastExit 'kubectl apply secret pandora-edge-envoy-certs'
+    kubectl @kubectlContextArgs apply -f $edgeEnvoyYaml
+    Assert-LastExit 'kubectl apply edge-envoy'
+    # 配置/证书变更不触发 Pod 重建,与 DS 面同款:显式滚动 + 等就绪。
+    kubectl @kubectlContextArgs rollout restart deploy/pandora-edge-envoy -n $K8sNamespace
+    Assert-LastExit 'rollout restart pandora-edge-envoy'
+    kubectl @kubectlContextArgs rollout status deploy/pandora-edge-envoy -n $K8sNamespace --timeout=120s
+    if ($LASTEXITCODE -ne 0) { throw "pandora-edge-envoy 未在 120s 内就绪;客户端面 8443 无法接入,已中止(排障:kubectl -n pandora describe deploy/pandora-edge-envoy)。" }
 
     Write-Host ""
     Write-Ok "k8s 模式已部署。查看:kubectl get pods -n $K8sNamespace"

@@ -1,0 +1,56 @@
+# in-cluster Envoy「客户端面」边缘网关(2026-07-28 P2,本地 minikube 用)
+#
+# 链路:UE 客户端 → 127.0.0.1:8443(宿主回环,由 minikube 节点容器端口发布
+# PANDORA_MINIKUBE_PORTS=127.0.0.1:8443:31443 转入)→ 本 Service NodePort 31443
+# → 本 Envoy(TLS 终止 + gRPC-Web 转换 + jwt_authn)→ 同 namespace 各业务 Service。
+# 取代宿主 compose envoy + 21 条 kubectl port-forward 桥(旧路径保留在
+# k8s_envoy_bridge.ps1,e2e_k8s.ps1 检测不到本网关/端口发布时自动回落——他人路径不变)。
+#
+# 配置与证书由 start.ps1 [7.5/8] 在部署时生成:
+#   configmap pandora-edge-envoy-config:宿主 deploy/envoy/envoy.yaml 经
+#     Convert-EdgeEnvoyConfigForCluster 机械变换(剥 DS 面监听器/admin 收回环/上游改
+#     Service 短名),单一事实源,不在本文件重复 1100 行路由;
+#   secret pandora-edge-envoy-certs:deploy/envoy/cert.pem + key.pem(dev CA 叶子,
+#     SAN 含 localhost/127.0.0.1/本机局域网 IP,客户端信任链不变)。
+# DS 面(:8444)不在本网关:集群内已有加固版 pandora-envoy(deploy/k8s/agones/16-ds-envoy.yaml)。
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: pandora-edge-envoy, namespace: pandora, labels: { app: pandora-edge-envoy } }
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  selector: { matchLabels: { app: pandora-edge-envoy } }
+  template:
+    metadata: { labels: { app: pandora-edge-envoy } }
+    spec:
+      containers:
+        - name: envoy
+          image: envoyproxy/envoy:v1.38-latest
+          args: [ "-c", "/etc/envoy/envoy.yaml", "--service-cluster", "pandora-edge-envoy" ]
+          ports:
+            - { name: client-face, containerPort: 8443 }
+          volumeMounts:
+            - { name: config, mountPath: /etc/envoy/envoy.yaml, subPath: envoy.yaml, readOnly: true }
+            - { name: certs, mountPath: /etc/envoy/cert.pem, subPath: cert.pem, readOnly: true }
+            - { name: certs, mountPath: /etc/envoy/key.pem, subPath: key.pem, readOnly: true }
+          # TLS 监听器 TCP 可达即视为就绪(握手由客户端完成;admin 收回环后不再暴露 /ready)
+          readinessProbe:
+            tcpSocket: { port: 8443 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes:
+        - name: config
+          configMap: { name: pandora-edge-envoy-config }
+        - name: certs
+          secret: { secretName: pandora-edge-envoy-certs }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: pandora-edge-envoy, namespace: pandora }
+spec:
+  type: NodePort
+  selector: { app: pandora-edge-envoy }
+  ports:
+    - { name: client-face, port: 8443, targetPort: 8443, nodePort: 31443 }

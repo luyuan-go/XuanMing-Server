@@ -26,6 +26,7 @@ param(
     [switch]$NoRelay,        # 不自动起容器版 UDP 中继
     [switch]$SkipImageLoad,  # 跳过 minikube image load
     [switch]$BridgeForce,    # 端口被非 bridge 进程占用时,杀掉占用者后重建 port-forward
+    [switch]$HostBridge,     # 强制走宿主 port-forward 桥(默认:集群内 pandora-edge-envoy 可用即跳过桥)
     [Alias('Profile')]
     # 默认序:显式参数 > PANDORA_MINIKUBE_PROFILE(与 start.ps1 Get-ActiveMinikubeProfile 同一覆盖口径,
     # 多 profile 并存时防打错集群)> 'pandora-agones' 历史默认。
@@ -459,7 +460,7 @@ if ($SkipImageLoad) {
 }
 
 # ── 2) 起宿主 Envoy 桥接 ────────────────────────────────────────────────
-Write-Step "[2/6] 起宿主 Envoy 桥接(k8s Service -> host port-forward -> Envoy)"
+Write-Step "[2/6] 客户端面接入(集群内边缘 Envoy,回落宿主桥接)"
 try {
     Assert-LiveAllocatorContractUnchanged -Baseline $relayContract -ContextArgs $kubectlContextArgs `
         -Namespace $K8sNamespace -RequestedBindHost $RelayBindHost `
@@ -468,7 +469,24 @@ try {
     Write-Err $_.Exception.Message
     exit 1
 }
-Start-K8sEnvoyBridge
+# 2026-07-28 P2:退役本机 port-forward 桥。集群内已部署 pandora-edge-envoy(NodePort 31443)
+# 且 minikube 节点容器发布了宿主 8443(-Reset 重建时经 PANDORA_MINIKUBE_PORTS 携带)时,
+# 客户端仍连 127.0.0.1:8443,链路变为 宿主 8443 → 节点 31443 → 集群内 Envoy → Service,
+# 无需 21 条 kubectl port-forward + 宿主 compose envoy。两条件任一不满足(其它机器/未重建的
+# 旧集群)自动回落宿主桥接——他人路径不变;-HostBridge 强制走旧路径。
+$edgeInCluster = $false
+if (-not $HostBridge) {
+    kubectl @kubectlContextArgs get svc pandora-edge-envoy -n $K8sNamespace *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $nodePortMap = (docker port $MinikubeProfile 2>$null | Out-String)
+        if ($nodePortMap -match '(?m)^31443/tcp') { $edgeInCluster = $true }
+    }
+}
+if ($edgeInCluster) {
+    Write-Ok "集群内边缘 Envoy 生效(127.0.0.1:8443 → 节点 31443 → pandora-edge-envoy),跳过宿主桥接。"
+} else {
+    Start-K8sEnvoyBridge
+}
 
 # ── 3) 等 Fleet Ready ──────────────────────────────────────────────────
 Write-Step "[3/6] 等 Fleet Ready(超时 ${TimeoutSec}s)"
