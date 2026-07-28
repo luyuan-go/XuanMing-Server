@@ -103,6 +103,24 @@ sweepOnce (biz/allocator.go)
 - 每实例 6 次 `model_b_sweep_release_failed`：DELETE 已 200、Pod 处正常 30s 终止宽限，被
   当作失败重复 DELETE ≥7 次并占 sweep 队头（P1-2）。
 
+## 4.2 第二次部署验证结果（2026-07-28，只读复审执行）——第三 P0
+
+⑧(心跳移 PostLoadMapWithWorld)部署(`pandora/battle-ds:r1553-dirty-20260727-230712`,
+`PandoraServer` SHA-256 `BFAC8268...B69A4C`;Go 三服务 `eed8ce2c6b5d`)后再次验证失败：
+
+- match_id=17389480767979520：03:39:30 分配(c9mk7/7078) → 03:40:18.958 冷加载约 48s 后
+  **仅收到第一拍**业务心跳并激活凭据 → 03:40:19.795 allocator 立即返回 `battle_ready` →
+  03:40:21 客户端 `ClientTravel 192.168.2.28:7078` → 客户端持续 UDP 发包**零回包**、DS 无
+  第二拍 → 03:40:36.005(首拍后 17.0s)命中 ACTIVE 15s 阈值删 Pod → 03:41:12 客户端 45s
+  watchdog 回退 Hub。次日新匹配 17395583916507136 服务端同型复现(首拍激活→立即 ready→
+  回收链)。
+- **根因**：`PostLoadMapWithWorld` 不是"游戏线程已稳定 tick、NetDriver 可接客"的充分条件
+  ——回调本身在游戏线程上执行,首拍在回调栈内同步发出只能证明"回调这一刻活着";回调
+  之后 Artic01 剩余初始化继续阻塞游戏线程,首拍已把凭据提升 ACTIVE 并放行 `waitBattleReady`,
+  随后按 ACTIVE 15s 契约被正确回收——错在**激活过早**,不在 15s 阈值。
+- 伴随观察：Redis 在 03:41:02 后短时断连,晚于首次 UDP 不可达约 40s,非本局起因;定谳
+  行动项见 A10。
+
 ## 5. 根因
 
 ### 5.1 直接根因
@@ -162,6 +180,7 @@ sweepOnce (biz/allocator.go)
 | ⑪ 二轮复审：⑧的 include 写错（`UObject/CoreDelegates.h` 在 UE 5.8 不存在）导致 Linux DS 全量编译失败（1235/1412 Action，UAT exit 6）→ 改 `UObject/UObjectGlobals.h`；同步清除 6 处仍声称"BeginPlay 启动心跳"的旧注释 | **已落码，待 UE 编译验证** | UE 4+2 文件 | 待 Codex 全量编译 |
 | ⑫ 二轮复审：Linux `-race -count=50` 可重复失败 8/50（`active projection corrupt`）——定谳为**实现缺陷**：`AbandonIfStale`/`readBoundAuthority` 在 WATCH 闭包内分两次 GET 读 auth+battle，首次 `ActivateHeartbeat` 的 EXEC 可落在两次 GET 之间，撕裂快照被跨键一致性校验在 EXEC 之前误判为 corrupt（WATCH 只保护到 EXEC，保护不了闭包内分次读）；生产表现为对刚激活对局的假 `authority_check_failed`。根修：同槽两键改**单条 MGET 原子读**（`readAuthorityPairAtomic`），撕裂读结构性不可能 | **已落码未提交** | `internal/data/battle_auth.go` | 审查方精确复现命令 `-race -count=60` 通过（修复前 8/50 失败） |
 | ⑬ 二轮复审：wait outcome 所有权——reclaimed/purged/superseded/不可授权一律携带 `errBattleWaitOwnershipLost` 哨兵（errcode cause 链），owner 见哨兵跳过 cleanup，消除 waiter×sweep 并发双 `ReleaseExpected`；缺 auth 等待钳 `HeartbeatTimeout`(15s) 有界宽限（推导：GSA POST ≤5s + Deliver PATCH ≤5s + Redis 往返；owner 完成 provision 才进 wait，正常永不触发），不再复用 120s 冷加载宽限 | **已落码未提交** | `internal/biz/allocator.go` | barrier 测试（abandon 已提交、Release 在途时 waiter 退出，Release 恰一次）+ 哨兵断言 |
+| ⑮ 第三 P0（§4.2）：**两阶段激活**下沉到 allocator 权威侧——`ActivateHeartbeat` 对 staged 心跳要求 ≥`activation_stability_beats`(默认 3) 次**实收**心跳且首尾跨度 ≥`activation_stability_span`(默认 10s=2 个完整 5s 周期)才原子提升 ACTIVE 并放行 `waitBattleReady`；门**只作用于首次激活**（`auth.Active==nil`），已被持续心跳证明的 ACTIVE 实例的凭据轮换(ROTATING)不重复付稳定性证据（拦轮换=无谓延迟,属过度修复,复审自查收紧）；证据存同槽 Redis 键(`pandora:ds:authstab:{m}`,同 WATCH、按凭据身份隔离、提升即删、TTL 兜底)；证据不足零状态转移(battle 保持 warming,120s 分配宽限兜底,pending 不续命)、响应无 ACK,DS 每 tick 幂等重试(协议零改动)。DS 侧：启动路径去掉**内联首拍**(纯周期定时器,每拍证明游戏线程真实 pump 过 TimerManager)+ PostLoadMap 后 NetDriver 未就绪 fail-closed 不启动心跳；EndPlay 代际关系已核(非无缝 travel 串行,旧 Stop 不可能清新定时器,注释锁定)。ACTIVE 15s 崩溃补偿阈值不变 | **已落码未提交,待编译/部署** | `conf.go`、`internal/data/battle_auth.go`、`internal/biz/allocator.go`、UE GameMode/DSBackendSubsystem | data 门四拍序列+阻塞 30s 不判弃+130s 判弃(fixture 时钟)；biz 端到端(首拍空 ACK 不放行、第 3 拍提升后 waiter 拿 ready) |
 | ⑭ 二轮复审：队头饥饿全类根除——abandoned 路径**所有**未确认 release/preflight 错误（不只 deletion-pending）按分配身份退避；epoch=0 resume（§9.4 最后一棒）外部确认失败同样退避（15s 只延后节奏，outbox 语义不变）；allocation-id 回退改 **LIST 先行**（全 deleting 直接 pending 不重复 DeleteCollection，空集合保留 DeleteCollection+后置 LIST 的 timeout-late-apply 防线）；UE 心跳诊断只在真发送时记时/打拍、Start/Stop 重置基准（防假连续性证据）；pinger 加 `PANDORA_AGONES_HEALTH_VERBOSE=1` 定向开关（不开放任意 LogCmds）+ 默认级别 60s 发拍摘要（窗口最大间隔即硬门证据） | **已落码未提交** | `internal/biz/allocator.go`、`internal/data/agones_allocator.go`、UE pinger/subsystem | 普通错误双轮公平性 + resume 退避 + 连续 DeleteCollection 单删测试，全绿 |
 
 ### 7.3 防复发规则
@@ -209,8 +228,9 @@ sweepOnce (biz/allocator.go)
 | A5 | P2 | Artic01 资产减负（server cook 190.7MB/83 cell）缩短冷加载本身 | 待指定 | 未排期 | — |
 | A6 | P1 | 回捞 §2.2 标注缺失的原始证据（allocator Pod 日志、k8s events）；捞不到则在本档确认永久缺失 | luhailong | 待执行 | §2.2 证据缺口 |
 | A7 | P2 | 双阈值版本全量铺开后评估恢复 ds-allocator RollingUpdate（本跳 Recreate 的收回条件） | 待指定 | 未排期 | §7.2⑦ |
-| A8 | P0-关闭门 | ⑧ UE 编译 → 重打不可变镜像 → 换入 fleet → 过验收门 A（≥60s/≥12 拍/最大间隔<15s/不删 Pod）+ pinger 硬门（含 canary） | luhailong | 待执行 | §8 |
-| A9 | P0-关闭门 | ⑨⑩ 部署新 ds-allocator → 过验收门 B（3 次杀 Pod 注入,~40s 内重试）→ 验收门 C（真实 UE 客户端 E2E）→ 观察窗口 | luhailong | 待执行 | §8 |
+| A8 | P0-关闭门 | ⑧⑮ UE 编译 → 重打不可变镜像 → 换入 fleet → 过验收门 A（≥60s/≥12 拍/最大间隔<15s/不删 Pod,以 started/2xx 指标为准）+ pinger 硬门（含 canary） | luhailong | 待执行 | §8 |
+| A9 | P0-关闭门 | ⑨⑩⑮ 部署新 ds-allocator → 过验收门 B（3 次杀 Pod 注入,~40s 内重试）→ 验收门 C（真实 UE 客户端拿地址→UDP 进场→Welcomed/Admission ACK→运行→退出→重连,连续 3 次）→ 观察窗口 | luhailong | 待执行 | §8 |
+| A10 | P1 | 伴随高危缺口定谳：Artic01 冷加载/回收窗口出现 Redis、Hub、Agones 及多个业务 Pod 探针**同时**超时且无 OOM 证据——采集 CPU/IO PSI、cgroup memory、冷加载并发重叠情况,确认 14Gi/maxReplicas=2 下是否仍存在冷启动/终止实例重叠导致的节点级 I/O 或 CPU 抖动;**不得先武断归因内存** | luhailong | 待执行 | §4.2 伴随观察 |
 
 ## 11. 关闭审核
 

@@ -1111,6 +1111,143 @@ func TestBattleAuthAbandonWarmingForfeitBoundToExactInstance(t *testing.T) {
 	}
 }
 
+// 两阶段激活稳定性门(INC-20260727-001 第三 P0):证据不足的 staged 心跳零状态转移
+// (不提升、无 ACK、battle 保持 warming、LastHeartbeatMs 不动);≥3 拍且跨度 ≥10s 才
+// 原子提升并清证据键;首拍后线程阻塞(无后续拍)→ 120s 分配宽限照常判弃。
+func TestBattleAuthActivationStabilityGate(t *testing.T) {
+	ctx := context.Background()
+	t.Run("promotes only after sustained beats", func(t *testing.T) {
+		f := newBattleAuthFixture(t)
+		const matchID = uint64(718)
+		const allocationID = "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f007"
+		seedModelBBattle(t, f, matchID, allocationID, "pod-stab", "uid-stab")
+		allocHeartbeatMs := f.now.UnixMilli()
+		_, id := prepareAndStage(t, f, matchID, allocationID, "pod-stab", "uid-stab", true)
+		in := activateInput()
+		in.StabilityBeats = 3
+		in.StabilitySpanMs = 10_000
+
+		assertPending := func(step string) {
+			res, err := f.auth.ActivateHeartbeat(ctx, matchID, id, in)
+			if err != nil || !res.ActivationPending || res.FirstActivation {
+				t.Fatalf("%s: res=%+v err=%v want pending", step, res, err)
+			}
+			if res.Active != (BattleCredentialIdentity{}) {
+				t.Fatalf("%s: pending response leaked ACK identity: %+v", step, res.Active)
+			}
+			snap, serr := f.auth.ReadAuthority(ctx, matchID)
+			if serr != nil || snap.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_BOOTSTRAP ||
+				snap.Battle.GetState() != "warming" || snap.Battle.GetLastHeartbeatMs() != allocHeartbeatMs {
+				t.Fatalf("%s: pending beat caused state transition: phase=%v state=%s hb=%d err=%v",
+					step, snap.Auth.GetPhase(), snap.Battle.GetState(), snap.Battle.GetLastHeartbeatMs(), serr)
+			}
+		}
+		assertPending("beat1")                    // T0:count=1
+		f.setNow(f.now.Add(6 * time.Second))
+		assertPending("beat2 +6s")                // count=2
+		f.setNow(f.now.Add(3 * time.Second))
+		assertPending("beat3 +9s span<10s")       // count=3 但跨度 9s
+		f.setNow(f.now.Add(2 * time.Second))
+		res, err := f.auth.ActivateHeartbeat(ctx, matchID, id, in) // +11s:count=4 跨度 11s
+		if err != nil || res.ActivationPending || !res.FirstActivation ||
+			res.Battle.GetState() != "running" {
+			t.Fatalf("stabilized beat did not promote: res=%+v err=%v", res, err)
+		}
+		if f.mr.Exists(battleActivationEvidenceKey(matchID)) {
+			t.Fatal("promotion did not clear stability evidence key")
+		}
+	})
+	t.Run("rotation of proven active instance bypasses gate", func(t *testing.T) {
+		f := newBattleAuthFixture(t)
+		const matchID = uint64(721)
+		const allocationID = "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f009"
+		seedModelBBattle(t, f, matchID, allocationID, "pod-rot", "uid-rot")
+		_, firstID := prepareAndStage(t, f, matchID, allocationID, "pod-rot", "uid-rot", true)
+		// 首次激活(门关,等价已通过稳定性证据的存量实例)。
+		if _, err := f.auth.ActivateHeartbeat(ctx, matchID, firstID, activateInput()); err != nil {
+			t.Fatalf("first activation: %v", err)
+		}
+		// 凭据轮换:新 staged 凭据在门开启下单拍即须完成提升——已证明实例不再付稳定性证据。
+		_, rotatedID := prepareAndStage(t, f, matchID, allocationID, "pod-rot", "uid-rot", true)
+		in := activateInput()
+		in.StabilityBeats = 3
+		in.StabilitySpanMs = 10_000
+		res, err := f.auth.ActivateHeartbeat(ctx, matchID, rotatedID, in)
+		if err != nil || res.ActivationPending || res.Active.JTI != rotatedID.JTI {
+			t.Fatalf("rotation must bypass stability gate: res=%+v err=%v", res, err)
+		}
+	})
+	t.Run("first beat then blocked thread reclaimed by warming grace", func(t *testing.T) {
+		f := newBattleAuthFixture(t)
+		const matchID = uint64(719)
+		const allocationID = "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f008"
+		seedModelBBattle(t, f, matchID, allocationID, "pod-stab2", "uid-stab2")
+		allocMs := f.now.UnixMilli()
+		_, id := prepareAndStage(t, f, matchID, allocationID, "pod-stab2", "uid-stab2", true)
+		in := activateInput()
+		in.StabilityBeats = 3
+		in.StabilitySpanMs = 10_000
+		if res, err := f.auth.ActivateHeartbeat(ctx, matchID, id, in); err != nil || !res.ActivationPending {
+			t.Fatalf("beat1: res=%+v err=%v", res, err)
+		}
+		// 20~30s 阻塞窗口内:warming 宽限保护,不得判弃。
+		result, err := f.auth.AbandonIfStale(ctx, matchID, coldLoadCutoffs(allocMs, 30*time.Second), testTTL, testTTL)
+		if err != nil || result.Abandoned {
+			t.Fatalf("blocked-at-30s falsely reclaimed: %+v err=%v", result, err)
+		}
+		// 永久阻塞:120s 分配宽限到期照常判弃(pending 心跳不续命)。
+		result, err = f.auth.AbandonIfStale(ctx, matchID, coldLoadCutoffs(allocMs, 130*time.Second), testTTL, testTTL)
+		if err != nil || !result.Abandoned {
+			t.Fatalf("blocked-forever not reclaimed at 130s: %+v err=%v", result, err)
+		}
+	})
+}
+
+// WRONGTYPE fail-closed(复审 P1-1):auth/battle 任一键被写成错误类型时,原子读必须
+// 把 WRONGTYPE 当错误返回(MGET 会静默给 nil,把损坏伪装成"合法缺失"),AbandonIfStale
+// 零副作用——不写 abandoned、不改另一键、不触发释放、outbox/TTL 原样。
+func TestBattleAuthAbandonFailsClosedOnWrongTypeKey(t *testing.T) {
+	ctx := context.Background()
+	for _, corrupt := range []string{"auth", "battle"} {
+		t.Run(corrupt, func(t *testing.T) {
+			f := newBattleAuthFixture(t)
+			const matchID = uint64(717)
+			const allocationID = "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f006"
+			seedModelBBattle(t, f, matchID, allocationID, "pod-wt", "uid-wt")
+			prepareAndStage(t, f, matchID, allocationID, "pod-wt", "uid-wt", true)
+
+			corruptKey := battleAuthKey(matchID)
+			intactKey := battleKey(matchID)
+			if corrupt == "battle" {
+				corruptKey, intactKey = battleKey(matchID), battleAuthKey(matchID)
+			}
+			// 把目标键改写成 LIST(WRONGTYPE 场景)。
+			f.mr.Del(corruptKey)
+			if _, err := f.mr.Lpush(corruptKey, "corrupted"); err != nil {
+				t.Fatal(err)
+			}
+			intactBefore := rawRedisBytes(t, f.rdb, intactKey)
+			scoreBefore, _ := f.rdb.ZScore(ctx, activeKey, fmt.Sprint(matchID)).Result()
+
+			result, err := f.auth.AbandonIfStale(ctx, matchID,
+				coldLoadCutoffs(f.now.UnixMilli(), 130*time.Second), testTTL, testTTL)
+			if err == nil {
+				t.Fatalf("wrong-type %s key must fail closed, result=%+v", corrupt, result)
+			}
+			if result.Abandoned || result.AlreadyTerminal {
+				t.Fatalf("wrong-type %s key produced abandon side effects: %+v", corrupt, result)
+			}
+			if !bytes.Equal(intactBefore, rawRedisBytes(t, f.rdb, intactKey)) {
+				t.Fatalf("wrong-type %s key mutated the intact peer key", corrupt)
+			}
+			if scoreAfter, zerr := f.rdb.ZScore(ctx, activeKey, fmt.Sprint(matchID)).Result(); zerr != nil || scoreAfter != scoreBefore {
+				t.Fatalf("wrong-type %s key touched active outbox: before=%v after=%v err=%v",
+					corrupt, scoreBefore, scoreAfter, zerr)
+			}
+		})
+	}
+}
+
 // ACTIVE(已激活,含 ready/running)只认业务心跳阈值:失联超 15s 必须回收,
 // 即使仍未超过 warming 冷加载阈值 —— 宽限绝不能延后 running DS 的崩溃补偿(不变量 §4)。
 func TestBattleAuthAbandonActiveIgnoresWarmingGrace(t *testing.T) {

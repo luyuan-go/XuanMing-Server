@@ -321,6 +321,18 @@ type AllocatorConf struct {
 	// 超过此时长没收到 Heartbeat → 标记 abandoned + 释放(W4 ② 仅释放,补偿留 W4 ③)。
 	HeartbeatTimeout config.Duration `yaml:"heartbeat_timeout,omitempty" json:"heartbeat_timeout,omitempty"`
 
+	// ActivationStabilityBeats 首次激活(staged→ACTIVE)所需的最少**实收**业务心跳次数
+	// (默认 3);ActivationStabilitySpan 是这些心跳的最小首尾跨度(默认 10s = 2 个完整
+	// 5s 心跳周期)。推导(INC-20260727-001 第三 P0):DS 在 PostLoadMapWithWorld 回调内
+	// 发出的首拍只能证明"回调这一刻游戏线程活着"——实测 Artic01 48s 冷加载后首拍即
+	// 激活并放行 ds_addr,回调后游戏线程继续阻塞,17s 后被 ACTIVE 15s 阈值判弃,客户端
+	// 连上一个不回包的 DS。跨 ≥2 个完整心跳周期的 ≥3 次实收心跳证明游戏线程持续 pump
+	// TimerManager(每一拍都是一次真实穿越)。证据不足期间 battle 保持 warming(120s
+	// 分配宽限兜底,pending 心跳不续命)、不返回 ds_addr、不发 ACK;ACTIVE 15s 崩溃
+	// 补偿阈值不变。beats≤1 且 span≤0 时门关闭(仅供测试/回退)。
+	ActivationStabilityBeats int             `yaml:"activation_stability_beats,omitempty" json:"activation_stability_beats,omitempty"`
+	ActivationStabilitySpan  config.Duration `yaml:"activation_stability_span,omitempty" json:"activation_stability_span,omitempty"`
+
 	// OwnerAddr owner 权威服务地址(owner-authority.md migrate ⑥)。
 	// 空 = 不双写实例租约(未启用,现网行为不变,安全默认)。
 	OwnerAddr string `yaml:"owner_addr,omitempty" json:"owner_addr,omitempty"`
@@ -378,6 +390,12 @@ func (c *Config) Defaults() {
 	}
 	if c.Allocator.HeartbeatTimeout == 0 {
 		c.Allocator.HeartbeatTimeout = config.Duration(15 * time.Second)
+	}
+	if c.Allocator.ActivationStabilityBeats == 0 {
+		c.Allocator.ActivationStabilityBeats = 3
+	}
+	if c.Allocator.ActivationStabilitySpan == 0 {
+		c.Allocator.ActivationStabilitySpan = config.Duration(10 * time.Second)
 	}
 	if c.Allocator.SweepInterval == 0 {
 		c.Allocator.SweepInterval = config.Duration(5 * time.Second)

@@ -124,11 +124,19 @@ type BattleHeartbeatInput struct {
 	AuthTTL            time.Duration
 	BattleTTL          time.Duration
 	EmptyBattleTimeout time.Duration
+	// StabilityBeats/StabilitySpanMs 是两阶段激活稳定性门(INC-20260727-001 第三 P0,
+	// 推导见 conf.ActivationStabilityBeats):staged→ACTIVE 提升要求 ≥Beats 次实收
+	// 心跳且首尾跨度 ≥SpanMs。Beats≤1 且 SpanMs≤0 时门关闭(零值兼容旧行为)。
+	StabilityBeats  int
+	StabilitySpanMs int64
 }
 
 // BattleActivateResult 同时承载 pending→active ACK 和事务提交后的 Battle 镜像。
 type BattleActivateResult struct {
-	FirstActivation bool
+	// ActivationPending:staged 心跳已实收但稳定性证据不足,未提升 ACTIVE、零状态
+	// 转移(battle 保持 warming);响应不得携带 ACK,DS 每 tick 幂等重试。
+	ActivationPending bool
+	FirstActivation   bool
 	// FirstAbandon 只在本事务首次把 active battle 推进为 abandoned 时为 true；
 	// 外层仅赢家执行一次 Pod 回收，补偿投递仍可由 sweep 幂等重试。
 	FirstAbandon bool
@@ -673,6 +681,55 @@ func (r *RedisBattleAuthRepo) MarkDelivered(ctx context.Context, matchID uint64,
 }
 
 // ActivateHeartbeat 是 pending→active、服务端心跳时刻、battle ready/投影的唯一线性化点。
+// battleActivationEvidenceKey 是两阶段激活稳定性门的证据键(与 auth/battle 同槽同
+// WATCH):`gen|jti|firstMs|count`。凭据身份变化(轮换/新分配)即整体重计;提升成功
+// 即删除;TTL=BattleTTL 兜底防泄漏(§9.24 有界)。
+func battleActivationEvidenceKey(matchID uint64) string {
+	return fmt.Sprintf("pandora:ds:authstab:{%d}", matchID)
+}
+
+// battleActivationStabilityPending 在 WATCH 事务内推进激活稳定性证据并判定是否仍
+// pending(INC-20260727-001 第三 P0,推导见 conf.ActivationStabilityBeats)。
+// 返回 (pending, 新证据 payload, err);门关闭时恒 (false, "", nil)。
+func battleActivationStabilityPending(
+	tx *redis.Tx,
+	ctx context.Context,
+	sKey string,
+	id BattleCredentialIdentity,
+	in BattleHeartbeatInput,
+	nowMs int64,
+) (bool, string, error) {
+	if in.StabilityBeats <= 1 && in.StabilitySpanMs <= 0 {
+		return false, "", nil
+	}
+	beats := int64(in.StabilityBeats)
+	if beats < 1 {
+		beats = 1
+	}
+	firstMs, count := nowMs, int64(1)
+	raw, err := tx.Get(ctx, sKey).Result()
+	switch {
+	case err == redis.Nil:
+	case err != nil:
+		return false, "", err
+	default:
+		parts := strings.Split(raw, "|")
+		if len(parts) == 4 && parts[0] == strconv.FormatUint(id.Gen, 10) && parts[1] == id.JTI {
+			if f, ferr := strconv.ParseInt(parts[2], 10, 64); ferr == nil && f > 0 && f <= nowMs {
+				firstMs = f
+			}
+			if c, cerr := strconv.ParseInt(parts[3], 10, 64); cerr == nil && c > 0 {
+				count = c + 1
+			}
+		}
+		// 身份不匹配(凭据轮换/同名新分配):旧证据作废,从本拍重计——绝不让旧实例的
+		// 心跳历史给新实例代付稳定性证据。
+	}
+	pending := count < beats || nowMs-firstMs < in.StabilitySpanMs
+	payload := fmt.Sprintf("%d|%s|%d|%d", id.Gen, id.JTI, firstMs, count)
+	return pending, payload, nil
+}
+
 func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uint64, id BattleCredentialIdentity, in BattleHeartbeatInput) (BattleActivateResult, error) {
 	serverNowMs := r.now().UnixMilli()
 	if matchID == 0 || in.PlayerCount < 0 || in.AuthTTL <= 0 || in.BattleTTL <= 0 ||
@@ -684,6 +741,7 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 	}
 	aKey, bKey := battleAuthKey(matchID), battleKey(matchID)
 	rKey := dsauthrecord.BattleResultReceiptKey(matchID)
+	sKey := battleActivationEvidenceKey(matchID)
 	var out BattleActivateResult
 	for attempt := 0; attempt < battleAuthCASRetries; attempt++ {
 		serverNowMs = r.now().UnixMilli()
@@ -800,6 +858,33 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 				bizErr = errBattleAuthStale
 				return bizErr
 			}
+			if promote && auth.Active == nil {
+				// 两阶段激活稳定性门(INC-20260727-001 第三 P0),**只作用于首次激活**:
+				// 首拍只能证明"此刻活着",证据不足时零状态转移——不提升 ACTIVE、不写
+				// auth/battle、不刷新 TTL、battle 保持 warming(120s 分配宽限兜底,pending
+				// 心跳仍不续命),仅原子推进同槽证据键;响应无 ACK,DS 每 tick 幂等重试
+				// staged 心跳。ROTATING 轮换发生在已被持续心跳证明存活的 ACTIVE 实例上
+				// (旧凭据在轮换完成前持续有效),不需要也不应该再付一次稳定性证据——
+				// 拦轮换只会无谓延迟 ~span,属过度修复。
+				stabilityPending, evidence, gerr := battleActivationStabilityPending(
+					tx, ctx, sKey, id, in, serverNowMs)
+				if gerr != nil {
+					return gerr
+				}
+				if stabilityPending {
+					_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+						pipe.Set(ctx, sKey, evidence, in.BattleTTL)
+						return nil
+					})
+					if err == nil {
+						out = BattleActivateResult{
+							ActivationPending: true,
+							Battle:            proto.Clone(battle).(*dsv1.BattleStorageRecord),
+						}
+					}
+					return err
+				}
+			}
 			if promote {
 				auth.Active = auth.Pending
 				auth.Pending = nil
@@ -856,13 +941,17 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 				if battle.State == "ended" {
 					pipe.Del(ctx, rKey)
 				}
+				if promote {
+					// 提升成功即清稳定性证据键(与提升同一 EXEC,原子)。
+					pipe.Del(ctx, sKey)
+				}
 				return nil
 			})
 			if err == nil {
 				out = activateResult(auth, battle, promote, firstAbandon, terminal)
 			}
 			return err
-		}, aKey, bKey, rKey)
+		}, aKey, bKey, rKey, sKey)
 		if txErr == nil {
 			if out.Terminal {
 				// abandoned 的 active member 同时是 lifecycle outbox：投递成功前必须保留，
@@ -2251,11 +2340,21 @@ func readBattleFrom(tx *redis.Tx, ctx context.Context, matchID uint64, key strin
 	return unmarshalBattle(matchID, b)
 }
 
-// readAuthorityPairAtomic 用**单条 MGET**读取同槽 auth+battle 快照(键含 {match_id}
-// 同 hash tag,cluster 下 MGET 合法)。两次独立 GET 之间并发写(如首次 ActivateHeartbeat
-// 的 EXEC)会造成撕裂快照:auth 已 ACTIVE 而 battle 仍是旧 warming 镜像,跨键一致性校验
-// 在 EXEC 之前就把它误判成 "active projection corrupt" 返回(race 实测 8/50)——WATCH 只
-// 保护到 EXEC,保护不了闭包内分次读。单条命令原子,撕裂读从根上不可能。
+// battleAuthorityPairScript 在单条命令内 GET 同槽 auth+battle 两键。
+// 为什么是 Lua 而不是 MGET(复审 P1-1):MGET 对**存在但类型错误**的 key 静默返回
+// nil,会把 WRONGTYPE 伪装成"合法缺失"(fail-open,严重时凭错误前提继续写
+// abandoned/release);Lua 内 redis.call('GET') 遇到非 string 键直接抛 WRONGTYPE,
+// 错误语义与逐键 GET 完全一致。Redis Lua 里缺失键的 GET 返回 false(非 nil),
+// {false, value} 不会截断表,两个位置始终齐全。
+var battleAuthorityPairScript = redis.NewScript(
+	`return {redis.call('GET', KEYS[1]), redis.call('GET', KEYS[2])}`)
+
+// readAuthorityPairAtomic 用**单条 Lua 命令**读取同槽 auth+battle 快照(键含
+// {match_id} 同 hash tag,cluster 下合法)。两次独立 GET 之间并发写(如首次
+// ActivateHeartbeat 的 EXEC)会造成撕裂快照:auth 已 ACTIVE 而 battle 仍是旧
+// warming 镜像,跨键一致性校验在 EXEC 之前就把它误判成 "active projection
+// corrupt" 返回(race 实测 8/50)——WATCH 只保护到 EXEC,保护不了闭包内分次读。
+// 单条命令原子,撕裂读从根上不可能;WRONGTYPE 照常返回错误(fail-closed)。
 // 返回值:任一键缺失返回对应 nil(不设错),由调用方按语义处理。
 func readAuthorityPairAtomic(
 	tx *redis.Tx,
@@ -2263,12 +2362,13 @@ func readAuthorityPairAtomic(
 	matchID uint64,
 	aKey, bKey string,
 ) (*dsv1.BattleDSAuthStorageRecord, *dsv1.BattleStorageRecord, error) {
-	vals, err := tx.MGet(ctx, aKey, bKey).Result()
+	res, err := battleAuthorityPairScript.Run(ctx, tx, []string{aKey, bKey}).Result()
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(vals) != 2 {
-		return nil, nil, fmt.Errorf("battle %d authority MGET returned %d values", matchID, len(vals))
+	vals, ok := res.([]interface{})
+	if !ok || len(vals) != 2 {
+		return nil, nil, fmt.Errorf("battle %d authority pair read returned %T", matchID, res)
 	}
 	var auth *dsv1.BattleDSAuthStorageRecord
 	if raw, ok := vals[0].(string); ok {

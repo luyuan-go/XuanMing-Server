@@ -816,6 +816,19 @@ func battleReadyForPod(b *dsv1.BattleStorageRecord, podName string, matchID uint
 		(b.State == stateReady || b.State == stateRunning)
 }
 
+// battleWaitStateProgressable 是 wait 可继续前进的状态**白名单**(复审 P1-3):
+// allocating/warming 是在途,ready/running 即将命中 ready 判定。其余一切状态
+// (ended/abandoned、preactive_release_pending、allocation_abort_pending、
+// allocation_uncertain/reconciling/empty_fence、以及任何未知新状态)都已由回收/对账链
+// 接管或属 fail-closed 墓碑——继续等待只会白耗 ready_wait,owner 也绝不能对其 cleanup。
+func battleWaitStateProgressable(state string) bool {
+	switch state {
+	case stateAllocating, stateWarming, stateReady, stateRunning:
+		return true
+	}
+	return false
+}
+
 // waitBattleReady 轮询 Redis 镜像直到 DS 心跳确认 ready,或 ReadyWaitTimeout 超时(返回 errReadyWaitTimeout)。
 // 提前失败分两类:回收/接管所有权已属他人的一律携带 errBattleWaitOwnershipLost(owner 不得
 // 再 cleanup);其余错误 owner 照旧 cleanup。
@@ -869,12 +882,21 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 			} else {
 				authMissingSince = time.Time{}
 			}
-			// sweep(实例判死加速/超时判弃)可能已把本分配写成终态;终态永远到不了 ready,
-			// 继续轮询只会白耗完整 ready_wait。回收所有权已属 sweep,owner 不得再 cleanup。
-			if b.State == stateAbandoned || b.State == stateEnded ||
-				b.State == data.BattleStatePreactiveReleasePending {
+			// 状态白名单(复审 P1-3):终态、abort/uncertain/release 各类墓碑与未知状态
+			// 一律视为回收/对账链已接管,立即携带所有权哨兵失败。
+			if !battleWaitStateProgressable(b.State) {
 				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d reclaimed while waiting ready: state=%s", matchID, b.State)
+			}
+			// auth 相位门:TERMINATING/QUARANTINED 是回收/隔离链写下的永久 fence——即使
+			// battle 投影仍是 warming/ready/running(半状态),该分配也不可能再被授权 ready。
+			if snapshot.AuthFound {
+				if phase := snapshot.Auth.GetPhase(); phase == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+					phase == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_QUARANTINED {
+					return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
+						"battle %d auth fenced while waiting ready: phase=%s state=%s",
+						matchID, phase.String(), b.State)
+				}
 			}
 			ready, _ := snapshot.ReadyAuthorized(
 				time.Now().UnixMilli(), u.cfg.HeartbeatTimeout.Std().Milliseconds())
@@ -895,7 +917,8 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d allocation superseded", matchID)
 			}
-			if b.State == stateAbandoned || b.State == stateEnded {
+			// legacy 同用白名单:滚动共存期也可能读到 modelB 写下的墓碑状态,一律不等。
+			if !battleWaitStateProgressable(b.State) {
 				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d reclaimed while waiting ready: state=%s", matchID, b.State)
 			}
@@ -1073,12 +1096,28 @@ func (u *AllocatorUsecase) releaseFencedPreactiveGameServer(
 
 // reconcilePreactiveRelease 幂等完成永久 pre-active release fence → UID 条件删除 → purge。
 // 返回 false 只表示当前仍不可确认回收；墓碑保持永久，安全性不依赖下一轮一定执行。
+// preactiveReleaseOutcome 是 preactive/bootstrap 回收单次推进的结构化结果(复审 P1-2):
+// 调用方据此决定是否登记 allocation-bound 退避,不再用单一 bool 把「不适用」与
+// 「外部未确认」混为一谈。
+type preactiveReleaseOutcome int
+
+const (
+	// preactiveReleaseSkipped:身份不完整/fence 判定不适用(如 ACTIVE 赢家),零外部副作用,
+	// 无需退避——下轮状态自然分流。
+	preactiveReleaseSkipped preactiveReleaseOutcome = iota
+	// preactiveReleaseUnconfirmed:preflight/release/purge 任一步结果未确认,重试前应按
+	// exact allocation 退避,防控制面持续故障时每轮重复外部调用占队头。
+	preactiveReleaseUnconfirmed
+	// preactiveReleaseCompleted:释放+purge 全链明确成功。
+	preactiveReleaseCompleted
+)
+
 func (u *AllocatorUsecase) reconcilePreactiveRelease(
 	ctx context.Context,
 	battle *dsv1.BattleStorageRecord,
-) bool {
+) preactiveReleaseOutcome {
 	if battle == nil || battle.GetAllocationId() == "" || battle.GetGameserverUid() == "" {
-		return false
+		return preactiveReleaseSkipped
 	}
 	expected := data.BattleExpectedInstance{
 		AllocationID: battle.GetAllocationId(), InstanceUID: battle.GetGameserverUid(),
@@ -1089,14 +1128,20 @@ func (u *AllocatorUsecase) reconcilePreactiveRelease(
 	if preflightErr != nil {
 		plog.With(ctx).Warnw("msg", "preactive_release_pod_uid_preflight_failed",
 			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", preflightErr)
-		return false
+		return preactiveReleaseUnconfirmed
 	}
 	battle.PodUid = podUID
 	fenced, err := u.authRepo.FencePreactiveReleaseExpected(ctx, battle.GetMatchId(), expected)
-	if err != nil || !fenced {
+	if err != nil {
 		plog.With(ctx).Warnw("msg", "preactive_release_fence_failed", "match_id", battle.GetMatchId(),
 			"allocation_id", battle.GetAllocationId(), "fenced", fenced, "err", err)
-		return false
+		return preactiveReleaseUnconfirmed
+	}
+	if !fenced {
+		// fence 明确拒绝(身份不符/已激活赢家/状态不适用):零副作用,属不适用而非未确认。
+		plog.With(ctx).Debugw("msg", "preactive_release_fence_not_applicable",
+			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId())
+		return preactiveReleaseSkipped
 	}
 	allocation := &data.AuthoritativeGameServerAllocation{
 		PodName: battle.GetDsPodName(), InstanceUID: battle.GetGameserverUid(),
@@ -1106,14 +1151,15 @@ func (u *AllocatorUsecase) reconcilePreactiveRelease(
 	if err := u.releaseFencedPreactiveGameServer(ctx, battle.GetMatchId(), battle.GetDsPodName(), allocation); err != nil {
 		plog.With(ctx).Warnw("msg", "preactive_release_unconfirmed", "match_id", battle.GetMatchId(),
 			"allocation_id", battle.GetAllocationId(), "err", err)
-		return false
+		return preactiveReleaseUnconfirmed
 	}
 	purged, err := u.authRepo.PurgePreactiveReleasedExpected(ctx, battle.GetMatchId(), expected)
-	if err != nil {
+	if err != nil || !purged {
 		plog.With(ctx).Warnw("msg", "preactive_release_purge_failed", "match_id", battle.GetMatchId(),
 			"allocation_id", battle.GetAllocationId(), "purged", purged, "err", err)
+		return preactiveReleaseUnconfirmed
 	}
-	return purged
+	return preactiveReleaseCompleted
 }
 
 // publishReconciledAllocationAbandoned is the durable handoff from a
@@ -1785,9 +1831,19 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 		AuthTTL:            u.dsCredentialTTL,
 		BattleTTL:          u.battleTTL(),
 		EmptyBattleTimeout: u.cfg.EmptyBattleTimeout.Std(),
+		StabilityBeats:     u.cfg.ActivationStabilityBeats,
+		StabilitySpanMs:    u.cfg.ActivationStabilitySpan.Std().Milliseconds(),
 	})
 	if err != nil {
 		return nil, err
+	}
+	if out.ActivationPending {
+		// 两阶段激活(INC-20260727-001 第三 P0):稳定性证据不足,不发 ACK、不下发指令、
+		// 不续 owner 租约(实例尚未服务)、不做离场对账;DS 每 tick 幂等重试 staged 心跳,
+		// waitBattleReady 因 auth 仍 BOOTSTRAP 不会放行 ds_addr。
+		plog.With(ctx).Debugw("msg", "battle_ds_activation_pending",
+			"match_id", matchID, "pod", id.PodName, "gen", id.Gen)
+		return &HeartbeatResult{}, nil
 	}
 	// owner 权威实例租约双写(owner-authority.md migrate ⑥):必须在心跳响应返回前完成,
 	// 失败语义(弱/强依赖)见 renewOwnerLeaseGate。
@@ -2325,10 +2381,18 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 		//      迟到的退避写会把已被 RemoveActive 的终态项复活回补偿 outbox,重复投递 lifecycle。
 		// 进程内表还顺带保住了 RunHeartbeatSweep 开头「重启即扫」的既定意图(重启即清空)。
 		if found && stuckReconcileState(inflight.GetState()) {
-			if u.sweepDeferralActive(mid, inflight.GetState(), roundStart) {
+			deferKey := inflight.GetState()
+			if inflight.GetState() == statePreactiveReleasing && inflight.GetAllocationId() != "" {
+				// preactive 墓碑与 release-pending 家族共用 allocation 键(复审 P1-2):
+				// abandoned→fence 成功→release 未确认会发生 abandoned→pending 的跨状态
+				// 迁移,若仍按状态键退避,上一轮登记的退避会被状态变化误判失效,
+				// 回到每轮重复外部调用;allocation_id 不随该迁移变化。
+				deferKey = releasePendingDeferPrefix + inflight.GetAllocationId()
+			}
+			if u.sweepDeferralActive(mid, deferKey, roundStart) {
 				continue
 			}
-			u.noteSweepDeferral(ctx, mid, inflight.GetState(), roundStart)
+			u.noteSweepDeferral(ctx, mid, deferKey, roundStart)
 		}
 		if found && (inflight.State == stateAllocationUncertain ||
 			inflight.State == stateAllocationReconciling) {
@@ -2502,9 +2566,15 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 				// Prepare 前崩溃的分配也必须先进入永久 release fence。旧实现
 				// Release→Delete 虽顺序较安全，但有限 TTL 仍会在 Release 响应未知后
 				// 自行开放第二次 POST；统一走同一个 fenced 回收状态机。
-				if u.reconcilePreactiveRelease(ctx, b) {
+				// bootstrap/no-active 分支同样按结构化结果退避(复审 P1-2):任何未确认
+				// 结果都按 exact allocation 让出队头,防控制面故障时每轮重复外部调用。
+				switch u.reconcilePreactiveRelease(ctx, b) {
+				case preactiveReleaseCompleted:
 					plog.With(ctx).Infow("msg", "model_b_inflight_reconciled",
 						"match_id", mid, "allocation_id", b.AllocationId)
+				case preactiveReleaseUnconfirmed:
+					u.noteSweepDeferral(ctx, mid, releasePendingDeferPrefix+b.GetAllocationId(), roundStart)
+				case preactiveReleaseSkipped:
 				}
 				continue
 			}

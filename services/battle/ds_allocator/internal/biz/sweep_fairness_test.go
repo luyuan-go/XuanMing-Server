@@ -62,11 +62,17 @@ func TestSweepRegistersInProcessDeferralForStuckStates(t *testing.T) {
 			if !ok {
 				t.Fatalf("state=%s 未登记队头退避 —— 它会每轮霸占队头饿死 §9.4 补偿", state)
 			}
-			if d.state != state {
-				t.Fatalf("退避记录的 state = %q, want %q(状态失效校验会失灵)", d.state, state)
+			// 新契约(复审 P1-2):preactive 墓碑与 release-pending 家族共用 allocation 键,
+			// abandoned→pending 跨状态迁移不会使退避失效;其余卡住态仍按状态键失效校验。
+			expectedKey := state
+			if state == statePreactiveReleasing {
+				expectedKey = releasePendingDeferPrefix + "stuck-allocation"
+			}
+			if d.state != expectedKey {
+				t.Fatalf("退避记录的 key = %q, want %q(失效校验会失灵)", d.state, expectedKey)
 			}
 			now := time.Now()
-			if !uc.sweepDeferralActive(matchID, state, now) {
+			if !uc.sweepDeferralActive(matchID, expectedKey, now) {
 				t.Fatalf("state=%s 登记后下一轮未让出队头", state)
 			}
 		})

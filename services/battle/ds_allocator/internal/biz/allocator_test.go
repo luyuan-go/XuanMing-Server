@@ -946,8 +946,8 @@ func TestPrecredentialEpochZeroCrashReleasePurgesWithoutTeardownFabrication(t *t
 	if err != nil || !found || battle.GetInstanceEpoch() != 0 {
 		t.Fatalf("precredential fixture: found=%v battle=%+v err=%v", found, battle, err)
 	}
-	if !uc.reconcilePreactiveRelease(ctx, battle) {
-		t.Fatal("epoch-zero precredential release did not complete")
+	if outcome := uc.reconcilePreactiveRelease(ctx, battle); outcome != preactiveReleaseCompleted {
+		t.Fatalf("epoch-zero precredential release outcome=%v want completed", outcome)
 	}
 	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
 	if err != nil || snapshot.AuthFound || snapshot.BattleFound {
@@ -999,8 +999,8 @@ func TestPrecredentialEpochZeroReleaseUnknownKeepsPermanentFence(t *testing.T) {
 	seedPrecredentialModelBBattle(
 		t, repo, matchID, allocationID, podName, gameServerUID, podUID)
 	battle, _, _ := repo.GetBattle(ctx, matchID)
-	if uc.reconcilePreactiveRelease(ctx, battle) {
-		t.Fatal("unknown epoch-zero delete was treated as success")
+	if outcome := uc.reconcilePreactiveRelease(ctx, battle); outcome != preactiveReleaseUnconfirmed {
+		t.Fatalf("unknown epoch-zero delete outcome=%v want unconfirmed", outcome)
 	}
 	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
 	if err != nil || snapshot.AuthFound || !snapshot.BattleFound ||
@@ -1014,8 +1014,8 @@ func TestPrecredentialEpochZeroReleaseUnknownKeepsPermanentFence(t *testing.T) {
 		t.Fatalf("unknown epoch-zero release calls=%d", allocator.releases.Load())
 	}
 	allocator.releaseErr = nil
-	if !uc.reconcilePreactiveRelease(ctx, snapshot.Battle) {
-		t.Fatal("epoch-zero ACK-loss retry did not converge")
+	if outcome := uc.reconcilePreactiveRelease(ctx, snapshot.Battle); outcome != preactiveReleaseCompleted {
+		t.Fatalf("epoch-zero ACK-loss retry outcome=%v want completed", outcome)
 	}
 	if _, found, err := repo.GetBattle(ctx, matchID); err != nil || found {
 		t.Fatalf("epoch-zero retry not purged: found=%v err=%v", found, err)
@@ -2803,6 +2803,266 @@ func TestBattleModelBSweepResumeAbandonedDefersOnFailure(t *testing.T) {
 	}
 	if ids, err := repo.RangeActiveBattles(ctx); err != nil || len(ids) != 1 {
 		t.Fatalf("resume deferral lost outbox: ids=%v err=%v", ids, err)
+	}
+}
+
+// bootstrap/no-active 回收的结构化退避(复审 P1-2):release 未确认→按 allocation 退避
+// (跨 abandoned→preactive_release_pending 状态迁移仍有效);第 2 轮零外部调用、队尾完成
+// 补偿;越过退避后收敛(release 成功→purge,记录物理消失)。
+func TestBattleModelBSweepBootstrapReleaseUnconfirmedDefersHead(t *testing.T) {
+	ctx := context.Background()
+	var headReleaseFail atomic.Bool
+	headReleaseFail.Store(true)
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	allocator.releaseCheck = func(a *data.AuthoritativeGameServerAllocation) error {
+		if a != nil && a.InstanceUID == "uid-bs-head" && headReleaseFail.Load() {
+			time.Sleep(150 * time.Millisecond) // 吃满单轮预算,复现队头阻塞
+			return errors.New("apiserver context deadline exceeded")
+		}
+		return nil
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	uc.cfg.ReadyWaitTimeout = config.Duration(120 * time.Second)
+	uc.cfg.SweepInterval = config.Duration(50 * time.Millisecond)
+	authRepo, rdb := enableModelBForTest(t, uc, mr)
+	life := &mockLifecycle{}
+	uc.SetLifecyclePusher(life)
+
+	// 队头:BOOTSTRAP(已投递未激活)warming,已超 120s 冷加载宽限,score 最老。
+	const headMatch = uint64(828)
+	seedWarmingModelBBattle(t, repo, authRepo, mr, headMatch,
+		"5d0a7c3e-16f2-4c58-8f4e-3a1f5b9d0828", "battle-bs-head", "uid-bs-head",
+		time.Now().Add(-130*time.Second).UnixMilli())
+	// 队尾:失联 30s 的 ACTIVE,依赖队列推进拿 §9.4 补偿。
+	const tailMatch = uint64(829)
+	seedWarmingModelBBattle(t, repo, authRepo, mr, tailMatch,
+		"5d0a7c3e-16f2-4c58-8f4e-3a1f5b9d0829", "battle-bs-tail", "uid-bs-tail",
+		time.Now().UnixMilli())
+	activateBackdatedModelBBattle(t, authRepo, rdb, mr, tailMatch, "battle-bs-tail", "uid-bs-tail", 30*time.Second)
+
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep round 1: %v", err)
+	}
+	if allocator.releases.Load() != 1 || life.calls != 0 {
+		t.Fatalf("round 1 unexpected: releases=%d lifecycle=%d", allocator.releases.Load(), life.calls)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep round 2: %v", err)
+	}
+	if allocator.releases.Load() != 2 || life.calls != 1 {
+		t.Fatalf("bootstrap head repeated external call or starved tail: releases=%d lifecycle=%d",
+			allocator.releases.Load(), life.calls)
+	}
+	// 越过退避窗口后必须收敛。
+	headReleaseFail.Store(false)
+	uc.pruneSweepDeferrals(time.Now().Add(uc.cfg.HeartbeatTimeout.Std() + time.Second))
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep round 3: %v", err)
+	}
+	if _, found, err := repo.GetBattle(ctx, headMatch); err != nil || found {
+		t.Fatalf("bootstrap head did not converge after backoff: found=%v err=%v", found, err)
+	}
+	if allocator.releases.Load() != 3 {
+		t.Fatalf("convergence release count=%d want 3", allocator.releases.Load())
+	}
+}
+
+// abort/quarantine 接管态的并发 waiter(复审 P1-3):这些状态/相位已由回收或隔离链接管,
+// waiter 必须立即携带所有权哨兵退出且零 Release。
+func TestWaitBattleReadyOwnershipLostOnAbortAndQuarantine(t *testing.T) {
+	ctx := context.Background()
+	t.Run("allocation abort pending state", func(t *testing.T) {
+		allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+		uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+		uc.cfg.ReadyWaitTimeout = config.Duration(30 * time.Second)
+		authRepo, rdb := enableModelBForTest(t, uc, mr)
+		const matchID = uint64(830)
+		const allocationID = "5d0a7c3e-16f2-4c58-8f4e-3a1f5b9d0830"
+		seedWarmingModelBBattle(t, repo, authRepo, mr, matchID, allocationID,
+			"battle-abort-830", "uid-abort-830", time.Now().UnixMilli())
+		key := fmt.Sprintf("pandora:ds:battle:{%d}", matchID)
+		raw, err := rdb.Get(ctx, key).Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := &dsv1.BattleStorageRecord{}
+		if err := proto.Unmarshal(raw, rec); err != nil {
+			t.Fatal(err)
+		}
+		rec.State = stateAllocationAbort
+		raw, _ = proto.Marshal(rec)
+		if err := rdb.Set(ctx, key, raw, time.Hour).Err(); err != nil {
+			t.Fatal(err)
+		}
+		_, werr := uc.waitBattleReady(ctx, matchID, "battle-abort-830", allocationID)
+		if !errors.Is(werr, errBattleWaitOwnershipLost) {
+			t.Fatalf("abort-pending wait err=%v", werr)
+		}
+		if allocator.releases.Load() != 0 {
+			t.Fatalf("abort-pending waiter triggered release=%d", allocator.releases.Load())
+		}
+	})
+	t.Run("quarantined auth with warming projection", func(t *testing.T) {
+		allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+		uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+		uc.cfg.ReadyWaitTimeout = config.Duration(30 * time.Second)
+		authRepo, rdb := enableModelBForTest(t, uc, mr)
+		const matchID = uint64(831)
+		const allocationID = "5d0a7c3e-16f2-4c58-8f4e-3a1f5b9d0831"
+		seedWarmingModelBBattle(t, repo, authRepo, mr, matchID, allocationID,
+			"battle-quar-831", "uid-quar-831", time.Now().UnixMilli())
+		key := fmt.Sprintf("pandora:ds:auth:{%d}", matchID)
+		raw, err := rdb.Get(ctx, key).Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := &dsv1.BattleDSAuthStorageRecord{}
+		if err := proto.Unmarshal(raw, rec); err != nil {
+			t.Fatal(err)
+		}
+		rec.Phase = dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_QUARANTINED
+		raw, _ = proto.Marshal(rec)
+		if err := rdb.Set(ctx, key, raw, time.Hour).Err(); err != nil {
+			t.Fatal(err)
+		}
+		_, werr := uc.waitBattleReady(ctx, matchID, "battle-quar-831", allocationID)
+		if !errors.Is(werr, errBattleWaitOwnershipLost) {
+			t.Fatalf("quarantined-auth wait err=%v", werr)
+		}
+		if allocator.releases.Load() != 0 {
+			t.Fatalf("quarantined waiter triggered release=%d", allocator.releases.Load())
+		}
+	})
+}
+
+// 缺 auth 的 provisioning 宽限三态(复审 P1-3):宽限内继续等、宽限内恢复则成功、
+// 超界携带所有权哨兵失败。
+func TestWaitBattleReadyMissingAuthGraceLifecycle(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	uc.cfg.ReadyWaitTimeout = config.Duration(30 * time.Second)
+	uc.cfg.HeartbeatTimeout = config.Duration(300 * time.Millisecond) // 宽限=300ms,测试可控
+	authRepo, rdb := enableModelBForTest(t, uc, mr)
+
+	t.Run("in grace then recovered", func(t *testing.T) {
+		const matchID = uint64(832)
+		const allocationID = "5d0a7c3e-16f2-4c58-8f4e-3a1f5b9d0832"
+		seedWarmingModelBBattle(t, repo, authRepo, mr, matchID, allocationID,
+			"battle-mag-832", "uid-mag-832", time.Now().UnixMilli())
+		authKey := fmt.Sprintf("pandora:ds:auth:{%d}", matchID)
+		savedAuth, err := rdb.Get(ctx, authKey).Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := rdb.Del(ctx, authKey).Err(); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() {
+			_, werr := uc.waitBattleReady(ctx, matchID, "battle-mag-832", allocationID)
+			done <- werr
+		}()
+		// 宽限内:不得提前失败。
+		select {
+		case werr := <-done:
+			t.Fatalf("waiter exited inside provisioning grace: %v", werr)
+		case <-time.After(100 * time.Millisecond):
+		}
+		// 宽限内恢复:auth 回填并激活 → waiter 正常拿到 ready。
+		if err := rdb.Set(ctx, authKey, savedAuth, time.Hour).Err(); err != nil {
+			t.Fatal(err)
+		}
+		activateBackdatedModelBBattle(t, authRepo, rdb, mr, matchID, "battle-mag-832", "uid-mag-832", 0)
+		select {
+		case werr := <-done:
+			if werr != nil {
+				t.Fatalf("recovered provisioning must succeed, err=%v", werr)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("waiter did not observe recovery")
+		}
+	})
+	t.Run("grace exceeded fails with ownership sentinel", func(t *testing.T) {
+		const matchID = uint64(833)
+		const allocationID = "5d0a7c3e-16f2-4c58-8f4e-3a1f5b9d0833"
+		seedWarmingModelBBattle(t, repo, authRepo, mr, matchID, allocationID,
+			"battle-mag-833", "uid-mag-833", time.Now().UnixMilli())
+		if err := rdb.Del(ctx, fmt.Sprintf("pandora:ds:auth:{%d}", matchID)).Err(); err != nil {
+			t.Fatal(err)
+		}
+		start := time.Now()
+		_, werr := uc.waitBattleReady(ctx, matchID, "battle-mag-833", allocationID)
+		elapsed := time.Since(start)
+		if !errors.Is(werr, errBattleWaitOwnershipLost) {
+			t.Fatalf("grace-exceeded wait err=%v", werr)
+		}
+		if elapsed < 250*time.Millisecond || elapsed > 2*time.Second {
+			t.Fatalf("grace bound not respected: elapsed=%v (want ~300ms)", elapsed)
+		}
+		if allocator.releases.Load() != 0 {
+			t.Fatalf("grace-exceeded waiter triggered release=%d", allocator.releases.Load())
+		}
+	})
+}
+
+// 两阶段激活端到端(第三 P0):首拍不得放行 ds_addr(空 ACK、waiter 继续等),
+// 跨度满足后第 3 拍原子提升,waiter 才拿到 ready。
+func TestBattleModelBReadyRequiresStabilizedActivation(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	uc.cfg.ReadyWaitTimeout = config.Duration(30 * time.Second)
+	uc.cfg.ActivationStabilityBeats = 3
+	uc.cfg.ActivationStabilitySpan = config.Duration(250 * time.Millisecond)
+	authRepo, _ := enableModelBForTest(t, uc, mr)
+	const matchID = uint64(834)
+	const allocationID = "5d0a7c3e-16f2-4c58-8f4e-3a1f5b9d0834"
+	seedWarmingModelBBattle(t, repo, authRepo, mr, matchID, allocationID,
+		"battle-stab-834", "uid-stab-834", time.Now().UnixMilli())
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := data.BattleCredentialIdentity{
+		PodName: "battle-stab-834", InstanceUID: "uid-stab-834",
+		InstanceEpoch: snapshot.Auth.GetInstanceEpoch(), Gen: snapshot.Auth.GetPending().GetGen(),
+		JTI: snapshot.Auth.GetPending().GetJti(), ExpMs: snapshot.Auth.GetPending().GetExpMs(),
+		Kid: snapshot.Auth.GetPending().GetKid(), TokenSHA256: snapshot.Auth.GetPending().GetTokenSha256(),
+		WriterEpoch: snapshot.Auth.GetPending().GetWriterEpoch(),
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, werr := uc.waitBattleReady(ctx, matchID, "battle-stab-834", allocationID)
+		done <- werr
+	}()
+	// 拍1:pending——空 ACK,不放行。
+	hb, err := uc.HeartbeatAuthorized(ctx, matchID, id, 0, stateRunning, time.Now().UnixMilli())
+	if err != nil || hb.AcceptedTokenGen != 0 || hb.AcceptedTokenJTI != "" {
+		t.Fatalf("beat1 must return empty ack: hb=%+v err=%v", hb, err)
+	}
+	select {
+	case werr := <-done:
+		t.Fatalf("waiter released on first beat: %v", werr)
+	case <-time.After(100 * time.Millisecond):
+	}
+	// 拍2(+150ms,跨度不足)仍 pending;拍3(+300ms)满足 ≥3 拍且跨度 ≥250ms → 提升。
+	if _, err := uc.HeartbeatAuthorized(ctx, matchID, id, 0, stateRunning, time.Now().UnixMilli()); err != nil {
+		t.Fatalf("beat2: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	hb3, err := uc.HeartbeatAuthorized(ctx, matchID, id, 0, stateRunning, time.Now().UnixMilli())
+	if err != nil || hb3.AcceptedTokenGen != id.Gen || hb3.AcceptedTokenJTI != id.JTI {
+		t.Fatalf("beat3 must promote and ack: hb=%+v err=%v", hb3, err)
+	}
+	select {
+	case werr := <-done:
+		if werr != nil {
+			t.Fatalf("waiter after stabilized activation err=%v", werr)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("waiter did not observe stabilized activation")
 	}
 }
 
