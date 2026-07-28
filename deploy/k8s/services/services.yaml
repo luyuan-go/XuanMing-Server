@@ -20,7 +20,16 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: login } }
   template:
-    metadata: { labels: { app: login, pandora.dev/ds-auth-writer-epoch: "2" } }
+    # 监控进集群(2026-07-28):全部业务 Pod 以 prometheus.io/* 注解声明 /metrics 抓取点,
+    # 由集群内 Prometheus kubernetes_sd(pod 角色)自动发现(deploy/k8s/infra/monitoring.yaml),
+    # 替代 compose 时代 host.docker.internal 静态抓取。端口 = 各服务 dev yaml 的 http addr
+    # (510xx,仅 /metrics),经 gen_cluster_config 原样进集群;下同,新增服务照抄并改端口。
+    metadata:
+      labels: { app: login, pandora.dev/ds-auth-writer-epoch: "2" }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51001"
+        prometheus.io/path: /metrics
     spec:
       # 四个 DSTicket 签发方以固定非 root 身份运行；fsGroup 只为 Secret 投影提供组读权限。
       # 私钥文件模式 0440(root:10001)，容器可读但不可写，其他 UID/GID 不可读。
@@ -61,7 +70,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: player } }
   template:
-    metadata: { labels: { app: player } }
+    metadata:
+      labels: { app: player }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51002"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: player
@@ -90,7 +104,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: data-service } }
   template:
-    metadata: { labels: { app: data-service } }
+    metadata:
+      labels: { app: data-service }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51003"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: data-service
@@ -115,7 +134,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: friend } }
   template:
-    metadata: { labels: { app: friend } }
+    metadata:
+      labels: { app: friend }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51004"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: friend
@@ -140,7 +164,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: chat } }
   template:
-    metadata: { labels: { app: chat } }
+    metadata:
+      labels: { app: chat }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51005"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: chat
@@ -165,7 +194,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: guild } }
   template:
-    metadata: { labels: { app: guild } }
+    metadata:
+      labels: { app: guild }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51008"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: guild
@@ -190,7 +224,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: mail } }
   template:
-    metadata: { labels: { app: mail } }
+    metadata:
+      labels: { app: mail }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51009"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: mail
@@ -215,7 +254,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: player-locator } }
   template:
-    metadata: { labels: { app: player-locator, pandora.dev/ds-auth-writer-epoch: "2" } }
+    metadata:
+      labels: { app: player-locator, pandora.dev/ds-auth-writer-epoch: "2" }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51006"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: player-locator
@@ -245,7 +289,12 @@ spec:
   strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
   selector: { matchLabels: { app: team } }
   template:
-    metadata: { labels: { app: team } }
+    metadata:
+      labels: { app: team }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51010"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: team
@@ -272,12 +321,20 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: matchmaker } }
   template:
-    metadata: { labels: { app: matchmaker } }
+    metadata:
+      labels: { app: matchmaker }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51011"
+        prometheus.io/path: /metrics
     spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: matchmaker
-          image: pandora/matchmaker:dev
+          # 钉定 live 实测 tag(2026-07-28,INC-20260727-001 配套):内容=eed8ce2c(排队态/
+          # fail-fast 修复);此前树内 :dev 可变 tag,re-apply 会把 live 修复镜像滚回旧 :dev。
+          # imageID sha256:bfd63445579c1497bb20843c6e3af9c1e98787004631495083e3320ed94356ad
+          image: pandora/matchmaker:geed8ce2c6b5d
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50011 } ]
@@ -307,12 +364,19 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: matchmaker-pve } }
   template:
-    metadata: { labels: { app: matchmaker-pve } }
+    metadata:
+      labels: { app: matchmaker-pve }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51018"
+        prometheus.io/path: /metrics
     spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: matchmaker-pve
-          image: pandora/matchmaker-pve:dev
+          # 钉定 live 实测 tag(2026-07-28):与 matchmaker 同 imageID(sha256:bfd63445...,
+          # 同一二进制不同配置),理由同上,防 re-apply 回滚。
+          image: pandora/matchmaker-pve:geed8ce2c6b5d
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50018 } ]
@@ -340,7 +404,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: trade } }
   template:
-    metadata: { labels: { app: trade } }
+    metadata:
+      labels: { app: trade }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51012"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: trade
@@ -365,7 +434,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: dialogue } }
   template:
-    metadata: { labels: { app: dialogue } }
+    metadata:
+      labels: { app: dialogue }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51013"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: dialogue
@@ -395,7 +469,12 @@ spec:
   # (实时时延优化,非正确性前提),见 online overlay 注释。
   selector: { matchLabels: { app: push } }
   template:
-    metadata: { labels: { app: push } }
+    metadata:
+      labels: { app: push }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51014"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: push
@@ -420,7 +499,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: leaderboard } }
   template:
-    metadata: { labels: { app: leaderboard } }
+    metadata:
+      labels: { app: leaderboard }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51007"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: leaderboard
@@ -445,7 +529,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: inventory } }
   template:
-    metadata: { labels: { app: inventory } }
+    metadata:
+      labels: { app: inventory }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51015"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: inventory
@@ -473,7 +562,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: auction } }
   template:
-    metadata: { labels: { app: auction } }
+    metadata:
+      labels: { app: auction }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51016"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: auction
@@ -502,7 +596,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: owner } }
   template:
-    metadata: { labels: { app: owner } }
+    metadata:
+      labels: { app: owner }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51017"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: owner
@@ -535,12 +634,21 @@ spec:
   strategy: { type: Recreate }
   selector: { matchLabels: { app: ds-allocator } }
   template:
-    metadata: { labels: { app: ds-allocator, pandora.dev/ds-auth-writer-epoch: "2" } }
+    metadata:
+      labels: { app: ds-allocator, pandora.dev/ds-auth-writer-epoch: "2" }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51020"
+        prometheus.io/path: /metrics
     spec:
       serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
       containers:
         - name: ds-allocator
-          image: pandora/ds-allocator:dev
+          # 钉定 live 实测 tag(2026-07-28,INC-20260727-001 第三 P0 配套):内容=eed8ce2c+
+          # 两阶段激活修复(构建时未提交,后入库为 8abf30a3),构建于 06:21;此前树内 :dev
+          # 可变 tag,re-apply 会把 live 修复镜像滚回旧 :dev(与 20/21-fleet yaml 同批钉定)。
+          # imageID sha256:9bbeb331e18a1a0ed04da056d237a082417ab31b70cb0647ae1c2e5238eb9f08
+          image: pandora/ds-allocator:geed8ce2-p03-da4bf6c7-20260728-062100
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
@@ -645,7 +753,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: battle-result } }
   template:
-    metadata: { labels: { app: battle-result, pandora.dev/ds-auth-writer-epoch: "2" } }
+    metadata:
+      labels: { app: battle-result, pandora.dev/ds-auth-writer-epoch: "2" }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "51022"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: battle-result

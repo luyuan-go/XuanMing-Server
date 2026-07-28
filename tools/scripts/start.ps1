@@ -1409,6 +1409,7 @@ function Assert-NoLocalFreshGenesisWriters {
         mysql = 'mysql:8.4'; redis = 'redis:8.8.0-alpine'
         zookeeper = 'confluentinc/cp-zookeeper:7.9.7'; kafka = 'confluentinc/cp-kafka:7.9.7'
         etcd = 'quay.io/coreos/etcd:v3.6.12'; loki = 'grafana/loki:3.4.1'; alloy = 'grafana/alloy:v1.7.1'
+        prometheus = 'prom/prometheus:v2.55.1'; grafana = 'grafana/grafana:11.3.1'
     }
     $writerIdentities = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     function Get-OptionalPropertyValue([object]$Object, [string]$Name) {
@@ -3971,7 +3972,13 @@ function Apply-AgonesManifests {
 # minikube 的 kube-context 名 == 其 profile 名(minikube start 会写入同名 context)。
 
 # 返回当前 active minikube profile 名(解析失败回落 'minikube')。
+# PANDORA_MINIKUBE_PROFILE 显式覆盖优先:多 profile 并存(旧 docker-driver 集群与新 hyperv/containerd
+# 集群共存期)时,active profile 是全局可变状态,靠它路由会把镜像 load/delete 打到另一个集群
+# (2026-07-07 有镜像落错 daemon 的实锤前科)。env 覆盖 + 下游 context 锁(Test-KubeContextIsLocalMinikube)
+# 双保险;env 未设时行为与旧版完全一致。
 function Get-ActiveMinikubeProfile {
+    $override = $env:PANDORA_MINIKUBE_PROFILE
+    if (-not [string]::IsNullOrWhiteSpace($override)) { return $override.Trim() }
     $p = ((& minikube profile 2>$null | Select-Object -First 1) -replace '^\*\s*', '').Trim()
     if ([string]::IsNullOrWhiteSpace($p)) { $p = 'minikube' }
     return $p
@@ -3989,6 +3996,57 @@ function Get-K8sManagedProfile {
         $script:K8sManagedProfileResolved = $true
     }
     return $script:K8sManagedProfile
+}
+
+# minikube start 的拓扑参数集(driver/runtime/cni/版本/规格)。
+# 关键语义:已存在的 profile 返回空参数——minikube 对既有集群忽略 cpus/memory 变更、
+# 对冲突的 --driver/--container-runtime 直接报错,传了只有害无益;拓扑只在「首次创建」时生效。
+# 新建 profile 默认与旧版脚本完全一致(docker/4C/6144M),环境变量仅在创建新集群时用于
+# 定义生产贴近形态(hyperv + containerd + calico + 钉定 K8s 版本),不影响任何既有 profile:
+#   PANDORA_MINIKUBE_DRIVER / PANDORA_MINIKUBE_CPUS / PANDORA_MINIKUBE_MEMORY
+#   PANDORA_MINIKUBE_RUNTIME(--container-runtime) / PANDORA_MINIKUBE_CNI(--cni)
+#   PANDORA_MINIKUBE_K8S_VERSION(--kubernetes-version;托管云通常落后上游 2~3 个小版本,
+#   钉版本防「本地比生产新」的隐性不兼容,具体版本待云厂商定版后复核)
+function Get-MinikubeStartArgs([string]$Profile) {
+    if (Test-MinikubeProfileExists -Profile $Profile) { return @() }
+    $driver = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_DRIVER)) { 'docker' } else { $env:PANDORA_MINIKUBE_DRIVER.Trim() }
+    $cpus = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_CPUS)) { '4' } else { $env:PANDORA_MINIKUBE_CPUS.Trim() }
+    $memory = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_MEMORY)) { '6144' } else { $env:PANDORA_MINIKUBE_MEMORY.Trim() }
+    $startArgs = @("--driver=$driver", "--cpus=$cpus", "--memory=$memory")
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_RUNTIME)) {
+        $startArgs += "--container-runtime=$($env:PANDORA_MINIKUBE_RUNTIME.Trim())"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_CNI)) {
+        $startArgs += "--cni=$($env:PANDORA_MINIKUBE_CNI.Trim())"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_K8S_VERSION)) {
+        $startArgs += "--kubernetes-version=$($env:PANDORA_MINIKUBE_K8S_VERSION.Trim())"
+    }
+    return $startArgs
+}
+
+# 读取 profile 的节点容器运行时(docker/containerd/cri-o),缓存;解析失败回落 'docker'(旧行为)。
+# 用途:节点内镜像操作(untag/pull/探测)在 docker 与 containerd 下命令不同,必须按 runtime 分流,
+# 不能把 `minikube ssh -- docker ...` 打进没有 docker CLI 的 containerd 节点(静默失败或硬报错)。
+$script:MinikubeRuntimeCache = @{}
+function Get-MinikubeNodeRuntime([string]$Profile) {
+    if ($script:MinikubeRuntimeCache.ContainsKey($Profile)) { return $script:MinikubeRuntimeCache[$Profile] }
+    $runtime = 'docker'
+    $json = (& minikube profile list -o json 2>$null | Out-String)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($json)) {
+        try {
+            $profiles = ($json | ConvertFrom-Json).valid
+            foreach ($p in @($profiles)) {
+                if ([string]$p.Name -ceq $Profile) {
+                    $cr = [string]$p.Config.KubernetesConfig.ContainerRuntime
+                    if (-not [string]::IsNullOrWhiteSpace($cr)) { $runtime = $cr.Trim() }
+                    break
+                }
+            }
+        } catch { }
+    }
+    $script:MinikubeRuntimeCache[$Profile] = $runtime
+    return $runtime
 }
 
 # 校验 active minikube profile 对应的 kube-context 确实存在于 kubeconfig,返回该 context 名。
@@ -4060,11 +4118,21 @@ function Sync-ImagesToMinikube {
         if ($LASTEXITCODE -ne 0 -or -not $id) { throw "宿主 docker 缺少镜像 $img(先构建再部署)" }
     }
 
-    # 2) 逐个强制刷新同名 tag。旧 Pod 正在用旧镜像时,minikube image rm 会失败;节点内 docker rmi -f
-    # 可以只 untag,不影响运行中容器,再 load 最新 tag。
+    # 2) 逐个强制刷新同名 tag。旧 Pod 正在用旧镜像时,minikube image rm 会失败;节点内 untag
+    # (docker rmi -f / crictl rmi 按 tag)只解绑 tag,不影响运行中容器,再 load 最新 tag。
+    # untag 命令必须按节点 runtime 分流:containerd 节点没有 docker CLI,旧写法会静默失败,
+    # 复现「宿主新 build、集群跑旧镜像」的 2026-07-07 事故;--overwrite 是否单独足够未实测,untag 保留。
+    $syncProfileIdx = [array]::IndexOf($MinikubeArgs, '-p')
+    $syncProfile = if ($syncProfileIdx -ge 0 -and $syncProfileIdx + 1 -lt $MinikubeArgs.Count) { $MinikubeArgs[$syncProfileIdx + 1] } else { Get-K8sManagedProfile }
+    $syncRuntime = Get-MinikubeNodeRuntime $syncProfile
     foreach ($img in $Images) {
-        Write-Info "  minikube image load --daemon=true --overwrite=true $img"
-        minikube @MinikubeArgs ssh -- docker rmi -f $img 2>$null | Out-Null
+        Write-Info "  minikube image load --daemon=true --overwrite=true $img(runtime=$syncRuntime)"
+        if ($syncRuntime -ceq 'docker') {
+            minikube @MinikubeArgs ssh -- docker rmi -f $img 2>$null | Out-Null
+        } else {
+            # containerd/cri-o:crictl rmi 按 tag 即 untag 语义;镜像被运行容器引用时按 tag 解绑同样安全。
+            minikube @MinikubeArgs ssh -- sudo crictl rmi "docker.io/$img" 2>$null | Out-Null
+        }
         minikube @MinikubeArgs image load --daemon=true --overwrite=true $img
         Assert-LastExit "minikube image load $img"
     }
@@ -4082,22 +4150,27 @@ function Sync-ImagesToMinikube {
     Write-Ok "镜像 tag 已刷新到 minikube($($Images.Count) 个)。"
 }
 
-# DS-auth capability 的 image_digest 必须来自 minikube 节点实际运行的 immutable
-# image config digest，不能沿用旧 Deployment annotation，也不能使用宿主 buildx
-# manifest-list digest。五个 writer 会把该 annotation 通过 Downward API 写入 etcd；
-# annotation 与节点 :dev tag 漂移会让 capability provenance 失真。
+# DS-auth capability 的 image_digest 必须来自 minikube 节点实际的 immutable 镜像身份,
+# 不能沿用旧 Deployment annotation,也不能使用宿主 buildx manifest-list digest。
+# 取值口径(2026-07-28 改):统一走 `minikube image ls --format json` 的 CRI 视角 id——
+# kubelet 的 containerStatuses.imageID 与 CRI image store 出自同一来源,该口径在 docker
+# 与 containerd 节点上都与 Pod 实际上报一致(docker 下即原 config digest,行为不变);
+# 旧写法 `ssh -- docker image inspect` 在 containerd 节点无 docker CLI 直接硬失败。
 function Get-LocalMinikubeImageDigest {
     param(
         [Parameter(Mandatory = $true)][string]$MinikubeProfile,
         [Parameter(Mandatory = $true)][string]$Image
     )
-    $lines = @(& minikube -p $MinikubeProfile ssh -- docker image inspect -f '{{.Id}}' $Image 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "minikube 节点读取镜像 digest 失败:$Image`n$($lines -join [Environment]::NewLine)"
+    $mkIds = Get-MinikubeImageIds @('-p', $MinikubeProfile)
+    if ($null -eq $mkIds) {
+        throw "minikube image ls --format json 不可用,无法读取节点镜像 digest:$Image(升级 minikube 后重试)"
     }
-    $digest = (($lines -join "`n").Trim())
+    if (-not $mkIds.ContainsKey($Image)) {
+        throw "minikube 节点镜像清单中找不到 $Image(先 load 再部署)"
+    }
+    $digest = ([string]$mkIds[$Image]).Trim()
     if ($digest -cnotmatch '^sha256:[0-9a-f]{64}$') {
-        throw "minikube 节点镜像 digest 非 canonical sha256:$Image"
+        throw "minikube 节点镜像 digest 非 canonical sha256:$Image(实际值:$digest)"
     }
     return $digest
 }
@@ -4177,7 +4250,8 @@ function Assert-LocalDsAuthImageDigestAnnotations {
             $statuses = @($pod.status.containerStatuses | Where-Object { [string]$_.name -ceq $writer })
             if ($statuses.Count -ne 1 -or $null -eq $statuses[0].state.running -or
                 -not ([string]$statuses[0].imageID).EndsWith($digest, [StringComparison]::Ordinal)) {
-                throw "$writer 运行容器 imageID 未命中声明的 minikube immutable digest。"
+                $actualImageId = if ($statuses.Count -eq 1) { [string]$statuses[0].imageID } else { "(containerStatuses 数=$($statuses.Count))" }
+                throw "$writer 运行容器 imageID 未命中声明的 minikube immutable digest。期望后缀:$digest;实际 imageID:$actualImageId(若两者 digest 形态不同,说明该节点 runtime 的 CRI 身份口径与 image ls 不一致,须先钉定口径,禁止放宽比对)。"
             }
         }
     }
@@ -4194,9 +4268,13 @@ function Ensure-EnvoyImageInMinikube {
     $envoyImg = 'envoyproxy/envoy:v1.38-latest'
     $mkArgs = @()
     if (-not [string]::IsNullOrWhiteSpace($MinikubeProfile)) { $mkArgs = @('-p', $MinikubeProfile) }
+    # 节点内镜像探测/拉取按 runtime 分流(containerd 节点无 docker CLI);探测统一用
+    # `minikube image ls`(runtime 无关),仅"节点内联网拉取"这一步需要区分命令。
+    $resolvedProfile = if ([string]::IsNullOrWhiteSpace($MinikubeProfile)) { Get-K8sManagedProfile } else { $MinikubeProfile }
+    $nodeRuntime = Get-MinikubeNodeRuntime $resolvedProfile
 
-    minikube @mkArgs ssh -- "docker image inspect $envoyImg >/dev/null 2>&1" 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
+    $mkIds = Get-MinikubeImageIds $mkArgs
+    if ($null -ne $mkIds -and $mkIds.ContainsKey($envoyImg)) {
         Write-Ok "in-cluster Envoy 镜像已在 minikube 节点($envoyImg)"
         return
     }
@@ -4207,14 +4285,18 @@ function Ensure-EnvoyImageInMinikube {
         minikube @mkArgs image load --daemon=true $envoyImg
         Assert-LastExit "minikube image load $envoyImg"
     } else {
-        Write-Info "宿主与 minikube 均无 $envoyImg,尝试在 minikube 节点联网拉取(断网机会失败)..."
-        minikube @mkArgs ssh -- "for i in 1 2 3 4 5 6; do docker pull $envoyImg && break || sleep 4; done" 2>$null | Out-Null
+        Write-Info "宿主与 minikube 均无 $envoyImg,尝试在 minikube 节点联网拉取(断网机会失败,runtime=$nodeRuntime)..."
+        if ($nodeRuntime -ceq 'docker') {
+            minikube @mkArgs ssh -- "for i in 1 2 3 4 5 6; do docker pull $envoyImg && break || sleep 4; done" 2>$null | Out-Null
+        } else {
+            minikube @mkArgs ssh -- "for i in 1 2 3 4 5 6; do sudo crictl pull docker.io/$envoyImg && break || sleep 4; done" 2>$null | Out-Null
+        }
     }
 
     # 拉取/加载可能静默失败(stderr 被吞)。显式确认镜像已在节点内,否则后面 pandora-envoy Pod
     # 会一直 ImagePullBackOff,DS 心跳(:8444)永远打不通 —— fail-fast 让调用方先解决镜像。
-    minikube @mkArgs ssh -- "docker image inspect $envoyImg >/dev/null 2>&1" 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    $mkIds = Get-MinikubeImageIds $mkArgs
+    if ($null -eq $mkIds -or -not $mkIds.ContainsKey($envoyImg)) {
         throw "in-cluster Envoy 镜像『$envoyImg』未能进入 minikube(断网/限流?)。DS 面 :8444 网关无法就绪,已中止。离线办法:在能联网机器 docker pull $envoyImg && docker save -o envoy.tar $envoyImg,拷到本机 docker load -i envoy.tar 后重跑(本函数会自动从宿主 load 进 minikube)。"
     }
     Write-Ok "in-cluster Envoy 镜像已就绪($envoyImg)"
@@ -4290,6 +4372,7 @@ function Invoke-K8s {
     $servicesDir = Join-Path $ProjectRoot 'deploy/k8s/services'
     $infraYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/infra.yaml'
     $lokiYaml    = Join-Path $ProjectRoot 'deploy/k8s/infra/loki.yaml'
+    $monitoringYaml = Join-Path $ProjectRoot 'deploy/k8s/infra/monitoring.yaml'
     $mysqlInit   = Join-Path $ProjectRoot 'deploy/mysql-init'
 
     if ($Down) {
@@ -4339,6 +4422,8 @@ function Invoke-K8s {
         }
         kubectl --context $mkProfile delete -f $lokiYaml --ignore-not-found 2>$null
         Assert-LastExit 'kubectl delete Loki'
+        kubectl --context $mkProfile delete -f $monitoringYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete Prometheus/Grafana'
         # 基础设施:删除除 PVC/etcd-data 外的全部对象，保留 etcd 数据卷。
         $infraManifest = (Get-Content -LiteralPath $infraYaml -Raw)
         $null = Remove-K8sManifestObjectsPreserving -KubeContext $mkProfile -ManifestText $infraManifest `
@@ -4367,11 +4452,13 @@ function Invoke-K8s {
     # 安装 Pandora”。真正的 genesis 授权不再依赖这个瞬时布尔值，而依赖持久 marker/PVC UID。
     $profileExistedBeforeStart = Test-MinikubeProfileExists -Profile $mkProfile
 
-    # 1) minikube 起没起
+    # 1) minikube 起没起。拓扑参数由 Get-MinikubeStartArgs 决定:既有 profile 空参续跑,
+    # 新建 profile 按默认(docker/4C/6144M)或 PANDORA_MINIKUBE_* 环境覆盖创建。
     minikube -p $mkProfile status *> $null
     if ($LASTEXITCODE -ne 0) {
-        Write-Info "启动 minikube(profile=$mkProfile,driver=docker)..."
-        minikube start -p $mkProfile --driver=docker --cpus=4 --memory=6144
+        $mkStartArgs = Get-MinikubeStartArgs $mkProfile
+        Write-Info "启动 minikube(profile=$mkProfile$(if ($mkStartArgs.Count) { ";新建参数:$($mkStartArgs -join ' ')" } else { ';既有集群,沿用已存拓扑' }))..."
+        minikube start -p $mkProfile @mkStartArgs
         if ($LASTEXITCODE -ne 0) { throw "minikube 启动失败" }
     } else {
         Write-Ok "minikube 已在运行(profile=$mkProfile)"
@@ -4525,6 +4612,9 @@ function Invoke-K8s {
     # 也不等它 rollout(日志栈晚几十秒就绪不影响业务链路)。
     kubectl @kubectlContextArgs apply -f $lokiYaml
     if ($LASTEXITCODE -ne 0) { Write-Warn "loki/alloy 日志栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/loki.yaml" }
+    # 监控(Prometheus kubernetes_sd + Grafana,2026-07-28 进集群):同日志栈,非关键路径只告警
+    kubectl @kubectlContextArgs apply -f $monitoringYaml
+    if ($LASTEXITCODE -ne 0) { Write-Warn "Prometheus/Grafana 监控栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/monitoring.yaml" }
     Write-Info "等待基础设施就绪(第三方镜像首次冷拉每个最多 1800s/30 分钟)..."
     kubectl @kubectlContextArgs rollout status deploy/mysql     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'mysql 就绪'
     kubectl @kubectlContextArgs rollout status deploy/redis     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'redis 就绪'
@@ -5670,7 +5760,10 @@ function Resume-K8s {
     minikube -p $mkProfile status *> $null
     if ($LASTEXITCODE -ne 0) {
         Write-Info "minikube 已停,minikube start 中(profile=$mkProfile;集群状态/镜像都在磁盘上,Pod 会自动恢复)..."
-        minikube start -p $mkProfile --driver=docker --cpus=4 --memory=6144
+        # Resume 对象必然是既有 profile:Get-MinikubeStartArgs 返回空参,沿用集群已存拓扑,
+        # 绝不带可能与既有 driver/runtime 冲突的创建参数(minikube 会硬报错)。
+        $mkStartArgs = Get-MinikubeStartArgs $mkProfile
+        minikube start -p $mkProfile @mkStartArgs
         if ($LASTEXITCODE -ne 0) { throw "minikube 启动失败(若集群已损坏,改用 -Reset 全新部署)" }
     } else {
         Write-Ok "minikube 已在运行(profile=$mkProfile)"

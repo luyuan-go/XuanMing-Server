@@ -1,0 +1,184 @@
+# Pandora 监控(k8s dev-grade,minikube 用)— Prometheus + Grafana
+#
+# 与 infra.yaml/loki.yaml 同级别的开发配置:单副本、emptyDir(Pod 重建丢历史指标/面板状态)、
+# 无鉴权(仅集群内可达,宿主经 port-forward 访问)。由 tools/scripts/start.ps1 -Mode k8s
+# 自动 apply(loki 之后,非关键路径,失败只告警不阻断业务启动)。
+#
+# 抓取模型(2026-07-28,替代 compose 时代 host.docker.internal 静态 targets——那套只能抓
+# 宿主进程,对 K8s Pod 全部失效,29 个 Deployment 长期零监控):
+#   kubernetes_sd pod 角色只发现 pandora namespace 内带 `prometheus.io/scrape: "true"`
+#   注解的 Pod;21 个业务 Deployment 已全部注解(services.yaml,端口=各服务 http 510xx
+#   /metrics)。新服务只要带注解即自动纳入,无需改本文件。
+#   版本与 compose 侧一致(prom v2.55.1 / grafana 11.3.1),避免同仓两套监控语义漂移。
+#
+# 告警 provisioning(deploy/grafana/provisioning/alerting)仍留在 compose Grafana:它依赖
+# PANDORA_ALERT_NTFY_URL 等宿主 env + entrypoint.sh 动态生成,进集群需 Secret 注入,单列待办。
+# 本文件 Grafana 只预配数据源(集群内 Prometheus + Loki,uid 与 compose 侧一致以便面板互通)。
+#
+# 宿主查看:
+#   kubectl -n pandora port-forward svc/grafana 3002:3000    → http://localhost:3002
+#   kubectl -n pandora port-forward svc/prometheus 9091:9090 → http://localhost:9091
+---
+# ── Prometheus RBAC(kubernetes_sd 需 list/watch pandora namespace 的 Pod)────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: pandora-prometheus, namespace: pandora }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: pandora-prometheus }
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: pandora-prometheus }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: pandora-prometheus }
+subjects:
+  - { kind: ServiceAccount, name: pandora-prometheus, namespace: pandora }
+---
+# ── Prometheus 配置 ────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: prometheus-config, namespace: pandora }
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        project: pandora
+        env: dev
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ['localhost:9090']
+      # pandora namespace 内注解驱动的 Pod 自动发现(注解契约见 services.yaml 首个 Deployment 注释)
+      - job_name: pandora-pods
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces: { names: [pandora] }
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            regex: (.+)
+            target_label: __metrics_path__
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          # service 标签沿用 compose 时代命名(app label),既有查询/面板不用改
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: replace
+            target_label: service
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: prometheus, namespace: pandora, labels: { app: prometheus } }
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  selector: { matchLabels: { app: prometheus } }
+  template:
+    metadata: { labels: { app: prometheus } }
+    spec:
+      serviceAccountName: pandora-prometheus
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.55.1
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            # dev-grade:7 天足够本地排障;emptyDir 本身 Pod 重建即清,不做长保留
+            - --storage.tsdb.retention.time=7d
+          ports: [ { containerPort: 9090 } ]
+          volumeMounts:
+            - { name: config, mountPath: /etc/prometheus, readOnly: true }
+            - { name: data, mountPath: /prometheus }
+          readinessProbe:
+            httpGet: { path: /-/ready, port: 9090 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+      volumes:
+        - name: config
+          configMap: { name: prometheus-config }
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: prometheus, namespace: pandora }
+spec: { selector: { app: prometheus }, ports: [ { port: 9090, targetPort: 9090 } ] }
+---
+# ── Grafana(数据源 provisioning;告警仍在 compose 侧,见文件头)──────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: grafana-datasources, namespace: pandora }
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: pandora-prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+      - name: Loki
+        uid: pandora-loki
+        type: loki
+        access: proxy
+        url: http://loki:3100
+        isDefault: false
+        editable: false
+        jsonData:
+          maxLines: 1000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: grafana, namespace: pandora, labels: { app: grafana } }
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  selector: { matchLabels: { app: grafana } }
+  template:
+    metadata: { labels: { app: grafana } }
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.3.1
+          env:
+            # dev-grade 无鉴权:仅 ClusterIP,不经 Envoy/bridge 对外暴露
+            - { name: GF_AUTH_ANONYMOUS_ENABLED, value: "true" }
+            - { name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: Admin }
+            - { name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true" }
+          ports: [ { containerPort: 3000 } ]
+          volumeMounts:
+            - { name: datasources, mountPath: /etc/grafana/provisioning/datasources, readOnly: true }
+            - { name: data, mountPath: /var/lib/grafana }
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: 500m, memory: 256Mi } }
+      volumes:
+        - name: datasources
+          configMap: { name: grafana-datasources }
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: grafana, namespace: pandora }
+spec: { selector: { app: grafana }, ports: [ { port: 3000, targetPort: 3000 } ] }

@@ -27,7 +27,9 @@ param(
     [switch]$SkipImageLoad,  # 跳过 minikube image load
     [switch]$BridgeForce,    # 端口被非 bridge 进程占用时,杀掉占用者后重建 port-forward
     [Alias('Profile')]
-    [string]$MinikubeProfile = 'pandora-agones', # minikube profile;docker driver 下通常同名 docker network
+    # 默认序:显式参数 > PANDORA_MINIKUBE_PROFILE(与 start.ps1 Get-ActiveMinikubeProfile 同一覆盖口径,
+    # 多 profile 并存时防打错集群)> 'pandora-agones' 历史默认。
+    [string]$MinikubeProfile = $(if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_PROFILE)) { $env:PANDORA_MINIKUBE_PROFILE.Trim() } else { 'pandora-agones' }), # minikube profile;docker driver 下通常同名 docker network
     [string]$KubeContext = '', # 必须指向上述本地 minikube；留空时取与 profile 同名的 context
     [ValidateSet('127.0.0.1', '0.0.0.0')]
     [string]$RelayBindHost = '127.0.0.1', # 安全默认仅本机;allocator 广播非回环地址时必须显式传 0.0.0.0
@@ -56,6 +58,29 @@ function Resolve-MinikubeProfile([string]$profile) {
     if (-not [string]::IsNullOrWhiteSpace($ctx)) { return $ctx }
 
     return 'pandora-agones'
+}
+
+# 读取 profile 的节点容器运行时(docker/containerd/cri-o),缓存;解析失败回落 'docker'(旧行为)。
+# 与 start.ps1 的 Get-MinikubeNodeRuntime 同构(独立脚本按仓库惯例自带副本);用于节点内
+# untag 命令分流——containerd 节点没有 docker CLI,`ssh -- docker rmi` 会静默失败。
+$script:E2eRuntimeCache = @{}
+function Get-MinikubeNodeRuntimeE2e([string]$Profile) {
+    if ($script:E2eRuntimeCache.ContainsKey($Profile)) { return $script:E2eRuntimeCache[$Profile] }
+    $runtime = 'docker'
+    $json = (& minikube profile list -o json 2>$null | Out-String)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($json)) {
+        try {
+            foreach ($p in @(($json | ConvertFrom-Json).valid)) {
+                if ([string]$p.Name -ceq $Profile) {
+                    $cr = [string]$p.Config.KubernetesConfig.ContainerRuntime
+                    if (-not [string]::IsNullOrWhiteSpace($cr)) { $runtime = $cr.Trim() }
+                    break
+                }
+            }
+        } catch { }
+    }
+    $script:E2eRuntimeCache[$Profile] = $runtime
+    return $runtime
 }
 
 function Test-KubeContextIsLocalMinikube([string]$Context, [string]$Profile) {
@@ -369,11 +394,28 @@ if ($SkipImageLoad) {
             exit 1
         }
         Write-Info "  强制刷新 minikube tag:$img"
-        minikube -p $MinikubeProfile ssh -- docker rmi -f $img 2>$null | Out-Null
+        # untag 按节点 runtime 分流(containerd 节点无 docker CLI);节点内 tag 确认统一走
+        # `minikube image ls`(runtime 无关),与 start.ps1 Sync-ImagesToMinikube 同口径。
+        if ((Get-MinikubeNodeRuntimeE2e $MinikubeProfile) -ceq 'docker') {
+            minikube -p $MinikubeProfile ssh -- docker rmi -f $img 2>$null | Out-Null
+        } else {
+            minikube -p $MinikubeProfile ssh -- sudo crictl rmi "docker.io/$img" 2>$null | Out-Null
+        }
         minikube -p $MinikubeProfile image load --daemon=true --overwrite=true $img
         if ($LASTEXITCODE -ne 0) { Write-Err "load 失败: $img"; exit 1 }
-        minikube -p $MinikubeProfile ssh -- "docker image inspect $img >/dev/null 2>&1" 2>$null | Out-Null
-        if ($LASTEXITCODE -ne 0) {
+        $mkTagJson = (minikube -p $MinikubeProfile image ls --format json 2>$null | Out-String)
+        $mkTagHit = $false
+        if (-not [string]::IsNullOrWhiteSpace($mkTagJson)) {
+            try {
+                foreach ($entry in @(($mkTagJson | ConvertFrom-Json))) {
+                    foreach ($tag in @($entry.repoTags)) {
+                        if (($tag -replace '^docker\.io/', '') -ceq $img) { $mkTagHit = $true; break }
+                    }
+                    if ($mkTagHit) { break }
+                }
+            } catch { }
+        }
+        if (-not $mkTagHit) {
             Write-Err "强制刷新后 minikube 节点仍找不到 tag:$img"
             exit 1
         }
