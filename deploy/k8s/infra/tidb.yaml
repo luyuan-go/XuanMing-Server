@@ -56,6 +56,10 @@ kind: Service
 metadata: { name: pd, namespace: pandora }
 spec:
   selector: { app: pd }
+  # pd 引导期会经 advertise-client-urls(http://pd:2379)拨自己;Service 默认只发布 Ready
+  # endpoints,而 readiness 又依赖引导完成——鸡生蛋死锁(CrashLoop 实测)。compose 下容器名
+  # 直解容器 IP 无此问题;K8s 对自引导/对等发现的标准解法即发布未就绪地址。tikv/tidb 同理。
+  publishNotReadyAddresses: true
   ports:
     - { name: client, port: 2379, targetPort: 2379 }
     - { name: peer, port: 2380, targetPort: 2380 }
@@ -99,6 +103,7 @@ kind: Service
 metadata: { name: tikv, namespace: pandora }
 spec:
   selector: { app: tikv }
+  publishNotReadyAddresses: true
   ports:
     - { name: peer, port: 20160, targetPort: 20160 }
     - { name: status, port: 20180, targetPort: 20180 }
@@ -136,6 +141,7 @@ kind: Service
 metadata: { name: tidb, namespace: pandora }
 spec:
   selector: { app: tidb }
+  publishNotReadyAddresses: true
   ports:
     - { name: mysql, port: 4000, targetPort: 4000 }
     - { name: status, port: 10080, targetPort: 10080 }
