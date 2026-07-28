@@ -1411,6 +1411,8 @@ function Assert-NoLocalFreshGenesisWriters {
         etcd = 'quay.io/coreos/etcd:v3.6.12'; loki = 'grafana/loki:3.4.1'; alloy = 'grafana/alloy:v1.7.1'
         prometheus = 'prom/prometheus:v2.55.1'; grafana = 'grafana/grafana:11.3.1'
         pd = 'pingcap/pd:v8.5.1'; tikv = 'pingcap/tikv:v8.5.1'; tidb = 'pingcap/tidb:v8.5.1'
+        'redis-master' = 'redis:8.8.0-alpine'; 'redis-replica' = 'redis:8.8.0-alpine'
+        'redis-sentinel' = 'redis:8.8.0-alpine'
     }
     $writerIdentities = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     function Get-OptionalPropertyValue([object]$Object, [string]$Name) {
@@ -4463,6 +4465,7 @@ function Invoke-K8s {
     $lokiYaml    = Join-Path $ProjectRoot 'deploy/k8s/infra/loki.yaml'
     $monitoringYaml = Join-Path $ProjectRoot 'deploy/k8s/infra/monitoring.yaml'
     $tidbYaml       = Join-Path $ProjectRoot 'deploy/k8s/infra/tidb.yaml'
+    $tidbInitJobYaml = Join-Path $ProjectRoot 'deploy/k8s/infra/tidb-init-job.yaml'
     $sentinelYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/redis-sentinel.yaml'
     $edgeEnvoyYaml  = Join-Path $ProjectRoot 'deploy/k8s/infra/edge-envoy.yaml'
     $tidbInitDir    = Join-Path $ProjectRoot 'deploy/tidb-init'
@@ -4523,6 +4526,8 @@ function Invoke-K8s {
         Assert-LastExit 'kubectl delete Prometheus/Grafana'
         kubectl --context $mkProfile delete -f $tidbYaml --ignore-not-found 2>$null
         Assert-LastExit 'kubectl delete TiDB'
+        kubectl --context $mkProfile delete -f $tidbInitJobYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete tidb-init Job'
         kubectl --context $mkProfile delete -f $sentinelYaml --ignore-not-found 2>$null
         Assert-LastExit 'kubectl delete Redis Sentinel'
         kubectl --context $mkProfile delete -f $edgeEnvoyYaml --ignore-not-found 2>$null
@@ -4736,13 +4741,13 @@ function Invoke-K8s {
     } else {
         Write-Info 'PANDORA_ALERT_NTFY_URL 未设置,Grafana 告警 provisioning 未进集群(数据源不受影响)。'
     }
-    # TiDB(pd/tikv/tidb + init Job)与 Redis Sentinel(一主两从三哨):2026-07-28 P2 进集群,
+    # TiDB(pd/tikv/tidb)与 Redis Sentinel(一主两从三哨):2026-07-28 P2 进集群,
     # 与线上形态同构;dev 服务仍用单 mysql/redis,本栈非关键路径,失败只告警。
-    # tidb-init Job 不可变,先删旧 Job 再 apply(SQL 幂等,重跑安全)。
+    # tidb-init Job 不在此处:fresh-genesis 门([3.5/8])只允许 Deployment/ReplicaSet/Pod,
+    # Job 在门后由 [3.6/8] 创建(deploy/k8s/infra/tidb-init-job.yaml)。
     kubectl @kubectlContextArgs create configmap pandora-tidb-init --from-file=$tidbInitDir -n $K8sNamespace `
         --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
     if ($LASTEXITCODE -ne 0) { Write-Warn 'pandora-tidb-init configmap 失败(不影响业务)' }
-    kubectl @kubectlContextArgs delete job tidb-init -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
     kubectl @kubectlContextArgs apply -f $tidbYaml
     if ($LASTEXITCODE -ne 0) { Write-Warn "TiDB 栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/tidb.yaml" }
     kubectl @kubectlContextArgs create configmap pandora-redis-sentinel-entrypoint --from-file=$sentinelEntrypointFile -n $K8sNamespace `
@@ -4764,6 +4769,12 @@ function Invoke-K8s {
         -ExpectedAdoptionCohortFingerprintSha256 $legacyAdoptionCohortFingerprintSha256 `
         -LegacyAdoptionCollectionTimeUnixMS $legacyAdoptionCollectionTimeUnixMS `
         -LegacyAdoptionCohortPreflightError $legacyAdoptionCohortPreflightError
+
+    # [3.6/8] tidb-init Job:必须晚于 [3.5/8] fresh-genesis 门(门只允许 Deployment/ReplicaSet/Pod,
+    # Job 属一次性任务放门后);Job spec 不可变,先删旧再 apply(SQL 幂等,重跑安全);非关键路径只告警。
+    kubectl @kubectlContextArgs delete job tidb-init -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
+    kubectl @kubectlContextArgs apply -f $tidbInitJobYaml
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'tidb-init Job apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/tidb-init-job.yaml' }
 
     Write-Step "[4/8] 安装 Agones + apply RBAC/Fleet(真 Linux DS)"
     Build-DsImagesForMinikube
