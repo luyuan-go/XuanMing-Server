@@ -1496,6 +1496,17 @@ function Assert-NoLocalFreshGenesisWriters {
             }
             continue
         }
+        # 控制面静态(mirror)Pod 由 Node 拥有(kube-apiserver-<节点名> 等);minikube profile 名
+        # 含 "pandora"(pandora-agones)时其节点名后缀会撞上下方 Pandora 身份正则——它们是
+        # k8s 控制面本体,按「kube-system + owner=Node」精确豁免(2026-07-28 重建实测抓获:
+        # 本门 07-25 加入,晚于旧集群创世,首次 fresh 全量跑才暴露)。其余对象照常筛查。
+        if ($kind -ceq 'Pod' -and $namespace -ceq 'kube-system') {
+            $mirrorOwnerValue = Get-OptionalPropertyValue -Object $item.metadata -Name 'ownerReferences'
+            $nodeOwners = @(@($mirrorOwnerValue) | Where-Object {
+                $null -ne $_ -and (Get-OptionalPropertyValue -Object $_ -Name 'controller') -eq $true -and [string]$_.kind -ceq 'Node'
+            })
+            if ($nodeOwners.Count -eq 1) { continue }
+        }
         $identity = @($namespace, $name, $app, ($images -join ',')) -join ' '
         $writerEpochLabel = [string](Get-OptionalPropertyValue -Object $labels -Name 'pandora.dev/ds-auth-writer-epoch')
         if ($name -in $writerIdentities -or $app -in $writerIdentities -or
