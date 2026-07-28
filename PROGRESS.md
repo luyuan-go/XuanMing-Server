@@ -1923,3 +1923,38 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
   account 将在 TiDB」的拆库拓扑冲突,**今天就已经过不了**)、k8s/minikube 无 TiDB 故
   `require_tidb` 路径在本仓任何环境都不会被执行(owner 今天即如此)、`run_services.ps1` 的 login
   仍指向 `login-dev.yaml`(未默认切 TiDB,避免动到本地链路;需要时手动用 `login-dev-tidb.yaml`)。
+
+## 2026-07-28 INC-20260727-001/-002 收尾轮:E2E 首验通过回填 + 清单漂移修复 + race 归档(Claude)
+
+- **状态确认**:三个 P0 修复已全部入库并 live 生效(Go `8abf30a3` 已推送、UE r1570 用户提交、
+  四轨 DS 镜像 `*-ds:r1502-dirty-v3-df2478e9c061`、battle 14Gi limits=requests、maxReplicas=2);
+  当日 map8 真实客户端 E2E 首验通过(两拍 activation_pending→第三拍提升→battle_ready→进图→
+  Battle Admission)。**验收门 A/B/C、pinger 硬门、观察窗口仍 OPEN,两事故均未关闭**。
+- **⑯ 部署清单漂移修复(未提交)**:live 四轨镜像已是 v3,但树内 20/21-fleet-battle yaml 仍钉
+  上一代 `r1553-dirty-20260727-133010`、30/31-fleet-hub yaml 仍是 `:dev` 可变 tag(P1-4 当时
+  漏钉 hub)——apply 即回滚。四行 image 已对齐 live 实测 tag(imageID sha256:4363...) 并补注释;
+  live 本就是目标态,无需 apply。
+- **race 随 `8abf30a3` 重跑归档**:docker golang:1.26.5-bookworm,data/biz 全量 `-race` +
+  `TestBattleAuthActivateConcurrentSinglePromotion -count=100` + `TestBattleAuthActivationStabilityGate
+  -count=30` 全部 ok(exit 0)。
+- **A6 证据回捞定案**:07-27/07-28 各局原始 allocator 日志确认永久缺失(events TTL 1h、容器多代
+  重启、loki 19 天 CrashLoopBackOff 1127 次无聚合);loki 修复列为后续改进项。
+- **A10 首批证据**:minikube 节点 PSI 实测 CPU some avg60=79.71(严重饥饿)、memory PSI=0、
+  dmesg 无 OOM;当日 login 37 次/player_locator 56 次/ds-allocator 12 次重启、etcd/mysql/redis
+  readiness 1s 探针集体超时→摘 endpoints→依赖方启动失败 exit 1 CrashLoop。方向=宿主机共载
+  (UE 编译/docker 构建/race 容器与 minikube 同机)CPU 争用,非内存;采样存在 race 容器自污染,
+  无负载对照样本待补,A10 保持 OPEN。
+- **新增 `robot/stress/cmd/gatecheck`(未提交)**:验收门 A/B 合成驱动——stressbot 同款直连
+  (login devAutoRegister→SetLocation(HUB)+20s 刷新→CreateTeam→SetReady→StartMatch(map_id=8,
+  走 matchmaker-pve walk-in)→轮询到 READY→保活观测窗口,不连 DS UDP,恰好构成门 A「无客户端」
+  场景。已编译通过;待集群从当前 CrashLoop 恢复后执行。
+- **档案回填**:INC-001 增 §4.3(第三次部署验证=首验通过,证据缺口如实标注)、§7.2⑯、§8 E2E 行、
+  §9 产物、A6/A10 状态、新增 A11(FogOfWar/GameState Ensure P1 候选);INC-002 状态更新为
+  「14Gi 已生效,完整一局回归未跑」,"3 台并发"验收口径钳为 2 台(外层 40Gi 实测约束);index.md 同步。
+- **续(同日下午,验收门实测)**:门 A **通过**(gatecheck 合成驱动,服务端实收 15 拍/78.1s/最大间隔
+  10.6s,Redis ZSCORE 逐拍采样;顺带实证 120s 宽限击穿→有界放弃→自动重试不卡玩家);pinger 硬门
+  **stable+canary 双轨通过**(加载阻塞窗口内层单调时钟 5.00s 零断流,60s 摘要 12/12/12/0;canary
+  临时 1 副本验毕归零);门 B **3/3 通过**(kill→重试 36/36/45s、kill→READY 96/101/118s,waiter 零
+  空转;取值修订:graceful delete 被 30s 终止宽限主导,目标应为 ~45s,18s 样本属 force-kill 场景);
+  A3 冷加载实测数据入档(22/48/49~58/84/>120s 五档)。**仍 OPEN:门 C(真实 UE 客户端×3)、观察窗口、
+  INC-002 完整一局 memory.peak、A10 定谳(节点 08:20Z 重启原因+无负载对照)、A11 FogOfWar Ensure**。

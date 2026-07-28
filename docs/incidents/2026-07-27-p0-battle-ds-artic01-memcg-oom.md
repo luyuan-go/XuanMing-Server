@@ -1,6 +1,6 @@
 # [INC-20260727-002][P0] Battle DS 加载 Artic01 时被 memcg OOM 杀死（limits 2Gi 顶死）
 
-> **状态**：正式限额已定（14Gi，待部署验证，未关闭）  
+> **状态**：正式限额 14Gi 已 apply 生效（2026-07-28 live 实测 limits=requests=14Gi、maxReplicas=2；完整一局回归与观察窗口未跑，未关闭）  
 > **类型**：`crash` / `availability`  
 > **环境**：本机 k8s（minikube + Agones，dev 全链路）  
 > **首次发生时间（UTC）**：2026-07-27（精确时刻缺失，见 §2.2）  
@@ -88,7 +88,7 @@ Artic01 服务端加载所需 anon 内存 > 2Gi 旧限额；memcg 硬限触发�
 | 项目 | 状态 | 代码/配置 | 验证 |
 |---|---|---|---|
 | A1 完整加载量 `memory.peak`(cgroup v2) | **已完成**(2026-07-27 部署验证):最高 `memory.peak=11,200,929,792B≈10.43GiB`,12Gi 围栏下 **0 OOM**(仅一实例读数在案;逐实例分解未记录,标缺失) | — | 部署实测 |
-| A2 按 peak×1.3~1.5 定正式 limits 并回调 yaml | **已落配置未 apply**:内存 limits=requests=**14Gi**(peak×1.34;CPU 仍 request<limit,QoS 为 Burstable,注释不作 Guaranteed 声称);autoscaler `maxReplicas` 500→**2**(K8s 宣告 47Gi 但 minikube 外层 memory.max 实际 40Gi,3×14=42 已超;先校正外层容量后方可验证 3 并发) | `20/21-fleet-battle*.yaml`、`25-fleetautoscaler-battle.yaml` | 待 apply 后回归跑一局不 OOM |
+| A2 按 peak×1.3~1.5 定正式 limits 并回调 yaml | **已 apply 生效**(2026-07-28 live 实测 limits=requests=14Gi、maxReplicas=2;当日 map8 真实客户端 E2E 一局进图+Admission 无 OOM——但该局未跑完整局,`memory.peak` 未读,不计入关闭回归):内存 limits=requests=**14Gi**(peak×1.34;CPU 仍 request<limit,QoS 为 Burstable);autoscaler `maxReplicas` 500→**2**(K8s 宣告 47Gi 但 minikube 外层 memory.max 实际 40Gi,3×14=42 已超;**"3 台并发"验收在外层扩容前不可执行,当前口径=2 台并发调度**) | `20/21-fleet-battle*.yaml`、`25-fleetautoscaler-battle.yaml` | 完整一局不 OOM + `memory.peak` 逐实例读数,OPEN |
 | A3 资产减负后重测(与 INC-001 A5 同源) | 未排期 | — | — |
 
 ## 8. 验证矩阵

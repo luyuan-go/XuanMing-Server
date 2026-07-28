@@ -55,9 +55,9 @@ spec:
             - name: pandora-hub-ds
               # Pandora 大厅 DS（UE Linux Dedicated Server）。镜像产出同 battle；push 由人手动执行，按实际 registry 覆盖。
               # Agones 自动注入 SDK sidecar；DS 内 UPandoraAgonesSubsystem 走 sidecar HTTP 调 Ready/Health/Shutdown。
-              # 用滚动 tag :dev（与 build-image.sh 默认一致）：重建镜像后只需 minikube image load，无需再改本文件，
-              # kubectl apply 也不会回退到过时的固定日期 tag。线上换成 registry 可拉取的完整镜像名（见 README online 节）。
-              image: pandora/hub-ds:dev
+              # 镜像一律钉**不可变 tag**,与 30-fleet-hub.yaml 同改同收(P1-4,§9.21;推导与换版
+              # 流程见该文件注释)。canary 轨换新版本时改本行为新的不可变 tag。
+              image: pandora/hub-ds:r1502-dirty-v3-df2478e9c061
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

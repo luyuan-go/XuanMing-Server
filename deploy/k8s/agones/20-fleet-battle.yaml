@@ -64,9 +64,10 @@ spec:
               # desired state,钉 :dev 滚动 tag 会让任意一次 kubectl apply 把 live 降回本机
               # IfNotPresent 缓存里的旧 :dev 构建。换版流程 = 打新不可变 tag → minikube image
               # load → 改本行 → apply;严禁回填 :dev。
-              # 当前批准镜像:r1553 源码构建,PandoraServer SHA-256
-              # E25B891838916D1575A58D17FED2BEFF4A20792FE4F0DA1E5D236055460E0C42(2026-07-27 部署实测)。
-              image: pandora/battle-ds:r1553-dirty-20260727-133010
+              # 当前批准镜像:UE r1570 内容(提交前 dirty 构建)+Go 8abf30a3 配套,镜像
+              # imageID sha256:436376043856ba2b99522b29fca415b4f381284866dc28b1c3957b49633deccf
+              # (2026-07-28 live 实测,map8 E2E 两阶段激活链首验通过)。
+              image: pandora/battle-ds:r1502-dirty-v3-df2478e9c061
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT
