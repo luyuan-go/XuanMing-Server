@@ -1263,7 +1263,7 @@ func (u *MatchUsecase) ConfirmMatch(ctx context.Context, playerID, matchID uint6
 			if !accept {
 				// INC-20260724-001:ALLOCATING 期必须给玩家一个真实出口(§9.20 禁止"按钮不可用 /
 				// 只能杀进程恢复",§9.23 长期无容量时只能停在可退出的形态)。
-				// 背景:DS 缺容 / k8s 控制面超时时分配会长时间重试(ds_allocate_timeout 60s ×
+				// 背景:DS 缺容 / k8s 控制面超时时分配会长时间重试(ds_allocate_timeout 默认 60s/dev 150s ×
 				// 无墙钟上限),而 expireOnce 对 stageAllocating 显式 keepActive 永不判失败;
 				// 此前唯一会终止 ALLOCATING 的是成局最终门的 presence 误杀,该门已因本事故关闭
 				// ⇒ 不补出口就会把"误杀"换成"永久卡死"。

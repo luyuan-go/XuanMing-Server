@@ -228,7 +228,7 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
 | 等对手 / 确认期 / MMR | 有 | **无**(直接建 `confirmAccepted`,跳过) |
 
 - **路由**:Envoy 按 header `x-pandora-game-mode: pve` 把 MatchService 路由到 PVE 实例;不带头 = 默认 PVP。
-- **仍是已受理型**:PVE 省掉的是「撮合」,但**拉 Battle DS 加载副本的延迟省不掉**(`ds_allocate_timeout` 60s,
+- **仍是已受理型**:PVE 省掉的是「撮合」,但**拉 Battle DS 加载副本的延迟省不掉**(`ds_allocate_timeout` 默认 60s、dev 大图 yaml 已调 150s,
   冷加载几十秒,与 PVP 相同)。所以 `StartMatch` 照样返回 `ticket_id`,进场靠 READY push;`formSoloMatch`
   也由后台 `RunMatchLoop` 驱动(≤1 tick 调度,相对 DS 冷加载可忽略),不做成同步 RPC 返回 `ds_addr`。
 - **正名与旧键兼容(2026-07-25)**:本开关原名 `enable_solo_match`(名字含 "solo"、注释曾写「测试专用」,
@@ -266,7 +266,7 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
 | `mmr_base_window` | `200` | 初始 MMR 窗口半宽 |
 | `mmr_widen_per_sec` | `20` | 每等待 1s 窗口放宽量 |
 | `mmr_max_window` | `2000` | 窗口放宽上限 |
-| `ds_allocate_timeout` | `60s` | 调 ds_allocator 超时(须覆盖其 server timeout,冷加载大图) |
+| `ds_allocate_timeout` | `60s`(dev PVE yaml 设 `150s`) | 调 ds_allocator 客户端超时(须 ≥ 其 server.grpc.timeout;冷加载大图链:ready_wait 120s < allocator server 150s ≤ 本值) |
 | `map_id` | `1` | 默认副本(客户端省略 `map_id` 时兜底) |
 | `game_mode` | `5v5_ranked` | 撮合池命名空间 + 透传 ds_allocator(PVE 实例为 `pve_coop`) |
 | `optimistic_retry` | `3` | WATCH/MULTI/EXEC 乐观锁重试次数 |

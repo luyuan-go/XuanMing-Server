@@ -204,8 +204,18 @@ type gameServerResponse struct {
 		ResourceVersion string            `json:"resourceVersion"`
 		Labels          map[string]string `json:"labels"`
 		Annotations     map[string]string `json:"annotations"`
+		// DeletionTimestamp 非空 = 删除已受理、对象处于终止宽限(graceful termination);
+		// 它不是物理消失证明,但足以证明无需再发 DELETE。
+		DeletionTimestamp string `json:"deletionTimestamp"`
 	} `json:"metadata"`
+	Status struct {
+		State string `json:"state"`
+	} `json:"status"`
 }
+
+// agonesStateUnhealthy 是 Agones 控制器依据 SDK health ping 断流写下的判死状态;
+// 进入该状态的 GameServer 不再参与分配,随后被 GameServerSet 删除替换。
+const agonesStateUnhealthy = "Unhealthy"
 
 type gameServerListResponse struct {
 	Items []gameServerResponse `json:"items"`
@@ -774,10 +784,110 @@ func (a *AgonesGameServerAllocator) ResolveExpectedPodUID(
 	return pod.Metadata.UID, nil
 }
 
+// ProbeExpectedInstanceGone 只读探测 exact 实例是否已可证死亡,供 warming 冷加载
+// 宽限期的 sweep 加速判弃(biz.WarmingInstanceProber):
+//   - GameServer NotFound / UID 已换代,且(有持久 podUID 时)关联 Pod 同样
+//     NotFound / UID 已换代 → (true, nil):物理实例已确认消失;
+//   - GameServer 同 UID 且 Status.State=Unhealthy → (true, nil):Agones 依据
+//     SDK health ping(DS 侧独立线程 pinger)断流判死,该实例不可能再服务本局;
+//   - 同 UID 且非 Unhealthy → (false, nil):实例存活(可能仍在冷加载);
+//   - 任何读失败/不确定 → (false, err):调用方必须回退时间界,不得据此回收。
+// 零写副作用;判弃权威仍是 Redis 事务(AbandonIfStale 的 WATCH 单赢家)。
+func (a *AgonesGameServerAllocator) ProbeExpectedInstanceGone(
+	ctx context.Context,
+	podName, instanceUID, podUID string,
+) (bool, error) {
+	if podName == "" || instanceUID == "" {
+		return false, errcode.New(errcode.ErrInvalidArg,
+			"agones: instance probe requires gameserver name and uid")
+	}
+	gsURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers/%s",
+		a.apiServer, a.namespace, podName)
+	body, status, err := a.do(ctx, http.MethodGet, gsURL, nil)
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case status == http.StatusNotFound:
+		// GameServer 已消失,继续向下做 Pod 双确认。
+	case status >= 200 && status < 300:
+		var gs gameServerResponse
+		if uerr := json.Unmarshal(body, &gs); uerr != nil {
+			return false, fmt.Errorf("decode gameserver probe: %w", uerr)
+		}
+		if gs.Metadata.UID == "" {
+			return false, fmt.Errorf("gameserver probe missing metadata.uid")
+		}
+		if gs.Metadata.UID == instanceUID {
+			return gs.Status.State == agonesStateUnhealthy, nil
+		}
+		// 同名对象已是新实例:旧 UID 物理消失,继续 Pod 双确认。
+	default:
+		return false, fmt.Errorf("GET gameserver probe http %d: %s", status, truncate(body, 128))
+	}
+	if podUID == "" {
+		// 无持久 Pod UID 可对账时只认 GameServer 消失(modelB 分配在 finalize 即持久化
+		// pod_uid,该回退只覆盖历史残留记录)。
+		return true, nil
+	}
+	podURL := fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s", a.apiServer, a.namespace, podName)
+	podGone, perr := a.resourceUIDGone(ctx, podURL, podUID)
+	if perr != nil {
+		return false, perr
+	}
+	return podGone, nil
+}
+
+// ErrReleaseDeletionPending:exact 删除已被 apiserver 受理(对象带 deletionTimestamp),
+// 物理消失需等待 Pod terminationGracePeriod(默认 30s)。调用方应按分配身份退避后重试
+// 确认,不得重复 DELETE,更不得据此写 teardown proof(nil 返回才是物理消失证明)。
+var ErrReleaseDeletionPending = errors.New("agones: exact release deletion pending")
+
+// exactResourceProbe 是 exact 对象(按 name GET + 期望 UID 对账)的三态快照。
+type exactResourceProbe struct {
+	gone     bool // NotFound / 同名对象 UID 已换代:期望实例物理消失
+	deleting bool // 同 UID 且带 deletionTimestamp:删除已受理,处于终止宽限
+}
+
+func (a *AgonesGameServerAllocator) probeExactResource(
+	ctx context.Context,
+	resourceURL, expectedUID string,
+) (exactResourceProbe, error) {
+	body, status, err := a.do(ctx, http.MethodGet, resourceURL, nil)
+	if err != nil {
+		return exactResourceProbe{}, err
+	}
+	if status == http.StatusNotFound {
+		return exactResourceProbe{gone: true}, nil
+	}
+	if status < 200 || status >= 300 {
+		return exactResourceProbe{}, fmt.Errorf("GET exact resource http %d: %s", status, truncate(body, 128))
+	}
+	var object struct {
+		Metadata struct {
+			UID               string `json:"uid"`
+			DeletionTimestamp string `json:"deletionTimestamp"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(body, &object); err != nil {
+		return exactResourceProbe{}, fmt.Errorf("decode exact resource identity: %w", err)
+	}
+	if object.Metadata.UID == "" {
+		return exactResourceProbe{}, fmt.Errorf("exact resource missing metadata.uid")
+	}
+	if object.Metadata.UID != expectedUID {
+		return exactResourceProbe{gone: true}, nil
+	}
+	return exactResourceProbe{deleting: object.Metadata.DeletionTimestamp != ""}, nil
+}
+
 // ReleaseExpected 只删除 UID 仍等于本次分配实例的 GameServer。
 // DELETE 2xx 只是 deletion request accepted，不是物理消失证明；本方法
 // 会继续轮询 exact GameServer UID 及分配时捕获的关联 Pod UID，
 // 只有两者都 NotFound/UID changed 才返回 nil。
+// 同 UID 已带 deletionTimestamp(删除已受理、Pod 处终止宽限)时**跳过重复 DELETE**,
+// 并快速返回 ErrReleaseDeletionPending 而非空耗轮询——宽限内对象不可能物理消失,
+// 空转只会占住 sweep 队头(INC-20260727-001 复审 P1-2)。
 func (a *AgonesGameServerAllocator) ReleaseExpected(
 	ctx context.Context,
 	allocation *AuthoritativeGameServerAllocation,
@@ -797,14 +907,49 @@ func (a *AgonesGameServerAllocator) ReleaseExpected(
 		}
 		collectionURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers?labelSelector=%s",
 			a.apiServer, a.namespace, url.QueryEscape(selector))
+		// LIST 先行(复审必修):对象已全部处于删除宽限时直接返回 pending,不重复
+		// DeleteCollection。空集合或含存活对象时才发 DeleteCollection——空集合仍保留
+		// DeleteCollection+后置 LIST 的 timeout-late-apply 防线(此前一次 DeleteCollection
+		// 可能已被受理但响应丢失,幂等再发无害且能捕获迟到 apply 出现的新对象)。
+		preListBody, preListStatus, preListErr := a.do(ctx, http.MethodGet, collectionURL, nil)
+		if preListErr == nil && preListStatus >= 200 && preListStatus < 300 {
+			var preList gameServerListResponse
+			if uerr := json.Unmarshal(preListBody, &preList); uerr == nil && len(preList.Items) > 0 {
+				allDeleting := true
+				for _, item := range preList.Items {
+					if item.Metadata.DeletionTimestamp == "" {
+						allDeleting = false
+						break
+					}
+				}
+				if allDeleting {
+					return fmt.Errorf("agones: allocation-id release awaiting termination grace (pre-list): allocation_id=%s items=%d: %w",
+						allocation.AllocationID, len(preList.Items), ErrReleaseDeletionPending)
+				}
+			}
+		}
 		deleteResp, deleteStatus, deleteErr := a.do(ctx, http.MethodDelete, collectionURL, deleteBody)
 		// DeleteCollection 的响应/超时同样不构成完成证据；严格 LIST 确认该唯一 label
 		// 已无对象。timeout-but-applied 可幂等成功，2xx 但仍有对象则保留 Redis claim。
 		listBody, listStatus, listErr := a.do(ctx, http.MethodGet, collectionURL, nil)
 		if listErr == nil && listStatus >= 200 && listStatus < 300 {
 			var list gameServerListResponse
-			if uerr := json.Unmarshal(listBody, &list); uerr == nil && len(list.Items) == 0 {
-				return nil
+			if uerr := json.Unmarshal(listBody, &list); uerr == nil {
+				if len(list.Items) == 0 {
+					return nil
+				}
+				allDeleting := true
+				for _, item := range list.Items {
+					if item.Metadata.DeletionTimestamp == "" {
+						allDeleting = false
+						break
+					}
+				}
+				if allDeleting {
+					// 全部对象删除已受理:等终止宽限,调用方退避后重试确认,不算失败。
+					return fmt.Errorf("agones: allocation-id release awaiting termination grace: allocation_id=%s items=%d: %w",
+						allocation.AllocationID, len(list.Items), ErrReleaseDeletionPending)
+				}
 			}
 		}
 		return errcode.New(errcode.ErrDSAllocationFailed,
@@ -825,17 +970,35 @@ func (a *AgonesGameServerAllocator) ReleaseExpected(
 			"agones: durable associated pod UID required before exact release: pod=%s gameserver_uid=%s",
 			allocation.PodName, allocation.InstanceUID)
 	}
-	body, err := json.Marshal(deleteOptions{
-		APIVersion: "v1", Kind: "DeleteOptions",
-		Preconditions: &deletePreconditions{UID: allocation.InstanceUID},
-	})
-	if err != nil {
-		return errcode.New(errcode.ErrDSAllocationFailed, "agones: marshal expected delete: %v", err)
-	}
 	url := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers/%s",
 		a.apiServer, a.namespace, allocation.PodName)
-	respBody, status, deleteErr := a.do(ctx, http.MethodDelete, url, body)
+	// 删除前先读 exact 状态:已消失或已带 deletionTimestamp 都无需再发 DELETE
+	//(重复 DELETE 是纯噪声;实测每实例 7 次重复,INC-20260727-001 复审 P1-2)。
+	preProbe, preErr := a.probeExactResource(ctx, url, allocation.InstanceUID)
+	if preErr != nil {
+		return errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: exact release pre-probe failed: pod=%s gs_uid=%s err=%v",
+			allocation.PodName, allocation.InstanceUID, preErr)
+	}
+	var respBody []byte
+	var status int
+	var deleteErr error
+	if !preProbe.gone && !preProbe.deleting {
+		body, err := json.Marshal(deleteOptions{
+			APIVersion: "v1", Kind: "DeleteOptions",
+			Preconditions: &deletePreconditions{UID: allocation.InstanceUID},
+		})
+		if err != nil {
+			return errcode.New(errcode.ErrDSAllocationFailed, "agones: marshal expected delete: %v", err)
+		}
+		respBody, status, deleteErr = a.do(ctx, http.MethodDelete, url, body)
+	}
 	if confirmErr := a.waitExpectedInstanceGone(ctx, allocation); confirmErr != nil {
+		if errors.Is(confirmErr, ErrReleaseDeletionPending) {
+			// 保持哨兵可被 errors.Is 识别:调用方按分配身份退避,不重复 DELETE。
+			return fmt.Errorf("agones: exact release awaiting termination grace: pod=%s gs_uid=%s pod_uid=%s: %w",
+				allocation.PodName, allocation.InstanceUID, allocation.PodUID, ErrReleaseDeletionPending)
+		}
 		return errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: exact release not physically confirmed: pod=%s gs_uid=%s pod_uid=%s delete_status=%d delete_err=%v delete_body=%q confirm_err=%v",
 			allocation.PodName, allocation.InstanceUID, allocation.PodUID, status, deleteErr,
@@ -858,49 +1021,42 @@ func (a *AgonesGameServerAllocator) waitExpectedInstanceGone(
 		a.apiServer, a.namespace, allocation.PodName)
 	podURL := fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s",
 		a.apiServer, a.namespace, allocation.PodName)
+	var lastGS, lastPod exactResourceProbe
 	var lastGSErr, lastPodErr error
 	for {
-		gsGone, gsErr := a.resourceUIDGone(waitCtx, gsURL, allocation.InstanceUID)
-		podGone, podErr := a.resourceUIDGone(waitCtx, podURL, allocation.PodUID)
-		lastGSErr, lastPodErr = gsErr, podErr
-		if gsErr == nil && podErr == nil && gsGone && podGone {
-			return nil
+		lastGS, lastGSErr = a.probeExactResource(waitCtx, gsURL, allocation.InstanceUID)
+		lastPod, lastPodErr = a.probeExactResource(waitCtx, podURL, allocation.PodUID)
+		if lastGSErr == nil && lastPodErr == nil {
+			if lastGS.gone && lastPod.gone {
+				return nil
+			}
+			// 任一对象带 deletionTimestamp:删除已受理,物理消失要等终止宽限(默认 30s,
+			// 远超本确认窗口),继续轮询只是空耗——立即返回 pending 哨兵交调用方退避。
+			if lastGS.deleting || lastPod.deleting {
+				return fmt.Errorf("gs_gone=%t gs_deleting=%t pod_gone=%t pod_deleting=%t: %w",
+					lastGS.gone, lastGS.deleting, lastPod.gone, lastPod.deleting, ErrReleaseDeletionPending)
+			}
 		}
 		select {
 		case <-waitCtx.Done():
-			return fmt.Errorf("timeout waiting exact objects gone: gs_gone=%t gs_err=%v pod_gone=%t pod_err=%v: %w",
-				gsGone, lastGSErr, podGone, lastPodErr, waitCtx.Err())
+			return fmt.Errorf("timeout waiting exact objects gone: gs=%+v gs_err=%v pod=%+v pod_err=%v: %w",
+				lastGS, lastGSErr, lastPod, lastPodErr, waitCtx.Err())
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
 }
 
+// resourceUIDGone 保留「物理消失才算 gone」语义(deleting 不算),供判死 probe 等
+// 只关心 gone/存活 的调用方使用。
 func (a *AgonesGameServerAllocator) resourceUIDGone(
 	ctx context.Context,
 	resourceURL, expectedUID string,
 ) (bool, error) {
-	body, status, err := a.do(ctx, http.MethodGet, resourceURL, nil)
+	probe, err := a.probeExactResource(ctx, resourceURL, expectedUID)
 	if err != nil {
 		return false, err
 	}
-	if status == http.StatusNotFound {
-		return true, nil
-	}
-	if status < 200 || status >= 300 {
-		return false, fmt.Errorf("GET exact resource http %d: %s", status, truncate(body, 128))
-	}
-	var object struct {
-		Metadata struct {
-			UID string `json:"uid"`
-		} `json:"metadata"`
-	}
-	if err := json.Unmarshal(body, &object); err != nil {
-		return false, fmt.Errorf("decode exact resource identity: %w", err)
-	}
-	if object.Metadata.UID == "" {
-		return false, fmt.Errorf("exact resource missing metadata.uid")
-	}
-	return object.Metadata.UID != expectedUID, nil
+	return probe.gone, nil
 }
 
 // Release DELETE 该 GameServer(Fleet 自动补新);404 视作已释放(幂等)。

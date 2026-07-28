@@ -525,6 +525,14 @@ kind: Deployment
 metadata: { name: ds-allocator, namespace: pandora, labels: { app: ds-allocator } }
 spec:
   replicas: 1
+  # 本跳(warming 双阈值判弃,INC-20260727-001)必须 Recreate:旧二进制的 sweep 对
+  # warming 恒用 15s 单阈值,且没有任何运行时手段让它停手 —— 默认 RollingUpdate 会先起
+  # 新副本再终止旧副本,共存窗口内旧 sweep 仍会误删新建 warming(大图冷加载分配必失败)。
+  # 这是 F:\work\CLAUDE.md 验收底线「首次引导升级」例外的同型:零共存与零重启窗口不可
+  # 兼得,按完整性优先选零共存;单副本 Recreate 的秒级重启窗口内 AllocateBattle 返回
+  # UNAVAILABLE,matchmaker 自动重试,可接受。双阈值版本全量铺开后,后续升级新旧语义
+  # 一致,可评估恢复 RollingUpdate。验证步骤见事故档案 §9。
+  strategy: { type: Recreate }
   selector: { matchLabels: { app: ds-allocator } }
   template:
     metadata: { labels: { app: ds-allocator, pandora.dev/ds-auth-writer-epoch: "2" } }

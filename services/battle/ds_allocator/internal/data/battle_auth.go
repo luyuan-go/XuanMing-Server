@@ -147,6 +147,45 @@ type BattleAbandonResult struct {
 	Battle          *dsv1.BattleStorageRecord
 }
 
+// BattleStaleCutoffs 是 sweep 判弃的双阈值(均为 UnixMilli,早于该值视为失联):
+//   - ActiveHeartbeatMs:已激活(auth.Active 存在)或 allocating 快速清理路径,
+//     对应 HeartbeatTimeout(不变量 §4,默认 15s)。
+//   - WarmingHeartbeatMs:尚未激活的 warming 冷加载窗口(大图 ServerTravel 到
+//     GameMode BeginPlay 前没有业务心跳是正常行为),对应 ReadyWaitTimeout,
+//     与 AllocateBattle 在途的 waitBattleReady 同一口径。
+//
+// 选择必须由 AbandonIfStale 在 WATCH auth+battle 事务内依据同一权威快照做:
+// 外层 sweep 读到的 State 快照会与首次 ActivateHeartbeat 并发(TOCTOU),
+// 不得用它决定单一阈值。
+type BattleStaleCutoffs struct {
+	ActiveHeartbeatMs  int64
+	WarmingHeartbeatMs int64
+	// WarmingForfeit 非空时表示编排层已权威确认某 exact 实例死亡,warming 可放弃
+	// 时间宽限提前判弃 —— 但判死结果只对被探测的那个实例有效(见其注释)。
+	WarmingForfeit *BattleWarmingForfeit
+}
+
+// BattleWarmingForfeit 把「编排层判死」绑定到 exact 分配身份,防 ABA:probe 探的是
+// 旧分配 A,事务执行时同 match_id 可能已换成新分配 B(A 被清理→matchmaker 重试)。
+// 事务内 battle 的 allocation_id+gameserver_uid+instance_epoch 与 Instance 精确一致
+// 时才允许用 HeartbeatMs(判死时刻)替代常规冷加载宽限;身份不一致即视为旧 probe
+// 结果作废,B 仍按常规宽限判断,绝不被 A 的判死误杀。
+type BattleWarmingForfeit struct {
+	Instance    BattleExpectedInstance
+	HeartbeatMs int64
+}
+
+// warmingCutoffFor 在事务内按 battle 精确身份选择 warming 阈值(ABA 防护本体)。
+func (c BattleStaleCutoffs) warmingCutoffFor(battle *dsv1.BattleStorageRecord) int64 {
+	if f := c.WarmingForfeit; f != nil &&
+		battle.GetAllocationId() == f.Instance.AllocationID &&
+		battle.GetGameserverUid() == f.Instance.InstanceUID &&
+		battle.GetInstanceEpoch() == f.Instance.InstanceEpoch {
+		return f.HeartbeatMs
+	}
+	return c.WarmingHeartbeatMs
+}
+
 // BattleAuthoritySnapshot 是 auth+battle 的同一 Redis 快照。
 type BattleAuthoritySnapshot struct {
 	Auth        *dsv1.BattleDSAuthStorageRecord
@@ -240,7 +279,7 @@ type BattleAuthRepo interface {
 	// 仍然弹出 GM 命令的 TOCTOU 窗口。queueKey 必须与 auth key 共享 {match_id} slot。
 	PopCommandsIfActive(context.Context, uint64, BattleCredentialIdentity, string, int64) ([]string, error)
 	CheckHeartbeatFresh(context.Context, uint64, int64) (bool, error)
-	AbandonIfStale(context.Context, uint64, int64, time.Duration, time.Duration) (BattleAbandonResult, error)
+	AbandonIfStale(context.Context, uint64, BattleStaleCutoffs, time.Duration, time.Duration) (BattleAbandonResult, error)
 	TerminateExpected(context.Context, uint64, BattleExpectedInstance, string, time.Duration, time.Duration) (bool, error)
 	// TerminateResultExpected 只接受 MySQL terminal-release outbox 的持久证明；它把
 	// receipt 与 ended 终态在同一 Redis CAS 写成永久墓碑。当前 gen/jti 可已轮换，
@@ -1172,33 +1211,36 @@ func battleProjectionMatchesCredential(
 
 // AbandonIfStale 把 sweep 的二次核验和 active→TERMINATING / battle→abandoned 放进
 // auth+battle 同槽事务。并发新心跳会使 WATCH 失败；重试读取新 heartbeat 后返回不判弃。
-func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64, thresholdMs int64, authTTL, battleTTL time.Duration) (BattleAbandonResult, error) {
-	if matchID == 0 || thresholdMs <= 0 || authTTL <= 0 || battleTTL <= 0 {
-		return BattleAbandonResult{}, errcode.New(errcode.ErrInvalidArg, "battle abandon requires match/threshold/ttls")
+// 阈值在事务内按同一权威快照选择(BattleStaleCutoffs 注释),首次 ActivateHeartbeat
+// 与本函数并发时由 WATCH 保证只有一方生效:激活赢则按 ACTIVE 阈值重判(新鲜不弃),
+// 判弃赢则激活读到 TERMINATING 终态返回 Unauthorized,不存在"激活成功又被弃"。
+func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64, cutoffs BattleStaleCutoffs, authTTL, battleTTL time.Duration) (BattleAbandonResult, error) {
+	if matchID == 0 || cutoffs.ActiveHeartbeatMs <= 0 || cutoffs.WarmingHeartbeatMs <= 0 ||
+		authTTL <= 0 || battleTTL <= 0 {
+		return BattleAbandonResult{}, errcode.New(errcode.ErrInvalidArg, "battle abandon requires match/cutoffs/ttls")
+	}
+	if f := cutoffs.WarmingForfeit; f != nil &&
+		(f.HeartbeatMs <= 0 || f.Instance.AllocationID == "" || f.Instance.InstanceUID == "") {
+		return BattleAbandonResult{}, errcode.New(errcode.ErrInvalidArg,
+			"battle abandon warming forfeit requires probed instance identity and timestamp")
 	}
 	aKey, bKey := battleAuthKey(matchID), battleKey(matchID)
 	for attempt := 0; attempt < battleAuthCASRetries; attempt++ {
 		var out BattleAbandonResult
 		var bizErr error
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
-			battle, err := readBattleFrom(tx, ctx, matchID, bKey)
+			// 单条 MGET 原子读:两键分次 GET 会与首次 ActivateHeartbeat 撕裂
+			//(见 readAuthorityPairAtomic 注释,race 实测)。
+			auth, battle, err := readAuthorityPairAtomic(tx, ctx, matchID, aKey, bKey)
 			if err != nil {
-				bizErr = err
 				return err
 			}
-			battleBefore := proto.Clone(battle).(*dsv1.BattleStorageRecord)
-			var auth *dsv1.BattleDSAuthStorageRecord
-			ab, aerr := tx.Get(ctx, aKey).Bytes()
-			switch {
-			case aerr == redis.Nil:
-			case aerr != nil:
-				return aerr
-			default:
-				auth = &dsv1.BattleDSAuthStorageRecord{}
-				if err := unmarshalBattleAuth(matchID, ab, auth); err != nil {
-					return err
-				}
+			if battle == nil {
+				// 与原 readBattleFrom 的 redis.Nil 语义一致:权威不可读,fail-closed。
+				bizErr = errBattleAuthStale
+				return bizErr
 			}
+			battleBefore := proto.Clone(battle).(*dsv1.BattleStorageRecord)
 			out.AuthFound = auth != nil
 			out.ActiveFound = auth != nil && auth.GetActive() != nil
 			out.Battle = proto.Clone(battle).(*dsv1.BattleStorageRecord)
@@ -1226,7 +1268,14 @@ func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64
 					bizErr = errcode.New(errcode.ErrInvalidState, "battle %d missing auth outside allocation grace", matchID)
 					return bizErr
 				}
-				if battle.LastHeartbeatMs > thresholdMs {
+				// warming 是冷加载窗口(无业务心跳属正常),用 ready 等待阈值(判死 forfeit
+				// 须与本事务快照的 exact 身份一致才生效);allocating 尚无外部实例交付,
+				// 保持快速清理语义。
+				cutoffMs := cutoffs.ActiveHeartbeatMs
+				if battle.State == "warming" {
+					cutoffMs = cutoffs.warmingCutoffFor(battle)
+				}
+				if battle.LastHeartbeatMs > cutoffMs {
 					_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 						pipe.Exists(ctx, aKey, bKey)
 						return nil
@@ -1309,11 +1358,19 @@ func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64
 					bizErr = errcode.New(errcode.ErrInvalidState, "battle %d active projection corrupt", matchID)
 					return bizErr
 				}
-				stale = auth.LastActiveHeartbeatMs <= thresholdMs
+				// 已激活过的实例(含 ready/running/rotating)一律按业务心跳阈值,
+				// 停跳即回收,不因 warming 宽限延后。
+				stale = auth.LastActiveHeartbeatMs <= cutoffs.ActiveHeartbeatMs
 			case auth.Phase == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_BOOTSTRAP &&
 				(battle.State == "allocating" || battle.State == "warming"):
 				// 尚未激活的分配只认后端写入的 allocation grace 时间；pending 本身不能续命。
-				stale = battle.LastHeartbeatMs <= thresholdMs
+				// warming 冷加载用 ready 等待阈值(判死 forfeit 须身份精确一致),
+				// allocating 保持快速清理。
+				cutoffMs := cutoffs.ActiveHeartbeatMs
+				if battle.State == "warming" {
+					cutoffMs = cutoffs.warmingCutoffFor(battle)
+				}
+				stale = battle.LastHeartbeatMs <= cutoffMs
 			default:
 				bizErr = errcode.New(errcode.ErrInvalidState, "battle %d auth state cannot be swept safely", matchID)
 				return bizErr
@@ -2194,21 +2251,49 @@ func readBattleFrom(tx *redis.Tx, ctx context.Context, matchID uint64, key strin
 	return unmarshalBattle(matchID, b)
 }
 
+// readAuthorityPairAtomic 用**单条 MGET**读取同槽 auth+battle 快照(键含 {match_id}
+// 同 hash tag,cluster 下 MGET 合法)。两次独立 GET 之间并发写(如首次 ActivateHeartbeat
+// 的 EXEC)会造成撕裂快照:auth 已 ACTIVE 而 battle 仍是旧 warming 镜像,跨键一致性校验
+// 在 EXEC 之前就把它误判成 "active projection corrupt" 返回(race 实测 8/50)——WATCH 只
+// 保护到 EXEC,保护不了闭包内分次读。单条命令原子,撕裂读从根上不可能。
+// 返回值:任一键缺失返回对应 nil(不设错),由调用方按语义处理。
+func readAuthorityPairAtomic(
+	tx *redis.Tx,
+	ctx context.Context,
+	matchID uint64,
+	aKey, bKey string,
+) (*dsv1.BattleDSAuthStorageRecord, *dsv1.BattleStorageRecord, error) {
+	vals, err := tx.MGet(ctx, aKey, bKey).Result()
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(vals) != 2 {
+		return nil, nil, fmt.Errorf("battle %d authority MGET returned %d values", matchID, len(vals))
+	}
+	var auth *dsv1.BattleDSAuthStorageRecord
+	if raw, ok := vals[0].(string); ok {
+		auth = &dsv1.BattleDSAuthStorageRecord{}
+		if err := unmarshalBattleAuth(matchID, []byte(raw), auth); err != nil {
+			return nil, nil, err
+		}
+	}
+	var battle *dsv1.BattleStorageRecord
+	if raw, ok := vals[1].(string); ok {
+		battle, err = unmarshalBattle(matchID, []byte(raw))
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return auth, battle, nil
+}
+
 func readBoundAuthority(tx *redis.Tx, ctx context.Context, matchID uint64, aKey, bKey string) (*dsv1.BattleDSAuthStorageRecord, *dsv1.BattleStorageRecord, error) {
-	ab, err := tx.Get(ctx, aKey).Bytes()
-	if err == redis.Nil {
+	auth, battle, err := readAuthorityPairAtomic(tx, ctx, matchID, aKey, bKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	if auth == nil || battle == nil {
 		return nil, nil, errBattleAuthStale
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	auth := &dsv1.BattleDSAuthStorageRecord{}
-	if err := unmarshalBattleAuth(matchID, ab, auth); err != nil {
-		return nil, nil, err
-	}
-	battle, err := readBattleFrom(tx, ctx, matchID, bKey)
-	if err != nil {
-		return nil, nil, err
 	}
 	return auth, battle, nil
 }

@@ -167,6 +167,15 @@ sweepOnce (每 5s;internal/biz/allocator.go:2093)
                                               投递成功才 Expire 移出 active;失败保留下一轮重试
 ```
 
+- **双阈值判弃**(`data.BattleStaleCutoffs`):ACTIVE(已收到首次业务心跳)按 `HeartbeatTimeout`(15s);
+  尚未激活的 warming 按 `ReadyWaitTimeout` 宽限(大图冷加载在 GameMode BeginPlay 前没有业务心跳是正常行为,
+  与 AllocateBattle 在途的 `waitBattleReady` 同一口径)。阈值由 `AbandonIfStale` 在 WATCH 事务内按
+  权威快照选择,不用外层 sweep 的 State 快照(与首次 ActivateHeartbeat 存在 TOCTOU)。
+- **warming 判死加速**(`WarmingInstanceProber`,接 Agones SDK health ping):宽限期内 sweep 只读探测
+  exact 实例——GameServer+关联 Pod UID 双确认消失,或 Agones 判 `Unhealthy`(DS 侧 r1553 起 health ping
+  由独立线程 pinger 驱动,断流即真死)——确认死亡才放弃时间宽限,本轮交事务判弃并走 fenced 回收;
+  探测失败只回退时间界。`waitBattleReady` 见到终态立即按分配失败返回,matchmaker 无需空等 `ReadyWaitTimeout`。
+
 - **可靠补偿(不变量 §4)**:abandoned 的对局在 `pandora.ds.lifecycle` 事件成功投递前**不移出 active**,下一轮 sweep
   再次命中重试,配合 battle_result 幂等消费(不变量 §2)构成穿越 Kafka 临时不可用的 at-least-once 闭环
   (`deliverAbandoned`,`allocator.go:2396`)。
@@ -230,7 +239,7 @@ AllocateBattle ─► allocating ─► warming ─► ready/running ─► ende
 | `heartbeat_timeout` | `15s` | DS 心跳超时阈值(不变量 §4);超过没心跳 → abandoned |
 | `sweep_interval` | `5s` | 后台心跳超时扫描间隔 |
 | `battle_ttl` | `2h` | 战斗镜像 Redis key TTL(防僵尸;须 ≤ `ds_auth.battle_token_ttl - 15m` 重连余量) |
-| `ready_wait_timeout` | `10s`(dev yaml 设 `45s`) | `AllocateBattle` 等 DS ready 心跳的最长时间;冷加载大图须调大 |
+| `ready_wait_timeout` | `10s`(dev yaml 设 `120s`,INC-20260727-001 Artic01 冷加载) | `AllocateBattle` 等 DS ready 心跳的最长时间;同时是 sweep 对 warming 的判弃宽限(双阈值判弃,见 §3);冷加载大图须调大 |
 | `empty_battle_timeout` | `5m` | 空场超时兜底(活跃但 `player_count==0` 超此时长判 abandoned);负值禁用 |
 | `owner_addr` | `""` | owner 权威服务地址(空=不双写实例租约,migrate ⑥) |
 | `owner_lease_required` | `false` | 实例租约续租失败是否令心跳失败(弱依赖→强依赖切换) |

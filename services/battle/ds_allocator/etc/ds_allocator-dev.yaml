@@ -10,10 +10,10 @@ server:
   grpc:
     network: tcp
     addr: ":50020"
-    timeout: "60s"              # AllocateBattle 阻塞等 allocate(5s)+ready_wait(45s)+余量;勿低于 55s
+    timeout: "150s"             # Artic01 冷加载实测超过 45s；覆盖 allocate + ready_wait(120s) + 回收余量
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
-    max_conn_age_grace: "90s"   # AllocateBattle 同步等 DS ready 最长 ~60s,宽限须盖过它(默认 30s 会砍断在途分配)
+    max_conn_age_grace: "180s"  # 必须盖过 150s 的 AllocateBattle 在途调用，避免 GOAWAY 提前砍断
   http:
     network: tcp
     addr: ":51020"
@@ -82,9 +82,11 @@ allocator:
   # ready_wait_timeout: AllocateBattle 等 DS 心跳 ready 的最长时间(代码默认 10s)。
   # k8s/minikube 真 Linux DS 冷启动 = Loader GameMode 等 Agones Allocated label → ServerTravel
   # 加载目标地图(松林镇等大图可远超 10s)→ BattleGameMode BeginPlay 才发 ready 心跳,
-  # 10s 必超时;调到 45s 覆盖冷加载。配套:上方 server.grpc.timeout=60s、
-  # matchmaker ds_allocate_timeout=60s、matchmaker server.grpc.timeout=60s,四处一起改。
-  ready_wait_timeout: "45s"
+  # 10s 必超时；Artic01 在本地 minikube 冷加载实测超过 45s，因此开发环境放宽到 120s
+  # (取值待 Linux cooked 实测复核,INC-20260727-001 A3)。
+  # 配套三处一起改:上方 server.grpc.timeout=150s、matchmaker ds_allocate_timeout=150s。
+  # matchmaker 自身的 server.grpc.timeout **不在本链上**(分配是后台 worker 出站调用),不必动。
+  ready_wait_timeout: "120s"
   # heartbeat_timeout: DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → abandoned
   heartbeat_timeout: "15s"
 

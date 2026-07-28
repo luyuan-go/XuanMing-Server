@@ -52,7 +52,13 @@ spec:
     buffer:
       bufferSize: 2
       minReplicas: 2
-      maxReplicas: 500
+      # 本地 dev 上限按**外层真实容量**收(INC-20260727-002 复审):单 DS memory
+      # request=limits=14Gi(见 20-fleet-battle.yaml 推导);K8s 虽宣告可分配 ~47Gi,
+      # 但 minikube 外层 cgroup memory.max 实际只有 40Gi,3×14Gi=42Gi 仅 limit 已超,
+      # 故本地取 2(28Gi,余量给 Go 服务/基础设施)。此前 500 是无依据占位。
+      # 若先校正 minikube 外层容量(--memory ≥48g 重建)可再验证 3 并发;
+      # 线上仍由 start.ps1 -BattleMaxReplicas 按节点池容量覆写。
+      maxReplicas: 2
   sync:
     type: FixedInterval
     fixedInterval:

@@ -39,12 +39,14 @@ spec:
       health:
         initialDelaySeconds: 15
         periodSeconds: 10
-        # 实验值(INC-20260727 Artic01):health ping 现由 DS 游戏线程 TimerManager 驱动,重图同步
-        # 加载(BlockTillLevelStreamingCompleted)期间 ping 断流,3×10s 窗口会把"正在加载"误判成
-        # 死进程清场。12×10s=120s 覆盖"暖载 17.9s × 冷 IO 数倍"的保守上界(待 Linux cooked 实测
-        # 复核)。回收计划:UPandoraAgonesSubsystem 后台线程 pinger 上线并验证加载期 ping 不断流
-        # 后,本值必须收回 3(真死进程 3 个周期判死,快速补位)。
-        failureThreshold: 12
+        # 按 INC-20260727-001 回收计划收回 3:health ping 已改由 FPandoraAgonesHealthPinger
+        # 独立 FRunnable 线程驱动(客户端 r1553,间隔 5s,完成委托留在 HTTP 线程,零游戏线程
+        # 依赖),重图同步加载(BlockTillLevelStreamingCompleted)期间发拍不断流,"正在加载"
+        # 不再被误判成死进程;真死进程 3×10s≈30s 判死,fleet 快速替换补位。
+        # ⚠️ apply 顺序硬门:必须先部署含 r1553 pinger 的 DS 镜像,并用
+        # `Log LogPandoraAgonesHealth Verbose` 实测一次 Artic01 冷加载期发拍连续后,
+        # 才能 apply 本值;对旧镜像(游戏线程 TimerManager 驱动)生效会复现加载期误杀。
+        failureThreshold: 3
       template:
         metadata:
           labels:
@@ -58,9 +60,13 @@ spec:
               # Pandora 战斗 DS（UE Linux Dedicated Server）。
               # 由 Tool/Server/Agones/build-linux-ds.ps1 + build-image.sh 产出镜像；push 由人手动执行，按实际 registry 覆盖。
               # Agones 自动注入 SDK sidecar；DS 内 UPandoraAgonesSubsystem 走 sidecar HTTP 调 Ready/Health/Shutdown。
-              # 用滚动 tag :dev（与 build-image.sh 默认一致）：重建镜像后只需 minikube image load，无需再改本文件，
-              # kubectl apply 也不会回退到过时的固定日期 tag。线上换成 registry 可拉取的完整镜像名（见 README online 节）。
-              image: pandora/battle-ds:dev
+              # 镜像一律钉**不可变 tag**(发布纪律,INC-20260727-001 复审 P1-4):本文件是集群
+              # desired state,钉 :dev 滚动 tag 会让任意一次 kubectl apply 把 live 降回本机
+              # IfNotPresent 缓存里的旧 :dev 构建。换版流程 = 打新不可变 tag → minikube image
+              # load → 改本行 → apply;严禁回填 :dev。
+              # 当前批准镜像:r1553 源码构建,PandoraServer SHA-256
+              # E25B891838916D1575A58D17FED2BEFF4A20792FE4F0DA1E5D236055460E0C42(2026-07-27 部署实测)。
+              image: pandora/battle-ds:r1553-dirty-20260727-133010
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT
@@ -75,8 +81,8 @@ spec:
                 - name: PANDORA_DS_GAMEMODE
                   value: "/Script/Pandora.PandoraDSLoaderGameMode"
                 # 旧直启路径(回退用,仅当 Loader 镜像未就绪时换回):直接启到固定战斗图 + 战斗 GameMode。
-                # APandoraBattleGameMode::BeginPlay 起 Pandora 业务心跳(DS→ds_allocator.Heartbeat,每 5s,
-                # 防 battle_abandoned_heartbeat_timeout)。直启会绕过按 map_id 选图,所有局都进同一张图。
+                # 业务心跳(DS→ds_allocator.Heartbeat,每 5s)在 PostLoadMapWithWorld(世界初始化
+                # 完成)后才启动(INC-20260727-001 P0 修复)。直启会绕过按 map_id 选图,所有局都进同一张图。
                 #   value: "/Game/Test/Level/MobaLevel"               # ← PANDORA_DS_MAP
                 #   value: "/Script/Pandora.PandoraBattleGameMode"    # ← PANDORA_DS_GAMEMODE
                 #
@@ -127,16 +133,21 @@ spec:
               resources:
                 requests:
                   cpu: "1"
-                  memory: 1Gi
+                  # 内存 request=limits:战斗 DS 峰值内存是确定性的地图加载成本,不是可
+                  # 超卖的突发 —— 用 1Gi request 超卖会让并发加载时节点真实耗尽、被
+                  # kubelet 驱逐或 OOM(INC-20260727-002 复审)。CPU 保持 request<limit
+                  # (可压缩资源,突发无害),因此 QoS 是 Burstable **不是 Guaranteed**,
+                  # 本注释不做 Guaranteed 声称;内存安全性由 request=limits 单独成立。
+                  # 调度容量约束由此真实生效:minikube 外层实际 40Gi ÷ 14Gi → 本地 2 台,
+                  # 与 25-fleetautoscaler maxReplicas=2 对齐。
+                  memory: 14Gi
                 limits:
                   cpu: "2"
-                  # 实验值(INC-20260727):Artic01(WP 83 cell,server cook 190.7MB)加载中段冲破旧值
-                  # 2Gi 被 memcg OOM 杀(dmesg 9 例,anon-rss≈2Gi 全部顶死限额,CONSTRAINT_MEMCG)。
-                  # 12Gi 为量测用上界(Windows editor 峰值 13GB 的近似;Linux cooked 无 DDC 构建应
-                  # 显著更小),目的=让一局完整跑完以量出真实 memory.peak,再按 peak×1.3~1.5 定正式值。
-                  # requests 维持 1Gi:调度按 requests 不超卖;limits 超卖只影响并发加载重图的突发
-                  # (节点可分配 ~47Gi,约容 3 台同时加载)。资产减负落地后应重测并回调本值。
-                  memory: 12Gi
+                  # 正式值推导(INC-20260727-002):故障注入部署实测完整加载 memory.peak=
+                  # 11,200,929,792B≈10.43GiB;按事故档案口径 peak×1.3~1.5=13.56~15.65GiB,
+                  # 取 14Gi(×1.34)。历史:2Gi 被 OOM 杀(dmesg 9 例)→12Gi 量测围栏→本值。
+                  # 资产减负(INC-001 A5)落地后应重测回调。
+                  memory: 14Gi
           volumes:
             # DSTicket v2 公钥 JWKS(只读,公钥非机密,用 ConfigMap 而非 Secret;由启动器/运维从
             # dsticket_keyset.ps1 create-only 投递的 jwks.json，私钥绝不进 DS 镜像/Pod)。

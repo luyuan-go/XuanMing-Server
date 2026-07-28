@@ -143,6 +143,11 @@ func activateInput() BattleHeartbeatInput {
 	}
 }
 
+// sameCutoffs 给不区分双阈值语义的既有用例复用:两条 cutoff 同值,行为等价旧单阈值。
+func sameCutoffs(ms int64) BattleStaleCutoffs {
+	return BattleStaleCutoffs{ActiveHeartbeatMs: ms, WarmingHeartbeatMs: ms}
+}
+
 func TestBattlePrepareRejectsExistingLowRequiredWriterWithoutMutation(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
@@ -642,7 +647,7 @@ func TestBattleV2RejectsLowAndFutureWriterWithoutAnyAuthoritySideEffect(t *testi
 			}, testTTL, testTTL); err == nil || result.AuthQuarantined || result.ProjectionAbandoned {
 				t.Fatalf("V2 QuarantineExpected result=%+v err=%v", result, err)
 			}
-			if _, err := f.auth.AbandonIfStale(ctx, matchID, f.now.Add(time.Second).UnixMilli(), testTTL, testTTL); err == nil {
+			if _, err := f.auth.AbandonIfStale(ctx, matchID, sameCutoffs(f.now.Add(time.Second).UnixMilli()), testTTL, testTTL); err == nil {
 				t.Fatal("V2 AbandonIfStale accepted non-v2 authority")
 			}
 			terminated, err := f.auth.TerminateExpected(ctx, matchID, BattleExpectedInstance{
@@ -913,7 +918,7 @@ func TestBattleAuthStaleZSetCannotAbandonFreshAuthority(t *testing.T) {
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, id, activateInput()); err != nil {
 		t.Fatal(err)
 	}
-	result, err := f.auth.AbandonIfStale(ctx, matchID, firstHB+5_000, testTTL, testTTL)
+	result, err := f.auth.AbandonIfStale(ctx, matchID, sameCutoffs(firstHB+5_000), testTTL, testTTL)
 	if err != nil {
 		t.Fatalf("abandon fresh: %v", err)
 	}
@@ -925,7 +930,7 @@ func TestBattleAuthStaleZSetCannotAbandonFreshAuthority(t *testing.T) {
 	}
 
 	f.mr.FastForward(30 * time.Minute)
-	result, err = f.auth.AbandonIfStale(ctx, matchID, f.now.UnixMilli(), testTTL, testTTL)
+	result, err = f.auth.AbandonIfStale(ctx, matchID, sameCutoffs(f.now.UnixMilli()), testTTL, testTTL)
 	if err != nil || !result.Abandoned || result.Battle.State != "abandoned" {
 		t.Fatalf("stale abandon=%+v err=%v", result, err)
 	}
@@ -958,7 +963,7 @@ func TestBattleAuthAbandonMissingAuthWarmingHalfFailure(t *testing.T) {
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(712)
 	seedModelBBattle(t, f, matchID, "b952759c-e53f-4f08-8331-44dcacabb086", "pod-half", "uid-half")
-	result, err := f.auth.AbandonIfStale(ctx, matchID, f.now.UnixMilli(), testTTL, testTTL)
+	result, err := f.auth.AbandonIfStale(ctx, matchID, sameCutoffs(f.now.UnixMilli()), testTTL, testTTL)
 	if err != nil || !result.Abandoned || result.Battle == nil || result.Battle.State != "abandoned" {
 		t.Fatalf("missing-auth warming abandon=%+v err=%v", result, err)
 	}
@@ -967,6 +972,234 @@ func TestBattleAuthAbandonMissingAuthWarmingHalfFailure(t *testing.T) {
 	}
 	if _, err := f.rdb.ZScore(ctx, activeKey, fmt.Sprint(matchID)).Result(); err != nil {
 		t.Fatalf("missing-auth abandoned outbox removed: %v", err)
+	}
+}
+
+// coldLoadCutoffs 以分配时刻为基准,模拟 sweep 在 age 之后按生产口径
+// heartbeat_timeout=15s / ready_wait_timeout=120s 计算的双阈值。
+func coldLoadCutoffs(allocMs int64, age time.Duration) BattleStaleCutoffs {
+	sweepNowMs := allocMs + age.Milliseconds()
+	return BattleStaleCutoffs{
+		ActiveHeartbeatMs:  sweepNowMs - (15 * time.Second).Milliseconds(),
+		WarmingHeartbeatMs: sweepNowMs - (120 * time.Second).Milliseconds(),
+	}
+}
+
+// 冷加载回归(Artic01 事故):缺 auth 的 warming 分配,年龄超过业务心跳阈值(15s)
+// 但未超过 ready 等待阈值(120s)时不得判弃且零副作用;超过 120s 后必须回收。
+func TestBattleAuthAbandonWarmingColdLoadGraceMissingAuth(t *testing.T) {
+	ctx := context.Background()
+	f := newBattleAuthFixture(t)
+	const matchID = uint64(713)
+	seedModelBBattle(t, f, matchID, "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f001", "pod-cold", "uid-cold")
+	allocMs := f.now.UnixMilli()
+
+	battleBefore := rawRedisBytes(t, f.rdb, battleKey(matchID))
+	ttlBefore := f.mr.TTL(battleKey(matchID))
+	result, err := f.auth.AbandonIfStale(ctx, matchID, coldLoadCutoffs(allocMs, 30*time.Second), testTTL, testTTL)
+	if err != nil || result.Abandoned || result.AlreadyTerminal {
+		t.Fatalf("cold-load warming falsely abandoned at 30s: %+v err=%v", result, err)
+	}
+	if result.Battle == nil || result.Battle.State != "warming" {
+		t.Fatalf("cold-load warming snapshot=%+v", result.Battle)
+	}
+	if !bytes.Equal(battleBefore, rawRedisBytes(t, f.rdb, battleKey(matchID))) ||
+		f.mr.TTL(battleKey(matchID)) != ttlBefore {
+		t.Fatal("grace-window sweep mutated warming battle bytes or TTL")
+	}
+
+	result, err = f.auth.AbandonIfStale(ctx, matchID, coldLoadCutoffs(allocMs, 130*time.Second), testTTL, testTTL)
+	if err != nil || !result.Abandoned || result.Battle == nil || result.Battle.State != "abandoned" {
+		t.Fatalf("cold-load warming not reclaimed after ready-wait cutoff: %+v err=%v", result, err)
+	}
+	if got := f.mr.TTL(battleKey(matchID)); got != 0 {
+		t.Fatalf("cold-load abandon release fence must persist, ttl=%v", got)
+	}
+	if _, err := f.rdb.ZScore(ctx, activeKey, fmt.Sprint(matchID)).Result(); err != nil {
+		t.Fatalf("cold-load abandoned outbox removed: %v", err)
+	}
+}
+
+// BOOTSTRAP(已 Prepare/Stage/Deliver、尚未首次心跳)+ warming 同样享受冷加载宽限;
+// 超过 ready 等待阈值后照常回收。
+func TestBattleAuthAbandonWarmingColdLoadGraceBootstrap(t *testing.T) {
+	ctx := context.Background()
+	f := newBattleAuthFixture(t)
+	const matchID = uint64(714)
+	const allocationID = "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f002"
+	seedModelBBattle(t, f, matchID, allocationID, "pod-cold-bs", "uid-cold-bs")
+	allocMs := f.now.UnixMilli()
+	prepareAndStage(t, f, matchID, allocationID, "pod-cold-bs", "uid-cold-bs", true)
+
+	authBefore := rawRedisBytes(t, f.rdb, battleAuthKey(matchID))
+	battleBefore := rawRedisBytes(t, f.rdb, battleKey(matchID))
+	result, err := f.auth.AbandonIfStale(ctx, matchID, coldLoadCutoffs(allocMs, 30*time.Second), testTTL, testTTL)
+	if err != nil || result.Abandoned || result.AlreadyTerminal {
+		t.Fatalf("bootstrap warming falsely abandoned at 30s: %+v err=%v", result, err)
+	}
+	if !bytes.Equal(authBefore, rawRedisBytes(t, f.rdb, battleAuthKey(matchID))) ||
+		!bytes.Equal(battleBefore, rawRedisBytes(t, f.rdb, battleKey(matchID))) {
+		t.Fatal("grace-window sweep mutated bootstrap authority")
+	}
+
+	result, err = f.auth.AbandonIfStale(ctx, matchID, coldLoadCutoffs(allocMs, 130*time.Second), testTTL, testTTL)
+	if err != nil || !result.Abandoned || result.Battle == nil || result.Battle.State != "abandoned" {
+		t.Fatalf("bootstrap warming not reclaimed after ready-wait cutoff: %+v err=%v", result, err)
+	}
+	if authTTL, battleTTL := f.mr.TTL(battleAuthKey(matchID)), f.mr.TTL(battleKey(matchID)); authTTL != 0 || battleTTL != 0 {
+		t.Fatalf("bootstrap abandon release fence must persist: auth=%v battle=%v", authTTL, battleTTL)
+	}
+}
+
+// ABA 防护:WarmingForfeit(编排层判死)绑定被探测实例的 exact 身份。事务内在场的
+// 已是同 match_id 的新分配 B 时,旧判死必须作废、B 按常规冷加载宽限存活;身份与
+// 在场记录精确一致时才允许放弃宽限立即判弃。
+func TestBattleAuthAbandonWarmingForfeitBoundToExactInstance(t *testing.T) {
+	ctx := context.Background()
+	f := newBattleAuthFixture(t)
+	const matchID = uint64(716)
+	const allocA = "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f004"
+	const allocB = "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f005"
+	seedModelBBattle(t, f, matchID, allocA, "pod-aba-a", "uid-aba-a")
+	prepareAndStage(t, f, matchID, allocA, "pod-aba-a", "uid-aba-a", true)
+	snapshotA, err := f.auth.ReadAuthority(ctx, matchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forfeitA := &BattleWarmingForfeit{
+		Instance: BattleExpectedInstance{
+			AllocationID:  allocA,
+			InstanceUID:   "uid-aba-a",
+			InstanceEpoch: snapshotA.Battle.GetInstanceEpoch(),
+		},
+		HeartbeatMs: f.now.UnixMilli(),
+	}
+
+	// probe 在途窗口内:A 被外部清理,同 match 新分配 B 就位。
+	f.mr.Del(battleKey(matchID))
+	f.mr.Del(battleAuthKey(matchID))
+	seedModelBBattle(t, f, matchID, allocB, "pod-aba-b", "uid-aba-b")
+	prepareAndStage(t, f, matchID, allocB, "pod-aba-b", "uid-aba-b", true)
+
+	cutoffs := coldLoadCutoffs(f.now.UnixMilli(), 30*time.Second) // B 仍在冷加载宽限内
+	cutoffs.WarmingForfeit = forfeitA
+	result, err := f.auth.AbandonIfStale(ctx, matchID, cutoffs, testTTL, testTTL)
+	if err != nil || result.Abandoned || result.AlreadyTerminal {
+		t.Fatalf("stale forfeit for A killed replacement B: %+v err=%v", result, err)
+	}
+	if result.Battle == nil || result.Battle.GetAllocationId() != allocB ||
+		result.Battle.GetState() != "warming" {
+		t.Fatalf("replacement B snapshot=%+v", result.Battle)
+	}
+
+	// 对照:forfeit 身份与在场 B 精确一致 → 允许放弃宽限,立即判弃。
+	snapshotB, err := f.auth.ReadAuthority(ctx, matchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cutoffs.WarmingForfeit = &BattleWarmingForfeit{
+		Instance: BattleExpectedInstance{
+			AllocationID:  allocB,
+			InstanceUID:   "uid-aba-b",
+			InstanceEpoch: snapshotB.Battle.GetInstanceEpoch(),
+		},
+		HeartbeatMs: f.now.UnixMilli(),
+	}
+	result, err = f.auth.AbandonIfStale(ctx, matchID, cutoffs, testTTL, testTTL)
+	if err != nil || !result.Abandoned || result.Battle == nil || result.Battle.GetState() != "abandoned" {
+		t.Fatalf("matching forfeit did not reclaim: %+v err=%v", result, err)
+	}
+}
+
+// ACTIVE(已激活,含 ready/running)只认业务心跳阈值:失联超 15s 必须回收,
+// 即使仍未超过 warming 冷加载阈值 —— 宽限绝不能延后 running DS 的崩溃补偿(不变量 §4)。
+func TestBattleAuthAbandonActiveIgnoresWarmingGrace(t *testing.T) {
+	ctx := context.Background()
+	f := newBattleAuthFixture(t)
+	const matchID = uint64(715)
+	seedModelBBattle(t, f, matchID, "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f003", "pod-cold-act", "uid-cold-act")
+	_, id := prepareAndStage(t, f, matchID, "0a4c9d9e-9f10-4b7e-8f7f-52d6f3f6f003", "pod-cold-act", "uid-cold-act", true)
+	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, id, activateInput()); err != nil {
+		t.Fatal(err)
+	}
+	lastHB := f.now.UnixMilli()
+
+	result, err := f.auth.AbandonIfStale(ctx, matchID, coldLoadCutoffs(lastHB, 30*time.Second), testTTL, testTTL)
+	if err != nil || !result.Abandoned || result.Battle == nil || result.Battle.State != "abandoned" {
+		t.Fatalf("active battle not reclaimed by heartbeat cutoff at 30s: %+v err=%v", result, err)
+	}
+	if authTTL, battleTTL := f.mr.TTL(battleAuthKey(matchID)), f.mr.TTL(battleKey(matchID)); authTTL != 0 || battleTTL != 0 {
+		t.Fatalf("active abandon release fence must persist: auth=%v battle=%v", authTTL, battleTTL)
+	}
+}
+
+// 首次 ActivateHeartbeat 与冷加载超时判弃并发:WATCH 事务保证恰好一方生效。
+// 激活先赢 → running 且不判弃;判弃先赢 → 激活 Unauthorized;绝不允许
+// "激活成功同时又 abandoned"。
+func TestBattleAuthWarmingActivationRacesColdLoadSweepSingleWinner(t *testing.T) {
+	ctx := context.Background()
+	f := newBattleAuthFixture(t)
+	for i := uint64(0); i < 20; i++ {
+		matchID := uint64(760) + i
+		allocationID := uuid.NewString()
+		pod := fmt.Sprintf("pod-race-cold-%d", i)
+		uid := fmt.Sprintf("uid-race-cold-%d", i)
+		seedModelBBattle(t, f, matchID, allocationID, pod, uid)
+		allocMs := f.now.UnixMilli()
+		_, id := prepareAndStage(t, f, matchID, allocationID, pod, uid, true)
+		// 冷加载已超 ready 等待阈值(sweep 有资格判弃);若 DS 首次心跳先赢,
+		// LastActiveHeartbeatMs=当前时刻,按 ACTIVE 阈值必为新鲜,不得再判弃。
+		f.setNow(f.now.Add(130 * time.Second))
+		cutoffs := coldLoadCutoffs(allocMs, 130*time.Second)
+
+		start := make(chan struct{})
+		activateDone := make(chan error, 1)
+		abandonDone := make(chan struct {
+			result BattleAbandonResult
+			err    error
+		}, 1)
+		go func() {
+			<-start
+			_, err := f.auth.ActivateHeartbeat(ctx, matchID, id, activateInput())
+			activateDone <- err
+		}()
+		go func() {
+			<-start
+			result, err := f.auth.AbandonIfStale(ctx, matchID, cutoffs, testTTL, testTTL)
+			abandonDone <- struct {
+				result BattleAbandonResult
+				err    error
+			}{result: result, err: err}
+		}()
+		close(start)
+		activateErr := <-activateDone
+		abandon := <-abandonDone
+		if abandon.err != nil {
+			t.Fatalf("round %d abandon err=%v", i, abandon.err)
+		}
+		activated := activateErr == nil
+		if activated == abandon.result.Abandoned {
+			t.Fatalf("round %d must have exactly one winner: activated=%v abandoned=%v activateErr=%v",
+				i, activated, abandon.result.Abandoned, activateErr)
+		}
+		snapshot, err := f.auth.ReadAuthority(ctx, matchID)
+		if err != nil {
+			t.Fatalf("round %d snapshot: %v", i, err)
+		}
+		if activated {
+			if snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ACTIVE ||
+				snapshot.Battle.GetState() != "running" {
+				t.Fatalf("round %d activation winner inconsistent: %+v", i, snapshot)
+			}
+		} else {
+			if errcode.As(activateErr) != errcode.ErrUnauthorized {
+				t.Fatalf("round %d late activation must be unauthorized, err=%v", i, activateErr)
+			}
+			if snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+				snapshot.Battle.GetState() != "abandoned" {
+				t.Fatalf("round %d abandon winner inconsistent: %+v", i, snapshot)
+			}
+		}
 	}
 }
 

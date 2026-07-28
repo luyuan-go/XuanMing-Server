@@ -58,6 +58,13 @@ var errHeartbeatAllocationFenced = errors.New("heartbeat on fenced allocation")
 // 调用方据此走回收 pod + 删镜像 + 返回 ErrDSAllocationFailed 的清理路径。
 var errReadyWaitTimeout = errors.New("ready wait timeout")
 
+// errBattleWaitOwnershipLost:wait 提前终止且该分配的回收/接管所有权已属他人
+// (sweep 已判弃或已 purge、allocation 被新分配取代、权威不可授权)。owner 见到本哨兵
+// **不得**再执行 cleanupAllocatedBattle——sweep 的 fenced 回收链可能正在途,并发第二路
+// FencePreactiveRelease/ReleaseExpected 只有幂等最终一致保证,没有单次调用保证
+// (复审必修:回收所有权必须可识别)。随 errcode.NewCause 附于 ErrDSAllocationFailed。
+var errBattleWaitOwnershipLost = errors.New("battle wait ownership lost")
+
 // 战斗 DS 状态常量(对应 proto string state 字段)。
 const (
 	stateAllocating            = "allocating"
@@ -545,6 +552,14 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		if errors.Is(werr, errReadyWaitTimeout) {
 			return nil, u.failReadyWaitTimeout(ctx, matchID, allocationID, podName, authoritative, true)
 		}
+		if errors.Is(werr, errBattleWaitOwnershipLost) {
+			// 回收/接管所有权已属 sweep 或新分配:owner 放弃 cleanup,避免与在途的
+			// fenced 回收链并发第二路 FencePreactiveRelease/ReleaseExpected
+			//(复审必修:reclaimed/purged/superseded outcome 可识别,owner 跳过)。
+			plog.With(ctx).Infow("msg", "battle_ready_wait_ownership_lost",
+				"match_id", matchID, "allocation_id", allocationID, "err", werr)
+			return nil, werr
+		}
 		// 入站 ctx 取消/超时或 repo 出错等非超时失败:本次刚分配的 pod 由本调用持有,
 		// 用独立 cleanup ctx 回收 pod + 删 warming 镜像,避免泄漏(入站 ctx 多半已失效)。
 		u.cleanupAllocatedBattle(ctx, matchID, allocationID, podName, authoritative)
@@ -802,10 +817,15 @@ func battleReadyForPod(b *dsv1.BattleStorageRecord, podName string, matchID uint
 }
 
 // waitBattleReady 轮询 Redis 镜像直到 DS 心跳确认 ready,或 ReadyWaitTimeout 超时(返回 errReadyWaitTimeout)。
+// 提前失败分两类:回收/接管所有权已属他人的一律携带 errBattleWaitOwnershipLost(owner 不得
+// 再 cleanup);其余错误 owner 照旧 cleanup。
 func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, podName, allocationID string) (*AllocateResult, error) {
 	deadline := time.Now().Add(u.readyWaitTimeout())
 	ticker := time.NewTicker(readyPollInterval)
 	defer ticker.Stop()
+	// auth 缺失的累计观察时长(单调):owner 完成 provision 后才进入 wait,正常路径永不缺
+	// auth;只有 joiner 会在 Claim→Prepare、Finalize→provision 在途窗口短暂看到缺 auth。
+	var authMissingSince time.Time
 	for {
 		if u.modelB {
 			snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
@@ -813,9 +833,48 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 				return nil, err
 			}
 			b := snapshot.Battle
-			if snapshot.BattleFound && allocationID != "" && b.AllocationId != allocationID {
-				return nil, errcode.New(errcode.ErrDSAllocationFailed,
+			// battle 键是分配的第一条持久痕迹:wait 上下文里它消失(无论 auth 是否残留)
+			// 只可能是判死回收链已 purge 或 TTL 到期,本分配不可能再 ready,立即失败让
+			// matchmaker 重试,不得空转满 ready_wait(实测 141.85s 总耗时的根因)。
+			if !snapshot.BattleFound {
+				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
+					"battle %d authority purged while waiting ready (auth_found=%t)",
+					matchID, snapshot.AuthFound)
+			}
+			if allocationID != "" && b.AllocationId != allocationID {
+				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d allocation superseded", matchID)
+			}
+			// Auth/Battle 非对称处理(复审必修):
+			//   - 缺 auth 且状态在 allocating/warming 之外:与 AbandonIfStale 的
+			//     allocation-grace 契约同判,不可授权,立即失败;
+			//   - 缺 auth 且在 grace 状态:只允许 joiner 的 provisioning 在途窗口,上界
+			//     取 HeartbeatTimeout(15s)——窗口实际成本 = GSA POST(≤agones
+			//     allocate_timeout 5s)+ DeliverCredential PATCH(≤5s)+ Redis 若干往返,
+			//     15s 是保守上界;超界即 provision 已死(半失败残留),不得复用完整
+			//     冷加载宽限空等 120s,fail-fast 交 sweep 按 grace 回收。
+			if !snapshot.AuthFound {
+				if b.State != stateAllocating && b.State != stateWarming {
+					return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
+						"battle %d missing auth outside allocation grace while waiting ready: state=%s",
+						matchID, b.State)
+				}
+				if authMissingSince.IsZero() {
+					authMissingSince = time.Now()
+				} else if time.Since(authMissingSince) > u.cfg.HeartbeatTimeout.Std() {
+					return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
+						"battle %d auth provisioning stalled beyond grace while waiting ready: state=%s",
+						matchID, b.State)
+				}
+			} else {
+				authMissingSince = time.Time{}
+			}
+			// sweep(实例判死加速/超时判弃)可能已把本分配写成终态;终态永远到不了 ready,
+			// 继续轮询只会白耗完整 ready_wait。回收所有权已属 sweep,owner 不得再 cleanup。
+			if b.State == stateAbandoned || b.State == stateEnded ||
+				b.State == data.BattleStatePreactiveReleasePending {
+				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
+					"battle %d reclaimed while waiting ready: state=%s", matchID, b.State)
 			}
 			ready, _ := snapshot.ReadyAuthorized(
 				time.Now().UnixMilli(), u.cfg.HeartbeatTimeout.Std().Milliseconds())
@@ -827,9 +886,18 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 			if err != nil {
 				return nil, err
 			}
-			if found && allocationID != "" && b.AllocationId != allocationID {
-				return nil, errcode.New(errcode.ErrDSAllocationFailed,
+			// wait 由 finalize 之后进入,镜像消失只可能是回收/TTL,同 modelB 立即失败。
+			if !found {
+				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
+					"battle %d record gone while waiting ready", matchID)
+			}
+			if allocationID != "" && b.AllocationId != allocationID {
+				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d allocation superseded", matchID)
+			}
+			if b.State == stateAbandoned || b.State == stateEnded {
+				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
+					"battle %d reclaimed while waiting ready: state=%s", matchID, b.State)
 			}
 			if found && (podName == "" || b.DsPodName == podName) &&
 				battleReadyForPod(b, b.DsPodName, matchID, b.AllocatedAtMs) {
@@ -2119,6 +2187,18 @@ type sweepDeferral struct {
 	until time.Time
 }
 
+// warmingProbeDeferPrefix 是 warming 判死 probe 失败的退避键前缀,后接 allocation_id:
+// 退避绑定到被探测的那次分配身份,同 match_id 的新分配(不同 allocation_id)键不同,
+// 天然不继承旧退避;记录状态真正变化时也会因 state 不匹配立即作废(sweepDeferralActive)。
+const warmingProbeDeferPrefix = "warming-probe:"
+
+// releasePendingDeferPrefix 是 abandoned 外部回收**任何未确认结果**(删除宽限、
+// GET/DELETE 超时、控制面持续故障、pod UID preflight 失败)后的退避键前缀,后接
+// allocation_id(复审必修:不只 deletion-pending,普通 5s 超时同样会让最老项每轮吃满
+// 预算,INC-20260724-001 队头饥饿必须全类根除)。宽限/故障期内重试只会空转,按分配
+// 身份让出队头;进程内表、不写 ZSET score,重启即清空(重试由 DELETE 幂等兜底)。
+const releasePendingDeferPrefix = "release-pending:"
+
 // noteSweepDeferral 登记一次队头退避。退避窗口复用既有 HeartbeatTimeout(默认 15s
 // = 3 个 SweepInterval),不新增配置项。
 func (u *AllocatorUsecase) noteSweepDeferral(ctx context.Context, matchID uint64, state string, now time.Time) {
@@ -2191,8 +2271,16 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 	if err := u.reconcileActiveIndexIfDue(ctx); err != nil {
 		return err
 	}
-	threshold := time.Now().Add(-u.cfg.HeartbeatTimeout.Std()).UnixMilli()
-	stale, err := u.repo.RangeStaleBattles(ctx, threshold)
+	// 双阈值同一 now 计算(data.BattleStaleCutoffs):ACTIVE 用业务心跳超时,warming
+	// 冷加载用 ready 等待超时(大图 ServerTravel→GameMode BeginPlay 前无业务心跳是
+	// 正常行为,与 AllocateBattle 在途的 waitBattleReady 同一口径)。RangeStaleBattles
+	// 仍用 activeCutoff 粗筛派生 ZSET(score 语义=last_heartbeat_ms),状态对应的
+	// 二次核验交给 AbandonIfStale 在 WATCH 事务内按权威快照完成——外层读到的
+	// inflight.State 会与首次 ActivateHeartbeat 并发,不得据其选单一阈值(TOCTOU)。
+	now := time.Now()
+	activeCutoff := now.Add(-u.cfg.HeartbeatTimeout.Std()).UnixMilli()
+	warmingCutoff := now.Add(-u.readyWaitTimeout()).UnixMilli()
+	stale, err := u.repo.RangeStaleBattles(ctx, activeCutoff)
 	if err != nil {
 		return err
 	}
@@ -2263,7 +2351,16 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			// allocation_uncertain reconciliation committed ABANDONED but crashed
 			// before Kafka ACK/Expire. Reconfirm exact physical absence, then resume
 			// the durable lifecycle handoff.
-			u.resumeReconciledAllocationAbandoned(ctx, inflight)
+			// §9.4 最后一棒仍保持高优先重试,但外部确认失败后按分配身份让出队头一个
+			// 退避窗口(复审必修:控制面持续故障时 epoch=0 resume 的物理确认 GET 同样
+			// 会每轮吃满预算;15s 退避只延后重试节奏,outbox 可靠补偿语义不变)。
+			if inflight.GetAllocationId() != "" &&
+				u.sweepDeferralActive(mid, releasePendingDeferPrefix+inflight.GetAllocationId(), roundStart) {
+				continue
+			}
+			if !u.resumeReconciledAllocationAbandoned(ctx, inflight) && inflight.GetAllocationId() != "" {
+				u.noteSweepDeferral(ctx, mid, releasePendingDeferPrefix+inflight.GetAllocationId(), roundStart)
+			}
 			continue
 		}
 		if found && inflight.State == statePreactiveReleasing {
@@ -2320,8 +2417,53 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			inflight.PodUid = resolvedPodUID
 		}
 		if u.modelB {
+			cutoffs := data.BattleStaleCutoffs{
+				ActiveHeartbeatMs:  activeCutoff,
+				WarmingHeartbeatMs: warmingCutoff,
+			}
+			// warming 冷加载宽限的 Agones 加速出口(SDK health ping 判死接入):exact 实例
+			// 已被编排层权威确认死亡(GameServer+关联 Pod UID 双确认消失,或 Agones 判
+			// Unhealthy)时放弃时间宽限,本轮即交事务判弃,不再空等 ready_wait 到期。
+			// 三道防线:
+			//   ① probe 是 advisory 只读:任何读失败仅回退时间界(fail-closed 到慢路径,
+			//      绝不据此直接 Release),并按分配身份记一次队头退避(复用 sweepDeferral,
+			//      INC-20260724-001 纪律:控制面持续超时的 probe 不得跨轮占住队头;时间
+			//      兜底判弃不受退避影响,同 match 的新分配身份不同、不继承旧退避)。
+			//   ② 判死 forfeit 绑定被探测实例的 exact 身份,由 AbandonIfStale 在事务内
+			//      精确核验(防 ABA:probe 挂起期间 A 被清理、同 match 新分配 B 就位,
+			//      A 的判死绝不能杀 B)。
+			//   ③ 与首次 ActivateHeartbeat 的竞态仍由 WATCH 单赢家保证——激活先赢时
+			//      Active 分支按业务心跳阈值重判,本轮不弃。
+			if found && inflight.GetState() == stateWarming && inflight.GetAllocationId() != "" &&
+				inflight.GetDsPodName() != "" && inflight.GetGameserverUid() != "" {
+				if prober, ok := u.authoritativeAlloc.(WarmingInstanceProber); ok {
+					probeDeferState := warmingProbeDeferPrefix + inflight.GetAllocationId()
+					if !u.sweepDeferralActive(mid, probeDeferState, roundStart) {
+						gone, perr := prober.ProbeExpectedInstanceGone(ctx,
+							inflight.GetDsPodName(), inflight.GetGameserverUid(), inflight.GetPodUid())
+						switch {
+						case perr != nil:
+							u.noteSweepDeferral(ctx, mid, probeDeferState, roundStart)
+							plog.With(ctx).Debugw("msg", "warming_instance_probe_unavailable",
+								"match_id", mid, "pod", inflight.GetDsPodName(), "err", perr)
+						case gone:
+							cutoffs.WarmingForfeit = &data.BattleWarmingForfeit{
+								Instance: data.BattleExpectedInstance{
+									AllocationID:  inflight.GetAllocationId(),
+									InstanceUID:   inflight.GetGameserverUid(),
+									InstanceEpoch: inflight.GetInstanceEpoch(),
+								},
+								HeartbeatMs: time.Now().UnixMilli(),
+							}
+							plog.With(ctx).Warnw("msg", "warming_instance_confirmed_dead_forfeit_grace",
+								"match_id", mid, "pod", inflight.GetDsPodName(),
+								"allocation_id", inflight.GetAllocationId())
+						}
+					}
+				}
+			}
 			out, aerr := u.authRepo.AbandonIfStale(
-				ctx, mid, threshold, u.dsCredentialTTL, u.battleTTL())
+				ctx, mid, cutoffs, u.dsCredentialTTL, u.battleTTL())
 			if aerr != nil {
 				// Redis 权威不可读/状态不一致时 fail-closed：绝不凭派生 ZSET 直接 Release。
 				// 仅 battle 已随 TTL 消失时可安全清残留索引。
@@ -2350,6 +2492,12 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			if b.State != stateAbandoned {
 				continue
 			}
+			// 外部回收已进入删除宽限的项让出队头(退避期内不重复 terminate/release;
+			// deliverAbandoned 本就门控在 release 确认之后,退避只是把必然失败的重试
+			// 推迟到宽限结束,不延后任何可行的补偿)。
+			if u.sweepDeferralActive(mid, releasePendingDeferPrefix+b.GetAllocationId(), roundStart) {
+				continue
+			}
 			if !out.AuthFound || !out.ActiveFound {
 				// Prepare 前崩溃的分配也必须先进入永久 release fence。旧实现
 				// Release→Delete 虽顺序较安全，但有限 TTL 仍会在 Release 响应未知后
@@ -2369,6 +2517,8 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			resolvedPodUID, preflightErr := u.ensureDurableReleasePodUID(
 				ctx, mid, b.GetDsPodName(), expectedInstance, b.GetReleaseTrack())
 			if preflightErr != nil {
+				// 控制面读失败同样按分配身份退避,不得每轮重试吃满预算(队头饥饿全类根除)。
+				u.noteSweepDeferral(ctx, mid, releasePendingDeferPrefix+b.GetAllocationId(), roundStart)
 				plog.With(ctx).Warnw("msg", "model_b_sweep_pod_uid_preflight_failed",
 					"match_id", mid, "pod", b.GetDsPodName(), "err", preflightErr)
 				continue
@@ -2389,6 +2539,15 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 				PodName: b.DsPodName, InstanceUID: b.GameserverUid, AllocationID: b.AllocationId,
 				PodUID: b.PodUid, InstanceEpoch: b.InstanceEpoch,
 			}); rerr != nil {
+				// 任何未确认的 release 结果都按分配身份退避(不只 deletion-pending):
+				// 宽限内/控制面故障中的重试只会空转占队头,队尾 §9.4 补偿必须照常推进;
+				// 退避到期后的重试经 DELETE 幂等 + 双对象消失确认闭合,outbox 语义不变。
+				u.noteSweepDeferral(ctx, mid, releasePendingDeferPrefix+b.GetAllocationId(), roundStart)
+				if errors.Is(rerr, data.ErrReleaseDeletionPending) {
+					plog.With(ctx).Debugw("msg", "model_b_sweep_release_grace_pending",
+						"match_id", mid, "pod", b.DsPodName, "allocation_id", b.GetAllocationId())
+					continue
+				}
 				plog.With(ctx).Warnw("msg", "model_b_sweep_release_failed",
 					"match_id", mid, "pod", b.DsPodName, "err", rerr)
 				continue
@@ -2434,7 +2593,12 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			// active ZSET 是跨 slot 派生索引。心跳可能已成功更新权威 record，但后续
 			// ZADD 失败，留下旧 score；必须在任何终态写/Release 前重新核验 record。
 			// UpdateBattleKeepTTL 成功后会以该真实时间补写 ZSET，故这里只修索引、零副作用。
-			if b.LastHeartbeatMs > threshold {
+			// 阈值同样在事务闭包内按最新镜像状态选择:warming 冷加载用 ready 等待阈值。
+			cutoff := activeCutoff
+			if b.State == stateWarming {
+				cutoff = warmingCutoff
+			}
+			if b.LastHeartbeatMs > cutoff {
 				staleIndexOnly = true
 				return nil
 			}

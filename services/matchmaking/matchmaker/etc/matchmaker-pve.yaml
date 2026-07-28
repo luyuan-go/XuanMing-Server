@@ -20,6 +20,8 @@ server:
     network: tcp
     addr: ":50018"
     timeout: "60s"              # 普通 RPC 上限；ConfirmMatch 不同步等待 DS，allocation worker 独立推进
+                                # (AllocateBattle 是后台 worker 的出站客户端调用,由 ds_allocate_timeout
+                                #  管辖,与本入站 server timeout 无关 —— 勿再为冷加载调大本值)
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
@@ -57,9 +59,9 @@ match:
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(成局后拉战斗 DS);留空用 StubDSAllocator
   ds_allocator_addr: "127.0.0.1:50020"
   # ds_allocate_timeout: 调 ds_allocator.AllocateBattle 的客户端超时(默认 60s)。
-  # 该 RPC 服务端阻塞等 DS ready 心跳(agones allocate 5s + ready_wait 45s + 余量),
-  # 必须 ≥ ds_allocator 侧 server.grpc.timeout(60s),否则客户端先超时白等
-  ds_allocate_timeout: "60s"
+  # 该 RPC 服务端阻塞等 DS ready 心跳(agones allocate + ready_wait 120s + 余量)，
+  # 必须 ≥ ds_allocator 侧 server.grpc.timeout(150s)，否则客户端先超时白等。
+  ds_allocate_timeout: "150s"
   # locator_addr: player_locator 服务 gRPC 直连地址(位置上报 + StartMatch 前置查战斗态)
   locator_addr: "127.0.0.1:50006"
   match_resume_auth_secret: "pandora-dev-match-resume-auth-key-v1!"

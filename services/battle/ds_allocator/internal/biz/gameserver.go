@@ -52,6 +52,18 @@ type AuthoritativeGameServerAllocator interface {
 	ReleaseExpected(ctx context.Context, allocation *data.AuthoritativeGameServerAllocation) error
 }
 
+// WarmingInstanceProber 是 warming 冷加载宽限期 sweep 的可选加速能力(advisory):
+// 只读探测 exact 实例(GameServer name+UID,可选关联 Pod UID)是否已被编排层权威
+// 确认死亡(物理消失或 Agones 依据 SDK health ping 判 Unhealthy)。返回 (true, nil)
+// 时 sweep 才允许放弃 ready_wait 时间宽限,提前交 AbandonIfStale 事务判弃;任何
+// error 都必须回退时间界。不实现本接口的分配器(local/mock)只按时间界回收。
+type WarmingInstanceProber interface {
+	ProbeExpectedInstanceGone(ctx context.Context, podName, instanceUID, podUID string) (bool, error)
+}
+
+// 生产 Agones 分配器必须具备探测能力;接线断裂在编译期暴露,不靠运行时静默降级。
+var _ WarmingInstanceProber = (*data.AgonesGameServerAllocator)(nil)
+
 // UncertainGameServerAllocationResolver is the read-only reconciliation
 // capability used after a GameServerAllocation POST result is unknown.  It
 // must never issue another allocation.  The implementation resolves the

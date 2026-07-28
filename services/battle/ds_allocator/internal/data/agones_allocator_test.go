@@ -10,6 +10,7 @@ package data
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -365,6 +366,259 @@ func TestResolveExpectedPodUIDRejectsMissingOrRecreatedIdentity(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestProbeExpectedInstanceGone:warming 冷加载宽限的判死探测。只有「物理消失双确认」
+// 或「Agones 依据 SDK health ping 判 Unhealthy」返回 true;存活/读失败一律不判死。
+func TestProbeExpectedInstanceGone(t *testing.T) {
+	const podName = "battle-probe-1"
+	tests := map[string]struct {
+		gsStatus  int    // GameServer GET http 状态(0=200)
+		gsUID     string // 200 时返回的 uid
+		gsState   string // 200 时返回的 status.state
+		podStatus int    // Pod GET http 状态(0=200)
+		podUID    string // 200 时返回的 pod uid
+		argPodUID string // 探测入参 podUID
+		wantGone  bool
+		wantErr   bool
+	}{
+		"alive scheduled":              {gsUID: "gs-1", gsState: "Scheduled", argPodUID: "pod-1", wantGone: false},
+		"alive allocated cold loading": {gsUID: "gs-1", gsState: "Allocated", argPodUID: "pod-1", wantGone: false},
+		"unhealthy verdict":            {gsUID: "gs-1", gsState: "Unhealthy", argPodUID: "pod-1", wantGone: true},
+		"gs gone pod gone":             {gsStatus: http.StatusNotFound, podStatus: http.StatusNotFound, argPodUID: "pod-1", wantGone: true},
+		"gs gone pod uid replaced":     {gsStatus: http.StatusNotFound, podUID: "pod-new", argPodUID: "pod-1", wantGone: true},
+		"gs gone pod still present":    {gsStatus: http.StatusNotFound, podUID: "pod-1", argPodUID: "pod-1", wantGone: false},
+		"gs uid replaced pod gone":     {gsUID: "gs-new", gsState: "Ready", podStatus: http.StatusNotFound, argPodUID: "pod-1", wantGone: true},
+		"gs gone no durable pod uid":   {gsStatus: http.StatusNotFound, argPodUID: "", wantGone: true},
+		"gs read failure":              {gsStatus: http.StatusInternalServerError, argPodUID: "pod-1", wantErr: true},
+		"pod read failure":             {gsStatus: http.StatusNotFound, podStatus: http.StatusInternalServerError, argPodUID: "pod-1", wantErr: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var writes atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					writes.Add(1)
+					w.WriteHeader(http.StatusMethodNotAllowed)
+					return
+				}
+				if strings.Contains(r.URL.Path, "/pods/") {
+					status := tc.podStatus
+					if status == 0 {
+						status = http.StatusOK
+					}
+					if status != http.StatusOK {
+						w.WriteHeader(status)
+						return
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
+						"name": podName, "uid": tc.podUID,
+					}})
+					return
+				}
+				status := tc.gsStatus
+				if status == 0 {
+					status = http.StatusOK
+				}
+				if status != http.StatusOK {
+					w.WriteHeader(status)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"metadata": map[string]any{"name": podName, "uid": tc.gsUID, "resourceVersion": "1"},
+					"status":   map[string]any{"state": tc.gsState},
+				})
+			}))
+			defer srv.Close()
+			a := newTestAllocator(t, srv.URL)
+			gone, err := a.ProbeExpectedInstanceGone(context.Background(), podName, "gs-1", tc.argPodUID)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("want error, got gone=%v", gone)
+				}
+			} else if err != nil || gone != tc.wantGone {
+				t.Fatalf("gone=%v err=%v want gone=%v", gone, err, tc.wantGone)
+			}
+			if writes.Load() != 0 {
+				t.Fatalf("probe issued %d non-GET side effects", writes.Load())
+			}
+		})
+	}
+}
+
+// TestReleaseExpectedDeletionGraceContract:exact 回收对 deletionTimestamp 的三态契约
+//(INC-20260727-001 复审 P1-2)。已受理删除不重复 DELETE、宽限内快速返回 pending 哨兵、
+// 双对象物理消失才 nil(teardown proof 门),同名新 UID 零删除。
+func TestReleaseExpectedDeletionGraceContract(t *testing.T) {
+	const podName = "battle-grace-1"
+	alloc := func() *AuthoritativeGameServerAllocation {
+		return &AuthoritativeGameServerAllocation{
+			PodName: podName, InstanceUID: "gs-1", PodUID: "pod-1",
+			AllocationID: "44444444-4444-4444-8444-444444444444",
+		}
+	}
+	type objectState struct {
+		status   int    // 0=200
+		uid      string
+		deleting bool
+	}
+	writeObject := func(w http.ResponseWriter, st objectState) {
+		if st.status != 0 && st.status != http.StatusOK {
+			w.WriteHeader(st.status)
+			return
+		}
+		meta := map[string]any{"name": podName, "uid": st.uid}
+		if st.deleting {
+			meta["deletionTimestamp"] = "2026-07-27T14:00:00Z"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"metadata": meta})
+	}
+	tests := map[string]struct {
+		gs          objectState
+		pod         objectState
+		gsAfterDel  *objectState // DELETE 受理后的 gs 状态(nil=不变)
+		wantPending bool
+		wantNil     bool
+		wantDeletes int32
+	}{
+		"live then accepted grace": {
+			gs: objectState{uid: "gs-1"}, pod: objectState{uid: "pod-1"},
+			gsAfterDel:  &objectState{uid: "gs-1", deleting: true},
+			wantPending: true, wantDeletes: 1,
+		},
+		"already deleting no repeat delete": {
+			gs: objectState{uid: "gs-1", deleting: true}, pod: objectState{uid: "pod-1", deleting: true},
+			wantPending: true, wantDeletes: 0,
+		},
+		"gs gone pod in grace": {
+			gs: objectState{status: http.StatusNotFound}, pod: objectState{uid: "pod-1", deleting: true},
+			wantPending: true, wantDeletes: 0,
+		},
+		"both physically gone": {
+			gs: objectState{status: http.StatusNotFound}, pod: objectState{status: http.StatusNotFound},
+			wantNil: true, wantDeletes: 0,
+		},
+		"same name new uid zero delete": {
+			gs: objectState{uid: "gs-new"}, pod: objectState{uid: "pod-new"},
+			wantNil: true, wantDeletes: 0,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var deletes atomic.Int32
+			var deleted atomic.Bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodDelete {
+					deletes.Add(1)
+					deleted.Store(true)
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				if r.Method != http.MethodGet {
+					w.WriteHeader(http.StatusMethodNotAllowed)
+					return
+				}
+				if strings.Contains(r.URL.Path, "/pods/") {
+					writeObject(w, tc.pod)
+					return
+				}
+				gs := tc.gs
+				if deleted.Load() && tc.gsAfterDel != nil {
+					gs = *tc.gsAfterDel
+				}
+				writeObject(w, gs)
+			}))
+			defer srv.Close()
+			a := newTestAllocator(t, srv.URL)
+			err := a.ReleaseExpected(context.Background(), alloc())
+			switch {
+			case tc.wantNil:
+				if err != nil {
+					t.Fatalf("want physical-gone success, err=%v", err)
+				}
+			case tc.wantPending:
+				if !errors.Is(err, ErrReleaseDeletionPending) {
+					t.Fatalf("want deletion-pending sentinel, err=%v", err)
+				}
+			default:
+				if err == nil {
+					t.Fatal("want error")
+				}
+			}
+			if got := deletes.Load(); got != tc.wantDeletes {
+				t.Fatalf("DELETE calls=%d want %d", got, tc.wantDeletes)
+			}
+		})
+	}
+}
+
+// allocation-id 回退路径的删除宽限契约(复审必修):LIST 先行,对象全部处于删除宽限时
+// 直接 pending 且**不重复 DeleteCollection**;空集合保留 DeleteCollection+后置 LIST 的
+// timeout-late-apply 防线。
+func TestReleaseExpectedAllocationIDCollectionGrace(t *testing.T) {
+	const allocationID = "55555555-5555-4555-8555-555555555555"
+	writeList := func(w http.ResponseWriter, deleting bool, count int) {
+		items := make([]map[string]any, 0, count)
+		for i := 0; i < count; i++ {
+			meta := map[string]any{"name": "gs-col", "uid": "u1"}
+			if deleting {
+				meta["deletionTimestamp"] = "2026-07-27T14:00:00Z"
+			}
+			items = append(items, map[string]any{"metadata": meta})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
+	}
+	t.Run("consecutive calls single delete", func(t *testing.T) {
+		var deletes atomic.Int32
+		var deleted atomic.Bool
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				writeList(w, deleted.Load(), 1)
+			case http.MethodDelete:
+				deletes.Add(1)
+				deleted.Store(true)
+				w.WriteHeader(http.StatusOK)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+		}))
+		defer srv.Close()
+		a := newTestAllocator(t, srv.URL)
+		alloc := &AuthoritativeGameServerAllocation{AllocationID: allocationID} // InstanceUID 空 → collection 路径
+		if err := a.ReleaseExpected(context.Background(), alloc); !errors.Is(err, ErrReleaseDeletionPending) {
+			t.Fatalf("call 1 want pending, err=%v", err)
+		}
+		if err := a.ReleaseExpected(context.Background(), alloc); !errors.Is(err, ErrReleaseDeletionPending) {
+			t.Fatalf("call 2 want pending, err=%v", err)
+		}
+		if got := deletes.Load(); got != 1 {
+			t.Fatalf("DeleteCollection calls=%d want 1(grace 内不得重复)", got)
+		}
+	})
+	t.Run("empty collection keeps late-apply defense", func(t *testing.T) {
+		var deletes atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				writeList(w, false, 0)
+			case http.MethodDelete:
+				deletes.Add(1)
+				w.WriteHeader(http.StatusOK)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+		}))
+		defer srv.Close()
+		a := newTestAllocator(t, srv.URL)
+		if err := a.ReleaseExpected(context.Background(),
+			&AuthoritativeGameServerAllocation{AllocationID: allocationID}); err != nil {
+			t.Fatalf("empty collection release: %v", err)
+		}
+		if got := deletes.Load(); got != 1 {
+			t.Fatalf("empty collection must keep idempotent DeleteCollection defense, calls=%d", got)
+		}
+	})
 }
 
 func TestAllocateAuthoritative_StrictGETRejectsMissingIdentity(t *testing.T) {
@@ -812,10 +1066,26 @@ func TestAgonesRelease_OK(t *testing.T) {
 }
 
 func TestAgonesReleaseExpected_UsesUIDPrecondition(t *testing.T) {
+	// 有状态假 apiserver:删除受理前 exact GameServer 存活(触发真 DELETE 并校验
+	// precondition),受理后双对象 404(物理消失确认)。原静态 404 版本在删除前预检
+	//(deletionTimestamp 三态)引入后不再触发 DELETE——对象已消失本就无需删。
 	var gotUID string
+	var deleted atomic.Bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			http.Error(w, "gone", http.StatusNotFound)
+			if deleted.Load() {
+				http.Error(w, "gone", http.StatusNotFound)
+				return
+			}
+			if strings.Contains(r.URL.Path, "/pods/") {
+				_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
+					"name": "battle-fleet-abc12", "uid": "pod-uid-old",
+				}})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
+				"name": "battle-fleet-abc12", "uid": "uid-old",
+			}})
 			return
 		}
 		var body struct {
@@ -825,6 +1095,7 @@ func TestAgonesReleaseExpected_UsesUIDPrecondition(t *testing.T) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		gotUID = body.Preconditions.UID
+		deleted.Store(true)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()

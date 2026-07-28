@@ -66,6 +66,8 @@ P0 不能仅凭“代码已改”“普通单测通过”或“服务重新 Read
 
 | Incident ID | 日期 | 严重级别 | 类型 | 状态 | 服务/主题 | 文档 |
 |---|---|---|---|---|---|---|
+| INC-20260727-002 | 2026-07-27 | P0 | crash / availability | 正式限额已定 14Gi（待部署验证，未关闭） | Battle DS 加载 Artic01 anon 内存顶死旧 limits 2Gi 被 memcg OOM 杀（dmesg 9 例）；实测 peak=10.43GiB/12Gi 围栏 0 OOM，limits=requests=14Gi（×1.34）+ autoscaler 上限 3 已落配置 | [事故报告](2026-07-27-p0-battle-ds-artic01-memcg-oom.md) |
+| INC-20260727-001 | 2026-07-27 | P0 | availability | 已部署但验证失败（修复实施中，未关闭） | Artic01 冷加载期 warming DS 被单阈值 sweep 误回收；首轮部署验证失败暴露第二 P0（BeginPlay 过早宣告 running→心跳移 PostLoadMapWithWorld）；二轮复审再暴露 include 编译阻断（已改 UObjectGlobals.h）与 `-race` 8/50 撕裂读（已根修为同槽 MGET 原子快照）；waiter 所有权哨兵/队头饥饿全类退避/LIST 先行已落码；全量编译、race 复跑、验收门 A/B/C 与 pinger 硬门 OPEN | [事故报告](2026-07-27-p0-ds-allocator-warming-coldload-reclaim.md) |
 | INC-20260726-003 | 2026-07-26 | P0 | availability / client-state / near-miss | 已修复待验证（未关闭） | UE SelectRole 旧请求被权威换代后门闩未释放；ROLE_REQUIRED 重进选角会永久吞掉后续确认 | [事故报告](2026-07-26-p0-client-select-role-stale-singleflight.md) |
 | INC-20260726-002 | 2026-07-26 | P0 | session-fencing / data / availability / near-miss | 补偿已修复，仍有相邻交付缺口（未关闭） | A/B/C 未交付前代恢复已改无能力墓碑；post-Set placement 失败仍会扣留新 session | [事故报告](2026-07-26-p0-login-session-candidate-delivery.md) |
 | INC-20260726-001 | 2026-07-26 | P0 | split-brain / data / availability / near-miss | 修复实施中（未关闭） | hub_allocator writer lease TTL 盲续/复活；assignment 补偿丢 operation identity/PTTL 与 tombstone ABA；CreateShard 绕 fence；Redis HA 已确认写回档仍 OPEN；canonical green strategy 漂移 | [事故报告](2026-07-26-p0-hub-writer-fencing-near-miss.md) |
