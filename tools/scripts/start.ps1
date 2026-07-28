@@ -4271,6 +4271,18 @@ function Get-LocalMinikubeImageDigest {
     return $digest
 }
 
+# writer Deployment 实际引用的容器镜像(digest provenance 的唯一合法来源)。
+function Get-LocalDsAuthWriterImage {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$Writer
+    )
+    $img = [string](kubectl --context $KubeContext -n $K8sNamespace get "deployment/$Writer" `
+        -o jsonpath='{.spec.template.spec.containers[0].image}' 2>$null)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($img)) { throw "读取 Deployment/$Writer 容器镜像失败。" }
+    return $img
+}
+
 function Set-LocalDsAuthImageDigestAnnotations {
     param(
         [Parameter(Mandatory = $true)][string]$KubeContext,
@@ -4299,7 +4311,10 @@ function Set-LocalDsAuthImageDigestAnnotations {
     }
     $writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     foreach ($writer in $writers) {
-        $image = "pandora/${writer}:dev"
+        # 2026-07-28:writer 可能钉定不可变 tag(INC-20260727-001,如 ds-allocator);provenance
+        # 必须描述 Deployment 实际引用的镜像,不得假定 :dev(否则注解写 :dev digest、Pod 跑
+        # 钉定镜像,Assert 如实拦截)。
+        $image = Get-LocalDsAuthWriterImage -KubeContext $KubeContext -Writer $writer
         $digest = Get-LocalMinikubeImageDigest -MinikubeProfile $MinikubeProfile -Image $image
         $patch = @{
             spec = @{ template = @{ metadata = @{ annotations = @{
@@ -4326,14 +4341,17 @@ function Assert-LocalDsAuthImageDigestAnnotations {
     )
     $writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     foreach ($writer in $writers) {
-        $digest = Get-LocalMinikubeImageDigest -MinikubeProfile $MinikubeProfile -Image "pandora/${writer}:dev"
         $deploymentLines = @(& kubectl --context $KubeContext -n $K8sNamespace get "deployment/$writer" -o json 2>&1)
         if ($LASTEXITCODE -ne 0) { throw "读取 Deployment/$writer 失败。" }
         try { $deployment = (($deploymentLines -join "`n") | ConvertFrom-Json -ErrorAction Stop) }
         catch { throw "Deployment/$writer JSON 非法:$($_.Exception.Message)" }
+        # 与 Set 同口径:digest 按 Deployment 实际引用镜像取(可能是钉定不可变 tag,不假定 :dev)
+        $writerImage = [string]$deployment.spec.template.spec.containers[0].image
+        if ([string]::IsNullOrWhiteSpace($writerImage)) { throw "Deployment/$writer 容器镜像为空。" }
+        $digest = Get-LocalMinikubeImageDigest -MinikubeProfile $MinikubeProfile -Image $writerImage
         $declared = [string]$deployment.spec.template.metadata.annotations.'pandora.dev/image-digest'
         if ($declared -cne $digest) {
-            throw "Deployment/$writer 声明 digest 与 minikube 节点 :dev tag 不一致；禁止以伪 provenance 启动。"
+            throw "Deployment/$writer 声明 digest 与 minikube 节点镜像『$writerImage』不一致；禁止以伪 provenance 启动。"
         }
         if ($SkipPodCheck) { continue }
 
