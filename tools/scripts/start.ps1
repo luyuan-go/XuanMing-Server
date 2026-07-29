@@ -1409,6 +1409,13 @@ function Assert-NoLocalFreshGenesisWriters {
         mysql = 'mysql:8.4'; redis = 'redis:8.8.0-alpine'
         zookeeper = 'confluentinc/cp-zookeeper:7.9.7'; kafka = 'confluentinc/cp-kafka:7.9.7'
         etcd = 'quay.io/coreos/etcd:v3.6.12'; loki = 'grafana/loki:3.4.1'; alloy = 'grafana/alloy:v1.7.1'
+        prometheus = 'prom/prometheus:v2.55.1'; grafana = 'grafana/grafana:11.3.1'
+        pd = 'pingcap/pd:v8.5.1'; tikv = 'pingcap/tikv:v8.5.1'; tidb = 'pingcap/tidb:v8.5.1'
+        # Sentinel 栈(2026-07-28 P2):值为 hashtable 时显式声明期望副本数(默认 1);
+        # 校验语义不变——名字/镜像/副本数三者都必须与声明逐项一致,仍是封闭清单。
+        'redis-master' = 'redis:8.8.0-alpine'
+        'redis-replica' = @{ image = 'redis:8.8.0-alpine'; replicas = 2 }
+        'redis-sentinel' = @{ image = 'redis:8.8.0-alpine'; replicas = 3 }
     }
     $writerIdentities = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     function Get-OptionalPropertyValue([object]$Object, [string]$Name) {
@@ -1457,7 +1464,10 @@ function Assert-NoLocalFreshGenesisWriters {
             if (-not [string]::IsNullOrWhiteSpace($deletionTimestamp)) {
                 throw "fresh genesis 前基础设施 workload 正在终止:$kind/$name"
             }
-            if ($images.Count -ne 1 -or $images[0] -cne [string]$allowedImages[$app]) {
+            $allowedEntry = $allowedImages[$app]
+            $expectedImage = if ($allowedEntry -is [System.Collections.IDictionary]) { [string]$allowedEntry['image'] } else { [string]$allowedEntry }
+            $expectedReplicas = if ($allowedEntry -is [System.Collections.IDictionary]) { [int]$allowedEntry['replicas'] } else { 1 }
+            if ($images.Count -ne 1 -or $images[0] -cne $expectedImage) {
                 throw "fresh genesis 前基础设施 workload 镜像/init/ephemeral 容器漂移:$kind/$name"
             }
             $ownerReferenceValue = Get-OptionalPropertyValue -Object $item.metadata -Name 'ownerReferences'
@@ -1466,8 +1476,8 @@ function Assert-NoLocalFreshGenesisWriters {
                 (Get-OptionalPropertyValue -Object $_ -Name 'controller') -eq $true
             })
             if ($kind -ceq 'Deployment') {
-                if ([int]$item.spec.replicas -ne 1 -or $name -cne $app -or $controllerOwner.Count -ne 0) {
-                    throw "fresh genesis 前基础设施 Deployment 结构/replicas 漂移:$name"
+                if ([int]$item.spec.replicas -ne $expectedReplicas -or $name -cne $app -or $controllerOwner.Count -ne 0) {
+                    throw "fresh genesis 前基础设施 Deployment 结构/replicas 漂移:$name(期望 replicas=$expectedReplicas)"
                 }
                 if ($seenInfraDeployments.ContainsKey($app)) {
                     throw "fresh genesis 前基础设施 Deployment 重复:$app"
@@ -1485,6 +1495,17 @@ function Assert-NoLocalFreshGenesisWriters {
                 }
             }
             continue
+        }
+        # 控制面静态(mirror)Pod 由 Node 拥有(kube-apiserver-<节点名> 等);minikube profile 名
+        # 含 "pandora"(pandora-agones)时其节点名后缀会撞上下方 Pandora 身份正则——它们是
+        # k8s 控制面本体,按「kube-system + owner=Node」精确豁免(2026-07-28 重建实测抓获:
+        # 本门 07-25 加入,晚于旧集群创世,首次 fresh 全量跑才暴露)。其余对象照常筛查。
+        if ($kind -ceq 'Pod' -and $namespace -ceq 'kube-system') {
+            $mirrorOwnerValue = Get-OptionalPropertyValue -Object $item.metadata -Name 'ownerReferences'
+            $nodeOwners = @(@($mirrorOwnerValue) | Where-Object {
+                $null -ne $_ -and (Get-OptionalPropertyValue -Object $_ -Name 'controller') -eq $true -and [string]$_.kind -ceq 'Node'
+            })
+            if ($nodeOwners.Count -eq 1) { continue }
         }
         $identity = @($namespace, $name, $app, ($images -join ',')) -join ' '
         $writerEpochLabel = [string](Get-OptionalPropertyValue -Object $labels -Name 'pandora.dev/ds-auth-writer-epoch')
@@ -3566,6 +3587,11 @@ function Resolve-Prerequisites([string]$mode) {
             if (-not (Ensure-Tool -Name 'kubectl'  -CheckCmd 'kubectl'  -WingetId 'Kubernetes.kubectl'  -ManualUrl 'https://kubernetes.io/docs/tasks/tools/')) { $allOk = $false }
             if (-not (Ensure-Tool -Name 'minikube' -CheckCmd 'minikube' -WingetId 'Kubernetes.minikube' -ManualUrl 'https://minikube.sigs.k8s.io/docs/start/')) { $allOk = $false }
             if (-not (Ensure-Tool -Name 'helm'     -CheckCmd 'helm'     -WingetId 'Helm.Helm'           -ManualUrl 'https://helm.sh/docs/intro/install/')) { $allOk = $false }
+            # [5/8] 构建 21 个服务镜像 = 宿主 Go 交叉编译,Go 缺失会在最贵的步骤中途才炸。
+            if (-not (Ensure-Tool -Name 'Go' -CheckCmd 'go' -WingetId 'GoLang.Go' -ManualUrl 'https://go.dev/dl/')) { $allOk = $false }
+            # [7.5/8] 集群内边缘 Envoy 的 dev 证书(deploy/envoy/cert.pem,不入库)缺失时由
+            # envoy_cert.ps1 用 mkcert 自动重签——新机器必经此路径,mkcert 缺失会中止部署。
+            if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
         }
         'online' {
             if (-not (Ensure-Tool -Name 'kubectl' -CheckCmd 'kubectl' -WingetId 'Kubernetes.kubectl' -ManualUrl 'https://kubernetes.io/docs/tasks/tools/')) { $allOk = $false }
@@ -3862,7 +3888,9 @@ function Apply-AgonesManifests {
             helm repo update 2>$null | Out-Null
             # Agones chart 含 controller/allocator/extensions 等多个第三方镜像；新机器首次冷拉时
             # Helm 默认 5 分钟会先于镜像下载结束而失败。显式放宽到 30 分钟，缓存命中时不增加耗时。
-            helm upgrade --install agones agones/agones --kube-context $KubeContext --namespace agones-system `
+            # 版本钉 1.58.0(2026-07-28):不钉的话每次重建装"当时最新",镜像(us-docker.pkg.dev,
+            # 墙内不可达)与本地缓存/导出全部失配;升级 Agones 必须显式改本行并重验四 Fleet。
+            helm upgrade --install agones agones/agones --version 1.58.0 --kube-context $KubeContext --namespace agones-system `
                 --create-namespace --wait --timeout 30m
             if ($LASTEXITCODE -ne 0) { throw "Agones 安装/修复失败(首次冷拉最多等待 30 分钟)" }
         } else {
@@ -3929,7 +3957,7 @@ function Apply-AgonesManifests {
         kubectl @kubectlContextArgs apply -f $autoscalerSrc
         Assert-LastExit 'kubectl apply Battle FleetAutoscaler'
     }
-    Write-Warn "Fleet 用真 UE DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)。"
+    Write-Warn "Fleet 用真 UE DS 镜像(fleet yaml 钉定不可变 tag=制品版本;宿主缺失时按制品库同版本自动重建)。"
     Write-Warn "  这些镜像由 UE 侧 Tool/Server/Agones 构建;minikube 需先 minikube image load,线上需 push 到 -Registry。"
 
     if ($ForceRecreateGameServers) {
@@ -3971,7 +3999,13 @@ function Apply-AgonesManifests {
 # minikube 的 kube-context 名 == 其 profile 名(minikube start 会写入同名 context)。
 
 # 返回当前 active minikube profile 名(解析失败回落 'minikube')。
+# PANDORA_MINIKUBE_PROFILE 显式覆盖优先:多 profile 并存(旧 docker-driver 集群与新 hyperv/containerd
+# 集群共存期)时,active profile 是全局可变状态,靠它路由会把镜像 load/delete 打到另一个集群
+# (2026-07-07 有镜像落错 daemon 的实锤前科)。env 覆盖 + 下游 context 锁(Test-KubeContextIsLocalMinikube)
+# 双保险;env 未设时行为与旧版完全一致。
 function Get-ActiveMinikubeProfile {
+    $override = $env:PANDORA_MINIKUBE_PROFILE
+    if (-not [string]::IsNullOrWhiteSpace($override)) { return $override.Trim() }
     $p = ((& minikube profile 2>$null | Select-Object -First 1) -replace '^\*\s*', '').Trim()
     if ([string]::IsNullOrWhiteSpace($p)) { $p = 'minikube' }
     return $p
@@ -3989,6 +4023,133 @@ function Get-K8sManagedProfile {
         $script:K8sManagedProfileResolved = $true
     }
     return $script:K8sManagedProfile
+}
+
+# 本机可给 minikube 节点的内存上限(MB)。docker driver 下真正的天花板是 Docker Desktop
+# 的 Linux VM(WSL2)内存,不是物理内存,故优先读 `docker info` 的 MemTotal;读不到再退物理内存。
+function Get-HostMinikubeMemoryCeilingMB {
+    $bytes = 0
+    $raw = (docker info --format '{{.MemTotal}}' 2>$null | Out-String).Trim()
+    if ($raw -match '^\d+$') { $bytes = [int64]$raw }
+    if ($bytes -le 0) {
+        try { $bytes = [int64](Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).TotalPhysicalMemory } catch { $bytes = 0 }
+    }
+    if ($bytes -le 0) { return 0 }
+    return [int][math]::Floor($bytes / 1MB)
+}
+
+# minikube start 的拓扑参数集(driver/runtime/cni/版本/规格)。
+# 关键语义:已存在的 profile 返回空参数——minikube 对既有集群忽略 cpus/memory 变更、
+# 对冲突的 --driver/--container-runtime 直接报错,传了只有害无益;拓扑只在「首次创建」时生效。
+#
+# 默认值 = 2026-07-28 实测通过的「贴近生产」形态,任何机器首次创建都拿到同一套拓扑
+# (换机器/换人跑一键启动即复现,不依赖谁记得导环境变量):
+#   containerd(线上 CRI,非 dockershim) + calico(可强制 NetworkPolicy) + 钉定 K8s 版本
+#   + 阿里云 kicbase(墙内可达;境外机器同样可拉) + 8443→NodePort 31443 端口发布
+#   (集群内边缘 Envoy 的客户端入口;docker/podman driver 专属参数)。
+# 规格默认随宿主自适应并 fail-fast:battle DS 单副本 limits=14Gi,节点内存不足时 DS 永远
+# 调度不上,只会在 [8/8] 等 Fleet Ready 处超时——与其让人等半小时再排查,不如现在讲清楚。
+# 逐项可用环境变量覆盖(设了就按你的来,脚本不二次判断):
+#   PANDORA_MINIKUBE_DRIVER / CPUS / MEMORY / RUNTIME / CNI / K8S_VERSION
+#   PANDORA_MINIKUBE_BASE_IMAGE / IMAGE_REPOSITORY / PORTS
+function Get-MinikubeStartArgs([string]$Profile) {
+    if (Test-MinikubeProfileExists -Profile $Profile) { return @() }
+    $driver = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_DRIVER)) { 'docker' } else { $env:PANDORA_MINIKUBE_DRIVER.Trim() }
+
+    # 内存:显式覆盖优先;否则取 min(宿主上限 × 0.85, 40960),并按 DS 规格做下限硬校验。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_MEMORY)) {
+        $memory = $env:PANDORA_MINIKUBE_MEMORY.Trim()
+    } else {
+        $ceilingMB = Get-HostMinikubeMemoryCeilingMB
+        if ($ceilingMB -le 0) {
+            throw '无法探测本机可用内存(docker info / Win32_ComputerSystem 都读不到);请显式设置 PANDORA_MINIKUBE_MEMORY 后重试。'
+        }
+        $memoryMB = [math]::Min([int][math]::Floor($ceilingMB * 0.85), 40960)
+        # 下限依据:battle DS limits=requests=14Gi(INC-20260727-002 量测围栏)+ 基础设施
+        # (mysql/redis/kafka/zk/etcd/TiDB 三件套/监控)约 6~8Gi + 21 个业务服务约 2Gi。
+        # 注意失败机理是 cgroup 层而非调度层:docker driver 下 kubelet 容量取自 VM /proc/meminfo
+        # (审计实测 47Gi),不读 --memory 的 cgroup 限额——所以不会 Pending,而是节点容器被硬钉
+        # 在小内存后 kubelet/etcd/kafka/DS 被内核 OOM killer 随机杀成 CrashLoop。低于 16Gi
+        # 真 DS 闭环必失败,只是死法难看,故前置拦截。
+        if ($memoryMB -lt 16384) {
+            throw ("本机可给 minikube 的内存上限约 ${ceilingMB}MB,按 85% 只能分到 ${memoryMB}MB,不足以跑真 DS 闭环" +
+                "(battle DS 单副本 limits 就是 14Gi)。处理方式:①Windows 上调大 WSL2 上限(%USERPROFILE%\.wslconfig 的 memory=) 后重启 Docker;" +
+                "②换内存更大的机器;③确认只跑 Go 服务不跑真 DS 时,显式设 PANDORA_MINIKUBE_MEMORY 绕过本校验(DS Fleet 会一直 Pending)。")
+        }
+        $memory = "$memoryMB"
+    }
+
+    # CPU:显式覆盖优先;否则取 min(逻辑核数, 16),下限 4。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_CPUS)) {
+        $cpus = $env:PANDORA_MINIKUBE_CPUS.Trim()
+    } else {
+        $hostCores = 0
+        try { $hostCores = [int](Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).NumberOfLogicalProcessors } catch { $hostCores = 0 }
+        if ($hostCores -le 0) { $hostCores = 4 }
+        $cpus = "$([math]::Max(4, [math]::Min($hostCores, 16)))"
+    }
+
+    $startArgs = @("--driver=$driver", "--cpus=$cpus", "--memory=$memory")
+    $runtime = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_RUNTIME)) { 'containerd' } else { $env:PANDORA_MINIKUBE_RUNTIME.Trim() }
+    $startArgs += "--container-runtime=$runtime"
+    $cni = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_CNI)) { 'calico' } else { $env:PANDORA_MINIKUBE_CNI.Trim() }
+    $startArgs += "--cni=$cni"
+    $k8sVersion = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_K8S_VERSION)) { 'v1.35.1' } else { $env:PANDORA_MINIKUBE_K8S_VERSION.Trim() }
+    $startArgs += "--kubernetes-version=$k8sVersion"
+    # PANDORA_MINIKUBE_IMAGE_REPOSITORY:k8s 核心镜像仓库覆盖(墙内 registry.k8s.io 不可达时
+    # 用 registry.cn-hangzhou.aliyuncs.com/google_containers;preload 可达时通常无需设置)。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY)) {
+        $startArgs += "--image-repository=$($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY.Trim())"
+    }
+    # 节点底图:默认用阿里云 kicbase 镜像(墙内可达,境外机器同样能拉);gcr.io 在墙内不可达,
+    # 走默认会在 "Pulling base image" 卡住直到超时。PANDORA_MINIKUBE_BASE_IMAGE 可覆盖。
+    $baseImage = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_BASE_IMAGE)) {
+        'registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.50'
+    } else { $env:PANDORA_MINIKUBE_BASE_IMAGE.Trim() }
+    $startArgs += "--base-image=$baseImage"
+    # PANDORA_MINIKUBE_IMAGE_REPOSITORY:k8s 核心镜像仓库覆盖。默认不设——containerd 变体
+    # 有 preload 时不需要;preload 拉不到且 registry.k8s.io 不可达时设成
+    # registry.cn-hangzhou.aliyuncs.com/google_containers 重建(2026-07-28 实测该源有 v1.35.1 全套)。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY)) {
+        $startArgs += "--image-repository=$($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY.Trim())"
+    }
+    # 端口发布:把宿主 8443 发布到节点 NodePort 31443 —— 集群内边缘 Envoy(pandora-edge-envoy)
+    # 的客户端入口,客户端保持连 127.0.0.1:8443 不变,不再需要 21 条 kubectl port-forward 桥。
+    # **docker/podman driver 专属参数**,别的 driver(hyperv/vmware 等)传了会直接报错:那些
+    # driver 的节点有可路由 IP,客户端直连 <节点IP>:31443 即可,无需发布。
+    # 内网多机联调把 PANDORA_MINIKUBE_PORTS 设成 "0.0.0.0:8443:31443";既有集群无法追加发布
+    # 端口,必须 -Reset 重建时携带。
+    $portSpecs = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_PORTS)) {
+        if ($driver -in @('docker', 'podman')) { @('127.0.0.1:8443:31443') } else { @() }
+    } else { @($env:PANDORA_MINIKUBE_PORTS -split ',') }
+    foreach ($portSpec in $portSpecs) {
+        if (-not [string]::IsNullOrWhiteSpace($portSpec)) { $startArgs += "--ports=$($portSpec.Trim())" }
+    }
+    return $startArgs
+}
+
+# 读取 profile 的节点容器运行时(docker/containerd/cri-o),缓存;解析失败回落 'docker'(旧行为)。
+# 用途:节点内镜像操作(untag/pull/探测)在 docker 与 containerd 下命令不同,必须按 runtime 分流,
+# 不能把 `minikube ssh -- docker ...` 打进没有 docker CLI 的 containerd 节点(静默失败或硬报错)。
+$script:MinikubeRuntimeCache = @{}
+function Get-MinikubeNodeRuntime([string]$Profile) {
+    if ($script:MinikubeRuntimeCache.ContainsKey($Profile)) { return $script:MinikubeRuntimeCache[$Profile] }
+    $runtime = 'docker'
+    $json = (& minikube profile list -o json 2>$null | Out-String)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($json)) {
+        try {
+            $profiles = ($json | ConvertFrom-Json).valid
+            foreach ($p in @($profiles)) {
+                if ([string]$p.Name -ceq $Profile) {
+                    $cr = [string]$p.Config.KubernetesConfig.ContainerRuntime
+                    if (-not [string]::IsNullOrWhiteSpace($cr)) { $runtime = $cr.Trim() }
+                    break
+                }
+            }
+        } catch { }
+    }
+    $script:MinikubeRuntimeCache[$Profile] = $runtime
+    return $runtime
 }
 
 # 校验 active minikube profile 对应的 kube-context 确实存在于 kubeconfig,返回该 context 名。
@@ -4035,13 +4196,67 @@ function Get-MinikubeImageIds([string[]]$MinikubeArgs = @()) {
     try { $list = $json | ConvertFrom-Json } catch { return $null }
     $map = @{}
     foreach ($entry in $list) {
+        $id = [string]$entry.id
+        # image ls --format json 的 id 是裸 64 位 hex(docker runtime 实测 2026-07-28,与
+        # docker image inspect .Id 去前缀后逐位一致);统一补 sha256: 前缀对齐 inspect /
+        # kubelet imageID 口径,已带前缀的形态原样保留。
+        if ($id -cmatch '^[0-9a-f]{64}$') { $id = "sha256:$id" }
         foreach ($tag in @($entry.repoTags)) {
             if ([string]::IsNullOrWhiteSpace($tag)) { continue }
             $name = $tag -replace '^docker\.io/', ''
-            $map[$name] = [string]$entry.id
+            $map[$name] = $id
         }
     }
     return $map
+}
+
+# 把宿主 deploy/envoy/envoy.yaml 机械变换为「集群内客户端面边缘 Envoy」配置(2026-07-28 P2)。
+# 单一事实源:路由/JWT/超时等 1100 行配置只维护宿主一份,进集群走本变换,防两份配置漂移。
+# 变换规则(其余逐字保留):
+#   ① 剥掉 pandora_ds_listener(8444 DS 面):集群内已有加固版 pandora-envoy(16-ds-envoy.yaml,
+#      带 x-pandora-ds-gateway 标记 + 方法白名单),边缘 Pod 不再暴露一个未加固副本;
+#      被它独占引用的 cluster 留着不被引用,Envoy 允许未引用的静态 cluster,无副作用。
+#   ② admin 0.0.0.0→127.0.0.1(与 DS 面同一收紧理由:admin 未鉴权,不得暴露 Pod IP 上)。
+#   ③ 上游 address: host.docker.internal → 同 namespace Service 短名,按同一 socket_address
+#      块里的 port_value 映射(端口=服务一一对应,见 infra.md §6);任何未映射端口 fail-fast。
+function Convert-EdgeEnvoyConfigForCluster([string]$Text) {
+    $portSvc = @{
+        50001 = 'login'; 50002 = 'player'; 50003 = 'data-service'; 50004 = 'friend'; 50005 = 'chat'
+        50006 = 'player-locator'; 50007 = 'leaderboard'; 50008 = 'guild'; 50009 = 'mail'; 50010 = 'team'
+        50011 = 'matchmaker'; 50012 = 'trade'; 50013 = 'dialogue'; 50014 = 'push'; 50015 = 'inventory'
+        50016 = 'auction'; 50017 = 'owner'; 50018 = 'matchmaker-pve'; 50020 = 'ds-allocator'
+        50021 = 'hub-allocator'; 50022 = 'battle-result'
+    }
+    $lines = $Text -split "`r?`n"
+    $out = New-Object 'System.Collections.Generic.List[string]'
+    $inAdmin = $false; $skipDsListener = $false; $pendingAddrIdx = -1; $addrSeen = 0; $replaced = 0
+    foreach ($line in $lines) {
+        if ($line -cmatch '^admin:') { $inAdmin = $true }
+        elseif ($line -cmatch '^static_resources:') { $inAdmin = $false }
+        if ($line -cmatch '^\s*-\s+name:\s+pandora_ds_listener\s*$') { $skipDsListener = $true; continue }
+        if ($skipDsListener) {
+            if ($line -cmatch '^  clusters:') { $skipDsListener = $false } else { continue }
+        }
+        $emit = $line
+        if ($inAdmin -and $line -cmatch '^(\s*address:\s*)0\.0\.0\.0\s*$') { $emit = "$($Matches[1])127.0.0.1" }
+        if ($line -cmatch '^(\s*)address:\s*host\.docker\.internal\s*$') {
+            $addrSeen++
+            if ($pendingAddrIdx -ge 0) { throw 'edge envoy 变换:连续两个 host.docker.internal 地址之间没有 port_value,配置结构与预期不符,拒绝生成。' }
+            $pendingAddrIdx = $out.Count
+        }
+        if ($pendingAddrIdx -ge 0 -and $line -cmatch '^\s*port_value:\s*(\d+)\s*$') {
+            $upPort = [int]$Matches[1]
+            if (-not $portSvc.ContainsKey($upPort)) { throw "edge envoy 变换:上游端口 $upPort 无 Service 映射,请补 Convert-EdgeEnvoyConfigForCluster 的 portSvc 表(infra.md §6)。" }
+            $indent = [regex]::Match($out[$pendingAddrIdx], '^\s*').Value
+            $out[$pendingAddrIdx] = "${indent}address: $($portSvc[$upPort])"
+            $pendingAddrIdx = -1; $replaced++
+        }
+        $out.Add($emit)
+    }
+    if ($skipDsListener) { throw 'edge envoy 变换:pandora_ds_listener 块直到文件尾都没遇到 clusters:,剥除失败,拒绝生成。' }
+    if ($pendingAddrIdx -ge 0) { throw 'edge envoy 变换:最后一个 host.docker.internal 地址没有配套 port_value,拒绝生成。' }
+    if ($addrSeen -eq 0 -or $replaced -ne $addrSeen) { throw "edge envoy 变换:上游地址改写数($replaced)与发现数($addrSeen)不一致或为零,输入不是预期的宿主 envoy 配置。" }
+    return ($out -join "`n")
 }
 
 # 把一组宿主镜像 load 进 minikube。
@@ -4060,11 +4275,21 @@ function Sync-ImagesToMinikube {
         if ($LASTEXITCODE -ne 0 -or -not $id) { throw "宿主 docker 缺少镜像 $img(先构建再部署)" }
     }
 
-    # 2) 逐个强制刷新同名 tag。旧 Pod 正在用旧镜像时,minikube image rm 会失败;节点内 docker rmi -f
-    # 可以只 untag,不影响运行中容器,再 load 最新 tag。
+    # 2) 逐个强制刷新同名 tag。旧 Pod 正在用旧镜像时,minikube image rm 会失败;节点内 untag
+    # (docker rmi -f / crictl rmi 按 tag)只解绑 tag,不影响运行中容器,再 load 最新 tag。
+    # untag 命令必须按节点 runtime 分流:containerd 节点没有 docker CLI,旧写法会静默失败,
+    # 复现「宿主新 build、集群跑旧镜像」的 2026-07-07 事故;--overwrite 是否单独足够未实测,untag 保留。
+    $syncProfileIdx = [array]::IndexOf($MinikubeArgs, '-p')
+    $syncProfile = if ($syncProfileIdx -ge 0 -and $syncProfileIdx + 1 -lt $MinikubeArgs.Count) { $MinikubeArgs[$syncProfileIdx + 1] } else { Get-K8sManagedProfile }
+    $syncRuntime = Get-MinikubeNodeRuntime $syncProfile
     foreach ($img in $Images) {
-        Write-Info "  minikube image load --daemon=true --overwrite=true $img"
-        minikube @MinikubeArgs ssh -- docker rmi -f $img 2>$null | Out-Null
+        Write-Info "  minikube image load --daemon=true --overwrite=true $img(runtime=$syncRuntime)"
+        if ($syncRuntime -ceq 'docker') {
+            minikube @MinikubeArgs ssh -- docker rmi -f $img 2>$null | Out-Null
+        } else {
+            # containerd/cri-o:crictl rmi 按 tag 即 untag 语义;镜像被运行容器引用时按 tag 解绑同样安全。
+            minikube @MinikubeArgs ssh -- sudo crictl rmi "docker.io/$img" 2>$null | Out-Null
+        }
         minikube @MinikubeArgs image load --daemon=true --overwrite=true $img
         Assert-LastExit "minikube image load $img"
     }
@@ -4082,24 +4307,41 @@ function Sync-ImagesToMinikube {
     Write-Ok "镜像 tag 已刷新到 minikube($($Images.Count) 个)。"
 }
 
-# DS-auth capability 的 image_digest 必须来自 minikube 节点实际运行的 immutable
-# image config digest，不能沿用旧 Deployment annotation，也不能使用宿主 buildx
-# manifest-list digest。五个 writer 会把该 annotation 通过 Downward API 写入 etcd；
-# annotation 与节点 :dev tag 漂移会让 capability provenance 失真。
+# DS-auth capability 的 image_digest 必须来自 minikube 节点实际的 immutable 镜像身份,
+# 不能沿用旧 Deployment annotation,也不能使用宿主 buildx manifest-list digest。
+# 取值口径(2026-07-28 改):统一走 `minikube image ls --format json` 的 CRI 视角 id——
+# kubelet 的 containerStatuses.imageID 与 CRI image store 出自同一来源,该口径在 docker
+# 与 containerd 节点上都与 Pod 实际上报一致(docker 下即原 config digest,行为不变);
+# 旧写法 `ssh -- docker image inspect` 在 containerd 节点无 docker CLI 直接硬失败。
 function Get-LocalMinikubeImageDigest {
     param(
         [Parameter(Mandatory = $true)][string]$MinikubeProfile,
         [Parameter(Mandatory = $true)][string]$Image
     )
-    $lines = @(& minikube -p $MinikubeProfile ssh -- docker image inspect -f '{{.Id}}' $Image 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "minikube 节点读取镜像 digest 失败:$Image`n$($lines -join [Environment]::NewLine)"
+    $mkIds = Get-MinikubeImageIds @('-p', $MinikubeProfile)
+    if ($null -eq $mkIds) {
+        throw "minikube image ls --format json 不可用,无法读取节点镜像 digest:$Image(升级 minikube 后重试)"
     }
-    $digest = (($lines -join "`n").Trim())
+    if (-not $mkIds.ContainsKey($Image)) {
+        throw "minikube 节点镜像清单中找不到 $Image(先 load 再部署)"
+    }
+    $digest = ([string]$mkIds[$Image]).Trim()
     if ($digest -cnotmatch '^sha256:[0-9a-f]{64}$') {
-        throw "minikube 节点镜像 digest 非 canonical sha256:$Image"
+        throw "minikube 节点镜像 digest 非 canonical sha256:$Image(实际值:$digest)"
     }
     return $digest
+}
+
+# writer Deployment 实际引用的容器镜像(digest provenance 的唯一合法来源)。
+function Get-LocalDsAuthWriterImage {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$Writer
+    )
+    $img = [string](kubectl --context $KubeContext -n $K8sNamespace get "deployment/$Writer" `
+        -o jsonpath='{.spec.template.spec.containers[0].image}' 2>$null)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($img)) { throw "读取 Deployment/$Writer 容器镜像失败。" }
+    return $img
 }
 
 function Set-LocalDsAuthImageDigestAnnotations {
@@ -4107,21 +4349,33 @@ function Set-LocalDsAuthImageDigestAnnotations {
         [Parameter(Mandatory = $true)][string]$KubeContext,
         [Parameter(Mandatory = $true)][string]$MinikubeProfile
     )
-    # 修改 template 会触发 rollout；Hub ledger 是单写者，任何 digest patch 前必须
-    # 已由当前清单收敛为 replicas=1 + Recreate，且不能残留 rollingUpdate 配置。
+    # 修改 template 会触发 rollout;Hub ledger 是单写者。两种合法形态(2026-07-28 更新,
+    # 本断言写于 R11 之前,全量流程自 R11 后首跑暴露其过时):
+    #   ① 旧形态:replicas=1 + Recreate 无 rollingUpdate(部署策略保证同刻单进程);
+    #   ② R11 P0-5(2026-07-25)后:RollingUpdate + pandora.dev/deploy-strategy 注解逐字一致
+    #      (main_test.go 清单契约)。单写者由运行时 writerlease(选举+单调 fencing+存储层
+    #      同事务校验)保证,进程读注解 fail-closed:RollingUpdate × writer_lease_mode!=enforce
+    #      直接拒启,不存在无保护双写窗口——单写者约束不得靠部署策略实现(宪法金丝雀条款)。
     $hubLines = @(& kubectl --context $KubeContext -n $K8sNamespace get deployment/hub-allocator -o json 2>&1)
     if ($LASTEXITCODE -ne 0) { throw '读取 Deployment/hub-allocator strategy 失败。' }
     try { $hubDeployment = (($hubLines -join "`n") | ConvertFrom-Json -ErrorAction Stop) }
     catch { throw "Deployment/hub-allocator JSON 非法:$($_.Exception.Message)" }
     $rolling = $hubDeployment.spec.strategy.PSObject.Properties['rollingUpdate']
-    if ([int]$hubDeployment.spec.replicas -ne 1 -or
-        [string]$hubDeployment.spec.strategy.type -cne 'Recreate' -or
-        ($null -ne $rolling -and $null -ne $rolling.Value)) {
-        throw 'Hub digest rollout 前必须为 exact replicas=1 + Recreate 且无 rollingUpdate。'
+    $hubStrategyType = [string]$hubDeployment.spec.strategy.type
+    $hubDeclaredStrategy = [string]$hubDeployment.spec.template.metadata.annotations.'pandora.dev/deploy-strategy'
+    $hubRecreateOk = ([int]$hubDeployment.spec.replicas -eq 1 -and $hubStrategyType -ceq 'Recreate' -and
+        ($null -eq $rolling -or $null -eq $rolling.Value))
+    $hubRollingOk = ([int]$hubDeployment.spec.replicas -eq 1 -and $hubStrategyType -ceq 'RollingUpdate' -and
+        $hubDeclaredStrategy -ceq 'RollingUpdate')
+    if (-not ($hubRecreateOk -or $hubRollingOk)) {
+        throw "Hub digest rollout 前必须为 replicas=1 且『Recreate 无 rollingUpdate』或『RollingUpdate 且 pandora.dev/deploy-strategy 注解逐字一致(writerlease 运行时单写者,R11 P0-5)』;实际 strategy=$hubStrategyType 注解=$hubDeclaredStrategy replicas=$($hubDeployment.spec.replicas)。"
     }
     $writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     foreach ($writer in $writers) {
-        $image = "pandora/${writer}:dev"
+        # 2026-07-28:writer 可能钉定不可变 tag(INC-20260727-001,如 ds-allocator);provenance
+        # 必须描述 Deployment 实际引用的镜像,不得假定 :dev(否则注解写 :dev digest、Pod 跑
+        # 钉定镜像,Assert 如实拦截)。
+        $image = Get-LocalDsAuthWriterImage -KubeContext $KubeContext -Writer $writer
         $digest = Get-LocalMinikubeImageDigest -MinikubeProfile $MinikubeProfile -Image $image
         $patch = @{
             spec = @{ template = @{ metadata = @{ annotations = @{
@@ -4148,14 +4402,17 @@ function Assert-LocalDsAuthImageDigestAnnotations {
     )
     $writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     foreach ($writer in $writers) {
-        $digest = Get-LocalMinikubeImageDigest -MinikubeProfile $MinikubeProfile -Image "pandora/${writer}:dev"
         $deploymentLines = @(& kubectl --context $KubeContext -n $K8sNamespace get "deployment/$writer" -o json 2>&1)
         if ($LASTEXITCODE -ne 0) { throw "读取 Deployment/$writer 失败。" }
         try { $deployment = (($deploymentLines -join "`n") | ConvertFrom-Json -ErrorAction Stop) }
         catch { throw "Deployment/$writer JSON 非法:$($_.Exception.Message)" }
+        # 与 Set 同口径:digest 按 Deployment 实际引用镜像取(可能是钉定不可变 tag,不假定 :dev)
+        $writerImage = [string]$deployment.spec.template.spec.containers[0].image
+        if ([string]::IsNullOrWhiteSpace($writerImage)) { throw "Deployment/$writer 容器镜像为空。" }
+        $digest = Get-LocalMinikubeImageDigest -MinikubeProfile $MinikubeProfile -Image $writerImage
         $declared = [string]$deployment.spec.template.metadata.annotations.'pandora.dev/image-digest'
         if ($declared -cne $digest) {
-            throw "Deployment/$writer 声明 digest 与 minikube 节点 :dev tag 不一致；禁止以伪 provenance 启动。"
+            throw "Deployment/$writer 声明 digest 与 minikube 节点镜像『$writerImage』不一致；禁止以伪 provenance 启动。"
         }
         if ($SkipPodCheck) { continue }
 
@@ -4177,7 +4434,8 @@ function Assert-LocalDsAuthImageDigestAnnotations {
             $statuses = @($pod.status.containerStatuses | Where-Object { [string]$_.name -ceq $writer })
             if ($statuses.Count -ne 1 -or $null -eq $statuses[0].state.running -or
                 -not ([string]$statuses[0].imageID).EndsWith($digest, [StringComparison]::Ordinal)) {
-                throw "$writer 运行容器 imageID 未命中声明的 minikube immutable digest。"
+                $actualImageId = if ($statuses.Count -eq 1) { [string]$statuses[0].imageID } else { "(containerStatuses 数=$($statuses.Count))" }
+                throw "$writer 运行容器 imageID 未命中声明的 minikube immutable digest。期望后缀:$digest;实际 imageID:$actualImageId(若两者 digest 形态不同,说明该节点 runtime 的 CRI 身份口径与 image ls 不一致,须先钉定口径,禁止放宽比对)。"
             }
         }
     }
@@ -4190,13 +4448,22 @@ function Assert-LocalDsAuthImageDigestAnnotations {
 #   2) 宿主 docker 已有 → minikube image load 灌进去(断网机 import_images -IncludeInfra 后走这条);
 #   3) 都没有 → 才在节点内联网 pull(重试 6 次),仍失败 fail-fast 给出离线导入指引。
 function Ensure-EnvoyImageInMinikube {
-    param([string]$MinikubeProfile)
-    $envoyImg = 'envoyproxy/envoy:v1.38-latest'
+    param(
+        [string]$MinikubeProfile,
+        # 默认值维持 DS 面(16-ds-envoy.yaml)的既有 tag;边缘 Envoy(edge-envoy.yaml)钉定
+        # v1.38.1(与 v1.38-latest 当日同 imageID,钉定只为杜绝"latest 漂移后新机器拉到不同构建")。
+        [string]$Image = 'envoyproxy/envoy:v1.38-latest'
+    )
+    $envoyImg = $Image
     $mkArgs = @()
     if (-not [string]::IsNullOrWhiteSpace($MinikubeProfile)) { $mkArgs = @('-p', $MinikubeProfile) }
+    # 节点内镜像探测/拉取按 runtime 分流(containerd 节点无 docker CLI);探测统一用
+    # `minikube image ls`(runtime 无关),仅"节点内联网拉取"这一步需要区分命令。
+    $resolvedProfile = if ([string]::IsNullOrWhiteSpace($MinikubeProfile)) { Get-K8sManagedProfile } else { $MinikubeProfile }
+    $nodeRuntime = Get-MinikubeNodeRuntime $resolvedProfile
 
-    minikube @mkArgs ssh -- "docker image inspect $envoyImg >/dev/null 2>&1" 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
+    $mkIds = Get-MinikubeImageIds $mkArgs
+    if ($null -ne $mkIds -and $mkIds.ContainsKey($envoyImg)) {
         Write-Ok "in-cluster Envoy 镜像已在 minikube 节点($envoyImg)"
         return
     }
@@ -4207,14 +4474,18 @@ function Ensure-EnvoyImageInMinikube {
         minikube @mkArgs image load --daemon=true $envoyImg
         Assert-LastExit "minikube image load $envoyImg"
     } else {
-        Write-Info "宿主与 minikube 均无 $envoyImg,尝试在 minikube 节点联网拉取(断网机会失败)..."
-        minikube @mkArgs ssh -- "for i in 1 2 3 4 5 6; do docker pull $envoyImg && break || sleep 4; done" 2>$null | Out-Null
+        Write-Info "宿主与 minikube 均无 $envoyImg,尝试在 minikube 节点联网拉取(断网机会失败,runtime=$nodeRuntime)..."
+        if ($nodeRuntime -ceq 'docker') {
+            minikube @mkArgs ssh -- "for i in 1 2 3 4 5 6; do docker pull $envoyImg && break || sleep 4; done" 2>$null | Out-Null
+        } else {
+            minikube @mkArgs ssh -- "for i in 1 2 3 4 5 6; do sudo crictl pull docker.io/$envoyImg && break || sleep 4; done" 2>$null | Out-Null
+        }
     }
 
     # 拉取/加载可能静默失败(stderr 被吞)。显式确认镜像已在节点内,否则后面 pandora-envoy Pod
     # 会一直 ImagePullBackOff,DS 心跳(:8444)永远打不通 —— fail-fast 让调用方先解决镜像。
-    minikube @mkArgs ssh -- "docker image inspect $envoyImg >/dev/null 2>&1" 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    $mkIds = Get-MinikubeImageIds $mkArgs
+    if ($null -eq $mkIds -or -not $mkIds.ContainsKey($envoyImg)) {
         throw "in-cluster Envoy 镜像『$envoyImg』未能进入 minikube(断网/限流?)。DS 面 :8444 网关无法就绪,已中止。离线办法:在能联网机器 docker pull $envoyImg && docker save -o envoy.tar $envoyImg,拷到本机 docker load -i envoy.tar 后重跑(本函数会自动从宿主 load 进 minikube)。"
     }
     Write-Ok "in-cluster Envoy 镜像已就绪($envoyImg)"
@@ -4241,7 +4512,40 @@ function Build-DsImagesForMinikube {
     $mkProfile = Get-K8sManagedProfile
     Write-Info "把 DS 镜像 load 进 minikube(profile=$mkProfile,强制刷新 :dev tag)..."
     Sync-ImagesToMinikube -Images @('pandora/battle-ds:dev', 'pandora/hub-ds:dev') -MinikubeArgs @('-p', $mkProfile)
-    Write-Ok "DS 镜像已就绪(pandora/battle-ds:dev / pandora/hub-ds:dev 已在 minikube)"
+    # 2026-07-28:Fleet yaml 钉定不可变 tag(INC-20260727-001 防回滚,20/21/30/31-fleet-*.yaml)。
+    # 钉定镜像不产自本次 :dev 构建——新节点(-Reset 重建)/新机器没有会让 GameServer 全量
+    # ImagePullBackOff(下游 e2e 又被 -SkipImageLoad 跳过加载)。
+    # 产出链(tag 命名契约=制品快照版本号):宿主 daemon 没有钉定镜像时,按 tag 定位制品库
+    # <root>\snapshots\client\trunk_Client\Server_Linux_Development\<tag>\LinuxServer 重建同名
+    # 镜像——任何机器只要可达制品库(PANDORA_ARTIFACT_ROOT,默认 F:\work\artifacts)即可复现;
+    # 制品缺失才 fail-fast(绝不静默退回 :dev 冒充钉定内容)。
+    $fleetPinned = @(Get-ChildItem (Join-Path $ProjectRoot 'deploy/k8s/agones') -Filter '*fleet*.yaml' |
+        ForEach-Object { Select-String -LiteralPath $_.FullName -Pattern '^\s*image:\s*(pandora/\S+)' |
+            ForEach-Object { $_.Matches[0].Groups[1].Value } } |
+        Where-Object { $_ -notmatch ':dev$' } | Sort-Object -Unique)
+    $pinnedMissing = @($fleetPinned | Where-Object {
+        docker image inspect $_ *> $null; $LASTEXITCODE -ne 0
+    })
+    if ($pinnedMissing.Count -gt 0) {
+        $artifactRoot = if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_ARTIFACT_ROOT)) { $env:PANDORA_ARTIFACT_ROOT.Trim() } else { 'F:\work\artifacts' }
+        foreach ($verGroup in ($pinnedMissing | Group-Object { ($_ -split ':', 2)[1] })) {
+            $ver = $verGroup.Name
+            $pkg = Join-Path $artifactRoot "snapshots\client\trunk_Client\Server_Linux_Development\$ver\LinuxServer"
+            if (-not (Test-Path -LiteralPath $pkg)) {
+                throw ("Fleet 钉定镜像 $($verGroup.Group -join ', ') 宿主缺失,且制品库找不到同版本 DS 包:$pkg`n" +
+                    "处理方式:①确认 PANDORA_ARTIFACT_ROOT 指向共享制品根(当前=$artifactRoot);" +
+                    "②在客户端仓库发布该版本(pwsh Tool\Build\PublishPackages.ps1);③改 fleet yaml 钉定为制品库里存在的版本。")
+            }
+            Write-Info "钉定镜像宿主缺失,按制品 $ver 重建($($verGroup.Group -join ', '))..."
+            & pwsh -NoProfile -ExecutionPolicy Bypass -File $dsBuild -BuildOnHost -Tag $ver -SourcePkg $pkg
+            Assert-LastExit "按制品版本重建 Fleet 钉定 DS 镜像($ver)"
+        }
+    }
+    if ($fleetPinned.Count -gt 0) {
+        Write-Info "Fleet 钉定镜像一并 load:$($fleetPinned -join ', ')"
+        Sync-ImagesToMinikube -Images $fleetPinned -MinikubeArgs @('-p', $mkProfile)
+    }
+    Write-Ok "DS 镜像已就绪(:dev + Fleet 钉定 tag 均已在 minikube)"
 }
 
 # ===== k8s 模式:宿主侧桥接/中继清理(与启动末尾自动跑的 e2e_k8s.ps1 对称)=====
@@ -4290,6 +4594,16 @@ function Invoke-K8s {
     $servicesDir = Join-Path $ProjectRoot 'deploy/k8s/services'
     $infraYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/infra.yaml'
     $lokiYaml    = Join-Path $ProjectRoot 'deploy/k8s/infra/loki.yaml'
+    $monitoringYaml = Join-Path $ProjectRoot 'deploy/k8s/infra/monitoring.yaml'
+    $tidbYaml       = Join-Path $ProjectRoot 'deploy/k8s/infra/tidb.yaml'
+    $tidbInitJobYaml = Join-Path $ProjectRoot 'deploy/k8s/infra/tidb-init-job.yaml'
+    $sentinelYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/redis-sentinel.yaml'
+    $edgeEnvoyYaml  = Join-Path $ProjectRoot 'deploy/k8s/infra/edge-envoy.yaml'
+    $tidbInitDir    = Join-Path $ProjectRoot 'deploy/tidb-init'
+    $sentinelEntrypointFile = Join-Path $ProjectRoot 'deploy/redis/sentinel-entrypoint.sh'
+    $grafanaAlertingDir = Join-Path $ProjectRoot 'deploy/grafana/provisioning/alerting'
+    $hostEnvoyConfigFile = Join-Path $ProjectRoot 'deploy/envoy/envoy.yaml'
+    $envoyCertDir   = Join-Path $ProjectRoot 'deploy/envoy'
     $mysqlInit   = Join-Path $ProjectRoot 'deploy/mysql-init'
 
     if ($Down) {
@@ -4339,6 +4653,20 @@ function Invoke-K8s {
         }
         kubectl --context $mkProfile delete -f $lokiYaml --ignore-not-found 2>$null
         Assert-LastExit 'kubectl delete Loki'
+        kubectl --context $mkProfile delete -f $monitoringYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete Prometheus/Grafana'
+        kubectl --context $mkProfile delete -f $tidbYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete TiDB'
+        kubectl --context $mkProfile delete -f $tidbInitJobYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete tidb-init Job'
+        kubectl --context $mkProfile delete -f $sentinelYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete Redis Sentinel'
+        kubectl --context $mkProfile delete -f $edgeEnvoyYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete edge Envoy'
+        kubectl --context $mkProfile delete configmap pandora-tidb-init pandora-redis-sentinel-entrypoint `
+            pandora-edge-envoy-config pandora-grafana-alerting -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
+        kubectl --context $mkProfile delete secret pandora-edge-envoy-certs pandora-grafana-alert-env `
+            -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
         # 基础设施:删除除 PVC/etcd-data 外的全部对象，保留 etcd 数据卷。
         $infraManifest = (Get-Content -LiteralPath $infraYaml -Raw)
         $null = Remove-K8sManifestObjectsPreserving -KubeContext $mkProfile -ManifestText $infraManifest `
@@ -4367,11 +4695,25 @@ function Invoke-K8s {
     # 安装 Pandora”。真正的 genesis 授权不再依赖这个瞬时布尔值，而依赖持久 marker/PVC UID。
     $profileExistedBeforeStart = Test-MinikubeProfileExists -Profile $mkProfile
 
-    # 1) minikube 起没起
+    # DS 包前置预检(2026-07-28,回应换机器审计):真 DS 是本模式的硬前置,但它的构建在
+    # [4/8]——起集群+装基础设施之后。新机器若既无同级客户端仓库/制品库/环境变量指定的包、
+    # 也无历史 stage,与其让人等十几分钟再在 [4/8] 中止,不如现在就按 -ResolveOnly(exit 2=
+    # 彻底无源)讲清楚。只预检不构建,几秒完成;有任一来源即放行,防降级门仍在真实构建时把关。
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot 'deploy/ds/build-image-minikube.ps1') -ResolveOnly
+    if ($LASTEXITCODE -eq 2) {
+        throw ("未找到任何 UE Linux DS 包来源,真 DS 闭环无法构建。任选其一后重跑:`n" +
+            "  ①同级客户端仓库打包:pwsh Tool\Build\PackageSet.ps1 -Flavors 'Server/Linux/Development'`n" +
+            "  ②指向共享制品库:`$env:PANDORA_ARTIFACT_ROOT='<制品根>'(内有 snapshots\client\...\Server_Linux_Development)`n" +
+            "  ③手动指定包目录:`$env:PANDORA_DS_LINUX_PKG='<...\LinuxServer>'")
+    }
+
+    # 1) minikube 起没起。拓扑参数由 Get-MinikubeStartArgs 决定:既有 profile 空参续跑,
+    # 新建 profile 按默认(docker/4C/6144M)或 PANDORA_MINIKUBE_* 环境覆盖创建。
     minikube -p $mkProfile status *> $null
     if ($LASTEXITCODE -ne 0) {
-        Write-Info "启动 minikube(profile=$mkProfile,driver=docker)..."
-        minikube start -p $mkProfile --driver=docker --cpus=4 --memory=6144
+        $mkStartArgs = Get-MinikubeStartArgs $mkProfile
+        Write-Info "启动 minikube(profile=$mkProfile$(if ($mkStartArgs.Count) { ";新建参数:$($mkStartArgs -join ' ')" } else { ';既有集群,沿用已存拓扑' }))..."
+        minikube start -p $mkProfile @mkStartArgs
         if ($LASTEXITCODE -ne 0) { throw "minikube 启动失败" }
     } else {
         Write-Ok "minikube 已在运行(profile=$mkProfile)"
@@ -4525,6 +4867,37 @@ function Invoke-K8s {
     # 也不等它 rollout(日志栈晚几十秒就绪不影响业务链路)。
     kubectl @kubectlContextArgs apply -f $lokiYaml
     if ($LASTEXITCODE -ne 0) { Write-Warn "loki/alloy 日志栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/loki.yaml" }
+    # 监控(Prometheus kubernetes_sd + Grafana,2026-07-28 进集群):同日志栈,非关键路径只告警
+    kubectl @kubectlContextArgs apply -f $monitoringYaml
+    if ($LASTEXITCODE -ne 0) { Write-Warn "Prometheus/Grafana 监控栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/monitoring.yaml" }
+    # Grafana 告警 provisioning(2026-07-28 P2):仅当宿主导出 PANDORA_ALERT_NTFY_URL 时进集群
+    # (与 compose 侧 entrypoint 的 env 守卫等价——URL 缺失时装载告警配置会让 Grafana 拒起);
+    # 未设置则跳过,grafana Deployment 的 alerting 挂载/envFrom 均 optional,数据源不受影响。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_ALERT_NTFY_URL)) {
+        kubectl @kubectlContextArgs create configmap pandora-grafana-alerting --from-file=$grafanaAlertingDir -n $K8sNamespace `
+            --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+        if ($LASTEXITCODE -ne 0) { Write-Warn 'pandora-grafana-alerting configmap 失败(不影响业务)' }
+        kubectl @kubectlContextArgs create secret generic pandora-grafana-alert-env `
+            --from-literal=PANDORA_ALERT_NTFY_URL=$env:PANDORA_ALERT_NTFY_URL -n $K8sNamespace `
+            --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+        if ($LASTEXITCODE -ne 0) { Write-Warn 'pandora-grafana-alert-env secret 失败(不影响业务)' }
+    } else {
+        Write-Info 'PANDORA_ALERT_NTFY_URL 未设置,Grafana 告警 provisioning 未进集群(数据源不受影响)。'
+    }
+    # TiDB(pd/tikv/tidb)与 Redis Sentinel(一主两从三哨):2026-07-28 P2 进集群,
+    # 与线上形态同构;dev 服务仍用单 mysql/redis,本栈非关键路径,失败只告警。
+    # tidb-init Job 不在此处:fresh-genesis 门([3.5/8])只允许 Deployment/ReplicaSet/Pod,
+    # Job 在门后由 [3.6/8] 创建(deploy/k8s/infra/tidb-init-job.yaml)。
+    kubectl @kubectlContextArgs create configmap pandora-tidb-init --from-file=$tidbInitDir -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'pandora-tidb-init configmap 失败(不影响业务)' }
+    kubectl @kubectlContextArgs apply -f $tidbYaml
+    if ($LASTEXITCODE -ne 0) { Write-Warn "TiDB 栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/tidb.yaml" }
+    kubectl @kubectlContextArgs create configmap pandora-redis-sentinel-entrypoint --from-file=$sentinelEntrypointFile -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'pandora-redis-sentinel-entrypoint configmap 失败(不影响业务)' }
+    kubectl @kubectlContextArgs apply -f $sentinelYaml
+    if ($LASTEXITCODE -ne 0) { Write-Warn "Redis Sentinel 栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/redis-sentinel.yaml" }
     Write-Info "等待基础设施就绪(第三方镜像首次冷拉每个最多 1800s/30 分钟)..."
     kubectl @kubectlContextArgs rollout status deploy/mysql     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'mysql 就绪'
     kubectl @kubectlContextArgs rollout status deploy/redis     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'redis 就绪'
@@ -4539,6 +4912,12 @@ function Invoke-K8s {
         -ExpectedAdoptionCohortFingerprintSha256 $legacyAdoptionCohortFingerprintSha256 `
         -LegacyAdoptionCollectionTimeUnixMS $legacyAdoptionCollectionTimeUnixMS `
         -LegacyAdoptionCohortPreflightError $legacyAdoptionCohortPreflightError
+
+    # [3.6/8] tidb-init Job:必须晚于 [3.5/8] fresh-genesis 门(门只允许 Deployment/ReplicaSet/Pod,
+    # Job 属一次性任务放门后);Job spec 不可变,先删旧再 apply(SQL 幂等,重跑安全);非关键路径只告警。
+    kubectl @kubectlContextArgs delete job tidb-init -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
+    kubectl @kubectlContextArgs apply -f $tidbInitJobYaml
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'tidb-init Job apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/tidb-init-job.yaml' }
 
     Write-Step "[4/8] 安装 Agones + apply RBAC/Fleet(真 Linux DS)"
     Build-DsImagesForMinikube
@@ -4556,6 +4935,16 @@ function Invoke-K8s {
     # active profile：它可能与已锁定的 kubectl context 不同，导致新业务镜像被 load
     # 到另一个本地集群，而当前集群随后只重启出旧 :dev 镜像。
     Sync-ImagesToMinikube -Images (Get-ServiceImages) -MinikubeArgs @('-p', $mkProfile)
+    # 2026-07-28:services.yaml 里存在钉定不可变 tag 的镜像(INC-20260727-001 防回滚,如
+    # matchmaker geed8ce2c6b5d / ds-allocator geed8ce2-p03-*)。它们不在 :dev 构建清单里,
+    # 但 Deployment 引用它们——新节点(-Reset 重建)没有就会 ImagePullBackOff。从宿主 daemon
+    # 一并 load;宿主缺失即 fail-fast(钉定镜像是已验证产物,绝不静默跳过、绝不退回 :dev)。
+    $pinnedImages = @(Select-String -LiteralPath (Join-Path $servicesDir 'services.yaml') -Pattern '^\s*image:\s*(pandora/\S+)' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value } | Where-Object { $_ -notmatch ':dev$' } | Sort-Object -Unique)
+    if ($pinnedImages.Count -gt 0) {
+        Write-Info "钉定镜像一并 load:$($pinnedImages -join ', ')"
+        Sync-ImagesToMinikube -Images $pinnedImages -MinikubeArgs @('-p', $mkProfile)
+    }
 
     Write-Step "[7/8] 部署业务服务"
     kubectl @kubectlContextArgs apply -k $servicesDir
@@ -4582,6 +4971,44 @@ function Invoke-K8s {
     Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
 
+    Write-Step "[7.5/8] 集群内客户端面边缘 Envoy(pandora-edge-envoy,NodePort 31443)"
+    # 2026-07-28 P2:客户端面 8443 进集群,退役宿主 compose envoy + 21 条 port-forward 桥。
+    # 客户端仍连 127.0.0.1:8443:由 minikube 节点容器的端口发布(PANDORA_MINIKUBE_PORTS,
+    # 创建时 --ports=127.0.0.1:8443:31443)转到 NodePort。旧集群没有该端口发布时本步照常部署,
+    # e2e_k8s.ps1 会探测不到宿主 8443 发布而自动回落宿主桥接(他人路径不变)。
+    $edgeCertPem = Join-Path $envoyCertDir 'cert.pem'
+    $edgeKeyPem  = Join-Path $envoyCertDir 'key.pem'
+    if (-not (Test-Path $edgeCertPem) -or -not (Test-Path $edgeKeyPem)) {
+        # envoy_cert.ps1 是函数库(dot-source 后调 Confirm-EnvoyDevCert 才会校验/mkcert 重签);
+        # 以 -File 直跑只定义函数就退出,是空操作——新机器证书缺失时必须走真实生成路径。
+        Write-Info 'Envoy dev 证书缺失,自动重签(mkcert,SAN 含 localhost/127.0.0.1/本机局域网 IP)...'
+        . (Join-Path $ScriptDir 'envoy_cert.ps1')
+        Confirm-EnvoyDevCert -EnvoyDir $envoyCertDir
+    }
+    if (-not (Test-Path $edgeCertPem) -or -not (Test-Path $edgeKeyPem)) {
+        throw 'Envoy dev 证书(deploy/envoy/cert.pem + key.pem)缺失且自动重签失败;边缘 Envoy 无法起 TLS,已中止。多半是 mkcert 不可用:winget install FiloSottile.mkcert 后重跑。'
+    }
+    # 边缘 Envoy 镜像钉定 tag(edge-envoy.yaml),新节点/新机器没有时从宿主 load 或联网补齐。
+    Ensure-EnvoyImageInMinikube -MinikubeProfile $mkProfile -Image 'envoyproxy/envoy:v1.38.1'
+    $edgeCfgText = Convert-EdgeEnvoyConfigForCluster (Get-Content -LiteralPath $hostEnvoyConfigFile -Raw)
+    $edgeCfgTmp = Join-Path ([System.IO.Path]::GetTempPath()) "pandora-edge-envoy-$PID.yaml"
+    Set-Content -LiteralPath $edgeCfgTmp -Value $edgeCfgText -Encoding utf8NoBOM
+    kubectl @kubectlContextArgs create configmap pandora-edge-envoy-config --from-file=envoy.yaml=$edgeCfgTmp -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+    Assert-LastExit 'kubectl apply configmap pandora-edge-envoy-config'
+    Remove-Item $edgeCfgTmp -Force -ErrorAction SilentlyContinue
+    kubectl @kubectlContextArgs create secret generic pandora-edge-envoy-certs `
+        --from-file=cert.pem=$edgeCertPem --from-file=key.pem=$edgeKeyPem -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+    Assert-LastExit 'kubectl apply secret pandora-edge-envoy-certs'
+    kubectl @kubectlContextArgs apply -f $edgeEnvoyYaml
+    Assert-LastExit 'kubectl apply edge-envoy'
+    # 配置/证书变更不触发 Pod 重建,与 DS 面同款:显式滚动 + 等就绪。
+    kubectl @kubectlContextArgs rollout restart deploy/pandora-edge-envoy -n $K8sNamespace
+    Assert-LastExit 'rollout restart pandora-edge-envoy'
+    kubectl @kubectlContextArgs rollout status deploy/pandora-edge-envoy -n $K8sNamespace --timeout=120s
+    if ($LASTEXITCODE -ne 0) { throw "pandora-edge-envoy 未在 120s 内就绪;客户端面 8443 无法接入,已中止(排障:kubectl -n pandora describe deploy/pandora-edge-envoy)。" }
+
     Write-Host ""
     Write-Ok "k8s 模式已部署。查看:kubectl get pods -n $K8sNamespace"
 
@@ -4599,9 +5026,16 @@ function Invoke-K8s {
     Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);集群本身已部署好,修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind"
 
     Write-Host ""
-    if ($relayBind -eq '0.0.0.0') {
+    # 8443 实际可达面取决于接入路径:集群内边缘 Envoy 时看节点端口发布的绑定地址(回环=仅本机),
+    # 宿主桥路径看 PANDORA_EDGE_BIND_HOST。按 docker port 实测如实提示,不再无条件宣称局域网可达。
+    $edgePublish = [regex]::Match((docker port $mkProfile 2>$null | Out-String), '(?m)^31443/tcp\s*->\s*(\S+):8443')
+    $edgeLoopbackOnly = ($edgePublish.Success -and $edgePublish.Groups[1].Value -notin @('0.0.0.0', '[::]', '::'))
+    if ($relayBind -eq '0.0.0.0' -and -not $edgeLoopbackOnly) {
         Write-Ok "真 DS 闭环就绪(局域网):内网其它机器客户端连 ${k8sAdvHost}:8443(TLS)即可登录进 Hub/战斗。"
         Write-Info "若其它机器连不进,先查本机防火墙是否放行 入站 TCP 8443 + 入站 UDP 7000-8000。宿主 DS 面 8444 仅回环可达。"
+    } elseif ($relayBind -eq '0.0.0.0') {
+        Write-Ok "真 DS 闭环就绪(仅本机业务面):客户端连 127.0.0.1:8443(TLS);UDP 中继已对局域网开放。"
+        Write-Warn "集群内边缘 8443 端口发布为回环,内网其它机器连不到业务面;需多机时 `$env:PANDORA_MINIKUBE_PORTS='0.0.0.0:8443:31443' 后 -Reset 重建。"
     } else {
         Write-Ok "真 DS 闭环就绪:客户端连 127.0.0.1:8443(TLS)即可登录进 Hub/战斗(仅本机)。"
     }
@@ -5670,7 +6104,10 @@ function Resume-K8s {
     minikube -p $mkProfile status *> $null
     if ($LASTEXITCODE -ne 0) {
         Write-Info "minikube 已停,minikube start 中(profile=$mkProfile;集群状态/镜像都在磁盘上,Pod 会自动恢复)..."
-        minikube start -p $mkProfile --driver=docker --cpus=4 --memory=6144
+        # Resume 对象必然是既有 profile:Get-MinikubeStartArgs 返回空参,沿用集群已存拓扑,
+        # 绝不带可能与既有 driver/runtime 冲突的创建参数(minikube 会硬报错)。
+        $mkStartArgs = Get-MinikubeStartArgs $mkProfile
+        minikube start -p $mkProfile @mkStartArgs
         if ($LASTEXITCODE -ne 0) { throw "minikube 启动失败(若集群已损坏,改用 -Reset 全新部署)" }
     } else {
         Write-Ok "minikube 已在运行(profile=$mkProfile)"

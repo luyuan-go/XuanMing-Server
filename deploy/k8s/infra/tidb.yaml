@@ -1,0 +1,149 @@
+# Pandora TiDB(k8s dev-grade,minikube 用)— PD + TiKV + TiDB 单副本
+#
+# 与 infra.yaml 同级别的开发配置:单副本、emptyDir(Pod 重建即清,本地数据可弃已拍板
+# 2026-07-28)、明文无鉴权。生产必须用 TiDB Operator / 云托管多副本,并按
+# deploy/tidb-init/README.md 走正式 bootstrap;本文件只为本地拓扑与线上同构
+# (owner/account/social 生产走 TiDB,§9.22 / gen_cluster_config -Prod 门)。
+#
+# 由 tools/scripts/start.ps1 -Mode k8s 自动 apply(infra 之后,非关键路径失败只告警);
+# schema 初始化:tidb-init Job(本文件末尾)等 tidb:4000 就绪后按 deploy/tidb-init/*.sql
+# 顺序执行,幂等(CREATE IF NOT EXISTS)。
+#
+# 版本钉 v8.5.1:与 compose 验证环境一致(2026-07-27 account 迁移全链在该版本实测,
+# 含新 collation utf8mb4_0900_ai_ci bootstrap);升级须重跑迁移验证。
+#
+# 服务短名:pd / tikv / tidb —— 与 compose 侧一致,DSN 形如 tcp(tidb:4000)。
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: pd, namespace: pandora, labels: { app: pd } }
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  selector: { matchLabels: { app: pd } }
+  # PD 有持久身份(cluster id),emptyDir 下多副本/滚动会分裂集群;单副本 Recreate 保序
+  strategy: { type: Recreate }
+  template:
+    metadata: { labels: { app: pd } }
+    spec:
+      containers:
+        - name: pd
+          image: pingcap/pd:v8.5.1
+          command:
+            - /pd-server
+            - --name=pd
+            - --data-dir=/data/pd
+            - --client-urls=http://0.0.0.0:2379
+            - --advertise-client-urls=http://pd:2379
+            - --peer-urls=http://0.0.0.0:2380
+            - --advertise-peer-urls=http://pd:2380
+            - --initial-cluster=pd=http://pd:2380
+          ports:
+            - { containerPort: 2379 }
+            - { containerPort: 2380 }
+          volumeMounts: [ { name: data, mountPath: /data } ]
+          readinessProbe:
+            httpGet: { path: /pd/api/v1/health, port: 2379 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: { requests: { cpu: 25m, memory: 128Mi }, limits: { cpu: "1", memory: 512Mi } }
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: pd, namespace: pandora }
+spec:
+  selector: { app: pd }
+  # pd 引导期会经 advertise-client-urls(http://pd:2379)拨自己;Service 默认只发布 Ready
+  # endpoints,而 readiness 又依赖引导完成——鸡生蛋死锁(CrashLoop 实测)。compose 下容器名
+  # 直解容器 IP 无此问题;K8s 对自引导/对等发现的标准解法即发布未就绪地址。tikv/tidb 同理。
+  publishNotReadyAddresses: true
+  ports:
+    - { name: client, port: 2379, targetPort: 2379 }
+    - { name: peer, port: 2380, targetPort: 2380 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: tikv, namespace: pandora, labels: { app: tikv } }
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  selector: { matchLabels: { app: tikv } }
+  strategy: { type: Recreate }
+  template:
+    metadata: { labels: { app: tikv } }
+    spec:
+      containers:
+        - name: tikv
+          image: pingcap/tikv:v8.5.1
+          command:
+            - /tikv-server
+            - --addr=0.0.0.0:20160
+            - --advertise-addr=tikv:20160
+            - --status-addr=0.0.0.0:20180
+            - --data-dir=/data/tikv
+            - --pd=pd:2379
+          ports:
+            - { containerPort: 20160 }
+            - { containerPort: 20180 }
+          volumeMounts: [ { name: data, mountPath: /data } ]
+          readinessProbe:
+            httpGet: { path: /status, port: 20180 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources: { requests: { cpu: 50m, memory: 512Mi }, limits: { cpu: "2", memory: 2Gi } }
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: tikv, namespace: pandora }
+spec:
+  selector: { app: tikv }
+  publishNotReadyAddresses: true
+  ports:
+    - { name: peer, port: 20160, targetPort: 20160 }
+    - { name: status, port: 20180, targetPort: 20180 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: tidb, namespace: pandora, labels: { app: tidb } }
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  selector: { matchLabels: { app: tidb } }
+  template:
+    metadata: { labels: { app: tidb } }
+    spec:
+      containers:
+        - name: tidb
+          image: pingcap/tidb:v8.5.1
+          command:
+            - /tidb-server
+            - --store=tikv
+            - --path=pd:2379
+            - --advertise-address=tidb
+          ports:
+            - { containerPort: 4000 }
+            - { containerPort: 10080 }
+          readinessProbe:
+            httpGet: { path: /status, port: 10080 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources: { requests: { cpu: 50m, memory: 256Mi }, limits: { cpu: "2", memory: 1Gi } }
+      volumes: []
+---
+apiVersion: v1
+kind: Service
+metadata: { name: tidb, namespace: pandora }
+spec:
+  selector: { app: tidb }
+  publishNotReadyAddresses: true
+  ports:
+    - { name: mysql, port: 4000, targetPort: 4000 }
+    - { name: status, port: 10080, targetPort: 10080 }
+# tidb-init Job 拆在 deploy/k8s/infra/tidb-init-job.yaml:fresh-genesis 门([3.5/8])
+# 只允许 Deployment/ReplicaSet/Pod 三类 workload,Job 须在门后由 start.ps1 [3.6/8] 创建。

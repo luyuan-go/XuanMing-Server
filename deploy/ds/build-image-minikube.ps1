@@ -176,6 +176,9 @@ if ($ResolveOnly) {
             }
         } else {
             Write-Host "  且 stage 也不存在 —— 真正构建时会直接报错中止。" -ForegroundColor Red
+            # 预检契约(2026-07-28):无任何包来源且无 stage = 构建必失败,exit 2 让调用方
+            # (start.ps1 -Mode k8s 的前置预检)在起集群/装基础设施之前就 fail-fast。
+            exit 2
         }
     }
     return

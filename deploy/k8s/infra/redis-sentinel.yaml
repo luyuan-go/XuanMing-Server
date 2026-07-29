@@ -1,0 +1,132 @@
+# Pandora Redis Sentinel(k8s dev-grade,minikube 用)— 一主两从 + 三哨兵
+#
+# 与 infra.yaml 同级别的开发配置:emptyDir(Pod 重建即清,本地数据可弃已拍板 2026-07-28)。
+# 拓扑/参数与 deploy/docker-compose.redis-sentinel.yml 逐项对齐(该 compose 栈随本文件
+# 进集群退役):noeviction(R4 P1-5,push 启动门核验对象)、requirepass、quorum=2、
+# master 名 pandora-master。业务切换仍按 deploy/redis/README.md(master_name+addrs),
+# dev 默认继续用单 redis;本栈为生产 Sentinel 形态的本地同构。
+#
+# sentinel 启动脚本经 configmap pandora-redis-sentinel-entrypoint 注入(start.ps1 用
+# deploy/redis/sentinel-entrypoint.sh 现场生成,与 compose 同一份脚本);
+# SENTINEL_ANNOUNCE_HOSTNAMES=no:Deployment Pod 主机名不可 DNS 解析,走 Pod IP 通告
+# (集群内全路由;Pod 重建换 IP 由 sentinel gossip 自愈,dev-grade 可接受)。
+#
+# 由 tools/scripts/start.ps1 -Mode k8s 自动 apply(infra 之后,非关键路径失败只告警)。
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis-master, namespace: pandora, labels: { app: redis-master } }
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  selector: { matchLabels: { app: redis-master } }
+  strategy: { type: Recreate }
+  template:
+    metadata: { labels: { app: redis-master } }
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.8.0-alpine
+          command:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --maxmemory
+            - "2gb"
+            # noeviction(R4 复审 P1-5):权威态不容 LRU 静默驱逐;push 启动门核验对象
+            - --maxmemory-policy
+            - noeviction
+            - --requirepass
+            - pandora_dev_pwd
+            - --masterauth
+            - pandora_dev_pwd
+          ports: [ { containerPort: 6379 } ]
+          volumeMounts: [ { name: data, mountPath: /data } ]
+          readinessProbe:
+            exec: { command: [redis-cli, --no-auth-warning, -a, pandora_dev_pwd, ping] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: { requests: { cpu: 25m, memory: 256Mi }, limits: { cpu: "1", memory: "2304Mi" } }
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: redis-master, namespace: pandora }
+spec: { selector: { app: redis-master }, ports: [ { port: 6379, targetPort: 6379 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis-replica, namespace: pandora, labels: { app: redis-replica } }
+spec:
+  replicas: 2
+  progressDeadlineSeconds: 1800
+  selector: { matchLabels: { app: redis-replica } }
+  template:
+    metadata: { labels: { app: redis-replica } }
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.8.0-alpine
+          command:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --replicaof
+            - redis-master
+            - "6379"
+            # 与 master 同配(R4 复审 P1-5):副本可被 Sentinel 提升为 master,策略必须一致
+            - --maxmemory
+            - "2gb"
+            - --maxmemory-policy
+            - noeviction
+            - --requirepass
+            - pandora_dev_pwd
+            - --masterauth
+            - pandora_dev_pwd
+          ports: [ { containerPort: 6379 } ]
+          volumeMounts: [ { name: data, mountPath: /data } ]
+          readinessProbe:
+            exec: { command: [redis-cli, --no-auth-warning, -a, pandora_dev_pwd, ping] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: { requests: { cpu: 25m, memory: 256Mi }, limits: { cpu: "1", memory: "2304Mi" } }
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis-sentinel, namespace: pandora, labels: { app: redis-sentinel } }
+spec:
+  replicas: 3
+  progressDeadlineSeconds: 1800
+  selector: { matchLabels: { app: redis-sentinel } }
+  template:
+    metadata: { labels: { app: redis-sentinel } }
+    spec:
+      containers:
+        - name: sentinel
+          image: redis:8.8.0-alpine
+          command: [/bin/sh, /etc/redis/sentinel-entrypoint.sh]
+          env:
+            - { name: REDIS_PASSWORD, value: pandora_dev_pwd }
+            - { name: SENTINEL_QUORUM, value: "2" }
+            - { name: SENTINEL_ANNOUNCE_HOSTNAMES, value: "no" }
+          ports: [ { containerPort: 26379 } ]
+          volumeMounts:
+            - { name: entrypoint, mountPath: /etc/redis, readOnly: true }
+          readinessProbe:
+            exec: { command: [redis-cli, -p, "26379", ping] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: 500m, memory: 256Mi } }
+      volumes:
+        - name: entrypoint
+          configMap: { name: pandora-redis-sentinel-entrypoint }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: redis-sentinel, namespace: pandora }
+spec: { selector: { app: redis-sentinel }, ports: [ { port: 26379, targetPort: 26379 } ] }

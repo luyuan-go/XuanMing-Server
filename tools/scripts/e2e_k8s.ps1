@@ -26,8 +26,11 @@ param(
     [switch]$NoRelay,        # 不自动起容器版 UDP 中继
     [switch]$SkipImageLoad,  # 跳过 minikube image load
     [switch]$BridgeForce,    # 端口被非 bridge 进程占用时,杀掉占用者后重建 port-forward
+    [switch]$HostBridge,     # 强制走宿主 port-forward 桥(默认:集群内 pandora-edge-envoy 可用即跳过桥)
     [Alias('Profile')]
-    [string]$MinikubeProfile = 'pandora-agones', # minikube profile;docker driver 下通常同名 docker network
+    # 默认序:显式参数 > PANDORA_MINIKUBE_PROFILE(与 start.ps1 Get-ActiveMinikubeProfile 同一覆盖口径,
+    # 多 profile 并存时防打错集群)> 'pandora-agones' 历史默认。
+    [string]$MinikubeProfile = $(if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_PROFILE)) { $env:PANDORA_MINIKUBE_PROFILE.Trim() } else { 'pandora-agones' }), # minikube profile;docker driver 下通常同名 docker network
     [string]$KubeContext = '', # 必须指向上述本地 minikube；留空时取与 profile 同名的 context
     [ValidateSet('127.0.0.1', '0.0.0.0')]
     [string]$RelayBindHost = '127.0.0.1', # 安全默认仅本机;allocator 广播非回环地址时必须显式传 0.0.0.0
@@ -56,6 +59,29 @@ function Resolve-MinikubeProfile([string]$profile) {
     if (-not [string]::IsNullOrWhiteSpace($ctx)) { return $ctx }
 
     return 'pandora-agones'
+}
+
+# 读取 profile 的节点容器运行时(docker/containerd/cri-o),缓存;解析失败回落 'docker'(旧行为)。
+# 与 start.ps1 的 Get-MinikubeNodeRuntime 同构(独立脚本按仓库惯例自带副本);用于节点内
+# untag 命令分流——containerd 节点没有 docker CLI,`ssh -- docker rmi` 会静默失败。
+$script:E2eRuntimeCache = @{}
+function Get-MinikubeNodeRuntimeE2e([string]$Profile) {
+    if ($script:E2eRuntimeCache.ContainsKey($Profile)) { return $script:E2eRuntimeCache[$Profile] }
+    $runtime = 'docker'
+    $json = (& minikube profile list -o json 2>$null | Out-String)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($json)) {
+        try {
+            foreach ($p in @(($json | ConvertFrom-Json).valid)) {
+                if ([string]$p.Name -ceq $Profile) {
+                    $cr = [string]$p.Config.KubernetesConfig.ContainerRuntime
+                    if (-not [string]::IsNullOrWhiteSpace($cr)) { $runtime = $cr.Trim() }
+                    break
+                }
+            }
+        } catch { }
+    }
+    $script:E2eRuntimeCache[$Profile] = $runtime
+    return $runtime
 }
 
 function Test-KubeContextIsLocalMinikube([string]$Context, [string]$Profile) {
@@ -369,11 +395,28 @@ if ($SkipImageLoad) {
             exit 1
         }
         Write-Info "  强制刷新 minikube tag:$img"
-        minikube -p $MinikubeProfile ssh -- docker rmi -f $img 2>$null | Out-Null
+        # untag 按节点 runtime 分流(containerd 节点无 docker CLI);节点内 tag 确认统一走
+        # `minikube image ls`(runtime 无关),与 start.ps1 Sync-ImagesToMinikube 同口径。
+        if ((Get-MinikubeNodeRuntimeE2e $MinikubeProfile) -ceq 'docker') {
+            minikube -p $MinikubeProfile ssh -- docker rmi -f $img 2>$null | Out-Null
+        } else {
+            minikube -p $MinikubeProfile ssh -- sudo crictl rmi "docker.io/$img" 2>$null | Out-Null
+        }
         minikube -p $MinikubeProfile image load --daemon=true --overwrite=true $img
         if ($LASTEXITCODE -ne 0) { Write-Err "load 失败: $img"; exit 1 }
-        minikube -p $MinikubeProfile ssh -- "docker image inspect $img >/dev/null 2>&1" 2>$null | Out-Null
-        if ($LASTEXITCODE -ne 0) {
+        $mkTagJson = (minikube -p $MinikubeProfile image ls --format json 2>$null | Out-String)
+        $mkTagHit = $false
+        if (-not [string]::IsNullOrWhiteSpace($mkTagJson)) {
+            try {
+                foreach ($entry in @(($mkTagJson | ConvertFrom-Json))) {
+                    foreach ($tag in @($entry.repoTags)) {
+                        if (($tag -replace '^docker\.io/', '') -ceq $img) { $mkTagHit = $true; break }
+                    }
+                    if ($mkTagHit) { break }
+                }
+            } catch { }
+        }
+        if (-not $mkTagHit) {
             Write-Err "强制刷新后 minikube 节点仍找不到 tag:$img"
             exit 1
         }
@@ -417,7 +460,7 @@ if ($SkipImageLoad) {
 }
 
 # ── 2) 起宿主 Envoy 桥接 ────────────────────────────────────────────────
-Write-Step "[2/6] 起宿主 Envoy 桥接(k8s Service -> host port-forward -> Envoy)"
+Write-Step "[2/6] 客户端面接入(集群内边缘 Envoy,回落宿主桥接)"
 try {
     Assert-LiveAllocatorContractUnchanged -Baseline $relayContract -ContextArgs $kubectlContextArgs `
         -Namespace $K8sNamespace -RequestedBindHost $RelayBindHost `
@@ -426,7 +469,35 @@ try {
     Write-Err $_.Exception.Message
     exit 1
 }
-Start-K8sEnvoyBridge
+# 2026-07-28 P2:退役本机 port-forward 桥。集群内已部署 pandora-edge-envoy(NodePort 31443)
+# 且 minikube 节点容器发布了宿主 8443(-Reset 重建时经 PANDORA_MINIKUBE_PORTS 携带)时,
+# 客户端仍连 127.0.0.1:8443,链路变为 宿主 8443 → 节点 31443 → 集群内 Envoy → Service,
+# 无需 21 条 kubectl port-forward + 宿主 compose envoy。两条件任一不满足(其它机器/未重建的
+# 旧集群)自动回落宿主桥接——他人路径不变;-HostBridge 强制走旧路径。
+$edgeInCluster = $false
+if (-not $HostBridge) {
+    kubectl @kubectlContextArgs get svc pandora-edge-envoy -n $K8sNamespace *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $nodePortMap = (docker port $MinikubeProfile 2>$null | Out-String)
+        $edgeBind = [regex]::Match($nodePortMap, '(?m)^31443/tcp\s*->\s*(\S+):8443')
+        if ($edgeBind.Success) {
+            $edgeInCluster = $true
+            $edgeBindHost = $edgeBind.Groups[1].Value
+            # 端口发布绑定与本次意图对齐提示:回环发布下本机链路完整,但内网其它机器连不到
+            # 8443(UDP 中继照常 0.0.0.0,不受影响)。不因内网诉求牺牲本机可用性,只如实告警;
+            # 注意此时宿主桥也救不了——8443 已被回环发布占用,bridge 的 0.0.0.0 绑定会 EADDRINUSE。
+            if ($RelayBindHost -eq '0.0.0.0' -and $edgeBindHost -notin @('0.0.0.0', '[::]', '::')) {
+                Write-Warn "集群内边缘 8443 端口发布仅绑 $edgeBindHost —— 本机可用,内网其它机器连不到业务面 8443。"
+                Write-Warn "  需内网多机时:`$env:PANDORA_MINIKUBE_PORTS='0.0.0.0:8443:31443' 后 start.ps1 -Mode k8s -Reset 重建集群。"
+            }
+        }
+    }
+}
+if ($edgeInCluster) {
+    Write-Ok "集群内边缘 Envoy 生效(宿主 ${edgeBindHost}:8443 → 节点 31443 → pandora-edge-envoy),跳过宿主桥接。"
+} else {
+    Start-K8sEnvoyBridge
+}
 
 # ── 3) 等 Fleet Ready ──────────────────────────────────────────────────
 Write-Step "[3/6] 等 Fleet Ready(超时 ${TimeoutSec}s)"

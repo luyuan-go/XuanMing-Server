@@ -1958,3 +1958,98 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
   空转;取值修订:graceful delete 被 30s 终止宽限主导,目标应为 ~45s,18s 样本属 force-kill 场景);
   A3 冷加载实测数据入档(22/48/49~58/84/>120s 五档)。**仍 OPEN:门 C(真实 UE 客户端×3)、观察窗口、
   INC-002 完整一局 memory.peak、A10 定谳(节点 08:20Z 重启原因+无负载对照)、A11 FogOfWar Ensure**。
+
+## 2026-07-28 本地 K8s 闭环批① + 宿主重启事故恢复(Claude)
+
+- **宿主重启事故(当日)**:重启后 Docker Desktop 反复启动崩溃,根因=本机 360 过滤驱动拦死
+  AF_UNIX socket 文件的删除/改名(Error 1920,连新建 socket 都删不掉)→ 每次退出残留的
+  dockerInference/engine.sock 清不掉,下次启动必崩;连带 settings-store.json 的
+  `CustomWslDistroDir` 被崩溃重置为默认 C: 路径,Docker 挂上全新空盘(daemon 零容器,
+  像整个集群没了)。**处置**:改名 socket 父目录(%LOCALAPPDATA%\Docker\run 与
+  docker-secrets-engine,墓地保留)+ 改回 F:\docker\wsl\DockerDesktopWSL(有 .bak 备份)。
+  466GB 数据盘无损,minikube 43d 集群、MySQL 10 库、Agones 3 GS Ready 全部原样恢复,
+  31 业务 Pod 收敛 Running。**根治需用户在 360 卸载/白名单 Docker,未做前每次异常退出
+  可能须重复绕法**(教训:daemon 空≠数据丢,先查 CustomWslDistroDir 与两处 vhdx;
+  绝不能在空 daemon 上跑 minikube start)。
+- **P0 镜像/清单对齐(worktree-k8s-closure-20260728 分支 1a276cd)**:services.yaml 三行
+  :dev 钉定为 live 实测 tag(matchmaker/matchmaker-pve=geed8ce2c6b5d,
+  ds-allocator=geed8ce2-p03-…-062100,注释含 imageID)——re-apply 不再回滚
+  INC-20260727-001 修复镜像(与 162bafc1 的 fleet yaml 钉定同一目的收口)。
+- **P1 六项 live 问题**:①loki 1174 次 CrashLoop 终结(删 Pod 换新 emptyDir 清坏 WAL,
+  1/1 Ready);②50001 断链=bridge 未跑,重启后重建 21 条 port-forward 全 LISTEN(含 login);
+  ③redis-master allkeys-lru→noeviction 运行时止血(**容器 args 仍旧,重启回漂;根治=用
+  F: 的 docker-compose.redis-sentinel.yml 收养重建,命名卷保数据,按 AGENTS §11.1 由
+  用户/Codex 执行**);④孤儿 redis-cluster 栈(rc-node-1..6+rc-init)已按拍板拆除;
+  ⑤镜像漂移=上条 P0;⑥监控进集群:新增 deploy/k8s/infra/monitoring.yaml(Prometheus
+  kubernetes_sd pod 角色注解驱动 + Grafana 数据源 provisioning,dev-grade emptyDir,
+  版本与 compose 一致),services.yaml 21 个 Deployment 全部加 prometheus.io/* 注解,
+  start.ps1 接线(apply/Down/genesis 白名单)。live 已 apply:三 Pod Ready,hub-allocator
+  抓取点自动发现且 up(其余 20 服务的注解随下次标准部署生效——**不可手动 raw-apply
+  services.yaml**,会抹掉部署期注入的 pandora.dev/image-digest 注解)。告警 provisioning
+  留 compose 侧(依赖 PANDORA_ALERT_NTFY_URL env,进集群需 Secret 注入,单列待办)。
+- **P2 前置(containerd 化,同分支 +a91b28c)**:start.ps1/e2e_k8s.ps1 支持
+  PANDORA_MINIKUBE_PROFILE 显式覆盖与 PANDORA_MINIKUBE_DRIVER/RUNTIME/CNI/K8S_VERSION
+  拓扑参数(仅新建 profile 生效,既有集群空参续跑);节点内镜像 untag/拉取按 runtime 分流
+  (docker CLI vs crictl);镜像存在性/digest 统一 `minikube image ls --format json` 口径
+  (docker runtime live 实测与 docker inspect .Id 一致;裸 hex→sha256: 归一修复系 live
+  验证抓获)。**containerd 分支待 P2 真集群重建(-Reset)首跑验证**;
+  deploy/ds/build-image-minikube.ps1 默认路径依赖 docker-env,containerd 下 fail-fast,
+  须 -BuildOnHost。
+- **剩余(P2 主体,待用户口令/执行)**:containerd+Calico+钉版本集群重建(-Reset,DS auth
+  etcd 权威随空盘重置=genesis 合法路径);边缘 Envoy/TiDB/Sentinel 进集群;退役个人路径
+  port-forward 桥;sentinel 栈收养重建;告警 provisioning 进集群。
+
+## 2026-07-28 P2 闭环:containerd+Calico 集群重建 + 边缘 Envoy/TiDB/Sentinel/监控全进集群 + 退役宿主桥(Claude)
+
+- **集群重建(用户拍板"修复到闭环",本地数据可弃)**:minikube delete 后按贴近生产形态重建——
+  **containerd 2.2.1 + Calico v3.31.3 + K8s 钉 v1.35.1** + 16C/40Gi(与旧集群实测外层限额一致)+
+  阿里云 kicbase + `--ports=127.0.0.1:8443:31443`(节点端口发布,退役桥的关键)。墙内网络三卡点:
+  containerd 变体 preload 缺失→逐镜像拉 registry.k8s.io 死路(手动从阿里云镜像源拉 7 核心镜像灌入);
+  Calico 由节点自行从 quay 拉齐;Agones 五镜像 us-docker.pkg.dev 墙外(delete 前从旧节点导出,
+  含 argocd/dex/storage-provisioner 共 9 tar 存 F:\work\image-export)。
+- **全量部署 8 轮迭代,抓获并修复 6 个全新路径 bug**(全部提交 worktree 分支):
+  ①分离进程控制台 GBK→kubectl JSON 回读乱码→configtable 写后校验假不一致(修=强制 UTF-8);
+  ②fresh-genesis 门:白名单补 sentinel 三名+副本数声明式(replicas 2/3);③同门:Job 类别被拒→
+  tidb-init 拆独立文件移门后 [3.6/8];④同门:控制面静态 Pod(etcd-pandora-agones 等)因 profile
+  名含 pandora 撞身份正则→按 kube-system+owner=Node 精确豁免 mirror Pod;⑤Hub digest rollout
+  断言过时(R11 前 Recreate 时代)→纳入 RollingUpdate+deploy-strategy 注解契约(writerlease 单写者);
+  ⑥writer digest provenance 写死 :dev→改按 Deployment 实际引用镜像(ds-allocator 钉定 tag)。
+  另:DS 构建防降级门正确拦截制品库旧包(r1553)覆盖 stage 新二进制,用 PANDORA_DS_LINUX_PKG
+  指向 Packages 最新包(04:05 构建)通过——门本身工作正常。
+- **验证全绿**:节点 Ready(containerd);kube-system 9/9;41+ Pod Running;三 GameServer Ready
+  (battle×2/hub×1,canary 归零);**边缘 Envoy 链路实测**:127.0.0.1:8443→NodePort 31443→
+  pandora-edge-envoy(TLS 握手回 mkcert dev 叶子,客户端地址不变);e2e 自动检测集群内边缘并
+  **跳过宿主桥**(零 port-forward,兜底回落逻辑保他人路径);**Prometheus 22/22 targets 全 up**
+  (21 服务注解全量生效,监控闭环);Sentinel master+2 replicas 全被哨兵识别;TiDB v8.5.1 三库
+  (account/owner/social)schema 落库(tidb-init Job Complete);Argo CD v3.4.5 重装+app 注册。
+- **TiDB 自引导鸡生蛋(live 抓获)**:pd 经 advertise(pd:2379)拨自己,Service 默认只发布 Ready
+  endpoints→CrashLoop 死锁;修=pd/tikv/tidb 三 Service `publishNotReadyAddresses: true`
+  (K8s 自引导标准解法);半状态残留(duplicated store)须三件套同批回收重引导。
+- **退役与清退**:宿主 compose envoy+21 条 port-forward 桥退役(脚本保留,自动回落);孤儿 compose
+  tidb/sentinel 栈容器移除(命名卷保留);udp-relay 重建指向新节点。
+- **残余/交接**:告警 provisioning 需带 PANDORA_ALERT_NTFY_URL 重跑部署段(或手动创建 configmap);
+  局域网多机需重建时用 0.0.0.0:8443:31443 端口发布或 -HostBridge;客户端(UE)真机验证=门 C 待用户;
+  worktree 分支 worktree-k8s-closure-20260728 待合 main(主树有已同步的未提交副本)。
+- **功能性终验(gatecheck 合成 E2E,新集群)**:login→CreateTeam→StartMatch(map8)→QUEUEING→
+  ALLOCATING→**READY t+196.1s**(ds 192.168.2.28:7541)+30s 观测窗干净退出。首跑 4 分钟超时属
+  全新节点零页缓存首冷载(首台分配被弃→授权重试链正常运转,不卡玩家链实证);二跑一次通过。
+  TiDB tidb-init 二次 Job Complete(三库 schema);孤儿 compose tidb/sentinel 栈容器已清退。
+
+## 2026-07-28 换机器可移植性审计整改(批③,合 main 前门禁)(Claude)
+
+36 代理四维审计+逐条对抗验证(11 条驳回),确认缺口全部整改:
+- **钉定镜像产出链**:services.yaml 三个 go 服务回归 :dev(修复已入 main,临时钉定动机消失;
+  服务面 re-apply 不换 Pod 无回滚面);fleet 钉定 tag 改为「tag=制品版本」契约,宿主缺失时
+  Build-DsImagesForMinikube 按 PANDORA_ARTIFACT_ROOT 定位同版本制品自动重建,制品缺失才
+  fail-fast——新机器可复现,绝不静默退回 :dev。
+- **证书链修真**:[7.5/8] 原以 -File 调 envoy_cert.ps1(纯函数库)是空操作;改 dot-source +
+  Confirm-EnvoyDevCert 真实重签;k8s 前置工具补 mkcert 与 Go(原缺,分别在 [7.5/8]/[5/8]
+  中途才炸)。
+- **DS 包前置预检**:-ResolveOnly 增 exit 2 契约(彻底无源),Invoke-K8s 在起集群前预检并
+  给三条可执行出路,不再让新机器等到 [4/8] 才失败。
+- **bridge dev.env 自举**:缺失时自动从 example 初始化(dev 默认值),回落路径不再因未入库
+  文件断头。
+- **离线清单同步**:export_images 补 pingcap 三件套 + envoy v1.38.1。
+- **边缘 Envoy 钉定 v1.38.1**(与 latest 当日同 imageID,防 latest 漂移;[7.5/8] 负责 load)。
+- 文案纠偏:fleet :dev 陈述、16Gi 门机理(cgroup OOM 而非调度 Pending,审计实测容量 47Gi
+  vs 限额 40Gi 的口径错位)。
