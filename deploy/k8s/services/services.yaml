@@ -331,10 +331,12 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: matchmaker
-          # 钉定 live 实测 tag(2026-07-28,INC-20260727-001 配套):内容=eed8ce2c(排队态/
-          # fail-fast 修复);此前树内 :dev 可变 tag,re-apply 会把 live 修复镜像滚回旧 :dev。
-          # imageID sha256:bfd63445579c1497bb20843c6e3af9c1e98787004631495083e3320ed94356ad
-          image: pandora/matchmaker:geed8ce2c6b5d
+          # :dev 是本地开发约定(每次部署由 [5/8] 从当前 HEAD 重建+[6/8] 强制刷新节点 tag;
+          # 单独 re-apply 不改 image 串不滚 Pod,无回滚面)。2026-07-28 曾临时钉定 live tag
+          # 防"旧树 re-apply 回滚 INC-20260727-001 修复镜像",修复入 main 后钉定动机消失,
+          # 回归 :dev——树内容落后于 live 时才需要钉定,钉定 tag 必须有可复现的产出链
+          # (参照 fleet yaml:tag=制品版本,Build-DsImagesForMinikube 按版本从制品库重建)。
+          image: pandora/matchmaker:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50011 } ]
@@ -374,9 +376,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: matchmaker-pve
-          # 钉定 live 实测 tag(2026-07-28):与 matchmaker 同 imageID(sha256:bfd63445...,
-          # 同一二进制不同配置),理由同上,防 re-apply 回滚。
-          image: pandora/matchmaker-pve:geed8ce2c6b5d
+          image: pandora/matchmaker-pve:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50018 } ]
@@ -644,11 +644,8 @@ spec:
       serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
       containers:
         - name: ds-allocator
-          # 钉定 live 实测 tag(2026-07-28,INC-20260727-001 第三 P0 配套):内容=eed8ce2c+
-          # 两阶段激活修复(构建时未提交,后入库为 8abf30a3),构建于 06:21;此前树内 :dev
-          # 可变 tag,re-apply 会把 live 修复镜像滚回旧 :dev(与 20/21-fleet yaml 同批钉定)。
-          # imageID sha256:9bbeb331e18a1a0ed04da056d237a082417ab31b70cb0647ae1c2e5238eb9f08
-          image: pandora/ds-allocator:geed8ce2-p03-da4bf6c7-20260728-062100
+          # :dev 回归理由见 matchmaker 注释(修复已入 main,临时钉定动机消失)。
+          image: pandora/ds-allocator:dev
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }

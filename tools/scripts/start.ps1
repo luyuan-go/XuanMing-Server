@@ -3587,6 +3587,11 @@ function Resolve-Prerequisites([string]$mode) {
             if (-not (Ensure-Tool -Name 'kubectl'  -CheckCmd 'kubectl'  -WingetId 'Kubernetes.kubectl'  -ManualUrl 'https://kubernetes.io/docs/tasks/tools/')) { $allOk = $false }
             if (-not (Ensure-Tool -Name 'minikube' -CheckCmd 'minikube' -WingetId 'Kubernetes.minikube' -ManualUrl 'https://minikube.sigs.k8s.io/docs/start/')) { $allOk = $false }
             if (-not (Ensure-Tool -Name 'helm'     -CheckCmd 'helm'     -WingetId 'Helm.Helm'           -ManualUrl 'https://helm.sh/docs/intro/install/')) { $allOk = $false }
+            # [5/8] 构建 21 个服务镜像 = 宿主 Go 交叉编译,Go 缺失会在最贵的步骤中途才炸。
+            if (-not (Ensure-Tool -Name 'Go' -CheckCmd 'go' -WingetId 'GoLang.Go' -ManualUrl 'https://go.dev/dl/')) { $allOk = $false }
+            # [7.5/8] 集群内边缘 Envoy 的 dev 证书(deploy/envoy/cert.pem,不入库)缺失时由
+            # envoy_cert.ps1 用 mkcert 自动重签——新机器必经此路径,mkcert 缺失会中止部署。
+            if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
         }
         'online' {
             if (-not (Ensure-Tool -Name 'kubectl' -CheckCmd 'kubectl' -WingetId 'Kubernetes.kubectl' -ManualUrl 'https://kubernetes.io/docs/tasks/tools/')) { $allOk = $false }
@@ -3952,7 +3957,7 @@ function Apply-AgonesManifests {
         kubectl @kubectlContextArgs apply -f $autoscalerSrc
         Assert-LastExit 'kubectl apply Battle FleetAutoscaler'
     }
-    Write-Warn "Fleet 用真 UE DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)。"
+    Write-Warn "Fleet 用真 UE DS 镜像(fleet yaml 钉定不可变 tag=制品版本;宿主缺失时按制品库同版本自动重建)。"
     Write-Warn "  这些镜像由 UE 侧 Tool/Server/Agones 构建;minikube 需先 minikube image load,线上需 push 到 -Registry。"
 
     if ($ForceRecreateGameServers) {
@@ -4062,7 +4067,10 @@ function Get-MinikubeStartArgs([string]$Profile) {
         $memoryMB = [math]::Min([int][math]::Floor($ceilingMB * 0.85), 40960)
         # 下限依据:battle DS limits=requests=14Gi(INC-20260727-002 量测围栏)+ 基础设施
         # (mysql/redis/kafka/zk/etcd/TiDB 三件套/监控)约 6~8Gi + 21 个业务服务约 2Gi。
-        # 低于 16Gi 时至少一台 battle DS 无法调度,真 DS 闭环必失败。
+        # 注意失败机理是 cgroup 层而非调度层:docker driver 下 kubelet 容量取自 VM /proc/meminfo
+        # (审计实测 47Gi),不读 --memory 的 cgroup 限额——所以不会 Pending,而是节点容器被硬钉
+        # 在小内存后 kubelet/etcd/kafka/DS 被内核 OOM killer 随机杀成 CrashLoop。低于 16Gi
+        # 真 DS 闭环必失败,只是死法难看,故前置拦截。
         if ($memoryMB -lt 16384) {
             throw ("本机可给 minikube 的内存上限约 ${ceilingMB}MB,按 85% 只能分到 ${memoryMB}MB,不足以跑真 DS 闭环" +
                 "(battle DS 单副本 limits 就是 14Gi)。处理方式:①Windows 上调大 WSL2 上限(%USERPROFILE%\.wslconfig 的 memory=) 后重启 Docker;" +
@@ -4440,8 +4448,13 @@ function Assert-LocalDsAuthImageDigestAnnotations {
 #   2) 宿主 docker 已有 → minikube image load 灌进去(断网机 import_images -IncludeInfra 后走这条);
 #   3) 都没有 → 才在节点内联网 pull(重试 6 次),仍失败 fail-fast 给出离线导入指引。
 function Ensure-EnvoyImageInMinikube {
-    param([string]$MinikubeProfile)
-    $envoyImg = 'envoyproxy/envoy:v1.38-latest'
+    param(
+        [string]$MinikubeProfile,
+        # 默认值维持 DS 面(16-ds-envoy.yaml)的既有 tag;边缘 Envoy(edge-envoy.yaml)钉定
+        # v1.38.1(与 v1.38-latest 当日同 imageID,钉定只为杜绝"latest 漂移后新机器拉到不同构建")。
+        [string]$Image = 'envoyproxy/envoy:v1.38-latest'
+    )
+    $envoyImg = $Image
     $mkArgs = @()
     if (-not [string]::IsNullOrWhiteSpace($MinikubeProfile)) { $mkArgs = @('-p', $MinikubeProfile) }
     # 节点内镜像探测/拉取按 runtime 分流(containerd 节点无 docker CLI);探测统一用
@@ -4500,13 +4513,34 @@ function Build-DsImagesForMinikube {
     Write-Info "把 DS 镜像 load 进 minikube(profile=$mkProfile,强制刷新 :dev tag)..."
     Sync-ImagesToMinikube -Images @('pandora/battle-ds:dev', 'pandora/hub-ds:dev') -MinikubeArgs @('-p', $mkProfile)
     # 2026-07-28:Fleet yaml 钉定不可变 tag(INC-20260727-001 防回滚,20/21/30/31-fleet-*.yaml)。
-    # 钉定镜像不产自本次 :dev 构建——新节点(-Reset 重建)没有会让 GameServer 全量
-    # ImagePullBackOff(下游 e2e 又被 -SkipImageLoad 跳过加载)。从宿主 daemon 一并 load;
-    # 宿主缺失 fail-fast(钉定镜像是已验证产物,不得静默退回 :dev)。
+    # 钉定镜像不产自本次 :dev 构建——新节点(-Reset 重建)/新机器没有会让 GameServer 全量
+    # ImagePullBackOff(下游 e2e 又被 -SkipImageLoad 跳过加载)。
+    # 产出链(tag 命名契约=制品快照版本号):宿主 daemon 没有钉定镜像时,按 tag 定位制品库
+    # <root>\snapshots\client\trunk_Client\Server_Linux_Development\<tag>\LinuxServer 重建同名
+    # 镜像——任何机器只要可达制品库(PANDORA_ARTIFACT_ROOT,默认 F:\work\artifacts)即可复现;
+    # 制品缺失才 fail-fast(绝不静默退回 :dev 冒充钉定内容)。
     $fleetPinned = @(Get-ChildItem (Join-Path $ProjectRoot 'deploy/k8s/agones') -Filter '*fleet*.yaml' |
         ForEach-Object { Select-String -LiteralPath $_.FullName -Pattern '^\s*image:\s*(pandora/\S+)' |
             ForEach-Object { $_.Matches[0].Groups[1].Value } } |
         Where-Object { $_ -notmatch ':dev$' } | Sort-Object -Unique)
+    $pinnedMissing = @($fleetPinned | Where-Object {
+        docker image inspect $_ *> $null; $LASTEXITCODE -ne 0
+    })
+    if ($pinnedMissing.Count -gt 0) {
+        $artifactRoot = if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_ARTIFACT_ROOT)) { $env:PANDORA_ARTIFACT_ROOT.Trim() } else { 'F:\work\artifacts' }
+        foreach ($verGroup in ($pinnedMissing | Group-Object { ($_ -split ':', 2)[1] })) {
+            $ver = $verGroup.Name
+            $pkg = Join-Path $artifactRoot "snapshots\client\trunk_Client\Server_Linux_Development\$ver\LinuxServer"
+            if (-not (Test-Path -LiteralPath $pkg)) {
+                throw ("Fleet 钉定镜像 $($verGroup.Group -join ', ') 宿主缺失,且制品库找不到同版本 DS 包:$pkg`n" +
+                    "处理方式:①确认 PANDORA_ARTIFACT_ROOT 指向共享制品根(当前=$artifactRoot);" +
+                    "②在客户端仓库发布该版本(pwsh Tool\Build\PublishPackages.ps1);③改 fleet yaml 钉定为制品库里存在的版本。")
+            }
+            Write-Info "钉定镜像宿主缺失,按制品 $ver 重建($($verGroup.Group -join ', '))..."
+            & pwsh -NoProfile -ExecutionPolicy Bypass -File $dsBuild -BuildOnHost -Tag $ver -SourcePkg $pkg
+            Assert-LastExit "按制品版本重建 Fleet 钉定 DS 镜像($ver)"
+        }
+    }
     if ($fleetPinned.Count -gt 0) {
         Write-Info "Fleet 钉定镜像一并 load:$($fleetPinned -join ', ')"
         Sync-ImagesToMinikube -Images $fleetPinned -MinikubeArgs @('-p', $mkProfile)
@@ -4660,6 +4694,18 @@ function Invoke-K8s {
     # 记录 profile 是否在本次运行前存在，仅用于区分全新 minikube 与“现有 minikube 上首次
     # 安装 Pandora”。真正的 genesis 授权不再依赖这个瞬时布尔值，而依赖持久 marker/PVC UID。
     $profileExistedBeforeStart = Test-MinikubeProfileExists -Profile $mkProfile
+
+    # DS 包前置预检(2026-07-28,回应换机器审计):真 DS 是本模式的硬前置,但它的构建在
+    # [4/8]——起集群+装基础设施之后。新机器若既无同级客户端仓库/制品库/环境变量指定的包、
+    # 也无历史 stage,与其让人等十几分钟再在 [4/8] 中止,不如现在就按 -ResolveOnly(exit 2=
+    # 彻底无源)讲清楚。只预检不构建,几秒完成;有任一来源即放行,防降级门仍在真实构建时把关。
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot 'deploy/ds/build-image-minikube.ps1') -ResolveOnly
+    if ($LASTEXITCODE -eq 2) {
+        throw ("未找到任何 UE Linux DS 包来源,真 DS 闭环无法构建。任选其一后重跑:`n" +
+            "  ①同级客户端仓库打包:pwsh Tool\Build\PackageSet.ps1 -Flavors 'Server/Linux/Development'`n" +
+            "  ②指向共享制品库:`$env:PANDORA_ARTIFACT_ROOT='<制品根>'(内有 snapshots\client\...\Server_Linux_Development)`n" +
+            "  ③手动指定包目录:`$env:PANDORA_DS_LINUX_PKG='<...\LinuxServer>'")
+    }
 
     # 1) minikube 起没起。拓扑参数由 Get-MinikubeStartArgs 决定:既有 profile 空参续跑,
     # 新建 profile 按默认(docker/4C/6144M)或 PANDORA_MINIKUBE_* 环境覆盖创建。
@@ -4933,12 +4979,17 @@ function Invoke-K8s {
     $edgeCertPem = Join-Path $envoyCertDir 'cert.pem'
     $edgeKeyPem  = Join-Path $envoyCertDir 'key.pem'
     if (-not (Test-Path $edgeCertPem) -or -not (Test-Path $edgeKeyPem)) {
-        Write-Info 'Envoy dev 证书缺失,尝试自动生成(envoy_cert.ps1)...'
-        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'envoy_cert.ps1')
+        # envoy_cert.ps1 是函数库(dot-source 后调 Confirm-EnvoyDevCert 才会校验/mkcert 重签);
+        # 以 -File 直跑只定义函数就退出,是空操作——新机器证书缺失时必须走真实生成路径。
+        Write-Info 'Envoy dev 证书缺失,自动重签(mkcert,SAN 含 localhost/127.0.0.1/本机局域网 IP)...'
+        . (Join-Path $ScriptDir 'envoy_cert.ps1')
+        Confirm-EnvoyDevCert -EnvoyDir $envoyCertDir
     }
     if (-not (Test-Path $edgeCertPem) -or -not (Test-Path $edgeKeyPem)) {
-        throw 'Envoy dev 证书(deploy/envoy/cert.pem + key.pem)缺失且自动生成失败;边缘 Envoy 无法起 TLS,已中止(修复:pwsh tools/scripts/envoy_cert.ps1)。'
+        throw 'Envoy dev 证书(deploy/envoy/cert.pem + key.pem)缺失且自动重签失败;边缘 Envoy 无法起 TLS,已中止。多半是 mkcert 不可用:winget install FiloSottile.mkcert 后重跑。'
     }
+    # 边缘 Envoy 镜像钉定 tag(edge-envoy.yaml),新节点/新机器没有时从宿主 load 或联网补齐。
+    Ensure-EnvoyImageInMinikube -MinikubeProfile $mkProfile -Image 'envoyproxy/envoy:v1.38.1'
     $edgeCfgText = Convert-EdgeEnvoyConfigForCluster (Get-Content -LiteralPath $hostEnvoyConfigFile -Raw)
     $edgeCfgTmp = Join-Path ([System.IO.Path]::GetTempPath()) "pandora-edge-envoy-$PID.yaml"
     Set-Content -LiteralPath $edgeCfgTmp -Value $edgeCfgText -Encoding utf8NoBOM

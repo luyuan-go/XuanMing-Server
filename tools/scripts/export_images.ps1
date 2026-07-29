@@ -165,7 +165,9 @@ $InfraImages = @(
     'confluentinc/cp-zookeeper:7.9.7','confluentinc/cp-kafka:7.9.7',
     'quay.io/coreos/etcd:v3.6.12','prom/prometheus:v2.55.1',
     'grafana/grafana:11.3.1','grafana/loki:3.4.1','grafana/alloy:v1.7.1',
-    'envoyproxy/envoy:v1.38-latest'
+    'envoyproxy/envoy:v1.38-latest','envoyproxy/envoy:v1.38.1',
+    # TiDB 三件套(2026-07-28 进集群,deploy/k8s/infra/tidb.yaml;清单须与 infra yaml 同步)
+    'pingcap/pd:v8.5.1','pingcap/tikv:v8.5.1','pingcap/tidb:v8.5.1'
 )
 
 # ---- 输出隔离 + 现有包新旧判断(必须早于构建,避免包未过期时浪费时间) ----

@@ -26,7 +26,9 @@ spec:
     spec:
       containers:
         - name: envoy
-          image: envoyproxy/envoy:v1.38-latest
+          # 钉定 v1.38.1(2026-07-28 与 v1.38-latest 同 imageID):latest 会漂移,新机器拉到
+          # 的构建可能与已验证环境不同;start.ps1 [7.5/8] 负责把本镜像 load 进节点。
+          image: envoyproxy/envoy:v1.38.1
           args: [ "-c", "/etc/envoy/envoy.yaml", "--service-cluster", "pandora-edge-envoy" ]
           ports:
             - { name: client-face, containerPort: 8443 }

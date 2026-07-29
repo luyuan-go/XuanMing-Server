@@ -2034,3 +2034,22 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
   ALLOCATING→**READY t+196.1s**(ds 192.168.2.28:7541)+30s 观测窗干净退出。首跑 4 分钟超时属
   全新节点零页缓存首冷载(首台分配被弃→授权重试链正常运转,不卡玩家链实证);二跑一次通过。
   TiDB tidb-init 二次 Job Complete(三库 schema);孤儿 compose tidb/sentinel 栈容器已清退。
+
+## 2026-07-28 换机器可移植性审计整改(批③,合 main 前门禁)(Claude)
+
+36 代理四维审计+逐条对抗验证(11 条驳回),确认缺口全部整改:
+- **钉定镜像产出链**:services.yaml 三个 go 服务回归 :dev(修复已入 main,临时钉定动机消失;
+  服务面 re-apply 不换 Pod 无回滚面);fleet 钉定 tag 改为「tag=制品版本」契约,宿主缺失时
+  Build-DsImagesForMinikube 按 PANDORA_ARTIFACT_ROOT 定位同版本制品自动重建,制品缺失才
+  fail-fast——新机器可复现,绝不静默退回 :dev。
+- **证书链修真**:[7.5/8] 原以 -File 调 envoy_cert.ps1(纯函数库)是空操作;改 dot-source +
+  Confirm-EnvoyDevCert 真实重签;k8s 前置工具补 mkcert 与 Go(原缺,分别在 [7.5/8]/[5/8]
+  中途才炸)。
+- **DS 包前置预检**:-ResolveOnly 增 exit 2 契约(彻底无源),Invoke-K8s 在起集群前预检并
+  给三条可执行出路,不再让新机器等到 [4/8] 才失败。
+- **bridge dev.env 自举**:缺失时自动从 example 初始化(dev 默认值),回落路径不再因未入库
+  文件断头。
+- **离线清单同步**:export_images 补 pingcap 三件套 + envoy v1.38.1。
+- **边缘 Envoy 钉定 v1.38.1**(与 latest 当日同 imageID,防 latest 漂移;[7.5/8] 负责 load)。
+- 文案纠偏:fleet :dev 陈述、16Gi 门机理(cgroup OOM 而非调度 Pending,审计实测容量 47Gi
+  vs 限额 40Gi 的口径错位)。

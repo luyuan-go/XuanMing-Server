@@ -463,6 +463,12 @@ function Stop-EnvoyForRecreate {
 Write-Ok "port-forward context 已锁定:$KubeContext"
 
 Ensure-File $ComposeFile
+# dev.env 被 git 忽略(真实 webhook/token 不入库);新机器首次跑时按 example 初始化——
+# 与 example 头部「首次使用:Copy-Item ...」的引导一致,把这步自动化(值全是 dev 级默认)。
+if (-not (Test-Path $EnvFile) -and (Test-Path "$EnvFile.example")) {
+    Copy-Item "$EnvFile.example" $EnvFile
+    Write-Info "已从 dev.env.example 初始化 $EnvFile(dev 默认值;真实 webhook/token 自行改写,不会入库)。"
+}
 Ensure-File $EnvFile
 Ensure-File (Join-Path $ProjectRoot 'deploy/envoy/envoy.yaml')
 # cert.pem / key.pem 不止判存在:必须是有效 PEM(key.pem 损坏会让 Envoy 启动直接退出)。
