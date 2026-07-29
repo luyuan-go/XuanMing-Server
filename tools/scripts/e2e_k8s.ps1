@@ -479,11 +479,22 @@ if (-not $HostBridge) {
     kubectl @kubectlContextArgs get svc pandora-edge-envoy -n $K8sNamespace *> $null
     if ($LASTEXITCODE -eq 0) {
         $nodePortMap = (docker port $MinikubeProfile 2>$null | Out-String)
-        if ($nodePortMap -match '(?m)^31443/tcp') { $edgeInCluster = $true }
+        $edgeBind = [regex]::Match($nodePortMap, '(?m)^31443/tcp\s*->\s*(\S+):8443')
+        if ($edgeBind.Success) {
+            $edgeInCluster = $true
+            $edgeBindHost = $edgeBind.Groups[1].Value
+            # 端口发布绑定与本次意图对齐提示:回环发布下本机链路完整,但内网其它机器连不到
+            # 8443(UDP 中继照常 0.0.0.0,不受影响)。不因内网诉求牺牲本机可用性,只如实告警;
+            # 注意此时宿主桥也救不了——8443 已被回环发布占用,bridge 的 0.0.0.0 绑定会 EADDRINUSE。
+            if ($RelayBindHost -eq '0.0.0.0' -and $edgeBindHost -notin @('0.0.0.0', '[::]', '::')) {
+                Write-Warn "集群内边缘 8443 端口发布仅绑 $edgeBindHost —— 本机可用,内网其它机器连不到业务面 8443。"
+                Write-Warn "  需内网多机时:`$env:PANDORA_MINIKUBE_PORTS='0.0.0.0:8443:31443' 后 start.ps1 -Mode k8s -Reset 重建集群。"
+            }
+        }
     }
 }
 if ($edgeInCluster) {
-    Write-Ok "集群内边缘 Envoy 生效(127.0.0.1:8443 → 节点 31443 → pandora-edge-envoy),跳过宿主桥接。"
+    Write-Ok "集群内边缘 Envoy 生效(宿主 ${edgeBindHost}:8443 → 节点 31443 → pandora-edge-envoy),跳过宿主桥接。"
 } else {
     Start-K8sEnvoyBridge
 }

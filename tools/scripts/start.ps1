@@ -4922,9 +4922,16 @@ function Invoke-K8s {
     Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);集群本身已部署好,修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind"
 
     Write-Host ""
-    if ($relayBind -eq '0.0.0.0') {
+    # 8443 实际可达面取决于接入路径:集群内边缘 Envoy 时看节点端口发布的绑定地址(回环=仅本机),
+    # 宿主桥路径看 PANDORA_EDGE_BIND_HOST。按 docker port 实测如实提示,不再无条件宣称局域网可达。
+    $edgePublish = [regex]::Match((docker port $mkProfile 2>$null | Out-String), '(?m)^31443/tcp\s*->\s*(\S+):8443')
+    $edgeLoopbackOnly = ($edgePublish.Success -and $edgePublish.Groups[1].Value -notin @('0.0.0.0', '[::]', '::'))
+    if ($relayBind -eq '0.0.0.0' -and -not $edgeLoopbackOnly) {
         Write-Ok "真 DS 闭环就绪(局域网):内网其它机器客户端连 ${k8sAdvHost}:8443(TLS)即可登录进 Hub/战斗。"
         Write-Info "若其它机器连不进,先查本机防火墙是否放行 入站 TCP 8443 + 入站 UDP 7000-8000。宿主 DS 面 8444 仅回环可达。"
+    } elseif ($relayBind -eq '0.0.0.0') {
+        Write-Ok "真 DS 闭环就绪(仅本机业务面):客户端连 127.0.0.1:8443(TLS);UDP 中继已对局域网开放。"
+        Write-Warn "集群内边缘 8443 端口发布为回环,内网其它机器连不到业务面;需多机时 `$env:PANDORA_MINIKUBE_PORTS='0.0.0.0:8443:31443' 后 -Reset 重建。"
     } else {
         Write-Ok "真 DS 闭环就绪:客户端连 127.0.0.1:8443(TLS)即可登录进 Hub/战斗(仅本机)。"
     }
