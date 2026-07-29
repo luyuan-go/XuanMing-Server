@@ -4020,49 +4020,102 @@ function Get-K8sManagedProfile {
     return $script:K8sManagedProfile
 }
 
+# 本机可给 minikube 节点的内存上限(MB)。docker driver 下真正的天花板是 Docker Desktop
+# 的 Linux VM(WSL2)内存,不是物理内存,故优先读 `docker info` 的 MemTotal;读不到再退物理内存。
+function Get-HostMinikubeMemoryCeilingMB {
+    $bytes = 0
+    $raw = (docker info --format '{{.MemTotal}}' 2>$null | Out-String).Trim()
+    if ($raw -match '^\d+$') { $bytes = [int64]$raw }
+    if ($bytes -le 0) {
+        try { $bytes = [int64](Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).TotalPhysicalMemory } catch { $bytes = 0 }
+    }
+    if ($bytes -le 0) { return 0 }
+    return [int][math]::Floor($bytes / 1MB)
+}
+
 # minikube start 的拓扑参数集(driver/runtime/cni/版本/规格)。
 # 关键语义:已存在的 profile 返回空参数——minikube 对既有集群忽略 cpus/memory 变更、
 # 对冲突的 --driver/--container-runtime 直接报错,传了只有害无益;拓扑只在「首次创建」时生效。
-# 新建 profile 默认与旧版脚本完全一致(docker/4C/6144M),环境变量仅在创建新集群时用于
-# 定义生产贴近形态(hyperv + containerd + calico + 钉定 K8s 版本),不影响任何既有 profile:
-#   PANDORA_MINIKUBE_DRIVER / PANDORA_MINIKUBE_CPUS / PANDORA_MINIKUBE_MEMORY
-#   PANDORA_MINIKUBE_RUNTIME(--container-runtime) / PANDORA_MINIKUBE_CNI(--cni)
-#   PANDORA_MINIKUBE_K8S_VERSION(--kubernetes-version;托管云通常落后上游 2~3 个小版本,
-#   钉版本防「本地比生产新」的隐性不兼容,具体版本待云厂商定版后复核)
+#
+# 默认值 = 2026-07-28 实测通过的「贴近生产」形态,任何机器首次创建都拿到同一套拓扑
+# (换机器/换人跑一键启动即复现,不依赖谁记得导环境变量):
+#   containerd(线上 CRI,非 dockershim) + calico(可强制 NetworkPolicy) + 钉定 K8s 版本
+#   + 阿里云 kicbase(墙内可达;境外机器同样可拉) + 8443→NodePort 31443 端口发布
+#   (集群内边缘 Envoy 的客户端入口;docker/podman driver 专属参数)。
+# 规格默认随宿主自适应并 fail-fast:battle DS 单副本 limits=14Gi,节点内存不足时 DS 永远
+# 调度不上,只会在 [8/8] 等 Fleet Ready 处超时——与其让人等半小时再排查,不如现在讲清楚。
+# 逐项可用环境变量覆盖(设了就按你的来,脚本不二次判断):
+#   PANDORA_MINIKUBE_DRIVER / CPUS / MEMORY / RUNTIME / CNI / K8S_VERSION
+#   PANDORA_MINIKUBE_BASE_IMAGE / IMAGE_REPOSITORY / PORTS
 function Get-MinikubeStartArgs([string]$Profile) {
     if (Test-MinikubeProfileExists -Profile $Profile) { return @() }
     $driver = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_DRIVER)) { 'docker' } else { $env:PANDORA_MINIKUBE_DRIVER.Trim() }
-    $cpus = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_CPUS)) { '4' } else { $env:PANDORA_MINIKUBE_CPUS.Trim() }
-    $memory = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_MEMORY)) { '6144' } else { $env:PANDORA_MINIKUBE_MEMORY.Trim() }
+
+    # 内存:显式覆盖优先;否则取 min(宿主上限 × 0.85, 40960),并按 DS 规格做下限硬校验。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_MEMORY)) {
+        $memory = $env:PANDORA_MINIKUBE_MEMORY.Trim()
+    } else {
+        $ceilingMB = Get-HostMinikubeMemoryCeilingMB
+        if ($ceilingMB -le 0) {
+            throw '无法探测本机可用内存(docker info / Win32_ComputerSystem 都读不到);请显式设置 PANDORA_MINIKUBE_MEMORY 后重试。'
+        }
+        $memoryMB = [math]::Min([int][math]::Floor($ceilingMB * 0.85), 40960)
+        # 下限依据:battle DS limits=requests=14Gi(INC-20260727-002 量测围栏)+ 基础设施
+        # (mysql/redis/kafka/zk/etcd/TiDB 三件套/监控)约 6~8Gi + 21 个业务服务约 2Gi。
+        # 低于 16Gi 时至少一台 battle DS 无法调度,真 DS 闭环必失败。
+        if ($memoryMB -lt 16384) {
+            throw ("本机可给 minikube 的内存上限约 ${ceilingMB}MB,按 85% 只能分到 ${memoryMB}MB,不足以跑真 DS 闭环" +
+                "(battle DS 单副本 limits 就是 14Gi)。处理方式:①Windows 上调大 WSL2 上限(%USERPROFILE%\.wslconfig 的 memory=) 后重启 Docker;" +
+                "②换内存更大的机器;③确认只跑 Go 服务不跑真 DS 时,显式设 PANDORA_MINIKUBE_MEMORY 绕过本校验(DS Fleet 会一直 Pending)。")
+        }
+        $memory = "$memoryMB"
+    }
+
+    # CPU:显式覆盖优先;否则取 min(逻辑核数, 16),下限 4。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_CPUS)) {
+        $cpus = $env:PANDORA_MINIKUBE_CPUS.Trim()
+    } else {
+        $hostCores = 0
+        try { $hostCores = [int](Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).NumberOfLogicalProcessors } catch { $hostCores = 0 }
+        if ($hostCores -le 0) { $hostCores = 4 }
+        $cpus = "$([math]::Max(4, [math]::Min($hostCores, 16)))"
+    }
+
     $startArgs = @("--driver=$driver", "--cpus=$cpus", "--memory=$memory")
-    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_RUNTIME)) {
-        $startArgs += "--container-runtime=$($env:PANDORA_MINIKUBE_RUNTIME.Trim())"
-    }
-    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_CNI)) {
-        $startArgs += "--cni=$($env:PANDORA_MINIKUBE_CNI.Trim())"
-    }
-    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_K8S_VERSION)) {
-        $startArgs += "--kubernetes-version=$($env:PANDORA_MINIKUBE_K8S_VERSION.Trim())"
-    }
+    $runtime = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_RUNTIME)) { 'containerd' } else { $env:PANDORA_MINIKUBE_RUNTIME.Trim() }
+    $startArgs += "--container-runtime=$runtime"
+    $cni = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_CNI)) { 'calico' } else { $env:PANDORA_MINIKUBE_CNI.Trim() }
+    $startArgs += "--cni=$cni"
+    $k8sVersion = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_K8S_VERSION)) { 'v1.35.1' } else { $env:PANDORA_MINIKUBE_K8S_VERSION.Trim() }
+    $startArgs += "--kubernetes-version=$k8sVersion"
     # PANDORA_MINIKUBE_IMAGE_REPOSITORY:k8s 核心镜像仓库覆盖(墙内 registry.k8s.io 不可达时
     # 用 registry.cn-hangzhou.aliyuncs.com/google_containers;preload 可达时通常无需设置)。
     if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY)) {
         $startArgs += "--image-repository=$($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY.Trim())"
     }
-    # PANDORA_MINIKUBE_BASE_IMAGE:kicbase 节点底图覆盖。既有集群实证用
-    # registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.50(宿主已缓存,
-    # 复用可避免重建时从 gcr.io(墙内不可达)重拉 ~500MB)。
-    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_BASE_IMAGE)) {
-        $startArgs += "--base-image=$($env:PANDORA_MINIKUBE_BASE_IMAGE.Trim())"
+    # 节点底图:默认用阿里云 kicbase 镜像(墙内可达,境外机器同样能拉);gcr.io 在墙内不可达,
+    # 走默认会在 "Pulling base image" 卡住直到超时。PANDORA_MINIKUBE_BASE_IMAGE 可覆盖。
+    $baseImage = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_BASE_IMAGE)) {
+        'registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.50'
+    } else { $env:PANDORA_MINIKUBE_BASE_IMAGE.Trim() }
+    $startArgs += "--base-image=$baseImage"
+    # PANDORA_MINIKUBE_IMAGE_REPOSITORY:k8s 核心镜像仓库覆盖。默认不设——containerd 变体
+    # 有 preload 时不需要;preload 拉不到且 registry.k8s.io 不可达时设成
+    # registry.cn-hangzhou.aliyuncs.com/google_containers 重建(2026-07-28 实测该源有 v1.35.1 全套)。
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY)) {
+        $startArgs += "--image-repository=$($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY.Trim())"
     }
-    # PANDORA_MINIKUBE_PORTS:逗号分隔的 docker 端口发布规格(docker driver 专属,仅创建时生效)。
-    # 例 "127.0.0.1:8443:31443" 把宿主回环 8443 发布到节点 NodePort 31443——集群内边缘 Envoy
-    # (pandora-edge-envoy)的入口,客户端保持连 127.0.0.1:8443 不变;局域网多机联调可改
-    # "0.0.0.0:8443:31443"。既有集群无法追加发布端口,须 -Reset 重建时携带。
-    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_PORTS)) {
-        foreach ($portSpec in ($env:PANDORA_MINIKUBE_PORTS -split ',')) {
-            if (-not [string]::IsNullOrWhiteSpace($portSpec)) { $startArgs += "--ports=$($portSpec.Trim())" }
-        }
+    # 端口发布:把宿主 8443 发布到节点 NodePort 31443 —— 集群内边缘 Envoy(pandora-edge-envoy)
+    # 的客户端入口,客户端保持连 127.0.0.1:8443 不变,不再需要 21 条 kubectl port-forward 桥。
+    # **docker/podman driver 专属参数**,别的 driver(hyperv/vmware 等)传了会直接报错:那些
+    # driver 的节点有可路由 IP,客户端直连 <节点IP>:31443 即可,无需发布。
+    # 内网多机联调把 PANDORA_MINIKUBE_PORTS 设成 "0.0.0.0:8443:31443";既有集群无法追加发布
+    # 端口,必须 -Reset 重建时携带。
+    $portSpecs = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_PORTS)) {
+        if ($driver -in @('docker', 'podman')) { @('127.0.0.1:8443:31443') } else { @() }
+    } else { @($env:PANDORA_MINIKUBE_PORTS -split ',') }
+    foreach ($portSpec in $portSpecs) {
+        if (-not [string]::IsNullOrWhiteSpace($portSpec)) { $startArgs += "--ports=$($portSpec.Trim())" }
     }
     return $startArgs
 }
