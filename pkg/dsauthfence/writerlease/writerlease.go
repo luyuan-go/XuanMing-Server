@@ -147,8 +147,12 @@ type Term interface {
 	// Lost 在任期失效(lease 过期/连接丢失)时关闭。
 	Lost() <-chan struct{}
 	// RemainingTTL 向 etcd 服务端确认本届 lease 仍存在并返回剩余寿命。
-	// 本地安全截止时间只能由这份服务端证据续期,不能把“Lost 尚未关闭”误当成
-	// keepalive ACK；确认失败时调用方必须立即自 fencing 并让位。
+	// 本地安全截止时间只能由这份服务端证据**向前推进**,不能把“Lost 尚未关闭”
+	// 误当成 keepalive ACK。
+	//
+	// 失败语义:本方法是一次**读**,失败(超时/瞬时不可达)只表示"这一拍没拿到新
+	// 证据",**不**是"lease 已被接管"的证否——调用方保留本届到已建立的安全截止,
+	// 下一拍重试;越过截止或服务端明确回报剩余寿命不足安全余量才自 fencing 让位。
 	RemainingTTL(ctx context.Context) (time.Duration, error)
 	// Resign 主动让位并释放本届资源(幂等)。
 	Resign(ctx context.Context) error
@@ -405,6 +409,28 @@ func (l *Lease) recordActivationFailure(election string, token uint64, err error
 	}
 }
 
+// recordProofRetry 累计"本届仍在安全截止内、只是这一拍没拿到新证据"的续证失败。
+// 与 recordActivationFailure 共用计数器(两者都表现为"写者不稳定"),但**不让位**：
+// Degraded() 在 Held 为真时恒为 false，因此持有期内的重试不会误报无主。
+func (l *Lease) recordProofRetry(election string, token uint64, err error) {
+	fails := l.consecutiveActivationErrs.Add(1)
+	l.lastActivationErr.Store(err.Error())
+	if fails >= campaignErrEscalateAfter {
+		klog.Errorf("[writerlease] lease proof failing persistently inside the local safety deadline election=%s identity=%s token=%d consecutive=%d err=%v — will self-fence when the deadline passes, check etcd latency",
+			election, l.identity, token, fails, err)
+	} else {
+		klog.Warnf("[writerlease] lease proof failed election=%s identity=%s token=%d consecutive=%d err=%v — term kept until local safety deadline, retrying next tick",
+			election, l.identity, token, fails, err)
+	}
+}
+
+// deadlinePassed 判定本届的本地安全截止是否已越过。截止为 0 表示 TTL 未知，
+// 此时不设本地过期（退化为纯事件驱动，见 holdUntilTermEnds）。
+func (l *Lease) deadlinePassed(state *holdState) bool {
+	deadline := state.validUntilUnixNano.Load()
+	return deadline != 0 && nowMonotonicNanos() >= deadline
+}
+
 func (l *Lease) markHoldStable() {
 	l.consecutiveActivationErrs.Store(0)
 	l.lastActivationErr.Store("")
@@ -570,7 +596,7 @@ func (l *Lease) holdUntilTermEnds(ctx context.Context, election string, term Ter
 		case <-ticker.C:
 			// 截止一旦越过，本届永久失效。禁止先过期、后靠 ticker/网络恢复把同一
 			// token “续活”，否则已被继任的旧写者会复活。
-			if deadline := state.validUntilUnixNano.Load(); deadline != 0 && nowMonotonicNanos() >= deadline {
+			if state.selfFenced.Load() || l.deadlinePassed(state) {
 				state.selfFenced.Store(true)
 				l.active.CompareAndSwap(state, nil)
 				l.recordActivationFailure(election, state.token,
@@ -585,23 +611,38 @@ func (l *Lease) holdUntilTermEnds(ctx context.Context, election string, term Ter
 			proofStartedAt := nowMonotonicNanos()
 			remaining, err := term.RemainingTTL(confirmCtx)
 			cancel()
-			// 确认期间也可能越过旧截止；这种情况下即使响应成功也不复活本届。
-			deadline := state.validUntilUnixNano.Load()
 			if err != nil {
-				state.selfFenced.Store(true)
-			}
-			if deadline != 0 && nowMonotonicNanos() >= deadline {
-				state.selfFenced.Store(true)
-			}
-			proofApplied := err == nil && !state.selfFenced.Load() &&
-				l.applyTTLProof(state, remaining, proofStartedAt)
-			if !proofApplied {
-				l.active.CompareAndSwap(state, nil)
-				proofErr := err
-				if proofErr == nil {
-					proofErr = fmt.Errorf("writerlease: lease proof unusable (remaining=%s, deadline expired or self-fenced)", remaining)
+				// 确认期间也可能越过旧截止；越过就按上面的规则永久自 fencing。
+				if l.deadlinePassed(state) {
+					state.selfFenced.Store(true)
+					l.active.CompareAndSwap(state, nil)
+					l.recordActivationFailure(election, state.token, err)
+					return false
 				}
-				l.recordActivationFailure(election, state.token, proofErr)
+				// 续证失败 ≠ 任期已丢。RemainingTTL 是一次**读**：超时/瞬时不可达
+				// 只说明"这一拍没拿到新证据"，不构成"lease 已被接管"的证否；而上一拍
+				// 成功证明给出的安全截止仍然有效且尚未到期，本届在截止之前继续写是
+				// 有服务端证据支撑的（截止已比 lease 最早可能过期时刻早
+				// holdSafetyMarginSec）。因此保留本届、下一拍重试：截止时间照常流逝，
+				// 真到期由上面的分支自 fencing，窗口依旧有界。
+				//
+				// 反例(本次修复前的行为)：这里直接 selfFenced + 让位，于是 etcd 一次
+				// >confirmTimeout 的慢响应就废掉整届任期。单副本部署下没有任何竞争者，
+				// 等于自己把自己踢下台，重选期间全集群无写者，所有 writer 权威 RPC
+				// 返回 errcode=10；hub DS 心跳被连续拒绝后 20s 授权租约饿死并自我
+				// fencing（2026-07-29 hub 自我 fencing 现场：单副本 90 分钟内反复
+				// term lost → 重选，每次约 8s 无写者）。设计里 lease TTL 15s、安全余量
+				// 3s、续证间隔 1/3 窗口本就预留了 2 次以上的重试机会，旧实现把这份
+				// 余量整个丢掉了。
+				l.recordProofRetry(election, state.token, err)
+				continue
+			}
+			// 服务端明确回报剩余寿命已不足安全余量 = 证否，必须让位
+			// （applyTTLProof 内部自 fencing）。
+			if !l.applyTTLProof(state, remaining, proofStartedAt) {
+				l.active.CompareAndSwap(state, nil)
+				l.recordActivationFailure(election, state.token,
+					fmt.Errorf("writerlease: lease proof unusable (remaining=%s, deadline expired or self-fenced)", remaining))
 				return false
 			}
 			// 首次证明只允许发布，尚不足以说明 writer 稳定；至少再完成一轮持有期

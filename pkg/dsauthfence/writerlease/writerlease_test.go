@@ -480,14 +480,69 @@ func TestCurrentObservesClosedLostChannelDirectly(t *testing.T) {
 	}
 }
 
-// 本地截止只允许由 etcd 服务端 TTL 确认续期。确认失败必须立即自 fencing + Resign，
-// 而不是仅凭 Lost 尚未关闭盲目续命。
-func TestTTLConfirmationFailureSelfFencesAndResigns(t *testing.T) {
-	term := newFakeTerm(80)
+// 单次续证失败只说明"这一拍没拿到新证据"，不构成"任期已被接管"的证否：上一拍成功
+// 证明给出的本地安全截止仍然有效，本届必须继续持有到截止，不得立刻让位。
+//
+// 回归对象(2026-07-29 hub 自我 fencing)：修复前这里一次 etcd 慢读即 selfFence + 让位，
+// 单副本 hub_allocator 没有任何竞争者却反复把自己踢下台，每次约 8s 无写者，期间
+// writer 权威 RPC 全返回 errcode=10，hub DS 心跳连续被拒后 20s 授权租约饿死。
+func TestTransientTTLProofFailureKeepsTermUntilDeadline(t *testing.T) {
+	term := newFakeTerm(805)
+	// remaining 给足(窗口 27s)，确认间隔仍由 LeaseTTLSec 决定为 ~666ms：
+	// 保证测试在截止到期前就能观察到"失败一拍 → 下一拍恢复"。
+	term.confirmFn = func(call int) (time.Duration, error) {
+		if call == 2 || call == 3 {
+			return 0, errors.New("etcd read timeout")
+		}
+		return 30 * time.Second, nil
+	}
 	backend := &fakeBackend{terms: []*fakeTerm{term}}
 	lease := StartWithBackend(context.Background(), backend, Config{
 		Election:    "hub_allocator/writer",
 		LeaseTTLSec: 5,
+	})
+	defer func() { _ = lease.Close() }()
+
+	waitFor(t, "elected", func() bool {
+		token, held := lease.Current()
+		return held && token == 805
+	})
+	// 失败期间：必须可观测(计数 + 最近原因)，但既不让位也不报 Degraded。
+	waitFor(t, "proof retry counted", func() bool {
+		return lease.Health().ConsecutiveActivationErrs >= 1
+	})
+	snap := lease.Health()
+	if !snap.Held || snap.Token != 805 {
+		t.Fatalf("续证失败期间不得让位: %+v", snap)
+	}
+	if snap.LastActivationErr == "" {
+		t.Fatalf("续证重试必须记录最近原因: %+v", snap)
+	}
+	if snap.Degraded() {
+		t.Fatalf("仍持有写权时不得报 Degraded: %+v", snap)
+	}
+	// 恢复之后：同一届继续持有，从未 Resign，计数被稳定续证清零。
+	waitFor(t, "proof recovered and hold stabilized", func() bool {
+		s := lease.Health()
+		return term.ttlProofCalls() >= 5 && s.ConsecutiveActivationErrs == 0
+	})
+	if token, held := lease.Current(); !held || token != 805 {
+		t.Fatalf("瞬时续证失败不得让位: token=%d held=%v", token, held)
+	}
+	if term.wasResigned() {
+		t.Fatal("瞬时续证失败不得 Resign 本届")
+	}
+}
+
+// 持续续证失败必须在本地安全截止到期后自 fencing + Resign：窗口是有界的，
+// "读失败不算证否"不得变成无限续命。
+func TestPersistentTTLProofFailureSelfFencesAtDeadline(t *testing.T) {
+	term := newFakeTerm(80)
+	term.remainingTTL = 4 * time.Second // 安全余量 3s → 本地窗口 1s
+	backend := &fakeBackend{terms: []*fakeTerm{term}}
+	lease := StartWithBackend(context.Background(), backend, Config{
+		Election:    "hub_allocator/writer",
+		LeaseTTLSec: 5, // 确认间隔 ~666ms
 	})
 	defer func() { _ = lease.Close() }()
 
@@ -498,7 +553,7 @@ func TestTTLConfirmationFailureSelfFencesAndResigns(t *testing.T) {
 	term.mu.Lock()
 	term.confirmErr = errors.New("etcd quorum unavailable")
 	term.mu.Unlock()
-	waitFor(t, "self-fenced after failed TTL confirmation", func() bool {
+	waitFor(t, "self-fenced after the local safety deadline elapsed", func() bool {
 		_, held := lease.Current()
 		return !held
 	})
