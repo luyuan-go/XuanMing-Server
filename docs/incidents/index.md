@@ -66,6 +66,7 @@ P0 不能仅凭“代码已改”“普通单测通过”或“服务重新 Read
 
 | Incident ID | 日期 | 严重级别 | 类型 | 状态 | 服务/主题 | 文档 |
 |---|---|---|---|---|---|---|
+| INC-20260729-001 | 2026-07-29 | P0 | availability | 修复已落码，未部署未验证（未关闭） | 节点落盘 I/O 卡顿（etcd WAL fdatasync 39.4s）致 ds_allocator 失 capability 保护性退出；因 replicas:1+Recreate，Heartbeat 断流 160s ≫ Battle DS 20s 授权租约 → DS 自我 fencing 踢人。结构性根因=重启预算未闭合（§16.8），任何升级都会打断全部在场对局（破底线 7）。已落码：2 副本+RollingUpdate+PDB、sweep 由 writerlease 选举串行化、fence 失效原因可辨、UE 等待窗口跨轮残留修复 | [事故报告](2026-07-29-p0-ds-allocator-single-replica-restart-kills-battles.md) |
 | INC-20260727-002 | 2026-07-27 | P0 | crash / availability | 14Gi+maxReplicas=2 已生效（完整一局回归未跑，未关闭） | Battle DS 加载 Artic01 anon 内存顶死旧 limits 2Gi 被 memcg OOM 杀（dmesg 9 例）；实测 peak=10.43GiB/12Gi 围栏 0 OOM，limits=requests=14Gi（×1.34）+ autoscaler 上限 3 已落配置 | [事故报告](2026-07-27-p0-battle-ds-artic01-memcg-oom.md) |
 | INC-20260727-001 | 2026-07-27 | P0 | availability | 门 A/B+pinger 硬门（含 canary）已过，剩门 C×3 与观察窗口（未关闭） | Artic01 冷加载期 warming DS 被单阈值 sweep 误回收；第二 P0=BeginPlay 过早宣告 running（心跳移 PostLoadMapWithWorld）；第三 P0=PostLoadMap 回调内首拍即激活/放行 ds_addr，回调后线程续阻塞 17s 被 ACTIVE 15s 回收（实测两例）——已下沉为 allocator 两阶段激活门（≥3 次实收心跳且跨度 ≥10s 才提升，期间保持 warming）+ DS 纯周期心跳 + NetDriver fail-closed 门；验收门 A/B/C、pinger 硬门与节点级抖动定谳（A10）OPEN | [事故报告](2026-07-27-p0-ds-allocator-warming-coldload-reclaim.md) |
 | INC-20260726-003 | 2026-07-26 | P0 | availability / client-state / near-miss | 已修复待验证（未关闭） | UE SelectRole 旧请求被权威换代后门闩未释放；ROLE_REQUIRED 重进选角会永久吞掉后续确认 | [事故报告](2026-07-26-p0-client-select-role-stale-singleflight.md) |

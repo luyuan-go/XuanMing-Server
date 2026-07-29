@@ -25,9 +25,11 @@ func (noopCloser) Close() error { return nil }
 //   - sf.NodeIDSource 为空 / "static":用 staticNodeID(来自 node.node_id)本地发号;
 //     返回的 io.Closer 是 no-op,不引入任何 etcd 依赖行为。
 //   - sf.NodeIDSource == "etcd":调用 Acquire 在 etcd 里抢占一个独占 nodeID,并**在内部**
-//     起一个 goroutine 履行 fencing 契约——一旦 Holder.Lost()(续租失败 / lease 被 revoke)
-//     就 os.Exit(1) 主动退出,交给 k8s 重新拉起重新抢号,杜绝同 nodeID 双活。返回的
-//     io.Closer 即 *Holder,进程正常退出时 Close() 会 revoke lease 让 nodeID 立即可复用。
+//     起一个 goroutine 履行 fencing 契约——一旦 Holder.Lost()(续租失败 / lease 被 revoke /
+//     自 fencing 超时未确认)就 os.Exit(1) 主动退出,交给 k8s 重新拉起重新抢号,杜绝同
+//     nodeID 双活。返回的 io.Closer 即 *Holder,进程正常退出时 Close() 停止续租,lease 于
+//     TTL 自然过期后才释放 nodeID(**刻意不 Revoke**:立即释放会让新副本在同一秒内领到同号,
+//     与本进程刚发的号逐位重号,详见 Holder.Close 注释)。
 //
 // 用法(进入多副本阶段的服务 main.go):
 //
@@ -38,7 +40,8 @@ func (noopCloser) Close() error { return nil }
 //	}
 //	defer func() { _ = sfCloser.Close() }()
 //
-// static 模式下 err 恒为 nil;只有 etcd 模式在 etcd 不可达 / 号段占满时才返回 err。
+// err 来源:static 模式仅当 node.node_id 越界(必须落在 [1, NodeMask],0 为 DS 保留);
+// etcd 模式还包括 etcd 不可达 / 号段占满。
 func ProvideSnowflake(
 	ctx context.Context,
 	service string,
@@ -84,6 +87,16 @@ func ProvideSnowflakeN(
 	}
 
 	if sf.NodeIDSource != "etcd" {
+		// static 号段合法性在这里 fail-closed,不能落到 snowflake.NewNode 里 panic:
+		//   - 0        :保留给 UE DS 本地发号器(机器号恒 0),服务端拿 0 会与 DS 本地 guid
+		//                撞进同一玩家背包键空间;
+		//   - >NodeMask:超出 17bit node 段会被静默截断,与别的副本撞号。
+		// 走 error 而非 panic,Must* 才能打出带服务名的配置错误日志再退出。
+		if staticNodeID == 0 || uint64(staticNodeID) > snowflake.NodeMask {
+			return nil, nil, fmt.Errorf(
+				"etcdnode: service %s static node_id=%d out of range [1,%d] (0 is reserved for the UE DS local generator)",
+				service, staticNodeID, snowflake.NodeMask)
+		}
 		return buildNodes(uint64(staticNodeID), n, nil), noopCloser{}, nil
 	}
 

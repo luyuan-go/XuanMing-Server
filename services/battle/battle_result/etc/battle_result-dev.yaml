@@ -37,11 +37,6 @@ node:
     read_timeout: "1s"
     write_timeout: "1s"
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 kafka:
   brokers: ["127.0.0.1:9093"]
   group_id: "pandora-battle-result"

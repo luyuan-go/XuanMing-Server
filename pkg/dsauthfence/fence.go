@@ -212,10 +212,31 @@ type Holder struct {
 	policy      atomic.Uint32
 	reclaimed   bool
 	lost        chan struct{}
+	lostReason  atomic.Value // string;与 lost 同一次 lostOnce 内写入,读者见 closed 即见 reason
 	lostOnce    sync.Once
 	closeOnce   sync.Once
 	intentional atomic.Bool
 }
+
+// 失效原因常量(LostReason)。五个触发分支在最终日志里此前完全同形,事故取证
+// (2026-07-29 ds_allocator 保护性退出)无法继续细分"是失租还是 watch 断",必须区分。
+const (
+	// LostReasonLeaseKeepaliveEnded:capability 租约 keepalive 通道结束
+	// (etcd 断连 / 租约过期 / 被 revoke)。
+	LostReasonLeaseKeepaliveEnded = "lease_keepalive_ended"
+	// LostReasonRequiredWatchError:required 键 watch 返回错误(含 compact revision)。
+	LostReasonRequiredWatchError = "required_watch_error"
+	// LostReasonRequiredDeleted:required 键被删除或值为空,权威策略已不可证明。
+	LostReasonRequiredDeleted = "required_deleted_or_empty"
+	// LostReasonRequiredRegressed:revision / epoch / policy generation 回退,
+	// 或新策略对本 capability 不再合法。
+	LostReasonRequiredRegressed = "required_regressed_or_invalid"
+	// LostReasonRequiredAdvanced:required epoch / policy 正常推进,按契约强制重启
+	// 以便用新 raw value 重新 CAS 注册 capability(不是故障)。
+	LostReasonRequiredAdvanced = "required_advanced"
+	// LostReasonRequiredWatchClosed:watch 通道静默结束(未报错也未取消)。
+	LostReasonRequiredWatchClosed = "required_watch_closed"
+)
 
 // Start 使用已构造的 Backend 启动栅栏。生产调用 Acquire；测试可注入 fake。
 func Start(ctx context.Context, backend Backend, cfg Config) (*Holder, error) {
@@ -376,10 +397,20 @@ func (h *Holder) RequiredPolicyGeneration() uint32 { return h.policy.Load() }
 // Lost 在任何 fencing 条件失效时关闭。调用方必须停止服务并退出。
 func (h *Holder) Lost() <-chan struct{} { return h.lost }
 
+// LostReason 返回本次失效的分支标识(LostReason* 常量之一);尚未失效时返回 ""。
+// 只在观察到 Lost() 已关闭后读取才有意义:reason 与 close 在同一次 lostOnce 内写,
+// 且 Store 先于 close,故"见 closed ⇒ 见 reason"。
+func (h *Holder) LostReason() string {
+	if v, ok := h.lostReason.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
 func (h *Holder) monitorLease(ch <-chan struct{}) {
 	<-ch
 	if !h.intentional.Load() {
-		h.signalLost()
+		h.signalLost(LostReasonLeaseKeepaliveEnded)
 	}
 }
 
@@ -391,15 +422,19 @@ func (h *Holder) monitorRequired(ch <-chan RequiredEvent, service string, suppor
 		if h.intentional.Load() {
 			return
 		}
-		if event.Err != nil || event.Deleted || event.State.Epoch == 0 || event.State.RawValue == "" {
-			h.signalLost()
+		if event.Err != nil {
+			h.signalLost(LostReasonRequiredWatchError)
+			return
+		}
+		if event.Deleted || event.State.Epoch == 0 || event.State.RawValue == "" {
+			h.signalLost(LostReasonRequiredDeleted)
 			return
 		}
 		seen := h.required.Load()
 		if event.Revision <= seenRevision || event.State.Epoch < seen || event.State.Epoch > supported ||
 			event.State.PolicyGeneration <= seenPolicyGeneration ||
 			validateRequiredPolicyForCapability(event.State, service, supported, features) != nil {
-			h.signalLost()
+			h.signalLost(LostReasonRequiredRegressed)
 			return
 		}
 		// Capability acquisition is CAS-bound to the old raw required value.  Even
@@ -410,16 +445,24 @@ func (h *Holder) monitorRequired(ch <-chan RequiredEvent, service string, suppor
 		seenPolicyGeneration = event.State.PolicyGeneration
 		h.required.Store(event.State.Epoch)
 		h.policy.Store(event.State.PolicyGeneration)
-		h.signalLost()
+		h.signalLost(LostReasonRequiredAdvanced)
 		return
 	}
 	if !h.intentional.Load() {
 		// watch 静默结束也不能继续写；不以重连/旧缓存冒充授权。
-		h.signalLost()
+		h.signalLost(LostReasonRequiredWatchClosed)
 	}
 }
 
-func (h *Holder) signalLost() { h.lostOnce.Do(func() { close(h.lost) }) }
+// signalLost 幂等地记录原因并关闭 Lost。reason 必须先于 close 写入,保证任何
+// 观察到 channel 已关闭的 goroutine 都能读到非空 reason(happens-before 由
+// lostOnce 内的顺序 + channel close/receive 建立)。
+func (h *Holder) signalLost(reason string) {
+	h.lostOnce.Do(func() {
+		h.lostReason.Store(reason)
+		close(h.lost)
+	})
+}
 
 // Close 主动释放 capability 并停止 watch。幂等；主动关闭不触发 Lost。
 func (h *Holder) Close() error {

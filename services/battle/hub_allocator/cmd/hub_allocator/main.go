@@ -558,7 +558,8 @@ func main() {
 		}
 		go func() {
 			<-fence.Lost()
-			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止旧 writer 在失租/epoch 回退后继续写")
+			helper.Errorw("msg", "ds_auth_fence_lost", "reason", fence.LostReason(),
+				"hint", "立即退出，禁止旧 writer 在失租/epoch 回退后继续写")
 			os.Exit(1)
 		}()
 		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch(), "reclaimed_stale_capability", fence.Reclaimed())

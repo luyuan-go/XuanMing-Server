@@ -110,3 +110,58 @@ func TestProvideSnowflake_DelegatesToN(t *testing.T) {
 		t.Fatalf("static 模式的 Closer 应为 noopCloser, got %T", closer)
 	}
 }
+
+// TestProvideSnowflakeN_RejectsReservedAndOutOfRangeStaticNodeID 钉住 static 号段守卫:
+// 0 是 UE DS 本地发号器(机器号恒 0)的保留号,服务端拿到它会与 DS 本地 guid 撞进同一
+// 玩家背包键空间;>NodeMask 会被 node 段静默截断成别人的号。两者都必须是**显式错误**,
+// 不能落到 snowflake.NewNode 里 panic —— 那会绕过 Must* 带服务名的配置错误日志。
+func TestProvideSnowflakeN_RejectsReservedAndOutOfRangeStaticNodeID(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		nodeID uint32
+	}{
+		{"reserved-zero", 0},
+		{"exceeds-node-mask", uint32(snowflake.NodeMask) + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			nodes, closer, err := ProvideSnowflakeN(
+				context.Background(), "team", tc.nodeID, config.SnowflakeConf{}, 1)
+			if err == nil {
+				if closer != nil {
+					_ = closer.Close()
+				}
+				t.Fatalf("static node_id=%d 应当报错, got nodes=%v", tc.nodeID, nodes)
+			}
+		})
+	}
+}
+
+// TestProvideSnowflakeN_AcceptsFirstStaticNodeID 保证守卫没有误伤合法下界:
+// 全部 dev 配置用的都是 1 / 2,必须照常放行。
+func TestProvideSnowflakeN_AcceptsFirstStaticNodeID(t *testing.T) {
+	for _, nodeID := range []uint32{1, 2, uint32(snowflake.NodeMask)} {
+		nodes, closer, err := ProvideSnowflakeN(
+			context.Background(), "team", nodeID, config.SnowflakeConf{}, 1)
+		if err != nil {
+			t.Fatalf("static node_id=%d 应当放行: %v", nodeID, err)
+		}
+		if got := nodeSegment(nodes[0].Generate()); got != uint64(nodeID) {
+			t.Fatalf("node 段=%d, want %d", got, nodeID)
+		}
+		_ = closer.Close()
+	}
+}
+
+// TestFirstDynamicNodeIDIsAboveStaticSegment 钉住"动态段必须在静态段之上"这条不变量:
+// static→etcd 的滚更共存窗口里,静态旧副本不写 etcd、对 Acquire 不可见,只有靠号段
+// 不相交才能保证新旧副本永不同号。全部 dev 配置当前用 1 / 2。
+func TestFirstDynamicNodeIDIsAboveStaticSegment(t *testing.T) {
+	const maxStaticNodeIDInUse = 2
+	if FirstDynamicNodeID <= maxStaticNodeIDInUse {
+		t.Fatalf("FirstDynamicNodeID=%d 必须大于在用的最大静态 node_id=%d",
+			FirstDynamicNodeID, maxStaticNodeIDInUse)
+	}
+	if FirstDynamicNodeID == 0 {
+		t.Fatal("nodeID 0 为 UE DS 本地发号器保留,动态段不得从 0 起")
+	}
+}

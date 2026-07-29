@@ -32,6 +32,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	pconfig "github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
+	"github.com/luyuancpp/pandora/pkg/dsauthfence/writerlease"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
@@ -396,7 +397,8 @@ func main() {
 
 	// 5. gRPC + HTTP
 	grpcSrv := server.NewGRPCServer(&cfg, svc, gmSvc)
-	httpSrv := server.NewHTTPServer(&cfg)
+	writerHealth := &server.WriterHealthHolder{}
+	httpSrv := server.NewHTTPServer(&cfg, writerHealth)
 
 	// sweep/capacity watcher 也是 writer；capability 未取得前禁止启动任何后台循环或 RPC。
 	if modelB {
@@ -417,10 +419,77 @@ func main() {
 		defer func() { _ = fence.Close() }()
 		go func() {
 			<-fence.Lost()
-			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止失租/旧 epoch allocator 继续分配或接收 DS 写回")
+			helper.Errorw("msg", "ds_auth_fence_lost", "reason", fence.LostReason(),
+				"hint", "立即退出，禁止失租/旧 epoch allocator 继续分配或接收 DS 写回")
 			os.Exit(1)
 		}()
 		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch(), "reclaimed_stale_capability", fence.Reclaimed())
+
+		// 5.1 心跳扫描的写者继任租约(2026-07-29 事故闭环;推导见 conf.WriterLeaseMode 注释)。
+		//
+		// 目的不是给 sweep 加防脑裂——那由既有的按 match 凭据 CAS 承担(见 biz.SweepWriterLease
+		// 的边界说明);目的是让 ds_allocator 能安全地跑**多副本 + RollingUpdate**,从而使
+		// "单副本重启 = 全服 Heartbeat 不可用 = 所有 Battle DS 在 20s 后踢人" 这条链断开。
+		// capability key 按 (service, PodUID) 唯一,多副本天然共存,故此处不需要放宽任何 fencing。
+		writerMode, wmErr := cfg.Allocator.ResolveWriterLeaseMode()
+		if wmErr != nil {
+			helper.Errorw("msg", "ds_writer_lease_mode_invalid", "err", wmErr)
+			os.Exit(1)
+		}
+		// 机械门禁(与 hub_allocator R11 P0-5 同款):writer_lease_mode != enforce 时"单扫描者"
+		// 只由部署策略(单副本 Recreate)保证;若实际部署是 RollingUpdate,重叠窗口里新旧副本
+		// 都会扫描。进程看不到 spec.strategy,故由 Deployment 把策略作为 annotation 注入 env,
+		// 并由 main_test.go 的清单契约测试钉住 annotation 与真实 strategy 一致。
+		//   · 受管 k8s 内 + env 缺失 → fail-closed 退出(清单回归必须炸,不能靠人看日志);
+		//   · 非 k8s(本机裸跑/dev)+ env 缺失 → 只告警(阻断会把开发环境一起打死)。
+		strategy := strings.TrimSpace(os.Getenv("PANDORA_DEPLOY_STRATEGY"))
+		inManagedK8s := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_HOST")) != ""
+		if strategy != "" {
+			if strings.EqualFold(strategy, "RollingUpdate") && writerMode != conf.WriterLeaseEnforce {
+				helper.Errorw("msg", "ds_writer_lease_rollingupdate_without_enforce",
+					"strategy", strategy, "mode", writerMode,
+					"hint", "RollingUpdate × writer_lease_mode!=enforce = 滚动重叠期出现并发心跳扫描者;"+
+						"要么把 allocator.writer_lease_mode 改 enforce,要么把 Deployment 改回单副本 Recreate")
+				os.Exit(1)
+			}
+			helper.Infow("msg", "ds_writer_lease_strategy_checked", "strategy", strategy, "mode", writerMode)
+		} else if inManagedK8s {
+			helper.Errorw("msg", "ds_writer_lease_strategy_annotation_missing", "mode", writerMode,
+				"hint", "受管 k8s 内必须注入 PANDORA_DEPLOY_STRATEGY(取自 Deployment 的 "+
+					"pandora.dev/deploy-strategy annotation);缺失则无法机械校验 RollingUpdate×非 enforce "+
+					"的并发扫描组合,fail-closed 退出。见 deploy/k8s/services/services.yaml")
+			os.Exit(1)
+		} else {
+			helper.Warnw("msg", "ds_writer_lease_strategy_unknown", "mode", writerMode,
+				"hint", "非 k8s 环境(本机裸跑/dev):跳过部署策略机械校验")
+		}
+		if writerMode == conf.WriterLeaseOff {
+			helper.Warnw("msg", "ds_writer_lease_disabled",
+				"hint", "writer_lease_mode=off:单扫描者只由部署策略保证,只允许单副本 Recreate")
+		} else {
+			hostname, _ := os.Hostname()
+			writerLease, wlErr := writerlease.Start(context.Background(), writerlease.Config{
+				Endpoints:   cfg.DSAuth.Fence.EtcdEndpoints,
+				Election:    "ds_allocator/sweep",
+				Identity:    fmt.Sprintf("%s/%d", hostname, os.Getpid()),
+				LeaseTTLSec: int(cfg.DSAuth.Fence.EtcdLeaseTTLSec),
+				DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
+				// 无 OnElected:接任不需要推进任何 fence 水位(sweep 不携带跨轮次权威意图)。
+			})
+			if wlErr != nil {
+				helper.Errorw("msg", "ds_writer_lease_start_failed", "err", wlErr)
+				os.Exit(1)
+			}
+			defer func() { _ = writerLease.Close() }()
+			if writerMode == conf.WriterLeaseEnforce {
+				uc.SetSweepWriterLease(writerLease)
+			}
+			writerHealth.Set(writerLease, writerMode)
+			helper.Infow("msg", "ds_writer_lease_started",
+				"election", "ds_allocator/sweep", "mode", writerMode,
+				"hint", "enforce:只有当选副本跑心跳超时扫描,热备副本照常服务 Heartbeat/AllocateBattle;"+
+					"warmup:只竞选观测 token 单调,不改扫描行为")
+		}
 	}
 
 	// 6. 后台心跳超时扫描(随进程生命周期启停)

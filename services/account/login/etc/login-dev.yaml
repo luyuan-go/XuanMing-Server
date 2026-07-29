@@ -34,11 +34,6 @@ node:
     conn_max_lifetime: "30m"    # W3 ⑥ 示范
     ping_timeout: "3s"
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 locker:
   account_lock_ttl: 10
   player_lock_ttl: 10

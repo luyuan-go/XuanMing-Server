@@ -623,15 +623,28 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: ds-allocator, namespace: pandora, labels: { app: ds-allocator } }
 spec:
-  replicas: 1
-  # 本跳(warming 双阈值判弃,INC-20260727-001)必须 Recreate:旧二进制的 sweep 对
-  # warming 恒用 15s 单阈值,且没有任何运行时手段让它停手 —— 默认 RollingUpdate 会先起
-  # 新副本再终止旧副本,共存窗口内旧 sweep 仍会误删新建 warming(大图冷加载分配必失败)。
-  # 这是 F:\work\CLAUDE.md 验收底线「首次引导升级」例外的同型:零共存与零重启窗口不可
-  # 兼得,按完整性优先选零共存;单副本 Recreate 的秒级重启窗口内 AllocateBattle 返回
-  # UNAVAILABLE,matchmaker 自动重试,可接受。双阈值版本全量铺开后,后续升级新旧语义
-  # 一致,可评估恢复 RollingUpdate。验证步骤见事故档案 §9。
-  strategy: { type: Recreate }
+  # 2 副本 + RollingUpdate(2026-07-29 事故闭环)。此前是 replicas:1 + Recreate,而
+  # ds-allocator 整个进程被 dsauthfence capability 门控、失租即 os.Exit(1) —— 于是**任何**
+  # 重启(崩溃 / 失租 / 例行换镜像)都会让 DSAllocatorService/Heartbeat 整体不可用,而
+  # Battle DS 在 pkg/placement.DSFenceLeaseMaxSeconds=20s 内拿不到凭据绑定 ACK 就会自我
+  # fencing 踢掉全部在场玩家。2026-07-29 06:13 实测一次失租→重新 Ready 用了 160s(≈8× 租约),
+  # §16.8「重启预算必须闭合」不成立,验收底线 7「升级不得打断对局」被破。
+  #
+  # 修的是可用性,不是 fencing:capability key 按 (service, PodUID) 唯一(pkg/dsauthfence
+  # 注释),异 Pod 副本各持异 key、永不互相接管,故多副本本就共存;唯一需要串行的
+  # 「同一未分区权威的单写者循环」是心跳超时扫描,已由 allocator.writer_lease_mode=enforce
+  # 的 etcd 选举(election=ds_allocator/sweep)承担。其余写路径按 match_id 分区并在 Redis
+  # 事务内按精确凭据身份 CAS,属 §9.21 的「可并行 worker + 幂等 CAS」,不串行化。
+  #
+  # 原 Recreate 的理由(INC-20260727-001 warming 双阈值首次引导升级)是一次性的:旧二进制
+  # 的 sweep 对 warming 恒用 15s 单阈值。该版本已全量铺开,新旧语义一致,例外到期。
+  #
+  # ⚠ 首次滚动到「含 writerlease 的镜像」必须两步走,否则重叠窗口里旧二进制不参与竞选、
+  #   不受选举约束 = 无保护并发扫描:
+  #     ① 先临时改回 strategy:{type:Recreate} + replicas:1 只换镜像;
+  #     ② 待新镜像全量后再单独 apply 本 strategy/replicas(strategy 变更不重建 Pod,零额外窗口)。
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
   selector: { matchLabels: { app: ds-allocator } }
   template:
     metadata:
@@ -640,8 +653,21 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "51020"
         prometheus.io/path: /metrics
+        # 机械门禁:必须与本 Deployment 的 spec.strategy.type 逐字一致(cmd/ds_allocator/
+        # main_test.go 的清单契约测试钉住)。进程读它做 fail-closed 校验:
+        # RollingUpdate × writer_lease_mode!=enforce 直接启动失败,不留无保护并发扫描组合。
+        pandora.dev/deploy-strategy: "RollingUpdate"
     spec:
       serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
+      # 两副本必须落在不同节点:同节点共命运(本次事故正是单节点落盘 I/O 卡死),
+      # 同时挂掉就等于没有多副本。单节点开发集群下 preferred 不会阻塞调度。
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: { matchLabels: { app: ds-allocator } }
       containers:
         - name: ds-allocator
           # :dev 回归理由见 matchmaker 注释(修复已入 main,临时钉定动机消失)。
@@ -650,17 +676,37 @@ spec:
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
             - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
+            - { name: PANDORA_DEPLOY_STRATEGY, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/deploy-strategy']" } } }
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { name: grpc, containerPort: 50020 } ]
+          # 51020 是运维面 HTTP(/metrics + /healthz/writer)。此前只声明 50020,而
+          # prometheus.io/port 指向 51020 —— 集群内根本没有到写者指标的路径(同 hub_allocator
+          # R11 P0-2)。sum(pandora_ds_allocator_writer_held)==0 是「长期无人扫描」的告警信号。
+          ports: [ { name: grpc, containerPort: 50020 }, { name: ops-http, containerPort: 51020 } ]
+          # readiness 只看 gRPC:热备副本(未当选扫描者)照常服务 Heartbeat/AllocateBattle,
+          # 绝不能把 readiness 门成"必须是写者"——那会在滚动升级时死锁,并把"扫描降级"
+          # 放大成"整服零 allocator 端点",正是本次要消除的东西。
           readinessProbe: { grpc: { port: 50020 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: ds-allocator.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
+# PDB:滚动升级/节点排空时至少保留 1 个可服务副本。没有它,kubectl drain 会把两个
+# 副本一起赶走,Heartbeat 断流 >20s,全部在场对局被 Battle DS 自我 fencing 踢掉。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: ds-allocator, namespace: pandora }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: ds-allocator } }
+---
 apiVersion: v1
 kind: Service
 metadata: { name: ds-allocator, namespace: pandora }
-spec: { selector: { app: ds-allocator }, ports: [ { name: grpc, appProtocol: grpc, port: 50020, targetPort: 50020 } ] }
+spec:
+  selector: { app: ds-allocator }
+  ports:
+    - { name: grpc, appProtocol: grpc, port: 50020, targetPort: 50020 }
+    - { name: ops-http, appProtocol: http, port: 51020, targetPort: 51020 }
 ---
 apiVersion: apps/v1
 kind: Deployment

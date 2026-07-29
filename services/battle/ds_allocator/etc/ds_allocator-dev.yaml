@@ -27,11 +27,6 @@ node:
     read_timeout: "1s"
     write_timeout: "1s"
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 # ── DS 启动后端模式(标准两模式开关)─────────────────────────────────────────
 # mode 单一开关决定战斗 DS 怎么起,与 hub_allocator.mode 对齐:
 #   "local"  → 本机直接 exec 打包好的 Windows DS 进程(Windows 单机自测,见下方 local_ds)
@@ -96,6 +91,15 @@ allocator:
   owner_addr: "127.0.0.1:50017"
   # sweep_interval: 后台心跳超时扫描间隔
   sweep_interval: "5s"
+  # writer_lease_mode: 心跳超时扫描的写者继任租约档位(enforce|warmup|off;留空=enforce)。
+  # 只有当选副本跑扫描,热备副本照常服务 Heartbeat/AllocateBattle —— 这是 ds-allocator 能
+  # 跑多副本 + RollingUpdate 的前提(INC-20260729-001:单副本重启会让全部在场对局被
+  # Battle DS 20s 授权租约判死踢人)。仅 Model B(agones + ds_auth enforce)下生效,
+  # dev 的 local/mock 模式不启动租约,此项为惰性。
+  #   · 首次从不含 writerlease 的旧镜像升级时改 warmup 走两跳;
+  #   · 回滚必须与 Deployment 同步改(off 必须配 replicas:1 + Recreate),否则启动期门禁
+  #     会 fail-closed 拒绝启动 —— 这是有意的,不要单改一边。
+  writer_lease_mode: "enforce"
   # battle_ttl: 战斗 DS 镜像 Redis key TTL(防僵尸镜像)
   battle_ttl: "2h"
   # empty_battle_timeout: 空场超时兜底(默认 5m)。对局活跃(ready/running)但 DS 上报

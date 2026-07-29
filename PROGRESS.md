@@ -2053,3 +2053,43 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
 - **边缘 Envoy 钉定 v1.38.1**(与 latest 当日同 imageID,防 latest 漂移;[7.5/8] 负责 load)。
 - 文案纠偏:fleet :dev 陈述、16Gi 门机理(cgroup OOM 而非调度 Pending,审计实测容量 47Gi
   vs 限额 40Gi 的口径错位)。
+
+## 2026-07-29 INC-20260729-001:ds_allocator 单副本重启打断全部在场对局
+
+事故档案:[docs/incidents/2026-07-29-p0-ds-allocator-single-replica-restart-kills-battles.md](docs/incidents/2026-07-29-p0-ds-allocator-single-replica-restart-kills-battles.md)(未关闭)
+
+- **定性**:节点落盘 I/O 卡顿(etcd WAL `fdatasync` 39.4s)只是触发条件;结构性根因是
+  ds_allocator `replicas:1 + Recreate` + 整进程被 capability 门控失租即 `os.Exit(1)`,
+  于是**任何重启(含例行换镜像)都让 Heartbeat 断流 160s**,远超 Battle DS 的 20s 授权租约
+  (`pkg/placement.DSFenceLeaseMaxSeconds`)→ DS 自我 fencing 踢掉在场玩家。
+  `§16.8` 重启预算不闭合、验收底线 7「升级不得打断对局」被破。**无数据丢失/回档/双写。**
+- **修的是可用性,不是 fencing**:capability key 按 `(service, PodUID)` 唯一,异 Pod 副本
+  各持异 key,多副本本就合法;唯一需串行的是心跳超时扫描。
+  - `deploy/k8s/services/services.yaml`:ds-allocator → `replicas:2` +
+    `RollingUpdate(maxSurge 1/maxUnavailable 0)` + `PodDisruptionBudget minAvailable:1` +
+    跨节点 preferred 反亲和 + 补声明 `containerPort 51020`(此前 prometheus 注解指向它却无端口)。
+  - `internal/biz/allocator.go`:新增 `SweepWriterLease` + `sweepIsLeader`,`RunHeartbeatSweep`
+    与首扫都过领导权门;**明确写清为什么 sweep 不需要存储级 fencing token**(它不携带跨轮次
+    权威意图,每轮从 Redis 重算,写是同事务 CAS;`sweepDeferUntil`/`ownerAdmitted` 已是非权威
+    调度提示与可重建缓存)——这是 `§9.21`「单写者循环选举」与「可并行 worker 幂等 CAS」的分界。
+  - `cmd/ds_allocator/main.go`:接 `pkg/dsauthfence/writerlease`(`election=ds_allocator/sweep`,
+    无 `OnElected`)+ 机械门禁(`RollingUpdate × mode!=enforce` 与受管 k8s 内缺
+    `PANDORA_DEPLOY_STRATEGY` 均 fail-closed)。
+  - `internal/conf/conf.go`:`allocator.writer_lease_mode`(enforce/warmup/off,空=enforce,
+    非法值 fail-fast),与 hub_allocator 同一档位语义。
+  - `internal/server/http.go`:`/healthz/writer` + 6 个 `pandora_ds_allocator_writer_*` 指标;
+    **不接 readiness**(热备副本必须继续服务 Heartbeat,否则等于没有多副本)。
+  - `deploy/grafana/.../rules.yaml`:新增 critical `pandora-ds-allocator-no-sweep-writer`
+    (`sum(...writer_held)==0` for 1m),覆盖「补偿链停摆但 RPC 全正常」这种外部无感故障。
+- **观测缺口修复**:`pkg/dsauthfence` 的 `signalLost` 带 reason(6 个分支常量)+ `LostReason()`,
+  5 个服务的 `ds_auth_fence_lost` 全部打印。此前五个分支在日志里完全同形,本次取证卡死在这。
+- **UE 客户端(待用户编译)**:`UMyDsRecoveryCoordinator::AuthorityWaitDeadlineSeconds` 是绝对
+  时刻且只在 `==0` 时武装,而清零只覆盖 4 个 `Operation` 复位点中的 2 个 —— 两处 admission
+  确认终态漏配对,上一轮残留的过期 deadline 被下一轮断线继承,0ms 即误报「已等满 30s」
+  (事故当天弹窗提前 35 秒)。已在两处补 `ResetAuthorityWaitState()` 并把不变量写进头文件。
+- **测试**:新增 13 个用例(fence 原因 6 + 扫描领导权门 3 + 档位解析 1 + 清单契约 3),
+  ds_allocator / dsauthfence 两模块 `go test ./...` 全绿,4 个受影响服务模块 build+vet 绿。
+- **未做/阻断**:`go test -race`(本机无 gcc,须 Linux/CI 补跑)、滚动升级故障注入与玩家 E2E、
+  UE 编译、未 commit 未构建未部署;宿主机 360 白名单与 vhdx 迁盘需用户操作。
+  ⚠ 首次滚动必须两步走(先 Recreate 换镜像,再单独 apply strategy/replicas),否则旧二进制
+  不参与选举 = 无保护并发扫描窗口。

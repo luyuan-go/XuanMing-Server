@@ -218,7 +218,8 @@ func (u *LoginUsecase) SetMatchContextResolver(r data.MatchContextResolver) {
 // NewLoginUsecase 构造 LoginUsecase。
 //
 // repo / sessions 必填;notifier / hubAssigner 可为 nil(弱依赖,nil 时降级)。
-// sf 用 svc.BaseContext.Snowflake;hubDSAddr / hubRegion 从 conf 读;signer / legacy verifier /
+// sf 由 main.go 经 etcdnode.MustProvideSnowflake 装配(static / etcd 两态 + 失租 fencing
+// 退出契约都收敛在那里,不要改回裸 snowflake.NewNode);hubDSAddr / hubRegion 从 conf 读;signer / legacy verifier /
 // v2 verifier 由 main 层按独立信任域构造后传进来。
 //
 // W4 ⑥:新增 hubAssigner + hubRegion。hubAssigner 非 nil 时,Login 调 hub_allocator.AssignHub
@@ -286,6 +287,24 @@ func (u *LoginUsecase) SetRequireHubAssignmentBinding(require bool) {
 
 func (u *LoginUsecase) rs256DSTicketProfileEnabled() bool {
 	return u != nil && u.v2Verifier != nil
+}
+
+// strictBattleGateProfile 是「战斗态查不到时能否放行进 Hub」的唯一档位判据。
+//
+// 它必须与 resolveHub 出票档位判据(requireHubAssignmentBinding || rs256DSTicketProfileEnabled,
+// 见本文件 IssueDSTicket 前的两处校验)**逐字一致**:两者一旦分叉,就会出现
+// 「弱档放行 + 强档出票」的组合——玩家在依赖抖动时被判定为"不在战斗",却拿到一张
+// hub_allocator 签发、DS 会正常接受的正式绑定票,于是同时存在于 Battle 与 Hub 两台
+// 可操作 DS(§9 不变量 1)。
+//
+// 两轴正交:requireHubAssignmentBinding 是归属绑定的滚动激活栅栏(默认 false),
+// rs256DSTicketProfileEnabled 只看 login.ds_ticket 是否配了 verifier。因此仅按前者分档
+// 会漏掉"RS256 已配、binding 未激活"这一激活窗口。
+//
+// 弱降级(返回 false)只允许存在于两轴都关的 legacy HS256 dev 裸跑档——那里 login 自签票,
+// 本就没有生产级权威可言,保留历史行为不影响线上。
+func (u *LoginUsecase) strictBattleGateProfile() bool {
+	return u != nil && (u.requireHubAssignmentBinding || u.rs256DSTicketProfileEnabled())
 }
 
 // Login 走真实流程(W3 ②):
@@ -396,7 +415,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 原对局 match_id(Battle→Hub 回流 fence),签进 hub 票据 source_match_id claim。
 	var hubFenceMatchID uint64
 	if u.notifier == nil {
-		if u.requireHubAssignmentBinding {
+		if u.strictBattleGateProfile() {
 			return nil, errcode.New(errcode.ErrUnavailable,
 				"player locator is required before B1 hub assignment")
 		}
@@ -669,7 +688,7 @@ func (u *LoginUsecase) resolveBattleAuthority(ctx context.Context, playerID uint
 	}
 	ma, merr := u.matchResolver.ResolvePlayerMatchContext(ctx, playerID)
 	if merr != nil {
-		if u.requireHubAssignmentBinding {
+		if u.strictBattleGateProfile() {
 			return data.BattleLocation{}, nil, errcode.NewCause(errcode.ErrUnavailable, merr,
 				"cannot consult durable match authority; retry")
 		}
@@ -695,7 +714,7 @@ func (u *LoginUsecase) resolveBattleAuthority(ctx context.Context, playerID uint
 		return bl, &ma, nil
 	default:
 		// UNKNOWN(索引漂移/坏记录):B1 不猜,可重试;local/off 弱降级。
-		if u.requireHubAssignmentBinding {
+		if u.strictBattleGateProfile() {
 			return data.BattleLocation{}, nil, errcode.New(errcode.ErrUnavailable,
 				"durable match authority state unknown; retry")
 		}
@@ -729,7 +748,7 @@ func (u *LoginUsecase) tryBattleReconnect(
 	bl, ma, err := u.resolveBattleAuthority(ctx, playerID)
 	if err != nil {
 		h.Warnw("msg", "battle_location_query_failed", "err", err, "player_id", playerID)
-		if u.requireHubAssignmentBinding {
+		if u.strictBattleGateProfile() {
 			return nil, 0, errcode.NewCause(errcode.ErrUnavailable, err,
 				"cannot prove player is outside battle before B1 hub assignment")
 		}
@@ -885,7 +904,7 @@ func (u *LoginUsecase) resolveResumeRoute(ctx context.Context, playerID uint64) 
 	}
 	bl, ma, qerr := u.resolveBattleAuthority(ctx, playerID)
 	if qerr != nil {
-		if u.requireHubAssignmentBinding {
+		if u.strictBattleGateProfile() {
 			return ResumeContextResult{}, errcode.NewCause(errcode.ErrUnavailable, qerr,
 				"cannot resolve battle location; retry")
 		}
@@ -1075,7 +1094,7 @@ func (u *LoginUsecase) ResolveHubEndpointFromMatch(ctx context.Context, playerID
 func (u *LoginUsecase) guardHubRouteAgainstActiveBattle(ctx context.Context, playerID uint64) (uint64, error) {
 	h := plog.With(ctx)
 	if u.notifier == nil {
-		if u.requireHubAssignmentBinding {
+		if u.strictBattleGateProfile() {
 			return 0, errcode.New(errcode.ErrUnavailable,
 				"player locator is required before hub ticket issuance")
 		}
@@ -1083,7 +1102,7 @@ func (u *LoginUsecase) guardHubRouteAgainstActiveBattle(ctx context.Context, pla
 	}
 	bl, _, err := u.resolveBattleAuthority(ctx, playerID) // hub 门只关心在局与否,不需要 game_mode
 	if err != nil {
-		if u.requireHubAssignmentBinding {
+		if u.strictBattleGateProfile() {
 			return 0, errcode.NewCause(errcode.ErrUnavailable, err,
 				"cannot prove player is outside battle before hub ticket issuance")
 		}

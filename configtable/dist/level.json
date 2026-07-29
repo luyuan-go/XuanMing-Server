@@ -26,14 +26,16 @@
       "asset_path": "/Game/Test/Level/Fight/Lvl_Test_Fight.Lvl_Test_Fight",
       "game_mode_class": "/Script/Pandora.PandoraBattleGameMode",
       "category": 4,
-      "team_size": 1
+      "team_size": 1,
+      "game_mode": "5v5_ranked"
     },
     {
       "id": 5,
       "name": "测试场景",
       "asset_path": "/Game/Test/Level/_Test/Level_TopDown_Test02.Level_TopDown_Test02",
       "category": 4,
-      "team_size": 1
+      "team_size": 1,
+      "game_mode": "5v5_ranked"
     },
     {
       "id": 6,
@@ -42,7 +44,8 @@
       "game_mode_class": "/Script/Pandora.PandoraBattleGameMode",
       "category": 4,
       "show_in_match_list": true,
-      "team_size": 1
+      "team_size": 1,
+      "game_mode": "5v5_ranked"
     },
     {
       "id": 7,
@@ -52,7 +55,8 @@
       "category": 4,
       "show_in_match_list": true,
       "team_size": 1,
-      "allow_exit": true
+      "allow_exit": true,
+      "game_mode": "pve_coop"
     },
     {
       "id": 8,
@@ -63,7 +67,8 @@
       "disable_ui_shortcut": true,
       "show_in_match_list": true,
       "team_size": 1,
-      "allow_exit": true
+      "allow_exit": true,
+      "game_mode": "pve_coop"
     },
     {
       "id": 9,
@@ -72,7 +77,8 @@
       "game_mode_class": "/Script/Pandora.PandoraBattleGameMode",
       "category": 4,
       "show_in_match_list": true,
-      "team_size": 3
+      "team_size": 3,
+      "game_mode": "5v5_ranked"
     },
     {
       "id": 10,
@@ -82,7 +88,8 @@
       "category": 4,
       "show_in_match_list": true,
       "team_size": 1,
-      "allow_exit": true
+      "allow_exit": true,
+      "game_mode": "pve_coop"
     }
   ]
 }

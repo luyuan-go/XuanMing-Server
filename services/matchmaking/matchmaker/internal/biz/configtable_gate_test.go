@@ -190,6 +190,48 @@ func TestStartMatch_MapGateHotReload(t *testing.T) {
 	}
 }
 
+// TestStartMatch_MapGameModeCrossCheck 玩法模式交叉校验(CLAUDE.md §17.1 服务端一侧):
+// 关卡表 game_mode 与本实例 cfg.GameMode 不等即拒——挡住伪造/选错的 x-pandora-game-mode
+// 路由头,避免「PVE 图进 PVP 池空排队到 ticket TTL」的静默故障。
+// 同时锁住 §9.21 兼容口径:留空(旧批次表无本列)只跳过校验,绝不据此拒绝,
+// 否则新二进制 + 旧表在滚动升级窗口内会拒掉所有匹配。
+func TestStartMatch_MapGameModeCrossCheck(t *testing.T) {
+	// 本实例承接 pvp 池。
+	f := newFixtureWith(t, 8500, func(c *conf.MatchConf) {
+		c.MapId = 6
+		c.GameMode = "5v5_ranked"
+	})
+
+	dir := t.TempDir()
+	writeLevelBatch(t, dir, 100, []*configpb.LevelRow{
+		{Id: 6, Name: "MOBA战斗", AssetPath: "/Game/L/MobaLevel.MobaLevel",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, GameMode: "5v5_ranked"},
+		{Id: 7, Name: "松林镇副本", AssetPath: "/Game/L/SonglinTown.SonglinTown",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, GameMode: "pve_coop"},
+		{Id: 8, Name: "旧批次无本列", AssetPath: "/Game/L/Legacy.Legacy",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE},
+	})
+	store := configtable.NewStore()
+	if _, err := store.Load(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	f.uc.SetConfigTables(store)
+	ctx := context.Background()
+
+	// 同模式放行。
+	if _, err := f.uc.StartMatch(ctx, 8501, 8501, 5001, 6); err != nil {
+		t.Fatalf("同 game_mode 的 map 6 应放行: %v", err)
+	}
+	// 跨模式拒绝:pve_coop 的图被送进 5v5_ranked 实例。
+	if _, err := f.uc.StartMatch(ctx, 8502, 8502, 5002, 7); errcode.As(err) != errcode.ErrMatchInvalidMap {
+		t.Fatalf("跨 game_mode 的 map 7 应拒绝 ErrMatchInvalidMap: %v", err)
+	}
+	// 留空 = 无法判定,不是错误证据:必须放行(§9.21 新二进制兼容旧批次表)。
+	if _, err := f.uc.StartMatch(ctx, 8503, 8503, 5003, 8); err != nil {
+		t.Fatalf("game_mode 留空(旧批次表)应放行而非拒绝: %v", err)
+	}
+}
+
 // TestStartMatch_MapGateDisabled 未启用配置表(tables=nil)保持历史行为:任意 map_id 放行。
 func TestStartMatch_MapGateDisabled(t *testing.T) {
 	f := newFixture(t, 8300)

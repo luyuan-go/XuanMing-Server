@@ -5,10 +5,16 @@
 // 用法:
 //
 //	type ServiceContext struct {
-//	    *svc.BaseContext             // 公共:Redis / Snowflake / RedisLocker / KafkaProducer
+//	    *svc.BaseContext             // 公共:Redis / RedisLocker / KillSwitch
 //	    PlayerLocatorClient plpb.PlayerLocatorClient  // 业务私有
 //	    MyBusinessHandler   *myHandler
 //	}
+//
+// ⚠️ 本模板**刻意不提供 snowflake 发号器**。发号器必须由服务 main.go 经
+// pkg/snowflake/etcdnode.MustProvideSnowflake(N) 装配:它一处收敛了 static / etcd 两态
+// 与失租 fencing 退出契约,而在这里 snowflake.NewNode(node_id) 只有 static 一条路
+// ——多副本(含每次滚更的新旧并存窗口)会双活发逐位相同的重号,且失租无人 fencing。
+// 详见 docs/design/infra.md §8.1 / §8.2。
 //
 //	func NewServiceContext(c config.Config) *ServiceContext {
 //	    base := svc.MustNewBaseContext(c.Base)
@@ -31,7 +37,6 @@ import (
 	"github.com/luyuancpp/pandora/pkg/killswitch"
 	"github.com/luyuancpp/pandora/pkg/redislock"
 	"github.com/luyuancpp/pandora/pkg/redisx"
-	"github.com/luyuancpp/pandora/pkg/snowflake"
 )
 
 // BaseContext 是所有 Pandora 服务共享的运行时上下文。
@@ -42,9 +47,6 @@ type BaseContext struct {
 	// addrs / master_name 自动选型:单实例 / Sentinel 主从 / Cluster 分片。留空 = 单实例,
 	// 行为与旧版完全一致。详见 docs/design/scale-cellular-20m.md 的单 Cell 扩容口径。
 	RedisClient redis.UniversalClient
-
-	// Snowflake 是该服务用的 ID 生成器,NodeID 取 config.Node.NodeId。
-	Snowflake *snowflake.Node
 
 	// Locker 是 Redis 分布式锁实例(用 pandora:lock: 前缀)。
 	Locker *redislock.RedisLocker
@@ -81,20 +83,16 @@ func MustNewBaseContext(c config.Base) *BaseContext {
 	}
 	cancel()
 
-	// 2. Snowflake
-	sf := snowflake.NewNode(uint64(c.Node.NodeId))
-
-	// 3. Locker
+	// 2. Locker
 	lk := redislock.NewRedisLocker(rdb)
 
-	// 4. Kill-Switch(RPC 级临时关停)。fail-open:配置缺失 / 源建不起来都不阻断启动。
+	// 3. Kill-Switch(RPC 级临时关停)。fail-open:配置缺失 / 源建不起来都不阻断启动。
 	ks := mustSetupKillSwitch(c.KillSwitch)
 
 	klog.Infof("[svc] BaseContext ready node=%d redis=%s", c.Node.NodeId, rc.Host)
 
 	return &BaseContext{
 		RedisClient: rdb,
-		Snowflake:   sf,
 		Locker:      lk,
 		KillSwitch:  ks,
 		Cfg:         c,

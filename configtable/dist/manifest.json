@@ -1,8 +1,8 @@
 {
-  "version": 20260727001,
-  "generated_at_ms": 1785157280721,
+  "version": 20260729001,
+  "generated_at_ms": 1785312962023,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-r1502",
+  "source_rev": "local-uncommitted-20260729",
   "tables": [
     {
       "name": "item",
@@ -15,7 +15,7 @@
       "name": "level",
       "file": "level.json",
       "proto": "pandora.config.v1.LevelTableData",
-      "checksum": "sha256:fd3b1cfa70570659e11ab02d8848eea376aaa8c90994ee7154b50cb20e7dff00",
+      "checksum": "sha256:3290e96ffd2293369b6aeee2f47a87b2111d665ea75b9055b8b183924ae51b2a",
       "rows": 10
     },
     {

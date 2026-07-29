@@ -24,11 +24,6 @@ node:
     db: 0
     dial_timeout: "2s"          # W3 ⑥ 示范
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 locator:
   # infra.md §3.2 表中 30s heartbeat。SetLocation 每次刷 TTL,30s 不刷 → 视为离线。
   # W3 ⑥ 起可直接 yaml 写字符串:

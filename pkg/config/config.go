@@ -261,11 +261,13 @@ func (k KafkaConfig) ParseCompression() sarama.CompressionCodec {
 }
 
 // SnowflakeConf 雪花算法参数。
+//
+// ⚠️ 位布局与 Epoch 是 pkg/snowflake 的**编译期常量**([time:32][node:17][step:15],
+// Epoch=1781161165),不是配置项——历史上这里曾有 epoch/node_bits/step_bits 字段,
+// 但从未被任何代码消费,且 yaml 里的旧值(1773446400)与代码常量早已漂移;为防有人
+// 改 yaml 以为能生效(改 Epoch 会让新旧 ID 时间段错位、批量重号),已整体删除。
+// 真要改布局只能改 pkg/snowflake 常量并全量重编译,且上线后不可再改(历史 ID 已定型)。
 type SnowflakeConf struct {
-	Epoch    int64  `yaml:"epoch,omitempty" json:"epoch,omitempty"`         // 默认 1773446400 (2026-03-14 UTC)
-	NodeBits uint32 `yaml:"node_bits,omitempty" json:"node_bits,omitempty"` // 默认 17
-	StepBits uint32 `yaml:"step_bits,omitempty" json:"step_bits,omitempty"` // 默认 15
-
 	// NodeIDSource 决定 snowflake nodeID 来源:
 	//   - ""/"static":用 node.node_id 静态分配(单副本 / dev 默认)。
 	//   - "etcd":进入 k8s 多副本动态扩缩阶段,用 etcd Lease 自动抢占 nodeID(同服务内唯一、跨服务可复用)。

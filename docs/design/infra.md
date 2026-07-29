@@ -403,8 +403,38 @@ Envoy 是基础设施组件,**不是 go 服务**。它做:
      -> 事务抢占 /pandora/snowflake/node/<id> 并绑定 lease
      -> 后台 KeepAlive 续租
      -> KeepAlive channel 关闭 = 租约丢失
+        或 距上次续租确认超过 TTL*2/3 = 自 fencing(2026-07-28)
      -> 进程主动退出,避免两个活进程共用同一 nodeID
 ```
+
+**2026-07-28 双活窗口收口(pkg/snowflake/etcdnode)**:
+- **自 fencing 提前量**:clientv3 的失租感知天然滞后于服务端过期点(client 端 deadline =
+  收到续租响应时刻 + TTL,恒晚于服务端授予时刻 + TTL;其 deadlineLoop 每 1s 才扫一轮)。
+  只等 channel 关闭,分区中的旧 holder 会在 nodeID 已可被新副本抢走之后再发号 1~2s。
+  现在 keepAliveLoop 以「上一次续租确认」为锚,超过 TTL*2/3(15s ⇒ 10s,容忍丢一拍)
+  无确认即触发 Lost 停发退出,**先于**服务端过期点,新旧 holder 发号窗口不再重叠。
+- **Close 不再立即 Revoke**:优雅退出立即释放会让 nodeID 在同一个日历秒内被新副本抢走,
+  与本进程同秒已发的号逐位重号(snowflake 时间粒度是秒,新 holder step 从 0 数起)。
+  改为停止续租、让 lease 于「最后一次续租 + TTL」自然过期,形成 ≥ TTL*2/3 的复用隔离期,
+  覆盖秒粒度与现实 NTP 偏差;131072 个号短暂多占一个无稀缺压力。异常路径(崩溃/OOM)
+  本就走 TTL 自然过期,隔离期天然成立。TTL 因此升格为**正确性参数**(隔离期下限),
+  Acquire 内钳制最小 5s。
+- **低位号段保留,etcd 抢占区间为 `[FirstDynamicNodeID=8, MaxNodeID)`**:
+  - `0` 给 UE DS 的本地发号器(`FMySnowflake`,Bag 堆叠 guid)——它机器号恒为 0,而服务端
+    铸的 instance_id 会与 DS 本地 guid 汇进同一玩家背包键空间,服务端若也拿到 0,同秒同步
+    即撞键,bag 的 `DuplicateGuid` fail-closed 会卡住玩家领取;
+  - `1..7` 给 static 模式(`node.node_id`,现值 1/2)。**static→etcd 首跳的滚更共存窗口里,
+    仍在跑的静态旧副本不写 etcd、对 `Acquire` 完全不可见**;若动态段从 1 起扫,新副本会领到
+    旧副本正在用的号,双活发重号。号段不相交后新旧永不同号,该跳不必 Recreate、也不必人工
+    预置占位 key。
+  `ProvideSnowflakeN` 在 static 分支对 `node_id ∈ [1, NodeMask]` fail-closed 校验(0 与越界
+  都返回显式错误而非 panic);新增静态 node_id 必须落在 `[1, 8)`,不够用时抬高该常量即可。
+- **Txn 响应丢失不再制造幽灵 key**:抢占事务超时/断连只说明响应没拿到,服务端可能已 Put
+  成功。此时直接扫下一个号会让**一个 lease 挂两个 key**,幽灵 key 被 KeepAlive 续活到进程
+  退出、永久占号。现在失败后先 `Get` 复核该 key 是否已挂本 lease,是则直接认领。
+- **扫描熔断**:连续 5 次传输层失败即判 etcd 不可用返回错误。此前 etcd 黑洞时每个 Txn 吃满
+  dial 超时,131072 个候选顺序扫完以天计,而 `Must*` 传的是 `context.Background()`(无
+  deadline),循环里的 ctx 检查永不触发。
 
 注意:用了 etcd 之后仍然需要一个后台 `KeepAlive` / session monitor,但这不是 Redis 方案里自己拼的"看门狗"。区别是:
 - etcd Lease 是 nodeID 独占权的事实来源;
@@ -443,11 +473,15 @@ snowflake 的唯一性**只在「同一个 `*snowflake.Node` 对象内」成立*
 所以只要两个服务铸**同一种** ID,把 `node_id_source` 改成 `etcd` 非但不解决问题,
 还会让它们稳定拿到相同的 nodeID。
 
-现存实例:`instance_id` 由 inventory(`GrantInstances`)和 mail(`buildClaimIntent`)
-两处铸造,两批实例可能汇进同一玩家的同一个背包段,被 `data/bag_apply.go` 的
-`duplicate instance` 检查 fail-closed 拒掉(玩家领不了那封邮件)。
-当前修法是 static 下给两服务分配不同 `node_id`(inventory=1,mail=2,配置里有注释);
-若将来切 etcd,两者必须显式共用同一个 `etcd_service_name`。
+现存实例(两例,均已在 `gen_cluster_config.ps1` 的 `$SnowflakeEtcdNamespaceOverride`
+落实共用命名空间,2026-07-28):
+- `instance_id` 由 inventory(`GrantInstances`)和 mail(`buildClaimIntent`)两处铸造,
+  两批实例可能汇进同一玩家的同一个背包段,被 `data/bag_apply.go` 的 `duplicate instance`
+  检查 fail-closed 拒掉(玩家领不了那封邮件)。static(dev)下靠 inventory=1 / mail=2
+  错开;集群 etcd 下两者共用 `etcd_service_name: "instance-id"`。
+- `match_id`(与 ticket_id)由 matchmaker 与 matchmaker-pve 两个部署(同一二进制)铸造,
+  流入同一 battle 结算链路,而 match_id 是战斗结果幂等键(§9.2)。static 下靠 pvp=1 /
+  pve=2 错开;集群 etcd 下两者共用 `etcd_service_name: "matchmaker"`。
 
 新增「两个服务铸同一种 ID」的设计前,先问一句:能不能只让**一个**服务铸(§9.22 唯一权威)。
 
@@ -455,11 +489,19 @@ snowflake 的唯一性**只在「同一个 `*snowflake.Node` 对象内」成立*
 
 static 模式下所有副本共用配置里的同一个 `node_id`,两个副本发出的号逐位相同。
 集群产物由 `tools/scripts/gen_cluster_config.ps1` 的 `$MultiReplicaSnowflakeServices`
-清单机械注入 etcd 模式(当前:`auction`、`login`)。判据是「可能同时跑多于一个副本
-**且**会发 snowflake ID」——`player-locator` 有 2 副本但不发号,故不在列。
+清单机械注入 etcd 模式。判据是「可能同时跑多于一个副本**且**会发 snowflake ID」——
+`player-locator` 有 2 副本但不发号,故不在列。
+
+**2026-07-28 起清单 = 全部 13 个发号部署**(login / friend / chat / leaderboard / guild /
+mail / team / matchmaker / matchmaker-pve / trade / dialogue / inventory / auction):
+services.yaml 除 ds-allocator 外全是 RollingUpdate(§9.16/§9.21 不停服硬要求),
+replicas=1 + maxSurge 意味着**每次发版都有新旧两副本并存窗口**,static 同 node_id 在该
+窗口内就是双活发重号——这不是「将来上金丝雀才有」的问题,所以不再按服务逐个纳入。
+dev 源配置不含 `snowflake:` 块(static 由零值 + `node.node_id` 驱动;位布局/Epoch 是
+`pkg/snowflake` 编译期常量,不进配置),集群块由生成器整块追加。
 
 CLAUDE.md §9.21 的金丝雀发布要求 stable / canary 并存,那就是同服务 2 副本。
-**任何服务纳入灰度发布前,必须先加进该清单**,否则灰度窗口内必然双活发重号。
+**新增发号服务时必须同步加进该清单**,否则滚更/灰度窗口内必然双活发重号。
 
 ### 8.3 批量发号 `GenerateInto`(2026-07-28)
 

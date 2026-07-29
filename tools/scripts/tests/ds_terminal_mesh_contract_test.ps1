@@ -59,8 +59,11 @@ Assert-True (-not [regex]::IsMatch($identity, '(?i)secretName|secretKeyRef|priva
     'terminal workload identity 不得新增或复用玩家/DS HMAC 密钥'
 
 $services = Get-Content -LiteralPath $ServicesPath -Raw
+# 断言只钉**意图**:50020 这一条端口必须带 name=grpc + appProtocol=grpc,path 级授权才解析得了。
+# 不再钉整个 Service 的行内单行写法——2026-07-29 起 ds-allocator 多了运维面 51020 端口
+# (writer 指标抓取路径),Service 改成多行列表;把排版一起钉死会让无关的合法演进撞红。
 Assert-True ($services -match
-    'spec:\s*\{\s*selector:\s*\{\s*app:\s*ds-allocator\s*\},\s*ports:\s*\[\s*\{\s*name:\s*grpc,\s*appProtocol:\s*grpc,\s*port:\s*50020,\s*targetPort:\s*50020\s*\}\s*\]\s*\}') `
+    '(?ms)name:\s*ds-allocator,\s*namespace:\s*pandora\s*\}\s*\r?\nspec:.*?\{\s*name:\s*grpc,\s*appProtocol:\s*grpc,\s*port:\s*50020,\s*targetPort:\s*50020\s*\}') `
     'ds-allocator Service 50020 必须 name=grpc + appProtocol=grpc，确保 path 级授权可解析'
 
 # 本组件只是独立静态候选，普通线上 overlay 不得默认引用，避免未完成真实 E2E 前误激活。

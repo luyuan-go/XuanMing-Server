@@ -423,9 +423,26 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 		}
 		assignmentID := uuid.NewString()
 		target, seat, err := u.selectAndReserveShard(ctx, playerID, assignmentID, region, teamID, "", desiredTrack)
-		// 只有“首次分配且 cohort=canary 且 canary 明确无可用容量”才允许回退 stable；
-		// 已有 assignment 必须保持粘性，stable 也绝不反向进入 canary。
-		if err != nil && !found && desiredTrack == releasetrack.Canary && errcode.As(err) == errcode.ErrHubNoAvailable {
+		// canary 明确无可用容量时回退 stable；stable 绝不反向进入 canary。
+		//
+		// 这里**不再**限定“首次分配”(原 !found 条件)。走到本行时已经在为玩家新建
+		// assignment(上方 assignmentID = uuid.NewString())：旧归属要么不可路由、要么其
+		// 分片已满/漂移，粘性本就无从保留。此时再坚持 canary 只会让整个 canary cohort
+		// 里“座位已失效”的那批玩家反复拿 ErrHubNoAvailable，直到 assignment TTL 过期
+		// 才自愈——而 canary 无容量最典型的成因恰恰是金丝雀存在的理由本身(canary 镜像
+		// CrashLoop / 永不心跳 / 回滚把 replicas 调 0)。
+		//
+		// 更关键的是运维止血手段会失灵：把 canary_percent 调 0 只改 releasePolicy.Select，
+		// 而已有归属走的是 stickyReleaseTrack(existing) 这条持久化路径、根本不读策略。
+		// §9.21 与验收底线第 7 条要求“异常时能立即把 Canary 权重归零、Stable 继续服务”，
+		// 该要求必须对已粘住的玩家同样成立。
+		//
+		// 回退方向是 canary→stable(降级到安全轨)，与 §9.21“同一玩家固定 release track”
+		// 的意图不冲突：那条约束是为了防止玩家在共存窗口内被反复甩到未验证的新版本，
+		// 而不是把玩家钉死在一个已经不可用的轨道上。反向(stable→canary)仍然禁止。
+		// 对照实现：Battle 侧同场景的回退本就是无条件的(ds_allocator
+		// internal/data/agones_allocator.go 的 tracks = [desired, stable])。
+		if err != nil && desiredTrack == releasetrack.Canary && errcode.As(err) == errcode.ErrHubNoAvailable {
 			if ensureErr := u.ensureShards(ctx, region, releasetrack.Stable); ensureErr != nil {
 				return nil, ensureErr
 			}

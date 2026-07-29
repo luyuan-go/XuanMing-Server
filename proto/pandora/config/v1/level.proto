@@ -46,6 +46,15 @@ message LevelRow {
   // 是否能退出(客户端退出按钮门控:1=允许主动退出并按失败结算返回 Hub,0=不显示退出按钮;
   //   当前仅单人 PVE 副本置 1,DS 端 RequestSoloDungeonLeave 仍对 PVE/单人 roster 做兜底校验)
   bool allow_exit = 9 [(excel_col) = "是否能退出", (excel_default) = "0"];
+  // 玩法模式(canonical game_mode):取值必须与承接该关卡的 matchmaker 部署 game_mode 完全一致
+  //   ("5v5_ranked"=默认撮合部署,"pve_coop"=walk_in 直进部署)。非战斗类关卡留空。
+  // 用途一(客户端):按 map_id 查得本列 → 选路由与冷启动恢复校验。**这是「这张图属于哪个撮合池」
+  //   的唯一事实源**;客户端不得再按 game_mode_class 字符串推断玩法,也不得硬编码模式白名单
+  //   (CLAUDE.md §17.1;退役 MyTeamModel.cpp IsPveMatchMap 与 PandoraMatchClient.cpp 双串白名单)。
+  // 用途二(服务端):matchmaker 交叉校验本列与自身部署 game_mode,不符即拒——既挡住伪造路由头,
+  //   也把"PVE 图被丢进 PVP 池空排队"变成一次明确失败。
+  // 战斗类关卡留空 = 配置缺失,两端均 fail-closed 拒绝进入(不猜默认池)。
+  string game_mode = 10 [(excel_col) = "玩法模式", (excel_default) = ""];
 }
 
 // LevelTableData 关卡表整表容器(dist/level.json 的根对象;excel_file 注解 = 导表登记)。

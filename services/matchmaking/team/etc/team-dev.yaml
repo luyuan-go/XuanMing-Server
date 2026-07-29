@@ -34,11 +34,6 @@ kafka:
   write_timeout: "5s"
   idempotent: true
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 team:
   # invite_ttl: 邀请令牌有效期(R6 AcceptInvite 时校验)
   invite_ttl: "60s"

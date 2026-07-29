@@ -249,6 +249,79 @@ func TestHolderMonotonicAndFailClosed(t *testing.T) {
 	}
 }
 
+// TestHolderLostReasonIdentifiesBranch 钉住失效原因的分支可辨识性。
+//
+// 动因(2026-07-29 ds_allocator 保护性退出取证):五个触发点此前在最终日志里完全
+// 同形,只能看到 ds_auth_fence_lost,无法区分「租约 keepalive 断」与「required watch
+// 断/回退/推进」。事故当时 etcd 正在几十秒级 fdatasync 卡顿,两类都可能,取证到此为止。
+// 本测试保证每个分支各自落到唯一常量上,回归后不再被合并成同一个不可分辨信号。
+func TestHolderLostReasonIdentifiesBranch(t *testing.T) {
+	// 初始 required modRevision 由 fakeBackend.GetRequired 固定返回 5,故 Revision<=5
+	// 即构成回退;Revision>5 且 policy generation 前进即构成正常推进。
+	validV2 := RequiredState{Epoch: 2, PolicyGeneration: RequiredPolicyGenerationV2,
+		PolicyID: RequiredPolicyV2, RawValue: RequiredValueV2}
+	for name, tc := range map[string]struct {
+		trigger func(watch chan RequiredEvent, lease *fakeLease)
+		want    string
+	}{
+		"lease_keepalive_ended": {
+			trigger: func(_ chan RequiredEvent, lease *fakeLease) { lease.Close() },
+			want:    LostReasonLeaseKeepaliveEnded,
+		},
+		"watch_error": {
+			trigger: func(watch chan RequiredEvent, _ *fakeLease) {
+				watch <- RequiredEvent{Err: errors.New("etcdserver: mvcc: required revision has been compacted")}
+			},
+			want: LostReasonRequiredWatchError,
+		},
+		"required_deleted": {
+			trigger: func(watch chan RequiredEvent, _ *fakeLease) {
+				watch <- RequiredEvent{Deleted: true, Revision: 9}
+			},
+			want: LostReasonRequiredDeleted,
+		},
+		"required_regressed": {
+			trigger: func(watch chan RequiredEvent, _ *fakeLease) {
+				watch <- RequiredEvent{State: validV2, Revision: 3}
+			},
+			want: LostReasonRequiredRegressed,
+		},
+		"required_advanced": {
+			trigger: func(watch chan RequiredEvent, _ *fakeLease) {
+				watch <- RequiredEvent{State: validV2, Revision: 9}
+			},
+			want: LostReasonRequiredAdvanced,
+		},
+		"watch_closed": {
+			trigger: func(watch chan RequiredEvent, _ *fakeLease) { close(watch) },
+			want:    LostReasonRequiredWatchClosed,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			watch := make(chan RequiredEvent, 1)
+			lease := newFakeLease()
+			backend := &fakeBackend{epoch: 1, found: true, watch: watch, lease: lease}
+			holder, err := Start(context.Background(), backend, validConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := holder.LostReason(); got != "" {
+				t.Fatalf("reason before loss = %q, want empty", got)
+			}
+			tc.trigger(watch, lease)
+			select {
+			case <-holder.Lost():
+			case <-time.After(time.Second):
+				t.Fatal("branch did not fence")
+			}
+			if got := holder.LostReason(); got != tc.want {
+				t.Fatalf("LostReason = %q, want %q", got, tc.want)
+			}
+			_ = holder.Close()
+		})
+	}
+}
+
 func TestLeaseLossAndWatchCloseFence(t *testing.T) {
 	for _, leaseLoss := range []bool{true, false} {
 		watch := make(chan RequiredEvent)

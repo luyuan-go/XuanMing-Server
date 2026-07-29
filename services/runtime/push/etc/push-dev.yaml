@@ -36,11 +36,6 @@ kafka:
   channel_buffer: 1024
   idempotent: true              # 防重复(配合幂等 producer)
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 push:
   # 订阅 topic 列表;不填走 kafkax.PushTopics 默认。
   # 2026-06-15 friend 服务上线,补 pandora.friend.event。

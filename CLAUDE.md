@@ -81,7 +81,21 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 
 1. **玩家同一时刻只能在一个可操作 DS**(由唯一 owner authority 的每玩家 `owner_epoch`、短 owner lease fencing 与 Admission 交接屏障强制；player_locator 只作 presence / 最近活跃投影)
 2. **战斗结果幂等**(同一 match_id 只落库一次)
-3. **DS 票据短时效**(JWT exp 5min)
+3. **DS 票据是进场权威的唯一搬运通道,短时效且不得取消**:v2 RS256 生产档默认 TTL 120s、
+   硬上限 180s(`pkg/auth/dsticket.go` 签发与验签双向强制;`ds_ticket_ttl: 5m` 只属 legacy
+   HS256 路径,勿按 5min 计算安全窗口)。票据不是一套可裁撤的独立鉴权,而是把**已由权威算好
+   的判定结果**搬到 DS 的唯一不可伪造通道:`player_id` / `role_id`(§9.6 五要件①身份)、
+   `hub_assignment_id`(归属版本,Transfer / Release / 同名 Pod 重建后旧票自动失效,是容量与
+   强制整合迁移的执行手段)、`ds_pod` / `ds_uid` / `ds_instance_epoch`(§9.22 exact 实例绑定)、
+   `release_track`(§9.21 灰度轨道粘滞)、`jti` + 短 exp(B1 纯本地验票下**唯一**的吊销手段,
+   时延上界 = TTL + DS 侧 leeway)、`sjti`(§9.23 会话 fencing)、`source_match_id`
+   (Battle→Hub 回流 fence)。取消票据并不减少要搬的东西,只会同时打穿身份、容量、灰度与
+   吊销四道门,且唯一自洽的替代(DS 每次 PreLogin 同步查后端,即 UE 侧已存在的
+   `OnlineAuthority` 档)是用在途同步依赖换掉离线可验签名,按 §15.2 更复杂而非更简单。
+   开发期嫌密钥体系麻烦应切 `local-off` 档,不得取消验票;`ShouldEnforceTicketForNetMode`
+   对 `NM_DedicatedServer` 恒为 true,不可配置关闭。重开此议题必须先满足
+   `docs/design/decision-revisit-hub-ds-ticket.md` §7 的四条举证门槛(替代不可伪造通道 /
+   吊销时延测算 / §9.21 共存窗口验证 / §9.19 有界驱动证明),仅以"看起来更简单"为由的取消提案直接驳回
 4. **DS 崩溃必有补偿**(Battle DS 15s 心跳超时 → abandoned → 段位回滚;Hub DS 默认 30s 超时 → draining/停止分配)
 5. **proto 字段编号上线后不复用**;开发期间已删除字段可复用编号,但必须重新生成 proto 并完整编译所有已启用 module
 6. **派生数值一律服务端计算;DS 的写权限有范围、可验证、有额度**(原"DS 不可信",
@@ -213,6 +227,7 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 4. 资源走 Git LFS(`.uasset / .umap / .fbx / .png / .wav / .ogg`)
 5. **永远不要提交** `Binaries/ Intermediate/ DerivedDataCache/ Saved/`
 6. **UE 编译由用户本人执行**：I can compile UE myself. AI 改完 UE 代码后不必代跑 UE 编译（本机编辑器常开 Live Coding 会阻塞 UBT），把 UE 编译/测试验证交给用户。
+7. **DS→客户端同一状态只允许一条下发通道（复制属性 + OnRep）**：UE 可靠有序只在单个 Actor Channel 内成立；Client RPC（走 PlayerController Channel）与目标 Actor 属性复制之间没有任何到达顺序保证，且同帧内 RPC（TickDispatch 即写）几乎必然先于属性 bunch（TickFlush 才写）到达。凡有生命周期的状态（读条 / 携带 / 阶段 / 进度）一律由复制快照 OnRep 单通道收敛，客户端缓存只能是快照的确定性投影、可随时重建；Client RPC 只用于一次性通知（拒绝原因、瞬时提示）。**禁止双通道下发同一事实后在客户端用 revision / 世代守卫弥合顺序**——这是 §9.22（唯一权威 / 不重复影子状态）在客户端表现层的对应物。实例：2026-07-28 宝箱读条曾用 `ClientLootChestUnlockStarted` RPC + `InteractionSnapshot` 双通道下发，客户端为压"按钮闪回"在 Controller 与 MainView 各写一份 revision 守卫；已改为快照单通道并删除该 RPC 与全部守卫。细则见 `Pandora-Client-SVN/CLAUDE.md「网络下发单一事实通道规则」`。
 
 ## 12. 不要做的事
 
@@ -287,3 +302,28 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
     落地要求：①**先修根因再谈兜底** —— 能通过修正调用链让事件正常到达的必须先修，只加超时不修根因就是掩盖；②超时 / 退避 / 重试必须有明确上限、可取消、可观测，并复用既有循环或 ticker，**不得为此新建第二套 timer 状态机或后台 goroutine**（`§15.2`）；③取值必须能说明推导依据（最坏合法到达时间），拿不到证据时取保守偏大值并在注释标注"待实测复核"，不得拍一个数字当已知；④**调度用的退避 / 节流状态不得写进权威或派生存储**，尤其不得改写带既定语义的字段（反例：INC-20260724-001 曾把 ds_allocator sweep 的队头退避写进 active ZSET score，而该 score 语义是 `last_heartbeat_ms`、且 `score==0` 是 abort fence / auth quarantine 要求"下一轮立即对账"的哨兵，索引重建专门用 `ZADD NX` 保护它 —— 正确做法是记在进程内并标注为非权威调度提示，重启即清空）。
 
 分布式正确性不能靠增加层数或复杂框架自动获得。仍须遵守 `§15`：优先用最简单的标准机制建立可证明的权威、原子、幂等、fencing 和恢复闭环。
+
+## 17. 进入场景 / 副本必须单一接口，差异表驱动（强制）
+
+「进入一个可玩场景」（大厅、PVP 对局、PVE 副本、单人副本、未来的活动 / 挑战 / 秘境）**只允许有一个进入接口**。不同场景的人数、条件、带入数据、DS 逻辑差异，一律表达为**配置表数据**与**服务端按表判定**，不得表达为新的 RPC、新的字段分支或客户端分支。
+
+现状基线（改动前必须先确认这些仍成立，不要重复建设）：
+- 进入接口 = `MatchService.StartMatch(team_id, map_id)`；单人副本与 5v5 走同一条链，仅 `team_size=1`、`game_mode` 分池（`pvp` / `pve_coop`）。
+- 每场景差异已表驱动：关卡表 `g_关卡.xlsx` → `configtable` level 表 / 客户端 `FCfgLevel`，现有列含 `LevelAsset`、`GameModeClass`（每副本可换 DS GameMode）、`Category`、`TeamSize`、`AllowExit`、`ShowInMatchList`。
+- `matchmaker.teamSizeForMap(map_id)` 按表读并钳到 `[1, MaxLevelTeamSize]`，表缺失回退全局默认。
+- `map_id` 全链透传：ticket / match 记录 → `MatchProgress` → 客户端预置关卡上下文 → `AllocateBattle` → Agones label `pandora.dev/map-id` → DS。
+
+三条强制规矩：
+
+1. **差异进表，不进接口签名。** 判定标准：**新增一个副本如果需要改 proto，就是走错了；只应该改表**。禁止出现按场景命名的 RPC（`EnterTowerDungeon` / `EnterTimeTrial` / `StartPveXxx`）、按场景分叉的 `if map_id == N` 业务逻辑、以及"某副本专用"的请求 message。确需新增一类差异时，加**关卡表的一列**（或与关卡表按 `map_id` 关联的子表），由服务端按 `map_id` 读表判定；新副本从此只是新增一行。
+
+2. **客户端只传"选择"，不传"权威数据"。** 请求里允许携带玩家的**选择**（难度档位、使用哪张门票的道具配置 ID、带哪个助战、编成槽位），这些只是意图；**带入的实际数值、道具数量、属性加成、进度快照一律由服务端从权威源组装**（`§9.6`）。任何"客户端上报本次带入 X"的设计一律拒。带入数据经既有通道下发 DS（票据 claims / match 记录 / DS 主动查后端），不新开客户端→DS 直传通道。
+
+3. **准入条件只有服务端一份权威判定。** 条件（等级下限、前置关卡、门票 / 消耗品、每日次数、CD、编成合法性）必须在服务端进入路径上 fail-closed 校验，读表判定，失败返回明确业务错误码。客户端可以拉取同一份条件用于灰化按钮与提示文案，但那只是展示，**不得实现第二份判定逻辑**，更不得因本地判定通过就跳过服务端校验。条件查询失败 = `UNKNOWN`，按 `§9.22` fail-closed，不得默认放行。
+
+配套约束：
+- **消耗型条件必须与进入同生共死**：扣门票 / 扣次数与"真正进入成功"必须绑定同一个 `§9.23` 稳定 `operation_id`，用既有托管 / 流水 / CAS 模式做到要么都成、要么都不成；进入失败或 DS 分配失败必须精确回滚**本次未交付**的扣减（验收底线第 4 条：只撤销未交付的写，绝不回退玩家已获得的东西）。禁止"先扣后进、进不去靠人工补"。
+- **proto 演进按 `§9.21`**：进入请求新增参数只能加字段 / 加 enum 值，禁止改编号、类型、语义；用 `oneof` 承载分场景参数前必须先证明"加表列解决不了"，否则按 `§15.3` 拒绝——不得因"以后可能扩展"提前搭参数框架、规则引擎或适配层。
+- **关卡表是跨仓共享事实**：DS 侧只有自己那份表，"同 `map_id` 在两仓指向不同地图"的漂移无法自检（历史事故：松林镇 4002 镜像关卡表漂移）。改表必须双仓同步发布，并遵守 `§9.15` 配置表热更流水线。
+
+客户端侧对应条款见 `Pandora-Client-SVN/CLAUDE.md「进入场景 / 副本的客户端纪律」`。

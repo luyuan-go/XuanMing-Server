@@ -35,11 +35,6 @@ kafka:
   write_timeout: "5s"
   idempotent: true
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 # config_table: 策划配置表加载(不变量 §9.15;docs/design/config-table-hotreload.md)。
 #   dir 非空 = 启用:启动强依赖加载该目录(manifest.json + 各表 json),失败进程退出;
 #   StartMatch 校验 map_id 必须是关卡表战斗类关卡;热更走 ConfigTableAdminService.ReloadConfigTable。

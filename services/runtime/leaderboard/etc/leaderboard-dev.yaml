@@ -40,11 +40,6 @@ kafka:
   write_timeout: "5s"
   idempotent: true
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 leaderboard:
   default_list_limit: 50         # GetRange 默认返回条数
   max_list_limit: 200            # GetRange / GetAround 单次返回上限

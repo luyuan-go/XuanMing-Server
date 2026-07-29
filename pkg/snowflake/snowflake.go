@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"sync/atomic"
 	"time"
+
+	klog "github.com/go-kratos/kratos/v2/log"
 )
 
 const (
@@ -136,9 +138,36 @@ func (n *Node) GenerateInto(dst []uint64) {
 }
 
 // waitNextTime 阻塞直到真实时钟越过 last(秒级粒度,sleep 1ms 轮询)。
+//
+// 正常情况下这里最多等 1 秒(当前秒的 32768 个 step 被发完)。但**时钟回拨**会让它退化:
+// 回拨期间 lastTime 是不回退的高水位,整个回拨窗口共享同一个 step 池,一旦发完,这里要等
+// 真实时钟重新爬过高水位 —— 等待时长 = 剩余回拨幅度,期间该 Node 的所有发号调用方全部阻塞
+// (每个新请求再堆一个阻塞 goroutine)。
+//
+// 这条路径不改成"借位下一逻辑秒":Go 侧的 ID 会持久化,且 MinIDAt 把时间段当作保留期清理的
+// 范围条件,时间字段超前会影响清理判定。宁可保持阻塞语义,但**绝不能静默阻塞**——原实现零
+// 日志零指标,线上只会表现为"服务莫名卡住"。这里把超过 waitStallLogThreshold 的等待打成
+// ERROR(含回拨幅度),恢复时再打一条,让告警而不是猜测发现时钟问题。
 func (n *Node) waitNextTime(last uint64) {
-	for nowEpoch() <= last {
+	const waitStallLogThreshold = 2 * time.Second
+
+	start := time.Now()
+	logged := false
+	for {
+		now := nowEpoch()
+		if now > last {
+			break
+		}
+		if !logged && time.Since(start) >= waitStallLogThreshold {
+			logged = true
+			klog.Errorf("[snowflake] node=%d stalled %v waiting for clock to pass logical second %d (now=%d, behind by %ds) — clock rollback or step pool exhausted; all ID minting on this node is blocked",
+				(n.nodeShifted>>nodeShift)&NodeMask, time.Since(start), last, now, last-now)
+		}
 		time.Sleep(time.Millisecond)
+	}
+	if logged {
+		klog.Warnf("[snowflake] node=%d resumed after stalling %v (clock passed logical second %d)",
+			(n.nodeShifted>>nodeShift)&NodeMask, time.Since(start), last)
 	}
 }
 

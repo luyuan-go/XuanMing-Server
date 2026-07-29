@@ -25,7 +25,8 @@ node:
   # 时发出的号逐位相同(pkg/snowflake/etcdnode.ProvideSnowflakeN 契约),汇合时会被
   # data/bag_apply.go 的 duplicate instance 检查 fail-closed 拒掉,玩家领不了那封邮件。
   # ⚠️ etcd 模式救不了它:etcd 的 nodeID 空间按服务名隔离、跨服务**刻意复用**,
-  # 两服务必须显式共用同一个 etcd_service_name 才能互斥。
+  # 两服务必须显式共用同一个 etcd_service_name 才能互斥——集群产物已由
+  # gen_cluster_config.ps1 的 $SnowflakeEtcdNamespaceOverride 落实(共用 "instance-id")。
   node_id: 2
   # Redis:会话现行性门只读 login 会话权威 pandora:sess(R5 复审 P0-1,共享实例)。
   redis_client:

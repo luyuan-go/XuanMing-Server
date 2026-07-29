@@ -33,11 +33,6 @@ kafka:
   write_timeout: "5s"
   idempotent: true
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 trade:
   # order_ttl: 订单 Redis key 存活时长(应 > order_expire,留查询窗口)
   order_ttl: "10m"

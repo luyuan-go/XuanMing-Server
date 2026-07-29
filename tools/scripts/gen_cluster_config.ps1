@@ -1250,37 +1250,58 @@ function Convert-DevToCluster([string]$text) {
 # static 模式下所有副本共用配置里的同一个 node_id,两个副本的发号器会发出**逐位相同**的 ID
 # (pkg/snowflake/etcdnode.ProvideSnowflakeN 契约,已有单测钉死),直接产出重号。
 #
-#   - auction:滚动更新 / 扩容期新旧副本并行(原 Set-AuctionClusterSafety)。
-#   - login  :deploy/k8s/overlays/online/kustomization.yaml 显式配 replicas=2,
-#             其 snowflake 发 player_id(ensureAccount 首登注册),重号会撞 accounts 主键。
+# 2026-07-28 起清单 = **全部发号服务**(调用 etcdnode.MustProvideSnowflake* 的 13 个部署):
+# services.yaml 现已**全部**是 RollingUpdate(§9.16/§9.21 不停服硬要求,Recreate 被审计否决;
+# 最后一个例外 ds-allocator 于 2026-07-29 随 INC-20260729-001 收口,它不发号故不在本清单),
+# replicas=1 + maxSurge 也意味着**每次发版都有新旧两副本并存窗口**——
+# static 同 node_id 在该窗口内双活发重号,不是「将来上金丝雀才会遇到」的问题。
+# 非发号服务(player / data-service / player-locator / owner / push / ds-allocator /
+# hub-allocator / battle-result)不在列:它们不 import etcdnode,无需为此引入 etcd 依赖。
 #
-# ⚠️ CLAUDE.md §9.21 金丝雀发布要求 stable/canary 新旧副本并存 —— 那等价于「同服务 2 副本」。
-# 任何服务一旦纳入金丝雀发布,都必须先加进本清单,否则灰度窗口内必然双活发重号。
-# 新增服务前先确认它真的在发 snowflake ID(player-locator 有 2 副本但不发号,故不在此列)。
-$script:MultiReplicaSnowflakeServices = @('auction', 'login')
+# ⚠️ 进本清单 = "多副本不会发重号",**不等于**"该服务可以安全多副本"。已知例外:
+#   - mail:ListMail 的系统/公会增量按 AdvanceCursor(max mail_id) 推水位,依赖"ID 顺序 =
+#     提交顺序",而这只在单发号器内成立。mail 扩 >1 副本(含金丝雀)前须先改单写者或
+#     换游标口径,详见 services/social/mail/cmd/mail/main.go 的说明。
+#   - matchmaker:>1 副本前须开 match.leader.enabled(见 services.yaml 注释),否则每个
+#     副本都跑撮合循环重复成局。
+# 扩副本 / 上灰度前先核对该服务自身的单写者约束,不要只看本清单。
+$script:MultiReplicaSnowflakeServices = @(
+    'login', 'friend', 'chat', 'leaderboard', 'guild', 'mail', 'team',
+    'matchmaker', 'matchmaker-pve', 'trade', 'dialogue', 'inventory', 'auction'
+)
 
-# Set-ClusterSnowflakeEtcd 把 dev 的 static snowflake 改写成 etcd 独占 nodeID。
-# dev 源配置保留 static,避免本机只启一个服务时额外依赖 etcd。
+# SnowflakeEtcdNamespaceOverride:跨服务/跨部署**共铸同一种 ID** 的空间必须共用同一个
+# etcd_service_name(infra.md §8.2②)。etcd 的 nodeID 空间默认按服务名隔离、跨服务刻意
+# 复用 nodeID——共铸方若各占一个命名空间,会稳定同时分到 nodeID 0,发出逐位相同的号。
 #
-# etcd_service_name 用服务名 = 每个服务各自一套 [0, MaxNodeID) 空间,跨服务刻意复用。
-# ⚠️ 若将来出现**跨服务共享的 ID 空间**(两个服务铸同一种 ID,如 instance_id),
-# 那些服务必须显式共用同一个 etcd_service_name,否则各自的空间会分到相同 nodeID。
+#   - instance-id:instance_id 由 inventory(GrantInstances)与 mail(buildClaimIntent)
+#     两个服务共铸,汇进同一玩家背包段,重号会被 bag_apply 的 duplicate 检查 fail-closed
+#     拒掉(玩家领不了邮件)。static 下靠 inventory=1 / mail=2 错开,etcd 下靠共用池。
+#   - matchmaker:match_id(和 ticket_id)由 matchmaker 与 matchmaker-pve 两个部署
+#     (同一二进制)共铸,流入同一 battle 结算链路(match_id 是战斗结果幂等键 §9.2)。
+#     static 下靠 pvp=1 / pve=2 错开,etcd 下必须共用 "matchmaker" 命名空间。
+#
+# 未列出的服务默认用自己的部署名做命名空间。新增「两个服务铸同一种 ID」前先问:
+# 能不能只让一个服务铸(§9.22 唯一权威);确须共铸,必须同步登记本表。
+$script:SnowflakeEtcdNamespaceOverride = @{
+    'inventory'      = 'instance-id'
+    'mail'           = 'instance-id'
+    'matchmaker-pve' = 'matchmaker'
+}
+
+# Set-ClusterSnowflakeEtcd 给集群产物追加 etcd 独占 nodeID 的 snowflake 配置块。
+# dev 源配置**不含** snowflake 块(static 走零值 + node.node_id),避免本机只启一个服务时
+# 额外依赖 etcd;位布局/Epoch 是 pkg/snowflake 编译期常量,本就不该出现在配置里。
 function Set-ClusterSnowflakeEtcd([string]$serviceName, [string]$text) {
-    $snowflakeHeaderCount = [regex]::Matches($text, '(?m)^snowflake:[ \t]*$').Count
-    $stepBitsCount = [regex]::Matches($text, '(?m)^[ \t]{2}step_bits:[ \t]*\d+[ \t]*$').Count
-    if ($snowflakeHeaderCount -ne 1 -or $stepBitsCount -ne 1) {
-        throw "[FATAL] $serviceName snowflake 锚点异常:snowflake=$snowflakeHeaderCount step_bits=$stepBitsCount"
+    if ([regex]::IsMatch($text, '(?m)^snowflake:')) {
+        throw "[FATAL] $serviceName dev 配置含 snowflake: 块。集群 etcd 注入由生成器整块追加,dev 配置应保持无该块(static 由零值驱动);若确需 dev 显式配置,请人工确认改写规则后再生成。"
     }
 
-    if ([regex]::IsMatch($text, '(?m)^\s{2}node_id_source:')) {
-        throw "[FATAL] $serviceName dev 配置已显式设置 node_id_source,请人工确认集群改写规则后再生成。"
-    }
+    $ns = $script:SnowflakeEtcdNamespaceOverride[$serviceName]
+    if (-not $ns) { $ns = $serviceName }
 
-    return [regex]::Replace(
-        $text,
-        '(?m)^([ \t]{2}step_bits:[ \t]*\d+[ \t]*)$',
-        "`$1`n  node_id_source: etcd`n  etcd_endpoints: [`"etcd:2379`"]`n  etcd_prefix: `"/pandora/snowflake/node/`"`n  etcd_service_name: `"$serviceName`"`n  etcd_lease_ttl_sec: 15",
-        1)
+    if (-not $text.EndsWith("`n")) { $text += "`n" }
+    return $text + "`nsnowflake:`n  node_id_source: etcd`n  etcd_endpoints: [`"etcd:2379`"]`n  etcd_prefix: `"/pandora/snowflake/node/`"`n  etcd_service_name: `"$ns`"`n  etcd_lease_ttl_sec: 15`n"
 }
 
 # auction 另需开启跨实例 market 锁(与 snowflake 无关,单独一条)。

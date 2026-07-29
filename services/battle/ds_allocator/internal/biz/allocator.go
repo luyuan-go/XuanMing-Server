@@ -178,6 +178,14 @@ type AllocatorUsecase struct {
 	// 为什么不写进 ZSET score,见 sweepOnce 内的三条硬约束注释。
 	sweepDeferUntil map[uint64]sweepDeferral
 
+	// sweepLease:心跳扫描循环的领导权来源(nil = 未启用继任租约,本副本无条件扫描)。
+	// 只在启动装配期写入,之后只读。作用域**仅限 sweepOnce**,不参与任何 RPC 写路径 ——
+	// 见 SetSweepWriterLease 的边界说明。
+	sweepLease SweepWriterLease
+	// sweepLeaseHeld:上一轮观察到的领导权,只由 RunHeartbeatSweep 单协程读写,
+	// 用于把"接任 / 让位"打成状态跃迁日志而不是每 tick 刷屏。
+	sweepLeaseHeld bool
+
 	// killOrphanOnStop:心跳判定某 DS 该停机(orphan / pod_mismatch / 终态)时,是否由后端主动
 	// 回收该 pod。local 模式打开——本机 UE DS 没有 Agones,收到 stop 指令不会自杀,残留进程会
 	// 幽灵般占着监听端口污染下一局;打开后 stop 时异步调 alloc.Release kill 掉它。Agones 模式默认
@@ -2185,16 +2193,69 @@ func (u *AllocatorUsecase) ListBattles(ctx context.Context, stateFilter string) 
 // ── 后台心跳超时扫描 ──────────────────────────────────────────────────────────
 
 // RunHeartbeatSweep 启动后台心跳超时扫描,直到 ctx 取消(不变量 §4)。
+// SweepWriterLease 是心跳扫描循环的领导权来源(*writerlease.Lease 满足)。
+//
+// **边界(必须理解后再扩大用途)**:本接口只用来给 sweepOnce 去重,不是防脑裂手段,
+// 因此 sweep 的写**不需要**像 hub_allocator 那样把 fencing token 带进存储事务。
+// 两者的差别是结构性的:
+//   - hub_allocator 的写携带**进程内累积的账本意图**(assignment / 容量),迟到的旧写者
+//     会把陈旧意图写进权威,故必须在同事务比较单调 token;
+//   - ds_allocator 的 sweep **不携带跨轮次权威状态**:每轮从 Redis 重读 authority 快照,
+//     判据只是"当前 last_heartbeat_ms 是否超时",写是同一事务内的 CAS。一个迟到的旧
+//     leader 做的是与新 leader **逐字相同的重算**,不存在"陈旧意图"这一类错误。它仅有的
+//     进程内状态(sweepDeferUntil / ownerAdmitted)已被显式定义为非权威调度提示与可重建
+//     缓存(见各自注释与 INC-20260724-001 整改结论),丢失或重复只影响一次多余往返。
+//
+// 所以这里选举的收益是**降载与去重**,防脑裂由既有的按 match 凭据 CAS 承担 —— 这正是
+// §9.21「单写者循环共享 leader election」与「可并行 worker 用幂等 CAS」的分界线。
+// 若将来 sweep 开始携带跨轮次权威意图,必须同步升级为存储级 fencing,不能只靠本接口。
+type SweepWriterLease interface {
+	// Current 返回 (fencing token, 是否持有领导权)。本接口只消费第二个返回值。
+	Current() (uint64, bool)
+}
+
+// SetSweepWriterLease 注入心跳扫描的领导权来源;nil = 不启用(本副本无条件扫描)。
+// 只允许在启动装配期调用(RunHeartbeatSweep 之前)。
+func (u *AllocatorUsecase) SetSweepWriterLease(l SweepWriterLease) { u.sweepLease = l }
+
+// sweepIsLeader 判定本轮是否由本副本执行扫描,并把领导权跃迁打成日志。
+// 未注入租约时恒为 true(单副本 Recreate 的历史形态)。
+func (u *AllocatorUsecase) sweepIsLeader(ctx context.Context) bool {
+	if u.sweepLease == nil {
+		return true
+	}
+	token, held := u.sweepLease.Current()
+	if held != u.sweepLeaseHeld {
+		u.sweepLeaseHeld = held
+		if held {
+			plog.With(ctx).Infow("msg", "heartbeat_sweep_leadership_acquired", "token", token)
+		} else {
+			// 让位不是故障:热备副本继续服务 Heartbeat / AllocateBattle,只是不扫描。
+			// 真正的异常是"全集群无人持有",由 writerlease Health()/指标暴露。
+			plog.With(ctx).Infow("msg", "heartbeat_sweep_leadership_released",
+				"hint", "本副本转热备,仅暂停心跳超时扫描;RPC 路径不受影响")
+		}
+	}
+	return held
+}
+
 func (u *AllocatorUsecase) RunHeartbeatSweep(ctx context.Context) {
 	ticker := time.NewTicker(u.cfg.SweepInterval.Std())
 	defer ticker.Stop()
 	plog.With(ctx).Infow("msg", "heartbeat_sweep_started",
-		"interval", u.cfg.SweepInterval.String(), "timeout", u.cfg.HeartbeatTimeout.String())
+		"interval", u.cfg.SweepInterval.String(), "timeout", u.cfg.HeartbeatTimeout.String(),
+		"writer_lease_wired", u.sweepLease != nil)
 	// Recover the derived index immediately on process start. Waiting for the
 	// first ticker would leave a lost permanent tombstone invisible for a full
 	// sweep interval after every restart.
-	if err := u.sweepOnce(ctx); err != nil {
-		plog.With(ctx).Warnw("msg", "heartbeat_initial_sweep_failed", "err", err)
+	//
+	// 接了继任租约时首扫必须过领导权门:竞选是异步的,启动瞬间通常尚未当选,此时
+	// 无条件首扫等于在滚动升级重叠窗口里多一个并发扫描者。跳过无损 —— 当选后的
+	// 第一个 tick 就会补上,间隔仅一个 SweepInterval(默认 5s)。
+	if u.sweepIsLeader(ctx) {
+		if err := u.sweepOnce(ctx); err != nil {
+			plog.With(ctx).Warnw("msg", "heartbeat_initial_sweep_failed", "err", err)
+		}
 	}
 	for {
 		select {
@@ -2219,6 +2280,11 @@ func (u *AllocatorUsecase) heartbeatSweepTick(ctx context.Context) {
 	// 处理过心跳的已销毁 Battle 实例(UID 永不复用)留下的 admitted 项永不回收,长压测 OOM。
 	// 活实例项每心跳 census 续期,仅超 TTL 未续期(实例已销毁)的项被清。
 	sweepStaleOwnerAdmitted(&u.ownerAdmitted, time.Now().Add(-ownerAdmittedStaleTTL))
+	// 领导权门排在本地内存卫生**之后**:热备副本照样服务 Heartbeat,其 census 缓存
+	// 必须继续老化回收,否则热备期越长内存越涨(§9.18)。
+	if !u.sweepIsLeader(ctx) {
+		return
+	}
 	if err := u.sweepOnce(ctx); err != nil {
 		plog.With(ctx).Warnw("msg", "heartbeat_sweep_failed", "err", err)
 	}

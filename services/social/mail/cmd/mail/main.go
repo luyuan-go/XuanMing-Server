@@ -72,6 +72,14 @@ func main() {
 
 	// 系统/公会邮件单节点生成,channel 内 mail_id 严格递增(游标比较零漏拉)
 	// node_id_source=static 静态；=etcd 走 etcd 自动抢占独占 nodeID，失租自动退出
+	//
+	// ⚠️ etcd 模式只解决"重号",**不解决"多副本"**:ListMail 的系统/公会增量按
+	// AdvanceCursor(max mail_id) 推水位,这依赖"同一 channel 的 mail_id 递增顺序 = 提交
+	// 顺序"。该单调性只在单个发号器内成立 —— 两个副本各自铸号并发落库时,ID 大小与提交
+	// 顺序脱钩,水位推过大 ID 后晚提交的小 ID 邮件会被**永久跳过**(玩家收不到)。
+	// 所以 mail 扩到 >1 副本(含金丝雀)前必须先二选一:①系统/公会写路径保持单写者
+	// (leader election + fencing,复用 pkg/dsauthfence/writerlease 模式);②游标改用
+	// DB 自增 / 提交水位列,mail_id 只当主键不当游标。滚更的新旧并存窗口同样受此约束。
 	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
 	defer func() { _ = sfCloser.Close() }()
 

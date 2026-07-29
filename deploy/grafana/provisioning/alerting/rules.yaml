@@ -186,3 +186,49 @@ groups:
               conditions:
                 - evaluator: { type: lt, params: [1] }
               refId: C
+
+      # ── DS 心跳超时扫描长期无写者(critical)────────────────────────────────
+      # 2026-07-29 事故闭环:ds_allocator 改为多副本 + RollingUpdate 后,心跳超时扫描
+      # 由 etcd 继任租约串行化(election=ds_allocator/sweep)。扫描是 §9 不变量 4
+      # 「DS 崩溃必有补偿」的唯一驱动:没有它,abandoned 对局不会被标记、不会回收 pod、
+      # 不会发 ds.lifecycle,段位回滚与结算补偿整条链静默停摆——而所有 RPC 仍然正常,
+      # 从外部看不出任何异常。这正是必须靠指标而不是靠"报错"发现的故障形态。
+      #
+      # 判据同 hub:失主副本是**有意的热备**(照常服务 Heartbeat/AllocateBattle),
+      # 单副本 held=0 属正常;真正的故障是**没有任何副本上报 held=1**。
+      # for: 1m > lease TTL 兜底接任窗口(15s)+ 滚动让位(亚秒),正常发布不误报。
+      # 未启用继任租约时(off,单扫描者由单副本 Recreate 保证)enabled=0,用 unless 排除。
+      - uid: pandora-ds-allocator-no-sweep-writer
+        title: DS心跳扫描长期无写者
+        condition: C
+        for: 1m
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: critical
+          service: ds_allocator
+        annotations:
+          summary: 'ds_allocator 无任何副本持有心跳扫描租约,DS 崩溃补偿链已停摆'
+          description: '心跳超时的战斗不会被标记 abandoned、不会回收 GameServer、不会发 ds.lifecycle,段位回滚与结算补偿全部积压;但 RPC 一切正常,外部无感。检查 etcd 可达性与选举 key /pandora/writerlease/ds_allocator/sweep;逐 Pod 看 pandora_ds_allocator_writer_campaign_errors 区分"选不上"与"全体都在热备"。'
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: pandora-prometheus
+            model:
+              editorMode: code
+              expr: sum (pandora_ds_allocator_writer_held) unless (max (pandora_ds_allocator_writer_lease_enabled) == 0)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+              refId: C

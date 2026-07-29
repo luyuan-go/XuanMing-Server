@@ -29,7 +29,9 @@ server:
     addr: ":51018"
 
 node:
-  node_id: 2                    # ⚠️ 与 PVP matchmaker(node_id=1)错开,match_id 全局唯一
+  # ⚠️ 与 PVP matchmaker(node_id=1)错开,match_id 全局唯一(dev static 模式)。
+  # 集群产物走 etcd 模式,由 gen_cluster_config.ps1 让两部署共用 "matchmaker" 命名空间互斥。
+  node_id: 2
   redis_client:
     host: "127.0.0.1:6380"
     db: 0
@@ -43,11 +45,6 @@ kafka:
   dial_timeout: "2s"
   write_timeout: "5s"
   idempotent: true
-
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
 
 # config_table: 策划配置表加载(不变量 §9.15,说明见 matchmaker-dev.yaml)。留空 = 不启用。
 config_table:

@@ -41,11 +41,6 @@ kafka:
   write_timeout: "5s"
   idempotent: true
 
-snowflake:
-  epoch: 1773446400
-  node_bits: 17
-  step_bits: 15
-
 auction:
   # 蓝绿 R3 只读预热时设 true；旧 auction 全部下线后必须改回 false 并重启，才可接写/跑补偿。
   passive_warmup: false

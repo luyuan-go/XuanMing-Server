@@ -1829,3 +1829,76 @@ func TestTicketTier_FollowsPolicy(t *testing.T) {
 		t.Fatalf("nil ticket tier = %d, want 0", tr)
 	}
 }
+
+// TestGetMatchProgress_TicketHandleNotShadowedByAliasedForeignMatch 钉住跨 ID 空间句柄混叠:
+// ticket_id 与 match_id 由同一 nodeID 的两个发号器铸造,同一秒里各自的第 K 个号**逐位相同**
+// (infra.md §8.2① 契约,pkg/snowflake/etcdnode/provider_test.go 已钉死),因此某玩家的
+// ticket_id 完全可能等于另一局无关的 match_id。修复前 GetMatchProgress 先探 match 空间,
+// 撞上无关对局后 caller 非成员即短路 4001,把排队中的玩家误判成"不在任何队列",
+// 客户端据此把匹配错误降级成 Hub 路由。
+func TestGetMatchProgress_TicketHandleNotShadowedByAliasedForeignMatch(t *testing.T) {
+	f := newFixture(t, 9700)
+	ctx := context.Background()
+	const (
+		playerID    = uint64(4701)
+		foreignA    = uint64(5701)
+		foreignB    = uint64(5702)
+		strangerID  = uint64(6701)
+		collisionID = uint64(9711) // 同时是 playerID 的 ticket_id 和无关对局的 match_id
+	)
+
+	if _, err := f.uc.StartMatch(ctx, collisionID, collisionID, playerID, 7); err != nil {
+		t.Fatal(err)
+	}
+	// 无关对局:match_id 与 playerID 的 ticket_id 逐位相同,成员里没有 playerID。
+	foreign := &matchv1.MatchStorageRecord{
+		MatchId: collisionID,
+		Stage:   matchv1.MatchStage_MATCH_STAGE_CONFIRM,
+		Members: []*matchv1.MatchMemberStorageRecord{
+			{PlayerId: foreignA, TeamId: 8801},
+			{PlayerId: foreignB, TeamId: 8802},
+		},
+	}
+	if err := f.repo.CreateMatch(ctx, foreign, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+
+	// ① canonical ticket 尚未落地(仍在 durable start operation 阶段):
+	//    match 空间被无关对局占着,必须继续探 start operation,而不是短路 4001。
+	prog, err := f.uc.GetMatchProgress(ctx, playerID, collisionID)
+	if err != nil {
+		t.Fatalf("start-operation 阶段被无关 match 遮蔽: err=%v", err)
+	}
+	if prog.GetStage() != stageQueueing {
+		t.Fatalf("start-operation 阶段 stage=%v, want QUEUEING (prog=%+v)", prog.GetStage(), prog)
+	}
+
+	// ② 交接出 canonical ticket 后:match 空间仍被无关对局占着,必须落到 ticket 空间。
+	if err := f.uc.advanceStartOperationsOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := f.repo.GetTicket(ctx, collisionID); err != nil || !found {
+		t.Fatalf("canonical ticket 应已交接: found=%v err=%v", found, err)
+	}
+	prog, err = f.uc.GetMatchProgress(ctx, playerID, collisionID)
+	if err != nil {
+		t.Fatalf("canonical ticket 被无关 match 遮蔽: err=%v", err)
+	}
+	if prog.GetStage() != stageQueueing {
+		t.Fatalf("ticket 阶段 stage=%v, want QUEUEING (prog=%+v)", prog.GetStage(), prog)
+	}
+
+	// ③ 无关对局的真实成员仍能用同一句柄读到自己那局(match 路径未被改坏)。
+	foreignProg, err := f.uc.GetMatchProgress(ctx, foreignA, collisionID)
+	if err != nil {
+		t.Fatalf("无关对局成员读取自己的对局: err=%v", err)
+	}
+	if foreignProg.GetStage() != matchv1.MatchStage_MATCH_STAGE_CONFIRM {
+		t.Fatalf("无关对局成员 stage=%v, want CONFIRM", foreignProg.GetStage())
+	}
+
+	// ④ 两个空间都不属于他的第三方,仍然只拿到 4001(不泄露他人对局存在性)。
+	if _, err := f.uc.GetMatchProgress(ctx, strangerID, collisionID); errcode.As(err) != errcode.ErrMatchNotFound {
+		t.Fatalf("无关第三方 = %v, want ErrMatchNotFound", err)
+	}
+}

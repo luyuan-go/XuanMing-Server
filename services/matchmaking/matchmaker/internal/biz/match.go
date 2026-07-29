@@ -237,6 +237,25 @@ func (u *MatchUsecase) validateMapID(mapID uint32) error {
 		return errcode.New(errcode.ErrMatchInvalidMap,
 			"map_id %d not a battle level in level table (version %d)", effective, tb.Version)
 	}
+	// 玩法模式交叉校验(CLAUDE.md §17.1「差异进表」的服务端一侧)。
+	// 关卡表 game_mode 是「这张图属于哪个撮合池」的唯一事实源;本实例的 cfg.GameMode 是
+	// 「本部署承接哪个池」。两者不等说明这次请求根本不该落到本实例:
+	//   - 客户端按表选错路由头,或路由头被伪造(Envoy 只按 header 选实例,不校验 map 归属);
+	//   - 表改了 game_mode 但某一侧尚未热更到同批次。
+	// 不校验会退化成「PVE 图进 PVP 池空排队到 ticket TTL」这类无人察觉的静默故障。
+	//
+	// **留空只跳过校验,绝不据此拒绝**(§9.21 双向兼容):关卡表是热更独立发布的,
+	// 新二进制 + 旧批次表(无本列)在滚动升级 / 金丝雀窗口内必然出现,若把"读不到列"
+	// 当成"配置错误"拒绝,会让该窗口内所有匹配全失败。语义同 DS 侧关卡门:
+	// **Mismatch(读到且不同)才是证据,Unknown(读不到)只是无法判定**。
+	// 客户端侧无此顾虑(表随包一起发,不存在错位),故客户端对留空是 fail-closed。
+	if row, ok := tb.Level.ByID(effective); ok {
+		if rowMode := row.GetGameMode(); rowMode != "" && rowMode != u.cfg.GameMode {
+			return errcode.New(errcode.ErrMatchInvalidMap,
+				"map_id %d belongs to game_mode %q but this matchmaker serves %q",
+				effective, rowMode, u.cfg.GameMode)
+		}
+	}
 	return nil
 }
 
@@ -2144,13 +2163,20 @@ func (u *MatchUsecase) GetMatchProgress(ctx context.Context, callerID, id uint64
 		id = tid
 	}
 
+	// ⚠️ id 是**跨两个 ID 空间**的句柄:排队中是 ticket_id,已撮合是 match_id,而这两个空间
+	// 由同一 nodeID 的两个发号器铸造(main.go 的 MustProvideSnowflakeN(…,2)),按
+	// infra.md §8.2① 的契约,同一秒里各自的第 K 个号**逐位相同是常态**——即某玩家的
+	// ticket_id 可以恰好等于另一局无关的 match_id。
+	// 因此这里探两个空间时,"命中了但 caller 不是成员"只能说明**这一侧撞的是别人的实体**,
+	// 绝不能就此判 4001 短路:必须继续探另一侧,否则排队玩家会被无关对局遮蔽,拿到误报的
+	// ErrMatchNotFound,再被客户端错误降级成 Hub 路由(与下方 start-operation 窗口同类事故)。
+	// 对外可见行为不变:两侧都不属于 caller 时仍在函数末尾统一返回 4001,不泄露他人对局存在性。
 	readCanonical := func() (*matchv1.MatchProgress, bool, error) {
-		if m, found, err := u.repo.GetMatch(ctx, id); err != nil {
+		m, matchFound, err := u.repo.GetMatch(ctx, id)
+		if err != nil {
 			return nil, false, err
-		} else if found {
-			if memberIndex(m.Members, callerID) < 0 {
-				return nil, false, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
-			}
+		}
+		if matchFound && memberIndex(m.Members, callerID) >= 0 {
 			if err := u.requireLocalGameMode(m.GetGameMode()); err != nil {
 				return nil, false, err
 			}
@@ -2164,12 +2190,16 @@ func (u *MatchUsecase) GetMatchProgress(ctx context.Context, callerID, id uint64
 			return nil, false, err
 		} else if found {
 			if memberIndex(t.Members, callerID) < 0 {
-				return nil, false, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
+				// 同上:这一侧撞的是别人的票据,交给调用链继续走 start-operation / 末尾 4001。
+				return nil, false, nil
 			}
 			if err := u.requireLocalGameMode(t.GetGameMode()); err != nil {
 				return nil, false, err
 			}
 			if t.MatchId != 0 {
+				// 注意:这里的 t.MatchId 是票据里**存下来的真实交叉引用**,不是客户端句柄,
+				// 不存在上面那种跨空间混叠。所以"caller 在票据里却不在它指向的 match 里"
+				// 是真正的数据不一致,必须 fail-closed 报错,**不能**照抄上面的继续探测写法。
 				if m, found, err := u.repo.GetMatch(ctx, t.MatchId); err != nil {
 					return nil, false, err
 				} else if found {

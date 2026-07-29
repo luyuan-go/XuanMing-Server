@@ -346,6 +346,30 @@ type AllocatorConf struct {
 	// SweepInterval 心跳超时扫描间隔(默认 5s)。
 	SweepInterval config.Duration `yaml:"sweep_interval,omitempty" json:"sweep_interval,omitempty"`
 
+	// WriterLeaseMode 心跳扫描循环的写者继任租约档位(留空 = enforce,与 hub_allocator 同一档位语义)。
+	//
+	// 为什么 ds_allocator 需要它(2026-07-29 事故闭环):本服务此前是 replicas=1 + Recreate,
+	// 且整个进程被 dsauthfence capability 门控、失租即 os.Exit(1)。于是**任何**重启(崩溃、
+	// 失租、例行换镜像)都会让 DSAllocatorService/Heartbeat 整体不可用;而 Battle DS 在
+	// placement.DSFenceLeaseMaxSeconds=20s 内拿不到凭据绑定 ACK 就会自我 fencing 踢掉全部
+	// 在场玩家。实测一次失租到重新 Ready 耗时 160s ≈ 8× 租约,§16.8「重启预算必须闭合」不成立,
+	// 底线 7「升级不得打断对局」直接被破。
+	//
+	// 解法是把可用性交给副本数,而不是放宽 DS 的 fencing:
+	//   · capability key 按 (service, PodUID) 唯一(pkg/dsauthfence 注释),异 Pod 副本各持异 key,
+	//     故多副本天然共存,单副本失租退出不再等于整服无 allocator;
+	//   · 唯一「同一未分区权威的单写者循环」是 RunHeartbeatSweep,由本档位挂 etcd 选举;
+	//   · 其余写路径(AllocateBattle / Heartbeat / Release / abort / GM)全部按 match_id 分区并在
+	//     Redis 事务内按精确凭据身份 CAS(data/battle_auth.go ActivateHeartbeat),属 §9.21 明说的
+	//     「可并行 worker + 幂等 CAS」,不得为金丝雀强行全局串行化,故一律不 gate。
+	//
+	// 档位:
+	//	enforce:竞选,只有当选副本跑 sweepOnce(稳态;RollingUpdate 必须用它);
+	//	warmup :只竞选、只观测 token 单调与失主重选,不改扫描行为(首次引导升级的第一跳);
+	//	off    :不启动租约(仅限单副本 Recreate 的历史部署)。
+	// 取值非法时启动 fail-fast(安全开关不允许静默变形)。
+	WriterLeaseMode string `yaml:"writer_lease_mode,omitempty" json:"writer_lease_mode,omitempty"`
+
 	// BattleTTL 战斗 DS 镜像 Redis key 的 TTL(默认 2h,防僵尸镜像)。
 	BattleTTL config.Duration `yaml:"battle_ttl,omitempty" json:"battle_ttl,omitempty"`
 
@@ -372,6 +396,28 @@ type AllocatorConf struct {
 
 	// MockDSPortRange Mock 端口取模范围(默认 1000)。
 	MockDSPortRange int `yaml:"mock_ds_port_range,omitempty" json:"mock_ds_port_range,omitempty"`
+}
+
+// 写者继任租约档位取值(AllocatorConf.WriterLeaseMode);语义与 hub_allocator 同名常量一致。
+const (
+	WriterLeaseEnforce = "enforce"
+	WriterLeaseWarmup  = "warmup"
+	WriterLeaseOff     = "off"
+)
+
+// ResolveWriterLeaseMode 归一化并校验 writer_lease_mode(空 → enforce)。
+// 非法值返回 error,由 main fail-fast:安全档位配错必须炸,不能静默退化成 off。
+func (c AllocatorConf) ResolveWriterLeaseMode() (string, error) {
+	switch strings.ToLower(strings.TrimSpace(c.WriterLeaseMode)) {
+	case "", WriterLeaseEnforce:
+		return WriterLeaseEnforce, nil
+	case WriterLeaseWarmup:
+		return WriterLeaseWarmup, nil
+	case WriterLeaseOff:
+		return WriterLeaseOff, nil
+	default:
+		return "", fmt.Errorf("allocator.writer_lease_mode %q invalid (want enforce|warmup|off)", c.WriterLeaseMode)
+	}
 }
 
 // Defaults 填默认值。
