@@ -33,6 +33,7 @@ import (
 	"github.com/go-kratos/kratos/v2/config/file"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
@@ -126,6 +127,24 @@ func main() {
 		helper.Errorw("msg", "mysql_required", "hint", "node.mysql_client.dsn or .shards required (pandora_auction)")
 		os.Exit(1)
 	}
+	// 严格模式断言(§9.24):**逐分片**断言——各分片可能连不同 MySQL 实例,
+	// 配置漂移完全可能只出现在个别分片上,只查一个会漏。非严格 sql_mode 下超长写入
+	// 被静默截断(err=nil 但数据被砍断),等于无声的数据损坏,故 fail-fast。
+	for i, shardDB := range router.All() {
+		if serr := dbguard.AssertStrictModeStartup(shardDB); serr != nil {
+			helper.Errorw("msg", "mysql_strict_mode_required", "shard_index", i, "err", serr)
+			os.Exit(1)
+		}
+	}
+
+	// 容量巡检(§9.24):**逐分片**各建一个 Guard——分片可能连不同实例,
+	// 且预算是按单分片量级给的(见 data.Budgets 注释),不能把总量摊在一个分片上。
+	capacityCtx, capacityCancel := context.WithCancel(context.Background())
+	defer capacityCancel()
+	for _, shardDB := range router.All() {
+		go runCapacityGuard(capacityCtx, dbguard.New(shardDB, "pandora_auction", data.Budgets(), nil))
+	}
+
 	topologyCtx, topologyCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	topologyErr := data.ValidateShardTopology(topologyCtx, router, data.ShardTopologyOptions{
 		Generation:     cfg.Auction.ShardTopologyGeneration,
@@ -353,13 +372,16 @@ func main() {
 				case <-ticker.C:
 					safego.Run(retentionCtx, "auction_retention_sweep", func() {
 						cutoffMs := time.Now().AddDate(0, 0, -cfg.Auction.RetentionDays).UnixMilli()
-						orders, matches, keys, rerr := repo.PurgeRetention(retentionCtx, cutoffMs, cfg.Auction.RetentionSweepBatch)
+						// mode 默认 report_only:各表待清理量由 dbguard.SweepTable 统一 WARN 告警,
+						// 这里只在真删发生时补一条业务 INFO。
+						out, rerr := repo.SweepRetention(retentionCtx, cfg.Auction.RetentionMode(),
+							cutoffMs, cfg.Auction.RetentionSweepBatch)
 						if rerr != nil {
 							helper.Warnw("msg", "auction_retention_sweep_failed", "err", rerr,
-								"orders", orders, "matches", matches, "idem_keys", keys)
-						} else if orders > 0 || matches > 0 || keys > 0 {
+								"orders", out.Orders.Deleted, "matches", out.Matches.Deleted, "idem_keys", out.IdemKeys.Deleted)
+						} else if out.Cleaned() {
 							helper.Infow("msg", "auction_retention_swept",
-								"orders", orders, "matches", matches, "idem_keys", keys,
+								"orders", out.Orders.Deleted, "matches", out.Matches.Deleted, "idem_keys", out.IdemKeys.Deleted,
 								"retention_days", cfg.Auction.RetentionDays)
 						}
 					})
@@ -502,6 +524,22 @@ func (k *auctionEventPusher) Close() error {
 		}
 	}
 	return firstErr
+}
+
+// runCapacityGuard 启动即跑一轮容量巡检拿基线,之后每小时一轮(§9.24)。
+// 走 information_schema 估算(毫秒级、不锁表);超预算只告警不阻断。
+func runCapacityGuard(ctx context.Context, g *dbguard.Guard) {
+	safego.Run(ctx, "db_capacity_guard_initial", func() { g.Check(ctx) })
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			safego.Run(ctx, "db_capacity_guard", func() { g.Check(ctx) })
+		}
+	}
 }
 
 // maskDSN 脱敏 DSN 里的密码(对齐 trade / inventory main.go)。

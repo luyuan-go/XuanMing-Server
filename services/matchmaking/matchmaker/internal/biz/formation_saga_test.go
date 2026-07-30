@@ -78,7 +78,7 @@ func TestAutoConfirmCrashBeforeAllocationCommitIsRecoveredFromCanonicalGraph(t *
 	}
 	// This models a process dying after every reservation was committed but
 	// before the final claim ACK/allocation transition.
-	if err := uc.formMatch(ctx, sideA, sideB); err == nil {
+	if err := uc.formMatch(ctx, [][]*matchv1.MatchTicketStorageRecord{sideA, sideB}); err == nil {
 		t.Fatal("injected pre-handoff failure was hidden")
 	}
 	forming, found, err := f.repo.GetMatch(ctx, 9901)

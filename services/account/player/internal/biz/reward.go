@@ -104,6 +104,19 @@ func (u *PlayerUsecase) ClaimReward(ctx context.Context, playerID uint64, source
 			return errcode.New(errcode.ErrRewardAlreadyClaimed, "reward already claimed: player=%d id=%d", playerID, rewardID)
 		case errors.Is(claimErr, rewardclaim.ErrIndexTooLarge):
 			return errcode.New(errcode.ErrRewardUnknownID, "reward_id out of range: %d", rewardID)
+		case errors.Is(claimErr, rewardclaim.ErrTooManyEntries), errors.Is(claimErr, rewardclaim.ErrSourceNameTooLong):
+			// 位图条目数 / 来源名触顶(§9.18 在 blob 内部的对应物):record 落进 LONGBLOB,
+			// DB 层不设防,只能在此 fail-closed。正常玩家永远碰不到(来源与活动都来自配置表);
+			// 触发即意味着有人在刷任意 source / activity_instance_id,或运营配置失控 ——
+			// 两种都要人查,故 ERROR 留证(客户端只拿到 ErrRewardUnknownID,不外泄内部上限)。
+			plog.With(ctx).Errorw(
+				"msg", "reward_claim_entry_limit_exceeded",
+				"player_id", playerID, "source_type", int32(sourceType), "source", source,
+				"activity_instance_id", activityInstanceID, "reward_id", rewardID, "err", claimErr,
+				"hint", "领奖记录位图条目数达上限:排查是否有客户端刷任意 source/activity_instance_id,"+
+					"或活动实例未经 EraseActivity 回收;根治见 rewardclaim.ClaimPermanentByID 白名单",
+			)
+			return errcode.New(errcode.ErrRewardUnknownID, "reward source rejected: player=%d", playerID)
 		default:
 			return errcode.New(errcode.ErrInternal, "claim reward player=%d id=%d: %v", playerID, rewardID, claimErr)
 		}

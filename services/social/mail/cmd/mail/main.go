@@ -15,6 +15,7 @@ import (
 	kconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/safego"
@@ -69,6 +70,19 @@ func main() {
 	db := mysqlx.MustNewClient(cfg.Node.MySQLClient)
 	defer func() { _ = db.Close() }()
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
+
+	// 严格模式断言(§9.24):非严格 sql_mode 下超长写入会被 MySQL **静默截断**
+	// (err=nil 但数据被砍断),等于无声的数据损坏,故 fail-fast 而不是继续产生坏数据。
+	if serr := dbguard.AssertStrictModeStartup(db); serr != nil {
+		helper.Errorw("msg", "mysql_strict_mode_required", "err", serr)
+		os.Exit(1)
+	}
+
+	// 容量巡检(§9.24):启动即跑一轮拿基线(上线时就已超限当场可见),之后每小时一轮。
+	// 走 information_schema 估算(毫秒级不锁表);超预算只打 ERROR 日志 + metric,不阻止启动。
+	capacityCtx, capacityCancel := context.WithCancel(context.Background())
+	defer capacityCancel()
+	go runCapacityGuard(capacityCtx, dbguard.New(db, "pandora_social", data.Budgets(), data.BigFields()))
 
 	// 系统/公会邮件单节点生成,channel 内 mail_id 严格递增(游标比较零漏拉)
 	// node_id_source=static 静态；=etcd 走 etcd 自动抢占独占 nodeID，失租自动退出
@@ -157,6 +171,23 @@ func runMailSweep(ctx context.Context, uc *biz.MailUsecase, interval time.Durati
 		case <-ticker.C:
 			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
 			safego.Run(ctx, "mail_expired_sweep", func() { uc.SweepExpired(ctx, time.Now().UnixMilli()) })
+		}
+	}
+}
+
+// runCapacityGuard 启动即跑一轮容量巡检拿基线,之后每小时一轮(§9.24)。
+// 走 information_schema 估算(毫秒级、不锁表、不扫数据),放启动路径安全;
+// 绝不用 COUNT(*)(千万行表几十秒,会拖垮滚动更新)。超预算只告警不阻断。
+func runCapacityGuard(ctx context.Context, g *dbguard.Guard) {
+	safego.Run(ctx, "db_capacity_guard_initial", func() { g.Check(ctx) })
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			safego.Run(ctx, "db_capacity_guard", func() { g.Check(ctx) })
 		}
 	}
 }

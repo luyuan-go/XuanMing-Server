@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	chatv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/chat/v1"
 	"github.com/luyuancpp/pandora/services/social/chat/internal/conf"
@@ -28,8 +29,8 @@ func (f *fakeRepo) SavePrivate(_ context.Context, msg *chatv1.ChatMessage) error
 }
 
 // 保留期清理(§9.24):biz 单测不模拟时间,默认 no-op。
-func (f *fakeRepo) DeleteMessagesBefore(context.Context, uint64, int) (int64, error) {
-	return 0, nil
+func (f *fakeRepo) SweepMessagesBefore(_ context.Context, mode dbguard.Mode, _ uint64, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
 
 func (f *fakeRepo) ListPrivate(_ context.Context, playerID, peerID uint64, limit int, beforeMs int64) ([]*chatv1.ChatMessage, error) {

@@ -18,6 +18,7 @@ import (
 	"math/rand"
 	"strings"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
 
@@ -124,10 +125,12 @@ type FriendRepo interface {
 	// RecommendRandom 从好友图里的玩家随机兜底,返回至多 limit 个候选;尾部不足时可少于 limit。
 	// 排除条件同上。
 	RecommendRandom(ctx context.Context, playerID uint64, exclude []uint64, limit int) ([]RecommendRow, error)
-	// DeleteTerminalRequestsBefore 删终态(accepted/rejected/expired)且 updated_at 超保留期的
-	// 好友请求行(保留期清理,§9.24;单批 limit 行)。pending 永不清;删后再次发起等价于
-	// 全新请求(好友关系权威在 friendships,请求行无资产语义)。返回删除行数。
-	DeleteTerminalRequestsBefore(ctx context.Context, retentionDays, limit int) (int64, error)
+	// SweepTerminalRequestsBefore 处理终态(accepted/rejected/expired)且 updated_at 超保留期的
+	// 好友请求行(保留期清理,§9.24)。
+	// **mode 默认 ModeReportOnly:只统计待清理量并 WARN 告警,一行都不删**(用户指令);
+	// pending 无论如何都不在处理范围。真删语义:删后再次发起等价于全新请求
+	// (好友关系权威在 friendships,请求行无资产语义)。
+	SweepTerminalRequestsBefore(ctx context.Context, mode dbguard.Mode, retentionDays, limit int) (dbguard.Outcome, error)
 	// DeletePairGuardsBefore 删 created_at 超保留期的关系对守卫行(R9 复审 P1:pair 守卫
 	// 随社交图 O(n²) 累积无上界,§9.24 不能豁免)。守卫行仅锁载体,任意时刻删除安全:
 	// 正被事务持有的行锁会阻塞 DELETE 到提交,下次 acquirePairGuard 重新 INSERT。
@@ -789,15 +792,13 @@ func (r *MySQLFriendRepo) scanRecommend(ctx context.Context, kind string, player
 // DeleteTerminalRequestsBefore 删终态且超保留期的好友请求行(保留期清理,§9.24)。
 // 条件走 idx_status_updated(status, updated_at);pending(=1)永不匹配。
 // 多副本并发调用安全(各删各的行)。
-func (r *MySQLFriendRepo) DeleteTerminalRequestsBefore(ctx context.Context, retentionDays, limit int) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`DELETE FROM friend_requests WHERE status <> ? AND updated_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`,
-		requestStatusPending, retentionDays, limit)
+func (r *MySQLFriendRepo) SweepTerminalRequestsBefore(ctx context.Context, mode dbguard.Mode, retentionDays, limit int) (dbguard.Outcome, error) {
+	out, err := dbguard.SweepTable(ctx, r.db, mode, "pandora_social", "friend_requests",
+		"status <> ? AND updated_at < DATE_SUB(NOW(), INTERVAL ? DAY)", limit, requestStatusPending, retentionDays)
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInternal, "delete terminal requests: %v", err)
+		return out, errcode.New(errcode.ErrInternal, "sweep terminal requests: %v", err)
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
+	return out, nil
 }
 
 // DeletePairGuardsBefore 删超保留期的关系对守卫行(§9.24,R9 复审 P1)。

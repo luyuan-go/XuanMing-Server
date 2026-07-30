@@ -34,6 +34,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/safego"
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 	teamv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/team/v1"
 
@@ -295,6 +296,70 @@ func (u *MatchUsecase) teamSizeForMap(mapID uint32) int {
 		return ts
 	}
 	return fallback
+}
+
+// isWalkInMap 判断某副本(map_id)是否走「直进」入口:关卡表 entry_mode 列为唯一事实源,
+// 未配置(UNSPECIFIED / 表未启用 / 行不存在)时沿用本部署的 cfg.WalkIn 开关。
+//
+// 为什么下沉到表:部署级开关只能表达「整个池要么全直进、要么全撮合」,而
+// 「多人撮合进副本」要求同一个 pve 池里有的副本直进、有的副本撮合(CLAUDE.md §17.1)。
+// 兼容方向(§9.21):新二进制 + 旧批次表(无本列)→ 逐字节保持旧行为,不会误改入口语义。
+func (u *MatchUsecase) isWalkInMap(mapID uint32) bool {
+	if u.tables == nil {
+		return u.cfg.WalkIn
+	}
+	effective := mapID
+	if effective == 0 {
+		effective = u.cfg.MapId
+	}
+	tb := u.tables.Tables()
+	if tb == nil {
+		return u.cfg.WalkIn
+	}
+	row, ok := tb.Level.ByID(effective)
+	if !ok {
+		return u.cfg.WalkIn
+	}
+	switch row.GetEntryMode() {
+	case configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN:
+		return true
+	case configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE:
+		return false
+	default:
+		return u.cfg.WalkIn
+	}
+}
+
+// sideCountForMap 取某副本(map_id)的对局方数:关卡表 side_count>0 时按表,否则回退 2
+// (历史 need=2×team_size 的逐字节等价默认)。PVE 合作副本填 1,多队混战填 N。
+// 与 teamSizeForMap 同一 effective 兜底口径(map_id==0 用本实例默认副本)。
+func (u *MatchUsecase) sideCountForMap(mapID uint32) int {
+	const fallback = 2
+	if u.tables == nil {
+		return fallback
+	}
+	effective := mapID
+	if effective == 0 {
+		effective = u.cfg.MapId
+	}
+	tb := u.tables.Tables()
+	if tb == nil {
+		return fallback
+	}
+	row, ok := tb.Level.ByID(effective)
+	if !ok {
+		return fallback
+	}
+	sc := int(row.GetSideCount())
+	if sc <= 0 {
+		return fallback
+	}
+	// 防御性钳制(§16.5):方数 × 每方人数 是撮合预分配的输入,坏配置不得放大成 OOM。
+	// 上界复用一方人数上限:方数不可能比"一方最多几个人"还离谱。
+	if sc > configtable.MaxLevelTeamSize {
+		return configtable.MaxLevelTeamSize
+	}
+	return sc
 }
 
 // clampTeamSize 把一方人数钳到 [1, configtable.MaxLevelTeamSize]。撮合按 need=2*teamSize
@@ -840,7 +905,13 @@ func (u *MatchUsecase) advanceStartOperation(ctx context.Context, current *match
 // resolveMembers 根据 team 快照构造 match 成员列表 + 计算平均 MMR。
 // reader 为 nil 时退化为"仅 captain 单人票据"(本机不起 team 的骨架联调路径)。
 func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uint64, mapID uint32) ([]*matchv1.MatchMemberStorageRecord, int32, error) {
-	if u.reader == nil {
+	// teamID==0 = 单人入口(单排撮合 / 单人直进副本):名单就是调用者本人,不查 team 服务。
+	// 「单人」与「单人组队」在协议层是同一件事——都是一张票据带 1 个成员——所以不该
+	// 强迫玩家先去组一个 1 人队(那只是用组队机制模拟单人,多一次 RPC 和一个失败点)。
+	// 无需按 team_size 设限:撮合按**人数**凑齐 side_count×team_size 后由 binPack 装箱分方,
+	// 5 个单排票天然能凑满一方,与「3 人队 + 2 人散排」同一条路径。
+	// captainID 取自 JWT sub(service 层),客户端无法伪造他人身份入队。
+	if teamID == 0 || u.reader == nil {
 		m := []*matchv1.MatchMemberStorageRecord{{PlayerId: captainID, TeamId: teamID, Confirm: confirmPending}}
 		return m, 0, nil
 	}
@@ -2751,14 +2822,24 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 	}
 	sort.SliceStable(tickets, func(i, j int) bool { return tickets[i].AvgMmr < tickets[j].AvgMmr })
 
-	if u.cfg.WalkIn {
-		for _, t := range tickets {
-			if err := u.formSoloMatch(ctx, t); err != nil {
-				plog.With(ctx).Warnw("msg", "form_solo_match_failed", "ticket_id", t.TicketId, "err", err)
-			}
+	// 入口模式分流:逐票按其 map_id 的 entry_mode 决定直进还是撮合(关卡表未配置时沿用
+	// 部署级 cfg.WalkIn)。直进票不参与凑局,立即成局;其余进撮合分组。
+	// 分流在同一个 loop 内完成,不新开循环/协程——单写者仍是「每个池一个 leader」
+	// (decision-revisit-matchmaker-single-writer.md),本改动不触碰该约束。
+	pending := make([]*matchv1.MatchTicketStorageRecord, 0, len(tickets))
+	for _, t := range tickets {
+		if !u.isWalkInMap(t.GetMapId()) {
+			pending = append(pending, t)
+			continue
 		}
+		if err := u.formSoloMatch(ctx, t); err != nil {
+			plog.With(ctx).Warnw("msg", "form_solo_match_failed", "ticket_id", t.TicketId, "err", err)
+		}
+	}
+	if len(pending) == 0 {
 		return nil
 	}
+	tickets = pending
 
 	now := time.Now().UnixMilli()
 
@@ -2774,14 +2855,17 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 // formMatchesInPool 在「同一副本(map_id)」的票据组内撮合:单 Cell/dev 走单桶贪心,
 // 多 Region 走两级(region 内优先 + 跨 region 溢出兜底)。从 matchOnce 抽出,便于按 map_id 分组复用。
 func (u *MatchUsecase) formMatchesInPool(ctx context.Context, tickets []*matchv1.MatchTicketStorageRecord, now int64) {
-	// 本池票据同属一个副本(partitionTicketsByMap),一方人数按该 map_id 读表(表未填回退全局)。
-	teamSize := u.teamSizeForMap(matchMapID(tickets))
-	need := 2 * teamSize
+	// 本池票据同属一个副本(partitionTicketsByMap),一方人数与方数均按该 map_id 读表
+	// (表未填分别回退全局 team_size 与 2 方)。need 是一局所需**总人数**,不是票数。
+	poolMapID := matchMapID(tickets)
+	teamSize := u.teamSizeForMap(poolMapID)
+	sideCount := u.sideCountForMap(poolMapID)
+	need := sideCount * teamSize
 	used := make(map[uint64]bool)
 
 	// 单 Cell / dev / 阶段 1~2(router 未配)→ 单桶贪心(历史行为,零分区开销)。
 	if u.router == nil {
-		u.greedyFormMatches(ctx, tickets, used, now, teamSize, nil)
+		u.greedyFormMatches(ctx, tickets, used, now, teamSize, sideCount, nil)
 		return
 	}
 
@@ -2791,7 +2875,7 @@ func (u *MatchUsecase) formMatchesInPool(ctx context.Context, tickets []*matchv1
 	//     且每局受"跨 region 玩家比例软上限"约束(WithinCrossRegionCap)。
 	buckets, order := partitionTicketsByRegion(tickets, u.ticketRegion)
 	for _, region := range order {
-		u.greedyFormMatches(ctx, buckets[region], used, now, teamSize, nil)
+		u.greedyFormMatches(ctx, buckets[region], used, now, teamSize, sideCount, nil)
 	}
 
 	// 收集本 region 内未成局的剩余票据(保持 MMR 升序),挑出可溢出者跨 region 兜底撮合。
@@ -2806,7 +2890,7 @@ func (u *MatchUsecase) formMatchesInPool(ctx context.Context, tickets []*matchv1
 	leftoverTotals := leftoverRegionBucketTotals(leftover, u.ticketRegion, u.ticketMmrBucket)
 	overflow := selectOverflowTickets(leftover, u.ticketRegion, leftoverTotals, u.ticketMmrBucket, need, u.regionPolicy, u.ticketTier, now)
 	if len(overflow) > 0 {
-		u.greedyFormMatches(ctx, overflow, used, now, teamSize, u.withinCrossRegionCap)
+		u.greedyFormMatches(ctx, overflow, used, now, teamSize, sideCount, u.withinCrossRegionCap)
 	}
 }
 
@@ -2877,9 +2961,12 @@ func (u *MatchUsecase) greedyFormMatches(
 	used map[uint64]bool,
 	now int64,
 	teamSize int,
+	sideCount int,
 	validate func(group []*matchv1.MatchTicketStorageRecord) bool,
 ) {
-	need := 2 * teamSize
+	// need 是一局所需**总人数** = 方数 × 每方人数;凑局按人数累加(见下方 total),
+	// 因此「3 人队 + 2 人散排」与「5 个单排」都能凑满一方,无需额外的拼队机制。
+	need := sideCount * teamSize
 	for start := 0; start < len(tickets); start++ {
 		if used[tickets[start].TicketId] {
 			continue
@@ -2900,14 +2987,14 @@ func (u *MatchUsecase) greedyFormMatches(
 		if total != need {
 			continue
 		}
-		sideA, sideB, ok := binPack(group, teamSize)
+		sides, ok := binPack(group, teamSize, sideCount)
 		if !ok {
 			continue
 		}
 		if validate != nil && !validate(group) {
 			continue // 跨 region 比例超上限等约束未过,放弃该组合
 		}
-		if err := u.formMatch(ctx, sideA, sideB); err != nil {
+		if err := u.formMatch(ctx, sides); err != nil {
 			plog.With(ctx).Warnw("msg", "form_match_failed", "err", err)
 			continue
 		}
@@ -2983,9 +3070,13 @@ func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchT
 	return nil
 }
 
-// formMatch 把两边票据组成一场 match:写 match record + 预留票据 + 推 FOUND/CONFIRM。
-func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.MatchTicketStorageRecord) error {
-	for _, side := range [][]*matchv1.MatchTicketStorageRecord{sideA, sideB} {
+// formMatch 把已装箱的各方票据组成一场 match:写 match record + 预留票据 + 推 FOUND/CONFIRM。
+// sides 由 binPack 产出,长度 = 关卡表 side_count(PVE 合作 1 方、常规对抗 2 方、混战 N 方);
+// 成员的 Side 即其所在方的下标,DS 侧阵营分配(player_combat_factions)本就支持 >2 方。
+func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTicketStorageRecord) error {
+	totalTickets := 0
+	for _, side := range sides {
+		totalTickets += len(side)
 		for _, ticket := range side {
 			if err := u.requireLocalGameMode(ticket.GetGameMode()); err != nil {
 				return err
@@ -2996,8 +3087,8 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 	now := time.Now().UnixMilli()
 	deadline := now + u.cfg.ConfirmTimeout.Std().Milliseconds()
 
-	members := make([]*matchv1.MatchMemberStorageRecord, 0, 2*u.cfg.TeamSize)
-	ticketIDs := make([]uint64, 0, len(sideA)+len(sideB))
+	members := make([]*matchv1.MatchMemberStorageRecord, 0, len(sides)*u.cfg.TeamSize)
+	ticketIDs := make([]uint64, 0, totalTickets)
 	initialConfirm := confirmPending
 	if u.cfg.AutoConfirmMatch {
 		initialConfirm = confirmAccepted
@@ -3017,8 +3108,9 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 			}
 		}
 	}
-	collect(sideA, 0)
-	collect(sideB, 1)
+	for i, side := range sides {
+		collect(side, int32(i))
+	}
 
 	match := &matchv1.MatchStorageRecord{
 		MatchId: matchID,
@@ -3029,7 +3121,7 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 		TicketIds:         ticketIDs,
 		CreatedAtMs:       now,
 		ConfirmDeadlineMs: deadline,
-		MapId:             matchMapID(sideA, sideB),
+		MapId:             matchMapID(sides...),
 		GameMode:          u.cfg.GameMode,
 	}
 
@@ -3046,9 +3138,9 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 		plog.With(ctx).Errorw("msg", "create_match_failed", "match_id", matchID, "err", err)
 		return err
 	}
-	reserved := make([]*matchv1.MatchTicketStorageRecord, 0, len(sideA)+len(sideB))
+	reserved := make([]*matchv1.MatchTicketStorageRecord, 0, totalTickets)
 	var persistErr error
-	for _, side := range [][]*matchv1.MatchTicketStorageRecord{sideA, sideB} {
+	for _, side := range sides {
 		for _, t := range side {
 			t.MatchId = matchID
 			if err := u.repo.ReserveTicket(ctx, t, u.ticketTTL()); err != nil {

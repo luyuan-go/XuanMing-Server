@@ -32,6 +32,7 @@ import (
 	klog "github.com/go-kratos/kratos/v2/log"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
@@ -93,6 +94,19 @@ func main() {
 	db := mysqlx.MustNewClient(cfg.Node.MySQLClient)
 	defer func() { _ = db.Close() }()
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
+
+	// 严格模式断言(§9.24):非严格 sql_mode 下超长写入会被 MySQL **静默截断**
+	// (err=nil 但数据被砍断),等于无声的数据损坏,故 fail-fast 而不是继续产生坏数据。
+	if serr := dbguard.AssertStrictModeStartup(db); serr != nil {
+		helper.Errorw("msg", "mysql_strict_mode_required", "err", serr)
+		os.Exit(1)
+	}
+
+	// 容量巡检(§9.24):启动即跑一轮拿基线(上线时就已超限当场可见),之后每小时一轮。
+	// 走 information_schema 估算(毫秒级不锁表);超预算只打 ERROR 日志 + metric,不阻止启动。
+	capacityCtx, capacityCancel := context.WithCancel(context.Background())
+	defer capacityCancel()
+	go runCapacityGuard(capacityCtx, dbguard.New(db, "pandora_leaderboard", data.Budgets(), data.BigFields()))
 
 	// 4. Redis(强依赖:排行榜 ZSET 不可降级)
 	rc := cfg.Node.RedisClient
@@ -162,7 +176,7 @@ func main() {
 	go runRewardRetrySweep(sweepCtx, uc)
 	// 8.6 保留期清理(§9.24):名次快照 + 已发放发奖记录 90 天后批删;settlement 行故意
 	// 保留(settle uk 防重复结算的永久闸,每批次 1 行慢增长豁免)。
-	go runRetentionSweep(sweepCtx, repo, cfg.Leaderboard.RetentionDays, cfg.Leaderboard.RetentionSweepBatch, helper)
+	go runRetentionSweep(sweepCtx, repo, cfg.Leaderboard.RetentionMode(), cfg.Leaderboard.RetentionDays, cfg.Leaderboard.RetentionSweepBatch, helper)
 
 	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):客户端面请求 jti 必须是 login
 	// 会话权威(pandora:sess,node.redis_client 指向的共享 Redis)当前一代;
@@ -227,7 +241,7 @@ func runRewardRetrySweep(ctx context.Context, uc *biz.LeaderboardUsecase) {
 
 // runRetentionSweep 周期清理超保留期的名次快照与已发放发奖记录(§9.24,每小时一轮)。
 // 多副本各自跑,DELETE 幂等无需锁;单批有界,积压跨轮摊平。
-func runRetentionSweep(ctx context.Context, repo *data.MySQLLeaderboardRepo, retentionDays, batch int, helper *klog.Helper) {
+func runRetentionSweep(ctx context.Context, repo *data.MySQLLeaderboardRepo, mode dbguard.Mode, retentionDays, batch int, helper *klog.Helper) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 	for {
@@ -237,15 +251,17 @@ func runRetentionSweep(ctx context.Context, repo *data.MySQLLeaderboardRepo, ret
 		case <-ticker.C:
 			safego.Run(ctx, "leaderboard_retention_sweep", func() {
 				cutoffMs := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
-				if n, err := repo.PurgeSnapshotsBefore(ctx, cutoffMs, batch); err != nil {
-					helper.Warnw("msg", "leaderboard_snapshot_purge_failed", "err", err)
-				} else if n > 0 {
-					helper.Infow("msg", "leaderboard_snapshot_purged", "rows", n, "retention_days", retentionDays)
+				// mode 默认 report_only:待清理量由 dbguard.SweepTable 统一 WARN 告警,
+				// 这里只在真删发生时补一条业务 INFO。
+				if out, err := repo.SweepSnapshotsBefore(ctx, mode, cutoffMs, batch); err != nil {
+					helper.Warnw("msg", "leaderboard_snapshot_sweep_failed", "err", err)
+				} else if out.Cleaned() {
+					helper.Infow("msg", "leaderboard_snapshot_purged", "rows", out.Deleted, "retention_days", retentionDays)
 				}
-				if n, err := repo.PurgeGrantedRewardsBefore(ctx, cutoffMs, batch); err != nil {
-					helper.Warnw("msg", "leaderboard_reward_log_purge_failed", "err", err)
-				} else if n > 0 {
-					helper.Infow("msg", "leaderboard_reward_log_purged", "rows", n, "retention_days", retentionDays)
+				if out, err := repo.SweepGrantedRewardsBefore(ctx, mode, cutoffMs, batch); err != nil {
+					helper.Warnw("msg", "leaderboard_reward_log_sweep_failed", "err", err)
+				} else if out.Cleaned() {
+					helper.Infow("msg", "leaderboard_reward_log_purged", "rows", out.Deleted, "retention_days", retentionDays)
 				}
 			})
 		}
@@ -268,6 +284,23 @@ func (k *settleEventPusher) PushSettle(ctx context.Context, settlementID uint64,
 		SettledAtMs: time.Now().UnixMilli(),
 	}
 	return k.settle.Send(ctx, strconv.FormatUint(settlementID, 10), evt)
+}
+
+// runCapacityGuard 启动即跑一轮容量巡检拿基线,之后每小时一轮(§9.24)。
+// 走 information_schema 估算(毫秒级、不锁表、不扫数据),放启动路径安全;
+// 绝不用 COUNT(*)(千万行表几十秒,会拖垮滚动更新)。超预算只告警不阻断。
+func runCapacityGuard(ctx context.Context, g *dbguard.Guard) {
+	safego.Run(ctx, "db_capacity_guard_initial", func() { g.Check(ctx) })
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			safego.Run(ctx, "db_capacity_guard", func() { g.Check(ctx) })
+		}
+	}
 }
 
 // maskDSN 脱敏 DSN 里的密码(对齐 auction / trade main.go)。

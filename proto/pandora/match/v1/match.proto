@@ -1,9 +1,30 @@
 // Pandora MatchService 协议。
 //
-// 职责(docs/design/go-services.md §2.8):按关卡配置的每方人数撮合
-// (team_size 逐关卡可配,见 g_关卡.xlsx / configtable level 表;PVE 单人副本 team_size=1,
-//  PVP 默认 5v5。**不要**再把 5v5 / 10 人写进契约,撮合人数是数据不是常量。)
-// 流程:enqueue → MMR 撮合 → 凑齐 2×team_size → 确认期(15s)→ 全确认 → 拉 DS → 发 ds_addr
+// 职责(docs/design/go-services.md §2.8):**开一局**。注意 StartMatch 里的 "Match" 指
+// 「一局对局」而非「撮合」—— 这是本服务唯一的开局入口,**撮不撮合是数据决定的,不是接口决定的**。
+// PVP 5v5、1v1、多方混战、单人副本、组队副本、撮合进副本,全部走同一个 StartMatch,
+// 差异只由「谁去 + 关卡表那一行」表达:
+//
+//   ① 谁去    = StartMatchRequest.team_id。0 = 只有调用者自己(单排 / 单人进本),
+//               非 0 = 该队伍全体。**「单人」与「单人组队」在协议层是同一件事**
+//               (都是一张票据带 1 个成员),不需要为单人另开接口或先建一个 1 人队。
+//   ② 编成形状 = 关卡表 side_count(几方) × team_size(每方几人)。二者逐关卡可配,
+//               **不要**再把 5v5 / 10 人写进契约,人数是数据不是常量。
+//   ③ 入口模式 = 关卡表 entry_mode:撮合(入池等凑齐)或直进(walk-in,立即成局)。
+//
+// 两条成局路径(由 ③ 决定,同一个 RPC):
+//   - 撮合:enqueue → 按 MMR 窗口凑齐 side_count×team_size **人** → 装箱分方
+//           → 确认期(15s)→ 全确认 → 拉 DS → 发 ds_addr。
+//           凑局单位是**人数不是票数**(greedyFormMatches 累加 len(members)),所以
+//           「3 人队 + 2 人散排拼成一方」与「5 个单排凑一方」天然支持,无需额外机制。
+//   - 直进:formSoloMatch —— 单张票据(单人或整队)立即成局、跳过撮合与确认、直接拉 DS,
+//           不与陌生人凑对手。这是单人 / 组队进副本的生产路径,**非测试专用**。
+//
+// ⚠️ 路由:同一 gRPC 服务名按 header `x-pandora-game-mode` 经 Envoy 分流到不同 matchmaker
+//    部署(撮合池按 game_mode 命名空间隔离,单写者约束见 decision-revisit-matchmaker-single-writer.md)。
+//    客户端的 game_mode 取自关卡表 game_mode 列,不得按 GameMode 类名或任何硬编码白名单推断
+//    (CLAUDE.md §17.1)。伪造该 header 最多进错池,player_id 仍以 JWT sub 为准;
+//    且 matchmaker 会交叉校验关卡表 game_mode 与本实例部署,不符即拒。
 //
 // ⚠️ 推送架构(ds-arch.md §0.8):
 //   go-zero zrpc 不支持 gRPC server stream。

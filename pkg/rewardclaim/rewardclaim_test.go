@@ -2,6 +2,8 @@ package rewardclaim
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -348,4 +350,75 @@ func TestSnapshotTrimsTrailingZeros(t *testing.T) {
 	if got := len(perm["sign_in"]); got != 1 {
 		t.Fatalf("尾部全零字节应被裁掉, 期望 1 字节, got %d", got)
 	}
+}
+
+// TestEntryLimits 条目数上限(§9.18 在 blob 内部的对应物,2026-07-22):
+// 客户端可直调 ClaimReward 且 source/activity_instance_id 无配置表白名单,
+// 每换一个值就永久新增一条位图 → record(LONGBLOB)无界增长。
+// 本测试锁定:新增条目触顶必须被拒,而**已存在**的条目必须继续可领(不许回档)。
+func TestEntryLimits(t *testing.T) {
+	t.Run("永久来源条目数触顶拒新增", func(t *testing.T) {
+		r := New()
+		for i := 0; i < MaxPermanentSources; i++ {
+			if err := r.ClaimPermanent(fmt.Sprintf("src_%d", i), 0); err != nil {
+				t.Fatalf("第 %d 个来源应成功: %v", i, err)
+			}
+		}
+		if err := r.ClaimPermanent("one_more", 0); !errors.Is(err, ErrTooManyEntries) {
+			t.Fatalf("超出 MaxPermanentSources 应回 ErrTooManyEntries, got %v", err)
+		}
+		// 关键:已有来源不受影响,否则调小上限 = 老玩家领不到已有奖励(回档)。
+		if err := r.ClaimPermanent("src_0", 1); err != nil {
+			t.Fatalf("已存在来源必须继续可领, got %v", err)
+		}
+	})
+
+	t.Run("活动实例条目数触顶拒新增", func(t *testing.T) {
+		r := New()
+		for i := 1; i <= MaxActivityInstances; i++ {
+			if err := r.ClaimActivity(uint64(i), 0); err != nil {
+				t.Fatalf("第 %d 个活动应成功: %v", i, err)
+			}
+		}
+		if err := r.ClaimActivity(999999, 0); !errors.Is(err, ErrTooManyEntries) {
+			t.Fatalf("超出 MaxActivityInstances 应回 ErrTooManyEntries, got %v", err)
+		}
+		if err := r.ClaimActivity(1, 5); err != nil {
+			t.Fatalf("已存在活动必须继续可领, got %v", err)
+		}
+		// 回收一条后应能再新增(EraseActivity 是活动下线的正常回收路径)。
+		if !r.EraseActivity(1) {
+			t.Fatal("EraseActivity(1) 应返回 true")
+		}
+		if err := r.ClaimActivity(999999, 0); err != nil {
+			t.Fatalf("回收一条后应可新增, got %v", err)
+		}
+	})
+
+	t.Run("来源名超长拒绝", func(t *testing.T) {
+		r := New()
+		long := strings.Repeat("x", MaxSourceNameLen+1)
+		if err := r.ClaimPermanent(long, 0); !errors.Is(err, ErrSourceNameTooLong) {
+			t.Fatalf("超长来源名应回 ErrSourceNameTooLong, got %v", err)
+		}
+		if err := r.ClaimPermanent(strings.Repeat("x", MaxSourceNameLen), 0); err != nil {
+			t.Fatalf("恰好等于上限的来源名应放行, got %v", err)
+		}
+	})
+
+	t.Run("存量超限记录只冻结不报错", func(t *testing.T) {
+		// Load 进来的存量记录(上限落地前写入的)可能已超限:必须能正常读写已有条目,
+		// 只是不能再长——否则上线即让存量玩家领奖全挂。
+		perm := map[string][]byte{}
+		for i := 0; i < MaxPermanentSources+10; i++ {
+			perm[fmt.Sprintf("legacy_%d", i)] = []byte{0x01}
+		}
+		r := Load(perm, nil)
+		if err := r.ClaimPermanent("legacy_0", 1); err != nil {
+			t.Fatalf("存量超限记录的已有来源必须可继续领取, got %v", err)
+		}
+		if err := r.ClaimPermanent("brand_new", 0); !errors.Is(err, ErrTooManyEntries) {
+			t.Fatalf("存量超限记录不得再新增来源, got %v", err)
+		}
+	})
 }

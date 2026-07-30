@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 )
 
 // Config 是 chat 服务的完整配置。
@@ -53,6 +54,31 @@ type ChatConf struct {
 
 	// SweepBatch 每轮清理行数上限(默认 500,小批量防长事务锁表)。
 	SweepBatch int `yaml:"sweep_batch,omitempty" json:"sweep_batch,omitempty"`
+
+	// RetentionModeRaw 是保留期清理的执行模式(§9.24)。
+	//
+	// **留空 / "report_only" = 默认:只统计待清理量并 WARN 告警,一行都不删。**
+	// "delete" = 真删。自动删除生产数据不可逆,清理条件/保留期/幂等窗口任一处配错都会
+	// 静默删掉不该删的玩家数据且删完才发现,所以默认不删,由人确认后显式开启。
+	// 不认识的值在 Validate 阶段 fail-fast(绝不猜成 delete)。
+	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
+}
+
+// RetentionMode 返回生效的清理模式(已在启动 Validate 校验过合法性;此处解析失败回落
+// ModeReportOnly —— 任何不确定都不删)。
+func (c *ChatConf) RetentionMode() dbguard.Mode {
+	m, err := dbguard.ParseMode(c.RetentionModeRaw)
+	if err != nil {
+		return dbguard.ModeReportOnly
+	}
+	return m
+}
+
+// ValidateRetentionMode 供 main 启动时 fail-fast:配置写了无法识别的模式必须拒启,
+// 而不是静默按 report_only 跑(运维以为开了删除,实际没开,库继续涨)。
+func (c *ChatConf) ValidateRetentionMode() error {
+	_, err := dbguard.ParseMode(c.RetentionModeRaw)
+	return err
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。

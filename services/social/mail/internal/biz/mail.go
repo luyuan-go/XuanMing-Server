@@ -20,6 +20,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	bagv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/bag/v1"
@@ -125,6 +126,14 @@ const (
 	defaultPageLimit = 50
 	maxPageLimit     = 100
 )
+
+// mailPayloadMaxBytes 是邮件 payload 序列化后的字节上限(§9.24 写入侧闸)。
+//
+// 取值按**设计期望**而非列类型上限(列是 BLOB=65535,写 65535 等于没设):
+// 标题 ≤64 rune × 4B(utf8mb4 最坏)= 256B,正文 ≤2048 rune × 4B = 8KB,
+// 附件 ≤16 条 × 约 64B = 1KB,加 proto framing 与 instance_grant_key,设计上界约 10KB。
+// 取 16KB 留 1.6 倍余量:正常业务永远碰不到,碰到即说明某个发送方绕过了逐项上限。
+const mailPayloadMaxBytes = 16 * 1024
 
 // clampLimit 把 0 归默认、超上限收敛。
 func clampLimit(limit int) int {
@@ -489,7 +498,7 @@ func (u *MailUsecase) MarkMailClaimed(ctx context.Context, playerID, mailID uint
 
 // SendSystemMail 插一行系统邮件,返回 mail_id(transfer 附件拒:多人可领与单实例矛盾)。
 func (u *MailUsecase) SendSystemMail(ctx context.Context, mailID uint64, title, body string, atts []*mailv1.MailAttachment, startMs, endMs, nowMs int64) (uint64, error) {
-	payload, err := u.buildPayload(title, body, atts, "", false)
+	payload, err := u.buildPayload(ctx, title, body, atts, "", false)
 	if err != nil {
 		return 0, err
 	}
@@ -512,7 +521,7 @@ func (u *MailUsecase) SendGuildMail(ctx context.Context, mailID, guildID uint64,
 	if guildID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "guild_id required")
 	}
-	payload, err := u.buildPayload(title, body, atts, "", false)
+	payload, err := u.buildPayload(ctx, title, body, atts, "", false)
 	if err != nil {
 		return 0, err
 	}
@@ -537,7 +546,7 @@ func (u *MailUsecase) SendPersonalMail(ctx context.Context, mailID, toPlayerID u
 	if toPlayerID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "to_player_id required")
 	}
-	payload, err := u.buildPayload(title, body, atts, instanceGrantKey, true)
+	payload, err := u.buildPayload(ctx, title, body, atts, instanceGrantKey, true)
 	if err != nil {
 		return 0, err
 	}
@@ -612,7 +621,8 @@ func (u *MailUsecase) defaultEnd(startMs, endMs, nowMs int64) int64 {
 	return endMs
 }
 
-func (u *MailUsecase) buildPayload(title, body string, atts []*mailv1.MailAttachment, instanceGrantKey string, allowTransfer bool) ([]byte, error) {
+// buildPayload 组装并序列化邮件内容。ctx 只用于日志上下文(payload 体积告警)。
+func (u *MailUsecase) buildPayload(ctx context.Context, title, body string, atts []*mailv1.MailAttachment, instanceGrantKey string, allowTransfer bool) ([]byte, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return nil, errcode.New(errcode.ErrInvalidArg, "title required")
@@ -686,7 +696,24 @@ func (u *MailUsecase) buildPayload(title, body string, atts []*mailv1.MailAttach
 		}
 	}
 	rec := &mailv1.MailContentStorageRecord{Title: title, Body: body, Attachments: atts, InstanceGrantKey: instanceGrantKey}
-	return proto.Marshal(rec)
+	payload, err := proto.Marshal(rec)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "encode mail payload: %v", err)
+	}
+	// 序列化后字节兜底(§9.24 写入侧闸):上面逐项的 rune / 条数上限都是**语义**上限,
+	// 无法保证序列化后一定装得进 BLOB(65535)——例如 utf8mb4 单 rune 最多 4 字节,
+	// 2048 rune 正文最坏 8KB;附件条数上限变化、proto 加字段都会推高实际字节。
+	// 这里按设计期望(mailPayloadMaxBytes)拦一道:
+	//   超限 → fail-closed 拒发(总比落库被 MySQL 拒/截断强,截断=玩家附件无声消失);
+	//   逼近 → WARN 日志(留出排查窗口,见 pkg/dbguard 三档语义)。
+	if cerr := dbguard.CheckPayload(ctx, dbguard.PayloadLimit{
+		DB: "pandora_social", Table: "player_mail", Column: "payload", Max: mailPayloadMaxBytes,
+		Hint: "邮件内容超设计上限:查 MaxTitleLen/MaxBodyLen/MaxAttachments 是否被某个发送方绕过" +
+			"(尤其系统发送方,如战斗掉落转邮件)",
+	}, payload); cerr != nil {
+		return nil, errcode.New(errcode.ErrInvalidArg, "mail payload too large: %v", cerr)
+	}
+	return payload, nil
 }
 
 func (u *MailUsecase) toChannelMail(ctx context.Context, playerID uint64, m data.MailRow, ch mailv1.MailChannel) *mailv1.Mail {

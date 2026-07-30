@@ -56,9 +56,9 @@ func (s *MatchService) StartMatch(ctx context.Context, req *matchv1.StartMatchRe
 	if captainID == 0 {
 		return &matchv1.StartMatchResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
-	if req.GetTeamId() == 0 {
-		return &matchv1.StartMatchResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
-	}
+	// team_id==0 是合法的**单人入口**(单排撮合 / 单人进副本),名单即 JWT 身份本人。
+	// 不再要求「先建一个 1 人队」——那是用组队机制模拟单人,多一次 RPC 与一个失败点。
+	// 成员解析与人数校验统一在 biz.resolveMembers,这里不重复判定。
 
 	ticketID := s.sf.Generate()
 	id, err := s.uc.StartMatch(ctx, ticketID, req.GetTeamId(), captainID, req.GetMapId())

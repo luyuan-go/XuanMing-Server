@@ -33,7 +33,19 @@ func withinWindow(a, b *matchv1.MatchTicketStorageRecord, nowMs int64, cfg conf.
 
 // binPack 用 largest-first 把票据装进两个容量 teamSize 的箱子(两边人数各恰好 teamSize)。
 // 票据整队不可拆。成功返回 (sideA, sideB, true);无法精确装满返回 (_, _, false)。
-func binPack(tickets []*matchv1.MatchTicketStorageRecord, teamSize int) (sideA, sideB []*matchv1.MatchTicketStorageRecord, ok bool) {
+// binPack 把若干张票据装箱成 sideCount 方,每方恰好 teamSize 人;装不满或装不下即失败。
+// 票据不可拆分(一支队伍必须整体在同一方),所以这是「多背包恰好装满」问题,用
+// 「大队优先 + 首个装得下的方」贪心——与原两方实现同一策略,只是把方数参数化。
+//
+// sideCount 由关卡表 side_count 列给出:PVE 合作=1、常规对抗=2、多队混战=N。
+// sideCount<=0 由调用方兜底成 2(历史默认),本函数不做该兜底以免掩盖调用方的取值错误。
+//
+// 复杂度 O(票数 × sideCount);票数被 need=sideCount×teamSize 上界约束,方数是个位数,
+// 不需要更聪明的装箱算法(§15.2:够用即可,不为理论最优增复杂度)。
+func binPack(tickets []*matchv1.MatchTicketStorageRecord, teamSize, sideCount int) (sides [][]*matchv1.MatchTicketStorageRecord, ok bool) {
+	if teamSize <= 0 || sideCount <= 0 {
+		return nil, false
+	}
 	// 复制并按队伍人数降序(大队优先放置,降低装不下的概率)
 	sorted := make([]*matchv1.MatchTicketStorageRecord, len(tickets))
 	copy(sorted, tickets)
@@ -43,24 +55,33 @@ func binPack(tickets []*matchv1.MatchTicketStorageRecord, teamSize int) (sideA, 
 		}
 	}
 
-	capA, capB := teamSize, teamSize
+	sides = make([][]*matchv1.MatchTicketStorageRecord, sideCount)
+	remain := make([]int, sideCount)
+	for i := range remain {
+		remain[i] = teamSize
+	}
 	for _, t := range sorted {
 		size := len(t.Members)
-		switch {
-		case size <= capA:
-			sideA = append(sideA, t)
-			capA -= size
-		case size <= capB:
-			sideB = append(sideB, t)
-			capB -= size
-		default:
-			return nil, nil, false
+		placed := false
+		for i := 0; i < sideCount; i++ {
+			if size <= remain[i] {
+				sides[i] = append(sides[i], t)
+				remain[i] -= size
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			return nil, false
 		}
 	}
-	if capA != 0 || capB != 0 {
-		return nil, nil, false
+	// 每一方都必须恰好装满:留空位说明这批票据凑不出完整对局,交回上层继续等。
+	for _, r := range remain {
+		if r != 0 {
+			return nil, false
+		}
 	}
-	return sideA, sideB, true
+	return sides, true
 }
 
 // ── 进度转换 ──────────────────────────────────────────────────────────────────

@@ -14,6 +14,19 @@ package pandora.config.v1;
 
 import "pandora/config/v1/excel.proto";
 
+// LevelEntryMode 入口模式:这张图「怎么进」。
+// 从 matchmaker 部署级开关 walk_in 下沉为关卡表数据(CLAUDE.md §17.1「差异进表」):
+// 部署级开关表达不了「同一个池里,有的副本直进、有的副本要撮合」——而这正是
+// 「多人撮合进副本」需要的。撮合池归属仍由 game_mode 列决定,与本列正交。
+enum LevelEntryMode {
+  // 未配置:沿用该 matchmaker 部署的 walk_in 开关(旧批次表 + 新二进制的兼容路径,§9.21)。
+  LEVEL_ENTRY_MODE_UNSPECIFIED = 0;
+  // 撮合:入池按 MMR 窗口凑齐 side_count×team_size 人后装箱分方,再进确认期。
+  LEVEL_ENTRY_MODE_MATCHMAKE   = 1;
+  // 直进(walk-in):单张票据(单人或整队)立即成局,跳过撮合与确认,不与陌生人凑对手。
+  LEVEL_ENTRY_MODE_WALK_IN     = 2;
+}
+
 // LevelCategory 关卡类别(对齐 g_关卡.xlsx「关卡类别」列取值,JSON 里用数字)。
 enum LevelCategory {
   LEVEL_CATEGORY_UNSPECIFIED = 0;
@@ -55,6 +68,15 @@ message LevelRow {
   //   也把"PVE 图被丢进 PVP 池空排队"变成一次明确失败。
   // 战斗类关卡留空 = 配置缺失,两端均 fail-closed 拒绝进入(不猜默认池)。
   string game_mode = 10 [(excel_col) = "玩法模式", (excel_default) = ""];
+  // 入口模式(枚举数字;空单元格=未配置,沿用部署级 walk_in 开关)。见 LevelEntryMode。
+  // 刻意**不写 (excel_default)**:枚举列的 0 被生成器视为非法数据值(与 category 同规则),
+  // 而本列的"未配置"恰恰要落 0。空单元格在无默认值时直接保持类型零值、不进枚举校验,
+  // 正好表达该语义;非战斗类关卡(登录/选角/主城)本就不经 StartMatch,留空即可。
+  LevelEntryMode entry_mode = 11 [(excel_col) = "入口模式"];
+  // 对局方数(几方对抗):PVE 合作副本填 1,PVP 对抗填 2,多队混战填 N。
+  //   0 = 未配置,沿用服务端默认 2(与历史 need=2×team_size 逐字节等价)。
+  // 撮合凑齐人数 = side_count × team_size;直进(walk-in)不看本列。
+  uint32 side_count = 12 [(excel_col) = "对局方数", (excel_default) = "0"];
 }
 
 // LevelTableData 关卡表整表容器(dist/level.json 的根对象;excel_file 注解 = 导表登记)。

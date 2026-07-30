@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 )
 
 // Config 是 guild 服务的完整配置(公会 + 临时群同进程共用)。
@@ -52,6 +53,10 @@ type GuildConf struct {
 
 	// SweepBatch 每轮清理行数上限(默认 500)。
 	SweepBatch int `yaml:"sweep_batch,omitempty" json:"sweep_batch,omitempty"`
+
+	// RetentionModeRaw 保留期清理模式:留空 / "report_only" = 默认只报告不删;"delete" = 真删。
+	// 「因为数据大了就自动删」不可接受(§9.24 + 2026-07-22 用户指令);业务性删除(解散公会等)不受此约束。
+	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -89,4 +94,19 @@ func (c *Config) Defaults() {
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51008"
 	}
+}
+
+// RetentionMode 返回生效的保留期清理模式(默认 ModeReportOnly = 只报告不删)。
+func (c *GuildConf) RetentionMode() dbguard.Mode {
+	m, err := dbguard.ParseMode(c.RetentionModeRaw)
+	if err != nil {
+		return dbguard.ModeReportOnly
+	}
+	return m
+}
+
+// ValidateRetentionMode 供 main 启动 fail-fast(写了无法识别的模式必须拒启)。
+func (c *GuildConf) ValidateRetentionMode() error {
+	_, err := dbguard.ParseMode(c.RetentionModeRaw)
+	return err
 }

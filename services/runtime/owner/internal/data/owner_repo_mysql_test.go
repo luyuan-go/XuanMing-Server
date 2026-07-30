@@ -35,6 +35,14 @@ import (
 
 const ownerMySQLTestTimeout = 15 * time.Second
 
+// ownerMySQLSetupTimeout 是 fixture 建库 + 建表(DDL)与清理的预算,独立于断言用的
+// ownerMySQLTestTimeout。DDL 比测试体里的小 DML 重一个量级(CREATE DATABASE 要落目录),
+// 而测试可能跑在被代理的链路上(kubectl port-forward / 远端联调库),实测单条 CREATE
+// DATABASE 可达十余秒——原实现用**同一个 15s ctx** 覆盖 ping + 建库 + 建表三步,任一步
+// 稍慢就把后面两步的预算吃光,失败还表现为「schema 初始化超时」这种误导性信息。
+// 放宽只影响等待上限,不改变任何断言:逻辑错依旧失败。
+const ownerMySQLSetupTimeout = 120 * time.Second
+
 var ownerMySQLTestDBPattern = regexp.MustCompile(`^pandora_owner_it_[0-9]+_[0-9a-f]{12}$`)
 
 type ownerMySQLFixture struct {
@@ -60,8 +68,10 @@ func openOwnerMySQLFixture(t *testing.T) *ownerMySQLFixture {
 	cfg.MultiStatements = true
 	cfg.ParseTime = true
 	cfg.Timeout = 5 * time.Second
-	cfg.ReadTimeout = ownerMySQLTestTimeout
-	cfg.WriteTimeout = ownerMySQLTestTimeout
+	// 驱动级读写上限按 DDL 预算取(建库/建表是本套最重的语句);断言用的小 DML 远低于此,
+	// 放宽只影响卡死时的等待上限,不改变任何判定。
+	cfg.ReadTimeout = ownerMySQLSetupTimeout
+	cfg.WriteTimeout = ownerMySQLSetupTimeout
 
 	admin, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
@@ -69,7 +79,7 @@ func openOwnerMySQLFixture(t *testing.T) *ownerMySQLFixture {
 	}
 	f := &ownerMySQLFixture{admin: admin}
 	t.Cleanup(func() { f.cleanup(t) })
-	ctx, cancel := context.WithTimeout(context.Background(), ownerMySQLTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), ownerMySQLSetupTimeout)
 	defer cancel()
 	if err := admin.PingContext(ctx); err != nil {
 		t.Fatalf("已设置测试 DSN 但 MySQL 不可达: %v", err)
@@ -103,7 +113,8 @@ func openOwnerMySQLFixture(t *testing.T) *ownerMySQLFixture {
 
 func (f *ownerMySQLFixture) cleanup(t *testing.T) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), ownerMySQLTestTimeout)
+	// DROP DATABASE 与建库同级重,用 setup 预算(原来复用 15s 断言预算,慢链路上必然误报)。
+	ctx, cancel := context.WithTimeout(context.Background(), ownerMySQLSetupTimeout)
 	defer cancel()
 	if f.db != nil {
 		_ = f.db.Close()
@@ -175,6 +186,71 @@ func TestOwnerRepoMySQL(t *testing.T) {
 		again, _, err := repo.Admit(ctx, player, 1, testOpA, target)
 		if err != nil || again.Phase != OwnerPhaseAdmitted {
 			t.Fatalf("Admit 重放: %+v err=%v", again, err)
+		}
+	})
+
+	// 同 exact 实例的重复投递必须收敛为 no-op,且 **operation_id 必须保持不变**。
+	// 这是 §9.23「一次真实进场用一个稳定 operation_id」的权威侧落点:调用方过去每次
+	// 投递现铸 UUID,同一次进场的重连/重复交付/心跳自愈会写出不同 operation,幂等键失效。
+	t.Run("SameInstanceRedeliveryKeepsOperationAndEpoch", func(t *testing.T) {
+		const player = 310
+		target := testTarget("uid-same")
+		first, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 5*time.Second)
+		if err != nil || first.OwnerEpoch != 1 || first.OperationID != testOpA {
+			t.Fatalf("首迁移: %+v err=%v", first, err)
+		}
+
+		// ① 换一个 operation 重复投递同一实例 → 原样返回,epoch 不动,operation 不被覆盖。
+		again, err := repo.BeginTransition(ctx, player, 0, testOpB, OwnerTypeHub, target, 5*time.Second)
+		if err != nil {
+			t.Fatalf("同实例重复投递不应报错: %v", err)
+		}
+		if again.OwnerEpoch != 1 {
+			t.Fatalf("同实例重复投递不得推进 epoch: got=%d want=1", again.OwnerEpoch)
+		}
+		if again.OperationID != testOpA {
+			t.Fatalf("operation_id 必须稳定: got=%q want=%q(调用方传的 %q 不得覆盖)",
+				again.OperationID, testOpA, testOpB)
+		}
+
+		// ② 过期 expectEpoch + 同实例 → 仍是 no-op,不得报 EPOCH_CONFLICT。
+		//    「目标已经是它」本就该幂等,不该先冲突再让调用方重查。
+		stale, err := repo.BeginTransition(ctx, player, 0, testOpC, OwnerTypeHub, target, 5*time.Second)
+		if err != nil || stale.OwnerEpoch != 1 || stale.OperationID != testOpA {
+			t.Fatalf("过期 expect + 同实例应幂等 no-op: %+v err=%v", stale, err)
+		}
+
+		// ③ 同实例但 assignment 刷新(seat 续租)→ 仍不得推进 epoch(churn 防护)。
+		refreshed := target
+		refreshed.AssignmentOrAllocationID = "assign-uid-same-v2"
+		seat, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, refreshed, 5*time.Second)
+		if err != nil || seat.OwnerEpoch != 1 || seat.OperationID != testOpA {
+			t.Fatalf("assignment 刷新不得推进 epoch: %+v err=%v", seat, err)
+		}
+
+		// ④ 已 ADMITTED 后重复投递 → 不得被打回 PENDING。
+		if _, _, aerr := repo.Admit(ctx, player, 1, testOpA, target); aerr != nil {
+			t.Fatalf("Admit: %v", aerr)
+		}
+		afterAdmit, err := repo.BeginTransition(ctx, player, 1, testOpC, OwnerTypeHub, target, 5*time.Second)
+		if err != nil || afterAdmit.Phase != OwnerPhaseAdmitted || afterAdmit.OwnerEpoch != 1 {
+			t.Fatalf("ADMITTED 后重复投递不得回退 phase: %+v err=%v", afterAdmit, err)
+		}
+
+		// ⑤ 真换实例 = 真实迁移:epoch 推进,operation 换成本次的。
+		moved, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, testTarget("uid-moved"), 0)
+		if err != nil || moved.OwnerEpoch != 2 || moved.OperationID != testOpB {
+			t.Fatalf("换实例应真实迁移: %+v err=%v", moved, err)
+		}
+	})
+
+	// 真实迁移路径不接受空 operation_id(绕过 biz 的内部调用兜底;空 operation 会让
+	// Admit exact 校验、客户端续用与审计流水同时失去锚点)。
+	t.Run("RealTransitionRejectsEmptyOperation", func(t *testing.T) {
+		const player = 311
+		_, err := repo.BeginTransition(ctx, player, 0, "", OwnerTypeHub, testTarget("uid-empty"), 0)
+		if errcode.As(err) != errcode.ErrOwnerInvalidOperation {
+			t.Fatalf("空 operation 的真实迁移必须拒绝,得到 err=%v", err)
 		}
 	})
 

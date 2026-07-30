@@ -2093,3 +2093,86 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
   UE 编译、未 commit 未构建未部署;宿主机 360 白名单与 vhdx 迁盘需用户操作。
   ⚠ 首次滚动必须两步走(先 Recreate 换镜像,再单独 apply strategy/replicas),否则旧二进制
   不参与选举 = 无保护并发扫描窗口。
+
+## 2026-07-22(续14):库容量守护 + 大字段排查体系(§9.24 深度侧,Claude)
+
+- 用户要求:①服务初始化时超上限打日志去查;②"某一格子数据过大就证明有问题",问标准做法。
+- **核心结论(已写进 §9.24)**:增长有两个**独立**失控方向,只管一个必漏另一个 ——
+  广度(行数变多,信号 TABLE_ROWS,闸=保留期清理)/ 深度(单行变胖,信号 AVG_ROW_LENGTH,
+  闸=写入侧上限)。本仓两个方向各错一个:bag 管住 items 条数却没管单个 item 的 attrs
+  (深度无闸);rewardclaim 管住单条位图大小却没管位图条目数(广度无闸)。
+  故 blob/JSON/CSV/位图列必须同时具备三闸:单元素上限 + 集合条目上限 + 整体字节上限。
+- **实测定性(真 MySQL 8.4)**:非严格 sql_mode 下往 VARBINARY(16) 写 100 字节
+  err=nil 且只存 16 字节(静默截断=无声数据损坏);严格模式 Error 1406 拒写。
+  全仓此前**零处**校验 sql_mode。
+- 落码:
+  - **pkg/dbguard** 新包:AssertStrictMode(启动 fail-fast,唯一允许拒启动的库检查)、
+    Guard.Check(information_schema 估算,毫秒级不锁表,禁 COUNT(*);超预算 ERROR 日志 +
+    metric,**不阻止启动**)、CheckColumns/TopLargeRows(定位)、CheckPayload(写入侧三档:
+    超限拒写 / 达 80% WARN 留排查窗口 / 否则静默)+ 6 个 Prometheus 指标
+    (强调 payload histogram 看 p99 而非 max:p99 正常+max 爆=个例,p99 齐涨=设计问题)。
+  - **P1 修复**:pkg/rewardclaim 位图条目数无上限 —— ClaimReward 是客户端可直调
+    (Envoy 不在 403 名单)、source/activity_instance_id 无配置表白名单,每换一个值就永久
+    新增一条位图(单条最大 128KiB),落进 LONGBLOB(4GB)DB 层不设防;约 3.3 万次调用即可
+    撑到 4GB,而每次领奖都全量 load+marshal,几 MB 后先打爆的是服务与带宽。
+    修:MaxPermanentSources=64 / MaxActivityInstances=256 / MaxSourceNameLen=64,
+    **只拦新增条目**(已有条目继续可领,存量超限只冻结不报错 —— 否则=回档);
+    触顶 ERROR 留证 + 客户端只拿 ErrRewardUnknownID(不外泄内部上限);4 个子测试锁定。
+    根治方向已注明:切 ClaimPermanentByID + BitIndexMap 配置表白名单。
+  - 接线 3 服务:inventory(trade+bag 双库严格模式断言 + 容量巡检)、player(LONGBLOB 表)、
+    mail(buildPayload 加序列化后字节兜底,签名加 ctx);budgets.go 声明各表预算
+    (口径:有保留期表=峰值速率×保留期×3;MaxAvgRowBytes 按 blob **设计期望**定不按类型上限定)。
+  - **dbcheck -size-check [-top-rows N]**:登记 9 个大字段,输出 rows/max/avg/预算/超限行数,
+    按超限程度排序 + 给出"超了该查什么",超阈值自动列 Top-N 主键。
+- 文档:**docs/design/db-capacity-guard.md** 排查 runbook(5 步:确认变胖还是变多 → 定位到列
+  并判个例/普遍 → 定位到行 → 反序列化定位到字段 → 回写入路径补最里层缺的那个闸)+
+  已知缺口表 + 新增表检查清单。CLAUDE.md §9.24 与 AGENTS.md §10 同步扩写。
+- 审计:workflow 6 域 21 候选 → 7 确认(全 P2,验证者逐条给出降级论证)+ 14 驳回;
+  **reward-claim agent 挂了,该域由我自己复核并查出上述 P1**(印证"挂掉的 agent 必须自查")。
+- 验证:pkg + 7 服务 build/vet/test 全绿;sql_mode 截断行为已在真 MySQL 8.4 实测。
+  **未跑**:-size-check 的真库验证(本机 Docker Desktop 挂了,TiDB/MySQL 容器均不可用),
+  SQL 是标准 MAX/AVG/COUNT,风险低但如实记为待办。
+
+## 2026-07-22(续15):dbguard 全服务接入补齐(12/12,Claude)
+
+- 自检发现自相矛盾:上一轮往 AGENTS.md 写了红线"连 MySQL 的服务必须启动时断言 sql_mode",
+  但自己只接了 3 个服务(且 mail 只接了写入侧 CheckPayload,没接断言)。本轮补齐到 12/12。
+- **严格模式断言 12/12**:新增 pkg/dbguard.AssertStrictModeStartup(自带 5s 超时,免各 main
+  重复写 context.WithTimeout 三行;不在包内 os.Exit——各服务退出约定不同,只统一"怎么探测")。
+  接入 login / battle_result / data_service / leaderboard / chat / friend / mail / guild /
+  owner / auction(前 6 个批量 perl 注入统一锚点,后 4 个结构特殊单独处理)。
+  **auction 逐分片断言**:各分片可能连不同 MySQL 实例,配置漂移可能只出现在个别分片,只查一个会漏。
+- **容量巡检 12/12**:新建 10 个 internal/data/budgets.go(每表都写了预算推导依据与"超了该查什么"),
+  各 main 加 runCapacityGuard(启动跑一轮拿基线 + 每小时一轮,safego 兜 panic,超限只 ERROR 不阻断)。
+  两处接法要点:①pandora_social 是 chat/friend/guild/mail 共用库,**各服务只声明自己负责的表**
+  (否则同表被四服务重复告警、处置责任不清);②auction 逐分片各建 Guard,预算按单分片量级给。
+- 文档同步:db-capacity-guard.md §2.1 补覆盖状态与两处接法要点。
+- 验证:pkg + 12 服务 build/vet/test 全绿(35 测试包 ok,0 FAIL);tools/migrate 编译通过。
+  未跑项同续14:dbcheck -size-check 的真库验证(本机 Docker Desktop 仍不可用)。
+
+## 2026-07-22(续16):保留期清理改为默认只报告不删(用户指令,Claude)
+
+- 用户指令:「你不能清理我的数据,只能打印日志」+ 澄清范围「原来像道具超时删除、过期删除
+  那种要保留,不允许的是我这个会话里为了『数据大了』新增的删除代码」。
+- **范围划定(关键)**:只改本会话续11~续15 新增的**运维语义**清理;**业务语义**删除一律不动
+  ——mail 过期清理 / bag_journal / owner_transition_log / friend_pair_guards(均非本轮新增)、
+  道具过期、挂单置 EXPIRED、玩家丢弃/解散公会、出箱投递成功即删,全部保持原样。
+- **pkg/dbguard/sweep.go** 新机制:
+  - Mode 零值 = ModeReportOnly(只 COUNT + WARN 告警 + pending gauge,一行不删);
+  - ParseMode 对无法识别的值**报错而非猜成 delete**(拼错一字母就删生产数据不可接受),
+    各服务 ValidateRetentionMode 供启动 fail-fast;
+  - **SweepTable 强制 Count 与 Delete 共用同一 where**(条件只写一遍,从机制上排除
+    "报告说 0 行、实际删 10 万行"的漂移);多表事务场景用 ReportPending/ReportDeleted 保持同口径。
+- 8 处改造(全部默认 report_only):inventory(ledger+escrow)、battle_result(battles/stats +
+  progress 组,report-only 只跑一轮不空转)、chat(私聊历史)、friend(终态请求)、
+  guild(终态申请)、auction(逐分片三表)、leaderboard(snapshot+GRANTED)、login(设备行)。
+  各服务 conf 加 retention_mode(留空=report_only)。
+- **dbcheck 移除真删能力**:-force-sweep/-confirm/-batch 整块删掉,换 -pending(只 COUNT
+  报告待清理量);**刻意不留同名 flag**——留着改语义会让按旧文档敲的命令静默变行为。
+- 测试:pkg/dbguard 加 ParseMode 安全语义单测(默认/拼错/零值全覆盖);inventory 集成测试
+  新增 ReportOnlyDeletesNothing(**保留期给 0 天极端条件下仍一行不少**);battle 加
+  DefaultsToReportOnly + MistypedModeFallsBack;inventory biz 加同类。
+- 规范:CLAUDE.md §9.24 开头改写(默认只报告 + 业务/运维语义删除对照表)、§8 压测句;
+  AGENTS.md §10 红线;db-capacity-guard.md 加 §0.0;stress-discipline.md §4.3 去掉
+  "批删速率抽测"改 -pending。
+- 验证:pkg + 12 服务 build 全绿,36 个测试包 ok / 0 FAIL,tools/migrate 编译通过。

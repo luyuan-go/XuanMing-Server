@@ -5,15 +5,20 @@
 //     (与 CLAUDE.md §9.24 只增表清单同步维护)——清单外的表、swept 表缺清理索引 → 退出码 1。
 //  2. 压测断言:压前 -snapshot before.json,压后 -snapshot after.json -compare before.json,
 //     断言 outbox 类表已排空(≤ -outbox-max)、无未登记表;各表增量打印供"增长 = 业务量可解释"核对。
-//  3. 清理压测:-force-sweep -confirm=YES-DELETE 以 cutoff=now 复用与服务同构的批删语句
-//     循环删到空并输出 rows/s(验证清理速率追得上写入、批删不锁表)。**会删光对应表数据,
-//     只准对压测/一次性库使用**。player_mail(归档分流)与 bag_journal(checkpoint 条件)
-//     不在工具内重复实现,由各自服务 sweep + 集成测试覆盖。
+//  3. 待清理量报告:-pending 对各 swept 表按 cutoff=now 统计"最坏情况下有多少行可清",
+//     供容量评估与"是否该开删"的决策。
+//
+// # 本工具永不删除任何数据(2026-07-22)
+//
+// 早先版本有 -force-sweep -confirm=YES-DELETE 的"清理压测"能力(cutoff=now 批删到空、
+// 输出 rows/s)。按用户指令「不能清理我的数据,只能打印日志」**已整块移除**,且**刻意不
+// 保留同名 flag**:留着改语义会让按旧文档敲的命令静默变行为,现在旧命令直接报未定义 flag。
+// 真删只由各服务配置 `retention_mode: delete` 决定(默认 report_only 只告警)。
 //
 // 用法:
 //
 //	go run ./cmd/dbcheck -dsn "root:pwd@tcp(127.0.0.1:3307)/" [-exact] [-snapshot out.json]
-//	    [-compare before.json] [-outbox-max 200] [-force-sweep -confirm=YES-DELETE]
+//	    [-compare before.json] [-outbox-max 200] [-size-check [-top-rows N]] [-pending]
 //
 // 登记清单口径:新增任何表必须先在 CLAUDE.md §9.24 登记再同步到本清单;
 // 本工具报"未登记表"即 PR review 拒绝口径的机械化(AGENTS.md §10 红线)。
@@ -55,9 +60,11 @@ type tableEntry struct {
 	Class tableClass
 	// RequiredIndexes 是 swept 表清理路径必需的索引(名字 + 前导列核对)。
 	RequiredIndexes []indexSpec
-	// SweepSQL 是 -force-sweep 用的批删语句(与服务实现同构,cutoff=now;须恰含一个 LIMIT ? 占位)。
-	// 空 = 不支持工具直删(多表事务/归档分流/条件复杂,由服务 sweep + 集成测试覆盖)。
-	SweepSQL string
+	// PendingWhere 是"满足清理条件"的 WHERE 片段(不含 WHERE 关键字,cutoff=now 即"一切都算超期",
+	// 用于 -pending 报告各表最坏待清理规模)。**本工具只 COUNT,永不 DELETE**
+	// (2026-07-22 用户指令:不能因为数据大了就删数据;真删由各服务 retention_mode=delete 决定)。
+	// 空 = 条件复杂/多表事务,由各服务 sweep 自己报告(见服务日志 db_retention_pending_not_deleted)。
+	PendingWhere string
 }
 
 // registry 是全库表登记清单(与 CLAUDE.md §9.24 同步;新表未登记 → 检查失败)。
@@ -66,7 +73,7 @@ var registry = map[string]map[string]tableEntry{
 		"accounts":                   {Class: classBounded},
 		"player_roles":               {Class: classBounded},
 		"player_session_generations": {Class: classBounded}, // 每玩家 1 行(登录定序+SetRole fencing 权威),被玩家数有界
-		"account_devices":            {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_last_login", Columns: []string{"last_login_at"}}}, SweepSQL: "DELETE FROM account_devices WHERE last_login_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
+		"account_devices":            {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_last_login", Columns: []string{"last_login_at"}}}, PendingWhere: "last_login_at < DATE_SUB(NOW(), INTERVAL 0 DAY)"},
 		"account_bans":               {Class: classExempt}, // 运营合规审计,量级 = 运营操作数
 	},
 	"pandora_player": {
@@ -78,10 +85,10 @@ var registry = map[string]map[string]tableEntry{
 		"player_talents":       {Class: classBounded},
 		"player_reward_claims": {Class: classBounded},
 		"player_push_outbox":   {Class: classOutbox},
-		"mmr_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM mmr_history WHERE created_at < NOW() LIMIT ?"},
-		"exp_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM exp_history WHERE created_at < NOW() LIMIT ?"},
-		"attr_point_grants":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM attr_point_grants WHERE created_at < NOW() LIMIT ?"},
-		"talent_point_grants":  {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM talent_point_grants WHERE created_at < NOW() LIMIT ?"},
+		"mmr_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
+		"exp_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
+		"attr_point_grants":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
+		"talent_point_grants":  {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
 	},
 	"pandora_battle": {
 		"battles":                  {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}},                // 清理按服务端 created_at(§9.6 不信 DS ended_at_ms);与 stats 同事务批删,不支持工具直删
@@ -98,42 +105,42 @@ var registry = map[string]map[string]tableEntry{
 	"pandora_social": {
 		"friendships":           {Class: classBounded},
 		"blocks":                {Class: classBounded},
-		"friend_player_guards":  {Class: classExempt},                                                                                                                                                                                             // 每玩家一行写守卫(R5 P1-2,TiDB 无 gap 锁;被玩家数有界,§9.24 豁免)
-		"friend_pair_guards":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM friend_pair_guards WHERE created_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"}, // 每关系对一行写守卫,随社交图 O(n²) 累积 → 保留期 sweep(R9 P1;守卫行仅锁载体,删除安全)
-		"friend_requests":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, SweepSQL: "DELETE FROM friend_requests WHERE status <> 1 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
-		"chat_private_messages": {Class: classSwept, SweepSQL: "DELETE FROM chat_private_messages WHERE message_id < 18446744073709551615 LIMIT ?"}, // 雪花 PK 范围删,无需时间索引
+		"friend_player_guards":  {Class: classExempt},                                                                                                                                                    // 每玩家一行写守卫(R5 P1-2,TiDB 无 gap 锁;被玩家数有界,§9.24 豁免)
+		"friend_pair_guards":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < DATE_SUB(NOW(), INTERVAL 0 DAY)"}, // 每关系对一行写守卫,随社交图 O(n²) 累积 → 保留期 sweep(R9 P1;守卫行仅锁载体,删除安全)
+		"friend_requests":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, PendingWhere: "status <> 1 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY)"},
+		"chat_private_messages": {Class: classSwept, PendingWhere: "message_id < 18446744073709551615"}, // 雪花 PK 范围删,无需时间索引
 		"guilds":                {Class: classBounded},
 		"guild_members":         {Class: classBounded},
-		"guild_join_requests":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, SweepSQL: "DELETE FROM guild_join_requests WHERE status <> 1 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
+		"guild_join_requests":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, PendingWhere: "status <> 1 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY)"},
 		"chat_groups":           {Class: classBounded},
 		"chat_group_members":    {Class: classBounded},
 		"player_group_counts":   {Class: classBounded},
-		"sys_mail":              {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_end", Columns: []string{"end_ms"}}}, SweepSQL: "DELETE FROM sys_mail WHERE end_ms > 0 AND end_ms <= UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
-		"guild_mail":            {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_end", Columns: []string{"end_ms"}}}, SweepSQL: "DELETE FROM guild_mail WHERE end_ms > 0 AND end_ms <= UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+		"sys_mail":              {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_end", Columns: []string{"end_ms"}}}, PendingWhere: "end_ms > 0 AND end_ms <= UNIX_TIMESTAMP(NOW(3))*1000"},
+		"guild_mail":            {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_end", Columns: []string{"end_ms"}}}, PendingWhere: "end_ms > 0 AND end_ms <= UNIX_TIMESTAMP(NOW(3))*1000"},
 		"player_mail":           {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_expire", Columns: []string{"expire_ms"}}}}, // 归档分流(未领附件先归档),不支持工具直删
 		"player_mail_cursor":    {Class: classBounded},
-		"player_mail_claim":     {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_mail", Columns: []string{"mail_id"}}}, SweepSQL: "DELETE FROM player_mail_claim WHERE mail_id < 18446744073709551615 LIMIT ?"},
-		"player_mail_archive":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_archived", Columns: []string{"archived_at"}}}, SweepSQL: "DELETE FROM player_mail_archive WHERE archived_at < NOW() LIMIT ?"},
+		"player_mail_claim":     {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_mail", Columns: []string{"mail_id"}}}, PendingWhere: "mail_id < 18446744073709551615"},
+		"player_mail_archive":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_archived", Columns: []string{"archived_at"}}}, PendingWhere: "archived_at < NOW()"},
 	},
 	"pandora_trade": {
 		"player_currency":      {Class: classBounded},
 		"player_items":         {Class: classBounded}, // count=0 行被 uk(player,item) 有界,故意不清(§9.24 豁免注记)
 		"player_item_instance": {Class: classBounded}, // 容量上限×玩家数;丢弃硬删
 		"mail_transfer_escrow": {Class: classBounded}, // 在途托管行,领取/释放即删;量级=在途 transfer 邮件数(§9.24 豁免注记)
-		"inventory_ledger":     {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM inventory_ledger WHERE created_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
-		"auction_escrow":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, SweepSQL: "DELETE FROM auction_escrow WHERE status = 2 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
+		"inventory_ledger":     {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < DATE_SUB(NOW(), INTERVAL 0 DAY)"},
+		"auction_escrow":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, PendingWhere: "status = 2 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY)"},
 	},
 	"pandora_auction": {
-		"auction_orders":           {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_terminal_purge", Columns: []string{"status", "updated_at_ms"}}}, SweepSQL: "DELETE FROM auction_orders WHERE status IN (3,4,5) AND release_pending = 0 AND match_pending = 0 AND updated_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
-		"auction_matches":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_settled_purge", Columns: []string{"settlement_status", "event_pending", "matched_at_ms"}}}, SweepSQL: "DELETE FROM auction_matches WHERE settlement_status = 1 AND event_pending = 0 AND matched_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
-		"auction_idempotency_keys": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at_ms"}}}, SweepSQL: "DELETE FROM auction_idempotency_keys WHERE created_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+		"auction_orders":           {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_terminal_purge", Columns: []string{"status", "updated_at_ms"}}}, PendingWhere: "status IN (3,4,5) AND release_pending = 0 AND match_pending = 0 AND updated_at_ms < UNIX_TIMESTAMP(NOW(3))*1000"},
+		"auction_matches":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_settled_purge", Columns: []string{"settlement_status", "event_pending", "matched_at_ms"}}}, PendingWhere: "settlement_status = 1 AND event_pending = 0 AND matched_at_ms < UNIX_TIMESTAMP(NOW(3))*1000"},
+		"auction_idempotency_keys": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at_ms"}}}, PendingWhere: "created_at_ms < UNIX_TIMESTAMP(NOW(3))*1000"},
 		"auction_owner_guards":     {Class: classExempt}, // 每 owner 一行,被玩家数有界
 		"auction_shard_topology":   {Class: classBounded},
 	},
 	"pandora_leaderboard": {
 		"leaderboard_settlement": {Class: classExempt}, // settle uk 防重复结算永久闸,每批次 1 行
-		"leaderboard_snapshot":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at_ms"}}}, SweepSQL: "DELETE FROM leaderboard_snapshot WHERE created_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
-		"leaderboard_reward_log": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at_ms"}}}, SweepSQL: "DELETE FROM leaderboard_reward_log WHERE status = 1 AND updated_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+		"leaderboard_snapshot":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at_ms"}}}, PendingWhere: "created_at_ms < UNIX_TIMESTAMP(NOW(3))*1000"},
+		"leaderboard_reward_log": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at_ms"}}}, PendingWhere: "status = 1 AND updated_at_ms < UNIX_TIMESTAMP(NOW(3))*1000"},
 	},
 	"pandora_bag": {
 		"bag_meta":       {Class: classBounded},
@@ -145,9 +152,9 @@ var registry = map[string]map[string]tableEntry{
 		"bag_capacity":   {Class: classBounded},                                                                                        // 已购容量增量,每玩家×可买段一行(§5.3)
 	},
 	"pandora_owner": {
-		"owner_record":         {Class: classBounded},                                                                                                                                                                       // 每玩家一行(§9.22 owner 权威)
-		"ds_instance_lease":    {Class: classBounded},                                                                                                                                                                       // 每 DS 实例一行
-		"owner_transition_log": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created_at", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM owner_transition_log WHERE created_at < NOW() LIMIT ?"}, // 迁移审计流水,90 天(owner 线负责 sweep 落地)
+		"owner_record":         {Class: classBounded},                                                                                                                            // 每玩家一行(§9.22 owner 权威)
+		"ds_instance_lease":    {Class: classBounded},                                                                                                                            // 每 DS 实例一行
+		"owner_transition_log": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created_at", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"}, // 迁移审计流水,90 天(owner 线负责 sweep 落地)
 	},
 	// 预留库:当前应无业务表;一旦出现新表必须先登记。
 	"pandora_ops": {},
@@ -164,23 +171,15 @@ func main() {
 	snapshotOut := flag.String("snapshot", "", "把各表行数快照写入该 JSON 文件")
 	compareWith := flag.String("compare", "", "与该 JSON 快照对比并输出增量")
 	outboxMax := flag.Int64("outbox-max", 200, "outbox 类表允许的残留行数上限(压后断言;在途少量属正常)")
-	forceSweep := flag.Bool("force-sweep", false, "以 cutoff=now 跑与服务同构的批删并输出 rows/s(会删光可清数据,只准对压测库)")
-	confirm := flag.String("confirm", "", "-force-sweep 必须同时传 -confirm=YES-DELETE")
-	batch := flag.Int("batch", 500, "-force-sweep 单批行数(与服务 sweep 默认一致)")
+	// -force-sweep / -confirm / -batch 已于 2026-07-22 **移除**(用户指令:不能因为数据大了就删数据)。
+	// 刻意不保留同名 flag:留着改语义会让按旧文档敲的命令静默变行为;现在旧命令直接报未定义 flag。
+	pending := flag.Bool("pending", false, "报告各 swept 表在 cutoff=now 下的待清理行数(只 COUNT,不删任何数据)")
+	sizeCheck := flag.Bool("size-check", false, "大字段体检:对登记的 blob/JSON 列跑 MAX/AVG LENGTH 与超限行数(全表扫描,勿高频)")
+	topRows := flag.Int("top-rows", 0, "配合 -size-check:对超限字段列出前 N 行(主键+字节数),定位到具体玩家/记录")
 	flag.Parse()
 
 	if *dsn == "" {
 		fmt.Fprintln(os.Stderr, "用法: dbcheck -dsn 'user:pwd@tcp(host:port)/' [flags];见文件头注释")
-		os.Exit(2)
-	}
-	if *forceSweep && *confirm != "YES-DELETE" {
-		fmt.Fprintln(os.Stderr, "FATAL: -force-sweep 会删光可清数据,必须同时传 -confirm=YES-DELETE(只准对压测库)")
-		os.Exit(2)
-	}
-	if *batch <= 0 {
-		// 审计 P2:-batch 0 时 RowsAffected 恒 0 < batch 恒假不成立…… LIMIT 0 删 0 行,
-		// n(0) < batch(0) 为假 → 无限空转到全局超时。参数必须为正。
-		fmt.Fprintln(os.Stderr, "FATAL: -batch 必须 > 0")
 		os.Exit(2)
 	}
 
@@ -329,10 +328,59 @@ func main() {
 		}
 	}
 
-	// 6. 清理压测:cutoff=now 批删到空,输出 rows/s。
-	if *forceSweep {
-		fmt.Println("── 清理压测(cutoff=now,与服务同构批删;player_mail / bag_journal / battles 组由服务 sweep 覆盖,跳过)──")
-		for dbName, reg := range registry {
+	// 5.5 大字段体检(-size-check):单行/单元素"变胖"检查,与行数检查是两个独立失控方向。
+	// 全表扫描 MAX/AVG LENGTH,成本高 → 仅显式开启时跑(上线前一次 / 告警后排查 / 压测收尾)。
+	if *sizeCheck {
+		present := map[string]map[string]bool{}
+		for dbName, tables := range actual {
+			present[dbName] = toSet(tables)
+		}
+		fmt.Println("\n── 大字段体检(按 max/预算 比值降序;AVG 涨=全体普遍变胖=设计问题,MAX 涨=个别行畸形)──")
+		for _, s := range checkBigFields(ctx, db, present) {
+			target := s.budget.DB + "." + s.budget.Table + "." + s.budget.Column
+			if s.err != nil {
+				fmt.Printf("  [WARN] %-52s 体检失败: %v\n", target, s.err)
+				continue
+			}
+			ratio := float64(s.maxBytes) / float64(max64(s.budget.MaxBytes, 1))
+			mark := "  ok  "
+			if s.overRows > 0 {
+				mark = " FAIL "
+				violations++
+			} else if ratio >= 0.8 {
+				mark = " WARN " // 逼近预算:还没坏,但这是排查成本最低的时点
+			}
+			fmt.Printf("  [%s] %-52s rows=%-9d max=%-9d avg=%-7d 预算=%-8d 超限行=%d\n",
+				mark, target, s.rows, s.maxBytes, s.avgBytes, s.budget.MaxBytes, s.overRows)
+			if s.overRows > 0 || ratio >= 0.8 {
+				fmt.Printf("         ↳ %s\n", s.budget.Why)
+			}
+			// 定位到具体行:拿到主键后 dump 反序列化,才能知道是"哪个字段"爆了。
+			if *topRows > 0 && (s.overRows > 0 || ratio >= 0.8) {
+				top, terr := topLargeRows(ctx, db, s.budget, *topRows)
+				if terr != nil {
+					fmt.Printf("         ↳ [WARN] Top-N 定位失败: %v\n", terr)
+				}
+				for _, r := range top {
+					fmt.Printf("         ↳ %s=%s  %d 字节\n", s.budget.PK, r.PK, r.Bytes)
+				}
+			}
+		}
+	}
+
+	// 6. 待清理量报告(-pending):对登记了 PendingWhere 的表跑 COUNT,给出 cutoff=now 下
+	//    的最坏待清理规模。**本工具只 COUNT,永不 DELETE**(2026-07-22 用户指令:不能因为
+	//    数据大了就删数据)。真删只由各服务配置 retention_mode=delete 决定,服务侧另有
+	//    持续 WARN 告警(db_retention_pending_not_deleted)与 pending gauge。
+	if *pending {
+		fmt.Println("\n── 待清理量报告(cutoff=now 上界;本工具不删任何数据)──")
+		dbNames := make([]string, 0, len(registry))
+		for dbName := range registry {
+			dbNames = append(dbNames, dbName)
+		}
+		sort.Strings(dbNames)
+		for _, dbName := range dbNames {
+			reg := registry[dbName]
 			present := toSet(actual[dbName])
 			names := make([]string, 0, len(reg))
 			for t := range reg {
@@ -341,43 +389,21 @@ func main() {
 			sort.Strings(names)
 			for _, t := range names {
 				e := reg[t]
-				if e.Class != classSwept || e.SweepSQL == "" || !present[t] {
+				if e.Class != classSwept || e.PendingWhere == "" || !present[t] {
 					continue
 				}
-				// 独占连接执行 USE + DELETE(审计 P1:经连接池分别执行时 USE 与 DELETE
-				// 可能落在不同连接——随机失败,DSN 带默认库时甚至删默认库同名表)。
-				conn, cerr := db.Conn(ctx)
-				if cerr != nil {
-					fatal("acquire conn for %s: %v", dbName, cerr)
+				var n int64
+				q := "SELECT COUNT(*) FROM `" + dbName + "`.`" + t + "` WHERE " + e.PendingWhere
+				if qerr := db.QueryRowContext(ctx, q).Scan(&n); qerr != nil {
+					fmt.Printf("  [WARN] %-46s 统计失败: %v\n", dbName+"."+t, qerr)
+					continue
 				}
-				if _, uerr := conn.ExecContext(ctx, "USE `"+dbName+"`"); uerr != nil {
-					_ = conn.Close()
-					fatal("use %s: %v", dbName, uerr)
-				}
-				var total int64
-				start := time.Now()
-				for {
-					res, derr := conn.ExecContext(ctx, e.SweepSQL, *batch)
-					if derr != nil {
-						_ = conn.Close()
-						fatal("sweep %s.%s: %v", dbName, t, derr)
-					}
-					n, aerr := res.RowsAffected()
-					if aerr != nil {
-						_ = conn.Close()
-						fatal("rows affected %s.%s: %v", dbName, t, aerr)
-					}
-					total += n
-					if n < int64(*batch) {
-						break
-					}
-				}
-				_ = conn.Close()
-				elapsed := time.Since(start)
-				rate := float64(total) / max(elapsed.Seconds(), 0.001)
-				fmt.Printf("  %-40s 删 %8d 行,耗时 %8s,%10.0f rows/s\n", dbName+"."+t, total, elapsed.Round(time.Millisecond), rate)
+				fmt.Printf("  %-46s 可清理 %10d 行\n", dbName+"."+t, n)
 			}
 		}
+		fmt.Println("  说明:以上是 cutoff=now 的**上界**(把一切都当超期);真实待清理量按各服务配置的")
+		fmt.Println("       retention_days 计算,见服务日志 db_retention_pending_not_deleted 与")
+		fmt.Println("       metric pandora_db_retention_pending_rows。")
 	}
 
 	if violations > 0 {

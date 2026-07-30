@@ -6,6 +6,7 @@ package biz
 
 import (
 	"context"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"testing"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -235,8 +236,8 @@ func (f *fakeRepo) RecommendRandom(_ context.Context, _ uint64, exclude []uint64
 }
 
 // 保留期清理(§9.24):biz 单测不模拟时间,默认 no-op。
-func (f *fakeRepo) DeleteTerminalRequestsBefore(context.Context, int, int) (int64, error) {
-	return 0, nil
+func (f *fakeRepo) SweepTerminalRequestsBefore(_ context.Context, mode dbguard.Mode, _, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
 
 func (f *fakeRepo) DeletePairGuardsBefore(context.Context, int, int) (int64, error) {

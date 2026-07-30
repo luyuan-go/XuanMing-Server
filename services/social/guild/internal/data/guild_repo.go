@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 )
@@ -128,10 +129,12 @@ type GuildRepo interface {
 	TransferLeader(ctx context.Context, guildID, oldLeaderID, newLeaderID uint64) error
 	// ListPendingRequests 列公会的挂起申请(按 request_id 升序游标分页)。
 	ListPendingRequests(ctx context.Context, guildID, cursor uint64, limit int) ([]GuildJoinRequestRow, error)
-	// DeleteTerminalJoinRequestsBefore 删终态(approved/rejected)且 updated_at 超保留期的
-	// 入会申请行(保留期清理,§9.24;单批 limit 行)。pending 永不清;删后再次申请等价于
-	// 全新申请(成员权威在 guild_members,申请行无资产语义)。返回删除行数。
-	DeleteTerminalJoinRequestsBefore(ctx context.Context, retentionDays, limit int) (int64, error)
+	// SweepTerminalJoinRequestsBefore 处理终态(approved/rejected)且 updated_at 超保留期的
+	// 入会申请行(保留期清理,§9.24)。
+	// **mode 默认 ModeReportOnly:只统计待清理量并 WARN 告警,一行都不删**(用户指令);
+	// pending 无论如何都不在处理范围。真删语义:删后再次申请等价于全新申请
+	// (成员权威在 guild_members,申请行无资产语义)。
+	SweepTerminalJoinRequestsBefore(ctx context.Context, mode dbguard.Mode, retentionDays, limit int) (dbguard.Outcome, error)
 }
 
 // MySQLGuildRepo 是基于 database/sql 的 GuildRepo 实现。
@@ -862,13 +865,11 @@ func (r *MySQLGuildRepo) txOnce(ctx context.Context, fn func(tx *sql.Tx) error) 
 // DeleteTerminalJoinRequestsBefore 删终态且超保留期的入会申请行(保留期清理,§9.24)。
 // 条件走 idx_status_updated(status, updated_at);pending(=1)永不匹配。
 // 多副本并发调用安全(各删各的行)。
-func (r *MySQLGuildRepo) DeleteTerminalJoinRequestsBefore(ctx context.Context, retentionDays, limit int) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`DELETE FROM guild_join_requests WHERE status <> ? AND updated_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`,
-		joinStatusPending, retentionDays, limit)
+func (r *MySQLGuildRepo) SweepTerminalJoinRequestsBefore(ctx context.Context, mode dbguard.Mode, retentionDays, limit int) (dbguard.Outcome, error) {
+	out, err := dbguard.SweepTable(ctx, r.db, mode, "pandora_social", "guild_join_requests",
+		"status <> ? AND updated_at < DATE_SUB(NOW(), INTERVAL ? DAY)", limit, joinStatusPending, retentionDays)
 	if err != nil {
-		return 0, dbErr(err, "delete terminal join requests")
+		return out, dbErr(err, "sweep terminal join requests")
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
+	return out, nil
 }

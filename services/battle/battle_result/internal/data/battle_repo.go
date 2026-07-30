@@ -21,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
@@ -171,18 +172,22 @@ type BattleRepo interface {
 	DeferProgressOutbox(ctx context.Context, id int64) error
 
 	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──────────────────────
-	// PurgeExpiredBattles 删服务端落库时间 created_at 早于 cutoffMs 的对局
-	// (battles + battle_player_stats 同事务批删,单批最多 batch 场)。清理依据必须是
-	// 服务端时间(§9.6 数值不信 DS):ended_at_ms 是 DS 上报,失陷 DS 报过去时间可让
-	// 新战绩立即可删(毁审计证据)、报未来时间可让行永不可删。battles.match_id 是结算
-	// 幂等键:删除后同 match 重放已不可能到达(权威 BattleStorageRecord / active match /
-	// Guard 早已释放,ReportResult 在凭据层就被拒),幂等键只需覆盖结算重试窗口(小时级)。
-	// 返回删除的对局数。
-	PurgeExpiredBattles(ctx context.Context, cutoffMs int64, batch int) (int64, error)
-	// PurgeSettledProgress 删已结算(settled_at_ms>0,服务端结算打标)且早于 cutoffMs
-	// 的进度水位(battle_progress_stream + battle_progress_player 同事务批删)。未结算行
-	// 永不清理(陈年未结算 = 补偿链 bug,应告警修复而不是静默删证据)。返回删除的对局数。
-	PurgeSettledProgress(ctx context.Context, cutoffMs int64, batch int) (int64, error)
+	// SweepExpiredBattles 处理服务端落库时间 created_at 早于 cutoffMs 的对局
+	// (battles + battle_player_stats 成组,单批最多 batch 场)。
+	//
+	// **mode 默认 ModeReportOnly:只统计待清理对局数并 WARN 告警,一行都不删**(用户指令:
+	// 不允许"因为数据大了"自动删数据);只有配置显式 retention_mode=delete 才真删。
+	//
+	// 清理依据必须是服务端时间(§9.6 数值不信 DS):ended_at_ms 是 DS 上报,失陷 DS 报过去
+	// 时间可让新战绩立即可删(毁审计证据)、报未来时间可让行永不可删。
+	// 真删语义:battles.match_id 是结算幂等键,删除后同 match 重放已不可能到达
+	// (权威 BattleStorageRecord / active match / Guard 早已释放,ReportResult 在凭据层就被拒)。
+	SweepExpiredBattles(ctx context.Context, mode dbguard.Mode, cutoffMs int64, batch int) (dbguard.Outcome, error)
+	// SweepSettledProgress 处理已结算(settled_at_ms>0,服务端结算打标)且早于 cutoffMs
+	// 的进度水位(battle_progress_stream + battle_progress_player 成组)。
+	// **mode 默认 ModeReportOnly(只报告不删)**;未结算行无论如何都不在处理范围
+	// (陈年未结算 = 补偿链 bug,由 CountStaleUnsettledProgress 持续告警,不静默删证据)。
+	SweepSettledProgress(ctx context.Context, mode dbguard.Mode, cutoffMs int64, batch int) (dbguard.Outcome, error)
 	// CountStaleUnsettledProgress 数超保留期仍未结算的水位行(结算补偿链 bug 证据,
 	// 永不自动清理;sweep 每轮告警暴露)。updated_at_ms 为服务端写入时间。
 	CountStaleUnsettledProgress(ctx context.Context, cutoffMs int64) (int64, error)
@@ -848,34 +853,68 @@ func (r *MySQLBattleRepo) deleteByMatchIDsTx(ctx context.Context, tables []strin
 	return nil
 }
 
-func (r *MySQLBattleRepo) PurgeExpiredBattles(ctx context.Context, cutoffMs int64, batch int) (int64, error) {
-	// 清理依据 = 服务端落库时间 created_at(§9.6 数值不信 DS,接口注释;走 idx_created)。
+// 清理条件常量:**Count(report-only)与 SELECT 候选(delete)共用同一 where**,
+// 条件只写一遍,杜绝"报告的条件"与"实删的条件"漂移(见 pkg/dbguard/sweep.go 头注释)。
+const (
+	// expiredBattlesWhere 依据服务端落库时间 created_at(§9.6 数值不信 DS;走 idx_created)。
 	// 行龄 = 结算落库距今,比 ended_at 晚一个对局时长,相对 90 天保留期误差可忽略,
 	// 且偏保守方向(只会晚删,不会早删)。
+	expiredBattlesWhere = "created_at < FROM_UNIXTIME(? / 1000)"
+	// settledProgressWhere 依据服务端结算事务打的 settled_at_ms(settleProgressStreamTx);走 idx_settled。
+	settledProgressWhere = "settled_at_ms > 0 AND settled_at_ms < ?"
+)
+
+// sweepByMatchID 是多表按 match_id 成组清理的统一实现(report-only 只数不删)。
+//
+// 多表事务清理用不了 dbguard.SweepTable(那是单条 DELETE),但告警口径必须一致,
+// 所以 report-only 走 dbguard.ReportPending、delete 走 dbguard.ReportDeleted。
+// unit 是 "matches":这里删的是"一组行"(一场对局的主表+子表),不是"一行"。
+func (r *MySQLBattleRepo) sweepByMatchID(
+	ctx context.Context, mode dbguard.Mode,
+	anchorTable, where string, deleteTables []string,
+	cutoffMs int64, batch int,
+) (dbguard.Outcome, error) {
+	out := dbguard.Outcome{Mode: mode}
+
+	if mode != dbguard.ModeDelete {
+		// report-only:只数满足条件的对局数(不受 batch 截断,给真实积压规模),不动数据。
+		var n int64
+		if err := r.db.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM `"+anchorTable+"` WHERE "+where, cutoffMs).Scan(&n); err != nil {
+			return out, errcode.New(errcode.ErrInternal, "count purgeable %s: %v", anchorTable, err)
+		}
+		out.Matched = n
+		dbguard.ReportPending(ctx, "pandora_battle", anchorTable, "matches", n)
+		return out, nil
+	}
+
 	ids, err := r.selectMatchIDs(ctx,
-		`SELECT match_id FROM battles WHERE created_at < FROM_UNIXTIME(? / 1000) LIMIT ?`,
-		cutoffMs, batch)
+		"SELECT match_id FROM `"+anchorTable+"` WHERE "+where+" LIMIT ?", cutoffMs, batch)
 	if err != nil || len(ids) == 0 {
-		return 0, err
+		return out, err
 	}
-	if derr := r.deleteByMatchIDsTx(ctx, []string{"battle_player_stats", "battles"}, ids); derr != nil {
-		return 0, derr
+	if derr := r.deleteByMatchIDsTx(ctx, deleteTables, ids); derr != nil {
+		return out, derr
 	}
-	return int64(len(ids)), nil
+	out.Matched, out.Deleted = int64(len(ids)), int64(len(ids))
+	out.Truncated = batch > 0 && len(ids) >= batch
+	dbguard.ReportDeleted(ctx, "pandora_battle", anchorTable, "matches", out.Deleted)
+	return out, nil
 }
 
-func (r *MySQLBattleRepo) PurgeSettledProgress(ctx context.Context, cutoffMs int64, batch int) (int64, error) {
-	// settled_at_ms 由服务端结算事务打标(settleProgressStreamTx),服务端时间权威;走 idx_settled。
-	ids, err := r.selectMatchIDs(ctx,
-		`SELECT match_id FROM battle_progress_stream WHERE settled_at_ms > 0 AND settled_at_ms < ? LIMIT ?`,
-		cutoffMs, batch)
-	if err != nil || len(ids) == 0 {
-		return 0, err
-	}
-	if derr := r.deleteByMatchIDsTx(ctx, []string{"battle_progress_player", "battle_progress_stream"}, ids); derr != nil {
-		return 0, derr
-	}
-	return int64(len(ids)), nil
+// SweepExpiredBattles 处理超保留期的对局(battles + battle_player_stats 同事务成组)。
+// **mode 默认 ModeReportOnly:只统计待清理对局数并 WARN 告警,一行都不删**(用户指令)。
+func (r *MySQLBattleRepo) SweepExpiredBattles(ctx context.Context, mode dbguard.Mode, cutoffMs int64, batch int) (dbguard.Outcome, error) {
+	return r.sweepByMatchID(ctx, mode, "battles", expiredBattlesWhere,
+		[]string{"battle_player_stats", "battles"}, cutoffMs, batch)
+}
+
+// SweepSettledProgress 处理已结算且超保留期的进度水位(stream + player 同事务成组)。
+// **mode 默认 ModeReportOnly(只报告不删)**;未结算行无论如何都不在处理范围
+// (陈年未结算 = 补偿链 bug 证据,另有 CountStaleUnsettledProgress 持续告警)。
+func (r *MySQLBattleRepo) SweepSettledProgress(ctx context.Context, mode dbguard.Mode, cutoffMs int64, batch int) (dbguard.Outcome, error) {
+	return r.sweepByMatchID(ctx, mode, "battle_progress_stream", settledProgressWhere,
+		[]string{"battle_progress_player", "battle_progress_stream"}, cutoffMs, batch)
 }
 
 func (r *MySQLBattleRepo) CountStaleUnsettledProgress(ctx context.Context, cutoffMs int64) (int64, error) {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 )
 
 // Config 是 friend 服务的完整配置。
@@ -54,6 +55,10 @@ type FriendConf struct {
 	// SweepBatch 每轮清理行数上限(默认 500)。
 	SweepBatch int `yaml:"sweep_batch,omitempty" json:"sweep_batch,omitempty"`
 
+	// RetentionModeRaw 保留期清理模式:留空 / "report_only" = 默认只报告不删;"delete" = 真删。
+	// 「因为数据大了就自动删」不可接受(§9.24 + 2026-07-22 用户指令);业务性过期删除不受此约束。
+	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
+
 	// PairGuardRetentionDays 关系对守卫行(friend_pair_guards)保留天数(默认 30)。
 	// R9 复审 P1:pair 守卫每关系对 1 行,随社交图 O(n²) 累积无上界。守卫行仅是
 	// 锁载体无业务数据,任意时刻删除都安全(正被持有的行锁会阻塞 DELETE 到事务
@@ -96,4 +101,19 @@ func (c *Config) Defaults() {
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51004"
 	}
+}
+
+// RetentionMode 返回生效的保留期清理模式(默认 ModeReportOnly = 只报告不删)。
+func (c *FriendConf) RetentionMode() dbguard.Mode {
+	m, err := dbguard.ParseMode(c.RetentionModeRaw)
+	if err != nil {
+		return dbguard.ModeReportOnly
+	}
+	return m
+}
+
+// ValidateRetentionMode 供 main 启动 fail-fast(写了无法识别的模式必须拒启)。
+func (c *FriendConf) ValidateRetentionMode() error {
+	_, err := dbguard.ParseMode(c.RetentionModeRaw)
+	return err
 }

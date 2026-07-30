@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	chatv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/chat/v1"
 )
@@ -24,9 +25,9 @@ type PrivateRepo interface {
 	//   beforeMs > 0 时只取 send_time_ms < beforeMs 的(翻页游标);=0 取最新。
 	//   返回结果已是客户端可见结构 ChatMessage(CLAUDE.md §14)。
 	ListPrivate(ctx context.Context, playerID, peerID uint64, limit int, beforeMs int64) ([]*chatv1.ChatMessage, error)
-	// DeleteMessagesBefore 删 message_id < maxMessageID 的私聊历史(保留期清理,§9.24;
-	// message_id 雪花时间段单调 → 主键范围删,单批 limit 行)。返回删除行数。
-	DeleteMessagesBefore(ctx context.Context, maxMessageID uint64, limit int) (int64, error)
+	// SweepMessagesBefore 按 mode 处理 message_id < maxMessageID 的私聊历史(保留期清理,§9.24)。
+	// **mode 默认 ModeReportOnly:只统计待清理量并告警,不删数据**;delete 模式才真删(单批 limit 行)。
+	SweepMessagesBefore(ctx context.Context, mode dbguard.Mode, maxMessageID uint64, limit int) (dbguard.Outcome, error)
 }
 
 // MySQLPrivateRepo 是基于 database/sql 的 PrivateRepo 实现。
@@ -78,14 +79,17 @@ LIMIT ?`
 	return out, nil
 }
 
-// DeleteMessagesBefore 删 message_id < maxMessageID 的私聊历史(保留期清理,§9.24)。
-// 雪花 message_id 时间段单调 → 主键范围删,无需时间列索引;多副本并发安全(各删各的行)。
-func (r *MySQLPrivateRepo) DeleteMessagesBefore(ctx context.Context, maxMessageID uint64, limit int) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`DELETE FROM chat_private_messages WHERE message_id < ? LIMIT ?`, maxMessageID, limit)
+// SweepMessagesBefore 按 mode 处理 message_id < maxMessageID 的私聊历史(保留期清理,§9.24)。
+//
+// **mode 默认 ModeReportOnly:只统计待清理行数并告警,不删任何数据**(用户指令);
+// 只有配置显式 retention_mode=delete 才真删。Count 与 Delete 共用同一 where,
+// 条件只写一遍(见 dbguard.SweepTable)。
+// 雪花 message_id 时间段单调 → 主键范围操作,无需时间列索引;多副本并发安全。
+func (r *MySQLPrivateRepo) SweepMessagesBefore(ctx context.Context, mode dbguard.Mode, maxMessageID uint64, limit int) (dbguard.Outcome, error) {
+	out, err := dbguard.SweepTable(ctx, r.db, mode,
+		"pandora_social", "chat_private_messages", "message_id < ?", limit, maxMessageID)
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInternal, "delete private history: %v", err)
+		return out, errcode.New(errcode.ErrInternal, "sweep private history: %v", err)
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
+	return out, nil
 }

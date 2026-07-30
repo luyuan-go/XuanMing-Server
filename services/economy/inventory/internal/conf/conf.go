@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 )
 
 // Config 是 inventory 服务的完整配置。
@@ -260,6 +261,14 @@ type InventoryConf struct {
 	// EscrowRetentionDays auction_escrow 已关闭(closed)托管行保留天数(默认 90)。
 	// 只删 closed 行;active 行永不清理(EnsureAuctionEscrow 核对遗留订单依赖其存在性)。
 	EscrowRetentionDays int `yaml:"escrow_retention_days,omitempty" json:"escrow_retention_days,omitempty"`
+
+	// RetentionModeRaw 是保留期清理的执行模式(§9.24)。
+	//
+	// **留空 / "report_only" = 默认:只统计待清理量并 WARN 告警,一行都不删。**
+	// "delete" = 真删。「因为数据大了就自动删」不可接受:清理条件/保留期/幂等窗口任一处
+	// 配错都会静默删掉不该删的玩家数据且删完才发现,所以默认不删,由人确认后显式开启。
+	// 注意:道具过期、邮件失效那类**业务语义**删除不受本开关约束(东西本来就该没了)。
+	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
 }
 
 // IdentifyAttrRoll 是鉴定属性池里的一条候选属性(值在 [Min,Max] 均匀 roll)。
@@ -413,4 +422,21 @@ func (ic *InventoryConf) Validate() error {
 		}
 	}
 	return nil
+}
+
+// RetentionMode 返回生效的保留期清理模式(启动已 Validate;解析失败回落 ModeReportOnly
+// —— 任何不确定都不删)。
+func (ic *InventoryConf) RetentionMode() dbguard.Mode {
+	m, err := dbguard.ParseMode(ic.RetentionModeRaw)
+	if err != nil {
+		return dbguard.ModeReportOnly
+	}
+	return m
+}
+
+// ValidateRetentionMode 供 main 启动 fail-fast:写了无法识别的模式必须拒启,
+// 而不是静默按 report_only 跑(运维以为开了删除、实际没开,库继续涨且无人知)。
+func (ic *InventoryConf) ValidateRetentionMode() error {
+	_, err := dbguard.ParseMode(ic.RetentionModeRaw)
+	return err
 }

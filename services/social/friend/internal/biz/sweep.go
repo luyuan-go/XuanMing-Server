@@ -20,10 +20,11 @@ import (
 //   - 关系对守卫行(friend_pair_guards,超 PairGuardRetentionDays;R9 复审 P1:
 //     pair 守卫随社交图 O(n²) 累积无上界,守卫行仅锁载体删除安全,下次 acquire 重建)。
 func (u *FriendUsecase) SweepTerminalRequests(ctx context.Context) {
-	if n, err := u.repo.DeleteTerminalRequestsBefore(ctx, u.cfg.RequestRetentionDays, u.cfg.SweepBatch); err != nil {
+	// mode 默认 report_only:待清理量由 dbguard.SweepTable 统一 WARN 告警,这里只在真删时补 INFO。
+	if out, err := u.repo.SweepTerminalRequestsBefore(ctx, u.cfg.RetentionMode(), u.cfg.RequestRetentionDays, u.cfg.SweepBatch); err != nil {
 		plog.With(ctx).Warnw("msg", "friend_request_sweep_failed", "err", err)
-	} else if n > 0 {
-		plog.With(ctx).Infow("msg", "friend_request_swept", "deleted", n, "retention_days", u.cfg.RequestRetentionDays)
+	} else if out.Cleaned() {
+		plog.With(ctx).Infow("msg", "friend_request_swept", "deleted", out.Deleted, "retention_days", u.cfg.RequestRetentionDays)
 	}
 	if n, err := u.repo.DeletePairGuardsBefore(ctx, u.cfg.PairGuardRetentionDays, u.cfg.SweepBatch); err != nil {
 		plog.With(ctx).Warnw("msg", "friend_pair_guard_sweep_failed", "err", err)

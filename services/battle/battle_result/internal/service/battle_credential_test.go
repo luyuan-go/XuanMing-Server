@@ -15,6 +15,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
@@ -319,11 +320,11 @@ func (*serviceBattleRepo) FetchProgressOutbox(context.Context, int) ([]data.Prog
 func (*serviceBattleRepo) DeleteProgressOutbox(context.Context, int64) error { return nil }
 
 // 保留期清理(§9.24):service 单测不涉及,默认 no-op。
-func (*serviceBattleRepo) PurgeExpiredBattles(context.Context, int64, int) (int64, error) {
-	return 0, nil
+func (*serviceBattleRepo) SweepExpiredBattles(_ context.Context, mode dbguard.Mode, _ int64, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
-func (*serviceBattleRepo) PurgeSettledProgress(context.Context, int64, int) (int64, error) {
-	return 0, nil
+func (*serviceBattleRepo) SweepSettledProgress(_ context.Context, mode dbguard.Mode, _ int64, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
 func (*serviceBattleRepo) CountStaleUnsettledProgress(context.Context, int64) (int64, error) {
 	return 0, nil

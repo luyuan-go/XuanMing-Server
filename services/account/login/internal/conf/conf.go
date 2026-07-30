@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 )
 
 // Config 是 login 服务的完整配置。
@@ -61,6 +62,9 @@ type LoginConf struct {
 	// 该参数首次 bootstrap 后不可更改。而 Go 侧对账号串零归一化,唯一性完全由列 collation 决定,
 	// 漂移即「老玩家登不进 + 同名抢注」。故必须行为探针,不能只看版本号(§16 隐蔽 bug)。
 	RequireTiDB bool `yaml:"require_tidb,omitempty" json:"require_tidb,omitempty"`
+
+	// RetentionModeRaw 保留期清理模式:留空 / "report_only" = 默认只报告不删;"delete" = 真删。
+	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
 
 	// DeviceRetentionDays account_devices 设备绑定行保留天数(默认 90,§9.24)。
 	// device_id 由客户端上报,单账号可无限堆新行;按 last_login_at 超期批删兜底有界,
@@ -309,4 +313,20 @@ func sameFence(a, b config.DSAuthFenceConf) bool {
 	return slices.Equal(a.EtcdEndpoints, b.EtcdEndpoints) && a.EtcdPrefix == b.EtcdPrefix &&
 		a.EtcdLeaseTTLSec == b.EtcdLeaseTTLSec && a.EtcdDialTimeout == b.EtcdDialTimeout &&
 		a.KeysetRevision == b.KeysetRevision
+}
+
+// RetentionMode 返回生效的保留期清理模式(默认 ModeReportOnly = 只报告不删,§9.24 +
+// 2026-07-22 用户指令:不能因为数据大了就删数据)。
+func (l *LoginConf) RetentionMode() dbguard.Mode {
+	m, err := dbguard.ParseMode(l.RetentionModeRaw)
+	if err != nil {
+		return dbguard.ModeReportOnly
+	}
+	return m
+}
+
+// ValidateRetentionMode 供启动 fail-fast(写了无法识别的模式必须拒启)。
+func (l *LoginConf) ValidateRetentionMode() error {
+	_, err := dbguard.ParseMode(l.RetentionModeRaw)
+	return err
 }

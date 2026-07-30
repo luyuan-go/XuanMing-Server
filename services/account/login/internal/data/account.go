@@ -18,6 +18,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
 
@@ -464,17 +465,16 @@ func (r *RedisTicketJTIRepo) MarkUsedByAdmission(
 	}
 }
 
-// PurgeStaleDevices 删 last_login_at 超保留期的设备绑定行(保留期清理,§9.24;单批 limit 行)。
+// SweepStaleDevices 处理 last_login_at 超保留期的设备绑定行(保留期清理,§9.24)。
+// **mode 默认 ModeReportOnly:只统计待清理量并 WARN 告警,一行都不删**(用户指令)。
 // account_devices 的 device_id 由客户端上报,单账号可无限堆新设备行 → 按最近登录时间兜底
 // 有界:被删设备下次登录时 TouchDevice upsert 自然重建,只丢历史最近登录记录,无业务语义。
 // 多副本并发调用安全(各删各的行)。走 idx_last_login 索引。
-func PurgeStaleDevices(ctx context.Context, db *sql.DB, retentionDays, limit int) (int64, error) {
-	res, err := db.ExecContext(ctx,
-		`DELETE FROM account_devices WHERE last_login_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`,
-		retentionDays, limit)
+func SweepStaleDevices(ctx context.Context, db *sql.DB, mode dbguard.Mode, retentionDays, limit int) (dbguard.Outcome, error) {
+	out, err := dbguard.SweepTable(ctx, db, mode, "pandora_account", "account_devices",
+		"last_login_at < DATE_SUB(NOW(), INTERVAL ? DAY)", limit, retentionDays)
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInternal, "purge stale devices: %v", err)
+		return out, errcode.New(errcode.ErrInternal, "sweep stale devices: %v", err)
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
+	return out, nil
 }

@@ -198,10 +198,13 @@ go run ./cmd/dbcheck -dsn 'user:pwd@tcp(host:port)/'
 go run ./cmd/dbcheck -dsn '...' -exact -snapshot db-before.json
 go run ./cmd/dbcheck -dsn '...' -exact -compare db-before.json
 
-# 清理速率抽测(⚠️ cutoff=now 删光可清数据,只准对压测/可丢弃库)
-go run ./cmd/dbcheck -dsn '...' -force-sweep -confirm=YES-DELETE
+# 待清理量报告(只 COUNT,不删任何数据)
+go run ./cmd/dbcheck -dsn '...' -pending
 ```
 
-批删语句与各服务 sweep 同构;`player_mail`(归档分流)、`bag_journal`(checkpoint 条件)、
-`battles`/进度组(多表事务)不在工具内重复实现,由各自服务 sweep + 集成测试覆盖。
+**本工具永不 DELETE**(2026-07-22 用户指令:不能因为数据大了就删数据;旧 `-force-sweep`
+已整块移除且刻意不留同名 flag)。真删只由各服务配置 `retention_mode: delete` 决定,
+默认 `report_only` 只 WARN 告警(见 `pkg/dbguard/sweep.go`)。
+`-pending` 的 WHERE 与各服务 sweep 同构;`player_mail`(归档分流)、`bag_journal`
+(checkpoint 条件)、`battles`/进度组(多表事务)条件复杂,由各自服务自行报告待清理量。
 压测接线细则见 `docs/design/stress-discipline.md` §4.1.1 / §4.3。

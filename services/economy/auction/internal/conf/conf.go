@@ -3,6 +3,7 @@ package conf
 
 import (
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 )
 
 // Config 是 auction 服务的完整配置。
@@ -99,6 +100,11 @@ type AuctionConf struct {
 
 	// RetentionSweepBatch 每轮每分片每表清理行数上限(默认 500)。
 	RetentionSweepBatch int `yaml:"retention_sweep_batch,omitempty" json:"retention_sweep_batch,omitempty"`
+
+	// RetentionModeRaw 保留期清理模式:留空 / "report_only" = 默认只报告不删;"delete" = 真删。
+	// 「因为数据大了就自动删」不可接受(§9.24 + 2026-07-22 用户指令);挂单过期置 EXPIRED
+	// 那类**业务语义**流转不受此约束(那是订单本来就该失效,不是"数据太多要删")。
+	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -157,4 +163,19 @@ func (c *Config) Defaults() {
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51016"
 	}
+}
+
+// RetentionMode 返回生效的保留期清理模式(默认 ModeReportOnly = 只报告不删)。
+func (a *AuctionConf) RetentionMode() dbguard.Mode {
+	m, err := dbguard.ParseMode(a.RetentionModeRaw)
+	if err != nil {
+		return dbguard.ModeReportOnly
+	}
+	return m
+}
+
+// ValidateRetentionMode 供启动 fail-fast(写了无法识别的模式必须拒启)。
+func (a *AuctionConf) ValidateRetentionMode() error {
+	_, err := dbguard.ParseMode(a.RetentionModeRaw)
+	return err
 }

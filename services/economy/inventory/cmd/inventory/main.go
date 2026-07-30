@@ -25,6 +25,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	pkgconfig "github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	pkgmw "github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
@@ -97,6 +98,17 @@ func main() {
 	defer func() { _ = db.Close() }()
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
 
+	// 严格模式断言(§9.24):非严格 sql_mode 下超长写入会被 MySQL **静默截断**
+	// (err=nil 但数据被砍断),等于无声的数据损坏——这是唯一值得 fail-fast 的库检查,
+	// 继续运行只会持续产生损坏数据。实测见 pkg/dbguard 包注释。
+	strictCtx, strictCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if serr := dbguard.AssertStrictMode(strictCtx, db); serr != nil {
+		strictCancel()
+		helper.Errorw("msg", "mysql_strict_mode_required", "err", serr)
+		os.Exit(1)
+	}
+	strictCancel()
+
 	// 4. 装配链
 	repo := data.NewMySQLInventoryRepo(db)
 	uc := biz.NewInventoryUsecase(repo, cfg.Inventory)
@@ -142,12 +154,27 @@ func main() {
 		"escrow_retention_days", cfg.Inventory.EscrowRetentionDays,
 	)
 
+	// 容量巡检(§9.24):启动即跑一轮拿基线(启动就暴露既有超限,不用等一个周期),
+	// 之后挂在保留期清理的同一 ticker 上周期跑(**不新建 timer 状态机**,遵守定时器纪律)。
+	// 超预算只打 ERROR 日志 + metric,不阻止启动。
+	tradeGuard := dbguard.New(db, "pandora_trade", data.TradeBudgets(), data.TradeBigFields())
+	go runCapacityGuard(sweepCtx, tradeGuard, cfg.Inventory.SweepInterval.Std())
+
 	// 背包域(pandora.bag.v1,bag-domain.md phase 1 由本进程承载):
 	// bag.dsn 为空 = 未启用(不注册 BagService,现网行为不变,安全默认)。
 	var bagSvc *service.BagService
 	if cfg.Bag.DSN != "" {
 		bagDB := mysqlx.MustNewClient(pkgconfig.MySQLConf{DSN: cfg.Bag.DSN})
 		defer func() { _ = bagDB.Close() }()
+		// 背包库同样断言严格模式:三个 blob 列(snapshot/section/payload)是最怕静默截断的
+		// ——截断后 proto.Unmarshal 失败,该玩家背包直接读不出来。
+		bagStrictCtx, bagStrictCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if serr := dbguard.AssertStrictMode(bagStrictCtx, bagDB); serr != nil {
+			bagStrictCancel()
+			helper.Errorw("msg", "bag_mysql_strict_mode_required", "err", serr)
+			os.Exit(1)
+		}
+		bagStrictCancel()
 		// 启动期 schema gate:pandora_bag 是后建库,既有 MySQL volume 不会自动重放 init SQL;
 		// 缺表时背包域全链路必炸,fail-fast 并指向迁移 SQL。
 		bagSchemaCtx, bagCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -190,6 +217,9 @@ func main() {
 			helper.Infow("msg", "bag_ds_guard_ready", "mode", dsGuard.Mode().String())
 		}
 		go runBagJournalSweep(sweepCtx, bagUC, helper, cfg.Inventory.SweepInterval.Std(), cfg.Inventory.SweepBatch)
+		// 背包库容量巡检:三个 blob 列是"单行变胖"的高风险点,avg_row_bytes 是最早的信号。
+		bagGuard := dbguard.New(bagDB, "pandora_bag", data.BagBudgets(), data.BagBigFields())
+		go runCapacityGuard(sweepCtx, bagGuard, cfg.Inventory.SweepInterval.Std())
 		// 存量迁移(D5,decision-revisit-bag-replay-semantics.md):默认关;contract 阶段
 		// 旧写路径冻结后开启,一次性幂等作业(重跑 no-op,多副本并发安全)。
 		if cfg.Bag.LegacyMigrationEnabled {
@@ -233,6 +263,29 @@ func main() {
 	if err := app.Run(); err != nil {
 		helper.Errorw("msg", "app_run_failed", "err", err)
 		os.Exit(1)
+	}
+}
+
+// runCapacityGuard 启动即跑一轮容量巡检拿基线,之后按 interval 周期跑。
+//
+// 巡检走 information_schema 估算(毫秒级、不锁表、不扫数据),放启动路径安全;
+// 绝不用 COUNT(*)(千万行表几十秒,会拖垮滚动更新)。超预算只告警不阻断。
+func runCapacityGuard(ctx context.Context, g *dbguard.Guard, interval time.Duration) {
+	// 启动基线:立刻跑一次,让"上线时就已超限"当场可见,而不是等一个周期。
+	safego.Run(ctx, "db_capacity_guard_initial", func() { g.Check(ctx) })
+	if interval <= 0 {
+		interval = 5 * time.Minute
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// panic 兜底:单轮 panic 只丢本轮,下轮继续(对齐 sweep 循环)。
+			safego.Run(ctx, "db_capacity_guard", func() { g.Check(ctx) })
+		}
 	}
 }
 

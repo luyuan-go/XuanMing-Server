@@ -230,7 +230,8 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 
 	// 幂等重放:同 operation 且记录就是本次 Begin 的结果(epoch=expect+1 / 目标全等)。
 	// 响应丢失后的原样重试拿回同一结果,不再推进 epoch(§9.23 端到端幂等)。
-	if rec.OperationID == operationID && rec.OwnerEpoch == expectEpoch+1 &&
+	// operationID 为空时本分支不适用(空 = 调用方未持显式幂等键,交由下面的同实例收敛)。
+	if operationID != "" && rec.OperationID == operationID && rec.OwnerEpoch == expectEpoch+1 &&
 		rec.OwnerType == ownerType && rec.Target.Equal(target) {
 		deadline, derr := readLeaseDeadline(ctx, tx, rec.Target.InstanceUID, false)
 		if derr != nil {
@@ -239,6 +240,39 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 		rec.LeaseDeadlineMs = deadline
 		if cerr := tx.Commit(); cerr != nil {
 			return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit replay begin player=%d: %v", playerID, cerr)
+		}
+		return rec, nil
+	}
+
+	// 同 exact 实例的重复投递:在本行锁事务内收敛为 no-op,原样返回既有记录
+	// (不推进 epoch、不改 phase、不覆盖 operation_id)。
+	//
+	// 这段判定原先在调用方(两个 allocator 的 decideOwnerBegin:Query → 本地比对 → Begin)。
+	// 移进事务的理由:
+	//   ① **operation_id 必须稳定**(§9.23「一次真实进场 / owner 迁移使用一个稳定
+	//      operation_id」)。调用方每次 Begin 现铸 uuid.NewString(),同一次进场的重复
+	//      投递(重连、重复交付、心跳自愈)会写出不同 operation,幂等键形同虚设。改由权威
+	//      在同目标时原样返回既有记录后,operation_id 天然贯穿整条链,客户端也能从
+	//      ResumeContext 拿到同一个值续用。
+	//   ② **判定与写入落在同一线性化点**。调用方那份判定是建议性的:Query 与 Begin 之间
+	//      记录可能已变,expectEpoch 随之作废,只能靠 EPOCH_CONFLICT 兜底重查——而"目标
+	//      已经是它"本就该是 no-op,不该先冲突再重来。
+	//
+	// 比对刻意只到**实例**粒度(type + pod + uid + instance_epoch),不含
+	// assignment_or_allocation_id 与 release_track,沿用调用方原语义:同一实例上的
+	// assignment 刷新(seat 续租)是同一 owner 的重复交付,纳入会让 epoch 无谓翻动(churn);
+	// release track 是独立 Fleet,其变化必然伴随 pod/uid 变化,已被实例粒度捕获。
+	if rec.OwnerType == ownerType && rec.Target.PodName == target.PodName &&
+		rec.Target.InstanceUID == target.InstanceUID &&
+		rec.Target.InstanceEpoch == target.InstanceEpoch &&
+		(rec.Phase == OwnerPhasePending || rec.Phase == OwnerPhaseAdmitted) {
+		deadline, derr := readLeaseDeadline(ctx, tx, rec.Target.InstanceUID, false)
+		if derr != nil {
+			return OwnerRecord{}, derr
+		}
+		rec.LeaseDeadlineMs = deadline
+		if cerr := tx.Commit(); cerr != nil {
+			return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit same-instance begin player=%d: %v", playerID, cerr)
 		}
 		return rec, nil
 	}
@@ -252,6 +286,14 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 			"operation_id", operationID)
 		return rec, errcode.New(errcode.ErrOwnerEpochConflict,
 			"epoch conflict player=%d expect=%d current=%d", playerID, expectEpoch, rec.OwnerEpoch)
+	}
+
+	// 到这里必定是**真实迁移**(要写新记录),operation_id 不能为空:空 operation 会让后续
+	// Admit 的 exact 校验、客户端续用与审计流水同时失去锚点。biz 层保证非空(空则铸新),
+	// 本行是防止绕过 biz 的内部调用写出无锚点记录的兜底。
+	if operationID == "" {
+		return OwnerRecord{}, errcode.New(errcode.ErrOwnerInvalidOperation,
+			"operation_id required for a real transition player=%d", playerID)
 	}
 
 	// admit_not_before:取 CAS 线性化点观察到的旧实例租约最晚截止(FOR UPDATE 挡在途续租)

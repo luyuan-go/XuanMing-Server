@@ -3,6 +3,7 @@ package conf
 
 import (
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 )
 
 // Config 是 leaderboard 服务的完整配置。
@@ -48,6 +49,9 @@ type LeaderboardConf struct {
 
 	// RetentionSweepBatch 每轮每表清理行数上限(默认 500)。清理与发奖补扫共用扫描节拍。
 	RetentionSweepBatch int `yaml:"retention_sweep_batch,omitempty" json:"retention_sweep_batch,omitempty"`
+
+	// RetentionModeRaw 保留期清理模式:留空 / "report_only" = 默认只报告不删;"delete" = 真删。
+	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -79,4 +83,19 @@ func (c *Config) Defaults() {
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51007"
 	}
+}
+
+// RetentionMode 返回生效的保留期清理模式(默认 ModeReportOnly = 只报告不删)。
+func (l *LeaderboardConf) RetentionMode() dbguard.Mode {
+	m, err := dbguard.ParseMode(l.RetentionModeRaw)
+	if err != nil {
+		return dbguard.ModeReportOnly
+	}
+	return m
+}
+
+// ValidateRetentionMode 供启动 fail-fast(写了无法识别的模式必须拒启)。
+func (l *LeaderboardConf) ValidateRetentionMode() error {
+	_, err := dbguard.ParseMode(l.RetentionModeRaw)
+	return err
 }

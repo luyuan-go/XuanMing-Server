@@ -2,6 +2,7 @@ package biz
 
 import (
 	"context"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"testing"
 
 	chatv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/chat/v1"
@@ -23,8 +24,8 @@ func (r *paginationSpyRepo) ListPrivate(_ context.Context, _, _ uint64, limit in
 	return nil, nil
 }
 
-func (*paginationSpyRepo) DeleteMessagesBefore(context.Context, uint64, int) (int64, error) {
-	return 0, nil
+func (*paginationSpyRepo) SweepMessagesBefore(_ context.Context, mode dbguard.Mode, _ uint64, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
 
 func TestPullHistory_ClampsLimitAndPreservesCursor(t *testing.T) {

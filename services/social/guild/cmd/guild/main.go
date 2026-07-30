@@ -28,10 +28,12 @@ import (
 	kconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/redisx"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	guildv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/guild/v1"
@@ -87,6 +89,14 @@ func main() {
 	}
 	db := mysqlx.MustNewClient(cfg.Node.MySQLClient)
 	defer func() { _ = db.Close() }()
+
+	// 严格模式断言(§9.24):非严格 sql_mode 下超长写入会被 MySQL **静默截断**
+	// (err=nil 但数据被砍断),等于无声的数据损坏,故 fail-fast 而不是继续产生坏数据。
+	if serr := dbguard.AssertStrictModeStartup(db); serr != nil {
+		helper.Errorw("msg", "mysql_strict_mode_required", "err", serr)
+		os.Exit(1)
+	}
+
 	schemaCtx, schemaCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	schemaErr := data.ValidateRequiredSchema(schemaCtx, db)
 	schemaCancel()
@@ -100,6 +110,11 @@ func main() {
 		os.Exit(1)
 	}
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
+
+	// 容量巡检(§9.24):启动即跑一轮拿基线,之后每小时一轮;超预算只告警不阻断。
+	capacityCtx, capacityCancel := context.WithCancel(context.Background())
+	defer capacityCancel()
+	go runCapacityGuard(capacityCtx, dbguard.New(db, "pandora_social", data.Budgets(), nil))
 
 	// 4. Snowflake(guild_id / group_id / request_id 生成；node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
 	//
@@ -199,6 +214,22 @@ type guildEventPusher struct {
 
 func (k *guildEventPusher) PushGuildEvent(ctx context.Context, toPlayerID uint64, evt *guildv1.GuildEvent) error {
 	return k.p.Send(ctx, strconv.FormatUint(toPlayerID, 10), evt)
+}
+
+// runCapacityGuard 启动即跑一轮容量巡检拿基线,之后每小时一轮(§9.24)。
+// 走 information_schema 估算(毫秒级、不锁表);超预算只告警不阻断。
+func runCapacityGuard(ctx context.Context, g *dbguard.Guard) {
+	safego.Run(ctx, "db_capacity_guard_initial", func() { g.Check(ctx) })
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			safego.Run(ctx, "db_capacity_guard", func() { g.Check(ctx) })
+		}
+	}
 }
 
 // maskDSN 脱敏 DSN 里的密码(对齐 friend / player main.go)。

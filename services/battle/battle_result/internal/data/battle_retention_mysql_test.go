@@ -12,6 +12,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -139,9 +140,9 @@ func TestBattleRetentionPurge_MySQL(t *testing.T) {
 		mustExecBattle(t, db, `INSERT INTO battle_player_stats(match_id, player_id) VALUES
 			(1, 11), (1, 12), (2, 21), (3, 31), (4, 41)`)
 
-		n, err := repo.PurgeExpiredBattles(ctx, cutoffMs, 100)
-		if err != nil || n != 2 {
-			t.Fatalf("PurgeExpiredBattles: n=%d err=%v, want n=2(match 1+4)", n, err)
+		out, err := repo.SweepExpiredBattles(ctx, dbguard.ModeDelete, cutoffMs, 100)
+		if err != nil || out.Deleted != 2 {
+			t.Fatalf("SweepExpiredBattles(delete): deleted=%d err=%v, want 2(match 1+4)", out.Deleted, err)
 		}
 		assertCount(t, db, `SELECT COUNT(*) FROM battles`, 2)
 		assertCount(t, db, `SELECT COUNT(*) FROM battle_player_stats`, 2)
@@ -150,11 +151,11 @@ func TestBattleRetentionPurge_MySQL(t *testing.T) {
 
 		// 小批量排空:剩余 2 行按 batch=1 分两批删光(drain 循环的 SQL 侧配合面)。
 		mustExecBattle(t, db, `UPDATE battles SET created_at = DATE_SUB(NOW(), INTERVAL 95 DAY)`)
-		if n, err := repo.PurgeExpiredBattles(ctx, cutoffMs, 1); err != nil || n != 1 {
-			t.Fatalf("batch=1 first purge: n=%d err=%v", n, err)
+		if out, err := repo.SweepExpiredBattles(ctx, dbguard.ModeDelete, cutoffMs, 1); err != nil || out.Deleted != 1 {
+			t.Fatalf("batch=1 first purge: deleted=%d err=%v", out.Deleted, err)
 		}
-		if n, err := repo.PurgeExpiredBattles(ctx, cutoffMs, 1); err != nil || n != 1 {
-			t.Fatalf("batch=1 second purge: n=%d err=%v", n, err)
+		if out, err := repo.SweepExpiredBattles(ctx, dbguard.ModeDelete, cutoffMs, 1); err != nil || out.Deleted != 1 {
+			t.Fatalf("batch=1 second purge: deleted=%d err=%v", out.Deleted, err)
 		}
 		assertCount(t, db, `SELECT COUNT(*) FROM battles`, 0)
 		assertCount(t, db, `SELECT COUNT(*) FROM battle_player_stats`, 0)
@@ -171,9 +172,9 @@ func TestBattleRetentionPurge_MySQL(t *testing.T) {
 		mustExecBattle(t, db, `INSERT INTO battle_progress_player(match_id, player_id, total_exp) VALUES
 			(101, 11, 100), (101, 12, 200), (102, 21, 300), (103, 31, 400)`)
 
-		n, err := repo.PurgeSettledProgress(ctx, cutoffMs, 100)
-		if err != nil || n != 1 {
-			t.Fatalf("PurgeSettledProgress: n=%d err=%v, want n=1(match 101)", n, err)
+		out, err := repo.SweepSettledProgress(ctx, dbguard.ModeDelete, cutoffMs, 100)
+		if err != nil || out.Deleted != 1 {
+			t.Fatalf("SweepSettledProgress(delete): deleted=%d err=%v, want 1(match 101)", out.Deleted, err)
 		}
 		assertCount(t, db, `SELECT COUNT(*) FROM battle_progress_stream`, 2)
 		assertCount(t, db, `SELECT COUNT(*) FROM battle_progress_player WHERE match_id = 101`, 0)

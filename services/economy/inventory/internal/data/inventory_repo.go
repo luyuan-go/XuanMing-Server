@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 )
@@ -157,15 +158,19 @@ type InventoryRepo interface {
 
 	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
 
-	// DeleteLedgerBefore 删 created_at 超过保留期的幂等流水(单批 limit 行,防长事务锁表)。
-	// 保留期必须远大于一切发放/使用/出售/结算的重试窗口(分钟级):行删除后同 key 重放
-	// 不再被 uk 拦截,靠"对应操作早已终态、调用方不会再重试"保证不重复入账。
-	DeleteLedgerBefore(ctx context.Context, retentionDays, limit int) (int64, error)
+	// SweepLedgerBefore 处理 created_at 超过保留期的幂等流水。
+	//
+	// **mode 默认 ModeReportOnly:只统计待清理量并 WARN 告警,一行都不删**(用户指令:
+	// 不允许"因为数据大了"自动删数据);只有配置显式 retention_mode=delete 才真删。
+	// 真删语义(仅供开启前评估):保留期必须远大于一切发放/使用/出售/结算的重试窗口
+	// (分钟级),行删除后同 key 重放不再被 uk 拦截,靠"对应操作早已终态"保证不重复入账。
+	SweepLedgerBefore(ctx context.Context, mode dbguard.Mode, retentionDays, limit int) (dbguard.Outcome, error)
 
-	// DeleteClosedEscrowBefore 删已关闭(status=closed)且 updated_at 超过保留期的托管行
-	// (单批 limit 行)。active 行永不清理(EnsureAuctionEscrow 依赖其存在性核对遗留订单)。
-	// 删后迟到 ReleaseEscrow 命中 ErrNoRows → already no-op,fail-safe。
-	DeleteClosedEscrowBefore(ctx context.Context, retentionDays, limit int) (int64, error)
+	// SweepClosedEscrowBefore 处理已关闭(status=closed)且 updated_at 超保留期的托管行。
+	// **mode 默认 ModeReportOnly(只报告不删)**;active 行无论如何都不在处理范围
+	// (EnsureAuctionEscrow 依赖其存在性核对遗留订单)。
+	// 真删语义:删后迟到 ReleaseEscrow 命中 ErrNoRows → already no-op,fail-safe。
+	SweepClosedEscrowBefore(ctx context.Context, mode dbguard.Mode, retentionDays, limit int) (dbguard.Outcome, error)
 }
 
 // MySQLInventoryRepo 是基于 database/sql 的 InventoryRepo 实现。
@@ -1043,16 +1048,22 @@ func consumeGoldEscrowTx(ctx context.Context, tx *sql.Tx, playerID, orderID uint
 // inventory_ledger / auction_escrow(closed) 是只增表,靠 biz/sweep.go 周期批量删除保证有界。
 // DELETE ... LIMIT 幂等,多副本并发跑只多花空批,不需要锁(对齐 mail sweep)。
 
-func (r *MySQLInventoryRepo) DeleteLedgerBefore(ctx context.Context, retentionDays, limit int) (int64, error) {
-	return r.execAffected(ctx, "delete ledger",
-		`DELETE FROM inventory_ledger WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`,
-		retentionDays, limit)
+func (r *MySQLInventoryRepo) SweepLedgerBefore(ctx context.Context, mode dbguard.Mode, retentionDays, limit int) (dbguard.Outcome, error) {
+	out, err := dbguard.SweepTable(ctx, r.db, mode, "pandora_trade", "inventory_ledger",
+		"created_at < DATE_SUB(NOW(), INTERVAL ? DAY)", limit, retentionDays)
+	if err != nil {
+		return out, errcode.New(errcode.ErrInternal, "sweep ledger: %v", err)
+	}
+	return out, nil
 }
 
-func (r *MySQLInventoryRepo) DeleteClosedEscrowBefore(ctx context.Context, retentionDays, limit int) (int64, error) {
-	return r.execAffected(ctx, "delete closed escrow",
-		`DELETE FROM auction_escrow WHERE status = ? AND updated_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`,
-		escrowStatusClosed, retentionDays, limit)
+func (r *MySQLInventoryRepo) SweepClosedEscrowBefore(ctx context.Context, mode dbguard.Mode, retentionDays, limit int) (dbguard.Outcome, error) {
+	out, err := dbguard.SweepTable(ctx, r.db, mode, "pandora_trade", "auction_escrow",
+		"status = ? AND updated_at < DATE_SUB(NOW(), INTERVAL ? DAY)", limit, escrowStatusClosed, retentionDays)
+	if err != nil {
+		return out, errcode.New(errcode.ErrInternal, "sweep closed escrow: %v", err)
+	}
+	return out, nil
 }
 
 func (r *MySQLInventoryRepo) execAffected(ctx context.Context, op, q string, args ...any) (int64, error) {

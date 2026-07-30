@@ -24,10 +24,11 @@ func (u *ChatUsecase) SweepHistory(ctx context.Context, nowMs int64) {
 	if maxID == 0 {
 		return // cutoff 早于雪花 Epoch(服务上线未满保留期),无可清理
 	}
-	if n, err := u.repo.DeleteMessagesBefore(ctx, maxID, u.cfg.SweepBatch); err != nil {
+	// mode 默认 report_only:只统计待清理量并 WARN 告警,不删数据(dbguard.SweepTable 内已打日志)。
+	if out, err := u.repo.SweepMessagesBefore(ctx, u.cfg.RetentionMode(), maxID, u.cfg.SweepBatch); err != nil {
 		plog.With(ctx).Warnw("msg", "chat_history_sweep_failed", "err", err)
-	} else if n > 0 {
-		plog.With(ctx).Infow("msg", "chat_history_swept", "deleted", n, "retention_days", u.cfg.HistoryRetentionDays)
+	} else if out.Cleaned() {
+		plog.With(ctx).Infow("msg", "chat_history_swept", "deleted", out.Deleted, "retention_days", u.cfg.HistoryRetentionDays)
 	}
 }
 

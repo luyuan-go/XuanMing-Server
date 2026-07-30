@@ -126,12 +126,17 @@ outbox 无堆积**。FAIL → 不许开压(新表未登记 = 无界增长风险,
    - **每张表的增量能用业务量解释**(流水/历史行数 ≈ 对局数×人数、操作数;数量级对不上 =
      重复写入 / 幂等失效 / 泄漏,当 bug 查);
    - **无未登记表**(压测中间接建出的新表也会被抓)。
-4. **清理速率抽测(压测库专用,会删数据)**:压测数据即将丢弃时,顺手验证批删速率追得上写入:
+4. **待清理量报告**(判断保留期与清理模式是否合适):
    ```powershell
-   go run ./cmd/dbcheck -dsn '...' -force-sweep -confirm=YES-DELETE
+   go run ./cmd/dbcheck -dsn '...' -pending
    ```
-   输出各 swept 表 rows/s;要求 **批删速率 ≥ 峰值写入速率**(否则 90 天后清理永远追不上,
-   需调大 sweep batch / 频率)。⚠️ 只准对压测库跑,cutoff=now 会删光可清数据。
+   输出各 swept 表在 cutoff=now 下的可清理行数(上界)。**只 COUNT,不删任何数据。**
+
+   ⚠️ 早先版本的 `-force-sweep -confirm=YES-DELETE`(批删到空 + 输出 rows/s)已于
+   2026-07-22 按用户指令**整块移除**:不允许"因为数据大了"就删数据。保留期清理现在
+   默认 `retention_mode=report_only`(只 WARN 告警不删),真删要各服务显式配
+   `retention_mode: delete`。**因此压测不再验证"批删速率"**——默认根本不删;
+   若将来要开 delete 模式,再单独设计速率验证(需在可丢弃库上做)。
 5. 贴决策行 + 更新 `docs/design/pandora-arch.md` §11
 6. 更新 `PROGRESS.md`
 7. **压期间不上传日志,只上传 summary 表格**
@@ -148,6 +153,7 @@ outbox 无堆积**。FAIL → 不许开压(新表未登记 = 无界增长风险,
 [ ] 至少 3 次 snapshot 已抓
 [ ] summarize.ps1 输出五段表
 [ ] dbcheck -compare 已跑:outbox 排空 + 增量可解释 + 无未登记表
+[ ] dbcheck -pending 已记录各表待清理量(评估保留期/清理模式)
 [ ] 对比表已写
 [ ] 决策行已贴
 [ ] PROGRESS.md 已更新

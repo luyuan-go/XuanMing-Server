@@ -10,6 +10,7 @@ package biz
 import (
 	"context"
 	"errors"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"sync"
 	"testing"
 	"time"
@@ -252,24 +253,33 @@ func (r *fakeRepo) DeferProgressOutbox(_ context.Context, id int64) error {
 
 // 保留期清理:SQL 行为由 data 层集成测试覆盖;biz 侧用可配批次序列验证排空循环。
 // purge*Results 依次弹出每次调用的返回值,耗尽后返回 0(= 追平)。
-func (r *fakeRepo) PurgeExpiredBattles(context.Context, int64, int) (int64, error) {
+// batchOutcome 把"本批处理了 n 行"翻译成对应 mode 的 Outcome:
+// report-only 只 Matched(Deleted 恒 0),delete 才 Deleted 并按 batch 判 Truncated。
+func batchOutcome(mode dbguard.Mode, n int64, batch int) dbguard.Outcome {
+	if mode != dbguard.ModeDelete {
+		return dbguard.Outcome{Mode: mode, Matched: n}
+	}
+	return dbguard.Outcome{Mode: mode, Matched: n, Deleted: n, Truncated: batch > 0 && n >= int64(batch)}
+}
+
+func (r *fakeRepo) SweepExpiredBattles(_ context.Context, mode dbguard.Mode, _ int64, batch int) (dbguard.Outcome, error) {
 	r.purgeBattlesCalls++
 	if len(r.purgeBattlesResults) == 0 {
-		return 0, nil
+		return dbguard.Outcome{Mode: mode}, nil
 	}
 	n := r.purgeBattlesResults[0]
 	r.purgeBattlesResults = r.purgeBattlesResults[1:]
-	return n, nil
+	return batchOutcome(mode, n, batch), nil
 }
 
-func (r *fakeRepo) PurgeSettledProgress(context.Context, int64, int) (int64, error) {
+func (r *fakeRepo) SweepSettledProgress(_ context.Context, mode dbguard.Mode, _ int64, batch int) (dbguard.Outcome, error) {
 	r.purgeProgressCalls++
 	if len(r.purgeProgressResults) == 0 {
-		return 0, nil
+		return dbguard.Outcome{Mode: mode}, nil
 	}
 	n := r.purgeProgressResults[0]
 	r.purgeProgressResults = r.purgeProgressResults[1:]
-	return n, nil
+	return batchOutcome(mode, n, batch), nil
 }
 
 func (r *fakeRepo) CountStaleUnsettledProgress(context.Context, int64) (int64, error) {

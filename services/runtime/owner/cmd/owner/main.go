@@ -24,6 +24,7 @@ import (
 	"github.com/go-kratos/kratos/v2/config/file"
 	klog "github.com/go-kratos/kratos/v2/log"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/safego"
@@ -80,6 +81,18 @@ func main() {
 	db := mysqlx.MustNewClient(cfg.Node.MySQLClient)
 	defer func() { _ = db.Close() }()
 	helper.Infow("msg", "owner_store_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
+
+	// 严格模式断言(§9.24):owner 是玩家归属权威(§9.22),非严格 sql_mode 下超长写入被
+	// 静默截断会让 owner 记录/租约字段损坏,后果比一般业务表更重,必须 fail-fast。
+	if serr := dbguard.AssertStrictModeStartup(db); serr != nil {
+		helper.Errorw("msg", "mysql_strict_mode_required", "err", serr)
+		os.Exit(1)
+	}
+
+	// 容量巡检(§9.24):启动即跑一轮拿基线,之后每小时一轮;超预算只告警不阻断。
+	capacityCtx, capacityCancel := context.WithCancel(context.Background())
+	defer capacityCancel()
+	go runCapacityGuard(capacityCtx, dbguard.New(db, "pandora_owner", data.Budgets(), nil))
 
 	// schema gate:pandora_owner 是后建库,既有 volume 不会自动重放 init SQL;缺表 fail-fast。
 	schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -157,6 +170,22 @@ func runTransitionLogSweep(ctx context.Context, uc *biz.OwnerUsecase, helper *kl
 					helper.Infow("msg", "owner_transition_log_swept", "deleted_rows", n, "batch", batch)
 				}
 			})
+		}
+	}
+}
+
+// runCapacityGuard 启动即跑一轮容量巡检拿基线,之后每小时一轮(§9.24)。
+// 走 information_schema 估算(毫秒级、不锁表);超预算只告警不阻断。
+func runCapacityGuard(ctx context.Context, g *dbguard.Guard) {
+	safego.Run(ctx, "db_capacity_guard_initial", func() { g.Check(ctx) })
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			safego.Run(ctx, "db_capacity_guard", func() { g.Check(ctx) })
 		}
 	}
 }

@@ -3,6 +3,7 @@ package conf
 
 import (
 	"fmt"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
@@ -158,6 +159,10 @@ type BattleConf struct {
 
 	// RetentionSweepBatch 每轮每类清理的对局数上限(默认 200 场;stats 行数 ≈ 场数×人数)。
 	RetentionSweepBatch int `yaml:"retention_sweep_batch,omitempty" json:"retention_sweep_batch,omitempty"`
+
+	// RetentionModeRaw 保留期清理模式:留空 / "report_only" = 默认只报告不删;"delete" = 真删。
+	// 「因为数据大了就自动删」不可接受(§9.24 + 2026-07-22 用户指令)。
+	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
 }
 
 // Defaults 填默认值。
@@ -368,4 +373,19 @@ func (b *BattleConf) ProgressBatchSizeOrDefault() int {
 		return b.ProgressBatchSize
 	}
 	return 128
+}
+
+// RetentionMode 返回生效的保留期清理模式(默认 ModeReportOnly = 只报告不删)。
+func (b *BattleConf) RetentionMode() dbguard.Mode {
+	m, err := dbguard.ParseMode(b.RetentionModeRaw)
+	if err != nil {
+		return dbguard.ModeReportOnly
+	}
+	return m
+}
+
+// ValidateRetentionMode 供启动 fail-fast(写了无法识别的模式必须拒启)。
+func (b *BattleConf) ValidateRetentionMode() error {
+	_, err := dbguard.ParseMode(b.RetentionModeRaw)
+	return err
 }

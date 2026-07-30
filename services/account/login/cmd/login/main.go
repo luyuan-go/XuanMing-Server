@@ -34,6 +34,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
@@ -139,10 +140,11 @@ func main() {
 				case <-ticker.C:
 					// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
 					safego.Run(deviceSweepCtx, "login_device_sweep", func() {
-						if n, err := data.PurgeStaleDevices(deviceSweepCtx, sdb, retentionDays, 500); err != nil {
-							helper.Warnw("msg", "device_purge_failed", "err", err)
-						} else if n > 0 {
-							helper.Infow("msg", "stale_devices_purged", "rows", n, "retention_days", retentionDays)
+						// mode 默认 report_only:待清理量由 dbguard 统一 WARN 告警,这里只在真删时补 INFO。
+						if out, err := data.SweepStaleDevices(deviceSweepCtx, sdb, cfg.Login.RetentionMode(), retentionDays, 500); err != nil {
+							helper.Warnw("msg", "device_sweep_failed", "err", err)
+						} else if out.Cleaned() {
+							helper.Infow("msg", "stale_devices_purged", "rows", out.Deleted, "retention_days", retentionDays)
 						}
 					})
 				}
@@ -414,6 +416,17 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, d
 
 	h.Infow("msg", "account_repo_mysql", "dsn_masked", maskDSN(cfg.Node.MySQLClient.DSN))
 
+	// 严格模式断言(§9.24):非严格 sql_mode 下超长写入会被 MySQL **静默截断**
+	// (err=nil 但数据被砍断),等于无声的数据损坏,故 fail-fast 而不是继续产生坏数据。
+	if serr := dbguard.AssertStrictModeStartup(db); serr != nil {
+		h.Errorw("msg", "mysql_strict_mode_required", "err", serr)
+		os.Exit(1)
+	}
+
+	// 容量巡检(§9.24):启动即跑一轮拿基线,之后每小时一轮;超预算只告警不阻断。
+	// 本函数在 main 装配路径内被调用一次,goroutine 随进程生命周期(main 的 defer 不覆盖此处)。
+	go runCapacityGuard(context.Background(), dbguard.New(db, "pandora_account", data.Budgets(), nil))
+
 	// 启动期 schema 检查(2026-07-08):player_roles 是后补的表,既有 MySQL volume / PVC 不会
 	// 自动重放 init SQL;缺表时 SelectRole 落库必炸、Login 读已选角持续告警。fail-fast 并指向迁移 SQL。
 	schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -570,6 +583,22 @@ func repoEnabled(b bool) string {
 		return "redis"
 	}
 	return "disabled"
+}
+
+// runCapacityGuard 启动即跑一轮容量巡检拿基线,之后每小时一轮(§9.24)。
+// 走 information_schema 估算(毫秒级、不锁表);超预算只告警不阻断。
+func runCapacityGuard(ctx context.Context, g *dbguard.Guard) {
+	safego.Run(ctx, "db_capacity_guard_initial", func() { g.Check(ctx) })
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			safego.Run(ctx, "db_capacity_guard", func() { g.Check(ctx) })
+		}
+	}
 }
 
 // maskDSN 把 user:password 段脱敏,只保留 host 信息便于日志诊断。

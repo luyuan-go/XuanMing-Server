@@ -15,6 +15,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
 
@@ -238,25 +239,24 @@ func isDupErr(err error) bool {
 // reward_log 只清 GRANTED:PENDING/FAILED 是补发扫描工作集,陈年残留属告警问题不是增长问题。
 // 多副本各自跑,DELETE 幂等无需锁;单批 limit 有界。
 
-// PurgeSnapshotsBefore 删 created_at_ms 超保留期的名次快照(单批 limit 行)。
-func (r *MySQLLeaderboardRepo) PurgeSnapshotsBefore(ctx context.Context, cutoffMs int64, limit int) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`DELETE FROM leaderboard_snapshot WHERE created_at_ms < ? LIMIT ?`, cutoffMs, limit)
+// SweepSnapshotsBefore 处理 created_at_ms 超保留期的名次快照。
+// **mode 默认 ModeReportOnly:只统计待清理量并 WARN 告警,一行都不删**(用户指令)。
+func (r *MySQLLeaderboardRepo) SweepSnapshotsBefore(ctx context.Context, mode dbguard.Mode, cutoffMs int64, limit int) (dbguard.Outcome, error) {
+	out, err := dbguard.SweepTable(ctx, r.db, mode, "pandora_leaderboard", "leaderboard_snapshot",
+		"created_at_ms < ?", limit, cutoffMs)
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInternal, "purge snapshots: %v", err)
+		return out, errcode.New(errcode.ErrInternal, "sweep snapshots: %v", err)
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
+	return out, nil
 }
 
-// PurgeGrantedRewardsBefore 删已发放(GRANTED)且 updated_at_ms 超保留期的发奖记录(单批 limit 行)。
-func (r *MySQLLeaderboardRepo) PurgeGrantedRewardsBefore(ctx context.Context, cutoffMs int64, limit int) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`DELETE FROM leaderboard_reward_log WHERE status = ? AND updated_at_ms < ? LIMIT ?`,
-		RewardGranted, cutoffMs, limit)
+// SweepGrantedRewardsBefore 处理已发放(GRANTED)且 updated_at_ms 超保留期的发奖记录。
+// **mode 默认 ModeReportOnly(只报告不删)**;PENDING/FAILED 是补发工作集,永不进入处理范围。
+func (r *MySQLLeaderboardRepo) SweepGrantedRewardsBefore(ctx context.Context, mode dbguard.Mode, cutoffMs int64, limit int) (dbguard.Outcome, error) {
+	out, err := dbguard.SweepTable(ctx, r.db, mode, "pandora_leaderboard", "leaderboard_reward_log",
+		"status = ? AND updated_at_ms < ?", limit, RewardGranted, cutoffMs)
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInternal, "purge granted rewards: %v", err)
+		return out, errcode.New(errcode.ErrInternal, "sweep granted rewards: %v", err)
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
+	return out, nil
 }

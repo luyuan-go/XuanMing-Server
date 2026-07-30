@@ -30,9 +30,11 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	"github.com/luyuancpp/pandora/pkg/configtable"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 
 	"github.com/luyuancpp/pandora/services/account/player/internal/biz"
@@ -144,6 +146,16 @@ func main() {
 	defer func() { _ = db.Close() }()
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
 
+	// 严格模式断言(§9.24):player_reward_claims.record 是 LONGBLOB,非严格模式下超长
+	// 静默截断会让位图直接损坏(领奖记录错乱),必须 fail-fast。
+	strictCtx, strictCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if serr := dbguard.AssertStrictMode(strictCtx, db); serr != nil {
+		strictCancel()
+		helper.Errorw("msg", "mysql_strict_mode_required", "err", serr)
+		os.Exit(1)
+	}
+	strictCancel()
+
 	// 5. 装配链
 	repo := data.NewMySQLPlayerRepo(db)
 	// 启动 schema gate:经验相关表列缺失时 fail-fast,不能让副本 Ready 后在首个
@@ -216,6 +228,9 @@ func main() {
 	}
 	go uc.RunPushOutboxPublisher(pubCtx)
 	go uc.RunExpHistoryJanitor(pubCtx)
+	// 容量巡检(§9.24):启动即跑一轮拿基线,之后每小时一轮。超预算只打 ERROR 日志 + metric,
+	// 不阻止启动(容量问题不该升级成可用性事故)。
+	go runCapacityGuard(pubCtx, dbguard.New(db, "pandora_player", data.Budgets(), data.BigFields()))
 	// mmr_history / 点数授予幂等历史保留期清理(默认关,前置条件见 conf,§9.24)。
 	go uc.RunHistoryJanitor(pubCtx)
 
@@ -324,6 +339,22 @@ func (k *playerEventPusher) PushPlayerEvent(ctx context.Context, playerID uint64
 }
 
 // maskDSN 脱敏 DSN 里的密码(对齐 battle_result / login main.go)。
+// runCapacityGuard 启动即跑一轮容量巡检拿基线,之后每小时一轮(§9.24)。
+// 走 information_schema 估算(毫秒级、不锁表),放启动路径安全;超预算只告警不阻断。
+func runCapacityGuard(ctx context.Context, g *dbguard.Guard) {
+	safego.Run(ctx, "db_capacity_guard_initial", func() { g.Check(ctx) })
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			safego.Run(ctx, "db_capacity_guard", func() { g.Check(ctx) })
+		}
+	}
+}
+
 func maskDSN(dsn string) string {
 	at := -1
 	colon := -1

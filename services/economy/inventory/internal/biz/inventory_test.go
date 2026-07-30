@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/services/economy/inventory/internal/conf"
 	"github.com/luyuancpp/pandora/services/economy/inventory/internal/data"
@@ -459,8 +460,13 @@ func (f *fakeRepo) MoveInstance(_ context.Context, playerID, instanceID uint64, 
 }
 
 // 保留期清理:biz 单测不模拟时间,默认 no-op(行为断言见 sweep_test.go 的 recording 替身)。
-func (f *fakeRepo) DeleteLedgerBefore(context.Context, int, int) (int64, error)       { return 0, nil }
-func (f *fakeRepo) DeleteClosedEscrowBefore(context.Context, int, int) (int64, error) { return 0, nil }
+func (f *fakeRepo) SweepLedgerBefore(_ context.Context, mode dbguard.Mode, _, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
+}
+
+func (f *fakeRepo) SweepClosedEscrowBefore(_ context.Context, mode dbguard.Mode, _, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
+}
 
 func (f *fakeRepo) DiscardInstance(_ context.Context, playerID, instanceID uint64) error {
 	delete(f.instances[playerID], instanceID)

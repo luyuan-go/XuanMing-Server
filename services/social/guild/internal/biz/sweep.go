@@ -18,10 +18,11 @@ import (
 
 // SweepTerminalJoinRequests 跑一轮终态申请清理(至多一批 cfg.SweepBatch),由调用方 ticker 驱动。
 func (u *GuildUsecase) SweepTerminalJoinRequests(ctx context.Context) {
-	if n, err := u.repo.DeleteTerminalJoinRequestsBefore(ctx, u.cfg.RequestRetentionDays, u.cfg.SweepBatch); err != nil {
+	// mode 默认 report_only:待清理量由 dbguard.SweepTable 统一 WARN 告警,这里只在真删时补 INFO。
+	if out, err := u.repo.SweepTerminalJoinRequestsBefore(ctx, u.cfg.RetentionMode(), u.cfg.RequestRetentionDays, u.cfg.SweepBatch); err != nil {
 		plog.With(ctx).Warnw("msg", "guild_request_sweep_failed", "err", err)
-	} else if n > 0 {
-		plog.With(ctx).Infow("msg", "guild_request_swept", "deleted", n, "retention_days", u.cfg.RequestRetentionDays)
+	} else if out.Cleaned() {
+		plog.With(ctx).Infow("msg", "guild_request_swept", "deleted", out.Deleted, "retention_days", u.cfg.RequestRetentionDays)
 	}
 }
 

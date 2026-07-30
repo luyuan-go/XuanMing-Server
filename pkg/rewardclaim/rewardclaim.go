@@ -30,6 +30,36 @@ import (
 // 防止恶意 / 错误传入的超大 index 把位图撑到撑爆内存。业务真实档位数远小于此。
 const MaxBitIndex = 1 << 20
 
+// ── 条目数上限(CLAUDE.md §9 不变量 18 在 blob 内部的对应物,2026-07-22)──────────
+//
+// 背景(必读,别再踩):MaxBitIndex 只约束**单条位图多大**,不约束**有多少条位图**。
+// 二者是两个独立的失控方向:
+//
+//	单元素过大 —— 一条位图撑到 128 KiB(已被 MaxBitIndex 挡住)
+//	条目数过多 —— map 里塞进任意多条位图(此前完全无闸)
+//
+// Record 整条序列化后落进 pandora_player.player_reward_claims.record(LONGBLOB,4 GB),
+// DB 层等于不设防;而 ClaimReward 是**客户端可直调**的 RPC(Envoy 只要求 JWT,不在 403
+// 内部名单内),source / activity_instance_id 又没有配置表白名单——于是客户端每换一个
+// source 字符串或 activity_instance_id,就永久新增一条位图。每条最大 128 KiB,
+// 约 3.3 万次调用即可把单个玩家的 record 撑到 4 GB;且 ClaimReward 每次都要
+// 全量 load→unmarshal→snapshot→marshal→save,record 涨到几 MB 后每次领奖都在
+// 读写几 MB,先打爆的是 player 服务与 MySQL 带宽,而不是 4 GB 列上限。
+//
+// 因此这里补上条目数与来源名长度的硬闸。真正的根治是**配置表白名单**
+// (ClaimPermanentByID + BitIndexMap,本文件已提供),奖励配置表落地后应切过去;
+// 在那之前,这些上限是唯一的兜底。
+const (
+	// MaxPermanentSources 是永久类来源种类上限。永久来源来自配置表(签到 / 成就 /
+	// 新手 / 永久任务……),是有限枚举,几十种足够;取 64 留足余量。
+	MaxPermanentSources = 64
+	// MaxActivityInstances 是同时在册的活动实例数上限。活动下线由 EraseActivity 回收,
+	// 正常运营同时在线活动远少于此;取 256 留足余量。
+	MaxActivityInstances = 256
+	// MaxSourceNameLen 是永久来源名的字节长度上限(来源名是配置表里的短标识符)。
+	MaxSourceNameLen = 64
+)
+
 var (
 	// ErrAlreadyClaimed 表示该档位此前已领取(幂等保护)。
 	ErrAlreadyClaimed = errors.New("rewardclaim: 该奖励档位已领取")
@@ -37,6 +67,11 @@ var (
 	ErrIndexTooLarge = errors.New("rewardclaim: bit 索引超出安全上界")
 	// ErrUnknownID 表示业务 ID 不在 BitIndexMap 里(配置表没有此条 / 表已变更)。
 	ErrUnknownID = errors.New("rewardclaim: 业务 ID 不在 bit 索引表中")
+	// ErrTooManyEntries 表示记录里的位图条目数已达上限,拒绝**新增**条目
+	// (已存在的条目不受影响,仍可继续领取)。
+	ErrTooManyEntries = errors.New("rewardclaim: 领奖记录条目数超出上限")
+	// ErrSourceNameTooLong 表示永久来源名超长。
+	ErrSourceNameTooLong = errors.New("rewardclaim: 永久来源名超出长度上限")
 )
 
 // BitIndexMap 是"业务 ID → bit 位"的映射,对标 mmorpg C++ 侧读表生成的
@@ -133,34 +168,53 @@ func New() *Record {
 	}
 }
 
-func (r *Record) permBitmap(source string) *bitmap {
-	b := r.permanent[source]
-	if b == nil {
-		b = &bitmap{}
-		r.permanent[source] = b
+// permBitmap 取 / 建永久来源位图。
+//
+// 只在**新增**条目时校验上限:已存在的来源继续领取永不因上限被拒
+// (否则调小上限或存量超限会让老玩家领不到已获得的奖励,属回档,违反验收底线第 4 条)。
+// Load 进来的存量记录同理不做校验,只是从此不能再长。
+func (r *Record) permBitmap(source string) (*bitmap, error) {
+	if b := r.permanent[source]; b != nil {
+		return b, nil
 	}
-	return b
+	if len(source) > MaxSourceNameLen {
+		return nil, ErrSourceNameTooLong
+	}
+	if len(r.permanent) >= MaxPermanentSources {
+		return nil, ErrTooManyEntries
+	}
+	b := &bitmap{}
+	r.permanent[source] = b
+	return b, nil
 }
 
-func (r *Record) actBitmap(instanceID uint64) *bitmap {
-	b := r.activity[instanceID]
-	if b == nil {
-		b = &bitmap{}
-		r.activity[instanceID] = b
+// actBitmap 取 / 建活动实例位图。上限语义同 permBitmap(只拦新增)。
+func (r *Record) actBitmap(instanceID uint64) (*bitmap, error) {
+	if b := r.activity[instanceID]; b != nil {
+		return b, nil
 	}
-	return b
+	if len(r.activity) >= MaxActivityInstances {
+		return nil, ErrTooManyEntries
+	}
+	b := &bitmap{}
+	r.activity[instanceID] = b
+	return b, nil
 }
 
 // ── 永久类 ───────────────────────────────────────────────────────────────
 
 // ClaimPermanent 领取永久来源 source 的第 index 档奖励。
 // 返回 nil 表示首次领取成功;ErrAlreadyClaimed 表示已领过(幂等);
-// ErrIndexTooLarge 表示索引超界。各 source 互相独立,只增不删。
+// ErrIndexTooLarge 表示索引超界;ErrTooManyEntries / ErrSourceNameTooLong 表示
+// 要新建的来源条目触碰上限(已有来源不受影响)。各 source 互相独立,只增不删。
 func (r *Record) ClaimPermanent(source string, index uint32) error {
 	if index >= MaxBitIndex {
 		return ErrIndexTooLarge
 	}
-	b := r.permBitmap(source)
+	b, err := r.permBitmap(source)
+	if err != nil {
+		return err
+	}
 	if b.test(index) {
 		return ErrAlreadyClaimed
 	}
@@ -223,7 +277,10 @@ func (r *Record) ClaimActivity(instanceID uint64, index uint32) error {
 	if index >= MaxBitIndex {
 		return ErrIndexTooLarge
 	}
-	b := r.actBitmap(instanceID)
+	b, err := r.actBitmap(instanceID)
+	if err != nil {
+		return err
+	}
 	if b.test(index) {
 		return ErrAlreadyClaimed
 	}

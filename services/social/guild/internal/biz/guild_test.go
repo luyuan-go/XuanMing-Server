@@ -7,6 +7,7 @@ package biz
 
 import (
 	"context"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"sort"
 	"testing"
 	"time"
@@ -258,8 +259,8 @@ func (f *fakeGuildRepo) ListPendingRequests(_ context.Context, guildID, cursor u
 }
 
 // 保留期清理(§9.24):biz 单测不模拟时间,默认 no-op。
-func (f *fakeGuildRepo) DeleteTerminalJoinRequestsBefore(context.Context, int, int) (int64, error) {
-	return 0, nil
+func (f *fakeGuildRepo) SweepTerminalJoinRequestsBefore(_ context.Context, mode dbguard.Mode, _, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
 
 // ── fakeGuildPusher ─────────────────────────────────────────────────────────────

@@ -232,6 +232,104 @@ func TestStartMatch_MapGameModeCrossCheck(t *testing.T) {
 	}
 }
 
+// TestStartMatch_SoloWithoutTeam 单人入口(team_id=0)必须放行:「单人」与「单人组队」在
+// 协议层是同一件事,不该强迫玩家先建一个 1 人队(CLAUDE.md §17)。
+// 同时锁住:名单来自 JWT 身份(captainID),不查 team 服务;单排进 5v5 图同样合法——
+// 撮合按人数凑齐后由 binPack 装箱,5 张单人票天然凑满一方。
+func TestStartMatch_SoloWithoutTeam(t *testing.T) {
+	f := newFixtureWith(t, 8600, func(c *conf.MatchConf) {
+		c.MapId = 6
+		c.GameMode = "5v5_ranked"
+		c.TeamSize = 5
+	})
+	dir := t.TempDir()
+	writeLevelBatch(t, dir, 100, []*configpb.LevelRow{
+		{Id: 6, Name: "MOBA战斗", AssetPath: "/Game/L/MobaLevel.MobaLevel",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, GameMode: "5v5_ranked",
+			TeamSize: 5, SideCount: 2,
+			EntryMode: configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE},
+	})
+	store := configtable.NewStore()
+	if _, err := store.Load(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	f.uc.SetConfigTables(store)
+
+	// team_id=0 单排进 5v5:受理成功,票据成员就是调用者本人。
+	ticketID, err := f.uc.StartMatch(context.Background(), 8601, 0, 6001, 6)
+	if err != nil {
+		t.Fatalf("单人入口(team_id=0)应放行: %v", err)
+	}
+	if ticketID == 0 {
+		t.Fatal("单人入口应返回有效票据句柄")
+	}
+}
+
+// TestEntryModeAndSideCountFromLevelTable 锁住两列的读取与回退口径:
+//   - entry_mode 决定直进/撮合,未配置时沿用部署级 walk_in(§9.21 旧批次表兼容);
+//   - side_count 决定几方,未配置/表缺失回退 2(与历史 need=2×team_size 等价)。
+func TestEntryModeAndSideCountFromLevelTable(t *testing.T) {
+	// 部署级 walk_in=false(撮合部署),用于验证"未配置时沿用部署开关"。
+	f := newFixtureWith(t, 8700, func(c *conf.MatchConf) {
+		c.MapId = 6
+		c.GameMode = "5v5_ranked"
+		c.WalkIn = false
+	})
+	// 表未启用:两者都回退。
+	if f.uc.isWalkInMap(6) {
+		t.Fatal("tables=nil 应沿用部署 walk_in=false")
+	}
+	if got := f.uc.sideCountForMap(6); got != 2 {
+		t.Fatalf("tables=nil 应回退 2 方,得 %d", got)
+	}
+
+	dir := t.TempDir()
+	writeLevelBatch(t, dir, 100, []*configpb.LevelRow{
+		{Id: 6, Name: "撮合图", AssetPath: "/Game/L/A.A",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, GameMode: "5v5_ranked",
+			SideCount: 2, EntryMode: configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE},
+		{Id: 7, Name: "直进副本", AssetPath: "/Game/L/B.B",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, GameMode: "5v5_ranked",
+			SideCount: 1, EntryMode: configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN},
+		{Id: 8, Name: "混战", AssetPath: "/Game/L/C.C",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, GameMode: "5v5_ranked",
+			SideCount: 4, EntryMode: configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE},
+		{Id: 9, Name: "旧批次无两列", AssetPath: "/Game/L/D.D",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, GameMode: "5v5_ranked"},
+	})
+	store := configtable.NewStore()
+	if _, err := store.Load(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	f.uc.SetConfigTables(store)
+
+	cases := []struct {
+		mapID     uint32
+		wantWalk  bool
+		wantSides int
+		name      string
+	}{
+		{6, false, 2, "撮合图"},
+		{7, true, 1, "直进副本"},
+		{8, false, 4, "四方混战"},
+		{9, false, 2, "旧批次两列留空 → 沿用部署 walk_in=false + 默认 2 方"},
+		{999, false, 2, "表内不存在 → 全回退"},
+	}
+	for _, c := range cases {
+		if got := f.uc.isWalkInMap(c.mapID); got != c.wantWalk {
+			t.Fatalf("%s: isWalkInMap(%d)=%v, 期望 %v", c.name, c.mapID, got, c.wantWalk)
+		}
+		if got := f.uc.sideCountForMap(c.mapID); got != c.wantSides {
+			t.Fatalf("%s: sideCountForMap(%d)=%d, 期望 %d", c.name, c.mapID, got, c.wantSides)
+		}
+	}
+
+	// 同一张表里直进与撮合共存 —— 这正是部署级开关表达不了、必须下沉到表的场景。
+	if !f.uc.isWalkInMap(7) || f.uc.isWalkInMap(6) {
+		t.Fatal("同池内直进图与撮合图必须能共存")
+	}
+}
+
 // TestStartMatch_MapGateDisabled 未启用配置表(tables=nil)保持历史行为:任意 map_id 放行。
 func TestStartMatch_MapGateDisabled(t *testing.T) {
 	f := newFixture(t, 8300)

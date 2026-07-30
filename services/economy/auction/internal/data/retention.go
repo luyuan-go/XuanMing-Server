@@ -22,41 +22,66 @@ package data
 import (
 	"context"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
 
-// PurgeRetention 对所有分片跑一轮保留期清理(每分片每表至多一批 limit 行)。
-// 返回三类各自的总删除行数;任一分片/表失败立即返回错误(下一轮重试,不破坏幂等)。
-func (r *MySQLAuctionRepo) PurgeRetention(ctx context.Context, cutoffMs int64, limit int) (orders, matches, idemKeys int64, err error) {
+// RetentionOutcome 汇总一轮三类清理的结果(逐分片累加)。
+type RetentionOutcome struct {
+	Orders   dbguard.Outcome
+	Matches  dbguard.Outcome
+	IdemKeys dbguard.Outcome
+}
+
+// Cleaned 返回本轮是否真的删了数据(供调用方决定日志措辞)。
+func (o RetentionOutcome) Cleaned() bool {
+	return o.Orders.Deleted+o.Matches.Deleted+o.IdemKeys.Deleted > 0
+}
+
+// PendingTotal 返回三类待清理量之和(report-only 下的积压规模)。
+func (o RetentionOutcome) PendingTotal() int64 {
+	return o.Orders.Matched + o.Matches.Matched + o.IdemKeys.Matched
+}
+
+// SweepRetention 对所有分片跑一轮保留期清理(每分片每表至多一批 limit 行)。
+//
+// **mode 默认 ModeReportOnly:只统计各表待清理量并 WARN 告警,一行都不删**(用户指令:
+// 不允许"因为数据大了"自动删数据);只有配置显式 retention_mode=delete 才真删。
+// 三类的 Count 与 Delete 共用同一 where(dbguard.SweepTable 保证),条件只写一遍。
+//
+// 任一分片/表失败立即返回错误(下一轮重试,不破坏幂等)。逐分片累加:各分片可能连不同
+// 实例,累加值是"整个 auction 域"的口径,而 metric 由 SweepTable 按 db+table 打(分片间同 label
+// 会互相覆盖 gauge —— 这是有意的近似:分片容量应大致均衡,单分片异常会被 dbcheck 逐库巡检抓到)。
+func (r *MySQLAuctionRepo) SweepRetention(ctx context.Context, mode dbguard.Mode, cutoffMs int64, limit int) (RetentionOutcome, error) {
+	var out RetentionOutcome
+	out.Orders.Mode, out.Matches.Mode, out.IdemKeys.Mode = mode, mode, mode
+
 	for _, db := range r.r.All() {
-		res, oerr := db.ExecContext(ctx,
-			`DELETE FROM auction_orders
-			 WHERE status IN (?, ?, ?) AND release_pending = 0 AND match_pending = 0 AND updated_at_ms < ?
-			 LIMIT ?`,
-			StatusFilled, StatusCanceled, StatusExpired, cutoffMs, limit)
+		o, oerr := dbguard.SweepTable(ctx, db, mode, "pandora_auction", "auction_orders",
+			"status IN (?, ?, ?) AND release_pending = 0 AND match_pending = 0 AND updated_at_ms < ?",
+			limit, StatusFilled, StatusCanceled, StatusExpired, cutoffMs)
 		if oerr != nil {
-			return orders, matches, idemKeys, errcode.New(errcode.ErrInternal, "purge terminal orders: %v", oerr)
+			return out, errcode.New(errcode.ErrInternal, "sweep terminal orders: %v", oerr)
 		}
-		n, _ := res.RowsAffected()
-		orders += n
+		out.Orders.Matched += o.Matched
+		out.Orders.Deleted += o.Deleted
 
-		res, merr := db.ExecContext(ctx,
-			`DELETE FROM auction_matches
-			 WHERE settlement_status = ? AND event_pending = 0 AND matched_at_ms < ?
-			 LIMIT ?`, SettlementCompleted, cutoffMs, limit)
+		m, merr := dbguard.SweepTable(ctx, db, mode, "pandora_auction", "auction_matches",
+			"settlement_status = ? AND event_pending = 0 AND matched_at_ms < ?",
+			limit, SettlementCompleted, cutoffMs)
 		if merr != nil {
-			return orders, matches, idemKeys, errcode.New(errcode.ErrInternal, "purge settled matches: %v", merr)
+			return out, errcode.New(errcode.ErrInternal, "sweep settled matches: %v", merr)
 		}
-		n, _ = res.RowsAffected()
-		matches += n
+		out.Matches.Matched += m.Matched
+		out.Matches.Deleted += m.Deleted
 
-		res, kerr := db.ExecContext(ctx,
-			`DELETE FROM auction_idempotency_keys WHERE created_at_ms < ? LIMIT ?`, cutoffMs, limit)
+		k, kerr := dbguard.SweepTable(ctx, db, mode, "pandora_auction", "auction_idempotency_keys",
+			"created_at_ms < ?", limit, cutoffMs)
 		if kerr != nil {
-			return orders, matches, idemKeys, errcode.New(errcode.ErrInternal, "purge idempotency keys: %v", kerr)
+			return out, errcode.New(errcode.ErrInternal, "sweep idempotency keys: %v", kerr)
 		}
-		n, _ = res.RowsAffected()
-		idemKeys += n
+		out.IdemKeys.Matched += k.Matched
+		out.IdemKeys.Deleted += k.Deleted
 	}
-	return orders, matches, idemKeys, nil
+	return out, nil
 }

@@ -9,6 +9,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/placement"
 
@@ -35,12 +37,19 @@ func (u *OwnerUsecase) Query(ctx context.Context, playerID uint64) (data.OwnerRe
 	return u.repo.Query(ctx, playerID)
 }
 
-// BeginTransition 发起 owner 迁移(CAS;幂等键 = (player, operation))。
+// BeginTransition 发起 owner 迁移(CAS;幂等键 = (player, exact 实例) 或调用方显式 operation)。
+//
+// operation_id 语义(§9.23「一次真实进场 / owner 迁移使用一个稳定 operation_id」):
+//   - **空 = 由本权威铸造**。这是默认形态:调用方(allocator 签票点 / READY 交付点)无法自己
+//     保证稳定——它们每次投递现铸一个 UUID,同一次进场的重连、重复交付、心跳自愈会写出
+//     不同 operation,幂等键失效。改由权威铸造后,同 exact 实例的重复投递在数据层原样返回
+//     既有记录(含原 operation_id),真实迁移才铸新的,operation 自然贯穿整条进场链。
+//   - **非空 = 调用方持显式幂等键**(响应丢失后原样重试),必须是 canonical UUIDv4。
 func (u *OwnerUsecase) BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target data.OwnerTarget) (data.OwnerRecord, error) {
 	if playerID == 0 {
 		return data.OwnerRecord{}, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
-	if !placement.ValidOperationID(operationID) {
+	if operationID != "" && !placement.ValidOperationID(operationID) {
 		return data.OwnerRecord{}, errcode.New(errcode.ErrOwnerInvalidOperation, "operation_id must be canonical UUIDv4")
 	}
 	if ownerType != data.OwnerTypeHub && ownerType != data.OwnerTypeBattle {
@@ -48,6 +57,11 @@ func (u *OwnerUsecase) BeginTransition(ctx context.Context, playerID, expectEpoc
 	}
 	if !target.Complete() {
 		return data.OwnerRecord{}, errcode.New(errcode.ErrOwnerInvalidOperation, "target identity incomplete")
+	}
+	// 空 operation → 权威铸造。真实迁移时被写入记录并从此贯穿本次进场链;若数据层判定为
+	// 同 exact 实例的重复投递(no-op 原样返回既有记录),这个新铸的值直接丢弃,不落库。
+	if operationID == "" {
+		operationID = uuid.NewString()
 	}
 	return u.repo.BeginTransition(ctx, playerID, expectEpoch, operationID, ownerType, target,
 		time.Duration(placement.DSFenceSkewMarginSeconds)*time.Second)

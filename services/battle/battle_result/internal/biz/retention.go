@@ -23,6 +23,7 @@ package biz
 
 import (
 	"context"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"time"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
@@ -54,10 +55,13 @@ func (u *BattleResultUsecase) sweepRetentionOnce(ctx context.Context) {
 	log := plog.With(ctx)
 	cutoffMs := time.Now().AddDate(0, 0, -u.cfg.HistoryRetentionDays).UnixMilli()
 
-	if n := u.drainPurge(ctx, "battles", cutoffMs, u.repo.PurgeExpiredBattles); n > 0 {
+	// mode 默认 report_only:待清理量由 dbguard.ReportPending 统一 WARN 告警(与单表清理同口径),
+	// 这里只在真删发生时补一条业务 INFO。
+	mode := u.cfg.RetentionMode()
+	if n := u.drainPurge(ctx, "battles", mode, cutoffMs, u.repo.SweepExpiredBattles); n > 0 {
 		log.Infow("msg", "battle_retention_battles_purged", "matches", n, "retention_days", u.cfg.HistoryRetentionDays)
 	}
-	if n := u.drainPurge(ctx, "progress", cutoffMs, u.repo.PurgeSettledProgress); n > 0 {
+	if n := u.drainPurge(ctx, "progress", mode, cutoffMs, u.repo.SweepSettledProgress); n > 0 {
 		log.Infow("msg", "battle_retention_progress_purged", "matches", n, "retention_days", u.cfg.HistoryRetentionDays)
 	}
 
@@ -73,23 +77,30 @@ func (u *BattleResultUsecase) sweepRetentionOnce(ctx context.Context) {
 }
 
 // drainPurge 单类清理:小批量循环删到短批(= 积压追平)为止。
-// 每批独立短事务(repo 内部保证),不长事务锁表;满批说明可能还有积压,继续下一批;
-// 失败中断本轮(幂等,下一轮重试)。清理期间新写入的行 created_at 必然晚于 cutoff,
-// 不会被本轮追进来,循环必然终止。
-func (u *BattleResultUsecase) drainPurge(ctx context.Context, kind string, cutoffMs int64, purge func(context.Context, int64, int) (int64, error)) int64 {
+//
+// **report_only 模式下只跑一轮**:那一轮已经数出全量待清理规模(不受 batch 截断),
+// 再循环只是重复同一次 COUNT,纯浪费 —— 循环存在的意义是"追平积压",而只报告不删时
+// 积压永远追不平,循环会变成每轮固定跑满的空转。
+func (u *BattleResultUsecase) drainPurge(
+	ctx context.Context, kind string, mode dbguard.Mode, cutoffMs int64,
+	sweep func(context.Context, dbguard.Mode, int64, int) (dbguard.Outcome, error),
+) int64 {
 	batch := u.cfg.RetentionSweepBatch
 	if batch <= 0 {
 		batch = 200 // 防御:未过 Defaults 的零值配置(batch=0 时 n<batch 永假 → 死循环)
 	}
 	var total int64
 	for ctx.Err() == nil {
-		n, err := purge(ctx, cutoffMs, batch)
+		out, err := sweep(ctx, mode, cutoffMs, batch)
 		if err != nil {
 			plog.With(ctx).Warnw("msg", "battle_retention_purge_failed", "kind", kind, "err", err, "purged_before_fail", total)
 			return total
 		}
-		total += n
-		if n < int64(batch) {
+		if mode != dbguard.ModeDelete {
+			return 0 // 只报告:一轮即得全量待清理规模,不删也就无所谓"追平"
+		}
+		total += out.Deleted
+		if !out.Truncated {
 			return total
 		}
 	}

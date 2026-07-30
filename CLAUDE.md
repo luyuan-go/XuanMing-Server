@@ -73,7 +73,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 
 ## 8. 压测纪律
 
-详见 [`docs/design/stress-discipline.md`](./docs/design/stress-discipline.md)。**核心**:跑测前必有 `prev-summary.txt` 且清空 redis/mysql/etcd/kafka offset/k8s GameServer;至少 3 次 prom snapshot(ramp 完/稳态中/稳态末);用 summarize 脚本输出五段二维表,不手 grep raw prom;没对比表不准声明"性能提升";压期不上传日志。**库增长断言(§9.24)**:压前用 `tools/migrate/cmd/dbcheck` 抓行数基线并核对登记清单/清理索引,压后 `-compare` 断言 outbox 排空、每表增量能用业务量解释、无未登记表;压测库丢弃前用 `-force-sweep` 抽测批删速率 ≥ 峰值写入速率。任一不过不许宣布本轮通过。
+详见 [`docs/design/stress-discipline.md`](./docs/design/stress-discipline.md)。**核心**:跑测前必有 `prev-summary.txt` 且清空 redis/mysql/etcd/kafka offset/k8s GameServer;至少 3 次 prom snapshot(ramp 完/稳态中/稳态末);用 summarize 脚本输出五段二维表,不手 grep raw prom;没对比表不准声明"性能提升";压期不上传日志。**库增长断言(§9.24)**:压前用 `tools/migrate/cmd/dbcheck` 抓行数基线并核对登记清单/清理索引,压后 `-compare` 断言 outbox 排空、每表增量能用业务量解释、无未登记表;压后再用 `-pending` 记录各表待清理量(判断保留期与清理模式是否需要调整)。任一不过不许宣布本轮通过。**注意 dbcheck 永不删数据**(旧 `-force-sweep` 已移除),保留期清理默认只报告不删。
 
 ## 9. 不变量(数据一致性 / 安全)
 
@@ -185,7 +185,19 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     - **脑裂时安全优先但不能永久卡流程**：为了守住一人一 DS，可以在新 owner 的 `admit_not_before` 前返回带明确原因、`retry_after` 和 deadline 的 `WAIT`，但必须保留 session 与原 `operation_id`，由同一 coordinator 的 watchdog 到期重查，不能等待旧 DS 某个可能永不到达的回调。旧 lease 到期且 authority / 健康 DS 恢复后必须自动继续，无需重登、手工清状态或另走 fallback。若 owner authority 永久失去法定多数或长期无容量，“立即进入新 DS”与“绝不双 DS”无法同时保证，此时只能停在可见、可交互、可持续重试 / 可退出的 UI；不得默认 Hub、清 session、黑屏或静默 loading。这里的“永不卡”是没有内部永久中间态或无出口等待，并以 authority 与容量最终恢复为收敛前提，不能靠放开第二个 DS 换取表面可用性。
     - **验收矩阵**：至少覆盖重复 Login / SelectRole、响应丢失、MATCHING 各阶段切后台 / 杀进程、locator / Redis / matchmaker 分区、READY push 丢失、地图加载无回调、Admission ACK 丢失、同 Hub 旧 Controller 不退出、旧 DS 分区后恢复、迟到 Logout / Heartbeat、服务进程重启以及 Stable / Canary 新旧组合。测试未覆盖前不得声称“永远不卡”“幂等进场”或“无 bug”。
 
-24. **持久化数据增长必须有界:失效数据最多保留 90 天,禁止只增不删的无界表**:任何随时间或玩家活跃度线性增长的只增表(幂等流水、审计、托管、归档、领取记录、outbox、历史/日志类表等)必须同时具备**保留期配置(带默认值)**和**周期清理任务**;玩家已失去 / 已终态 / 已关闭的数据(用完道具的流水、closed escrow、过期邮件、已结算订单等)物理保留**默认且最多 90 天**。清理必须小批量(`DELETE ... LIMIT`)防长事务锁表,多副本并发跑必须幂等;清理列必须有可用索引。幂等 / 防重行的保留期必须**远大于对应操作的最大重试 / 回放窗口**,且删除后迟到重放必须 fail-closed 或 no-op(不得重复入账 / 重复发放 / 重复冻结)——依赖某流水"永久兜底"的防重设计一律改为在源头闭环(例:邮件寿命钳到 claim 保留期内,而不是靠 inventory 流水永存)。确需超过 90 天必须写明理由并在下表登记为例外。**新增只增表必须同步登记到下表,没有清理方案的只增表 PR review 直接拒**:
+24. **持久化数据增长必须有界,但"因为数据大了"删数据默认不许做(2026-07-22 用户指令)**:
+
+    保留期清理**默认只报告不删**(`retention_mode` 留空 = `report_only`):周期统计"有多少行满足清理条件"并打 `WARN` 日志 + `pandora_db_retention_pending_rows` gauge,一行都不删。真删必须由配置显式写 `retention_mode: delete`。理由:自动删生产数据不可逆,清理条件 / 保留期 / 幂等窗口任一处配错都会静默删掉不该删的玩家数据,而且**删完才发现**;把"何时删"的决定权交回人手里。代价是 report-only 下库会继续增长——所以待清理量必须持续可见(WARN + metric + `dbcheck -pending`),让人能判断何时开删。实现见 `pkg/dbguard/sweep.go`:`Mode` 零值即 `ModeReportOnly`;`ParseMode` 对无法识别的值**报错而非猜成 delete**(拼错一个字母就开始删生产数据是不可接受的失败模式),启动 `ValidateRetentionMode` fail-fast。`SweepTable` 强制 Count 与 Delete **共用同一 where**,从机制上排除"报告说 0 行、实际删了 10 万行"的条件漂移。
+
+    **必须分清两类删除,别混为一谈**:
+
+    | | **业务语义删除**(不受本条约束) | **运维语义删除**(默认只报告) |
+    |---|---|---|
+    | 含义 | 东西本来就该没了 | 数据还有效,只是占地方 |
+    | 例子 | 道具过期、邮件失效、挂单置 EXPIRED、玩家主动丢弃/解散公会、出箱投递成功即删 | 幂等流水超 90 天、终态申请行、已结算成交流水、私聊历史 |
+    | 处置 | 照常删,是正常业务逻辑 | `retention_mode` 默认 report_only |
+
+    以下为"运维语义删除"的通用要求:任何随时间或玩家活跃度线性增长的只增表(幂等流水、审计、托管、归档、领取记录、outbox、历史/日志类表等)必须同时具备**保留期配置(带默认值)**和**周期清理任务**;玩家已失去 / 已终态 / 已关闭的数据(用完道具的流水、closed escrow、过期邮件、已结算订单等)物理保留**默认且最多 90 天**。清理必须小批量(`DELETE ... LIMIT`)防长事务锁表,多副本并发跑必须幂等;清理列必须有可用索引。幂等 / 防重行的保留期必须**远大于对应操作的最大重试 / 回放窗口**,且删除后迟到重放必须 fail-closed 或 no-op(不得重复入账 / 重复发放 / 重复冻结)——依赖某流水"永久兜底"的防重设计一律改为在源头闭环(例:邮件寿命钳到 claim 保留期内,而不是靠 inventory 流水永存)。确需超过 90 天必须写明理由并在下表登记为例外。**新增只增表必须同步登记到下表,没有清理方案的只增表 PR review 直接拒**:
 
     | 只增表 | 清理条件 | 保留期 | 清理任务 |
     |---|---|---|---|
@@ -213,7 +225,20 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     **登记豁免(慢增长 / 权威闸,不清理)**:`leaderboard_settlement`(settle uk 是防重复结算的永久闸,每批次 1 行)、`auction_owner_guards`(每 owner 1 行,被玩家数有界)、`friend_player_guards` / `friend_pair_guards`(好友域写守卫行,R5 复审 P1-2/4:TiDB 无 gap 锁,限额与关系变更先锁守卫行再进临界区;每玩家/每关系对至多 1 行,被玩家数与社交图对数有界,无业务语义不清理)、`account_bans`(运营合规审计,量级 = 运营操作数)、各出箱表(投递成功即删,积压属告警问题)、`player_items` count=0 行(被 uk 有界,删行会漂移错误码语义)、`mail_transfer_escrow`(邮件 transfer 附件在途托管行,领取/释放即删;行是已扣出实例资产的唯一持有处,量级 = 在途 transfer 邮件数,被个人邮件 TTL + 归档补偿链兜底,不得按时间清理)、`bag_migration`(旧 inventory 存量迁移幂等闸,一玩家一行永久保留;删行会让迁移作业重跑双倍入账,decision-revisit-bag-replay-semantics.md D5)。
     存量库补清理索引统一走 `tools/migrate` 各库 `*_retention_indexes` 迁移(幂等条件建索引);未登记不等于已达标。
 
-    **机械化检查(上线前 / 压测强制)**:`tools/migrate/cmd/dbcheck` 内嵌与本清单同步的登记表,对真实库枚举全部 `pandora_%` 表并断言:①无未登记表;②swept 表清理索引齐备;③outbox 无堆积;`-snapshot`/`-compare` 供压测前后行数对比(增量必须能用业务量解释),`-force-sweep -confirm=YES-DELETE` 供压测库清理速率抽测(cutoff=now,只准对可丢弃库)。**上线前对生产库跑一次 dbcheck 且 PASS 是发布门禁**;新增表必须同时登记本清单与 dbcheck 内嵌清单,漂移即检查失败。压测接线见 `stress-discipline.md` §4.1.1/§4.3。
+    **机械化检查(上线前 / 压测强制)**:`tools/migrate/cmd/dbcheck` 内嵌与本清单同步的登记表,对真实库枚举全部 `pandora_%` 表并断言:①无未登记表;②swept 表清理索引齐备;③outbox 无堆积;`-snapshot`/`-compare` 供压测前后行数对比(增量必须能用业务量解释),`-pending` 供待清理量报告(只 COUNT),`-size-check [-top-rows N]` 供大字段体检(见下条)。**本工具永不 DELETE**(旧 `-force-sweep` 按用户指令已整块移除,且刻意不留同名 flag)。**上线前对生产库跑一次 dbcheck 且 PASS 是发布门禁**;新增表必须同时登记本清单与 dbcheck 内嵌清单,漂移即检查失败。压测接线见 `stress-discipline.md` §4.1.1/§4.3。
+
+    **增长有两个独立方向,只管一个必漏另一个**(2026-07-22 补充,排查手册见 `docs/design/db-capacity-guard.md`):
+
+    | 方向 | 症状 | 信号 | 闸 |
+    |---|---|---|---|
+    | **广度**:行数变多 | 表越来越大 | `TABLE_ROWS` | 保留期清理(上表) |
+    | **深度**:单行变胖 | 行数正常但表照样大 | `AVG_ROW_LENGTH` | 写入侧上限(下述三条) |
+
+    凡 blob / JSON / CSV / 位图这类**集合序列化**列,写入路径必须同时具备三个上限,缺一个就有洞:①**单元素上限**(单个格子 / 单条附件 ≤ M 字节且子元素 ≤ K 个);②**集合条目上限**(格子数 / 附件数 / 位图条数 ≤ N);③**整体字节上限**(序列化后 payload ≤ P,`pkg/dbguard.CheckPayload`)。只设 ③ 会漏掉"单个格子胖到 60KB 但整体没超";只设 ①② 会漏掉"每项合规但项数×大小仍超列容量"。**上限值按设计期望定,不按列类型上限定**——写成列类型上限等于没设(数据涨到快撑爆才告警,业务语义早已崩坏)。列类型同理:能用 `VARBINARY(N)` 就不用 `LONGBLOB`,后者等于 DB 层不设防。真实教训:`bag` 管住了 items 条数却没管单个 item 的 attrs 条数(深度无闸);`rewardclaim` 管住了单条位图大小却没管位图条目数(广度无闸,已修)。
+
+    **`sql_mode` 必须含 `STRICT_TRANS_TABLES`,服务启动时断言并 fail-fast**(`pkg/dbguard.AssertStrictMode`)。非严格模式下超长写入不报错而是**静默截断**(真 MySQL 8.4 实测:往 `VARBINARY(16)` 写 100 字节,严格 → Error 1406 写入失败;非严格 → `err=nil` 且实际只存 16 字节),玩家数据被无声砍断且无任何错误可观测。这是唯一允许因数据库检查而拒绝启动的场景——静默数据损坏远比服务起不来严重。注意断言 `@@session.sql_mode` 而非 `@@global`(DSN 参数可覆盖 session)。
+
+    **超容量预算只告警不阻断**(`pkg/dbguard.Guard.Check`):各服务在 `internal/data/budgets.go` 声明自己表的行数 / 平均行长预算,启动时跑一轮拿基线、之后挂已有 sweep ticker 周期跑(**不新建 timer 状态机**),走 `information_schema` 估算(毫秒级不锁表,**禁止 `COUNT(*)`** 拖垮启动),超限打 `ERROR` 日志 + `pandora_db_budget_violations_total`。容量超限是"要去查的问题",不是"服务不能跑的理由";拒绝启动会把容量问题升级成可用性事故(违反验收底线第 1 条)。写入侧另有"逼近告警"三档:达上限拒写(ERROR)、达 80% 放行但 WARN(留出排查窗口)、否则静默。
 
 ## 10. AI 协作约定
 

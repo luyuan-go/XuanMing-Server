@@ -1633,7 +1633,7 @@ func TestFormMatch_ReserveFailsMidway_RollsBackNoMatch(t *testing.T) {
 		}
 	}
 
-	if err := uc.formMatch(ctx, sideA, sideB); err == nil {
+	if err := uc.formMatch(ctx, [][]*matchv1.MatchTicketStorageRecord{sideA, sideB}); err == nil {
 		t.Fatal("formMatch should fail when ReserveTicket fails")
 	}
 
@@ -1682,7 +1682,7 @@ func TestFormMatchClaimPersistFailureKeepsCompleteCanonicalGraphAndPublishesNoth
 			sideB = append(sideB, ticket)
 		}
 	}
-	if err := uc.formMatch(ctx, sideA, sideB); err == nil {
+	if err := uc.formMatch(ctx, [][]*matchv1.MatchTicketStorageRecord{sideA, sideB}); err == nil {
 		t.Fatal("claim persistence failure must stop FOUND publication")
 	}
 	m, found, err := f.repo.GetMatch(ctx, 999)
