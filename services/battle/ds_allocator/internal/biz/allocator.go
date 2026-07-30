@@ -1193,7 +1193,7 @@ func (u *AllocatorUsecase) publishReconciledAllocationAbandoned(
 		return false
 	}
 	battle = snapshot.Battle
-	if !u.deliverAbandoned(ctx, battle.GetMatchId(), battle.GetDsPodName(),
+	if !u.deliverAbandoned(ctx, battle.GetMatchId(), battle.GetDsPodName(), battle.GetGameserverUid(),
 		battle.GetPlayerIds(), battle.GetMapId(), battle.GetGameMode()) {
 		return false
 	}
@@ -1515,7 +1515,7 @@ func (u *AllocatorUsecase) AbortPreactiveBattle(ctx context.Context, request bat
 	if err := u.releaseGameServer(ctx, request.MatchID, request.Target.PodName, allocation); err != nil {
 		return err
 	}
-	if !u.deliverAbandoned(ctx, request.MatchID, request.Target.PodName,
+	if !u.deliverAbandoned(ctx, request.MatchID, request.Target.PodName, request.Target.InstanceUID,
 		battle.GetPlayerIds(), battle.GetMapId(), battle.GetGameMode()) {
 		return errcode.New(errcode.ErrUnavailable,
 			"battle %d allocation abort lifecycle publish pending", request.MatchID)
@@ -2118,7 +2118,7 @@ func (u *AllocatorUsecase) finishEmptyAbandon(
 			return &HeartbeatResult{Command: commandStop}
 		}
 	}
-	if u.deliverAbandoned(ctx, matchID, podName, playerIDs, mapID, gameMode) {
+	if u.deliverAbandoned(ctx, matchID, podName, instanceUID, playerIDs, mapID, gameMode) {
 		if u.modelB {
 			target := placement.Target{
 				PodName: podName, InstanceUID: instanceUID, InstanceEpoch: instanceEpoch,
@@ -2692,7 +2692,7 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 				plog.With(ctx).Infow("msg", "battle_abandoned_heartbeat_timeout",
 					"match_id", mid, "pod", b.DsPodName, "authority", "redis")
 			}
-			if u.deliverAbandoned(ctx, mid, b.DsPodName, b.PlayerIds, b.MapId, b.GameMode) {
+			if u.deliverAbandoned(ctx, mid, b.DsPodName, b.GameserverUid, b.PlayerIds, b.MapId, b.GameMode) {
 				target := placement.Target{
 					PodName: b.DsPodName, InstanceUID: b.GameserverUid,
 					InstanceEpoch: b.InstanceEpoch, AllocationID: b.AllocationId,
@@ -2713,6 +2713,7 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			continue
 		}
 		var podName string
+		var instanceUID string // owner 释放的 exact 身份门用(见 deliverAbandoned)
 		var staleIndexOnly bool
 		var endedSkip bool
 		var firstAbandon bool // 本次成功事务是否执行了 →abandoned 的首次迁移(全局恰好一次,见闭包内注释)
@@ -2750,6 +2751,7 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			firstAbandon = b.State != stateAbandoned
 			b.State = stateAbandoned
 			podName = b.DsPodName
+			instanceUID = b.GameserverUid
 			playerIDs = b.PlayerIds
 			mapID = b.MapId
 			gameMode = b.GameMode
@@ -2788,7 +2790,7 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 		}
 		// 投递 abandoned 补偿事件:成功(或显式 local/off 开发回退)才移出 active;
 		// 失败则保留在 active,下一轮 sweep 重试(可靠补偿,不变量 §4)。
-		if u.deliverAbandoned(ctx, mid, podName, playerIDs, mapID, gameMode) {
+		if u.deliverAbandoned(ctx, mid, podName, instanceUID, playerIDs, mapID, gameMode) {
 			// 终态镜像保留一段供查询,移出 active 不再扫描
 			if eerr := u.repo.ExpireBattle(ctx, mid, u.battleTTL()); eerr != nil {
 				plog.With(ctx).Warnw("msg", "sweep_expire_failed", "match_id", mid, "err", eerr)
@@ -2827,7 +2829,19 @@ func (u *AllocatorUsecase) reconcileActiveIndexIfDue(ctx context.Context) error 
 //
 // 生产 required 但 publisher 意外为 nil 时必须返回 false：这是一道独立于 main 启动
 // 校验的 fail-closed 保险，禁止 abandoned 在没有 match release / exit proof 时被过期。
-func (u *AllocatorUsecase) deliverAbandoned(ctx context.Context, matchID uint64, podName string, playerIDs []uint64, mapID uint32, gameMode string) bool {
+func (u *AllocatorUsecase) deliverAbandoned(ctx context.Context, matchID uint64, podName, instanceUID string, playerIDs []uint64, mapID uint32, gameMode string) bool {
+	// owner 权威释放(INC-20260729-002 P0-B1)与 lifecycle 投递同点执行:本函数的所有调用点
+	// 都已门控在「被判弃实例的 GameServer 回收已确认」之后,正是唯一既安全(旧 DS 已消失,
+	// 释放不会开出双 DS)又必经(补偿链的唯一收口)的位置。
+	//
+	// 放在 lifecycle 投递**之前**:lifecycle 失败会返回 false 让 sweep 下一轮整体重试,
+	// 而 owner 释放本身幂等(compare-delete,已释放的记录第二次是 no-op),重跑无副作用;
+	// 反过来若放在 return true 之后,lifecycle 长时间不可用时玩家的 owner 记录会一直
+	// 指向已删除的 Pod,这正是本条要根治的状态。
+	// 预算 2s 与 ownerAdmitCensusWeak 同口径:本函数在 sweep 轮内被调用,而 sweep 单轮
+	// 墙钟预算 = SweepInterval(默认 5s,见 sweepRoundBudget),owner 抖动时不得吃满它。
+	ownerReleaseAbandonedPlayersWeak(ctx, u.ownerAuth, playerIDs, podName, instanceUID, 2*time.Second)
+
 	if u.lifecycle == nil {
 		if u.lifecycleRequired {
 			plog.With(ctx).Errorw("msg", "ds_lifecycle_publisher_missing_fail_closed",

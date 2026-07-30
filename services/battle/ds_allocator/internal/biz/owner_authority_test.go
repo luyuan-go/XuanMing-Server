@@ -7,6 +7,7 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -14,11 +15,14 @@ import (
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
 )
 
-// scriptedOwnerAuthority:QueryOwner 按注入记录应答;记录 Admit 调用。
+// scriptedOwnerAuthority:QueryOwner 按注入记录应答;记录 Admit / Release 调用。
 type scriptedOwnerAuthority struct {
-	mu      sync.Mutex
-	records map[uint64]data.OwnerRecordView
-	admits  []uint64
+	mu       sync.Mutex
+	records  map[uint64]data.OwnerRecordView
+	admits   []uint64
+	releases []uint64
+	// releaseErr 非 nil 时 ReleaseOwner 直接失败,用于验证弱依赖只告警不中断。
+	releaseErr error
 }
 
 func (s *scriptedOwnerAuthority) QueryOwner(_ context.Context, playerID uint64) (data.OwnerRecordView, error) {
@@ -40,6 +44,25 @@ func (s *scriptedOwnerAuthority) Admit(_ context.Context, playerID, _ uint64, _ 
 	s.records[playerID] = rec
 	return 0, nil
 }
+
+func (s *scriptedOwnerAuthority) ReleaseOwner(_ context.Context, playerID, ownerEpoch uint64, operationID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.releaseErr != nil {
+		return s.releaseErr
+	}
+	// compare-delete 语义:epoch/operation 必须与当前记录一致才生效,否则视为陈旧释放。
+	rec := s.records[playerID]
+	if rec.OwnerEpoch != ownerEpoch || rec.OperationID != operationID {
+		return errStaleOwnerReleaseForTest
+	}
+	s.releases = append(s.releases, playerID)
+	delete(s.records, playerID)
+	return nil
+}
+
+// errStaleOwnerReleaseForTest 模拟 owner 侧对 epoch 不匹配释放的拒绝。
+var errStaleOwnerReleaseForTest = errors.New("stale owner release rejected")
 
 func pendingBattleRecord(pod, uid string, epoch uint64) data.OwnerRecordView {
 	return data.OwnerRecordView{
@@ -123,5 +146,82 @@ func TestSweepStaleOwnerAdmitted(t *testing.T) {
 	sweepStaleOwnerAdmitted(&admitted, time.Now().Add(-ownerAdmittedStaleTTL))
 	if _, ok := admitted.Load("uid-BAD|3003"); ok {
 		t.Fatal("非 time.Time 值应被 fail-safe 清除")
+	}
+}
+
+// ── 判弃后释放 owner(INC-20260729-002 P0-B1)────────────────────────────────
+
+// 记录仍指向被判弃实例 → 必须释放,否则 query-first 恢复会一直返回已删除的 battle Pod。
+func TestOwnerReleaseAbandoned_ReleasesPlayersStillOwnedBySelf(t *testing.T) {
+	const pod, uid = "battle-9", "uid-9"
+	auth := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{
+		2001: pendingBattleRecord(pod, uid, 5),
+		2002: pendingBattleRecord(pod, uid, 6),
+	}}
+
+	ownerReleaseAbandonedPlayersWeak(context.Background(), auth,
+		[]uint64{2001, 2002}, pod, uid, time.Second)
+
+	if len(auth.releases) != 2 {
+		t.Fatalf("仍归属本实例的玩家必须全部释放, got %v", auth.releases)
+	}
+	if len(auth.records) != 0 {
+		t.Fatalf("释放后记录应清空, 剩余 %d", len(auth.records))
+	}
+}
+
+// 玩家已被迁到别的 DS(pod/uid 已变)→ 绝不能释放,否则会误删活归属(双 DS / 掉线)。
+func TestOwnerReleaseAbandoned_SkipsPlayersMigratedElsewhere(t *testing.T) {
+	const deadPod, deadUID = "battle-old", "uid-old"
+	auth := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{
+		// 已迁到新实例。
+		3001: pendingBattleRecord("battle-new", "uid-new", 8),
+		// 已回 Hub(类型不同)。
+		3002: {OwnerEpoch: 9, OwnerType: ownerTypeHub, Phase: ownerPhaseAdmitted,
+			PodName: deadPod, InstanceUID: deadUID, OperationID: "op-hub"},
+	}}
+
+	ownerReleaseAbandonedPlayersWeak(context.Background(), auth,
+		[]uint64{3001, 3002}, deadPod, deadUID, time.Second)
+
+	if len(auth.releases) != 0 {
+		t.Fatalf("不指向本实例的记录一律不得释放, got %v", auth.releases)
+	}
+	if len(auth.records) != 2 {
+		t.Fatalf("跳过的记录必须原样保留, 剩余 %d", len(auth.records))
+	}
+}
+
+// owner 抖动只降级为告警:释放失败不得让调用方(deliverAbandoned)中断补偿链。
+func TestOwnerReleaseAbandoned_WeakOnFailure(t *testing.T) {
+	const pod, uid = "battle-7", "uid-7"
+	auth := &scriptedOwnerAuthority{
+		records:    map[uint64]data.OwnerRecordView{4001: pendingBattleRecord(pod, uid, 2)},
+		releaseErr: errors.New("owner unavailable"),
+	}
+
+	// 不 panic、正常返回即为通过(弱依赖语义);记录保持原样等下一轮 sweep 重试。
+	ownerReleaseAbandonedPlayersWeak(context.Background(), auth, []uint64{4001}, pod, uid, time.Second)
+
+	if len(auth.releases) != 0 {
+		t.Fatalf("释放失败不应记为已释放, got %v", auth.releases)
+	}
+	if len(auth.records) != 1 {
+		t.Fatal("释放失败时记录必须保留,等待下一轮重试")
+	}
+}
+
+// auth 为 nil(owner 未启用)或身份缺失时必须直接 no-op,不得 panic。
+func TestOwnerReleaseAbandoned_NilAndMissingIdentityAreNoop(t *testing.T) {
+	ownerReleaseAbandonedPlayersWeak(context.Background(), nil, []uint64{1}, "pod", "uid", time.Second)
+
+	auth := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{
+		5001: pendingBattleRecord("pod", "uid", 1),
+	}}
+	// 缺 pod / uid 时无法做 exact 身份门,必须整体跳过而不是盲删。
+	ownerReleaseAbandonedPlayersWeak(context.Background(), auth, []uint64{5001}, "", "uid", time.Second)
+	ownerReleaseAbandonedPlayersWeak(context.Background(), auth, []uint64{5001}, "pod", "", time.Second)
+	if len(auth.releases) != 0 {
+		t.Fatalf("身份缺失时不得释放任何记录, got %v", auth.releases)
 	}
 }

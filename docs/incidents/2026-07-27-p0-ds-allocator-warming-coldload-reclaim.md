@@ -7,7 +7,7 @@
 > **首次发现时间（UTC）**：2026-07-27（用户重复匹配 map_id=8 无法进场后定位）  
 > **负责人**：luhailong  
 > **受影响服务/版本**：ds_allocator（git de19c92c 及之前）、UE Battle DS 镜像 `pandora/battle-ds:dev`（r1553 之前构建）、Fleet `pandora-battle-stable`/`-canary`  
-> **最后更新**：2026-07-28
+> **最后更新**：2026-07-29 EDT（UTC 2026-07-30；追加 Gate C 失败样本）
 
 ## 0. 一句话结论
 
@@ -232,7 +232,7 @@ r1570 提交前 dirty 构建;UE 侧修复已于同日 r1570 入库)后,真实 UE
 | map8 真实客户端 E2E 全链（⑮ 部署后首验） | 失败（§4.1/§4.2） | **通过 1 次**：两拍 activation_pending → 第三拍提升 → battle_ready → 进图 → Battle Admission 完成（原始日志永久缺失，按操作方报告采信；门 C 需连续 3 次完整循环，本次不计满） | 2026-07-28 live | §4.3 |
 | 新验收门 A：map8 packaged DS 无客户端运行 ≥60s，服务端连续收 ≥12 发业务心跳、最大间隔 <15s、期间不删 Pod | 失败（§4.1/4.2） | **通过**（2026-07-28 合成驱动 gatecheck 两轮）：①匹配 17487513396510720——服务端实收 **15 拍/跨 78.1s**（3 staged+12 ACTIVE，Redis `pandora:ds:active` score 逐拍推进为证），**最大间隔 10.6s**<15s，窗口内 Pod 存活；78.1s 后 DS 按无玩家清场主动终局（终局心跳→release 链→`ds_lifecycle_published`，设计内非误删）。②同轮顺带验证 120s warming 宽限路径：首台冷加载超 120s（宿主残余负载）→ `battle_ready_wait_timeout` 有界放弃→自动重试→最终 READY t+278.6s，全程无卡死。③次轮页缓存热：READY t+64.4s，`battle_ds_activation_pending`×2→`battle_ds_credential_activated`(3 拍/跨度 10.18~10.66s)→`battle_ready_after_heartbeat` 全链路日志与 ⑮ 设计逐字吻合 | gatecheck(robot/stress/cmd/gatecheck)+Redis ZSCORE 采样+allocator 日志 | 本机 2026-07-28 |
 | 新验收门 B：warming Pod kill 连续注入 ≥3 次，每次 ~40s 内完成重试 | 失败（141.85s，waiter 空转 120s） | **通过**（2026-07-28 连续 3 次注入）：kill→重试分配 **36s/36s/45s**，kill→READY **96s/101s/118s**（含第二台 49~58s 冷加载+三拍激活）；每次均 `warming_instance_confirmed_dead_forfeit_grace`→waiter 立即 `battle_ready_wait_ownership_lost`(errcode=5002,零空转)→秒级重试。**取值修订（A3 数据）**：kill→重试被 pod 30s terminationGracePeriod 主导——冷加载中 DS 游戏线程阻塞无法响应 SIGTERM 必吃满宽限，graceful delete 场景合理目标为 **~45s**；07-27 的 18s probe 判死样本对应 force-kill/进程即死场景 | gatecheck+故障注入脚本+allocator 日志 | 本机 2026-07-28 |
-| 新验收门 C：真实 UE 客户端拿 ds_addr→UDP 进场→运行→退出→重连 | — | 未执行 | 待 A/B 过门后 | OPEN |
+| 新验收门 C：真实 UE 客户端拿 ds_addr→UDP 进场→运行→退出→重连 | — | **失败样本 1 次（2026-07-30 UTC）**：完成 READY、UDP、Welcomed、Admission 和运行，但 ACTIVE 心跳随后停止、DS 被回收；PIE 未产生网络失败，退出和重连均未完成。停跳原因未知，独立建档 [INC-20260729-002](2026-07-29-p0-battle-ds-reclaimed-client-exit-stuck.md)。Gate C 要求的连续 3 次完整成功循环仍为 OPEN | Windows UE PIE + 本机 k8s | OPEN |
 | /health 独立线程 pinger 硬门（加载期每 ~5s 连续发拍，覆盖 >30s 阻塞窗口；canary 轨同验） | 未完成（22.43s<30s 窗口不构成证明） | **stable 轨通过**（2026-07-28 门 A 次轮同场采集）：加载阻塞窗口内 pinger 线程按内层单调时钟每 5.00s 连续发拍零断流（游戏线程日志 flush 成批延迟、pinger 不受影响，独立线程语义实证）；覆盖阻塞段的 60s 摘要 `尝试=12 启动=12 完成2xx=12 启动失败=0 完成失败=0 相邻启动最大间隔=5.01s`，连续 4 个窗口全绿。**canary 轨通过**：临时 scale 1 副本（同 imageID `sha256:4363...`），20s 到 Ready 并在 threshold=3 下持续 Ready ≥2m39s；稳态 60s 摘要 `12/12/12/0 最大间隔=5.01s` 全绿（启动窗口 2 次完成失败=sidecar 自身就绪前的预期抖动，started 节奏未断）；验毕归零 | DS pod 日志 `LogPandoraAgonesHealth`（门 A 采集脚本随场抓取） | 本机 2026-07-28 |
 | Linux DS 全量编译（⑧ 修复后首验） | **失败**：`UObject/CoreDelegates.h` not found（1235/1412，UAT exit 6，⑪ 已修） | 未执行 | 待 Codex 全量编译 | OPEN |
 | Linux `-race -count=50` 目标用例 | **失败 8/50**（⑫ 已根修） | 修复后审查方原命令 `-count=60` 通过；待复审重跑确认 | docker golang:1.26.5 | 本机 2026-07-27 |
@@ -265,7 +265,7 @@ r1570 提交前 dirty 构建;UE 侧修复已于同日 r1570 入库)后,真实 UE
 | A6 | P1 | 回捞 §2.2 标注缺失的原始证据（allocator Pod 日志、k8s events） | luhailong | **已执行,确认永久缺失**（2026-07-28 回捞:events TTL 1h 已过、allocator 容器多代重启日志不存、loki 19 天 CrashLoop 无聚合;§4.3 成功局同因缺原始日志）。**后续改进**:loki 修复另行处理,否则事故证据持续不可归档 | §2.2/§4.3 证据缺口 |
 | A7 | P2 | 双阈值版本全量铺开后评估恢复 ds-allocator RollingUpdate（本跳 Recreate 的收回条件） | 待指定 | 未排期 | §7.2⑦ |
 | A8 | P0-关闭门 | ⑧⑮ UE 编译 → 重打不可变镜像 → 换入 fleet → 过验收门 A（≥60s/≥12 拍/最大间隔<15s/不删 Pod,以 started/2xx 指标为准）+ pinger 硬门（含 canary） | luhailong | **门 A 通过、pinger stable 轨通过**(2026-07-28,§8);canary 轨临时 1 副本验证执行中 | §8 |
-| A9 | P0-关闭门 | ⑨⑩⑮ 部署新 ds-allocator → 过验收门 B（3 次杀 Pod 注入）→ 验收门 C（真实 UE 客户端拿地址→UDP 进场→Welcomed/Admission ACK→运行→退出→重连,连续 3 次）→ 观察窗口 | luhailong | **门 B 通过**(3/3,重试 36/36/45s,§8);**门 C 与观察窗口仍 OPEN**——需真实 UE 客户端连续 3 次完整循环(今日 1 次成功进场不计满),由用户执行 | §8 |
+| A9 | P0-关闭门 | ⑨⑩⑮ 部署新 ds-allocator → 过验收门 B（3 次杀 Pod 注入）→ 验收门 C（真实 UE 客户端拿地址→UDP 进场→Welcomed/Admission ACK→运行→退出→重连,连续 3 次）→ 观察窗口 | luhailong | **门 B 通过**(3/3,重试 36/36/45s,§8);**门 C 与观察窗口仍 OPEN**——2026-07-30 UTC 新增 1 次失败样本：已进场但 DS ACTIVE 心跳停止后被回收，PIE 退出/重连未完成，详见 [INC-20260729-002](2026-07-29-p0-battle-ds-reclaimed-client-exit-stuck.md) | §8 |
 | A10 | P1 | 伴随高危缺口定谳：多组件探针**同时**超时且无 OOM 证据——采集 CPU/IO PSI、cgroup memory、冷加载并发重叠情况;**不得先武断归因内存** | luhailong | **首批证据已采**(2026-07-28,§4.3 伴随观察②):CPU PSI some avg60=79.71、memory PSI=0、dmesg 无 OOM,方向=宿主机共载 CPU 争用非内存;**待补**:无宿主负载对照样本、login 37 次/locator 56 次慢性重启周期定谳、必要时宿主重负载与集群隔离(CPU 配额/错峰) | §4.2/§4.3 |
 | A11 | P1 候选 | FogOfWar/GameState `Ensure`（2026-07-28 E2E 观察到,未阻断进图）：从 DS 日志抓 ensure 堆栈定性建档;历史线索:r1467 前后曾修"FogOfWar Handler 类引用失效",关联性未证 | 待指定 | 待执行 | §4.3 伴随观察① |
 

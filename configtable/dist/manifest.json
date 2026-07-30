@@ -1,8 +1,8 @@
 {
   "version": 20260729002,
-  "generated_at_ms": 1785328884595,
+  "generated_at_ms": 1785383727809,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "local-uncommitted-20260729",
+  "source_rev": "svn-r1598",
   "tables": [
     {
       "name": "item",

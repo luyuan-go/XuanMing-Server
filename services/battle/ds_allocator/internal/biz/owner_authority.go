@@ -54,12 +54,13 @@ func sweepStaleOwnerAdmitted(admitted *sync.Map, cutoff time.Time) {
 	})
 }
 
-// OwnerAuthority 是 owner 权威的 migrate 调用面(Query/Begin/Admit;弱依赖)。
+// OwnerAuthority 是 owner 权威的 migrate 调用面(Query/Begin/Admit/Release;弱依赖)。
 // 由 data.GrpcOwnerLeaseRenewer 实现(与租约续写共用连接);可为 nil(未启用)。
 type OwnerAuthority interface {
 	QueryOwner(ctx context.Context, playerID uint64) (data.OwnerRecordView, error)
 	BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target data.OwnerTargetView) error
 	Admit(ctx context.Context, playerID, ownerEpoch uint64, operationID string, target data.OwnerTargetView) (int64, error)
+	ReleaseOwner(ctx context.Context, playerID, ownerEpoch uint64, operationID string) error
 }
 
 // SetOwnerAuthority 注入 owner 权威调用面(nil-safe)。
@@ -128,6 +129,77 @@ func ownerBeginPlayersWeak(ctx context.Context, auth OwnerAuthority, players []u
 			beginFailed++
 			noteFail(playerID, err)
 		}
+	}
+}
+
+// ownerReleaseAbandonedPlayersWeak 判弃对局后释放仍指向该实例的 owner 记录
+// (INC-20260729-002 P0-B1;弱依赖,同 Begin/Admit)。
+//
+// 为什么必须有:§9.4 的 abandoned 补偿链原本被当作「玩家解放出口」(UE 侧
+// PandoraAgonesHealthPinger.h 的设计注释明写这一点),但它只做了 lifecycle 事件 +
+// battle_result 记账 + match 释放,**从没动过 owner 权威**。全仓 ReleaseOwner 的唯一
+// 调用点是 login 登出。后果:一旦 login 的 owner_query_first 打开,判弃后的恢复查询会
+// 一直返回 TARGET(已删除的 battle Pod),客户端按 §9.23 反复 Travel 到不存在的实例,
+// 比不接 owner 更糟。释放后恢复查询才会落到「无归属 → 首次进场链 → Hub」。
+//
+// 安全边界(三条,缺一不可):
+//  ① **时序**:只能在被判弃实例的 GameServer 回收已确认之后调用(与 deliverAbandoned
+//     同一门控)。提前释放会在旧 DS 可能仍在跑时放行新归属 = 双 DS(§9.22)。
+//  ② **exact 身份**:只释放「记录仍指向本次被判弃的 pod+uid 且类型为 BATTLE」的玩家。
+//     玩家已被迁到新 DS(epoch 已推进、pod/uid 已变)时必须跳过,否则误删活归属。
+//  ③ **compare-delete**:带 Query 读到的 owner_epoch + operation_id 调用,owner 侧按
+//     epoch 比对拒绝陈旧释放(同 §9.23「迟到 Logout 只能删自己」)。
+//
+// 失败只告警:owner 未启用 / 抖动时,login 侧 InspectBattleRoute 的
+// abandoned→(过再入屏障)→Terminal→Hub 旧门仍能让玩家收敛,不影响正确性。
+func ownerReleaseAbandonedPlayersWeak(ctx context.Context, auth OwnerAuthority, players []uint64,
+	selfPod, selfUID string, budget time.Duration) {
+	if auth == nil || len(players) == 0 || selfPod == "" || selfUID == "" {
+		return
+	}
+	budgetCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	var queryFailed, releaseFailed, released, skipped int
+	var firstErr error
+	var samplePlayer uint64
+	noteFail := func(playerID uint64, err error) {
+		if firstErr == nil {
+			firstErr, samplePlayer = err, playerID
+		}
+	}
+	defer func() {
+		// 成功条数也要可观测:判弃是低频事件,一条汇总不会刷屏,而「释放了几个/跳过几个」
+		// 正是排查「玩家为什么还回不去 Hub」时第一眼要看的数。
+		plog.With(ctx).Infow("msg", "owner_release_abandoned_weak",
+			"players", len(players), "released", released, "skipped_not_self", skipped,
+			"query_failed", queryFailed, "release_failed", releaseFailed,
+			"pod", selfPod, "sample_player_id", samplePlayer, "first_err", firstErr)
+	}()
+	for i, playerID := range players {
+		if budgetCtx.Err() != nil {
+			plog.With(ctx).Warnw("msg", "owner_release_abandoned_budget_exhausted",
+				"players", len(players), "done", i, "remaining_players", len(players)-i,
+				"hint", "migrate 弱依赖;login InspectBattleRoute 旧门仍能收敛")
+			return
+		}
+		rec, err := auth.QueryOwner(budgetCtx, playerID)
+		if err != nil {
+			queryFailed++
+			noteFail(playerID, err)
+			continue
+		}
+		// ② exact 身份门:只有记录仍指向本次被判弃的实例才允许释放。
+		if rec.OwnerType != ownerTypeBattle || rec.PodName != selfPod || rec.InstanceUID != selfUID {
+			skipped++
+			continue
+		}
+		// ③ compare-delete:epoch/operation 取自刚读到的记录,owner 侧再校验一次。
+		if rerr := auth.ReleaseOwner(budgetCtx, playerID, rec.OwnerEpoch, rec.OperationID); rerr != nil {
+			releaseFailed++
+			noteFail(playerID, rerr)
+			continue
+		}
+		released++
 	}
 }
 

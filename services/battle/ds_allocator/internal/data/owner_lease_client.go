@@ -121,6 +121,29 @@ func (g *GrpcOwnerLeaseRenewer) Admit(ctx context.Context, playerID, ownerEpoch 
 	return 0, nil
 }
 
+// ReleaseOwner 释放 owner 记录(INC-20260729-002 P0-B1)。
+//
+// 只在「被判弃实例的 GameServer 已确认回收」之后调用,且必须带上**从 Query 读到的**
+// owner_epoch + operation_id —— owner 侧按 compare-delete 语义处理,epoch 不匹配即
+// 拒绝/no-op(§9.23「迟到 Logout 只能 compare-delete 自己,不能删除新会话」同款约束)。
+// 这样即使玩家在我们判弃期间已被迁到新 DS(epoch 已 +1),本次释放也不会误删新归属。
+func (g *GrpcOwnerLeaseRenewer) ReleaseOwner(ctx context.Context, playerID, ownerEpoch uint64, operationID string) error {
+	callCtx, cancel := context.WithTimeout(ctx, ownerLeaseRPCTimeout)
+	defer cancel()
+	resp, err := g.cli.ReleaseOwner(callCtx, &ownerv1.ReleaseOwnerRequest{
+		PlayerId:    playerID,
+		OwnerEpoch:  ownerEpoch,
+		OperationId: operationID,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return errcode.New(errcode.Code(resp.GetCode()), "owner release rejected player=%d", playerID)
+	}
+	return nil
+}
+
 func targetProto(t OwnerTargetView) *ownerv1.OwnerTarget {
 	return &ownerv1.OwnerTarget{
 		PodName:                  t.PodName,

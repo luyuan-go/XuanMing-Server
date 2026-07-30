@@ -67,16 +67,63 @@ else
   SERVER_LAUNCH=("${SERVER_SH}")
 fi
 
+# stdout 行缓冲（INC-20260729-002 根因门 A1）。
+#
+# 为什么必须显式做：UE 只在 `FUnixPlatformMisc::HasBeenStartedRemotely()`（= 环境变量
+# SSH_CONNECTION 非空）或有调试器时才 `setvbuf(stdout, NULL, _IONBF, 0)`
+# （UnixPlatformMisc.cpp）。容器里两者都不成立，stdout 对着管道走 libc 默认的 4KB
+# 块缓冲，日志要攒满一块才吐给 kubelet / Loki。实测后果：该事故 Pod 的 11 条
+# 「每分钟一次」health 窗口摘要（UE 时间 02:30:20 → 02:40:21，跨 10 分钟）在
+# 02:40:47.252 一次性到达 Loki；进程被回收时最后一批只吐出 2 行，且第一行在
+# `NickN` 处被截断 —— 也就是 02:42:09 之后 DS 写的所有日志（含解释「为什么停止
+# 业务心跳」的第一现场）全部随缓冲区丢失。
+#
+# `-FORCELOGFLUSH` 救不了：它只作用于 `OutputDeviceFile`（写 .log 文件），不管 stdout。
+# 所以用 POSIX 标准工具 `stdbuf` 把 stdout/stderr 改成行缓冲。stdbuf 自身在设置
+# LD_PRELOAD/_STDBUF_* 后 execvp 目标进程，**DS 仍是 PID 1**，SIGTERM 语义不变。
+#
+# 兜底：镜像若被裁剪掉 coreutils，退回 UE 自己的无缓冲路径（置 SSH_CONNECTION 触发
+# 上述 setvbuf(_IONBF)）。两条都不静默失败——用哪条会打进启动日志。
+# 注意：不用「可能为空的数组 + set -u 下展开」这种写法（bash 4.3 及更早会报错），
+# 直接把 stdbuf 前缀并进最终 argv 数组，空前缀情形天然不存在。
+if command -v stdbuf >/dev/null 2>&1; then
+  FINAL_LAUNCH=(stdbuf -oL -eL "${SERVER_LAUNCH[@]}")
+  STDOUT_MODE="stdbuf(line-buffered)"
+else
+  # UE：SSH_CONNECTION 非空 → HasBeenStartedRemotely() → setvbuf(stdout, _IONBF)。
+  export SSH_CONNECTION="${SSH_CONNECTION:-0.0.0.0 0 0.0.0.0 0}"
+  FINAL_LAUNCH=("${SERVER_LAUNCH[@]}")
+  STDOUT_MODE="ue-setvbuf-unbuffered(fallback: stdbuf 不可用)"
+fi
+
 # UE 的 LogNet 默认会把 Login/Join URL 原样写入 stdout；URL 中含短期 DSTicket，
 # 即使票据有 TTL/JTI/实例绑定也不应进入集中日志。用两个互补入口把该分类固定为
 # Warning：ini override 覆盖启动期，LogCmds 覆盖运行期；两项都放在用户 EXTRA_ARGS
 # 之后，避免调试参数意外重新打开含票的 Display/Log 级别。
 #
-# 不在启动日志回显 EXTRA_ARGS：它是运维扩展入口，未来可能承载敏感值。
-echo "[entrypoint] 启动 Pandora DS: ${SERVER_LAUNCH[*]} ${MAP_URL} -port=${PORT} -log [LogNet=Warning]"
+# 同一批 ini override 里打开引擎自带的挂起检测（INC-20260729-002 根因门 A1）：
+#   - HangDuration=10：**把已有的检测阈值从默认 25s 降到 10s**（不是从零开启——
+#     ThreadHeartBeat.cpp 的 HangDuration 默认就是 25.0，且 AllowThreadHeartBeat() 是
+#     `!FParse::Param(..., "noheartbeatthread")` 即默认为真，server 构建下
+#     USE_HANG_DETECTION 也成立，所以检测线程本来就在跑）。25s 大于 ds_allocator 的
+#     ACTIVE heartbeat_timeout=15s，Pod 会先被回收，`Hang detected on GameThread`
+#     + 卡住线程堆栈永远来不及打出来；降到 10s 才能抢在回收前留下证据。
+#     引擎下限是 5s，取 10s 留出一拍 5s 业务心跳的正常抖动余量，不误报。
+#   - HangsAreFatal=False：**显式钉住而非纠正默认值**。UE_ASSERT_ON_HANG 未被外部定义时
+#     默认是 0（ThreadHeartBeat.cpp:28-30），所以默认本来就不致命；这里写明是为了防止
+#     以后有人在 Target/Build 里定义 UE_ASSERT_ON_HANG=1 后，10s 阈值把「一次长加载」
+#     变成「直接 assert 崩进程」。我们要的是**证据**不是自杀：Error + 堆栈即可，回收由
+#     allocator 的 §9.4 补偿链负责（验收底线第 1 条：短暂不可用可接受，杀进程不可接受）。
+#     Linux 上 PLATFORM_USE_MINIMAL_HANG_DETECTION=0，故走的是打堆栈而非 abort() 的分支。
+# 只挂在 DS 启动参数上，不写进 Config/DefaultEngine.ini，避免影响客户端 / 编辑器。
+echo "[entrypoint] 启动 Pandora DS: ${FINAL_LAUNCH[*]} ${MAP_URL} -port=${PORT} -log [LogNet=Warning][HangDuration=10]"
+echo "[entrypoint] stdout 缓冲模式=${STDOUT_MODE}"
 echo "[entrypoint] AGONES_SDK_HTTP_PORT=${AGONES_SDK_HTTP_PORT:-<unset>} AGONES_SDK_GRPC_PORT=${AGONES_SDK_GRPC_PORT:-<unset>}"
 
 # exec 让 DS 成为 PID 1，正确接收 SIGTERM（Agones 回收 Pod 时优雅退出）。
-exec "${SERVER_LAUNCH[@]}" "${MAP_URL}" -port="${PORT}" -log ${EXTRA_ARGS} \
+# stdbuf 在 execvp 后被目标进程替换，PID 1 仍是 DS 本体。
+exec "${FINAL_LAUNCH[@]}" "${MAP_URL}" -port="${PORT}" -log ${EXTRA_ARGS} \
   '-ini:Engine:[Core.Log]:LogNet=Warning' \
-  '-LogCmds=LogNet Warning'
+  '-LogCmds=LogNet Warning' \
+  '-ini:Engine:[Core.System]:HangDuration=10.0' \
+  '-ini:Engine:[Core.System]:HangsAreFatal=False'

@@ -619,7 +619,7 @@ func TestLifecycleStartupGateAndDeliveryFailClosed(t *testing.T) {
 	if err := uc.ValidateLifecyclePusherReady(); err == nil {
 		t.Fatal("required lifecycle publisher must be present before startup")
 	}
-	if delivered := uc.deliverAbandoned(context.Background(), 7, "battle-7", []uint64{1}, 1, "ranked"); delivered {
+	if delivered := uc.deliverAbandoned(context.Background(), 7, "battle-7", "gs-uid-7", []uint64{1}, 1, "ranked"); delivered {
 		t.Fatal("missing required publisher must retain the recovery outbox")
 	}
 
@@ -628,7 +628,7 @@ func TestLifecycleStartupGateAndDeliveryFailClosed(t *testing.T) {
 	if err := uc.ValidateLifecyclePusherReady(); err != nil {
 		t.Fatalf("ready lifecycle publisher rejected: %v", err)
 	}
-	if delivered := uc.deliverAbandoned(context.Background(), 7, "battle-7", []uint64{1}, 1, "ranked"); !delivered {
+	if delivered := uc.deliverAbandoned(context.Background(), 7, "battle-7", "gs-uid-7", []uint64{1}, 1, "ranked"); !delivered {
 		t.Fatal("healthy required publisher should complete delivery")
 	}
 }

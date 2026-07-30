@@ -50,8 +50,10 @@ func TestDiscoverLevel(t *testing.T) {
 	if d.DataStart != 5 {
 		t.Fatalf("level 默认 DataStart=%d, want 5", d.DataStart)
 	}
-	if len(d.columns) != 9 || d.columns[0].header != "ID" ||
-		d.columns[7].header != "队伍人数" || d.columns[8].header != "是否能退出" {
+	if len(d.columns) != 12 || d.columns[0].header != "ID" ||
+		d.columns[7].header != "队伍人数" || d.columns[8].header != "是否能退出" ||
+		d.columns[9].header != "玩法模式" || d.columns[10].header != "入口模式" ||
+		d.columns[11].header != "对局方数" {
 		t.Fatalf("columns=%d", len(d.columns))
 	}
 }
@@ -81,14 +83,14 @@ func TestBuildPlayerLevelExpStartsAtFourthRow(t *testing.T) {
 // sampleGrid 复刻 g_关卡.xlsx 的真实版式:1 表头、2-4 注释、5+ 数据、尾部残留空单元格行。
 func sampleGrid() [][]string {
 	return [][]string{
-		{"ID", "关卡名称", "关卡资源", "GameMode类", "关卡类别", "禁止ui快捷键开关", "匹配列表显示", "队伍人数", "是否能退出"},
-		{"", "", "", "", "", "0:不禁止", "0:不显示(默认)", "一方人数(team_size)", "0:不可退出(默认)"},
-		{"", "", "", "", "", "1:禁止(默认)", "1:显示", "本地1v1填1;正式5v5填5", "1:可主动退出"},
+		{"ID", "关卡名称", "关卡资源", "GameMode类", "关卡类别", "禁止ui快捷键开关", "匹配列表显示", "队伍人数", "是否能退出", "玩法模式", "入口模式", "对局方数"},
+		{"", "", "", "", "", "0:不禁止", "0:不显示(默认)", "一方人数(team_size)", "0:不可退出(默认)", "撮合池 game_mode", "1:撮合", "PVP 通常为 2"},
+		{"", "", "", "", "", "1:禁止(默认)", "1:显示", "本地1v1填1;正式5v5填5", "1:可主动退出", "", "2:直进", "PVE 通常为 1"},
 		{},
-		{"1", "登录", "/Game/Level/Login/Lvl_Login.Lvl_Login", "", "1", "", "0", "", "0"},
-		{"2", "选角", "/Game/Level/RoleSelect/Lvl_RoleSelect.Lvl_RoleSelect", "", "2", "", "0", "", "0"},
-		{"6", "MOBA战斗", "/Game/Test/Level/MobaLevel.MobaLevel", "/Script/Pandora.PandoraBattleGameMode", "4", "", "1", "3", "0"},
-		{"7", "松林镇副本", "/Game/Test/Level/SonglinTown.SonglinTown", "/Script/Pandora.PandoraPveGameMode", "4", "", "1", "1", "1"},
+		{"1", "登录", "/Game/Level/Login/Lvl_Login.Lvl_Login", "", "1", "", "0", "", "0", "", "", ""},
+		{"2", "选角", "/Game/Level/RoleSelect/Lvl_RoleSelect.Lvl_RoleSelect", "", "2", "", "0", "", "0", "", "", ""},
+		{"6", "MOBA战斗", "/Game/Test/Level/MobaLevel.MobaLevel", "/Script/Pandora.PandoraBattleGameMode", "4", "", "1", "3", "0", "5v5_ranked", "1", "2"},
+		{"7", "松林镇副本", "/Game/Test/Level/SonglinTown.SonglinTown", "/Script/Pandora.PandoraPveGameMode", "4", "", "1", "1", "1", "pve_coop", "2", "1"},
 		{"", "", "", ""}, // 格式残留:全空行(g_关卡 D12-D51 的空字符串单元格)
 		{"", "", "", ""},
 	}
@@ -120,11 +122,14 @@ func TestBuildLevelHappyPath(t *testing.T) {
 	}
 	r6 := data.Rows[2]
 	if r6.Id != 6 || r6.Category != configpb.LevelCategory_LEVEL_CATEGORY_BATTLE ||
-		!r6.ShowInMatchList || r6.TeamSize != 3 || r6.AllowExit {
+		!r6.ShowInMatchList || r6.TeamSize != 3 || r6.AllowExit ||
+		r6.GameMode != "5v5_ranked" || r6.EntryMode != configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE ||
+		r6.SideCount != 2 {
 		t.Fatalf("id6 解析错误: %+v", r6)
 	}
 	r7 := data.Rows[3]
-	if r7.TeamSize != 1 || !r7.AllowExit {
+	if r7.TeamSize != 1 || !r7.AllowExit || r7.GameMode != "pve_coop" ||
+		r7.EntryMode != configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN || r7.SideCount != 1 {
 		t.Fatalf("id7 新增列解析错误: %+v", r7)
 	}
 	// 布尔默认值((excel_default) 注解):禁止ui快捷键开关 空 = true;匹配列表显示 填 0 = false
@@ -195,6 +200,18 @@ func TestBuildLevelErrors(t *testing.T) {
 			g[4][6] = "2"
 			return g
 		}), "布尔列"},
+		"入口模式越界": {mutate(func(g [][]string) [][]string {
+			g[6][10] = "3"
+			return g
+		}), "枚举"},
+		"入口模式显式填 0": {mutate(func(g [][]string) [][]string {
+			g[6][10] = "0"
+			return g
+		}), "UNSPECIFIED 不允许"},
+		"对局方数非数字": {mutate(func(g [][]string) [][]string {
+			g[6][11] = "双边"
+			return g
+		}), "非负整数"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
