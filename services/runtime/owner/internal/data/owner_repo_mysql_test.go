@@ -244,6 +244,29 @@ func TestOwnerRepoMySQL(t *testing.T) {
 		}
 	})
 
+	// §9.22:「Pod UID / instance epoch 变化或灾备接管都必须递增 owner_epoch」。
+	// 同 pod+uid 但 instance_epoch 已推进(实例代次翻转 / 灾备接管)**不是**同一实例,
+	// 必须走真实迁移。这条判据原先在 allocator 的 decideOwnerBegin(复审 P1-3 专门加的),
+	// 随判定下沉到权威一并搬来,覆盖不能丢。
+	t.Run("InstanceEpochBumpIsRealMigration", func(t *testing.T) {
+		const player = 312
+		target := testTarget("uid-epoch")
+		first, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0)
+		if err != nil || first.OwnerEpoch != 1 {
+			t.Fatalf("首迁移: %+v err=%v", first, err)
+		}
+		// 同 pod + 同 uid,仅 instance_epoch 前进 → 必须推进 owner_epoch 并换 operation。
+		bumped := target
+		bumped.InstanceEpoch = target.InstanceEpoch + 1
+		moved, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, bumped, 0)
+		if err != nil {
+			t.Fatalf("instance epoch 前进应发起真实迁移: %v", err)
+		}
+		if moved.OwnerEpoch != 2 || moved.OperationID != testOpB {
+			t.Fatalf("instance epoch 变化必须递增 owner_epoch(§9.22): %+v", moved)
+		}
+	})
+
 	// 真实迁移路径不接受空 operation_id(绕过 biz 的内部调用兜底;空 operation 会让
 	// Admit exact 校验、客户端续用与审计流水同时失去锚点)。
 	t.Run("RealTransitionRejectsEmptyOperation", func(t *testing.T) {

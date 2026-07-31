@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
+
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
 )
 
-// scriptedOwnerAuthority:QueryOwner 按注入记录应答;记录 Admit / Release 调用。
+// scriptedOwnerAuthority:QueryOwner 按注入记录应答;记录 Admit / Release / Begin 调用。
 type scriptedOwnerAuthority struct {
 	mu       sync.Mutex
 	records  map[uint64]data.OwnerRecordView
@@ -23,16 +25,99 @@ type scriptedOwnerAuthority struct {
 	releases []uint64
 	// releaseErr 非 nil 时 ReleaseOwner 直接失败,用于验证弱依赖只告警不中断。
 	releaseErr error
+
+	// Begin 侧故障注入(contract 强依赖回归):beginOps 记录收到的 operation_id,
+	// queries 记录 Query 次数(验证冲突重试确实重查了权威)。
+	beginOps          []string
+	queries           int
+	queryErr          error
+	beginErr          error
+	beginErrForPlayer uint64 // 非 0 = 只对该玩家注入 beginErr
+	conflictTimes     int    // 剩余需返回 EPOCH_CONFLICT 的次数(独立于 beginErr)
 }
 
 func (s *scriptedOwnerAuthority) QueryOwner(_ context.Context, playerID uint64) (data.OwnerRecordView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.queries++
+	if s.queryErr != nil {
+		return data.OwnerRecordView{}, s.queryErr
+	}
 	return s.records[playerID], nil
 }
 
-func (s *scriptedOwnerAuthority) BeginTransition(_ context.Context, _, _ uint64, _ string, _ int8, _ data.OwnerTargetView) error {
+func (s *scriptedOwnerAuthority) BeginTransition(_ context.Context, playerID, _ uint64, operationID string, _ int8, _ data.OwnerTargetView) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.beginOps = append(s.beginOps, operationID)
+	if s.conflictTimes > 0 {
+		s.conflictTimes--
+		return errcode.New(errcode.ErrOwnerEpochConflict, "injected epoch conflict")
+	}
+	if s.beginErr != nil && (s.beginErrForPlayer == 0 || s.beginErrForPlayer == playerID) {
+		return s.beginErr
+	}
 	return nil
+}
+
+// contract 阶段:READY 交付点 Begin 是强依赖——写不进 owner 权威即整体失败,
+// 调用方据此走既有分配失败补偿链,绝不把 ds_addr 交付出去。
+func TestOwnerBeginPlayers_StrongFailClosed(t *testing.T) {
+	target := data.OwnerTargetView{PodName: "battle-1", InstanceUID: "uid-1", InstanceEpoch: 1,
+		AssignmentOrAllocationID: "alloc-1", ReleaseTrack: "stable"}
+	ctx := context.Background()
+
+	failing := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{},
+		beginErr: errcode.New(errcode.ErrUnavailable, "owner down")}
+	if err := ownerBeginPlayers(ctx, failing, []uint64{1001}, ownerTypeBattle, target, time.Second); err == nil {
+		t.Fatal("Begin 失败必须上抛,不得交付 READY")
+	}
+
+	// Query 不可判定同样 fail-closed(§9.22 禁冒充 OFFLINE/空闲)。
+	qfail := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{},
+		queryErr: errcode.New(errcode.ErrUnavailable, "owner unreachable")}
+	if err := ownerBeginPlayers(ctx, qfail, []uint64{1001}, ownerTypeBattle, target, time.Second); err == nil {
+		t.Fatal("Query 不可判定必须 fail-closed")
+	}
+
+	// 一局里任一玩家失败即整局失败:不留"部分玩家有归属、部分没有"的半截状态。
+	partial := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{},
+		beginErrForPlayer: 2002, beginErr: errcode.New(errcode.ErrUnavailable, "owner down")}
+	if err := ownerBeginPlayers(ctx, partial, []uint64{1001, 2002, 3003}, ownerTypeBattle, target, time.Second); err == nil {
+		t.Fatal("一局内任一玩家失败必须整局失败")
+	}
+
+	// owner 未部署(auth==nil)不阻断分配。
+	if err := ownerBeginPlayers(ctx, nil, []uint64{1001}, ownerTypeBattle, target, time.Second); err != nil {
+		t.Fatalf("auth==nil 不应报错: %v", err)
+	}
+
+	// operation 必须留空交权威铸造(§9.23 稳定 operation);调用方自铸会让每次投递换 ID。
+	ok := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{}}
+	if err := ownerBeginPlayers(ctx, ok, []uint64{1001, 2002}, ownerTypeBattle, target, time.Second); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	for _, op := range ok.beginOps {
+		if op != "" {
+			t.Fatalf("operation 必须留空交权威铸造,实得 %q", op)
+		}
+	}
+
+	// EPOCH_CONFLICT 重查一次再试;持续冲突则上抛,不无限重试。
+	once := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{}, conflictTimes: 1}
+	if err := ownerBeginPlayers(ctx, once, []uint64{1001}, ownerTypeBattle, target, time.Second); err != nil {
+		t.Fatalf("一次冲突后应重试成功: %v", err)
+	}
+	if once.queries != 2 {
+		t.Fatalf("冲突重试必须重查权威取新 expect_epoch,实得 %d 次 Query", once.queries)
+	}
+	always := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{}, conflictTimes: 99}
+	if err := ownerBeginPlayers(ctx, always, []uint64{1001}, ownerTypeBattle, target, time.Second); err == nil {
+		t.Fatal("持续冲突必须上抛")
+	}
+	if always.queries > 2 {
+		t.Fatalf("重试上限 2 轮,实得 %d 次 Query", always.queries)
+	}
 }
 
 func (s *scriptedOwnerAuthority) Admit(_ context.Context, playerID, _ uint64, _ string, _ data.OwnerTargetView) (int64, error) {

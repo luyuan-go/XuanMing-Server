@@ -2546,16 +2546,29 @@ func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID 
 		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
 		return "", 0, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
 	}
-	// owner 迁移双写(owner-authority.md migrate ①/④):签票是 hub 归属定案的统一出口
-	// (分配/恢复/转移/Battle→Hub 回流全路径过此),此处弱 Begin(HUB) 一处覆盖全部。
+	// owner 归属定案(owner-authority.md ①/④;contract 阶段=强依赖):签票是 hub 归属定案的
+	// 统一出口(分配/恢复/转移/Battle→Hub 回流全路径过此),此处 Begin(HUB) 一处覆盖全部。
 	// hub 无独立实例纪元语义,以 ProtocolEpoch 充当(census Admit 侧同源,exact 等值自洽)。
-	ownerBeginPlayersWeak(ctx, u.ownerAuth, []uint64{playerID}, ownerTypeHub, data.OwnerTargetView{
+	//
+	// **写不进 owner 就不发票**:票据是把"已由权威算好的判定结果"搬到 DS 的唯一通道(§9.3),
+	// 归属还没定案就签票,等于把一张无权威背书的入场券交出去——玩家可能同时被两台 DS 认领。
+	// 四个调用方都已能安全承接这个错误:signResult/transferResult 上抛(客户端退避重查),
+	// 两条 migrate 扫描路径回源索引 / 补偿座位后下个 tick 重试,不漏座位也不卡玩家。
+	//
+	// 预算 3s:单玩家最多 2 轮 (Query+Begin)(EPOCH_CONFLICT 重查一次),留足跨服务往返与
+	// 一次 TiDB 事务的余量。超时按失败处理,调用方重试——待实测复核。
+	if err := ownerBeginPlayers(ctx, u.ownerAuth, []uint64{playerID}, ownerTypeHub, data.OwnerTargetView{
 		PodName:                  binding.PodName,
 		InstanceUID:              binding.InstanceUID,
 		InstanceEpoch:            binding.ProtocolEpoch,
 		AssignmentOrAllocationID: binding.HubAssignmentID,
 		ReleaseTrack:             binding.ReleaseTrack,
-	}, 1500*time.Millisecond)
+	}, 3*time.Second); err != nil {
+		plog.With(ctx).Warnw("msg", "hub_ticket_refused_owner_begin_failed",
+			"player_id", playerID, "pod", binding.PodName, "err", err,
+			"hint", "归属未定案不签票(§9.3/§9.22);调用方重试")
+		return "", 0, err
+	}
 	return token, expMs, nil
 }
 

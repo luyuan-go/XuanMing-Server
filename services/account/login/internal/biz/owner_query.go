@@ -66,12 +66,6 @@ func (u *LoginUsecase) SetOwnerPlacementQuerier(q OwnerPlacementQuerier) {
 	u.ownerPlacement = q
 }
 
-// SetOwnerQueryFirst 开关 §9.23 query-first(默认 false = 保持旧的 locator-first 路由)。
-// 打开后 owner 成为路由第一权威,失败返回 WAIT 而不是回落旧路由。
-func (u *LoginUsecase) SetOwnerQueryFirst(enabled bool) {
-	u.ownerQueryFirst = enabled
-}
-
 // ownerTypeToResumeRoute 把 owner 类型映射为恢复路由(none → UNSPECIFIED)。
 func ownerTypeToResumeRoute(ownerType int8) loginv1.ResumeRoute {
 	switch ownerType {
@@ -100,6 +94,14 @@ func waitResume(reason loginv1.ResumeWaitReason, retryAfterMs uint32) ResumeCont
 // 返回 decided=false 只有一种情况:owner 明确回答"该玩家当前没有归属记录"——此时交给
 // 首次进场链(角色 → 撮合 → 首个 Hub)。其余情况 owner 的答案就是最终答案。
 func (u *LoginUsecase) resolveResumeFromOwner(ctx context.Context, playerID uint64) (bool, ResumeContextResult) {
+	if u.ownerPlacement == nil {
+		// owner_addr 未配置(owner 服务未部署)。这是部署形态问题,不是"该玩家无归属"——
+		// 冒充无归属会让调用方走首次进场链、再分配一台 DS(§9.22 禁冒充默认状态)。
+		plog.With(ctx).Warnw("msg", "owner_placement_querier_missing",
+			"player_id", playerID, "hint", "owner_addr 未配置;进场按 WAIT 处理")
+		return true, waitResume(loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN,
+			ownerUnknownRetryAfterMs)
+	}
 	v, err := u.ownerPlacement.QueryOwnerPlacement(ctx, playerID)
 	if err != nil {
 		// 不可判定 → WAIT。**绝不回落旧路由**:locator presence 只是投影,key miss

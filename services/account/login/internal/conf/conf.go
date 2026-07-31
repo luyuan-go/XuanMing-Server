@@ -46,11 +46,10 @@ type LoginConf struct {
 	// Query+Release(compare-delete 自己,失败仅告警,不影响登出)。
 	OwnerAddr string `yaml:"owner_addr,omitempty" json:"owner_addr,omitempty"`
 
-	// OwnerQueryFirst 开启 §9.23 恢复上下文 query-first owner placement 叠加(owner-authority.md
-	// migrate ①)。默认 false = 恢复路径不查 owner,行为与现状一致(安全默认);true 时在既有
-	// presence/match 路由解析之上叠加 owner 权威 exact placement(仅同路由叠加,不改路由决策)。
-	// 需先配 owner_addr。owner 覆盖式权威 + §9.23 全量属 contract 阶段(须集成故障注入后再切)。
-	OwnerQueryFirst bool `yaml:"owner_query_first,omitempty" json:"owner_query_first,omitempty"`
+	// OwnerQueryFirst 已于 2026-07-29 删除:§9.23 query-first 成为唯一进场路由路径,
+	// locator-first 旧基线一并退役(它按 presence 推路由,是 §9.22 禁止的 fail-open,
+	// 且永远填不出五态)。保留一个只会置 true 的开关违反 §15.3,故直接删。
+	// reserved: owner_query_first
 
 	// RequireTiDB 是账号库后端强校验门(全服单点扩容,2026-07-27;与 owner.require_tidb 同语义、
 	// 按服务独立激活)。dev 默认 false = 连单机 MySQL 联调不校验;-Prod 产物由

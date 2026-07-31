@@ -191,6 +191,18 @@ func (f *fakeHubAssigner) AssignHub(_ context.Context, playerID uint64, region s
 	return f.res, nil
 }
 
+type unavailableRoleRepo struct {
+	err error
+}
+
+func (f *unavailableRoleRepo) GetRole(context.Context, uint64) (uint32, error) {
+	return 0, f.err
+}
+
+func (f *unavailableRoleRepo) SetRole(context.Context, uint64, uint32, string, func(context.Context) error) error {
+	return nil
+}
+
 // fakeNotifier 实现 data.LocationNotifier(断线重连测试用)。
 type fakeNotifier struct {
 	bl            data.BattleLocation
@@ -243,11 +255,99 @@ func newTestUsecaseWithNotifier(t *testing.T, hub data.HubAssigner, notifier dat
 	hash := mustBcrypt(t, "pw")
 	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash}
 	sf := snowflake.NewNode(1)
-	uc := NewLoginUsecase(repo, newFakeSessionRepo(), notifier, hub, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, nil, false)
+	uc := NewLoginUsecase(repo, newFakeSessionRepo(), notifier, hub, &fakeRoleRepo{roleID: 7}, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, nil, false)
 	ticketUC := NewTicketUsecase(signer, verifier, nil)
 	ticketUC.SetBattleTicketAuthorizer(&loginBattleAuthorizerFake{})
 	uc.SetBattleTicketIssuer(ticketUC)
+	uc.SetOwnerPlacementQuerier(&fakeOwnerPlacementQuerier{view: stableTestOwnerPlacement(ownerTypeHub)})
 	return uc
+}
+
+func stableTestOwnerPlacement(ownerType int8) data.OwnerPlacementView {
+	view := data.OwnerPlacementView{
+		OwnerEpoch:               7,
+		OwnerType:                ownerType,
+		Phase:                    ownerPhaseAdmitted,
+		PodName:                  "hub-stable-1",
+		InstanceUID:              "hub-uid-1",
+		InstanceEpoch:            11,
+		AssignmentOrAllocationID: "hub-assignment-1",
+		ReleaseTrack:             "stable",
+		OperationID:              "11111111-1111-4111-8111-111111111111",
+		LeaseDeadlineMs:          time.Now().Add(time.Minute).UnixMilli(),
+	}
+	if ownerType == ownerTypeBattle {
+		view.PodName = "battle-stable-1"
+		view.InstanceUID = "battle-uid-1"
+		view.AssignmentOrAllocationID = "battle-allocation-1"
+	}
+	return view
+}
+
+func requireLoginWait(t *testing.T, res *LoginResult, err error, reason loginv1.ResumeWaitReason) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("Login WAIT returned error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("Login WAIT returned nil result")
+	}
+	if res.PlayerID == 0 || res.SessionToken == "" || res.SessionExpMs <= time.Now().UnixMilli() {
+		t.Fatalf("Login WAIT must preserve a usable session, got player=%d token_len=%d exp_ms=%d",
+			res.PlayerID, len(res.SessionToken), res.SessionExpMs)
+	}
+	if res.Resume.Route != loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN ||
+		res.Resume.EntryState != loginv1.ResumeEntryState_RESUME_ENTRY_STATE_WAIT ||
+		res.Resume.WaitReason != reason ||
+		res.Resume.RetryAfterMs != loginWaitRetryAfterMs {
+		t.Fatalf("Login WAIT resume = %+v, want UNKNOWN/WAIT/%v/retry=%d",
+			res.Resume, reason, loginWaitRetryAfterMs)
+	}
+	if res.HubDSAddr != "" || res.HubTicket != "" || res.BattleDSAddr != "" || res.BattleTicket != "" {
+		t.Fatalf("Login WAIT must not leak DS endpoint/ticket: hub=%q hub_ticket_len=%d battle=%q battle_ticket_len=%d",
+			res.HubDSAddr, len(res.HubTicket), res.BattleDSAddr, len(res.BattleTicket))
+	}
+}
+
+func TestLogin_NoSelectedRoleReturnsRoleRequiredWithoutHubSideEffects(t *testing.T) {
+	hub := &fakeHubAssigner{res: &data.HubAssignment{
+		HubDSAddr: "10.0.0.9:7777", HubTicket: "must-not-be-used",
+	}}
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier)
+	uc.roleRepo = &fakeRoleRepo{roleID: 0}
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if res == nil || res.PlayerID != 42 || res.SessionToken == "" || res.SessionExpMs <= time.Now().UnixMilli() {
+		t.Fatalf("ROLE_REQUIRED must preserve a usable session, got %+v", res)
+	}
+	if res.Resume.Route != loginv1.ResumeRoute_RESUME_ROUTE_HUB ||
+		res.Resume.EntryState != loginv1.ResumeEntryState_RESUME_ENTRY_STATE_ROLE_REQUIRED {
+		t.Fatalf("Resume = %+v, want HUB/ROLE_REQUIRED", res.Resume)
+	}
+	if res.HubDSAddr != "" || res.HubTicket != "" || hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
+		t.Fatalf("ROLE_REQUIRED must not allocate/notify/leak ticket: result=%+v hub_player=%d pending=%d",
+			res, hub.gotPlayerID, notifier.loginPendingN)
+	}
+}
+
+func TestLogin_RoleAuthorityFailureReturnsWaitWithoutHubSideEffects(t *testing.T) {
+	hub := &fakeHubAssigner{res: &data.HubAssignment{
+		HubDSAddr: "10.0.0.9:7777", HubTicket: "must-not-be-used",
+	}}
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier)
+	uc.roleRepo = &unavailableRoleRepo{err: errcode.New(errcode.ErrUnavailable, "role authority unavailable")}
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_ROLE_UNKNOWN)
+	if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
+		t.Fatalf("ROLE_UNKNOWN must not allocate/notify: hub_player=%d pending=%d",
+			hub.gotPlayerID, notifier.loginPendingN)
+	}
 }
 
 func TestLogin_HubAssignerSuccess(t *testing.T) {
@@ -731,9 +831,7 @@ func TestLogin_BattleReconnect_EmptyAuthoritativeAddressDoesNotAssignHub(t *test
 	uc.SetBattleTicketIssuer(ticketUC)
 
 	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
-	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
-		t.Fatalf("empty target result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
-	}
+	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
 		t.Fatalf("empty target mutated hub/login-pending: hub_player=%d pending=%d",
 			hub.gotPlayerID, notifier.loginPendingN)
@@ -751,9 +849,7 @@ func TestLogin_BattleReconnect_RosterAuthorityFailureDoesNotAssignHub(t *testing
 	uc.SetBattleTicketIssuer(ticketUC)
 
 	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
-	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
-		t.Fatalf("roster rejection result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
-	}
+	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 {
 		t.Fatalf("roster rejection called AssignHub for player %d", hub.gotPlayerID)
 	}
@@ -769,9 +865,7 @@ func TestLogin_BattleReconnect_MissingIssuerDoesNotAssignHub(t *testing.T) {
 	uc.SetBattleTicketIssuer(nil)
 
 	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
-	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
-		t.Fatalf("missing issuer result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
-	}
+	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
 		t.Fatalf("missing issuer mutated hub/login-pending: hub_player=%d pending=%d",
 			hub.gotPlayerID, notifier.loginPendingN)
@@ -883,9 +977,7 @@ func TestLogin_B1RequiresConfiguredLocatorBeforeHubAssignment(t *testing.T) {
 	uc.SetRequireHubAssignmentBinding(true)
 
 	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
-	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
-		t.Fatalf("result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
-	}
+	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 {
 		t.Fatalf("Hub allocator called before locator proof, player=%d", hub.gotPlayerID)
 	}
@@ -898,9 +990,7 @@ func TestLogin_B1LocatorQueryFailureDoesNotAssignHub(t *testing.T) {
 	uc.SetRequireHubAssignmentBinding(true)
 
 	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
-	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
-		t.Fatalf("result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
-	}
+	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if notifier.getN != battleLocationQueryRetries {
 		t.Fatalf("locator query count=%d, want %d", notifier.getN, battleLocationQueryRetries)
 	}
@@ -925,9 +1015,7 @@ func TestLogin_B1NotifyLoginPendingFailureDoesNotDeliverHubTicket(t *testing.T) 
 	uc.SetRequireHubAssignmentBinding(true)
 
 	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
-	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
-		t.Fatalf("result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
-	}
+	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 || notifier.loginPendingN != 1 {
 		t.Fatalf("hub_player=%d pending_calls=%d, want 0/1", hub.gotPlayerID, notifier.loginPendingN)
 	}
@@ -1086,9 +1174,7 @@ func TestLogin_BattleReconnect_B1FailClosedWhenGameModeUnavailable(t *testing.T)
 			uc.SetRequireHubAssignmentBinding(true)
 
 			res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
-			if errcode.As(err) != errcode.ErrUnavailable || res != nil {
-				t.Fatalf("result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
-			}
+			requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 			if authorizer.authorizeCalls != 0 {
 				t.Fatalf("ticket issued %d times on rejected resume path, want 0 (no side effects)", authorizer.authorizeCalls)
 			}
@@ -1163,12 +1249,12 @@ func signTestSession(t *testing.T, uc *LoginUsecase) string {
 	return tok
 }
 
-// TestGetResumeContext_BattleRouteCarriesGameModeAndStage:冷启动恢复(bug 主现场,
-// login.go 原 GetResumeContext 返回缺 game_mode 的结果)必须给出 BATTLE + RUNNING +
-// canonical game_mode。
+// TestGetResumeContext_BattleRouteCarriesGameModeAndStage 验证 owner-first 冷启动恢复:
+// owner 给出 exact BATTLE TARGET,matchmaker 只补 canonical game_mode/stage。
 func TestGetResumeContext_BattleRouteCarriesGameModeAndStage(t *testing.T) {
 	notifier := presenceHitBattle(9001)
 	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+	uc.SetOwnerPlacementQuerier(&fakeOwnerPlacementQuerier{view: stableTestOwnerPlacement(ownerTypeBattle)})
 	resolver := &fakeMatchResolver{out: data.PlayerMatchAuthority{
 		State:    matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
 		Stage:    matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY,
@@ -1183,8 +1269,13 @@ func TestGetResumeContext_BattleRouteCarriesGameModeAndStage(t *testing.T) {
 		t.Fatalf("GetResumeContext: %v", err)
 	}
 	if r.Route != loginv1.ResumeRoute_RESUME_ROUTE_BATTLE || r.MatchID != 9001 ||
-		r.GameMode != "pve_coop" || r.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_RUNNING {
-		t.Fatalf("resume = %+v, want BATTLE/9001/pve_coop/RUNNING", r)
+		r.GameMode != "pve_coop" || r.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_READY {
+		t.Fatalf("resume = %+v, want BATTLE/9001/pve_coop/READY", r)
+	}
+	if r.EntryState != loginv1.ResumeEntryState_RESUME_ENTRY_STATE_TARGET ||
+		r.PlacementState != loginv1.ResumePlacementState_RESUME_PLACEMENT_STATE_STABLE ||
+		r.DSPodName != "battle-stable-1" || r.AllocationID != "battle-allocation-1" {
+		t.Fatalf("owner target not preserved in battle resume: %+v", r)
 	}
 }
 
@@ -1234,19 +1325,34 @@ func TestGetResumeContext_NoClaimPlainHub(t *testing.T) {
 	}
 }
 
-// TestGetResumeContext_B1FailClosedWhenResolverFails:B1 下冷启动恢复也 fail-closed:
-// presence 命中 BATTLE 但权威查询失败 → 可重试 Unavailable,绝不下发缺 game_mode 的
-// BATTLE resume。
-func TestGetResumeContext_B1FailClosedWhenResolverFails(t *testing.T) {
+// TestGetResumeContext_OwnerTargetSurvivesMatchEnrichmentFailure 验证 owner 是归属唯一权威:
+// match 查询失败只丢失展示/恢复富化字段,不能推翻已确定的 exact Battle TARGET。
+func TestGetResumeContext_OwnerTargetSurvivesMatchEnrichmentFailure(t *testing.T) {
 	notifier := presenceHitBattle(9001)
 	uc := newTestUsecaseWithNotifier(t, nil, notifier)
-	uc.SetMatchContextResolver(&fakeMatchResolver{err: errcode.New(errcode.ErrInternal, "matchmaker down")})
-	uc.SetRequireHubAssignmentBinding(true)
+	uc.SetOwnerPlacementQuerier(&fakeOwnerPlacementQuerier{view: stableTestOwnerPlacement(ownerTypeBattle)})
+	resolver := &fakeMatchResolver{err: errcode.New(errcode.ErrInternal, "matchmaker down")}
+	uc.SetMatchContextResolver(resolver)
 	tok := signTestSession(t, uc)
 
-	_, err := uc.GetResumeContext(context.Background(), tok)
-	if errcode.As(err) != errcode.ErrUnavailable {
-		t.Fatalf("code=%v err=%v, want retryable Unavailable", errcode.As(err), err)
+	r, err := uc.GetResumeContext(context.Background(), tok)
+	if err != nil {
+		t.Fatalf("GetResumeContext: %v", err)
+	}
+	if r.Route != loginv1.ResumeRoute_RESUME_ROUTE_BATTLE ||
+		r.EntryState != loginv1.ResumeEntryState_RESUME_ENTRY_STATE_TARGET ||
+		r.PlacementState != loginv1.ResumePlacementState_RESUME_PLACEMENT_STATE_STABLE ||
+		r.DSPodName != "battle-stable-1" || r.DSInstanceUID != "battle-uid-1" ||
+		r.DSInstanceEpoch != 11 || r.AllocationID != "battle-allocation-1" ||
+		r.OwnerEpoch != 7 || r.OperationID != "11111111-1111-4111-8111-111111111111" {
+		t.Fatalf("owner target must survive enrichment failure: %+v", r)
+	}
+	if r.MatchID != 0 || r.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_UNSPECIFIED ||
+		r.GameMode != "" || r.MapID != 0 {
+		t.Fatalf("failed enrichment must leave match fields empty: %+v", r)
+	}
+	if resolver.calls != 1 {
+		t.Fatalf("resolver calls = %d, want exactly 1", resolver.calls)
 	}
 }
 

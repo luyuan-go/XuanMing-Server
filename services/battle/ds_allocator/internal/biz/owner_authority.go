@@ -1,11 +1,10 @@
-// owner_authority.go — owner 迁移弱依赖接线(owner-authority.md migrate ②/③,2026-07-22)。
+// owner_authority.go — owner 归属接线(owner-authority.md;contract 阶段,2026-07-29)。
 //
-// migrate 语义(全部弱依赖,路由决策不变,§9.23 行为切换属 contract 阶段):
-//   - ② READY 交付前逐玩家 BeginTransition(BATTLE):把"这批玩家将由该 Battle 实例 own"
-//     写进 owner 权威(E+1/PENDING/屏障);失败仅告警,分配照常;
-//   - ③ 授权心跳 census 首见玩家代提交 Admit(migrate 近似:census 来自绑定 exact 实例
-//     身份的授权心跳,是"该实例正在服务该玩家"的证据;contract 阶段 Admit 移交 DS
-//     Admission 链原生提交,本近似退役)。
+//   - ② READY 交付前逐玩家 **强** BeginTransition(BATTLE):把"这批玩家将由该 Battle 实例
+//     own"写进 owner 权威(E+1/PENDING/屏障);**写不进即拒绝本次交付**(§9.22 fail-closed);
+//   - ③ 授权心跳 census 首见玩家代提交 Admit(仍是近似:census 来自绑定 exact 实例身份的
+//     授权心跳,是"该实例正在服务该玩家"的证据;DS Admission 链原生提交后本近似退役)。
+//     census 侧刻意保持弱:它是周期性重试点,不该让一个玩家的自愈失败打挂整台 DS 的心跳。
 package biz
 
 import (
@@ -15,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
@@ -68,68 +67,70 @@ func (u *AllocatorUsecase) SetOwnerAuthority(a OwnerAuthority) {
 	u.ownerAuth = a
 }
 
-// decideOwnerBegin 判定是否需要发起迁移(§9.23 幂等 no-op 规则):
-// 记录已指向同一实例(类型同 && pod+uid 同)且处于 PENDING/ADMITTED → 跳过
-// (同目标重连/重复交付不再推进 epoch);否则以当前 epoch 为 CAS 期望发起。
-func decideOwnerBegin(rec data.OwnerRecordView, ownerType int8, target data.OwnerTargetView) (skip bool, expectEpoch uint64) {
-	if rec.OwnerType == ownerType && rec.PodName == target.PodName && rec.InstanceUID == target.InstanceUID &&
-		(rec.Phase == ownerPhasePending || rec.Phase == ownerPhaseAdmitted) {
-		return true, 0
+// beginOnePlayer 为单个玩家把 owner 权威推进到 target(contract 阶段:强依赖)。
+//
+// 同实例收敛与 operation_id 铸造都已下沉到 owner 的行锁事务:
+//   - 本地 Query→比对→Begin 是先查再存(§9.22 明令禁止),判定与写入不在同一线性化点;
+//   - 调用方自铸 operation 会让每次投递产生新 operation,§9.23 要求的稳定 operation 失效。
+//
+// 顺带修掉一个洞:本文件原先的同实例判定只比 pod+uid,**不含 instance_epoch**
+// (hub_allocator 侧复审 P1-3 已加、这边一直没加)。§9.22 要求 instance epoch 变化
+// (实例代次翻转 / 灾备接管)必须递增 owner_epoch——旧判定会把它误当同目标跳过,
+// 漏掉本应发生的 owner 迁移。权威侧的判定含 instance_epoch,下沉后自动补齐。
+//
+// Query 仍要发:取 CAS 期望值 expect_epoch。与 Begin 之间被别的写者推进属 CAS 设计内
+// 竞争,权威回 EPOCH_CONFLICT——重查一次再试;仍冲突则 fail-closed 交调用方整体重试。
+func beginOnePlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
+	ownerType int8, target data.OwnerTargetView) error {
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		rec, qerr := auth.QueryOwner(ctx, playerID)
+		if qerr != nil {
+			// 查询不可判定 → UNKNOWN,绝不当作"无归属"继续(§9.22 禁冒充 OFFLINE/空闲)。
+			return qerr
+		}
+		berr := auth.BeginTransition(ctx, playerID, rec.OwnerEpoch, "", ownerType, target)
+		if berr == nil {
+			return nil
+		}
+		if errcode.As(berr) != errcode.ErrOwnerEpochConflict {
+			return berr
+		}
+		lastErr = berr
 	}
-	return false, rec.OwnerEpoch
+	return lastErr
 }
 
-// ownerBeginPlayersWeak 批量弱 Begin:整批共享预算 ctx(防 owner 卡顿拖慢调用链),
-// 每玩家 Query→decide→Begin;任何失败仅告警(migrate 弱依赖,旧路由门照跑)。
-func ownerBeginPlayersWeak(ctx context.Context, auth OwnerAuthority, players []uint64,
-	ownerType int8, target data.OwnerTargetView, budget time.Duration) {
+// ownerBeginPlayers 批量强 Begin(contract 阶段):**任一玩家写不进 owner 权威即整体失败**。
+//
+// 为什么从"告警放行"改成 fail-closed:owner 是归属的唯一权威(§9.22),写不进去就无法证明
+// "这台 DS 有权控制该玩家"。此时把 READY 交付出去 = 玩家可能同时被两台 DS 认领,
+// 直接踩验收底线第 3 条(宁可 fail-closed 拒绝一次操作,也不写出不自洽的数据)。
+//
+// 拒绝不会把玩家卡死(底线第 1 条):分配失败后撮合按既有补偿链回收 claim,
+// 客户端按 §9.23 退避重查,owner 恢复即自动重新分配。
+//
+// auth == nil = owner_addr 未配置(owner 服务未部署),属部署形态问题,不在本函数收敛。
+//
+// 超预算即失败,而不是 migrate 阶段的"跳过剩余玩家":一局里部分玩家有归属、部分没有,
+// 比整局失败重来更难收敛,也会让 Admit 侧看到半截状态。
+func ownerBeginPlayers(ctx context.Context, auth OwnerAuthority, players []uint64,
+	ownerType int8, target data.OwnerTargetView, budget time.Duration) error {
 	if auth == nil || len(players) == 0 {
-		return
+		return nil
 	}
 	budgetCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	// 模式 C:owner 是显式弱依赖(失败时旧路由门照跑,不影响正确性),但本循环按玩家扇出
-	// 且由 AllocateBattle / 心跳驱动——owner 抖动时逐玩家打 Warn 会按「批人数 × 调用频率」
-	// 刷屏。改为批内累加、批末汇总一条:既保留降级信号,又能直接回答「这批 N 个里坏了几个」。
-	var queryFailed, beginFailed int
-	var firstErr error
-	var samplePlayer uint64
-	noteFail := func(playerID uint64, err error) {
-		if firstErr == nil {
-			firstErr, samplePlayer = err, playerID
-		}
-	}
-	defer func() {
-		if queryFailed+beginFailed == 0 {
-			return
-		}
-		plog.With(ctx).Warnw("msg", "owner_begin_weak_failed",
-			"players", len(players), "query_failed", queryFailed, "begin_failed", beginFailed,
-			"sample_player_id", samplePlayer, "first_err", firstErr,
-			"hint", "migrate 弱依赖,旧路由门照跑")
-	}()
 	for i, playerID := range players {
-		if budgetCtx.Err() != nil {
-			plog.With(ctx).Warnw("msg", "owner_begin_budget_exhausted",
-				"players", len(players), "done", i, "remaining_players", len(players)-i,
-				"hint", "migrate 弱依赖,跳过剩余玩家")
-			return
-		}
-		rec, err := auth.QueryOwner(budgetCtx, playerID)
-		if err != nil {
-			queryFailed++
-			noteFail(playerID, err)
-			continue
-		}
-		skip, expectEpoch := decideOwnerBegin(rec, ownerType, target)
-		if skip {
-			continue
-		}
-		if err := auth.BeginTransition(budgetCtx, playerID, expectEpoch, uuid.NewString(), ownerType, target); err != nil {
-			beginFailed++
-			noteFail(playerID, err)
+		if err := beginOnePlayer(budgetCtx, auth, playerID, ownerType, target); err != nil {
+			plog.With(ctx).Warnw("msg", "owner_begin_failed",
+				"players", len(players), "failed_at", i, "player_id", playerID, "err", err,
+				"pod", target.PodName, "instance_uid", target.InstanceUID,
+				"hint", "contract 强依赖:归属写不进权威即拒绝本次交付,调用方重试")
+			return err
 		}
 	}
+	return nil
 }
 
 // ownerReleaseAbandonedPlayersWeak 判弃对局后释放仍指向该实例的 owner 记录
@@ -143,12 +144,13 @@ func ownerBeginPlayersWeak(ctx context.Context, auth OwnerAuthority, players []u
 // 比不接 owner 更糟。释放后恢复查询才会落到「无归属 → 首次进场链 → Hub」。
 //
 // 安全边界(三条,缺一不可):
-//  ① **时序**:只能在被判弃实例的 GameServer 回收已确认之后调用(与 deliverAbandoned
-//     同一门控)。提前释放会在旧 DS 可能仍在跑时放行新归属 = 双 DS(§9.22)。
-//  ② **exact 身份**:只释放「记录仍指向本次被判弃的 pod+uid 且类型为 BATTLE」的玩家。
-//     玩家已被迁到新 DS(epoch 已推进、pod/uid 已变)时必须跳过,否则误删活归属。
-//  ③ **compare-delete**:带 Query 读到的 owner_epoch + operation_id 调用,owner 侧按
-//     epoch 比对拒绝陈旧释放(同 §9.23「迟到 Logout 只能删自己」)。
+//
+//	① **时序**:只能在被判弃实例的 GameServer 回收已确认之后调用(与 deliverAbandoned
+//	   同一门控)。提前释放会在旧 DS 可能仍在跑时放行新归属 = 双 DS(§9.22)。
+//	② **exact 身份**:只释放「记录仍指向本次被判弃的 pod+uid 且类型为 BATTLE」的玩家。
+//	   玩家已被迁到新 DS(epoch 已推进、pod/uid 已变)时必须跳过,否则误删活归属。
+//	③ **compare-delete**:带 Query 读到的 owner_epoch + operation_id 调用,owner 侧按
+//	   epoch 比对拒绝陈旧释放(同 §9.23「迟到 Logout 只能删自己」)。
 //
 // 失败只告警:owner 未启用 / 抖动时,login 侧 InspectBattleRoute 的
 // abandoned→(过再入屏障)→Terminal→Hub 旧门仍能让玩家收敛,不影响正确性。

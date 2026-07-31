@@ -240,17 +240,19 @@ func main() {
 			"note", "空 sjti 告警放行(混版兼容窗);签发面排空后开 login.require_ticket_sjti")
 	}
 
-	// owner 迁移登出释放(owner-authority.md migrate ⑤):owner_addr 空 = 不启用。
+	// owner 权威接线(owner-authority.md;登出释放 ⑤ + §9.23 query-first 路由)。
+	// owner_addr 空 = owner 服务未部署:进场路径按 WAIT 处理(不冒充"无归属"再分配一台 DS),
+	// 故这里显式告警——它已不是"少一个可选增强",而是进场链缺了权威。
 	if cfg.Login.OwnerAddr != "" {
 		ownerReleaser := data.NewGrpcOwnerReleaser(cfg.Login.OwnerAddr)
 		defer func() { _ = ownerReleaser.Close() }()
 		loginUC.SetOwnerReleaser(ownerReleaser)
-		// §9.23 query-first placement 叠加(migrate ①):同一 owner 客户端兼任查询器;
-		// 默认关(owner_query_first=false)时恢复路径不查 owner,行为不变。
+		// 同一 owner 客户端兼任 placement 查询器(§9.23 唯一路由权威,开关已删除)。
 		loginUC.SetOwnerPlacementQuerier(ownerReleaser)
-		loginUC.SetOwnerQueryFirst(cfg.Login.OwnerQueryFirst)
-		helper.Infow("msg", "owner_release_enabled", "owner_addr", cfg.Login.OwnerAddr,
-			"owner_query_first", cfg.Login.OwnerQueryFirst)
+		helper.Infow("msg", "owner_authority_enabled", "owner_addr", cfg.Login.OwnerAddr)
+	} else {
+		helper.Warnw("msg", "owner_addr_missing",
+			"warn", "owner 是 §9.23 归属唯一权威;未配置时进场一律 WAIT,玩家进不去场景")
 	}
 	loginUC.SetRequireHubAssignmentBinding(cfg.Login.RequireHubAssignmentBinding)
 	loginUC.SetMatchContextResolver(matchResolver)

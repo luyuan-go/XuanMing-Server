@@ -26,8 +26,8 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
-	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/passwd"
+	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
 	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 	loginv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/login/v1"
@@ -114,15 +114,14 @@ type LoginUsecase struct {
 	roleRepo    data.PlayerRoleRepo // 选角权威化(2026-07-08):player_roles 仓储,可为 nil(降级无选角)
 	// ownerReleaser:owner 迁移登出释放(owner-authority.md migrate ⑤;弱依赖,nil=未启用)。
 	ownerReleaser OwnerReleaser
-	// ownerPlacement / ownerQueryFirst:§9.23 query-first placement 叠加(migrate ①;
-	// nil 或 ownerQueryFirst=false 时完全不查 owner,恢复上下文行为与现状一致)。
-	ownerPlacement  OwnerPlacementQuerier
-	ownerQueryFirst bool
-	sf              *snowflake.Node
-	hubDSAddr       string // 回退用静态 hub DS 地址(hub_allocator 未配 / 调用失败时)
-	hubRegion       string // 传给 hub_allocator.AssignHub 的 region(空=allocator 选最空分片)
-	signer          *auth.Signer
-	verifier        *auth.Verifier
+	// ownerPlacement:§9.23 query-first 的 owner 权威查询器。**唯一路由权威**,不再有开关,
+	// 也不再有 locator-first 旧基线可回落;nil(owner_addr 未配)时进场按 WAIT 处理。
+	ownerPlacement OwnerPlacementQuerier
+	sf             *snowflake.Node
+	hubDSAddr      string // 回退用静态 hub DS 地址(hub_allocator 未配 / 调用失败时)
+	hubRegion      string // 传给 hub_allocator.AssignHub 的 region(空=allocator 选最空分片)
+	signer         *auth.Signer
+	verifier       *auth.Verifier
 	// v2Verifier 独立验证 Hub allocator 返回的 DSTicket v2(RS256)。非 nil 也机械激活
 	// 玩家 DSTicket 的 RS256-only profile；玩家 Session 仍走独立 HS256 verifier。
 	v2Verifier *auth.DSTicketVerifier
@@ -317,6 +316,32 @@ func (u *LoginUsecase) strictBattleGateProfile() bool {
 //  7. 返回 hub_ds_addr + 两份 JWT
 //
 // 任何步骤失败返回 *errcode.Error,由 service 层翻译。
+// loginWaitRetryAfterMs 是 Login 侧暂时失败给客户端的建议退避。
+// 与 owner_query.go 的 ownerUnknownRetryAfterMs 同源推导:依赖(locator / hub_allocator /
+// 角色权威)的故障切换与重选举量级在秒内,1s 足够跨过瞬时抖动又不让玩家傻等;
+// 客户端仍会叠加自己的退避 + jitter,这里只是下界提示。
+const loginWaitRetryAfterMs uint32 = 1000
+
+// waitLogin 把**会话已建立之后**的暂时性失败收敛成携带新 session 的 WAIT。
+//
+// §9.23:「路由、匹配、分配、签票、Travel、Admission 的暂时失败不得清空会话、要求重新
+// 输入账号密码,或另起一条本地 fallback 路由」。原实现在这些步骤失败时直接返回 error,
+// service 层只回一个业务码——**刚刚写入并已成为当前一代的 session 就此丢失**:客户端拿
+// 不到 token,而服务端已把旧会话顶掉,玩家只能重新输账号密码,且重登又会再顶一次。
+//
+// 返回值刻意是 (result, nil):对客户端这不是"登录失败",而是"登录成功、进场待定",
+// 由 coordinator 按 retry_after 重查同一入口继续推进。
+func waitLogin(base *LoginResult, reason loginv1.ResumeWaitReason) *LoginResult {
+	out := *base
+	out.Resume = ResumeContextResult{
+		Route:        loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN,
+		EntryState:   loginv1.ResumeEntryState_RESUME_ENTRY_STATE_WAIT,
+		WaitReason:   reason,
+		RetryAfterMs: loginWaitRetryAfterMs,
+	}
+	return &out
+}
+
 func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceID string) (*LoginResult, error) {
 	h := plog.With(ctx)
 
@@ -413,16 +438,34 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// DS 崩溃/删除 → 心跳停 → 租约 30s 蒸发 → 玩家自动进 Hub,无需任何 cleanup。
 	// hubFenceMatchID:tryBattleReconnect 判定「终局后 TTL 残留」继续走 Hub 时带回的
 	// 原对局 match_id(Battle→Hub 回流 fence),签进 hub 票据 source_match_id claim。
+	// 会话已是当前一代:此后的每一步暂时失败都必须带着它返回 WAIT,而不是丢弃(§9.23)。
+	base := &LoginResult{
+		PlayerID:     playerID,
+		SessionToken: sessionToken,
+		SessionExpMs: sessExpMs,
+		RegionID:     regionID,
+		CellID:       cellID,
+	}
+	// 交付前置终检:凭 base 交付 session 同样要过 fenceLoginDelivery(见下方 R5 复审 P0-5
+	// 注释)。抽成闭包,WAIT 与正常返回共用同一道门,避免 WAIT 路径成为绕过终检的后门。
+	deliver := func(out *LoginResult) (*LoginResult, error) {
+		if ferr := u.fenceLoginDelivery(ctx, playerID, sessJTI); ferr != nil {
+			return nil, ferr
+		}
+		return out, nil
+	}
+
 	var hubFenceMatchID uint64
 	if u.notifier == nil {
 		if u.strictBattleGateProfile() {
-			return nil, errcode.New(errcode.ErrUnavailable,
-				"player locator is required before B1 hub assignment")
+			return deliver(waitLogin(base, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN))
 		}
 	} else {
 		res, terminalFence, reconnectErr := u.tryBattleReconnect(ctx, playerID, deviceID, sessionToken, sessExpMs, regionID, cellID, sessJTI)
 		if reconnectErr != nil {
-			return nil, reconnectErr
+			// 重连权威不可判定 → WAIT + 保留会话(绝不默认 Hub:locator key miss 不能证明
+			// 玩家已离开旧 Battle DS,§9.22)。
+			return deliver(waitLogin(base, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN))
 		}
 		if res != nil {
 			// R5 复审 P0-5:battle 重连路径同样先做交付终检(见 fenceLoginDelivery 注释),
@@ -435,9 +478,25 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		hubFenceMatchID = terminalFence
 	}
 
-	// 读玩家已选角色(选角权威化 2026-07-08):弱依赖,读失败按 0(未选角)处理不阻断登录。
-	// 透传给 resolveHub → hub 票据 claim;同时回给客户端选角界面预选中。
-	selectedRoleID := u.loadSelectedRole(ctx, playerID)
+	// 角色权威门(§9.23 最小状态集):必须区分三种结果,不能都折叠成 role=0。
+	//   - 查询失败 → WAIT/ROLE_UNKNOWN,保留会话退避重查(不得冒充"未选角");
+	//   - role=0(权威明确"没选过") → ROLE_REQUIRED,并且**到此为止**:
+	//     §9.23 明文「未选角时不得提前分配 Hub、占座或签进场票」。客户端本来就是登录后
+	//     先进选角关卡、由 SelectRole 拿含 role_id 的 hub 票进大厅,原先在这里先分配一次
+	//     Hub 属于白占座位 + 白签一张没有 role 的票。
+	//   - role>0 → 继续分配 Hub。
+	selectedRoleID, roleErr := u.loadSelectedRole(ctx, playerID)
+	if roleErr != nil {
+		return deliver(waitLogin(base, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_ROLE_UNKNOWN))
+	}
+	if selectedRoleID == 0 {
+		roleRequired := *base
+		roleRequired.Resume = ResumeContextResult{
+			Route:      loginv1.ResumeRoute_RESUME_ROUTE_HUB,
+			EntryState: loginv1.ResumeEntryState_RESUME_ENTRY_STATE_ROLE_REQUIRED,
+		}
+		return deliver(&roleRequired)
+	}
 
 	// B1 先建立 LOGIN_PENDING 权威位置，再调用 Hub allocator。写入失败时既不分配
 	// Hub，也不会产生/交付 Hub 票；local/off 保留历史上的分配后 best-effort 通知顺序。
@@ -448,9 +507,9 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 				"player locator is required before B1 hub assignment")
 		}
 		if err := u.notifier.NotifyLoginPending(ctx, playerID, deviceID); err != nil {
-			h.Warnw("msg", "locator_notify_failed", "err", err, "player_id", playerID)
-			return nil, errcode.NewCause(errcode.ErrUnavailable, err,
-				"player locator refused LOGIN_PENDING; hub was not assigned")
+			h.Warnw("msg", "locator_notify_failed", "err", err, "player_id", playerID,
+				"hint", "LOGIN_PENDING 写失败:不分配 Hub,带会话返回 WAIT 由客户端重查")
+			return deliver(waitLogin(base, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN))
 		}
 		pendingNotified = true
 	}
@@ -458,10 +517,14 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 解析 hub 分片 + hub 票据(W4 ⑥):
 	// hub_allocator 是 hub 票据权威,优先调 AssignHub 拿真实地址 + 票据;
 	// 未配 / 调用失败 → 回退自签票据(盖 region/cell 戳) + 静态 hubDSAddr(弱依赖,不阻断登录)。
+	// 注意:contract 阶段起,AssignHub 内的 owner Begin 是强依赖——归属写不进权威时
+	// hub_allocator 直接拒绝签票,错误在此收敛成 WAIT/NO_CAPACITY,客户端退避重查,
+	// owner 恢复即自动继续(§9.22 fail-closed + 底线第 1 条"短暂不可用后自动恢复")。
 	hubDSAddr, hubTicket, hubExpMs, err := u.resolveHub(ctx, playerID, regionID, cellID, selectedRoleID, hubFenceMatchID, sessJTI)
 	if err != nil {
-		h.Errorw("msg", "resolve_hub_failed", "err", err, "player_id", playerID)
-		return nil, err
+		h.Errorw("msg", "resolve_hub_failed", "err", err, "player_id", playerID,
+			"hint", "带会话返回 WAIT,不清空会话不要求重新登录(§9.23)")
+		return deliver(waitLogin(base, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_NO_CAPACITY))
 	}
 
 	// 记录最近登录设备:纯记账副作用(失败本就只日志),移出登录关键路径
@@ -481,27 +544,32 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 将取得"看似有效"的完整登录态。复核失败 → 不返回任何凭据(票据已签但从未离开
 	// 服务端 = 未取得);已写的 LOGIN_PENDING 等 locator 投影由 B 自己的写覆盖
 	// (locator 是 presence 投影,非权威,§9.22)。
-	if ferr := u.fenceLoginDelivery(ctx, playerID, sessJTI); ferr != nil {
-		return nil, ferr
-	}
-
 	// 确定性 region/cell 路由已在上方一次算好(regionID/cellID),这里直接复用。
 	h.Debugw("msg", "login_ok", "player_id", playerID, "device_id", deviceID,
 		"session_exp_ms", sessExpMs, "hub_ticket_exp_ms", hubExpMs,
 		"region_id", regionID, "cell_id", cellID)
 
-	return &LoginResult{
-		PlayerID:       playerID,
-		SessionToken:   sessionToken,
-		SessionExpMs:   sessExpMs,
-		HubDSAddr:      hubDSAddr,
-		HubTicket:      hubTicket,
-		HubTicketExpMs: hubExpMs,
-		RegionID:       regionID,
-		CellID:         cellID,
-		SelectedRoleID: selectedRoleID,
-		Resume:         ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB},
-	}, nil
+	// Resume 必须是**真正的 §9.23 TARGET**,不能是硬编码的 {Route: HUB}。
+	// AssignHub 已经在权威里写下了本次归属(contract 阶段强 Begin),此处回查一次即可拿到
+	// exact 实例身份 + owner_epoch + operation_id 三元组——客户端据此判定"当前连接是否
+	// 已精确匹配 owner",匹配就幂等 no-op,不再重复 Travel / 占座。
+	// 回查失败不推翻已完成的分配:降级为 WAIT,客户端重查同一入口即可拿到 TARGET。
+	out := *base
+	out.HubDSAddr = hubDSAddr
+	out.HubTicket = hubTicket
+	out.HubTicketExpMs = hubExpMs
+	out.SelectedRoleID = selectedRoleID
+	decided, owned := u.resolveResumeFromOwner(ctx, playerID)
+	switch {
+	case !decided:
+		// owner 明确"无归属"却刚分配完 Hub:归属记录与分配结果不自洽,不冒充 TARGET。
+		h.Warnw("msg", "login_owner_missing_after_assign", "player_id", playerID,
+			"hint", "不冒充 TARGET,返回 WAIT 让客户端重查权威")
+		out.Resume = waitLogin(base, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN).Resume
+	default:
+		out.Resume = u.enrichResumeFromMatchAuthority(ctx, playerID, owned)
+	}
+	return deliver(&out)
 }
 
 // resumeStageFromMatchStage 显式映射 matchmaker 权威 stage → login resume stage。
@@ -841,25 +909,60 @@ func (u *LoginUsecase) GetResumeContext(ctx context.Context, sessionToken string
 	if cerr := u.requireCurrentSession(ctx, playerID, claims.ID); cerr != nil {
 		return ResumeContextResult{}, cerr
 	}
-	// §9.23 query-first(R11 复审 架构 P0):**owner 先问**,它是归属的唯一权威。
-	//   · 有归属记录 → owner 定 Route 与 exact target;locator/matchmaker 只补富化字段。
-	//   · 查询不可判定 → WAIT/UNKNOWN,绝不回落 locator 路由(presence key miss 不能证明
-	//     玩家已离开旧 DS,更不能授权进入另一台 DS)。
-	//   · 明确"无归属" → 落到首次进场链(角色 → 撮合 → 首个 Hub)。
-	if u.ownerQueryFirst && u.ownerPlacement != nil {
-		decided, owned := u.resolveResumeFromOwner(ctx, playerID)
-		if decided {
-			if owned.EntryState == loginv1.ResumeEntryState_RESUME_ENTRY_STATE_WAIT {
-				return owned, nil // 权威不可达 / 屏障未开:客户端按 retry_after 重查
-			}
-			return u.enrichResumeFromMatchAuthority(ctx, playerID, owned), nil
+	// §9.23 query-first:**owner 先问**,它是归属的唯一权威。开关已删除,这是唯一路径。
+	//
+	// 为什么不再保留 locator-first 旧基线:那条路的判据是 locator presence,而 §9.22 明文
+	// 「key miss 只能说明 presence 不可见,不能证明玩家已离开旧 DS,也不能授权进入另一台
+	// DS」——保留它就是保留一条会 fail-open 的第二权威,且它永远填不出 §9.23 的五态
+	// (客户端因此永远走 legacy 兼容分支)。§15.3 同样反对留一个只会置 true 的开关。
+	//
+	//   · 有归属记录 → owner 定 Route 与 exact target;matchmaker 只补富化字段。
+	//   · 查询不可判定 → WAIT/UNKNOWN,退避重查,绝不猜路由。
+	//   · 明确"无归属" → 首次进场链(角色门 → 分配首个 Hub),仍由本入口收敛。
+	if decided, owned := u.resolveResumeFromOwner(ctx, playerID); decided {
+		if owned.EntryState == loginv1.ResumeEntryState_RESUME_ENTRY_STATE_WAIT {
+			return owned, nil // 权威不可达 / 屏障未开:客户端按 retry_after 重查
 		}
+		return u.enrichResumeFromMatchAuthority(ctx, playerID, owned), nil
 	}
-	out, rerr := u.resolveResumeRoute(ctx, playerID)
-	if rerr != nil {
-		return out, rerr
+	return u.resolveFirstEntry(ctx, playerID, claims.ID)
+}
+
+// resolveFirstEntry 处理 owner 明确回答"无归属"的情况:这是首次进场(或登出释放后重进),
+// 不是故障。§9.23 要求统一入口在此也给出明确五态,而不是像旧基线那样返回一个
+// 什么都没填的裸 HUB(那正是客户端 legacy 兼容分支赖以存在的根源)。
+//
+//	角色查询失败 → WAIT/ROLE_UNKNOWN(不得冒充未选角);
+//	role=0       → ROLE_REQUIRED(且不分配 Hub、不占座、不签票);
+//	role>0       → 分配首个 Hub,再回查权威给出 TARGET。
+func (u *LoginUsecase) resolveFirstEntry(ctx context.Context, playerID uint64, sessJTI string) (ResumeContextResult, error) {
+	roleID, roleErr := u.loadSelectedRole(ctx, playerID)
+	if roleErr != nil {
+		return waitResume(loginv1.ResumeWaitReason_RESUME_WAIT_REASON_ROLE_UNKNOWN,
+			ownerUnknownRetryAfterMs), nil
 	}
-	return out, nil
+	if roleID == 0 {
+		return ResumeContextResult{
+			Route:      loginv1.ResumeRoute_RESUME_ROUTE_HUB,
+			EntryState: loginv1.ResumeEntryState_RESUME_ENTRY_STATE_ROLE_REQUIRED,
+		}, nil
+	}
+	// 已选角但无归属:补分配首个 Hub。复用既有 ResolveHubEndpoint(内部 AssignHub →
+	// 强 Begin 写权威),不新起第二条分配路径(§9.23 单一入口 / §15.2 复用)。
+	if _, _, _, err := u.ResolveHubEndpoint(ctx, playerID, sessJTI); err != nil {
+		plog.With(ctx).Warnw("msg", "first_entry_hub_assign_failed", "player_id", playerID, "err", err,
+			"hint", "带 retry_after 的 WAIT,客户端重查本入口继续推进")
+		return waitResume(loginv1.ResumeWaitReason_RESUME_WAIT_REASON_NO_CAPACITY,
+			ownerUnknownRetryAfterMs), nil
+	}
+	// 分配成功 → 权威里已有归属,回查给出 exact TARGET。
+	if decided, owned := u.resolveResumeFromOwner(ctx, playerID); decided &&
+		owned.EntryState != loginv1.ResumeEntryState_RESUME_ENTRY_STATE_WAIT {
+		return u.enrichResumeFromMatchAuthority(ctx, playerID, owned), nil
+	}
+	// 刚分配完却查不到归属:不自洽,不冒充 TARGET,让客户端重查(§9.22 fail-closed)。
+	return waitResume(loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN,
+		ownerUnknownRetryAfterMs), nil
 }
 
 // enrichResumeFromMatchAuthority 在 owner 已定路由后,补充**非归属**的展示/恢复字段
@@ -897,39 +1000,16 @@ func (u *LoginUsecase) enrichResumeFromMatchAuthority(ctx context.Context, playe
 	return out
 }
 
-// resolveResumeRoute 是恢复路由的既有解析(presence/match 权威;§9.23 query-first 叠加前的基线)。
-func (u *LoginUsecase) resolveResumeRoute(ctx context.Context, playerID uint64) (ResumeContextResult, error) {
-	if u.notifier == nil {
-		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}, nil
-	}
-	bl, ma, qerr := u.resolveBattleAuthority(ctx, playerID)
-	if qerr != nil {
-		if u.strictBattleGateProfile() {
-			return ResumeContextResult{}, errcode.NewCause(errcode.ErrUnavailable, qerr,
-				"cannot resolve battle location; retry")
-		}
-		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}, nil
-	}
-	if !bl.InBattle {
-		// HUB 路由:若持有活跃撮合 claim(排队/确认/分配中),把权威
-		// match_id/stage/game_mode 带给冷启动客户端恢复撮合会话。
-		return hubResumeFromMatchAuthority(ma), nil
-	}
-	if u.battleTicketIssuer == nil {
-		return ResumeContextResult{}, errcode.New(errcode.ErrUnavailable,
-			"battle route authority unavailable")
-	}
-	state, rerr := u.battleTicketIssuer.InspectBattleRoute(ctx, playerID, bl.MatchID)
-	switch state {
-	case data.BattleRouteActive:
-		return u.buildBattleResume(ctx, playerID, bl, ma)
-	case data.BattleRouteTerminal:
-		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}, nil
-	default:
-		return ResumeContextResult{}, errcode.NewCause(errcode.ErrUnavailable, rerr,
-			"battle route authority temporarily unavailable; retry")
-	}
-}
+// resolveResumeRoute(locator-first 旧基线)已于 2026-07-29 删除。
+//
+// 它按 locator presence 推路由:key miss → 裸 HUB。§9.22 明文「key miss 只能说明 presence
+// 不可见,不能证明玩家已离开旧 DS,也不能授权进入另一台 DS」——这条路径正是那个被禁止的
+// fail-open 推导。它同时也永远填不出 §9.23 的五态(只给 route + match 富化字段),
+// 客户端因此只能长期停在 legacy 兼容分支。
+//
+// 现在归属唯一权威是 owner:GetResumeContext → resolveResumeFromOwner,
+// 明确"无归属"才落 resolveFirstEntry(角色门 → 分配首个 Hub → 回查 TARGET)。
+// Battle 路由由 owner 记录的 owner_type=BATTLE 给出,不再由 locator 租约推导。
 
 // ensureAccount 在开发期假注册 / 免密模式下为不存在的账号首登注册一条记录,返回稳定 player_id。
 //
@@ -1070,7 +1150,13 @@ func (u *LoginUsecase) ResolveHubEndpointFromMatch(ctx context.Context, playerID
 	}
 	regionID, cellID := u.routeRegionCell(ctx, playerID)
 	// 选角权威化:返回大厅路径也把已选角盖进新票(与登录同语义,DS 重入时同样能 spawn 对角色)。
-	return u.resolveHub(ctx, playerID, regionID, cellID, u.loadSelectedRole(ctx, playerID), fenceMatchID, sessJTI)
+	// 角色权威不可判定时 fail-closed:回大厅是**签票**路径,拿不准角色就不能签
+	// (签出 role=0 的票 = DS 侧按无角色 spawn,等于用一次查询抖动把玩家的角色抹掉)。
+	roleID, roleErr := u.loadSelectedRole(ctx, playerID)
+	if roleErr != nil {
+		return "", "", 0, roleErr
+	}
+	return u.resolveHub(ctx, playerID, regionID, cellID, roleID, fenceMatchID, sessJTI)
 }
 
 // guardHubRouteAgainstActiveBattle 是所有非 Login 主链 Hub 签票入口(IssueDSTicket(hub) /
@@ -1138,18 +1224,29 @@ func (u *LoginUsecase) guardHubRouteAgainstActiveBattle(ctx context.Context, pla
 	}
 }
 
-// loadSelectedRole 读玩家已选角色(player_roles)。弱依赖:roleRepo 未配 / 读失败 → 0
-// (未选角语义,仅告警不阻断)。只用于读路径;写路径(SelectRole)失败必须报错。
-func (u *LoginUsecase) loadSelectedRole(ctx context.Context, playerID uint64) uint32 {
+// loadSelectedRole 读玩家已选角色(player_roles)。
+//
+// **返回 error 而不是把失败折叠成 0**(§9.23:「角色查询失败不等于 role=0」)。
+// 折叠会把两件性质完全不同的事混成一个值:
+//   - role=0 = 权威明确回答"没选角" → ROLE_REQUIRED,客户端去选角界面;
+//   - 查询失败 = 结果不可判定(UNKNOWN) → WAIT + 退避重查(§9.22 禁冒充默认状态)。
+//
+// 混淆的后果不只是文案不准:未选角时不得提前分配 Hub、占座或签票(§9.23),
+// 而把"查询失败"当成 role=0 会让一个其实已选角的玩家走进未选角分支。
+//
+// roleRepo 未配(dev 裸跑)= 无角色权威,按"没选角"处理并告警,不算查询失败。
+func (u *LoginUsecase) loadSelectedRole(ctx context.Context, playerID uint64) (uint32, error) {
 	if u.roleRepo == nil {
-		return 0
+		return 0, nil
 	}
 	roleID, err := u.roleRepo.GetRole(ctx, playerID)
 	if err != nil {
-		plog.With(ctx).Warnw("msg", "load_selected_role_failed", "err", err, "player_id", playerID)
-		return 0
+		plog.With(ctx).Warnw("msg", "load_selected_role_failed", "err", err, "player_id", playerID,
+			"hint", "角色权威不可判定:按 WAIT/ROLE_UNKNOWN 处理,不得当作未选角")
+		return 0, errcode.NewCause(errcode.ErrUnavailable, err,
+			"selected role unavailable player_id=%d", playerID)
 	}
-	return roleID
+	return roleID, nil
 }
 
 // SelectRole 选角用例(选角权威化 2026-07-08,docs 综述见 login.proto SelectRole 注释)。

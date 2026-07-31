@@ -64,7 +64,6 @@ login:
   # entry_state/wait_reason/owner_epoch/retry_after_ms 的版本(旧客户端读不到会退化成
   # 只看 route,WAIT 会被当成 UNKNOWN 而停在重查,不会误进场但体验差);③ 对 owner 做过
   # 分区注入,确认 WAIT 不回落且客户端能按 retry_after 自动恢复。
-  owner_query_first: false
   mock_hub_ds_addr: "127.0.0.1:7777"
   # Hub 归属绑定激活栅栏。滚动升级期间保持 false；确认所有 hub_allocator 已能签发
   # 完整绑定票后再切 true。true 时 Redis/hub.addr 缺失会令 login 启动失败，且禁止自签回退。

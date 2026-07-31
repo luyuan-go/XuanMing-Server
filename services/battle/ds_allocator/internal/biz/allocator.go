@@ -574,15 +574,26 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		return nil, werr
 	}
 
-	// owner 迁移双写(owner-authority.md migrate ②):READY 交付前逐玩家弱 Begin(BATTLE)。
-	// 失败仅告警,分配照常(路由决策不变,行为切换属 contract);预算限界防 owner 卡顿拖慢分配。
-	ownerBeginPlayersWeak(ctx, u.ownerAuth, playerIDs, ownerTypeBattle, data.OwnerTargetView{
+	// owner 归属定案(owner-authority.md ②;contract 阶段=强依赖):READY 交付前逐玩家
+	// Begin(BATTLE)。**写不进 owner 就不交付 READY**——交付即意味着客户端会拿票进这台
+	// Battle DS,归属没定案就放行等于让玩家可能同时被两台 DS 认领(§9.22 / 底线第 3 条)。
+	// 失败按分配失败处理:既有补偿链回收 claim 与 pod,撮合重试,客户端按 §9.23 退避重查。
+	//
+	// 预算 5s:一局最多 10 人,每人最多 2 轮 (Query+Begin)(EPOCH_CONFLICT 重查一次),
+	// 串行执行;按本地 TiDB 往返量级留足余量。超时按失败处理——待实测复核。
+	if err := ownerBeginPlayers(ctx, u.ownerAuth, playerIDs, ownerTypeBattle, data.OwnerTargetView{
 		PodName:                  res.DSPodName,
 		InstanceUID:              res.GameserverUID,
 		InstanceEpoch:            res.InstanceEpoch,
 		AssignmentOrAllocationID: res.AllocationID,
 		ReleaseTrack:             res.ReleaseTrack,
-	}, 3*time.Second)
+	}, 5*time.Second); err != nil {
+		plog.With(ctx).Warnw("msg", "battle_ready_refused_owner_begin_failed",
+			"match_id", matchID, "pod", res.DSPodName, "players", len(playerIDs), "err", err,
+			"hint", "归属未定案不交付 READY(§9.22);走既有分配失败补偿链")
+		u.cleanupAllocatedBattle(ctx, matchID, allocationID, podName, authoritative)
+		return nil, err
+	}
 
 	plog.With(ctx).Debugw("msg", "battle_ready_after_heartbeat", "match_id", matchID, "pod", podName, "ds_addr", addr)
 	return res, nil
