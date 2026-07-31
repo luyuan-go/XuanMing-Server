@@ -517,6 +517,207 @@ UE 侧 `PandoraAgonesHealthPinger.h` 的设计注释明确写道：业务心跳�
 
 ⚠️ owner 释放缺失当前尚未在生产语义上暴露，因为 `login-dev.yaml` / `login-dev-tidb.yaml` 的 `owner_query_first: false`，恢复查询走旧链（`resolveResumeRoute` → `InspectBattleRoute`），而旧链对 `abandoned` 的处理是正确的：等过 `placement.DSFenceReentryBarrier` 再入屏障后返回 `BattleRouteTerminal` → HUB（`services/account/login/internal/data/battle_ticket_authorizer.go:159-171`）。一旦 `owner_query_first` 打开，缺失的释放会让恢复查询持续返回 `TARGET(已删除的 battle Pod)`，比不接 owner 更糟。
 
+### 5.5 减少 N 的手段辨析（2026-07-30 按源码与资产实测，修正 A9 原判断）
+
+先把 N 的定义钉死。`FPendingSpatialDataQueue`（`Chaos/Public/Chaos/PendingSpatialData.h:183`）：
+
+```cpp
+struct FPendingSpatialDataQueue
+{
+    TArray<FPendingSpatialData>    PendingData;            // 本帧待刷的增删条目
+    TArrayAsMap<FUniqueIdx,int32>  ParticleToPendingData;  // 按粒子唯一号索引
+};
+
+void Remove(const FUniqueIdx UniqueIdx)   // :213
+{
+    if (int32* Existing = ParticleToPendingData.Find(UniqueIdx))
+    {
+        const int32 SlotIdx = *Existing;
+        if (SlotIdx + 1 < PendingData.Num())
+        {
+            const FUniqueIdx LastElemUniqueIdx = PendingData.Last().UniqueIdx();
+            ParticleToPendingData.FindChecked(LastElemUniqueIdx) = SlotIdx;  // swap-remove
+        }
+        ...
+```
+
+两条决定性事实：
+
+1. **`TArrayAsMap<FUniqueIdx,int32>` 是"用数组当 map"**——按 key 的整数值直接下标寻址。它的长度 ≈ **曾注册过的最大粒子唯一号**，与"当前有几条待处理"无关，只与**世界里注册了多少物理体**有关。
+2. `Remove` 是 swap-remove，会让 `PendingData` 收缩 → `ResizeAllocation` → `Realloc` → poison memset。而 `FlushExternalAccelerationQueue` 是**逐条 Remove**，这个代价按条数重复支付。
+
+**因此 N 的来源是"开了碰撞的图元"，与 tick 完全无关。** 一个 `bCanEverTick=false` 的静态网格，只要碰撞开着，照样注册物理体、照样占一个 `FUniqueIdx`、照样把那个数组撑大。
+
+Artic01 的 933 个 OFPA actor 类分布（uasset 名表统计）与减 N 有效性对照：
+
+| 类 | 数量级 | 有碰撞 | 排除能减 N | 备注 |
+|---|---|---|---|---|
+| `PCGPartitionActor` | 670 | **未实测** | **可能最大头** | 取决于 PCG 输出网格的碰撞设置 |
+| `LandscapeStreamingProxy` | 512 | **有** | 不能排除 | 玩家要站在地形上；只能降碰撞精度 |
+| `WorldPartitionHLOD` | 274 | 一般无 | 大概率不减 N | 远景渲染替身；**是否在专服加载未证明**（DS 日志 83 个 `_Generated_` 包名是哈希，分不出 HLOD 与普通 cell） |
+| `PackedLevelActor` / `StaticMeshActor` / `BlockingVolume` | 89 / 58 / 8 | 有 | 需逐个看 | 可能承载可站立几何 |
+| `RuntimeVirtualTextureVolume` / `SkyLight` / `SkyAtmosphere` / `VolumetricCloud` / `ExponentialHeightFog` / `PostProcessVolume` / `WorldPartitionMiniMap*` | 各 1–4 | **无** | **不减 N** | 已落码排除（A9a），买到的只是内存与加载时间 |
+
+**对原判断的修正**：§10 原 A9 把"排除纯装饰类"写成"直接减 N、风险最低"。实测后这句话不成立——**最安全可排的那批恰好没有碰撞、不贡献 N；真正贡献 N 的（地形、PCG）都会改变玩法**。所以 A9 拆成：A9a 安全但只省内存（已落码）、**A9b 先测量**、A9c 再按数据动玩法相关项。
+
+**DS 减负的四个层级（互相独立，别混）**：
+
+| 层级 | 手段 | 效果 | 对本卡顿 |
+|---|---|---|---|
+| 不进包 | `ClassesExcludedOnDedicatedServer` | 类不 cook、不加载 | 仅当该类有碰撞才有效 |
+| 加载但不常驻 | 服务端 WP 流送（现为 `IsServerStreamingEnabled=0`） | 按玩家位置分块加载卸载 | **最对症**，但历史上流送引发过 `BlockTillLevelStreamingCompleted` 卡死，风险最高 |
+| 加载但不 tick | `PrimaryActorTick.bCanEverTick=false` / `SetActorTickEnabled(false)` | 省 CPU | **无效**（物理体照样注册） |
+| 加载但不参与物理 | 碰撞设为 `NoCollision` | 不注册物理体 | **有效** |
+
+### 5.6 服务端 WP 流送：唯一形状不变的减 N 手段，以及对"流送会引入阻塞卡死"的推翻
+
+**A. 形状为什么不变。** 加载集 = 与「以每个 streaming source（玩家）为心、半径 `LoadingRange` 的球」相交的所有 cell。玩家所在之处，周围碰撞几何与关流送时**逐顶点相同**；变的只是玩家不在的远处不常驻。这是它与其它减 N 手段的根本区别——降地形 `CollisionMipLevel`、复杂碰撞换简单碰撞、装饰物关碰撞，三者都改变玩家实际能站上去/撞得到的表面。
+
+**B. 九宫格是原生行为，不需要自写。** `FSpatialHashRuntimeGrid`（`WorldPartitionRuntimeSpatialHash.h:243-266`）字段为 `GridName` / `CellSize` / `LoadingRange` / `bBlockOnSlowStreaming` / `Priority` / `bClientOnlyVisible`。令 `LoadingRange ≈ CellSize` 即最多 3×3 = 9 格；`≈2×CellSize` 则为 5×5。这两个值存在**地图**里，ini 改不到，须在编辑器 World Settings → World Partition Setup → Runtime Hash → Grids 按图调（行动项 A9e）。多玩家时每个玩家各是一个 source，加载集是各自 3×3 的并集。
+
+**C. 推翻原判断：开流送不会引入阻塞加载，反而缩短它。** 原 A9c 写的"最对症但历史上引发过 `BlockTillLevelStreamingCompleted` 卡死，风险最高"不成立。引擎里 WP 触发该阻塞只有两处，都在**世界启动**：
+
+```cpp
+void UWorldPartition::OnWorldPreBeginPlay()   // WorldPartition.cpp:1212
+{ GetWorld()->BlockTillLevelStreamingCompleted(); }
+
+void UWorldPartition::OnWorldMatchStarting()  // WorldPartition.cpp:1220
+{ GetWorld()->BlockTillLevelStreamingCompleted(); }
+```
+
+所以：
+
+| | 启动阻塞窗口 | 游戏中跨 cell |
+|---|---|---|
+| **关流送（今天）** | 必须等**整张图**流完 → 就是那 30s 加载，以及加载期那次 `Hang detected` | 无（全在内存） |
+| **开流送** | 只等出生点周边那批 cell → **窗口变短** | 非阻塞，前提 `bBlockOnSlowStreaming=false`（构造默认即 false，`WorldPartitionRuntimeSpatialHash.cpp:102`；**不要打开**） |
+
+松林镇那次（镜像关卡表漂移 → 误载 Artic01 WP 重图 → 阻塞加载死锁）与此一致：危险的是"阻塞加载整张 WP 重图"，而服务端流送正是消除它的手段。
+
+**D. 生效链已核实。** `wp.Runtime.EnableServerStreaming` / `EnableServerStreamingOut` 在非编辑器构建下是 `ECVF_ReadOnly`（`WorldPartition.cpp:77-79`），只能启动期由 ini/命令行设定；地图的 `ServerStreamingMode` 构造默认 `ProjectDefault`（`WorldPartition.cpp:402`），`IsServerStreamingEnabled()`（`:1383`）与 `IsServerStreamingOutEnabled()`（`:1435`）在该模式下直接取这两个全局值。故只需在 DS 启动参数设定，无需改地图、无需改 `Config/DefaultEngine.ini`（客户端与编辑器零影响）。
+
+**D2. 多玩家时是"并集"，不是"每人一份"——收益随玩家分散程度缩水。** `APlayerController` 本身实现 `IWorldPartitionStreamingSourceProvider`（`PlayerController.h:262`），服务端把**所有** provider 的 source 累加进同一个列表（`WorldPartitionSubsystem.cpp:1032-1046`）。服务端只有一份世界、一套 cell：
+
+- 任意一个玩家的球覆盖到 → 该 cell 加载
+- 没有任何玩家的球覆盖到 → 该 cell 卸载
+
+因此 **N 不再是"全图物理体"，而是"当前所有玩家九宫格并集内的物理体"**：
+
+| 场景 | source 数 | 加载集上界 | 减 N 收益 |
+|---|---|---|---|
+| Artic01 单人 PVE（现状 `team_size=1`） | 1 | ~9 格 | **最大** |
+| 5v5 玩家聚团 | 10（但球重叠） | 略大于 9 格 | 大 |
+| 5v5 玩家散开 | 10 | 最多 10×9=90 格 | **可能接近全图，收益很小** |
+
+**验收口径推论**：卡顿时长从此与「在场玩家数 × 分散程度」相关，压测必须新增这一维度；不能只用单人副本的结果宣称问题已解决。
+
+另有一处引擎有意为之的行为（`WorldPartitionSubsystem.cpp:1055-1069`）：服务端会给每个 source **额外放大半径**（`GServerStreamingSourceMinimumExtraRadius` 与量化误差的 2 倍取大），注释说明理由是"服务端必须比客户端多加载一点"，否则客户端会因位置量化差异永远等一个服务端根本没请求的 cell。所以服务端实际加载集**略大于**客户端，这是正确行为，不要试图对齐。
+
+**E. 唯一真实的玩法风险（A9d，阻断上线）。** 开了流送**出**之后，未加载或已卸载 cell 里的 actor 在服务端不存在。角落刷怪点、任务触发器、需要全程有效的逻辑 actor 必须逐个确认并标 `bIsSpatiallyLoaded = false`。不过这一遍，症状会是"远处的怪不刷了"这种静默玩法变化——比卡顿更难发现。
+
+### 5.7 A9d 排查结果：地图 actor 风险很小，真风险在配置表驱动的 spawn
+
+**A. 整图与九宫格的量化对比（决定收益上界）。**
+
+从 Artic01 的 OFPA 资产里提取 PCG 分区网格命名 `PCGPartitionGridActor_25600_<X>_<Y>`，去重得 **256 个格**，格号两个方向都是 `-8..7`：
+
+| 量 | 值 |
+|---|---|
+| `CellSize` | 25600 uu = **256 m**（由网格命名反推，与客户端日志里 `PCGPartitionGridActor_25600_3_2_*` 一致） |
+| 整图范围 | 16 × 16 = **256 格 ≈ 4096 m × 4096 m** |
+| 九宫格加载集（`LoadingRange ≈ CellSize`） | 9 格 = **整图的 3.5%** |
+| 关卡 8 全部 146 个刷怪点的分布范围 | X 跨 276 m、Y 跨 273 m ≈ **2×2 格 = 整图的 1.6%** |
+
+两条推论：
+
+1. **减 N 收益上界很大**：物理体若大致均匀分布，加载集从 256 格降到 9 格意味着 N 降到约 3.5%。这也解释了 INC-20260727-002 测到的 10.43 GiB——DS 载入了 4 km × 4 km 全图，而玩法只用其中约 1.6%。
+2. ~~**刷怪点被九宫格完全覆盖**：所有刷怪点集中在 2×2 格内，3×3 加载集覆盖得住，因此"怪刷在未加载 cell 里"这个风险在本图实际上不成立。~~
+   **⚠️ 本条已于同日推翻，见 §5.8。** 该推论隐含假设"刷怪时玩家已在场且位于刷怪区"，而实测时间线证明刷怪发生在**任何玩家连入之前 82 秒**——那一刻没有 streaming source，地形一格都没加载。空间范围的比较因此不适用。
+
+**B. 地图放置 actor 的常驻需求清单（风险比预想小）。**
+
+| 类 | 数量 | 需常驻？ | 依据 |
+|---|---|---|---|
+| `PlayerStart` | 2 | **是，必须确认** | 出生点所在 cell 未加载则无法生成玩家；WP 经典坑 |
+| `MyNpcCharacter` | 3 | **需设计判断** | 地图放置的 NPC，位于远处 cell 时服务端不存在 |
+| `RecastNavMesh` | 2 | 否（预期行为） | WP 导航随 cell 流送，AI 寻路超出加载范围失效属设计如此 |
+| `WorldDataLayers` / `WorldSettings` / `PCGWorldActor` | 各 1–2 | 引擎自管 | 本就常驻 |
+| `LocationVolume` | 32 | 否 | WP **编辑器**加载区域，不参与 cook |
+| 宝箱 | — | **不是地图 actor** | 见下 C |
+
+**C. 宝箱确认安全（无需任何处理）。** 宝箱由 `FCfgChestPoint` 配置表驱动 spawn（`MyChestSpawnModel`，关卡 8 有 150 个点），且 `AMyLootChestActor : public AActor`——**不是 Pawn/Character、不模拟物理、不受重力**；三个组件为 `ChestMesh=NoCollision`、`UnlockRange=QueryOnly`、`ClickBounds=QueryOnly`。所以即使所在 cell 未加载，宝箱只是静置在配置坐标上，玩家靠近时地形加载出来即恢复正常。
+
+**D. 真正的风险面是配置表 spawn 的怪，不是地图 actor。**
+
+- `AMyNpcCharacter : public AMyCharacter` → Character → 带 `CharacterMovementComponent` → **受重力**。
+- 刷怪用配置表写死的世界坐标（`FCfgSpawnPoint` 的 `CenterX/Y/Z`），spawn 时 `ESpawnActorCollisionHandlingMethod::AlwaysSpawn`，**全程没有地面射线**（`MyChestSpawnModel.cpp` / `MySpawnModel.cpp` 中 `LineTrace`/`FindFloor`/`ProjectPointToNavigation` 命中均为 0）。
+- 因此若刷怪坐标所在 cell 未加载，怪脚下没有地形碰撞 → 会往下掉。
+- ~~**但按 A 的实测分布（2×2 格），九宫格覆盖得住，本图风险可控。**~~ **本句已推翻，见 §5.8。** 关卡 7（松林镇，279 个刷怪点）同样受影响。
+
+### 5.8 更正：刷怪落在无地形区域的风险成立，且比 §5.7 的判断严重（时机因素）
+
+§5.7 A-2 与 D 的"九宫格覆盖得住"用的是**空间**比较，隐含前提是"刷怪时玩家已在场"。该前提被实测时间线否证：
+
+| 时刻（UTC，同一局） | 事件 |
+|---|---|
+| `02:40:47.552` | `LogMySpawnModel: OnWorldBeginPlay(LifeCycle): 启动刷怪` |
+| `02:42:09.072` | `LogPandoraDSAuth: InitNewPlayer accepted`（**首个玩家连入**） |
+
+**相差 82 秒。刷怪发生在任何玩家连入之前。**
+
+代码侧一致：`UMySpawnModel` 在 `OnWorldBeginPlay` 里 `LoadSpawnConfigs` → 异步预载资产 → `FinishInitializeAfterPreload` → `ScheduleInitialSpawns`，全程**没有任何玩家距离门控**（`Distance` / `Proximity` / `NearestPlayer` / `PlayerInRange` 在该文件命中均为 0），行数据只有 `bEnabled` / `bSpawnOnBeginPlay` 两个开关。
+
+而服务端流送的加载集完全由 streaming source 决定，source 只来自 `IWorldPartitionStreamingSourceProvider`（服务端实际提供者就是 `APlayerController`）。**世界 BeginPlay 时零玩家 → 零 source → 地形一格都不加载**（代码阅读未发现"无 source 时兜底全加载"的分支；`OnWorldPreBeginPlay` 的 `BlockTillLevelStreamingCompleted` 在无请求时立即返回）。
+
+**结论**：开启服务端流送后，146 个受重力的 `AMyNpcCharacter` 会在"地形完全未加载"的世界里 spawn 到写死坐标，脚下没有任何碰撞面 → 全部下坠（随后被 `KillZ` 或坠入无限空间），**玩法直接损坏**。空间范围（2×2 格 vs 3×3 格）在这里不适用，因为问题不在"够不够大"，而在"那一刻什么都没有"。
+
+宝箱不受此影响（§5.7 C：非 Character、不受重力），只有受重力的 spawn 物受影响。
+
+**因此 A9c（服务端流送）在解决本条之前不得上线**，A9d 恢复为阻断项。可选解法（属设计决策，需拍板）：
+
+| 方案 | 做法 | 代价 |
+|---|---|---|
+| ① 刷怪等地形就绪 | 把初始刷怪从 `OnWorldBeginPlay` 改为等一个**明确的就绪事件**（首个玩家 Admission 完成 / 对应 cell 加载完成）后再刷 | 改代码；改变刷怪时机语义。**注意**：必须挂真实就绪事件，不能用延迟——`CLAUDE.md` 禁止用 Timer/Delay 掩盖时序（判据："到期后假设成功"= 掩盖） |
+| ② 玩法区常驻 | 用 Data Layer / 非空间加载把刷怪区那 2×2 格设为 always loaded，其余 252 格照常流送 | 仍能省掉 98% 的图；但需要在编辑器里划区，且 N 不会降到 3.5%（约降到 2×2 格 + 九宫格边缘） |
+| ③ 懒刷 | 刷怪改为玩家进入范围才生成 | 最符合流送模型，但改变刷怪与战斗节奏，工作量最大 |
+| ④ 暂不开流送 | 只上 A6（poison malloc），先看卡顿降到多少 | 零风险；若 A6 已把卡顿压到 15s 阈值以下，流送可按常规优化排期 |
+
+**已选定并落码：③（懒刷）+ ④（流送暂停用）**，见 §5.9。
+
+### 5.9 方案③ 已落码：刷怪按玩家距离激活 + 远处停 tick
+
+复用 `UMySpawnModel` **已有的 2s `MaintainTimerHandle` 循环**（`TickMaintainSpawns`），不新建 timer、不进每帧 Tick（§16.10）。改动集中在 `MySpawnModel.{h,cpp}`：
+
+| 环节 | 改动 |
+|---|---|
+| `ScheduleInitialSpawns` | 距离激活开启时**不再在 BeginPlay 填充**，只置 `bInitialSpawnDone`（`InitialDelay` 语义保留）；首次填充交给维护循环 |
+| `TickMaintainSpawns` | 每轮收集一次玩家 Pawn 位置快照 → 逐点算 `bActivated` → `ApplyTickCullingForSpawnPoint` → 填充条件加 `&& bActivated` |
+| `OnEntityPendingRespawn` | 重生同样过距离门；已消耗的 pending 句柄使 `Missing` 记账把该只算成缺口，玩家回来即补 |
+| `TryFillSpawnPoint` | 新增**地面就绪门**：从配置坐标上方向下射线（`ECC_WorldStatic`），不命中则本轮不刷、下个 2s 周期重查 |
+| `ForceFillSpawnPoint`（GM 调试） | 刻意**不过**距离门（显式强制），但仍过地面门 |
+
+设计要点：
+
+- **hysteresis**：未激活用 `SpawnActivationRadius` 判入，已激活用 `× SpawnDeactivationRadiusScale`（默认 1.25）判出，防玩家在边界来回走导致反复刷怪 / 反复开关 tick。
+- **半径默认 25600 = Artic01 的 WP `CellSize`**，与"九宫格"同口径：WP 加载集是「以玩家为心、半径 `LoadingRange` 的球」相交的 cell，令 `LoadingRange ≈ CellSize` 即最多 3×3；刷怪半径与之对齐则刷怪范围不会超出加载范围。调到 `2×CellSize` 对应 5×5。
+- **远处只停 tick，不销毁**：销毁会让打了一半的怪消失或回满血，那是改玩法。`SetActorTickEnabled(false)` 保留 Actor 与血量 / 仇恨等全部状态，玩家回来即恢复。开关由 `bCullDistantSpawnedTick` 控制。
+- **多玩家取并集**：任一玩家在半径内即激活，与 WP 加载集取并集同口径（§5.6 D2）。
+- **地面门是"重查"不是"假设"**：不命中时不刷、等下轮再查，属 §16.10 强制项一侧；连续失败达 `GroundCheckWarnStreak`（默认 5 次 ≈ 10s）时 edge-trigger 升一次 Warning——cell 异步流入是合法暂态不该刷屏，但"配置 Z 配错 / 那里本来没地面"必须可见。
+- **可一键回退**：`SpawnActivationRadius <= 0` 即关闭整套机制，回到改造前行为（BeginPlay 全图刷满）。
+- 参数暂为全局默认值；若出现"每关卡半径不同"的真实需求，按 §17 迁到关卡表一列，**不得**加 `if (LevelId == N)` 分支。
+
+**这同时解决了 §5.8 的坠落问题**：刷怪只发生在某个玩家（= streaming source）的激活半径内，该处地形必然在加载范围内，再加地面门兜住异步流送窗口。因此 A9c 的流送阻断项在本改动编译验证后即可解除。
+
+**E. 顺带发现一个与本事故无关的现存 bug：导表未跑，Artic01 当前一个怪都不刷。**
+
+| 证据 | 值 |
+|---|---|
+| `Table/关卡/s_刷怪点.xlsx` | 2026-07-26 05:12，**关卡 8 有 146 行刷怪点** |
+| `Pandora/Content/Pkg/Cfg/Table/Cpp/cfgspawnpoint.uasset` | 2026-07-25 09:54（比 xlsx **旧约 20 小时**） |
+| DS 运行日志 | `LogMySpawnModel: Warning: 关卡 8 未找到刷怪点配置`（BeginPlay 与兜底各一次） |
+
+即 xlsx 里的刷怪配置从未进入运行时 DataTable。**重要时序含义**：正因为现在不刷怪，D 项的风险目前是隐性的；一旦重跑导表让 146 个受重力 Character 真的生成，才会暴露。**开流送与重跑导表这两件事应当同批验证，不要分开上。**
+
 ## 6. 全仓同类问题扫描
 
 - 扫描基线：服务端 Git `332b2fcf`；客户端为取证时 SVN 混合工作副本 `1487:1598M`；UE Engine `5.8.0-release` 本地源码。
@@ -588,6 +789,7 @@ UE 侧 `PandoraAgonesHealthPinger.h` 的设计注释明确写道：业务心跳�
 
 - 2026-07-29：新增 Incident 文档、索引和旧 Gate C 失败交叉链接。
 - 2026-07-30：落码 §7.2 的 A/B/C 组改动（3 个仓库位置：`XuanMing-Server/deploy/ds`、`XuanMing-Server/services/battle/ds_allocator`、`Pandora-Client-SVN/Pandora/Source/Pandora`）。
+- 2026-07-30：本事故 §5.5~§5.9 的可复用性能陷阱与方法论已提炼为运维手册 `docs/ops/ue-ds-perf-pitfalls.md`（poison malloc / 挂起检测阈值 / stdout 缓冲 / tick≠物理 / 流送时机 + 先量后改方法论）。该手册不替代本事故档案的完整证据链。
 - 仍未修改 `AGENTS.md`、`CLAUDE.md` 与设计规范：本次没有产生新的稳定约束，A 组是补观测、B/C 组是既有条款（§9.19/§9.20/§9.22/§9.23）的实现补齐，不引入新规则。**待 A 组产出根因后再评估是否需要写入规范。**
 
 ## 8. 验证矩阵
@@ -631,7 +833,16 @@ UE 侧 `PandoraAgonesHealthPinger.h` 的设计注释明确写道：业务心跳�
 | **A6** | **P0-次级根因** | **DS 停用 poison malloc**：Linux 专服改用 `Shipping`/`Test` 配置，或在 server target 显式 `UE_USE_MALLOC_FILL_BYTES=0`；修复后复测同一 Artic01 对局，断言不再出现 `Hang detected on GameThread` | 待指定 | **OPEN（当前最高优先级）** | 本档 §5.1 |
 | A7 | P1-放大因素 | 节点内存容量与 battle DS `requests=limits=14Gi` 的比例复核（61.7Gi 节点只容得下 2 个；已观察到 `FailedScheduling: Insufficient memory`）；确认是否需要扩容或下调 | 待指定 | OPEN | 本档 §5.1 |
 | A8 | P1-定位精度 | 查明"是哪个容器/数组在 realloc" | — | **CLOSED**（08:22 第三次复发拿到完整调用链：`FEndPhysicsTickFunction` → `FChaosScene::EndFrame` → `CopySolverAccelerationStructure` → `FlushExternalAccelerationQueue` → `Chaos::FPendingSpatialDataQueue::Remove` → `TArray::ResizeAllocation`） | 本档 §2.2.11 |
-| **A9** | **P0-负载** | **DS 侧 Chaos 物理负载治理**：Artic01 在 DS 上 `IsServerStreamingEnabled=0`、933 个 OFPA actor 全图刚体常驻，`FPendingSpatialDataQueue` 规模随之膨胀。评估①开服务端 WP 流送，或②把纯装饰刚体在 DS 上排除（`ClassesExcludedOnDedicatedServer` 同款手段，参考 `DefaultEngine.ini` 已有的 `PCGLandscapeCache` 先例），或③降低碰撞体数量。**与 A6 是两个独立因子：A6 降低单次 realloc 成本，A9 降低 realloc 规模与频次，都要做** | 待指定 | OPEN | 本档 §2.2.11 |
+| **A9** | **P0-负载** | **DS 侧 Chaos 物理负载治理**（下方 §5.5 已按源码与资产实测修正原判断）。**与 A6 是两个独立因子：A6 降低单次 realloc 的每字节成本，A9 降低 N（粒子数），都要做**。当前分解为 A9a/A9b/A9c | 待指定 | OPEN | 本档 §2.2.11、§5.5 |
+| A9a | P1-减负 | 纯渲染类专服 cook 剥离（**已落码**：`DefaultEngine.ini` 新增 8 条 `ClassesExcludedOnDedicatedServer`）。⚠️ 只省内存与加载时间，**不减 N、不修卡顿**，理由见 §5.5 | — | 已落码未验证 | §5.5 |
+| A9b | **P0-测量前置** | **先量 N 再动玩法**：在 DS 上取得物理粒子/刚体数量及其构成（地形 vs PCG vs 静态网格）。没有这个数就不许改地形碰撞精度或 PCG 碰撞——那会改变玩家能否站上去/撞不撞树 | 待指定 | **OPEN（A9c 的前置）** | §5.5 |
+| A9c | P0-减负 | 开服务端 WP 流送 + 流送出。两条 CVar 已写入 `entrypoint.sh` 但**按 A9d 结论注释停用**（注释保留完整推导与启用步骤）。这是唯一"碰撞形状逐顶点不变"的减 N 手段。**原判断「流送会引入 `BlockTillLevelStreamingCompleted` 卡死」已推翻**——该阻塞只在世界启动两处，开流送反而缩短它（§5.6）。①降地形碰撞精度、②PCG 关碰撞两项**不做**（会改玩法） | 待指定 | **停用中，待 A9d 解除** | §5.6、§5.8 |
+| **A9d** | P0-流送阻断项 | 排查需常驻的 actor + 解决初始刷怪坠落。地图放置 actor 侧风险小（宝箱安全；只有 `PlayerStart`×2 需确认、`MyNpcCharacter`×3 需设计判断）。坠落问题**已按 §5.8 方案③ 落码**（`MySpawnModel` 距离激活 + 地面门，见 §5.9）：刷怪只发生在玩家激活半径内 → 必在加载范围内 → 脚下有地形 | — | **已落码未编译**；编译验证通过后可解除对 A9c 的阻断 | §5.7、§5.8、**§5.9** |
+| A9i | P1-tick 负载 | 距离激活顺带把"开局全图怪全部 tick"改成"只 tick 玩家附近"（`bCullDistantSpawnedTick`，只停 tick 不销毁以免改玩法）。**效果未实测**：需在物理体普查日志之外再取一次 tick 侧数据（怪数量 × 是否 tick），确认 CPU 收益 | 待指定 | OPEN | §5.9 |
+| **A9g** | **P1-独立 bug** | **导表未跑：`s_刷怪点.xlsx`（07-26 05:12，关卡 8 有 146 行）比 `cfgspawnpoint.uasset`（07-25 09:54）新约 20 小时，DS 日志报 `关卡 8 未找到刷怪点配置` → Artic01 当前一个怪都不刷。** 与本事故无关，但**必须与 A9c 同批验证**：重跑导表后才会有受重力的怪落在写死坐标上，D 项风险届时才暴露 | 待指定 | OPEN | §5.7 E |
+| A9h | P1-其它图 | 关卡 7（松林镇）有 279 个刷怪点，未按 §5.7 A 的口径量过分布范围。开流送前必须逐图确认"刷怪范围 ≤ 九宫格覆盖" | 待指定 | OPEN | §5.7 D |
+| A9e | P1-网格调参 | 九宫格生效条件是 `LoadingRange ≈ CellSize`（加载集 = 与「玩家为心、半径 LoadingRange 的球」相交的 cell）。这两个值在**地图**的 World Partition 运行时网格里（World Settings → World Partition Setup → Runtime Hash → Grids），需在编辑器按图调；`bBlockOnSlowStreaming` 保持默认 `false`，**不要打开**（打开即恢复阻塞加载） | 待指定 | OPEN | §5.6 |
+| A9f | P2-未验证候选 | `WorldPartitionHLOD`(274 个) 在专服是否加载仍未证明；若加载则可排除（纯远景渲染替身）。开流送后可用同一批日志顺带确认 | 待指定 | OPEN | §5.5 |
 | A10 | P2-可观测 | 卡死期间 UE 输出设备全局锁会连带推迟**非游戏线程**日志（实测 health 摘要滞后 38s）。读时间线必须按行内嵌时间，不能按 Loki 摄取时间；考虑在 runbook 里写明 | 待指定 | OPEN | 本档 §2.2.11 |
 | A1b | P1-观测缺口 | 评估补齐 cadvisor / node-exporter 采集（当前 Prometheus 只抓 `pandora-pods`），否则"宿主/容器资源导致停跳"这一类假设永远无法事后取证 | 待指定 | OPEN | 本档 §2.2.8 |
 | A2 | P0-修复门 | 根因确认后记录实际修复、修复前失败和修复后通过证据 | 待指定 | OPEN | 本档 §7–§8 |

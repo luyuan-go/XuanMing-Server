@@ -64,10 +64,14 @@ spec:
               # desired state,钉 :dev 滚动 tag 会让任意一次 kubectl apply 把 live 降回本机
               # IfNotPresent 缓存里的旧 :dev 构建。换版流程 = 打新不可变 tag → minikube image
               # load → 改本行 → apply;严禁回填 :dev。
-              # 当前本地开发镜像:r1580-dirty-20260729-005257(UE 工作副本 svnversion
-              # 1487:1580M;PandoraServer sha256 2AB590F43347…F706,
-              # 292,920,696 字节,2026-07-29 00:52 构建)。该包尚未发布到制品库。
-              image: pandora/battle-ds:r1580-dirty-20260729-005257
+              # 当前本地开发镜像:r1604-dirty-20260731-042958(UE 工作副本 svnversion
+              # 1487:1604M;PandoraServer sha256 CA737C7D4A6C…166B,
+              # 293,027,640 字节,2026-07-31 04:26 构建)。已发布到制品库:
+              # <PANDORA_ARTIFACT_ROOT>\snapshots\client\trunk_Client\
+              # Server_Linux_Development\r1604-dirty-20260731-042958\LinuxServer
+              # (默认根 F:\work\artifacts 是指向 E:\artifacts 的 junction),
+              # 因此本 tag 可在任意可达制品库的机器上按 start.ps1 的重建链复现。
+              image: pandora/battle-ds:r1604-dirty-20260731-042958
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

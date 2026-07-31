@@ -122,8 +122,75 @@ echo "[entrypoint] AGONES_SDK_HTTP_PORT=${AGONES_SDK_HTTP_PORT:-<unset>} AGONES_
 
 # exec 让 DS 成为 PID 1，正确接收 SIGTERM（Agones 回收 Pod 时优雅退出）。
 # stdbuf 在 execvp 后被目标进程替换，PID 1 仍是 DS 本体。
+#
+# 服务端 World Partition 流送（INC-20260729-002 A9c）——**当前已停用，见文末阻断原因**。
+#
+# ⚠️ 下面这段推导仍然成立，但两条 CVar 已按 A9d 的结论注释掉。启用前必读文末。
+#
+# 为什么：Artic01 在 DS 上原本 `IsServerStreamingEnabled = 0`，即**整张图**的 actor 与
+# 碰撞体一次性全部实例化并永久常驻。Chaos 的 FPendingSpatialDataQueue 里
+# ParticleToPendingData 是 TArrayAsMap<FUniqueIdx,int32>（按粒子唯一号下标寻址，
+# 长度≈已注册物理体数），全图常驻 = 该结构恒为全图规模，每帧 EndPhysics 刷新时逐条
+# Remove 触发的 realloc 就按全图规模付代价 —— 这是那次 >10s 游戏线程卡死的 N 因子。
+#
+# 为什么这是唯一"形状不变"的减 N 手段：加载哪些 cell 由玩家位置 + LoadingRange 决定。
+# 玩家所在之处，周围碰撞几何与今天逐顶点相同；变的只是玩家不在的远处不常驻。
+# 相比之下降地形碰撞精度 / 复杂碰撞换简单碰撞 / 装饰物关碰撞都会改变玩家实际体验。
+#
+# 关于阻塞加载（重要，与此前判断相反）：引擎里 WP 的 BlockTillLevelStreamingCompleted
+# 只出现在 OnWorldPreBeginPlay 与 OnWorldMatchStarting 两处（WorldPartition.cpp:1212-1226），
+# 即**世界启动时**，不是游戏中逐 cell 流送。所以：
+#   - 关流送（今天）= 启动时必须阻塞等**整张图**流完 → 就是那 30s 加载与加载期那次 Hang；
+#   - 开流送 = 启动时只需等出生点周边那一批 cell → 阻塞窗口**变短**。
+# 游戏中跨 cell 是非阻塞的，前提是网格的 bBlockOnSlowStreaming 保持 false
+# （WorldPartitionRuntimeSpatialHash.cpp:102 构造默认即 false，不要去打开它）。
+#
+# 九宫格（3×3）就是原生行为，不需要自写：加载集 = 与「以玩家为心、半径 LoadingRange 的球」
+# 相交的所有 cell。令 LoadingRange ≈ CellSize 即最多 3×3=9 格。CellSize / LoadingRange 在
+# **地图的 World Partition 运行时网格设置**里（World Settings → World Partition Setup →
+# Runtime Hash → Grids），改不到这里来，需在编辑器里按图调。
+#
+# EnableServerStreamingOut=1 让服务端也**卸载**远离的 cell（否则只加载不卸载，玩家走遍
+# 全图后 N 又回到全图规模）。代价见事故档案 A9c：未被加载/已被卸载 cell 里的 actor 在
+# 服务端不存在，角落刷怪点、任务触发器这类必须常驻的对象要标 bIsSpatiallyLoaded=false。
+#
+# 两个 CVar 都是 ECVF_ReadOnly（非编辑器构建），只能启动期由 ini/命令行设定，运行中改无效；
+# 地图的 ServerStreamingMode 构造默认为 ProjectDefault，因此这两个 CVar 即为生效值。
+# 放在 DS 启动参数而非 Config/DefaultEngine.ini：只改专服行为，客户端与编辑器零影响。
+#
+# ══ 为什么现在是注释掉的（A9d 阻断项，事故档案 §5.8）══════════════════════════
+#
+# 初始刷怪跑在 UMySpawnModel::OnWorldBeginPlay，**没有任何玩家距离门控**
+# （Distance / Proximity / NearestPlayer / PlayerInRange 在该文件命中均为 0）。
+# 实测同一局时间线：
+#     02:40:47.552  OnWorldBeginPlay(LifeCycle): 启动刷怪
+#     02:42:09.072  InitNewPlayer accepted   ← 首个玩家连入，晚 82 秒
+#
+# 而服务端流送的加载集完全由 streaming source 决定，服务端的 source 只来自
+# APlayerController。世界 BeginPlay 时**零玩家 → 零 source → 地形零加载**。
+# 于是 146 个受重力的 AMyNpcCharacter（AMyCharacter → Character，有
+# CharacterMovementComponent）会 spawn 到配置表写死的世界坐标上
+# （ESpawnActorCollisionHandlingMethod::AlwaysSpawn，全程无地面射线），
+# 脚下没有任何碰撞面 → 全部下坠 → 玩法直接损坏。
+#
+# 注意这里**不是**"九宫格够不够大"的问题：刷怪点实测只跨 2×2 格（276m × 273m，
+# 整图 16×16 格 / 4096m），空间上罩得住；坏的是**时机**——那一刻什么都还没加载。
+# 宝箱不受影响（AMyLootChestActor : AActor，不受重力，三个组件 NoCollision/QueryOnly）。
+#
+# 启用前必须先选定并落地事故档案 §5.8 的方案之一：
+#   ① 初始刷怪改为等**明确就绪事件**（首个玩家 Admission 完成 / 对应 cell 加载完成）。
+#      必须挂真实事件，**不得用 Timer/Delay 掩盖时序**（CLAUDE.md §16.10）。
+#   ② 用 Data Layer / 非空间加载把刷怪区那 2×2 格设为 always loaded，其余 252 格照常流送。
+#   ③ 刷怪改为玩家进范围才生成（最贴流送模型，工作量最大）。
+# 另需逐图复核：关卡 7（松林镇）有 279 个刷怪点，分布范围未按同一口径量过（A9h）。
+#
+# 启用方式：删掉下面两行的注释与前一行末尾的对齐即可（记得给上一行补 `\`）。
+# ═════════════════════════════════════════════════════════════════════════════
 exec "${FINAL_LAUNCH[@]}" "${MAP_URL}" -port="${PORT}" -log ${EXTRA_ARGS} \
   '-ini:Engine:[Core.Log]:LogNet=Warning' \
   '-LogCmds=LogNet Warning' \
   '-ini:Engine:[Core.System]:HangDuration=10.0' \
   '-ini:Engine:[Core.System]:HangsAreFatal=False'
+  # A9d 阻断中，勿直接启用（理由见上方 ══ 段）：
+  #   '-ini:Engine:[SystemSettings]:wp.Runtime.EnableServerStreaming=1' \
+  #   '-ini:Engine:[SystemSettings]:wp.Runtime.EnableServerStreamingOut=1'

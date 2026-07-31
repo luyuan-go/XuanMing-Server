@@ -5,6 +5,9 @@
 >
 > 结论先放前面:线上跑 **Linux Release / Shipping DS 是对的**,但必须同时保留
 > crash dump、debug symbols、日志和 metrics。不要只靠 ssh 进 Linux 机器看进程。
+>
+> 姊妹篇:`docs/ops/ue-ds-perf-pitfalls.md`(UE 专服性能陷阱与优化手册:poison malloc、
+> 挂起检测阈值、stdout 缓冲、tick≠物理、流送时机等真实案例的坑/因/修/验)。
 
 ---
 
