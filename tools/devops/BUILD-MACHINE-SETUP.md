@@ -1,9 +1,39 @@
-# 构建/发布机搭建手册
+# 新机器搭建手册
 
-把一台新机器变成能完成「UE 打包 → 发布制品库 → 打 DS 镜像」全链的构建机。
+把一台干净的 Windows 机器变成 **开发机 + 构建机 + CI 机**。
 
-> 配套自检脚本：`tools/devops/preflight-buildmachine.ps1`
-> 每一步做完都可以跑它验证，全绿再往下走。
+## 一键入口
+
+先手工检出后端仓库（脚本在里面，鸡生蛋的部分只有这一步）：
+
+```powershell
+svn checkout http://infinity-svn/svn/Pandora-Moba/trunk/Server D:\Pandora-Server
+```
+
+然后：
+
+```powershell
+cd D:\Pandora-Server
+pwsh tools\devops\bootstrap-machine.ps1 -WhatIfOnly      # 先看它要做什么，不改任何东西
+pwsh tools\devops\bootstrap-machine.ps1 -Install         # 实际搭建，缺的工具用 winget 装
+```
+
+它按正确顺序串起：前置工具检查 → 机器级环境变量 → 源码工作副本校验 →
+`up.ps1`（CI 栈）→ `setup-jenkins.ps1` + `install-agent-service.ps1` → `preflight-buildmachine.ps1`。
+**幂等，可以反复跑**；有阻断项时会停在那里并说清缺什么，不会带着半套配置往下走。
+
+只搭其中一部分用 `-Role Dev` / `-Role Build` / `-Role CI`（可组合）。
+
+**脚本刻意不做的四件事**（都会在结尾的「仍需人工完成」里列出来）：
+
+| 不做 | 为什么 |
+|---|---|
+| 下 51GB UE 引擎 | 体积大、来源因人而异，只报告缺不缺 |
+| 装 Linux 交叉编译工具链 | 同上（3.3GB） |
+| 检出客户端仓库 | 89GB 级别，"一键"不该静默拉一整天；要拉加 `-CheckoutClient` |
+| 碰任何口令 | Jenkins 的 SVN 凭据必须你本人在它界面上建 |
+
+下面是这些步骤各自在做什么、以及踩过的坑 —— 一键流程卡住时按这里排查。
 
 ---
 
@@ -13,8 +43,16 @@
 |---|---|---|---|
 | **UE 引擎** | `E:\GitRepos\PandoraEngine.git`（裸仓库） | **51 GB** | 已编译的 installed build，**clone 完不用再编译** |
 | **Linux 交叉编译工具链** | `C:\UnrealToolchains\v26_clang-20.1.8-rockylinux8\` | 3.3 GB | ⚠️ **不在引擎仓库里**，必须单独装或拷 |
-| **客户端源码** | SVN `http://infinity-svn/svn/Pandora-Moba` | 大 | `svn checkout` |
-| **后端源码** | `https://github.com/luyuan-go/XuanMing-Server.git` | 小 | 注意用 `luyuan-go`（仓库已从 `luyuan-cpp` 迁移） |
+| **客户端源码** | SVN `^/trunk/Client` | 大 | `svn checkout` |
+| **后端源码** | SVN `^/trunk/Server` | 小 | 与 Client 同仓同级，一个 revision 同时定位前后端 |
+
+SVN 仓库根：`http://infinity-svn/svn/Pandora-Moba`
+
+> **后端为什么用 SVN 而不是 GitHub**（2026-07-27 改）：`^/trunk/Server` 是团队权威源，
+> CI 三个任务（`backend-dev` / `client-dev` / `artifacts-sync`）全部从它检出。
+> `https://github.com/luyuan-go/XuanMing-Server.git` 是个人镜像仓库，**不再有任何 CI 消费方**；
+> 构建机照着它拉会拿到与 CI 不同的代码。个人开发想继续用 git 没问题，但**这台机器上
+> 用于打包/发布的工作副本必须是 SVN 检出** —— 版本戳（`r<rev>`）也依赖它。
 
 引擎那 51 GB 是大头，按内网带宽预留时间。
 
@@ -80,13 +118,23 @@ setx PANDORA_ARTIFACT_ROOT "D:\artifacts"
 
 ---
 
-## 4. 拉两个仓库
+## 4. 拉两个仓库（都从 SVN）
 
 ```powershell
-git clone https://github.com/luyuan-go/XuanMing-Server.git
+svn checkout http://infinity-svn/svn/Pandora-Moba/trunk/Server D:\Pandora-Server
 ```
 
-客户端按既有方式 `svn checkout`。
+```powershell
+svn checkout http://infinity-svn/svn/Pandora-Moba/trunk/Client D:\Pandora-Client-SVN
+```
+
+路径按这台机器的实际盘符定；下面第 5 步的 `-ClientRepo` 与 `.env` 里的
+`PANDORA_PROTO_SERVER_ROOT` 要跟着改成实际路径。
+
+> 命令行 SVN 客户端是硬前提：发布脚本用 `svnversion` 取版本戳。
+> **Jenkins 的 Subversion 插件不提供 `svn.exe`**，必须单独装（TortoiseSVN 勾选 command line tools，
+> 或 `winget install --id CollabNet.Subversion`）。缺它 `publish_offline_images.ps1` 会明确报
+> 「svnversion 可用: False」并拒绝发布，不会静默出错。
 
 ---
 
