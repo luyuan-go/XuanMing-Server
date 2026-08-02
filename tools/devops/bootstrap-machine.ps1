@@ -71,6 +71,35 @@ function Bad  ($m) { Write-Host "  [FAIL] $m" -ForegroundColor Red;    $script:f
 function Manual($m) { $script:manual += $m }
 function Step ($m) { Write-Host "  -> $m" -ForegroundColor White }
 
+# Invoke-ChildScript 调用同目录下的纯 PowerShell 子脚本并**如实**判定成败。
+#
+# 为什么不能用 $LASTEXITCODE 判定这几个子脚本：$LASTEXITCODE 只由**原生可执行文件**
+# （或显式调用 exit 的脚本）设置。up.ps1 / setup-jenkins.ps1 / install-agent-service.ps1
+# 都是 `$ErrorActionPreference = 'Stop'` + `throw` 的纯 PS 脚本，**从不调 exit**，所以它们
+# 返回后 $LASTEXITCODE 仍是上一条原生命令的遗留值（比如本脚本里的 svn checkout，或子脚本
+# 内部某次 docker 调用）。双向都会错：
+#   - 子脚本明明成功，却因遗留码非 0 被谎报成 [FAIL]；
+#   - 子脚本 throw 时异常直接终止 bootstrap，那行 if 根本轮不到执行，汇总与"仍需人工"
+#     清单也一并丢失——而这两样正是本脚本存在的意义。
+# try/catch 才是与 throw 语义对应的判定方式：异常即失败，计入 $script:fail，并让 bootstrap
+# 继续走到汇总段。
+#
+# 注意：preflight-buildmachine.ps1 结尾确实有 `exit ([int]($script:fail -gt 0))`，
+# 客户端 svn checkout 也是原生命令，那两处继续用 $LASTEXITCODE 是正确的，不要一并改掉。
+function Invoke-ChildScript {
+    param(
+        [Parameter(Mandatory)][string] $Name,
+        [object[]] $ScriptArgs = @()
+    )
+    try {
+        & (Join-Path $here $Name) @ScriptArgs
+        return $true
+    } catch {
+        Bad "$Name 失败：$($_.Exception.Message)"
+        return $false
+    }
+}
+
 $roles = if ($Role -contains 'All') { @('Dev', 'Build', 'CI') } else { $Role }
 
 Write-Host "Pandora 新机器搭建  $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $env:COMPUTERNAME" -ForegroundColor White
@@ -270,8 +299,7 @@ if ($roles -contains 'CI') {
         Info '将执行： up.ps1（首次会拉镜像+装插件，约几分钟）'
     } else {
         Step 'up.ps1 ...'
-        & (Join-Path $here 'up.ps1')
-        if ($LASTEXITCODE -ne 0) { Bad "up.ps1 失败（exit=$LASTEXITCODE）" } else { Ok 'CI 栈已启动' }
+        if (Invoke-ChildScript -Name 'up.ps1') { Ok 'CI 栈已启动' }
     }
 
     Section '5. Jenkins 接线'
@@ -284,15 +312,15 @@ if ($roles -contains 'CI') {
         # -SkipAgent：这里只建配置，agent 交给下面的计划任务常驻拉起。
         # setup-jenkins 自己拉的 agent 是普通进程，注销/重启就没了，构建会卡在
         # "Timeout waiting for agent to come back"（实际发生过）。
-        & (Join-Path $here 'setup-jenkins.ps1') -SkipAgent
-        if ($LASTEXITCODE -ne 0) { Bad "setup-jenkins.ps1 失败（exit=$LASTEXITCODE）" }
-
-        Step 'install-agent-service.ps1（agent 注册为开机自启计划任务）...'
-        & (Join-Path $here 'install-agent-service.ps1')
-        if ($LASTEXITCODE -ne 0) { Bad "install-agent-service.ps1 失败（exit=$LASTEXITCODE）" }
-        else {
-            Start-ScheduledTask -TaskName 'PandoraJenkinsAgent' -ErrorAction SilentlyContinue
-            Ok 'agent 计划任务已注册并启动'
+        # 嵌套而非并列：本文件开头的顺序说明已写明「install-agent-service 要节点已经建好」。
+        # setup-jenkins 失败时节点就没建出来，再去注册 agent 计划任务只会叠一条更难读的
+        # 二次失败，掩盖真正的首因。
+        if (Invoke-ChildScript -Name 'setup-jenkins.ps1' -ScriptArgs @('-SkipAgent')) {
+            Step 'install-agent-service.ps1（agent 注册为开机自启计划任务）...'
+            if (Invoke-ChildScript -Name 'install-agent-service.ps1') {
+                Start-ScheduledTask -TaskName 'PandoraJenkinsAgent' -ErrorAction SilentlyContinue
+                Ok 'agent 计划任务已注册并启动'
+            }
         }
     }
     Manual 'Jenkins 里建 SVN 凭据：界面 → Manage Jenkins → Credentials → 新建 Username/Password，ID 必须与 .env 的 SVN_CREDENTIALS_ID 一致。口令只能你本人输，脚本不碰。'
