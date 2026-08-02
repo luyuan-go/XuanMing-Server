@@ -8,6 +8,7 @@ package biz
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -34,6 +35,7 @@ type scriptedOwnerAuthority struct {
 	beginErr          error
 	beginErrForPlayer uint64 // 非 0 = 只对该玩家注入 beginErr
 	conflictTimes     int    // 剩余需返回 EPOCH_CONFLICT 的次数(独立于 beginErr)
+	mintSeq           int    // 模拟权威铸造 operation_id 的自增序号
 }
 
 func (s *scriptedOwnerAuthority) QueryOwner(_ context.Context, playerID uint64) (data.OwnerRecordView, error) {
@@ -46,18 +48,35 @@ func (s *scriptedOwnerAuthority) QueryOwner(_ context.Context, playerID uint64) 
 	return s.records[playerID], nil
 }
 
-func (s *scriptedOwnerAuthority) BeginTransition(_ context.Context, playerID, _ uint64, operationID string, _ int8, _ data.OwnerTargetView) error {
+func (s *scriptedOwnerAuthority) BeginTransition(_ context.Context, playerID, _ uint64, operationID string, _ int8, target data.OwnerTargetView) (data.OwnerRecordView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.beginOps = append(s.beginOps, operationID)
 	if s.conflictTimes > 0 {
 		s.conflictTimes--
-		return errcode.New(errcode.ErrOwnerEpochConflict, "injected epoch conflict")
+		// 冲突时权威回传的是**当前记录**(owner.proto BeginTransitionResponse.record)。
+		return s.records[playerID], errcode.New(errcode.ErrOwnerEpochConflict, "injected epoch conflict")
 	}
 	if s.beginErr != nil && (s.beginErrForPlayer == 0 || s.beginErrForPlayer == playerID) {
-		return s.beginErr
+		return data.OwnerRecordView{}, s.beginErr
 	}
-	return nil
+	// 模拟 owner 行锁事务:epoch+1、铸造 operation_id、记录改指向本次目标。
+	// operation_id 必须真的铸出来并回传——调用方的精确回滚正是拿它 + epoch 做
+	// compare-delete(见下方 ReleaseOwner),回传空值会让回滚静默失效而测试仍然"通过"。
+	rec := s.records[playerID]
+	minted := operationID
+	if minted == "" {
+		s.mintSeq++
+		minted = fmt.Sprintf("op-%d-%d", playerID, s.mintSeq)
+	}
+	next := data.OwnerRecordView{
+		OwnerEpoch: rec.OwnerEpoch + 1, OwnerType: ownerTypeBattle, Phase: ownerPhasePending,
+		PodName: target.PodName, InstanceUID: target.InstanceUID, InstanceEpoch: target.InstanceEpoch,
+		AssignmentOrAllocationID: target.AssignmentOrAllocationID, ReleaseTrack: target.ReleaseTrack,
+		OperationID: minted,
+	}
+	s.records[playerID] = next
+	return next, nil
 }
 
 // contract 阶段:READY 交付点 Begin 是强依赖——写不进 owner 权威即整体失败,
@@ -117,6 +136,59 @@ func TestOwnerBeginPlayers_StrongFailClosed(t *testing.T) {
 	}
 	if always.queries > 2 {
 		t.Fatalf("重试上限 2 轮,实得 %d 次 Query", always.queries)
+	}
+
+	// 部分失败必须**精确回滚**已写进权威的那几个玩家。
+	//
+	// 不回滚的后果(本回归要钉死的就是它):失败点之前的归属记录指向的 Pod,紧接着就被
+	// 调用方 cleanupAllocatedBattle 删掉;而 owner 侧没有任何归属记录的 TTL / 回收
+	// (唯一的 sweep 是 RunTransitionLogSweep,清的是审计流水)。玩家若就此离线,记录
+	// 永久停在 PENDING 指向死 Pod;下次登录时 login 的 query-first
+	// (account/login/internal/biz/owner_query.go applyOwnerPlacement)在屏障已开时会把它
+	// 翻译成 TARGET+PENDING,把死 Pod 当 exact target 下发,客户端反复连一台不存在的 DS。
+	rollback := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{},
+		beginErrForPlayer: 3003, beginErr: errcode.New(errcode.ErrUnavailable, "owner down")}
+	if err := ownerBeginPlayers(ctx, rollback, []uint64{1001, 2002, 3003}, ownerTypeBattle, target, time.Second); err == nil {
+		t.Fatal("一局内任一玩家失败必须整局失败")
+	}
+	// 1001/2002 已写进权威 → 必须被撤销;3003 从未写成功 → 不该被 Release。
+	if len(rollback.releases) != 2 {
+		t.Fatalf("已写入的 2 个玩家必须回滚,实得 releases=%v", rollback.releases)
+	}
+	for _, pid := range []uint64{1001, 2002} {
+		if _, ok := rollback.records[pid]; ok {
+			t.Fatalf("玩家 %d 的归属记录必须被撤销,实际仍残留指向已回收实例", pid)
+		}
+	}
+	// 逆序释放:先撤最后写进去的。
+	if rollback.releases[0] != 2002 || rollback.releases[1] != 1001 {
+		t.Fatalf("回滚应逆序释放,实得 %v", rollback.releases)
+	}
+
+	// 全部成功时一次 Release 都不许发:补偿只撤销"本次未交付"的写(验收底线第 4 条),
+	// 绝不能顺手把玩家已生效的归属也撤掉。
+	allOK := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{}}
+	if err := ownerBeginPlayers(ctx, allOK, []uint64{1001, 2002}, ownerTypeBattle, target, time.Second); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	if len(allOK.releases) != 0 {
+		t.Fatalf("全部成功不得回滚,实得 releases=%v", allOK.releases)
+	}
+	if len(allOK.records) != 2 {
+		t.Fatalf("全部成功后两份归属都应留在权威,实得 %d 份", len(allOK.records))
+	}
+
+	// 回滚本身失败只告警不改变返回值:此时 owner 本就不可用,把回滚错误盖掉原始错误
+	// 会让上层误判失败原因。
+	rbFail := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{},
+		beginErrForPlayer: 2002, beginErr: errcode.New(errcode.ErrUnavailable, "owner down"),
+		releaseErr: errors.New("owner still down")}
+	err := ownerBeginPlayers(ctx, rbFail, []uint64{1001, 2002}, ownerTypeBattle, target, time.Second)
+	if err == nil {
+		t.Fatal("Begin 失败必须上抛")
+	}
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("上抛的必须是 Begin 的原始错误,实得 %v", err)
 	}
 }
 

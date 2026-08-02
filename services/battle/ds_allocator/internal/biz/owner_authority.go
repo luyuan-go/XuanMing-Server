@@ -53,11 +53,14 @@ func sweepStaleOwnerAdmitted(admitted *sync.Map, cutoff time.Time) {
 	})
 }
 
-// OwnerAuthority 是 owner 权威的 migrate 调用面(Query/Begin/Admit/Release;弱依赖)。
+// OwnerAuthority 是 owner 权威的调用面(Query/Begin/Admit/Release)。
 // 由 data.GrpcOwnerLeaseRenewer 实现(与租约续写共用连接);可为 nil(未启用)。
+//
+// BeginTransition 回传记录:成功时是新记录(其 owner_epoch + operation_id 是精确回滚的
+// 唯一凭据),EPOCH_CONFLICT 时是权威当前记录。契约见 owner.proto BeginTransitionResponse。
 type OwnerAuthority interface {
 	QueryOwner(ctx context.Context, playerID uint64) (data.OwnerRecordView, error)
-	BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target data.OwnerTargetView) error
+	BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target data.OwnerTargetView) (data.OwnerRecordView, error)
 	Admit(ctx context.Context, playerID, ownerEpoch uint64, operationID string, target data.OwnerTargetView) (int64, error)
 	ReleaseOwner(ctx context.Context, playerID, ownerEpoch uint64, operationID string) error
 }
@@ -80,25 +83,87 @@ func (u *AllocatorUsecase) SetOwnerAuthority(a OwnerAuthority) {
 //
 // Query 仍要发:取 CAS 期望值 expect_epoch。与 Begin 之间被别的写者推进属 CAS 设计内
 // 竞争,权威回 EPOCH_CONFLICT——重查一次再试;仍冲突则 fail-closed 交调用方整体重试。
+// 返回权威回传的新记录:调用方要用它的 owner_epoch + operation_id 做精确回滚。
 func beginOnePlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
-	ownerType int8, target data.OwnerTargetView) error {
+	ownerType int8, target data.OwnerTargetView) (data.OwnerRecordView, error) {
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
 		rec, qerr := auth.QueryOwner(ctx, playerID)
 		if qerr != nil {
 			// 查询不可判定 → UNKNOWN,绝不当作"无归属"继续(§9.22 禁冒充 OFFLINE/空闲)。
-			return qerr
+			return data.OwnerRecordView{}, qerr
 		}
-		berr := auth.BeginTransition(ctx, playerID, rec.OwnerEpoch, "", ownerType, target)
+		got, berr := auth.BeginTransition(ctx, playerID, rec.OwnerEpoch, "", ownerType, target)
 		if berr == nil {
-			return nil
+			return got, nil
 		}
 		if errcode.As(berr) != errcode.ErrOwnerEpochConflict {
-			return berr
+			return data.OwnerRecordView{}, berr
 		}
 		lastErr = berr
 	}
-	return lastErr
+	return data.OwnerRecordView{}, lastErr
+}
+
+// ownerBeginGrant 是本次调用已成功写进权威的一份归属,用于部分失败时精确回滚。
+// epoch/operation 必须取权威回传的新记录:Release 要求两者与记录全等才生效。
+type ownerBeginGrant struct {
+	PlayerID    uint64
+	OwnerEpoch  uint64
+	OperationID string
+}
+
+// ownerBeginRollbackBudget 是部分失败后回滚已写入归属的独立预算。
+// 取值依据:回滚至多 len(players)-1 次(一局最多 10 人 → ≤9 次)单趟 owner Release RPC,
+// 与 Begin 侧同量级往返;3s 留足余量,又不至于让分配失败路径长时间挂着。待实测复核。
+const ownerBeginRollbackBudget = 3 * time.Second
+
+// rollbackOwnerBegins 精确撤销本次未交付的 Begin。
+//
+// 为什么必须回滚,而不是"等下次分配的 CAS 自然覆盖":BeginTransition 是纯 CAS、不校验
+// admit 屏障,下次分配确实能覆盖——**前提是还有下次**。玩家若在本次失败后离线,记录会
+// 永久停在 PENDING 指向一台马上被 cleanupAllocatedBattle 删掉的 Pod;而 login 的
+// query-first(account/login/internal/biz/owner_query.go 的 applyOwnerPlacement)在屏障
+// 已开时会把它翻译成 TARGET+PENDING,把这台死 Pod 当 exact target 下发给客户端。客户端
+// 按 §9.23 重查拿到同一个死目标,重登也一样——玩家有"返回登录"出口却回不去游戏,
+// 只能靠运维手工清记录。owner 侧没有任何归属记录的 TTL/回收(唯一的 sweep 是
+// RunTransitionLogSweep,清的是审计流水),所以这个残留不会自己消失。
+//
+// 只撤销本函数刚写进去的 (player, epoch, operation) 三元组,不动别的:符合验收底线第 4 条
+// "补偿只允许精确撤销本次未交付的写,绝不回退玩家已获得的东西"。若期间记录已被别的写者
+// 推进(玩家已被分到别处),epoch/operation 不再匹配,Release 按迟到调用幂等 no-op,不误伤。
+//
+// 独立 ctx:调用方的 budgetCtx 多半已因超时失效,拿它回滚等于不回滚。用 plog.Detach
+// 保住 trace_id(§9.8 所有写都要带 trace_id)又不继承请求级 transport(§16.7)。
+//
+// best-effort:回滚失败只告警不上抛。此时 owner 权威本就不可用,重试也写不进去,而把
+// 回滚的错误盖掉调用方的原始错误会让上层误判失败原因;下次分配的 CAS 覆盖仍是兜底。
+func rollbackOwnerBegins(ctx context.Context, auth OwnerAuthority, granted []ownerBeginGrant) {
+	if len(granted) == 0 {
+		return
+	}
+	rbCtx, cancel := context.WithTimeout(plog.Detach(ctx), ownerBeginRollbackBudget)
+	defer cancel()
+	var failed int
+	var firstErr error
+	// 逆序释放:与写入顺序相反,先撤最后写进去的。
+	for i := len(granted) - 1; i >= 0; i-- {
+		g := granted[i]
+		if err := auth.ReleaseOwner(rbCtx, g.PlayerID, g.OwnerEpoch, g.OperationID); err != nil {
+			failed++
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	if failed > 0 {
+		plog.With(ctx).Warnw("msg", "owner_begin_rollback_incomplete",
+			"granted", len(granted), "release_failed", failed, "first_err", firstErr,
+			"hint", "残留归属指向已回收实例;下次分配的 CAS 覆盖兜底,持续出现须人工核查")
+		return
+	}
+	plog.With(ctx).Infow("msg", "owner_begin_rolled_back",
+		"granted", len(granted), "hint", "已精确撤销本次未交付的归属写")
 }
 
 // ownerBeginPlayers 批量强 Begin(contract 阶段):**任一玩家写不进 owner 权威即整体失败**。
@@ -114,6 +179,11 @@ func beginOnePlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
 //
 // 超预算即失败,而不是 migrate 阶段的"跳过剩余玩家":一局里部分玩家有归属、部分没有,
 // 比整局失败重来更难收敛,也会让 Admit 侧看到半截状态。
+//
+// **整体失败必须连同已写入的部分一起撤销**:本函数串行逐玩家写,失败点之前的玩家归属
+// 已经落进权威,而调用方紧接着就会 cleanupAllocatedBattle 把那台 Pod 删掉。不回滚就会
+// 留下一批"归属指向已删除实例"的 PENDING 记录,且没有任何路径能清掉它们
+// (详见 rollbackOwnerBegins 的注释)。回滚是 best-effort,不改变本函数返回的原始错误。
 func ownerBeginPlayers(ctx context.Context, auth OwnerAuthority, players []uint64,
 	ownerType int8, target data.OwnerTargetView, budget time.Duration) error {
 	if auth == nil || len(players) == 0 {
@@ -121,14 +191,23 @@ func ownerBeginPlayers(ctx context.Context, auth OwnerAuthority, players []uint6
 	}
 	budgetCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
+	granted := make([]ownerBeginGrant, 0, len(players))
 	for i, playerID := range players {
-		if err := beginOnePlayer(budgetCtx, auth, playerID, ownerType, target); err != nil {
+		rec, err := beginOnePlayer(budgetCtx, auth, playerID, ownerType, target)
+		if err != nil {
 			plog.With(ctx).Warnw("msg", "owner_begin_failed",
 				"players", len(players), "failed_at", i, "player_id", playerID, "err", err,
 				"pod", target.PodName, "instance_uid", target.InstanceUID,
+				"granted_before_failure", len(granted),
 				"hint", "contract 强依赖:归属写不进权威即拒绝本次交付,调用方重试")
+			rollbackOwnerBegins(ctx, auth, granted)
 			return err
 		}
+		granted = append(granted, ownerBeginGrant{
+			PlayerID:    playerID,
+			OwnerEpoch:  rec.OwnerEpoch,
+			OperationID: rec.OperationID,
+		})
 	}
 	return nil
 }

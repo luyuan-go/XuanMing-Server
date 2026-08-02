@@ -54,11 +54,15 @@ func sweepStaleOwnerAdmitted(admitted *sync.Map, cutoff time.Time) {
 	})
 }
 
-// OwnerAuthority 是 owner 权威的 migrate 调用面(Query/Begin/Admit;弱依赖)。
+// OwnerAuthority 是 owner 权威的调用面(Query/Begin/Admit)。
 // 由 data.GrpcOwnerLeaseRenewer 实现(与租约续写共用连接);可为 nil(未启用)。
+//
+// BeginTransition 回传记录:成功时是新记录,EPOCH_CONFLICT 时是权威当前记录。
+// 契约见 owner.proto BeginTransitionResponse。hub 侧当前不需要读它(签票是单玩家、
+// 无部分写入可回滚),保持与 ds_allocator 同签名以免两份实现漂移。
 type OwnerAuthority interface {
 	QueryOwner(ctx context.Context, playerID uint64) (data.OwnerRecordView, error)
-	BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target data.OwnerTargetView) error
+	BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target data.OwnerTargetView) (data.OwnerRecordView, error)
 	Admit(ctx context.Context, playerID, ownerEpoch uint64, operationID string, target data.OwnerTargetView) (int64, error)
 }
 
@@ -89,7 +93,8 @@ func beginOnePlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
 			// 查询不可判定 → UNKNOWN,绝不当作"无归属"继续(§9.22 禁冒充 OFFLINE/空闲)。
 			return qerr
 		}
-		berr := auth.BeginTransition(ctx, playerID, rec.OwnerEpoch, "", ownerType, target)
+		// 回传的新记录 hub 侧用不到(见 ownerBeginPlayer 注释:单玩家写,无部分写入可回滚)。
+		_, berr := auth.BeginTransition(ctx, playerID, rec.OwnerEpoch, "", ownerType, target)
 		if berr == nil {
 			return nil
 		}
@@ -101,7 +106,7 @@ func beginOnePlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
 	return lastErr
 }
 
-// ownerBeginPlayers 批量强 Begin(contract 阶段):**任一玩家写不进 owner 权威即整体失败**。
+// ownerBeginPlayer 单玩家强 Begin(contract 阶段):**写不进 owner 权威即失败**。
 //
 // 为什么从"告警放行"改成 fail-closed:owner 是归属的唯一权威(§9.22),写不进去就无法证明
 // "这台 DS 有权控制该玩家"。此时放行 = 玩家可能同时被两台 DS 认领,直接踩验收底线第 3 条
@@ -112,23 +117,25 @@ func beginOnePlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
 //
 // auth == nil = owner_addr 未配置(owner 服务未部署),属部署形态问题,不在本函数收敛。
 //
-// 超预算即失败,而不是 migrate 阶段的"跳过剩余玩家":部分写入 + 部分跳过会留下一批
-// 无归属记录的在场玩家,比整体失败重试更难收敛。
-func ownerBeginPlayers(ctx context.Context, auth OwnerAuthority, players []uint64,
+// **刻意是单玩家而不是批量**:hub 的归属定案出口(签票,hub.go signHubTicket)天然一次
+// 一个玩家。做成批量就会引入"前几个已写进权威、最后一个失败"的部分写入态——那批已写入
+// 的归属会指向一台随后被回收的实例,而 hub 侧 OwnerAuthority 没有 Release 通道可精确
+// 回滚(ds_allocator 的 READY 交付是真批量,故那边补了 rollbackOwnerBegins)。保持单玩家,
+// 这类残留在 hub 结构上就不可能出现。将来若真出现批量调用方,必须连同 Release 回滚一起
+// 加,不能只是把 slice 传进来。
+func ownerBeginPlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
 	ownerType int8, target data.OwnerTargetView, budget time.Duration) error {
-	if auth == nil || len(players) == 0 {
+	if auth == nil {
 		return nil
 	}
 	budgetCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	for i, playerID := range players {
-		if err := beginOnePlayer(budgetCtx, auth, playerID, ownerType, target); err != nil {
-			plog.With(ctx).Warnw("msg", "owner_begin_failed",
-				"players", len(players), "failed_at", i, "player_id", playerID, "err", err,
-				"pod", target.PodName, "instance_uid", target.InstanceUID,
-				"hint", "contract 强依赖:归属写不进权威即拒绝本次交付,调用方重试")
-			return err
-		}
+	if err := beginOnePlayer(budgetCtx, auth, playerID, ownerType, target); err != nil {
+		plog.With(ctx).Warnw("msg", "owner_begin_failed",
+			"player_id", playerID, "err", err,
+			"pod", target.PodName, "instance_uid", target.InstanceUID,
+			"hint", "contract 强依赖:归属写不进权威即拒绝本次交付,调用方重试")
+		return err
 	}
 	return nil
 }

@@ -2557,7 +2557,7 @@ func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID 
 	//
 	// 预算 3s:单玩家最多 2 轮 (Query+Begin)(EPOCH_CONFLICT 重查一次),留足跨服务往返与
 	// 一次 TiDB 事务的余量。超时按失败处理,调用方重试——待实测复核。
-	if err := ownerBeginPlayers(ctx, u.ownerAuth, []uint64{playerID}, ownerTypeHub, data.OwnerTargetView{
+	if err := ownerBeginPlayer(ctx, u.ownerAuth, playerID, ownerTypeHub, data.OwnerTargetView{
 		PodName:                  binding.PodName,
 		InstanceUID:              binding.InstanceUID,
 		InstanceEpoch:            binding.ProtocolEpoch,

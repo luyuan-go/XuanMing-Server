@@ -82,8 +82,16 @@ func (g *GrpcOwnerLeaseRenewer) QueryOwner(ctx context.Context, playerID uint64)
 	return recordView(resp.GetRecord()), nil
 }
 
-// BeginTransition 发起 owner 迁移(EPOCH_CONFLICT 也按 error 返回,biz 弱模式只告警)。
-func (g *GrpcOwnerLeaseRenewer) BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target OwnerTargetView) error {
+// BeginTransition 发起 owner 迁移(EPOCH_CONFLICT 也按 error 返回)。
+//
+// 回传记录而非只回 error:owner.proto BeginTransitionResponse.record 成功时是**新记录**、
+// EPOCH_CONFLICT 时是**当前记录**,两者调用方都要用——
+//   - 成功:biz 侧要拿新记录的 owner_epoch + operation_id 才能在部分失败时精确 Release
+//     回滚(Release 要求两者全等,自铸或推算都不行);
+//   - 冲突:当前记录供重查决策。
+//
+// 此前这里把 resp.Record 整个丢掉,回滚所需的两个值在调用方**无从取得**。
+func (g *GrpcOwnerLeaseRenewer) BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target OwnerTargetView) (OwnerRecordView, error) {
 	callCtx, cancel := context.WithTimeout(ctx, ownerLeaseRPCTimeout)
 	defer cancel()
 	resp, err := g.cli.BeginTransition(callCtx, &ownerv1.BeginTransitionRequest{
@@ -94,12 +102,12 @@ func (g *GrpcOwnerLeaseRenewer) BeginTransition(ctx context.Context, playerID, e
 		Target:      targetProto(target),
 	})
 	if err != nil {
-		return err
+		return OwnerRecordView{}, err
 	}
 	if resp.GetCode() != commonv1.ErrCode_OK {
-		return errcode.New(errcode.Code(resp.GetCode()), "owner begin rejected player=%d", playerID)
+		return recordView(resp.GetRecord()), errcode.New(errcode.Code(resp.GetCode()), "owner begin rejected player=%d", playerID)
 	}
-	return nil
+	return recordView(resp.GetRecord()), nil
 }
 
 // Admit 准入提交;BARRIER_NOT_OPEN 返回剩余毫秒(biz 下次心跳重试)。
