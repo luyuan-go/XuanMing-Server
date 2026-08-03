@@ -184,8 +184,26 @@ Pod template 三层都必须带相同的 `pandora.dev/release-track=stable|canar
 
 异常回滚顺序：**先把权重归零**，立即停止新分配进入 Canary；不要删除 Fleet、不要杀 Allocated
 GameServer、不要换 keyset。确认 Canary 已无新分配后，可把 Canary `replicas` 设为 0 清 Ready 池；
-旧 Allocated Hub/Battle 继续排空，最终由运维结合对局/Hub 在线人数证据清理。脚本尤其不会自动删除
-旧 Hub Fleet，因为本仓库无法机械证明玩家已经全部离开。
+旧 Allocated Hub/Battle 继续排空。
+
+**残留 Allocated 实例的清理（2026-08-03 设计复议，替代原「运维结合在线证据人工清理」条款）**：
+
+- 旧版本条款要求「最终由运维结合对局/Hub 在线人数证据清理」。该路径已被证伪并废除：
+  「无人」的反证责任在删除方，而人工可得的证据（日志窗口 grep、近段鉴权记录）受
+  `--since` 窗口起点、容器日志轮转、级别静默三重失真，**永远构不成「无人」的证明**——
+  2026-08-03 正是按此流程误删了载人 battle DS（INC-20260803-002，玩家被踢）。
+- 现行规则：**人工与脚本一律不得直接 delete Allocated GameServer**（§9.21）。残留分两类：
+  - **有权威分配记录引用**的 Allocated 实例：等对局/在线自然结束，由既有判弃链
+    （心跳超时 abandoned → fenced release）与 Agones 生命周期回收；
+  - **无任何权威记录引用**的孤儿实例：由 ds_allocator sweep 的孤儿对账清扫自动回收
+    （`biz/orphan_gameserver.go`）——它能做到人工做不到的机械证明：无记录 ⇒ 签不出
+    DSTicket ⇒ 不可能再有玩家进来（票据硬上限 180s）；「不可能已在内」由心跳停机契约
+    （无记录心跳 → `commandStop` / DS 失联自我 fencing，§9.22）闭合。删除走服务端复核
+    + UID+resourceVersion 双 precondition，连续观察超阈值（默认 10m）才执行；且必须由
+    allocation 权威台账（`data/allocation_ledger.go`）证明该 GS 出身本权威——读到空/
+    错配 Redis 的进程台账必空、一台都删不掉，防「权威视图分裂下机械化全量误删」。
+- 「本仓库无法机械证明玩家已经全部离开」对**有记录引用**的实例（尤其旧 Hub Fleet）仍然
+  成立，脚本仍不会自动删除旧 Hub Fleet；孤儿对账清扫只覆盖「无记录」这一可证明子集。
 
 上述普通灰度回滚不得与独立 DSTicket 轮换交叉执行。若发现
 `pandora/ConfigMap/pandora-dsticket-operation-lock` 遗留，只能先审计 holder、operation、UID、相关
