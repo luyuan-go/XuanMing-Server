@@ -34,6 +34,12 @@ const (
 type Node struct {
 	nodeShifted uint64        // 预移位好的 node 段,免去每次 Generate 重复移位
 	state       atomic.Uint64 // 上一次发出的 ID:[lastTime:32][node:17][step:15]
+
+	// exhaustLoggedSec 是"已为哪个逻辑秒打过耗尽日志"。
+	// 无锁 CAS 下,一秒的 step 池耗尽会让**所有**并发发号 goroutine 同时撞进等待分支,
+	// 不限频就会按并发度刷屏(压测时每秒上千条)。用它选出每个逻辑秒的第一个进入者
+	// 当该秒的唯一记录者,其余静默。+1 是为了让"逻辑秒 0"也能被正常记录一次。
+	exhaustLoggedSec atomic.Uint64
 }
 
 // NewNode 创建一个 SnowFlake 生成器。nodeID 超过 17 位会 panic。
@@ -151,23 +157,40 @@ func (n *Node) GenerateInto(dst []uint64) {
 func (n *Node) waitNextTime(last uint64) {
 	const waitStallLogThreshold = 2 * time.Second
 
+	nodeID := (n.nodeShifted >> nodeShift) & NodeMask
 	start := time.Now()
-	logged := false
+
+	// 每个逻辑秒只让第一个进入者记录,避免并发耗尽时按 goroutine 数刷屏。
+	// 该秒的后续进入者只安静等待。
+	isLogger := n.exhaustLoggedSec.Swap(last+1) != last+1
+	if isLogger {
+		// 本秒 step 池耗尽本身就是要记录的事件:它意味着该节点已撞到 32768/s 的容量墙
+		// (或处在时钟回拨窗口——回拨期间整个窗口共享一个 step 池,是耗尽的主要放大因素)。
+		// behind 为 0 说明是纯粹的量大,>0 说明叠加了回拨,运维据此区分两种成因。
+		behind := uint64(0)
+		if nw := nowEpoch(); nw < last {
+			behind = last - nw
+		}
+		klog.Errorf("[snowflake] node=%d step pool exhausted for logical second %d (%d IDs/s cap reached, clock behind by %ds); minting on this node blocks until the clock passes it — consider re-balancing StepBits/NodeBits if this is not a clock issue",
+			nodeID, last, stepMask+1, behind)
+	}
+
+	stallLogged := false
 	for {
 		now := nowEpoch()
 		if now > last {
 			break
 		}
-		if !logged && time.Since(start) >= waitStallLogThreshold {
-			logged = true
-			klog.Errorf("[snowflake] node=%d stalled %v waiting for clock to pass logical second %d (now=%d, behind by %ds) — clock rollback or step pool exhausted; all ID minting on this node is blocked",
-				(n.nodeShifted>>nodeShift)&NodeMask, time.Since(start), last, now, last-now)
+		if isLogger && !stallLogged && time.Since(start) >= waitStallLogThreshold {
+			stallLogged = true
+			klog.Errorf("[snowflake] node=%d stalled %v waiting for clock to pass logical second %d (now=%d, behind by %ds) — clock rollback; all ID minting on this node is blocked",
+				nodeID, time.Since(start), last, now, last-now)
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if logged {
+	if stallLogged {
 		klog.Warnf("[snowflake] node=%d resumed after stalling %v (clock passed logical second %d)",
-			(n.nodeShifted>>nodeShift)&NodeMask, time.Since(start), last)
+			nodeID, time.Since(start), last)
 	}
 }
 
