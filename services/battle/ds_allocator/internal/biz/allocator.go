@@ -191,6 +191,17 @@ type AllocatorUsecase struct {
 	// 幽灵般占着监听端口污染下一局;打开后 stop 时异步调 alloc.Release kill 掉它。Agones 模式默认
 	// 关闭:孤儿 GameServer 由 Agones 生命周期回收,避免 Redis 抖动误判 orphan 时误删正常 pod。
 	killOrphanOnStop bool
+
+	// 孤儿 Allocated GameServer 对账清扫(biz/orphan_gameserver.go;2026-08-03)。
+	// orphanGSReconciler 由构造期对 alloc 的接口断言注入(仅 Agones 实现);
+	// allocationLedger 由构造期对 repo 的接口断言注入(权威台账,防误删④的
+	// 「本权威出身证明」;二者任一缺失则清扫整体禁用)。
+	// 其余两个字段与 sweepDeferUntil 同一并发域(仅 sweepOnce 单协程读写,不加锁),
+	// 且同为进程内非权威调度提示:丢失只是把回收推迟一个观察期,方向安全。
+	orphanGSReconciler    OrphanGameServerReconciler
+	allocationLedger      BattleAllocationLedger
+	lastOrphanGSReconcile time.Time
+	orphanGSFirstSeen     map[string]time.Time
 }
 
 // BattleCredentialSigner 把 Allocator 可见能力收窄为 DS callback 凭据签发；生产实现是
@@ -204,6 +215,12 @@ func NewAllocatorUsecase(repo data.BattleRepo, alloc GameServerAllocator, cfg co
 	u := &AllocatorUsecase{repo: repo, alloc: alloc, cfg: cfg}
 	if reconciler, ok := repo.(data.BattleActiveIndexReconciler); ok {
 		u.activeIndexReconciler = reconciler
+	}
+	if orphan, ok := alloc.(OrphanGameServerReconciler); ok {
+		u.orphanGSReconciler = orphan // 仅 Agones 分配器实现;local/mock 自动禁用
+	}
+	if ledger, ok := repo.(BattleAllocationLedger); ok {
+		u.allocationLedger = ledger // 孤儿清扫的权威台账(防误删④);无台账则清扫禁用
 	}
 	return u
 }
@@ -440,6 +457,16 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 				"battle %d allocation request conflicts with existing snapshot", matchID)
 		}
 		return u.awaitExistingAllocation(ctx, matchID, existing)
+	}
+	// allocation 台账(孤儿清扫防误删④,data/allocation_ledger.go):claim 赢家在任何
+	// 外部 GSA POST 前把 allocation_id 记入本权威台账;孤儿清扫只准回收「台账能证明
+	// 出身于本权威」的 GS。写失败不阻断分配(可用性优先)——代价只是本次分配若泄漏,
+	// 清扫因台账查无而保留不删,方向安全。
+	if u.allocationLedger != nil {
+		if lerr := u.allocationLedger.RecordAllocationLedger(ctx, allocationID, claimAt); lerr != nil {
+			plog.With(ctx).Warnw("msg", "battle_allocation_ledger_record_failed",
+				"match_id", matchID, "allocation_id", allocationID, "err", lerr)
+		}
 	}
 
 	var authoritative *data.AuthoritativeGameServerAllocation
@@ -1531,6 +1558,19 @@ func (u *AllocatorUsecase) AbortPreactiveBattle(ctx context.Context, request bat
 		return errcode.New(errcode.ErrUnavailable,
 			"battle %d allocation abort lifecycle publish pending", request.MatchID)
 	}
+	// owner 精确释放(§9.23 取消/失败路径;2026-07-29 补)。
+	//
+	// 判弃的这台实例正在被回收,但 READY 交付前的强 Begin 已经把这批玩家的归属写成
+	// BATTLE/本实例。不释放的话 query-first 会一直把玩家指回一台死 DS:客户端 Travel 失败
+	// → 重试 → 拿到同一个 TARGET → 再失败,正是验收底线第 1 条要防的「只能杀进程恢复」。
+	// (abandon sweep 那条路有同样的释放,但它由心跳超时驱动;abort 是 saga 主动判弃,
+	// 走不到那里,此前是纯缺口。)
+	//
+	// 复用 abandon sweep 的同一把释放:exact 身份门(记录仍指向本实例才动) + compare-delete,
+	// 只撤销本次未交付的归属。若玩家已被分到别处(epoch/operation 已推进),
+	// 门与 compare-delete 双重跳过,不误伤——验收底线第 4 条。
+	ownerReleaseAbandonedPlayersWeak(ctx, u.ownerAuth, battle.GetPlayerIds(),
+		request.Target.PodName, request.Target.InstanceUID, 2*time.Second)
 	if err := u.lifecycleProofRepo.RecordAllocationLifecyclePublished(
 		ctx, request.MatchID, request.Target); err != nil {
 		return errcode.NewCause(errcode.ErrUnavailable, err,
@@ -2808,6 +2848,9 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			}
 		}
 	}
+	// 孤儿 Allocated GameServer 对账清扫(biz/orphan_gameserver.go):按分钟节流,
+	// 只处理「无任何权威记录引用」的 GS,与上面按记录驱动的判弃链互不重叠。
+	u.reconcileOrphanGameServersIfDue(ctx, time.Now())
 	return nil
 }
 

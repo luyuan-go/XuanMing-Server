@@ -3972,15 +3972,59 @@ function Apply-AgonesManifests {
         }
         $fleetNs = 'default'
         Write-Info "强制重建 GameServer(context=$KubeContext,让 :dev tag 的新 DS 镜像生效)..."
+        # §9.21 硬线(2026-08-03 事故整改):**绝不删除 Allocated 的 GameServer**——Allocated
+        # 本身就是「可能载人」的声明,强删等于把在场玩家踢下线(实锤:2026-08-03 清旧代把
+        # 用户正在游戏的 battle DS 删了)。这里只删非 Allocated(Ready/Scheduled/RequestReady
+        # 等)副本,GameServerSet 按当前 spec(:dev 已指向新镜像)自动补齐;Allocated 旧镜像
+        # 副本以旧版本跑完当前对局后由 Agones 自然回收(§9.21 本就要求旧 Battle DS 打完退场)。
+        # 若某台 Allocated 实为泄漏残留(无任何权威分配记录引用),ds_allocator 的孤儿对账清扫
+        # (biz/orphan_gameserver.go)会在观察阈值(默认 10m)后按 UID+resourceVersion 精确
+        # 回收——**任何情况下都不需要、也不允许人工/脚本直接删 Allocated GameServer**。
         foreach ($fleet in @('pandora-battle-stable', 'pandora-battle-canary', 'pandora-hub-stable', 'pandora-hub-canary')) {
-            kubectl @kubectlContextArgs delete gameservers -l "agones.dev/fleet=$fleet" -n $fleetNs --ignore-not-found
+            $gsListJson = (kubectl @kubectlContextArgs get gameservers -l "agones.dev/fleet=$fleet" -n $fleetNs -o json 2>$null | Out-String)
             if ($LASTEXITCODE -ne 0) {
-                # 删除失败 = 旧镜像 Pod 可能仍在跑;绝不能静默继续,否则会把「旧实例还在跑」
-                # 误判成「新镜像已部署成功」。直接 fail-fast,让调用方看到并处理。
-                throw "删除 Fleet『$fleet』的 GameServer 失败(exit=$LASTEXITCODE);旧 DS 镜像 Pod 可能仍在跑,已中止以免误判为新镜像部署成功。请检查:kubectl --context $KubeContext get gameservers -l agones.dev/fleet=$fleet -n $fleetNs,排障后重跑。"
+                throw "列举 Fleet『$fleet』的 GameServer 失败(exit=$LASTEXITCODE);无法区分 Allocated/非 Allocated,已中止(绝不盲删)。请检查:kubectl --context $KubeContext get gameservers -l agones.dev/fleet=$fleet -n $fleetNs,排障后重跑。"
+            }
+            $gsItems = @()
+            if (-not [string]::IsNullOrWhiteSpace($gsListJson)) {
+                $parsed = $gsListJson | ConvertFrom-Json
+                if ($null -ne $parsed.items) { $gsItems = @($parsed.items) }
+            }
+            $allocatedGs = @($gsItems | Where-Object { [string]$_.status.state -ceq 'Allocated' })
+            $deletableGs = @($gsItems | Where-Object { [string]$_.status.state -cne 'Allocated' })
+            foreach ($gs in $deletableGs) {
+                # LIST→DELETE 窗口防护(对抗审查 P1):快照时 Ready 的 GS 在轮到删除时可能已被
+                # GSA 分配(Ready→Allocated 毫秒级,分配后立即签票、玩家在途)。kubectl delete
+                # 表达不了 UID/resourceVersion precondition,故删除前紧贴着重查一次该 GS 的当前
+                # 状态:已变 Allocated 的跳过(转入保留清单),已消失的跳过。重查只能把窗口从
+                # 秒级压到毫秒级,不能归零——残余窗口由 Go 侧兜底:ds_allocator 分配失败会走
+                # 既有补偿链重排,不会留下永久损伤;真正带 precondition 的精确删除只存在于
+                # ds_allocator 的孤儿对账清扫(DeleteAllocatedGameServerExact)。
+                $curStateRaw = (kubectl @kubectlContextArgs get gameserver $gs.metadata.name -n $fleetNs --ignore-not-found -o jsonpath='{.status.state}' 2>$null | Out-String)
+                if ($LASTEXITCODE -ne 0) {
+                    throw "重查 GameServer『$($gs.metadata.name)』状态失败(exit=$LASTEXITCODE);无法证明它仍非 Allocated,已中止(绝不盲删)。"
+                }
+                $curState = $curStateRaw.Trim()
+                if ($curState -ceq 'Allocated') {
+                    Write-Warn "跳过删除:GameServer『$($gs.metadata.name)』在列举后已被分配(Allocated,可能载人,§9.21)。"
+                    $allocatedGs = @($allocatedGs) + @($gs)
+                    continue
+                }
+                kubectl @kubectlContextArgs delete gameserver $gs.metadata.name -n $fleetNs --ignore-not-found
+                if ($LASTEXITCODE -ne 0) {
+                    # 删除失败 = 旧镜像 Pod 可能仍在跑;绝不能静默继续,否则会把「旧实例还在跑」
+                    # 误判成「新镜像已部署成功」。直接 fail-fast,让调用方看到并处理。
+                    throw "删除 Fleet『$fleet』的 GameServer『$($gs.metadata.name)』失败(exit=$LASTEXITCODE);旧 DS 镜像 Pod 可能仍在跑,已中止以免误判为新镜像部署成功。请检查:kubectl --context $KubeContext get gameservers -l agones.dev/fleet=$fleet -n $fleetNs,排障后重跑。"
+                }
+            }
+            if ($allocatedGs.Count -gt 0) {
+                $allocatedNames = @($allocatedGs | ForEach-Object { $_.metadata.name }) -join ', '
+                Write-Warn "Fleet『$fleet』保留 $($allocatedGs.Count) 台 Allocated GameServer(可能载人,§9.21 禁止强删):$allocatedNames"
+                Write-Warn "  它们将以旧镜像跑完当前对局后由 Agones 回收;新分配已落在新镜像副本上。"
+                Write-Warn "  若确属泄漏残留,ds_allocator 孤儿对账清扫会在阈值后自动回收,无需(也不允许)人工删除。"
             }
         }
-        Write-Ok "已删除旧 GameServer,Agones 将用最新 :dev 镜像重建(kubectl get gameservers 观察 Ready)。"
+        Write-Ok "已删除旧的非 Allocated GameServer,Agones 将用最新 :dev 镜像重建(kubectl get gameservers 观察 Ready)。"
     }
 }
 

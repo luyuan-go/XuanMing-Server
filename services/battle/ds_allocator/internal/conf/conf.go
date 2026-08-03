@@ -386,6 +386,16 @@ type AllocatorConf struct {
 	// 设为负值禁用(0 = 用默认 5m)。
 	EmptyBattleTimeout config.Duration `yaml:"empty_battle_timeout,omitempty" json:"empty_battle_timeout,omitempty"`
 
+	// OrphanGsReclaimAfter 孤儿 Allocated GameServer(处于 Allocated 却无任何权威分配
+	// 记录引用)连续观察超过该时长后,由 sweep 的对账清扫按 UID+resourceVersion
+	// precondition 精确回收(biz/orphan_gameserver.go;2026-08-03)。
+	// 默认 10m,下限 5m(biz 侧钳制);推导:阈值覆盖 DSTicket 硬上限 180s +
+	// ready_wait 120s + 时钟余量,保证"无记录 ⇒ 不可能再有玩家进来"。
+	// ⚠️ "不可能已在内"不由阈值保证,靠的是心跳停机契约(无记录心跳 → commandStop /
+	// DS 失联自我 fencing,§9.22)——完整判定链见 biz/orphan_gameserver.go 文件头。
+	// 0/负值 = 用默认;仅 Agones 分配器生效(local/mock 无 Allocated 概念)。
+	OrphanGsReclaimAfter config.Duration `yaml:"orphan_gs_reclaim_after,omitempty" json:"orphan_gs_reclaim_after,omitempty"`
+
 	// MockDSAddrHost W4 ② MockGameServerAllocator 返回的假 DS host(默认 127.0.0.1)。
 	// W4 ③ 接 Agones 后此字段废弃,addr 由 GameServerAllocation status 返回。
 	MockDSAddrHost string `yaml:"mock_ds_addr_host,omitempty" json:"mock_ds_addr_host,omitempty"`

@@ -25,6 +25,10 @@
 param(
     [switch]$NoRelay,        # 不自动起容器版 UDP 中继
     [switch]$SkipImageLoad,  # 跳过 minikube image load
+    # 集群上存在 Allocated(可能载人)GameServer 时,全量清场默认**中止**;只有显式传本开关
+    # 才连 Allocated 一起删(§9.21 / 2026-08-03 误删载人 DS 整改:零秒警告不构成守卫,
+    # 必须 fail-closed + 显式确认)。确认无真人对局(如只剩上一轮 e2e 的合成残留)时才传。
+    [switch]$ForceDeleteAllocated,
     [switch]$BridgeForce,    # 端口被非 bridge 进程占用时,杀掉占用者后重建 port-forward
     [switch]$HostBridge,     # 强制走宿主 port-forward 桥(默认:集群内 pandora-edge-envoy 可用即跳过桥)
     [Alias('Profile')]
@@ -431,12 +435,67 @@ if ($SkipImageLoad) {
     }
     # 只要执行过 image load，就必须按本项目四支 Fleet 精确重建 GameServer。即使 load 一次成功、
     # tag 校验已匹配，运行中的旧 Pod 也不会自动换镜像；若不删会把旧 Ready 实例误判为新包就绪。
+    #
+    # ⚠️ 本删除是 §8 压测纪律授权的**测试集群全量重置**(跑测前清空 GameServer),会连
+    # Allocated 一起删。它只允许出现在 e2e/压测清场;任何日常部署/换镜像路径都必须走
+    # start.ps1 的「只删非 Allocated」逻辑(§9.21:禁止删除仍承载玩家的 Allocated DS,
+    # 2026-08-03 有误删载人 DS 实锤)。
+    # 存在 Allocated 时 fail-closed 中止(对抗审查 P2:打印警告后同秒即删是零秒窗口,
+    # 拦不住任何人;本脚本还常被无人值守执行,目视机会连受众都没有)。真要连 Allocated
+    # 一起清,必须显式传 -ForceDeleteAllocated——决定权交给确认过"无真人对局"的人。
+    $allocatedByFleet = @{}
+    foreach ($fleet in $fleetNames) {
+        $names = @(Get-FleetGameServerItems $fleet | Where-Object { [string]$_.status.state -ceq 'Allocated' } |
+            ForEach-Object { $_.metadata.name })
+        if ($names.Count -gt 0) { $allocatedByFleet[$fleet] = $names }
+    }
+    if ($allocatedByFleet.Count -gt 0 -and -not $ForceDeleteAllocated) {
+        foreach ($fleet in $allocatedByFleet.Keys) {
+            Write-Err "Fleet '$fleet' 存在 $($allocatedByFleet[$fleet].Count) 台 Allocated GameServer(可能载人):$($allocatedByFleet[$fleet] -join ', ')"
+        }
+        Write-Err "e2e 全量清场会删除上述 Allocated 实例;为防误删载人 DS(§9.21,2026-08-03 实锤)已中止。"
+        Write-Err "确认集群上没有真人对局(例如只剩上一轮 e2e 的合成残留)后,显式加 -ForceDeleteAllocated 重跑。"
+        exit 1
+    }
+    if ($allocatedByFleet.Count -gt 0) {
+        foreach ($fleet in $allocatedByFleet.Keys) {
+            Write-Warn "-ForceDeleteAllocated 已指定:Fleet '$fleet' 的 Allocated 实例将随全量重置删除:$($allocatedByFleet[$fleet] -join ', ')"
+        }
+    }
     Write-Warn "DS 镜像已刷新，按 Fleet 标签删除现存 GameServer，让 Agones 用新镜像重建..."
     foreach ($fleet in $fleetNames) {
-        kubectl @kubectlContextArgs delete gameservers -n $FleetNamespace -l "agones.dev/fleet=$fleet" --ignore-not-found
-        if ($LASTEXITCODE -ne 0) {
-            Write-Err "删除 Fleet '$fleet' 的旧 GameServer 失败；不能继续用旧 Ready 实例假报成功。"
-            exit 1
+        if ($ForceDeleteAllocated) {
+            # 显式授权的全量重置:按 label 批删(连 Allocated)。仅限确认无真人对局的测试集群。
+            kubectl @kubectlContextArgs delete gameservers -n $FleetNamespace -l "agones.dev/fleet=$fleet" --ignore-not-found
+            if ($LASTEXITCODE -ne 0) {
+                Write-Err "删除 Fleet '$fleet' 的旧 GameServer 失败；不能继续用旧 Ready 实例假报成功。"
+                exit 1
+            }
+            continue
+        }
+        # 非 force 路径(对抗审查 P2 整改):上方门检到这里存在秒级窗口,窗口内可能出现
+        # 新的 Allocated(分配在途)。改为逐台按名删除并在删前复查状态:复查失败或发现
+        # Allocated 一律中止(与门检同一 fail-closed 语义),绝不静默连删。复查→删除仍有
+        # 毫秒级残余窗口(kubectl 表达不了 precondition),被删的只可能是「复查后毫秒内
+        # 刚被选中」的分配——分配尚在 warming、未向 matchmaker 放行 ds_addr,分配失败由
+        # 后端既有补偿链重排,不产生玩家可见损伤。
+        foreach ($item in @(Get-FleetGameServerItems $fleet)) {
+            $gsName = [string]$item.metadata.name
+            if ([string]::IsNullOrWhiteSpace($gsName)) { continue }
+            $curState = (kubectl @kubectlContextArgs get gameserver $gsName -n $FleetNamespace --ignore-not-found -o jsonpath='{.status.state}' 2>$null | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0) {
+                Write-Err "复查 GameServer '$gsName' 状态失败；无法证明其非 Allocated,绝不盲删,已中止。"
+                exit 1
+            }
+            if ($curState -ceq 'Allocated') {
+                Write-Err "GameServer '$gsName' 在清场窗口内变为 Allocated(可能载人)；为防误删已中止(§9.21)。确认无真人对局后用 -ForceDeleteAllocated 重跑。"
+                exit 1
+            }
+            kubectl @kubectlContextArgs delete gameserver $gsName -n $FleetNamespace --ignore-not-found
+            if ($LASTEXITCODE -ne 0) {
+                Write-Err "删除 Fleet '$fleet' 的旧 GameServer '$gsName' 失败；不能继续用旧 Ready 实例假报成功。"
+                exit 1
+            }
         }
     }
     # delete 返回后仍显式确认旧 UID 已全部消失，再进入 Ready 等待；否则 Fleet status 的短暂旧值

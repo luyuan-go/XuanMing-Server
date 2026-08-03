@@ -84,6 +84,11 @@ allocator:
   ready_wait_timeout: "120s"
   # heartbeat_timeout: DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → abandoned
   heartbeat_timeout: "15s"
+  # orphan_gs_reclaim_after: 孤儿 Allocated GameServer(无任何权威分配记录引用)连续
+  # 观察超过该时长后由 sweep 对账清扫按 UID+resourceVersion precondition 回收
+  # (代码默认 10m,下限 5m;留空即默认)。根治「Allocated 泄漏占位 → 只能人肉删 →
+  # 误删载人 DS」:任何人任何脚本都不得再手工 delete Allocated GameServer(§9.21)。
+  # orphan_gs_reclaim_after: "10m"
 
   # owner 迁移双写(owner-authority.md migrate ②③⑥):实例租约 + READY Begin(BATTLE) +
   # census 代提交 Admit。dev 一键启动已含 owner 服务(:50017);弱依赖,owner 掉线仅告警。

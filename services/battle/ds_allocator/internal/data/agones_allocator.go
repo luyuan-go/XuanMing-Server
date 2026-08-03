@@ -252,6 +252,10 @@ type deleteOptions struct {
 
 type deletePreconditions struct {
 	UID string `json:"uid"`
+	// ResourceVersion(可选)把 precondition 收紧到"读到的那个版本":对象任何后续
+	// 变更(含新的 GSA 分配 PATCH)都会让 DELETE 409。孤儿对账回收用它闭合
+	// GET→DELETE 竞态窗口;既有 UID-only 调用方不受影响(omitempty)。
+	ResourceVersion string `json:"resourceVersion,omitempty"`
 }
 
 // Allocate POST 一个 GameServerAllocation,返回 (gameServerName, address:port)。
@@ -1079,6 +1083,140 @@ func (a *AgonesGameServerAllocator) Release(ctx context.Context, podName string)
 			"agones: release %s http %d: %s", podName, status, truncate(respBytes, 256))
 	}
 	return nil
+}
+
+// ── 孤儿 Allocated GameServer 对账回收(2026-08-03)────────────────────────────
+//
+// 背景:Agones 生命周期**不回收** Allocated GameServer。若一台 GS 处于 Allocated
+// 却在权威存储里没有任何分配记录引用(记录已释放但外部删除失败/响应丢失、手工 GSA、
+// 历史残留),它会永久占位锁死 Fleet 容量;而人工判断"无人"必须翻日志,日志窗口/
+// 轮转/级别静默三重失真已两次导致误删载人 DS(见工作区记忆 2026-08-03)。
+// 本节提供机械化的只读列举 + exact 复核删除,由 biz 层 sweep 的对账清扫消费,
+// 使人肉删除从流程上不再必要(§9.21:禁止删除仍承载玩家的 Allocated DS)。
+
+// agonesStateAllocated 是 Agones GameServer 的已分配状态。
+const agonesStateAllocated = "Allocated"
+
+// AllocatedGameServerInfo 是对账清扫用的 Allocated GameServer 快照。
+type AllocatedGameServerInfo struct {
+	Name  string
+	UID   string
+	Fleet string
+	// AllocationID 取自 pandora.dev/allocation-id label(本系统 GSA 写入的唯一
+	// UUID);手工 GSA / 非本系统分配可能为空。空值不参与引用匹配,只按
+	// name/UID 判定。
+	AllocationID string
+	// Deleting:deletionTimestamp 非空,删除已受理,处于终止宽限,无需再处理。
+	Deleting bool
+}
+
+// ListAllocatedGameServers 列出全部受管 Fleet 下处于 Allocated 状态的 GameServer。
+// 任何错误都整轮失败(fail-closed):对账清扫拿不到完整清单时必须什么都不删,
+// 部分清单会把仍被引用的 GS 误判为孤儿。
+func (a *AgonesGameServerAllocator) ListAllocatedGameServers(
+	ctx context.Context,
+) ([]AllocatedGameServerInfo, error) {
+	fleets := a.WatchedFleets()
+	if len(fleets) == 0 {
+		return nil, nil
+	}
+	selector := fleetLabelKey + " in (" + strings.Join(fleets, ",") + ")"
+	listURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers?labelSelector=%s",
+		a.apiServer, a.namespace, url.QueryEscape(selector))
+	respBytes, status, err := a.do(ctx, http.MethodGet, listURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("agones: list allocated gameservers: %w", err)
+	}
+	if status < 200 || status >= 300 {
+		return nil, fmt.Errorf("agones: list allocated gameservers http %d: %s",
+			status, truncate(respBytes, 256))
+	}
+	var list gameServerListResponse
+	if err := json.Unmarshal(respBytes, &list); err != nil {
+		return nil, fmt.Errorf("agones: decode allocated gameserver list: %w", err)
+	}
+	out := make([]AllocatedGameServerInfo, 0, len(list.Items))
+	for _, item := range list.Items {
+		if item.Status.State != agonesStateAllocated {
+			continue
+		}
+		out = append(out, AllocatedGameServerInfo{
+			Name:         item.Metadata.Name,
+			UID:          item.Metadata.UID,
+			Fleet:        item.Metadata.Labels[fleetLabelKey],
+			AllocationID: item.Metadata.Labels[battleAllocationMetadataKey],
+			Deleting:     item.Metadata.DeletionTimestamp != "",
+		})
+	}
+	return out, nil
+}
+
+// DeleteAllocatedGameServerExact 回收一台已被 biz 层判定为孤儿的 Allocated GameServer。
+//
+// 删除前在服务端做一次 exact 复核(GET 最新对象),四项任一不符即返回 (false, nil)
+// 让调用方作废候选重新观察,绝不带着过期观察结论删除:
+//   - UID 不符:同名对象已是新实例;
+//   - 已带 deletionTimestamp:删除已受理;
+//   - 状态离开 Allocated:候选前提不成立;
+//   - allocation-id label 与候选观察值不符:GET 前发生过新的 GSA 写入。
+//
+// DELETE 携带 UID + resourceVersion 双 precondition:GET→DELETE 窗口内对象的**任何**
+// 变更(包括一次新的 GSA 分配,它必然 PATCH metadata 抬高 resourceVersion)都会让
+// precondition 失败(409),从机制上排除"复核后瞬间被分配、随即被删"的竞态。
+// 404/409 都按候选失效返回 (false, nil);只有确认 2xx 才返回 (true, nil)。
+func (a *AgonesGameServerAllocator) DeleteAllocatedGameServerExact(
+	ctx context.Context, name, uid, expectedAllocationID string,
+) (bool, error) {
+	if name == "" || uid == "" {
+		return false, errcode.New(errcode.ErrInvalidArg,
+			"agones: orphan reclaim requires gameserver name and uid")
+	}
+	gsURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers/%s",
+		a.apiServer, a.namespace, name)
+	respBytes, status, err := a.do(ctx, http.MethodGet, gsURL, nil)
+	if err != nil {
+		return false, fmt.Errorf("agones: orphan reclaim get %s: %w", name, err)
+	}
+	if status == http.StatusNotFound {
+		return false, nil // 已消失,无需动作
+	}
+	if status < 200 || status >= 300 {
+		return false, fmt.Errorf("agones: orphan reclaim get %s http %d: %s",
+			name, status, truncate(respBytes, 256))
+	}
+	var gs gameServerResponse
+	if err := json.Unmarshal(respBytes, &gs); err != nil {
+		return false, fmt.Errorf("agones: orphan reclaim decode %s: %w", name, err)
+	}
+	if gs.Metadata.UID != uid || gs.Metadata.DeletionTimestamp != "" ||
+		gs.Status.State != agonesStateAllocated ||
+		gs.Metadata.Labels[battleAllocationMetadataKey] != expectedAllocationID {
+		return false, nil
+	}
+	body, err := json.Marshal(deleteOptions{
+		APIVersion: "v1", Kind: "DeleteOptions",
+		Preconditions: &deletePreconditions{
+			UID:             uid,
+			ResourceVersion: gs.Metadata.ResourceVersion,
+		},
+	})
+	if err != nil {
+		return false, fmt.Errorf("agones: orphan reclaim marshal delete %s: %w", name, err)
+	}
+	respBytes, status, err = a.do(ctx, http.MethodDelete, gsURL, body)
+	if err != nil {
+		return false, fmt.Errorf("agones: orphan reclaim delete %s: %w", name, err)
+	}
+	switch {
+	case status == http.StatusNotFound, status == http.StatusConflict:
+		// 404=对象已消失;409=precondition 失败(GET→DELETE 窗口内对象变过)。
+		// 都不是本次删除完成,按候选失效处理。
+		return false, nil
+	case status < 200 || status >= 300:
+		return false, fmt.Errorf("agones: orphan reclaim delete %s http %d: %s",
+			name, status, truncate(respBytes, 256))
+	}
+	return true, nil
 }
 
 // ── Fleet 容量巡检(K8s 快上限预警,2026-07-10)──────────────────────────────
