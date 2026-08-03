@@ -1536,7 +1536,71 @@ func (u *HubUsecase) AcknowledgeAdmission(ctx context.Context, playerID uint64, 
 		}
 		return nil, errcode.New(errcode.ErrInvalidState, "hub admission assignment changed during acknowledge")
 	}
+	// owner 权威准入(§9.23 服务端完成点)。这里是 Admission 链的原生提交点,取代原先由
+	// 心跳 census 代提交的近似——census 只能证明"该实例正在服务该玩家",而本处是玩家
+	// **本次**进场的线性化点,exact identity 就在手上。
+	//
+	// 强依赖:Admit 不成功就不开 spawn gate。§9.22 明文「新 DS 在屏障打开前不得创建可操作
+	// Pawn / 玩家态、向客户端确认 PLAYABLE」,而 Admitted=true 正是 DS 开 spawn gate 的信号。
+	// 屏障未开是预期内的暂时态(旧 DS 仍在可玩窗口),返回可重试错误让 DS 用同 identity 重放
+	// ACK —— Admit 幂等,重放不会产生第二个 owner。
+	if err := u.admitOwnerForAdmission(ctx, playerID, data.OwnerTargetView{
+		PodName:                  pod,
+		InstanceUID:              cred.InstanceUID,
+		InstanceEpoch:            cred.ProtocolEpoch,
+		AssignmentOrAllocationID: assignmentID,
+		ReleaseTrack:             current.GetReleaseTrack(),
+	}); err != nil {
+		return nil, err
+	}
 	return &AcknowledgeAdmissionResult{Admitted: result.Admitted}, nil
+}
+
+// admitOwnerForAdmission 把 owner 记录从 PENDING 推进到 ADMITTED(§9.23 完成点)。
+//
+// 先 Query 再 Admit 不是"先查再存"的 TOCTOU:Admit 自身在 owner 的行锁事务内按 exact
+// (player_id, owner_epoch, operation_id, 实例四元组)做 CAS,查到的值只是拿来当 CAS 期望;
+// 期间记录若被推进,Admit 会以 IDENTITY_MISMATCH / EPOCH_CONFLICT 拒绝,不会误准入。
+//
+// ownerAuth == nil = owner 未部署(部署形态问题),不在本函数收敛。
+func (u *HubUsecase) admitOwnerForAdmission(ctx context.Context, playerID uint64,
+	target data.OwnerTargetView) error {
+	if u.ownerAuth == nil {
+		return nil
+	}
+	rec, err := u.ownerAuth.QueryOwner(ctx, playerID)
+	if err != nil {
+		// 结果不可判定 → fail-closed,绝不冒充"已准入"开门(§9.22)。
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"owner authority unavailable during hub admission player=%d", playerID)
+	}
+	if rec.OwnerType != ownerTypeHub || rec.PodName != target.PodName ||
+		rec.InstanceUID != target.InstanceUID || rec.InstanceEpoch != target.InstanceEpoch {
+		// 归属已经不指向本实例(Transfer / 顶号 / 灾备接管都会走到这里)。
+		// 不 Admit、不开门:玩家的 owner 在别处,这台 DS 无权创建可操作玩家态。
+		plog.With(ctx).Warnw("msg", "hub_admission_owner_points_elsewhere",
+			"player_id", playerID, "want_pod", target.PodName, "owner_pod", rec.PodName,
+			"owner_uid", rec.InstanceUID, "owner_epoch", rec.OwnerEpoch)
+		return errcode.New(errcode.ErrInvalidState,
+			"owner no longer points at this hub instance; admission refused player=%d", playerID)
+	}
+	if rec.Phase == ownerPhaseAdmitted {
+		return nil // 幂等:ACK 重放 / 回包丢失后重试,原样返回已准入,不产生第二个 owner。
+	}
+	retryAfterMs, aerr := u.ownerAuth.Admit(ctx, playerID, rec.OwnerEpoch, rec.OperationID, target)
+	if aerr == nil {
+		return nil
+	}
+	if retryAfterMs > 0 {
+		// admit_not_before 屏障未开:旧 DS 最晚安全截止时间之前放行就是双 DS。
+		// 可重试错误 + 剩余毫秒,DS 退避后用同 identity 重放 ACK(§9.23 WAIT 语义)。
+		plog.With(ctx).Debugw("msg", "hub_admission_barrier_not_open",
+			"player_id", playerID, "retry_after_ms", retryAfterMs, "owner_epoch", rec.OwnerEpoch)
+		return errcode.NewCause(errcode.ErrUnavailable, aerr,
+			"owner admit barrier not open; retry after %dms", retryAfterMs)
+	}
+	return errcode.NewCause(errcode.ErrUnavailable, aerr,
+		"owner admit failed during hub admission player=%d", playerID)
 }
 
 func assignmentMatchesAdmission(a *hubv1.HubAssignmentStorageRecord, playerID uint64,

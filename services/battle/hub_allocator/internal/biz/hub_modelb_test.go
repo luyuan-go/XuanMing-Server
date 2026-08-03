@@ -481,6 +481,70 @@ func (g *ackFakeSessionGate) CurrentJTI(context.Context, uint64) (string, bool, 
 // 权威接触点。装配 session gate 后:空 sjti 硬拒、非当前代拒(顶号旧票在入场确认点
 // 作废)、权威不可达 fail-closed、无会话拒;全部失败路径不得消费 reservation;
 // 当前代放行。确定性交错:每一步都在固定的 gate 状态下同步断言。
+// §9.23 服务端完成点:Admission ACK 原生提交 owner Admit,**Admit 不成功就不开 spawn gate**。
+// §9.22 明文「新 DS 在屏障打开前不得创建可操作 Pawn / 玩家态、向客户端确认 PLAYABLE」,
+// 而 Admitted=true 正是 DS 开 spawn gate 的信号——放行等于允许双 DS 同时可玩。
+func TestModelB_AcknowledgeAdmissionRequiresOwnerAdmit(t *testing.T) {
+	const (
+		pod      = "pandora-hub-global-1"
+		playerID = uint64(1001)
+	)
+	// setup 把一次成功的 Admission 准备到「只差 owner Admit」的位置,并把分配阶段
+	// (签票点强 Begin)写下的 owner 记录一并返回——后续故障用例必须**继承**这份记录,
+	// 才能精确隔离「Begin 已成功、只有 Admit 失败」这一种形态;否则会先被
+	// "归属不指向本实例" 拦下,根本走不到要断言的分支。
+	setup := func(t *testing.T) (*HubUsecase, string, *HubCredential, *scriptedOwnerAuthority) {
+		t.Helper()
+		uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
+		ctx := context.Background()
+		now := time.Now().UnixMilli()
+		seedWarming(t, repo, pod, 1, 500, now)
+		epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+		cred := &HubCredential{
+			InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+			TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+		}
+		healthy := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{}}
+		uc.SetOwnerAuthority(healthy)
+		if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
+			t.Fatalf("assign: %v", err)
+		}
+		assignment, found, err := repo.GetAssignment(ctx, playerID)
+		if err != nil || !found {
+			t.Fatalf("assignment found=%v err=%v", found, err)
+		}
+		return uc, assignment.GetAssignmentId(), cred, healthy
+	}
+	ctx := context.Background()
+
+	// ① owner 记录指向本实例且 PENDING → Admit 成功 → 开门。
+	uc, assignID, cred, ok := setup(t)
+	res, err := uc.AcknowledgeAdmission(ctx, playerID, assignID, pod, uuid.NewString(), 1, "", cred)
+	if err != nil || res == nil || !res.Admitted {
+		t.Fatalf("owner 已准入时应开门: res=%+v err=%v", res, err)
+	}
+	if len(ok.admits) != 1 {
+		t.Fatalf("Admission ACK 必须原生提交一次 Admit,实得 %d", len(ok.admits))
+	}
+
+	// ② owner 权威不可达 → fail-closed,绝不冒充已准入开门。
+	uc2, assignID2, cred2, healthy2 := setup(t)
+	uc2.SetOwnerAuthority(&scriptedOwnerAuthority{records: healthy2.records,
+		queryErr: errcode.New(errcode.ErrUnavailable, "owner down")})
+	if res, err := uc2.AcknowledgeAdmission(ctx, playerID, assignID2, pod, uuid.NewString(), 1, "", cred2); err == nil || (res != nil && res.Admitted) {
+		t.Fatalf("owner 不可达必须拒绝开门: res=%+v err=%v", res, err)
+	}
+
+	// ③ admit_not_before 屏障未开 → 可重试错误,不开门(旧 DS 仍在可玩窗口内)。
+	uc3, assignID3, cred3, healthy3 := setup(t)
+	uc3.SetOwnerAuthority(&scriptedOwnerAuthority{records: healthy3.records,
+		admitRetryAfterMs: 1500, admitErr: errcode.New(errcode.ErrUnavailable, "barrier not open")})
+	res3, err3 := uc3.AcknowledgeAdmission(ctx, playerID, assignID3, pod, uuid.NewString(), 1, "", cred3)
+	if errcode.As(err3) != errcode.ErrUnavailable || (res3 != nil && res3.Admitted) {
+		t.Fatalf("屏障未开必须返回可重试且不开门: res=%+v err=%v", res3, err3)
+	}
+}
+
 func TestModelB_AcknowledgeAdmissionSessionGate(t *testing.T) {
 	uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
 	ctx := context.Background()

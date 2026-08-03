@@ -1111,6 +1111,9 @@ func TestLogin_BattleReconnect_ResumeCarriesCanonicalGameMode(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			notifier := presenceHitBattle(9001)
 			uc := newTestUsecaseWithNotifier(t, nil, notifier)
+			// 玩家确实在 battle:owner 权威必须同口径说 BATTLE。locator presence 只是投影,
+			// 单凭它放行是 §9.22 禁止的 fail-open,服务端已改为 owner 未确认即 WAIT。
+			uc.SetOwnerPlacementQuerier(&fakeOwnerPlacementQuerier{view: stableTestOwnerPlacement(ownerTypeBattle)})
 			resolver := &fakeMatchResolver{out: data.PlayerMatchAuthority{
 				State:    matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
 				Stage:    matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY,
@@ -1191,6 +1194,8 @@ func TestLogin_BattleReconnect_B1FailClosedWhenGameModeUnavailable(t *testing.T)
 func TestLogin_BattleReconnect_LocalDegradesWithoutResolver(t *testing.T) {
 	notifier := presenceHitBattle(9001)
 	uc := newTestUsecaseWithNotifier(t, nil, notifier) // resolver 未配,B1 off
+	// owner 是归属唯一权威:presence 不能单独授权回原局(§9.22)。
+	uc.SetOwnerPlacementQuerier(&fakeOwnerPlacementQuerier{view: stableTestOwnerPlacement(ownerTypeBattle)})
 
 	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
 	if err != nil {
@@ -1212,6 +1217,8 @@ func TestLogin_BattleReconnect_LocalDegradesWithoutResolver(t *testing.T) {
 func TestLogin_BattleReconnect_PresenceMissReadyClaimCarriesGameMode(t *testing.T) {
 	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}} // 租约已蒸发
 	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+	// presence 已蒸发但 owner 仍持 BATTLE 归属(由 READY claim 合成的路径)。
+	uc.SetOwnerPlacementQuerier(&fakeOwnerPlacementQuerier{view: stableTestOwnerPlacement(ownerTypeBattle)})
 	resolver := &fakeMatchResolver{out: data.PlayerMatchAuthority{
 		State:        matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
 		Stage:        matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY,

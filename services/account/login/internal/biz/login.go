@@ -489,7 +489,9 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	if roleErr != nil {
 		return deliver(waitLogin(base, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_ROLE_UNKNOWN))
 	}
-	if selectedRoleID == 0 {
+	// roleRepo == nil = 没部署角色权威(dev 裸跑),"选没选角"这个问题不成立,不设门。
+	// 只有角色权威在线且明确回答 0 时才是 ROLE_REQUIRED。
+	if u.roleRepo != nil && selectedRoleID == 0 {
 		roleRequired := *base
 		roleRequired.Resume = ResumeContextResult{
 			Route:      loginv1.ResumeRoute_RESUME_ROUTE_HUB,
@@ -592,20 +594,11 @@ func resumeStageFromMatchStage(s matchv1.PlayerMatchResumeStage) loginv1.ResumeM
 	}
 }
 
-// hubResumeFromMatchAuthority 组装 HUB 路由的 ResumeContext。玩家持有活跃撮合 claim
-// (排队/确认/分配中)时带上 match_id/stage/game_mode——冷启动客户端必须先恢复
-// x-pandora-game-mode 路由头才能 Cancel/Confirm/GetProgress
-// (login.proto ResumeContext.game_mode 契约)。无 claim / 未查到 → 裸 HUB。
-func hubResumeFromMatchAuthority(ma *data.PlayerMatchAuthority) ResumeContextResult {
-	out := ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}
-	if ma != nil && ma.State == matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE {
-		out.MatchID = ma.MatchID
-		out.MatchStage = resumeStageFromMatchStage(ma.Stage)
-		out.GameMode = ma.GameMode
-		out.MapID = ma.MapID
-	}
-	return out
-}
+// hubResumeFromMatchAuthority 随 resolveResumeRoute 旧基线一并删除(2026-07-29)。
+// 它产出的是「Route=HUB + 撮合富化字段、entry_state/owner_epoch 全空」的**旧协议形态**,
+// 客户端会判定为 legacy 兼容响应。归属现由 owner 权威给出 TARGET,撮合字段由
+// enrichResumeFromMatchAuthority 叠加——留着这个没有调用方的函数只会让下一个人
+// 顺手用回去,把刚收口的五态又打出一个洞。
 
 // buildBattleResume 组装 BATTLE 路由的 ResumeContext。game_mode 必须来自 matchmaker
 // 持久权威(ResolvePlayerMatchContext 的 canonical 读,PVE/PVP 记录同源可解),
@@ -658,13 +651,33 @@ func (u *LoginUsecase) buildBattleResume(
 	if bl.PresenceState != locatorv1.LocationState_LOCATION_STATE_BATTLE && ma != nil {
 		stage = resumeStageFromMatchStage(ma.Stage)
 	}
-	return ResumeContextResult{
+	out := ResumeContextResult{
 		Route:      loginv1.ResumeRoute_RESUME_ROUTE_BATTLE,
 		MatchID:    bl.MatchID,
 		MatchStage: stage,
 		GameMode:   gameMode,
 		MapID:      mapID,
-	}, nil
+	}
+	// §9.23 五态必须在**所有**路径上有值。断线重连这条路原先只填 route + 撮合富化字段,
+	// entry_state / owner_epoch / exact target 全空——那正是客户端 legacy 兼容分支赖以存在的
+	// 最后一条路径(四个 additive 字段全零 = 被判定为旧协议响应)。
+	//
+	// 归属仍以 owner 为唯一权威:locator presence 只证明"看起来还在 battle",不能授权进入
+	// (§9.22)。owner 说 BATTLE 才给 TARGET;owner 不可判定或指向别处 → WAIT 退避重查,
+	// 绝不凭 presence 直接把玩家送回旧 DS。
+	decided, owned := u.resolveResumeFromOwner(ctx, playerID)
+	if !decided || owned.EntryState == loginv1.ResumeEntryState_RESUME_ENTRY_STATE_WAIT ||
+		owned.Route != loginv1.ResumeRoute_RESUME_ROUTE_BATTLE {
+		h.Warnw("msg", "battle_resume_owner_not_battle", "player_id", playerID,
+			"match_id", bl.MatchID, "owner_decided", decided, "owner_route", owned.Route,
+			"hint", "presence 说在 battle 但 owner 未确认;返回 WAIT 让客户端重查,不凭投影放行")
+		return waitResume(loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN,
+			ownerUnknownRetryAfterMs), nil
+	}
+	// owner 定归属身份(entry_state / placement_state / exact target / owner_epoch /
+	// operation_id),locator+matchmaker 只补展示字段。
+	owned.MatchID, owned.MatchStage, owned.GameMode, owned.MapID = out.MatchID, out.MatchStage, out.GameMode, out.MapID
+	return owned, nil
 }
 
 // ResolveBattleEndpoint 为 authenticated IssueDSTicket(battle) 与完整 Login
@@ -941,7 +954,8 @@ func (u *LoginUsecase) resolveFirstEntry(ctx context.Context, playerID uint64, s
 		return waitResume(loginv1.ResumeWaitReason_RESUME_WAIT_REASON_ROLE_UNKNOWN,
 			ownerUnknownRetryAfterMs), nil
 	}
-	if roleID == 0 {
+	// 同 Login 的角色门:没部署角色权威(dev 裸跑)时不设门,直接分配 Hub。
+	if u.roleRepo != nil && roleID == 0 {
 		return ResumeContextResult{
 			Route:      loginv1.ResumeRoute_RESUME_ROUTE_HUB,
 			EntryState: loginv1.ResumeEntryState_RESUME_ENTRY_STATE_ROLE_REQUIRED,

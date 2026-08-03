@@ -29,6 +29,8 @@ type scriptedOwnerAuthority struct {
 	beginErr          error
 	beginErrForPlayer uint64 // 非 0 = 只对该玩家注入 beginErr
 	conflictTimes     int    // 剩余需返回 EPOCH_CONFLICT 的次数
+	admitErr          error
+	admitRetryAfterMs int64 // >0 = 模拟 admit_not_before 屏障未开
 }
 
 func (s *scriptedOwnerAuthority) QueryOwner(_ context.Context, playerID uint64) (data.OwnerRecordView, error) {
@@ -71,6 +73,9 @@ func (s *scriptedOwnerAuthority) BeginTransition(_ context.Context, playerID, _ 
 func (s *scriptedOwnerAuthority) Admit(_ context.Context, playerID, _ uint64, _ string, _ data.OwnerTargetView) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.admitErr != nil {
+		return s.admitRetryAfterMs, s.admitErr
+	}
 	s.admits = append(s.admits, playerID)
 	rec := s.records[playerID]
 	rec.Phase = ownerPhaseAdmitted
