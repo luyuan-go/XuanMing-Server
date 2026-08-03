@@ -59,10 +59,10 @@ spec:
               # 同口径):本文件是集群 desired state,钉 :dev 滚动 tag 会让任意一次 kubectl apply 把
               # live 降回本机 IfNotPresent 缓存里的旧 :dev 构建。换版流程 = 打新不可变 tag →
               # minikube image load → 改本行 → apply;严禁回填 :dev。
-              # 当前本地开发镜像:与 battle 同一构建(PandoraServer sha256 CA737C7D4A6C…166B,
-              # 2026-07-31 04:26 构建),已发布到制品库快照
-              # r1604-dirty-20260731-042958,可按 start.ps1 的重建链复现。
-              image: pandora/hub-ds:r1604-dirty-20260731-042958
+              # 当前本地开发镜像:与 battle 同一构建(PandoraServer sha256 3982342EAA68…83A0,
+              # 2026-08-01 11:03 构建),已发布到制品库快照
+              # r1642-dirty-20260801-110738,可按 start.ps1 的重建链复现。
+              image: pandora/hub-ds:r1642-dirty-20260801-110738
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

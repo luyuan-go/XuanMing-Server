@@ -107,7 +107,7 @@ battle:
   inventory_addr: "127.0.0.1:50015"
   # 白名单与 UE 侧掉落表(Pandora-Client Table/道具/d_掉落.xlsx)同源维护:
   # 表里新增掉落物品必须同步加进这里,否则 DS 上报的拾取会被过滤不发放(只告警)。
-  drop_whitelist: [10001, 10002, 10003, 10005, 10006]
+  drop_whitelist: [10001, 10002, 10003, 10004, 10005, 10006]
 
 # ── DS 回调服务令牌校验(审核 P1 #1)────────────────────────────────────────────
 # battle_result 只校验不签发:Battle DS 经 Envoy :8444 调 ReportResult 须带 battle 令牌
