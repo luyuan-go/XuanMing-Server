@@ -131,7 +131,14 @@
 | `start.ps1 -ForceRecreateGameServers` 只删非 Allocated + 删前逐个重查状态(压缩 LIST→DELETE 竞态窗口至毫秒级) | 已落码 | `tools/scripts/start.ps1` | 语法解析零错;`local_k8s_profile_contract_test` PASS |
 | `e2e_k8s.ps1` 存在 Allocated 时 fail-closed 中止,须显式 `-ForceDeleteAllocated` 才连删;非 force 路径逐台复查、窗口内出现 Allocated 即中止(对抗审查 P2:门检→批删 TOCTOU) | 已落码 | `tools/scripts/e2e_k8s.ps1` | 同上 |
 
-**对抗审查记录(两轮,3 视角 × 每发现 2 名反驳者)**:第一轮确认 3 缺陷(start.ps1 LIST→DELETE 竞态 / e2e 零秒警告 / 注释安全依据缺半边),修复后被复核代理对照代码逐字确认落地;第二轮确认 5 缺陷 —— **P0 权威视图零绑定**(上表台账整改)、P2 孤儿轮无预算、P2 节流测试为空测(变异实验证伪,已改为真实调用计数断言)、P2 e2e 门检→批删 TOCTOU、P2 文件头「每轮核验」声明与实现不符(证据中断重新起算整改),全部落码并回归绿。
+| e2e `Wait-FleetReady` 收敛判据计入 Allocated(`Ready+Allocated ≥ desired`):保留载人 Allocated 后,一局在打时 buffer autoscaler 钳满 replicas,旧判据 `ready≥desired` 会把成功部署空转 240s 误报失败且错误归因 | 已落码 | `tools/scripts/e2e_k8s.ps1` Wait-FleetReady | 契约测试 PASS;闭环验证第三轮确认项(P1) |
+| 契约测试补 §9.21 守卫断言(e2e 必须有 `-ForceDeleteAllocated` fail-closed 门、批删必须在授权分支内、start.ps1 强制重建必须逐台过滤非 Allocated + 删前重查、函数体内禁止整批删) | 已落码 | `tools/scripts/tests/local_k8s_profile_contract_test.ps1` | **变异实验 3/3 击落**(去门/批删逃出授权分支/回退整批删均使测试红),复原后基线绿——满足 §16.6「修复前失败、修复后通过」 |
+| hub Fleet 可见性:注释澄清孤儿清扫只覆盖 battle Fleet(hub 常驻分片不走 GSA、原理上无 Allocated);强制重建删 Ready hub 副本前显式告警「hub 载人时仍是 Ready,在线玩家将被踢去重连」 | 已落码 | `tools/scripts/start.ps1` | 契约测试 PASS |
+
+**对抗审查记录(三轮,视角 × 每发现 2 名反驳者)**:
+- 第一轮确认 3 缺陷(start.ps1 LIST→DELETE 竞态 / e2e 零秒警告 / 注释安全依据缺半边),修复后被复核代理对照代码逐字确认落地;
+- 第二轮确认 5 缺陷 —— **P0 权威视图零绑定**(台账整改)、P2 孤儿轮无预算、P2 节流测试为空测(变异实验证伪,已改真实调用计数断言)、P2 e2e 门检→批删 TOCTOU、P2「每轮核验」声明与实现不符(证据中断重新起算),全部落码回归绿;
+- 第三轮(对修复的闭环验证):**P0 攻击角确认清扫误删向量已关死**(台账/refs/claim 绑定同一 Redis 实例,空/错配 Redis 一台都删不掉);其「心跳向量同拓扑攻击」被双反驳者以三层独立机制驳回(生产 Model B 门禁 fail-fast、空 Redis 心跳只回 ERR_UNAUTHORIZED 无指令、UE 凭据 ACK 五元组精确匹配才消费 stop——心跳向量由凭据 ACK 绑定承重,与台账同源等价);脚本回归角确认上表 P1/P2 两项,已修。
 
 ### 7.3 防复发规则
 

@@ -576,17 +576,32 @@ function Wait-FleetReady([string]$fleet, [int]$timeoutSec) {
             return $false
         }
         $ready = @($items | Where-Object { $_.status.state -eq 'Ready' }).Count
+        # Allocated 计入收敛(对抗审查 P1 整改):§9.21 允许保留载人 Allocated 原地排空后,
+        # 一局在打时 buffer autoscaler 把 spec.replicas 钳在 max、Ready 必然差 allocated 台,
+        # 旧判据 ready>=desired 会对一次成功的部署空转到超时并误报"未就绪"。
+        # 新判据:Ready + Allocated ≥ desired(Allocated 是被合法对局占用的容量,不是缺口)。
+        # 注意 -SkipImageLoad 场景下 Allocated 可能仍跑旧镜像(受控排空,§9.21 既定语义);
+        # 要验证"全部副本都是新镜像 Ready",跑不带 -SkipImageLoad 的全量 e2e(会先清场)。
+        $allocated = @($items | Where-Object { $_.status.state -eq 'Allocated' }).Count
         if ([int]$desired -eq 0 -and $ready -eq 0) {
             Write-Ok "$fleet 休眠:Ready=0/0（不接新分配）"
             return $true
         }
-        if ($ready -ge [int]$desired) { Write-Ok "$fleet Ready=$ready/$desired"; return $true }
-        Write-Host "  $fleet actual Ready GameServers=$ready/$desired ..." -ForegroundColor DarkGray
+        if (($ready + $allocated) -ge [int]$desired -and ($ready -gt 0 -or $allocated -ge [int]$desired)) {
+            if ($allocated -gt 0) {
+                Write-Ok "$fleet Ready=$ready + Allocated=$allocated ≥ desired=$desired(Allocated 为在场对局占用,按 §9.21 原地排空,不计缺口)"
+            } else {
+                Write-Ok "$fleet Ready=$ready/$desired"
+            }
+            return $true
+        }
+        Write-Host "  $fleet actual Ready=$ready Allocated=$allocated desired=$desired ..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 5
     }
     Write-Err "$fleet 在 ${timeoutSec}s 内未就绪"
     kubectl @kubectlContextArgs get gameservers -n $FleetNamespace -L agones.dev/fleet 2>$null
     Write-Warn "排查:kubectl --context $KubeContext describe fleet $fleet -n $FleetNamespace;kubectl --context $KubeContext logs <gs-pod> -n $FleetNamespace -c $fleet-ds"
+    Write-Warn "若上表存在 Allocated:那是被在场对局占用的容量,已计入收敛判据;仍未就绪说明 Ready 补位真的没起来(才需要查 Agones SDK/镜像)。"
     return $false
 }
 $fleetReady = @($fleetNames | ForEach-Object { Wait-FleetReady $_ $TimeoutSec })

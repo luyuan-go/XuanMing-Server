@@ -3977,9 +3977,16 @@ function Apply-AgonesManifests {
         # 用户正在游戏的 battle DS 删了)。这里只删非 Allocated(Ready/Scheduled/RequestReady
         # 等)副本,GameServerSet 按当前 spec(:dev 已指向新镜像)自动补齐;Allocated 旧镜像
         # 副本以旧版本跑完当前对局后由 Agones 自然回收(§9.21 本就要求旧 Battle DS 打完退场)。
-        # 若某台 Allocated 实为泄漏残留(无任何权威分配记录引用),ds_allocator 的孤儿对账清扫
-        # (biz/orphan_gameserver.go)会在观察阈值(默认 10m)后按 UID+resourceVersion 精确
-        # 回收——**任何情况下都不需要、也不允许人工/脚本直接删 Allocated GameServer**。
+        # 若某台 **battle** Fleet 的 Allocated 实为泄漏残留(无任何权威分配记录引用),
+        # ds_allocator 的孤儿对账清扫(biz/orphan_gameserver.go)会在观察阈值(默认 10m)后按
+        # UID+resourceVersion 精确回收——**任何情况下都不需要、也不允许人工/脚本直接删
+        # Allocated GameServer**。(该自动回收只覆盖 battle stable/canary/map 专用 Fleet;
+        # hub Fleet 是常驻分片模型、不走 GameServerAllocation,原理上不会出现 Allocated,
+        # 也不在清扫列举范围内。)
+        # ⚠️ hub 的另一面:正因为 hub 不走 GSA,hub GS **载人时仍是 Ready**(容量在
+        # hub_allocator 的 Redis 权威里判定)——本步骤删 Ready 副本时会把在线大厅玩家踢去
+        # 重连(客户端恢复链自动回大厅)。这是 dev 换镜像流程的既定代价,下面对 hub Fleet
+        # 打显式告警;有真人在线时避开本开关或先通知。
         foreach ($fleet in @('pandora-battle-stable', 'pandora-battle-canary', 'pandora-hub-stable', 'pandora-hub-canary')) {
             $gsListJson = (kubectl @kubectlContextArgs get gameservers -l "agones.dev/fleet=$fleet" -n $fleetNs -o json 2>$null | Out-String)
             if ($LASTEXITCODE -ne 0) {
@@ -3992,6 +3999,9 @@ function Apply-AgonesManifests {
             }
             $allocatedGs = @($gsItems | Where-Object { [string]$_.status.state -ceq 'Allocated' })
             $deletableGs = @($gsItems | Where-Object { [string]$_.status.state -cne 'Allocated' })
+            if ($fleet -like 'pandora-hub-*' -and $deletableGs.Count -gt 0) {
+                Write-Warn "Fleet『$fleet』将删除 $($deletableGs.Count) 台 Ready 副本:hub 载人时仍是 Ready(常驻分片,不走 GSA),在线大厅玩家会被踢去重连(客户端恢复链自动回大厅)。"
+            }
             foreach ($gs in $deletableGs) {
                 # LIST→DELETE 窗口防护(对抗审查 P1):快照时 Ready 的 GS 在轮到删除时可能已被
                 # GSA 分配(Ready→Allocated 毫秒级,分配后立即签票、玩家在途)。kubectl delete

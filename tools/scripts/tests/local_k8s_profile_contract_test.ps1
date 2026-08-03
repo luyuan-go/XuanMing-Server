@@ -1036,4 +1036,69 @@ $stopCall = $bridgeSource.LastIndexOf('Stop-EnvoyForRecreate', [StringComparison
 $upCall = $bridgeSource.IndexOf('up -d --force-recreate envoy', [StringComparison]::Ordinal)
 Assert-True ($stopCall -ge 0 -and $upCall -gt $stopCall) '必须先等待旧 Envoy 端口释放，再 force-recreate'
 
+# ── §9.21 禁删 Allocated 守卫(INC-20260803-002;对抗审查确认此前零回归覆盖)──────
+# 变异口径:删掉 e2e 的 -ForceDeleteAllocated 门、或把 start.ps1 只删非 Allocated 的
+# 逐台循环回退成整批删,下列断言必须失败。
+
+# (1) e2e:必须有 -ForceDeleteAllocated 开关,且存在「有 Allocated 且未显式授权 → fail-closed」门。
+Assert-True ($e2eSource.Contains('[switch]$ForceDeleteAllocated')) `
+    'e2e_k8s.ps1 必须保留 -ForceDeleteAllocated 显式授权开关(§9.21)'
+$e2eAllocatedGate = @($e2eAst.FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.IfStatementAst] -and
+        $node.Extent.Text -cmatch '\$allocatedByFleet\.Count\s+-gt\s+0\s+-and\s+-not\s+\$ForceDeleteAllocated'
+}, $true))
+Assert-True ($e2eAllocatedGate.Count -ge 1 -and $e2eAllocatedGate[0].Extent.Text.Contains('exit 1')) `
+    'e2e_k8s.ps1 检测到 Allocated 且未传 -ForceDeleteAllocated 时必须 fail-closed 中止,不得静默连删(§9.21)'
+
+# (2) e2e:所有按 label 的 GameServer 批删命令必须处于 $ForceDeleteAllocated 显式授权分支内。
+function Test-InsideForceDeleteAllocatedBranch($node) {
+    $cur = $node.Parent
+    while ($null -ne $cur) {
+        if ($cur -is [System.Management.Automation.Language.IfStatementAst] -and
+            $cur.Extent.Text -cmatch 'if\s*\(\s*\$ForceDeleteAllocated\s*\)') {
+            return $true
+        }
+        $cur = $cur.Parent
+    }
+    return $false
+}
+$e2eBatchDeletes = @($e2eAst.FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -ceq 'kubectl' -and
+        $node.Extent.Text -cmatch 'delete\s+gameservers\s' -and
+        $node.Extent.Text.Contains('-l ')
+}, $true))
+Assert-True ($e2eBatchDeletes.Count -ge 1) 'e2e 全量清场必须保留显式授权下的按 label 批删(压测纪律 §8)'
+foreach ($cmd in $e2eBatchDeletes) {
+    Assert-True (Test-InsideForceDeleteAllocatedBranch $cmd) `
+        "e2e 按 label 的 GameServer 批删必须包在 if(`$ForceDeleteAllocated) 分支内,发现裸批删:$($cmd.Extent.Text)"
+}
+
+# (3) start.ps1 Apply-AgonesManifests:强制重建只准逐台删非 Allocated,且删前必须重查状态;
+#     函数体内不得出现按 label 的整批 gameservers 删除。
+Assert-True ($applyAgonesSource -cmatch "-cne\s+'Allocated'") `
+    'start.ps1 强制重建必须按 state -cne Allocated 过滤可删集(§9.21)'
+Assert-True ($applyAgonesSource -cmatch "-ceq\s+'Allocated'") `
+    'start.ps1 强制重建必须显式识别并保留 Allocated 集'
+Assert-True ($applyAgonesSource.Contains('{.status.state}')) `
+    'start.ps1 强制重建删除前必须逐台重查 GameServer 当前状态(LIST→DELETE 竞态窗口压缩)'
+$applyAgonesBatchDeletes = @($applyAgonesFunctions[0].FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -ceq 'kubectl' -and
+        $node.Extent.Text -cmatch 'delete\s+gameservers\s'
+}, $true))
+Assert-True ($applyAgonesBatchDeletes.Count -eq 0) `
+    'start.ps1 Apply-AgonesManifests 不得出现按 label 的整批 gameservers 删除(会连 Allocated 一起删,INC-20260803-002)'
+$applyAgonesSingleDeletes = @($applyAgonesFunctions[0].FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -ceq 'kubectl' -and
+        $node.Extent.Text -cmatch 'delete\s+gameserver\s'
+}, $true))
+Assert-True ($applyAgonesSingleDeletes.Count -ge 1) `
+    'start.ps1 强制重建必须保留逐台按名删除路径(整段删除消失=强制重建失效,须显式知情)'
+
 Write-Host 'local_k8s_profile_contract_test: PASS' -ForegroundColor Green
