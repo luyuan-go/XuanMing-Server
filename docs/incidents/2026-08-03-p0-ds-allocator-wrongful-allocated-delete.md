@@ -150,11 +150,12 @@
 
 | 验证 | 修复前结果 | 修复后结果 | 环境/命令 | 证据 |
 |---|---|---|---|---|
-| 孤儿清扫单测(三重防误删/复核失效/删除失败重试/候选修剪) | — | 16 用例全绿 | `go test ./ds_allocator/...` | 本地运行 |
-| 部署脚本契约测试 | — | PASS | `local_k8s_profile_contract_test.ps1` | 本地运行 |
+| 孤儿清扫单测(四重防误删/复核失效/删除失败重试/候选修剪/封顶/台账查无永不删) | — | 全绿 | `go test ./ds_allocator/...` | 本地运行 |
+| 部署脚本契约测试 + §9.21 守卫变异实验 | 变异体 3/3 **PASS(空证)** | 变异体 3/3 **FAIL**,基线 PASS | `local_k8s_profile_contract_test.ps1`;沙盒变异:去 e2e 门 / 批删逃出授权分支 / start.ps1 回退整批删 | 本地运行,满足 §16.6 |
+| **真集群:台账写入路径生效** | — | **PASS** | 集群 `pandora-agones`,镜像 `pandora/ds-allocator:g00938143-dirty-20260803-082426`(部署 2026-08-03T12:36Z) | 12:55:27Z 的一次真实分配把 `allocation_id=b3aee60c-…` 写入 `pandora:ds:allocation_ledger`(ZSCORE=1785761727863);该写入证明 `u.allocationLedger` 接口断言在生产装配成功 |
+| **真集群:载人对局全程不被清扫触碰** | — | **PASS(约 40 分钟观察)** | 同上 | GS `pandora-battle-stable-mfjtj-d95kt`(Allocated,match `19759259038318592`)权威记录 `pandora:ds:battle:{…}` 存在 → 三通道引用命中 → 全程零 `orphan_allocated_gs_candidate` 日志、GS 未被触碰(静默即正确行为) |
+| 真集群:注入无记录 Allocated GS → 阈值后被清扫回收 | — | 未执行(当前集群无孤儿可观察;台账上线前的存量泄漏按设计只告警不回收) | 待构造孤儿后验证 | 剩余风险 |
 | `go test -race` | — | 未执行(需 Linux/CGO CI,§16.7;新代码单协程域,风险低但未证) | — | 剩余风险 |
-| 真集群:注入无记录 Allocated GS → 阈值后被清扫回收 | — | 未执行(镜像未重建) | 待部署后 | 剩余风险 |
-| 真集群:载人对局全程不被清扫触碰 | — | 未执行 | 待部署后 | 剩余风险 |
 
 ## 9. 部署、回滚与观察
 
