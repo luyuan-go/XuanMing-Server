@@ -42,6 +42,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# 参数组合校验(闭环审查确认 P2):清场(含 -ForceDeleteAllocated 的全部语义)只存在于
+# 非 -SkipImageLoad 路径;两者同传时授权开关会被静默忽略,操作者却以为已清场——
+# fail-fast 让矛盾在动手前暴露,而不是让 §8 压测基线被残留污染。
+if ($SkipImageLoad -and $ForceDeleteAllocated) {
+    Write-Host "[ERR ] -ForceDeleteAllocated 与 -SkipImageLoad 互斥:清场只发生在 image load 路径,-SkipImageLoad 下不会删除任何 GameServer。" -ForegroundColor Red
+    Write-Host "[ERR ] 要全量清场(§8)去掉 -SkipImageLoad 重跑;要跳过清场就别传 -ForceDeleteAllocated。" -ForegroundColor Red
+    exit 1
+}
 $ScriptDir   = $PSScriptRoot
 $ProjectRoot = (Resolve-Path "$ScriptDir/../..").Path
 $AgonesDir   = Join-Path $ProjectRoot 'deploy/k8s/agones'
@@ -588,8 +596,15 @@ function Wait-FleetReady([string]$fleet, [int]$timeoutSec) {
             return $true
         }
         if (($ready + $allocated) -ge [int]$desired -and ($ready -gt 0 -or $allocated -ge [int]$desired)) {
-            if ($allocated -gt 0) {
-                Write-Ok "$fleet Ready=$ready + Allocated=$allocated ≥ desired=$desired(Allocated 为在场对局占用,按 §9.21 原地排空,不计缺口)"
+            if ($ready -eq 0) {
+                # 假绿防护(闭环审查确认 P1):零 Ready + 满 Allocated 恰是「泄漏占位锁死
+                # 匹配池」的动机事故拓扑,占用是否为真实对局本脚本无从核实——放行(真实
+                # 对局占满是合法状态)但绝不绿报,并把唯一可核实的信号指给操作者。
+                Write-Warn "$fleet Ready=0 + Allocated=$allocated ≥ desired=$desired:全部容量被 Allocated 占用且零 Ready。"
+                Write-Warn "  占用是否为真实对局未经核实;新分配将失败直到有 Ready 补位。若怀疑泄漏:"
+                Write-Warn "  查 ds_allocator 日志 orphan_allocated_gs_unprovable_present 与 metric pandora_ds_allocator_orphan_gameserver_reclaims_total{result=`"unprovable`"}(台账查无的候选只告警不自动回收)。"
+            } elseif ($allocated -gt 0) {
+                Write-Ok "$fleet Ready=$ready + Allocated=$allocated ≥ desired=$desired(Allocated 计入容量,按 §9.21 原地排空;是否真实对局以 ds_allocator 权威为准)"
             } else {
                 Write-Ok "$fleet Ready=$ready/$desired"
             }

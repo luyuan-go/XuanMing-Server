@@ -4678,6 +4678,26 @@ function Invoke-K8s {
             throw "宿主桥接已清理，但 kube-context『$mkProfile』的 endpoint 不是本机 minikube(可能是同名远端/生产集群)。为防误删且避免假报 Down 成功，集群侧删除未执行。"
         }
         Write-Step "删除 k8s 业务服务 + 基础设施(context=$mkProfile)"
+        # Allocated 可见性(闭环审查确认 P2:Down 是第三条能杀载人 DS 的脚本路径,此前零守卫
+        # 零告警也未登记同型扫描)。Down 的语义是**用户显式拆除整套本地栈**(后端一并删,
+        # 保留 DS 无意义),故按 §9.21 豁免执行删除、不加开关;但必须点名将被级联杀掉的
+        # Allocated 实例,让"我以为只是收工"与"正有人在打局"这两件事不再静默重合。
+        $downAllocated = @()
+        foreach ($downFleet in @('pandora-battle-stable', 'pandora-battle-canary', 'pandora-hub-stable', 'pandora-hub-canary')) {
+            $downJson = (kubectl --context $mkProfile get gameservers -l "agones.dev/fleet=$downFleet" -n 'default' -o json 2>$null | Out-String)
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($downJson)) { continue }
+            $downParsed = $downJson | ConvertFrom-Json
+            if ($null -eq $downParsed.items) { continue }
+            foreach ($gs in @($downParsed.items)) {
+                if ([string]$gs.status.state -ceq 'Allocated') {
+                    $downAllocated += "$downFleet/$($gs.metadata.name)"
+                }
+            }
+        }
+        if ($downAllocated.Count -gt 0) {
+            Write-Warn "Down 将级联删除 $($downAllocated.Count) 台 Allocated GameServer(可能载人,对局会被打断):$($downAllocated -join ', ')"
+            Write-Warn "  这是 Down「显式拆除整套本地栈」的既定代价(§9.21 对 Down 的豁免,已登记 INC-20260803-002 §6);若不想打断对局请 Ctrl+C,等对局结束再 Down。"
+        }
         # Fleet 是启动时 Apply-AgonesManifests 起的,也要停干净(DS Pod 别留着空跑)。
         # 先删 FleetAutoscaler 再删 Fleet:避免删 Fleet 期间 autoscaler 还在按 buffer 补建 GameServer。
         foreach ($fleetFile in @('25-fleetautoscaler-battle.yaml', '31-fleet-hub-canary.yaml', '30-fleet-hub.yaml', '21-fleet-battle-canary.yaml', '20-fleet-battle.yaml')) {

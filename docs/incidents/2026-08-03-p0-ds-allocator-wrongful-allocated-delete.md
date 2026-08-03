@@ -109,7 +109,8 @@
 ## 6. 全仓同类问题扫描
 
 - `tools/scripts/start.ps1 -ForceRecreateGameServers`:整批删含 Allocated —— Confirmed 同型,已修(见 §7.2)。
-- `tools/scripts/e2e_k8s.ps1` 全量清场:压测纪律授权的测试重置,但零守卫 —— Confirmed 同型,已修(fail-closed + 显式开关)。
+- `tools/scripts/e2e_k8s.ps1` 全量清场:压测纪律授权的测试重置,但零守卫 —— Confirmed 同型,已修(fail-closed + 显式开关 + 非 force 路径逐台复查 + 与 `-SkipImageLoad` 互斥 fail-fast)。
+- `tools/scripts/start.ps1 -Down` 的 Fleet 级联删除:第三条能杀载人 Allocated 的脚本路径(闭环审查第四轮补入,此前本节漏登记)—— **按 §9.21 豁免执行**:Down 语义是用户显式拆除整套本地栈(后端一并删,保留 DS 无意义),不加确认开关;但已补 Allocated 点名告警(列出将被级联杀掉的实例 + Ctrl+C 提示),消除「以为只是收工」与「正有人在打局」的静默重合。
 - `ds_allocator` 判弃链的 `ReleaseExpected`/fenced delete:带 UID precondition 且由权威记录驱动,非同型,排除。
 - 未覆盖边界:直接手敲 `kubectl delete` 无法技术性禁止,靠规则(§9.21/记忆)+ 消除动机(自动清扫)兜底。
 
