@@ -231,8 +231,17 @@ Redis(`authority_mode=redis` 才连):**只读**校验 DS 授权记录(`GetBattle
 
 ## 保留期清理(不变量 §9.24)
 
+**产品口径:MySQL 里最多只存最近六个月的战报,超过六个月的就没有数据**(2026-08-03 用户指令,
+§9.24 登记例外)。同一个 `HistoryRetentionDays` 既是清理 cutoff,也是玩家战报可见窗口
+(`ListPlayerHistory` 只读 MySQL,没有冷存归档)。
+
+⚠️ **本服 `retention_mode` 留空即 `delete`(真删)**,与其它域的 `report_only` 全局默认相反:
+战报是产品上就有寿命的数据,只报告不删交付不了"六个月后没有数据"。拼错的模式值启动即
+fail-fast 拒启(`ValidateRetentionMode`),避免六个月口径静默失效。排查误删嫌疑时显式配
+`retention_mode: report_only` 立即停删(只统计待清理量打 WARN)。
+
 `RunRetentionSweep` → `sweepRetentionOnce`(`internal/biz/retention.go`)每 `RetentionSweepInterval`
-(默认 1h)小批量批删超 `HistoryRetentionDays`(默认 90,硬钳 ≤90)的行:
+(默认 1h)小批量批删超 `HistoryRetentionDays`(默认 180,钳 `[30,180]`)的行:
 
 - `battles` + `battle_player_stats`:按**服务端落库时间 `created_at`** 超期同事务批删(§9.6 不信 DS 上报的
   `ended_at_ms`,防伪造提前删/永不删)。
@@ -266,8 +275,9 @@ Redis(`authority_mode=redis` 才连):**只读**校验 DS 授权记录(`GetBattle
 | `max_progress_exp_per_match` / `_items_per_match` | `1000000` / `500` | 单场累计硬上限(反作弊,事务权威侧封顶) |
 | `max_progress_exp_per_player` / `_items_per_player` / `_kills_per_player` | `200000` / `100` / `1000` | 单场单玩家累计硬上限 |
 | `progress_publish_interval` / `progress_batch_size` | `1s` / `128` | 进度出箱发布节奏 |
-| `history_retention_days` | `90` | 结算/已结算进度水位保留天数(硬钳 ≤90,§9.24) |
-| `retention_sweep_interval` / `retention_sweep_batch` | `1h` / `200` | 保留期清理节奏 |
+| `history_retention_days` | `180` | 战报(结算 + 已结算进度水位)保留天数 = 玩家可见窗口;钳 `[30,180]`(§9.24 登记例外) |
+| `retention_mode` | `delete` | **本服留空即真删**(与全局 `report_only` 默认相反);`report_only` 停删只告警;拼错拒启 |
+| `retention_sweep_interval` / `retention_sweep_batch` | `1h` / `200` | 保留期清理节奏(每轮循环删到追平,批间独立短事务) |
 
 DS 回调鉴权在顶层 `ds_auth`(`config.DSAuthConf`):`mode`(off/permissive/enforce)、`authority_mode`
 (legacy/redis)、`active_heartbeat_max_age`、`secret`(须与 ds_allocator 一致)、`fence.*`(etcd 租约)。

@@ -20,30 +20,31 @@ func retentionUsecase(repo *fakeRepo, batch int) *BattleResultUsecase {
 func retentionUsecaseMode(repo *fakeRepo, batch int, modeRaw string) *BattleResultUsecase {
 	cfg := conf.BattleConf{
 		EloKFactor: 32, BaseMMR: 1500,
-		HistoryRetentionDays: 90,
+		HistoryRetentionDays: conf.HistoryRetentionMaxDays,
 		RetentionSweepBatch:  batch,
 		RetentionModeRaw:     modeRaw,
 	}
 	return NewBattleResultUsecase(repo, NewStaticMMRReader(cfg.BaseMMR), &fakePusher{}, nil, cfg)
 }
 
-// TestRetentionSweep_DefaultsToReportOnly 守住 2026-07-22 用户指令:
-// **配置不写 retention_mode 时,清理只报告不删,且每类只跑一轮**(report-only 一轮即得
-// 全量待清理规模,再循环纯空转)。回归它 = 回归"不能因为数据大了就删我的数据"。
-func TestRetentionSweep_DefaultsToReportOnly(t *testing.T) {
+// TestRetentionSweep_DefaultsToDelete 守住 2026-08-03 用户指令:
+// **battle_result 配置不写 retention_mode 时就是真删**(战报最多留六个月,
+// 超过六个月 MySQL 里不该还有数据)。回归它 = 战报库悄悄变回只报告不删、无界增长。
+// 判据用"是否排空积压":只有 delete 模式才会循环删到短批,report-only 恒只跑一轮。
+func TestRetentionSweep_DefaultsToDelete(t *testing.T) {
 	repo := newFakeRepo()
-	// 喂满批序列:delete 模式会因此循环多次;report-only 必须只调一次。
-	repo.purgeBattlesResults = []int64{2, 2, 2}
-	repo.purgeProgressResults = []int64{2, 2}
+	// 喂满批序列:delete 模式会因此循环多次;report-only 只会调一次。
+	repo.purgeBattlesResults = []int64{2, 2, 1}
+	repo.purgeProgressResults = []int64{2, 0}
 	uc := retentionUsecaseMode(repo, 2, "") // 配置留空 = 默认
 
 	uc.sweepRetentionOnce(context.Background())
 
-	if repo.purgeBattlesCalls != 1 {
-		t.Fatalf("report_only 下 battles 应只跑一轮, calls=%d", repo.purgeBattlesCalls)
+	if repo.purgeBattlesCalls != 3 {
+		t.Fatalf("留空 retention_mode 必须真删并排空积压, battles calls=%d want=3", repo.purgeBattlesCalls)
 	}
-	if repo.purgeProgressCalls != 1 {
-		t.Fatalf("report_only 下 progress 应只跑一轮, calls=%d", repo.purgeProgressCalls)
+	if repo.purgeProgressCalls != 2 {
+		t.Fatalf("留空 retention_mode 必须真删并排空积压, progress calls=%d want=2", repo.purgeProgressCalls)
 	}
 	// 陈年未结算探测与模式无关,每轮都必须跑(它本来就只告警不删)。
 	if repo.staleUnsettledCalls != 1 {
@@ -51,7 +52,29 @@ func TestRetentionSweep_DefaultsToReportOnly(t *testing.T) {
 	}
 }
 
+// TestRetentionSweep_ExplicitReportOnlyStopsDeleting 显式配 report_only 必须立即停删
+// (排查误删嫌疑时的刹车),且每类只跑一轮 —— report-only 一轮即得全量待清理规模,
+// 再循环纯空转。
+func TestRetentionSweep_ExplicitReportOnlyStopsDeleting(t *testing.T) {
+	for _, raw := range []string{"report_only", "report", "report-only"} {
+		repo := newFakeRepo()
+		repo.purgeBattlesResults = []int64{2, 2, 2}
+		repo.purgeProgressResults = []int64{2, 2}
+
+		retentionUsecaseMode(repo, 2, raw).sweepRetentionOnce(context.Background())
+
+		if repo.purgeBattlesCalls != 1 {
+			t.Fatalf("retention_mode=%q 下 battles 应只跑一轮, calls=%d", raw, repo.purgeBattlesCalls)
+		}
+		if repo.purgeProgressCalls != 1 {
+			t.Fatalf("retention_mode=%q 下 progress 应只跑一轮, calls=%d", raw, repo.purgeProgressCalls)
+		}
+	}
+}
+
 // TestRetentionSweep_MistypedModeFallsBackToReportOnly 拼错的模式值不得被猜成 delete。
+// (正常路径到不了这里:main 启动时 ValidateRetentionMode 已经拒启 —— 否则拼错
+// "delete" 会让六个月口径静默失效。这里守的是"万一走到了也别乱删"。)
 func TestRetentionSweep_MistypedModeFallsBackToReportOnly(t *testing.T) {
 	for _, raw := range []string{"del", "true", "1", "purge"} {
 		repo := newFakeRepo()

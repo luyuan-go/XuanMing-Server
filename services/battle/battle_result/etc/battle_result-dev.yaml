@@ -109,6 +109,19 @@ battle:
   # 表里新增掉落物品必须同步加进这里,否则 DS 上报的拾取会被过滤不发放(只告警)。
   drop_whitelist: [10001, 10002, 10003, 10004, 10005, 10006]
 
+  # ── 战报保留期(§9.24 登记例外:180 天)──────────────────────────────────
+  # 产品口径:MySQL 里最多只存最近六个月的战报,超过六个月的就没有数据
+  # (2026-08-03 用户指令)。这条同时决定玩家能查到多久以前的战报(ListPlayerHistory
+  # 只读 MySQL,没有冷存归档)。取值钳在 [30,180]。
+  history_retention_days: 180
+  # retention_mode: 本服留空即 delete(与其它域 report_only 默认相反,战报有产品寿命);
+  # 这里显式写出来是为了让"这个库会真删数据"在配置里一眼可见。
+  # 排查误删嫌疑时改成 report_only:只统计待清理量打 WARN,一行不删。
+  retention_mode: "delete"
+  # 清理节奏:每小时一轮,每轮每类小批量循环删到追平(单批 200 场,批间独立短事务不锁表)。
+  retention_sweep_interval: "1h"
+  retention_sweep_batch: 200
+
 # ── DS 回调服务令牌校验(审核 P1 #1)────────────────────────────────────────────
 # battle_result 只校验不签发:Battle DS 经 Envoy :8444 调 ReportResult 须带 battle 令牌
 # (ds_allocator 分配时签发,绑 match_id,防拿 A 局令牌伪造 B 局结算)。

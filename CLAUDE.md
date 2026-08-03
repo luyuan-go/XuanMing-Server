@@ -187,7 +187,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 
 24. **持久化数据增长必须有界,但"因为数据大了"删数据默认不许做(2026-07-22 用户指令)**:
 
-    保留期清理**默认只报告不删**(`retention_mode` 留空 = `report_only`):周期统计"有多少行满足清理条件"并打 `WARN` 日志 + `pandora_db_retention_pending_rows` gauge,一行都不删。真删必须由配置显式写 `retention_mode: delete`。理由:自动删生产数据不可逆,清理条件 / 保留期 / 幂等窗口任一处配错都会静默删掉不该删的玩家数据,而且**删完才发现**;把"何时删"的决定权交回人手里。代价是 report-only 下库会继续增长——所以待清理量必须持续可见(WARN + metric + `dbcheck -pending`),让人能判断何时开删。实现见 `pkg/dbguard/sweep.go`:`Mode` 零值即 `ModeReportOnly`;`ParseMode` 对无法识别的值**报错而非猜成 delete**(拼错一个字母就开始删生产数据是不可接受的失败模式),启动 `ValidateRetentionMode` fail-fast。`SweepTable` 强制 Count 与 Delete **共用同一 where**,从机制上排除"报告说 0 行、实际删了 10 万行"的条件漂移。
+    保留期清理**默认只报告不删**(`retention_mode` 留空 = `report_only`):周期统计"有多少行满足清理条件"并打 `WARN` 日志 + `pandora_db_retention_pending_rows` gauge,一行都不删。真删必须由配置显式写 `retention_mode: delete`。**唯一例外:battle_result 的战报清理默认真删**(见下方"按域覆盖")。理由:自动删生产数据不可逆,清理条件 / 保留期 / 幂等窗口任一处配错都会静默删掉不该删的玩家数据,而且**删完才发现**;把"何时删"的决定权交回人手里。代价是 report-only 下库会继续增长——所以待清理量必须持续可见(WARN + metric + `dbcheck -pending`),让人能判断何时开删。实现见 `pkg/dbguard/sweep.go`:`Mode` 零值即 `ModeReportOnly`;`ParseMode` 对无法识别的值**报错而非猜成 delete**(拼错一个字母就开始删生产数据是不可接受的失败模式),启动 `ValidateRetentionMode` fail-fast。`SweepTable` 强制 Count 与 Delete **共用同一 where**,从机制上排除"报告说 0 行、实际删了 10 万行"的条件漂移。
 
     **必须分清两类删除,别混为一谈**:
 
@@ -196,6 +196,10 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     | 含义 | 东西本来就该没了 | 数据还有效,只是占地方 |
     | 例子 | 道具过期、邮件失效、挂单置 EXPIRED、玩家主动丢弃/解散公会、出箱投递成功即删 | 幂等流水超 90 天、终态申请行、已结算成交流水、私聊历史 |
     | 处置 | 照常删,是正常业务逻辑 | `retention_mode` 默认 report_only |
+
+    **按域覆盖:战报(battle_result)默认真删,保留六个月(2026-08-03 用户指令)**。
+
+    "MySQL 里最多只存最近六个月的战报,超过六个月的就没有数据"是产品口径,不是运维口味 —— 战报是产品上就有寿命的数据,只报告不删交付不了这条(库会一直涨)。因此 `battle_result` 的 `retention_mode` **留空即 `delete`**,`history_retention_days` 默认 180 并钳在 `[30,180]`(`internal/conf/conf.go` 的 `HistoryRetentionMaxDays` / `HistoryRetentionMinDays`,`budgets.go` 容量预算直接引用上限常量,不另抄一份)。配套纪律:①同一个值也是**玩家战报可见窗口**(`ListPlayerHistory` 只读 MySQL,当前无冷存归档),要给运营 / 客服留更久必须另做归档,不是加大这个数;②启动 `ValidateRetentionMode` fail-fast(本服拼错 `delete` 会让六个月口径静默失效);③下限 30 天是防手滑护栏(真删域里把 180 写成 18 不可逆);④首次开删前先 `dbcheck -pending` 看积压规模,存量库第一轮会把全部超期数据按批删完,建议低峰期发布。**其它域不受此影响,仍是 report_only 默认。**
 
     以下为"运维语义删除"的通用要求:任何随时间或玩家活跃度线性增长的只增表(幂等流水、审计、托管、归档、领取记录、outbox、历史/日志类表等)必须同时具备**保留期配置(带默认值)**和**周期清理任务**;玩家已失去 / 已终态 / 已关闭的数据(用完道具的流水、closed escrow、过期邮件、已结算订单等)物理保留**默认且最多 90 天**。清理必须小批量(`DELETE ... LIMIT`)防长事务锁表,多副本并发跑必须幂等;清理列必须有可用索引。幂等 / 防重行的保留期必须**远大于对应操作的最大重试 / 回放窗口**,且删除后迟到重放必须 fail-closed 或 no-op(不得重复入账 / 重复发放 / 重复冻结)——依赖某流水"永久兜底"的防重设计一律改为在源头闭环(例:邮件寿命钳到 claim 保留期内,而不是靠 inventory 流水永存)。确需超过 90 天必须写明理由并在下表登记为例外。**新增只增表必须同步登记到下表,没有清理方案的只增表 PR review 直接拒**:
 
@@ -206,8 +210,8 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     | player_mail / sys_mail / guild_mail | 过期 / 失效 + 缓冲期 | 过期后 7 天(`expired_retention_days`) | mail `biz/sweep.go` |
     | player_mail_archive | archived_at 超期 | 90 天(`archive_retention_days`) | mail `biz/sweep.go` |
     | player_mail_claim | mail_id 早于 cutoff(雪花时间) | **180 天(登记例外)**:发送侧已把邮件可领窗口钳到本值内,claim 行必须活得比可领窗口长 | mail `biz/sweep.go` |
-    | battles + battle_player_stats | created_at(服务端落库时间;§9.6 不信 DS 上报的 ended_at_ms,防伪造提前删/永不删)超期,同事务批删 | 90 天(`history_retention_days`) | battle_result `biz/retention.go` |
-    | battle_progress_stream + battle_progress_player | settled_at_ms>0 且超期(未结算行永不清:陈年未结算 = 补偿链 bug 证据) | 90 天(同上) | battle_result `biz/retention.go` |
+    | battles + battle_player_stats | created_at(服务端落库时间;§9.6 不信 DS 上报的 ended_at_ms,防伪造提前删/永不删)超期,同事务批删 | **180 天(登记例外)**:战报保留期 = 玩家可见窗口,产品口径"最多存最近六个月"(`history_retention_days`,钳 `[30,180]`);**本域 `retention_mode` 默认 delete** | battle_result `biz/retention.go` |
+    | battle_progress_stream + battle_progress_player | settled_at_ms>0 且超期(未结算行永不清:陈年未结算 = 补偿链 bug 证据) | 180 天(同上) | battle_result `biz/retention.go` |
     | exp_history | created_at 超期(**默认关**:上游 progress 出箱无总重试期限,清收据会双发;上游有界后运维显式开启) | 7 天(`exp_history_retention`) | player `RunExpHistoryJanitor` |
     | mmr_history / attr_point_grants / talent_point_grants | created_at 超期(**默认关**,同上:kafka 重放 / 授予补扫须先有界) | 90 天(`history_retention_days`,下限 30) | player `RunHistoryJanitor` |
     | chat_private_messages | message_id 早于雪花 cutoff | 90 天(`history_retention_days`) | chat `biz/sweep.go` |

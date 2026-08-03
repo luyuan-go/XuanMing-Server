@@ -102,6 +102,13 @@ func main() {
 			"hint", "Model-B 只允许受 Guard/Redis active/receipt 保护的 ReportResult RPC；Kafka 只保留 ds.lifecycle")
 		os.Exit(1)
 	}
+	// 保留期清理模式必须能被识别(§9.24 fail-fast):本服默认真删(战报只留六个月),
+	// 拼错的模式值会静默回落 report_only —— 库继续无界增长且没人发现,必须拒启。
+	if err := cfg.Battle.ValidateRetentionMode(); err != nil {
+		helper.Errorw("msg", "battle_retention_mode_invalid", "err", err,
+			"hint", "battle.retention_mode 只接受 \"delete\"(留空即此) 或 \"report_only\"")
+		os.Exit(1)
+	}
 
 	// 3. MySQL(强依赖:结算落库不可降级)
 	if cfg.Node.MySQLClient.DSN == "" {

@@ -2176,3 +2176,31 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
   AGENTS.md §10 红线;db-capacity-guard.md 加 §0.0;stress-discipline.md §4.3 去掉
   "批删速率抽测"改 -pending。
 - 验证:pkg + 12 服务 build 全绿,36 个测试包 ok / 0 FAIL,tools/migrate 编译通过。
+
+## 2026-08-03:战报保留期改为六个月且默认真删(用户指令,Claude)
+
+用户口径:"战斗结算数据库不会无限大啊?玩家战报在 MySQL 最多只存最近六个月,超过六个月的
+在 MySQL 里面就应该没有数据了"。
+
+- **改前现状(确实会无界增长)**:清理任务早就有(`biz/retention.go`),但两处让它实际不删:
+  ① `history_retention_days` 硬钳 ≤90;② `retention_mode` 留空 = `report_only`
+  (2026-07-22 用户指令的全局默认)—— 所以线上只有 WARN + `pandora_db_retention_pending_rows`
+  在报待清理量,一行没删。
+- **改后**:`battle_result` 域按域覆盖全局默认 ——
+  - `history_retention_days` 默认 180(六个月),钳 `[30,180]`
+    (`conf.HistoryRetentionMaxDays/MinDays`;下限是真删域的手滑护栏);
+  - `retention_mode` **留空即 `delete`**(其它域仍 report_only 不变);
+  - `main.go` 补上 `ValidateRetentionMode` 启动 fail-fast —— 之前定义了却没人调,
+    拼错 "delete" 会让六个月口径静默失效;
+  - `budgets.go` 容量预算改为直接引用 `conf.HistoryRetentionMaxDays`(不再抄一份 90),
+    保留期一改预算跟着改,杜绝告警恒响/形同虚设;
+  - dev yaml + prod example 显式写出 180 / delete + 首次开删纪律(先 `dbcheck -pending`
+    看积压,低峰期发布)。
+- **口径提醒**:保留期同时是玩家战报可见窗口(`ListPlayerHistory` 只读 MySQL,无冷存归档);
+  运营/客服要更久必须另做归档,不是加大这个数。
+- 测试:`DefaultsToDelete`(留空必须真删并排空积压)、`ExplicitReportOnlyStopsDeleting`
+  (刹车仍在)、`HistoryRetentionDaysClamped`(0/-1/365/180/90/1)、
+  `RetentionModeDefaultsToDelete`(含拼错拒启)、prod 模板断言 180+delete。
+  `go build`/`go vet` 全绿,conf + biz 测试包 ok。
+- 规范同步:CLAUDE.md §9.24 开头加"按域覆盖"段 + 登记表 battles/progress 两行改 180 天例外;
+  battle_result README 保留期章节与配置表。

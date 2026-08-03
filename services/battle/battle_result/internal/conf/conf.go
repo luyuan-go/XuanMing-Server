@@ -3,11 +3,22 @@ package conf
 
 import (
 	"fmt"
-	"github.com/luyuancpp/pandora/pkg/dbguard"
+	"strings"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
+)
+
+// 战报保留期边界(§9.24 登记例外:180 天 > 通用 90 天上限)。
+//
+// 上限 180 天 = 六个月,是产品口径「MySQL 里最多只存最近六个月的战报」的落点:
+// 它同时是清理 cutoff 与玩家战报可见窗口(ListPlayerHistory 只读 MySQL)。
+// 下限 30 天防配置手滑把真删窗口缩到玩家还在看的范围内。
+const (
+	HistoryRetentionMaxDays = 180
+	HistoryRetentionMinDays = 30
 )
 
 // Config 是 battle_result 服务的完整配置。
@@ -151,7 +162,9 @@ type BattleConf struct {
 	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
 
 	// HistoryRetentionDays 对局结算(battles+stats)与已结算进度水位(stream+player)
-	// 保留天数(默认 90)。远大于结算重试窗口(小时级);对局历史查询窗口同步受此限。
+	// 保留天数(默认 180 = 六个月,钳在 [30,180])。远大于结算重试窗口(小时级);
+	// 玩家战报查询窗口(ListPlayerHistory)同步受此限 —— 这正是产品口径:
+	// **MySQL 里最多只有最近六个月的战报**(2026-08-03 用户指令,§9.24 登记例外)。
 	HistoryRetentionDays int `yaml:"history_retention_days,omitempty" json:"history_retention_days,omitempty"`
 
 	// RetentionSweepInterval 保留期清理轮询间隔(默认 1h)。多副本各自跑,批删幂等无需锁。
@@ -160,8 +173,15 @@ type BattleConf struct {
 	// RetentionSweepBatch 每轮每类清理的对局数上限(默认 200 场;stats 行数 ≈ 场数×人数)。
 	RetentionSweepBatch int `yaml:"retention_sweep_batch,omitempty" json:"retention_sweep_batch,omitempty"`
 
-	// RetentionModeRaw 保留期清理模式:留空 / "report_only" = 默认只报告不删;"delete" = 真删。
-	// 「因为数据大了就自动删」不可接受(§9.24 + 2026-07-22 用户指令)。
+	// RetentionModeRaw 保留期清理模式:留空 = **delete(本服特例,见下)**;
+	// "report_only" / "report" = 只报告不删;"delete" = 真删。
+	//
+	// ⚠️ 本服的默认值与 dbguard 全局默认(report_only,2026-07-22 用户指令
+	// 「不能因为数据大了就删我的数据」)**相反**,是 2026-08-03 用户指令的按域覆盖:
+	// 战报是产品上就有寿命的数据 ——「超过六个月的在 MySQL 里就应该没有数据了」。
+	// 只报告不删无法交付这条产品口径(库会一直涨),所以本服零值即真删。
+	// 其它域(背包流水、邮件、拍卖…)仍保持全局 report_only 默认,不受此影响。
+	// 需要临时停删(如排查误删嫌疑)显式写 `retention_mode: report_only`。
 	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
 }
 
@@ -198,12 +218,18 @@ func (c *Config) Defaults() {
 		c.Battle.DropBatchSize = 128
 	}
 	if c.Battle.HistoryRetentionDays <= 0 {
-		c.Battle.HistoryRetentionDays = 90
+		c.Battle.HistoryRetentionDays = HistoryRetentionMaxDays
 	}
-	if c.Battle.HistoryRetentionDays > 90 {
-		// §9.24 硬上限:失效数据最多保留 90 天(审计 P1:配置 365 不得原样生效;
-		// 确需更长必须走 §9.24 登记例外,不允许静默配置突破)。
-		c.Battle.HistoryRetentionDays = 90
+	if c.Battle.HistoryRetentionDays > HistoryRetentionMaxDays {
+		// 硬上限:战报最多留六个月(配置 365 不得原样生效;要更长必须先改这里 +
+		// 改 §9.24 登记表 + 改 budgets.go 容量预算,不允许靠配置静默突破)。
+		c.Battle.HistoryRetentionDays = HistoryRetentionMaxDays
+	}
+	if c.Battle.HistoryRetentionDays < HistoryRetentionMinDays {
+		// 硬下限:本服清理是**真删**(见 RetentionModeRaw),配置写错一个数量级
+		// (如把 180 写成 18、误填 1)会不可逆地删掉玩家还看得见的战报。
+		// 下限把手滑的爆炸半径钳住;真要留更短须先改这里,让改动过 review。
+		c.Battle.HistoryRetentionDays = HistoryRetentionMinDays
 	}
 	if c.Battle.RetentionSweepInterval.Std() <= 0 {
 		c.Battle.RetentionSweepInterval = config.Duration(time.Hour)
@@ -375,8 +401,16 @@ func (b *BattleConf) ProgressBatchSizeOrDefault() int {
 	return 128
 }
 
-// RetentionMode 返回生效的保留期清理模式(默认 ModeReportOnly = 只报告不删)。
+// RetentionMode 返回生效的保留期清理模式。
+//
+// **留空 = ModeDelete**(本服特例,与 dbguard 全局默认相反,理由见 RetentionModeRaw):
+// 「超过六个月的战报在 MySQL 里就该没有」只报告不删交付不了。
+// 无法识别的值回落 ModeReportOnly(不删更安全),但启动期 ValidateRetentionMode
+// 已经 fail-fast 拒启,正常路径到不了这里。
 func (b *BattleConf) RetentionMode() dbguard.Mode {
+	if strings.TrimSpace(b.RetentionModeRaw) == "" {
+		return dbguard.ModeDelete
+	}
 	m, err := dbguard.ParseMode(b.RetentionModeRaw)
 	if err != nil {
 		return dbguard.ModeReportOnly
@@ -385,6 +419,7 @@ func (b *BattleConf) RetentionMode() dbguard.Mode {
 }
 
 // ValidateRetentionMode 供启动 fail-fast(写了无法识别的模式必须拒启)。
+// 本服尤其不能只回落默认:拼错 "delete" 会让六个月口径静默失效,库继续无界增长。
 func (b *BattleConf) ValidateRetentionMode() error {
 	_, err := dbguard.ParseMode(b.RetentionModeRaw)
 	return err

@@ -857,7 +857,7 @@ func (r *MySQLBattleRepo) deleteByMatchIDsTx(ctx context.Context, tables []strin
 // 条件只写一遍,杜绝"报告的条件"与"实删的条件"漂移(见 pkg/dbguard/sweep.go 头注释)。
 const (
 	// expiredBattlesWhere 依据服务端落库时间 created_at(§9.6 数值不信 DS;走 idx_created)。
-	// 行龄 = 结算落库距今,比 ended_at 晚一个对局时长,相对 90 天保留期误差可忽略,
+	// 行龄 = 结算落库距今,比 ended_at 晚一个对局时长,相对 180 天保留期误差可忽略,
 	// 且偏保守方向(只会晚删,不会早删)。
 	expiredBattlesWhere = "created_at < FROM_UNIXTIME(? / 1000)"
 	// settledProgressWhere 依据服务端结算事务打的 settled_at_ms(settleProgressStreamTx);走 idx_settled。
@@ -903,14 +903,15 @@ func (r *MySQLBattleRepo) sweepByMatchID(
 }
 
 // SweepExpiredBattles 处理超保留期的对局(battles + battle_player_stats 同事务成组)。
-// **mode 默认 ModeReportOnly:只统计待清理对局数并 WARN 告警,一行都不删**(用户指令)。
+// mode 由 conf 决定:battle_result 默认 ModeDelete(战报只留六个月,2026-08-03 用户指令);
+// 显式配 report_only 时只统计待清理对局数并 WARN 告警,一行都不删。
 func (r *MySQLBattleRepo) SweepExpiredBattles(ctx context.Context, mode dbguard.Mode, cutoffMs int64, batch int) (dbguard.Outcome, error) {
 	return r.sweepByMatchID(ctx, mode, "battles", expiredBattlesWhere,
 		[]string{"battle_player_stats", "battles"}, cutoffMs, batch)
 }
 
 // SweepSettledProgress 处理已结算且超保留期的进度水位(stream + player 同事务成组)。
-// **mode 默认 ModeReportOnly(只报告不删)**;未结算行无论如何都不在处理范围
+// mode 同上(默认真删);未结算行无论如何都不在处理范围
 // (陈年未结算 = 补偿链 bug 证据,另有 CountStaleUnsettledProgress 持续告警)。
 func (r *MySQLBattleRepo) SweepSettledProgress(ctx context.Context, mode dbguard.Mode, cutoffMs int64, batch int) (dbguard.Outcome, error) {
 	return r.sweepByMatchID(ctx, mode, "battle_progress_stream", settledProgressWhere,

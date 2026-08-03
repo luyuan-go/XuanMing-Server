@@ -2,12 +2,18 @@
 // 口径与 fail-open 语义见 inventory/internal/data/budgets.go 头注释。
 package data
 
-import "github.com/luyuancpp/pandora/pkg/dbguard"
+import (
+	"github.com/luyuancpp/pandora/pkg/dbguard"
+	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
+)
 
 // 容量规划基数:日活 1 万,每人每天 10 局,每局 10 人 → 每天约 1 万局。
 const (
 	planDailyMatches = 10_000
 	planPerMatch     = 10 // 单局人数(stats / progress_player 的行放大系数)
+	// planRetentionDays 直接取保留期上限(六个月),不另抄一份常量:
+	// 预算 = 稳态最大行数 × 3 倍余量,保留期一改预算必须同步,否则告警要么恒响要么形同虚设。
+	planRetentionDays = conf.HistoryRetentionMaxDays
 )
 
 // Budgets 是 pandora_battle 库的容量预算。
@@ -17,17 +23,17 @@ const (
 func Budgets() []dbguard.TableBudget {
 	return []dbguard.TableBudget{
 		{
-			// 保留 90 天:1 万局/天 × 90 × 3。
-			Table: "battles", MaxRows: planDailyMatches * 90 * 3, MaxAvgRowBytes: 256,
-			Note: "对局结算头,保留 90 天;超限先查 battle 保留期清理是否在跑(日志 battle_retention_battles_purged)",
+			// 保留 180 天(六个月):1 万局/天 × 180 × 3。
+			Table: "battles", MaxRows: planDailyMatches * planRetentionDays * 3, MaxAvgRowBytes: 256,
+			Note: "对局结算头,保留 180 天;超限先查 battle 保留期清理是否在跑(日志 battle_retention_battles_purged)",
 		},
 		{
-			Table: "battle_player_stats", MaxRows: planDailyMatches * planPerMatch * 90 * 3, MaxAvgRowBytes: 192,
+			Table: "battle_player_stats", MaxRows: planDailyMatches * planPerMatch * planRetentionDays * 3, MaxAvgRowBytes: 192,
 			Note: "随 battles 同事务批删;行数 ≈ 对局数 × 单局人数",
 		},
-		{Table: "battle_progress_stream", MaxRows: planDailyMatches * 90 * 3, MaxAvgRowBytes: 128,
-			Note: "已结算行保留 90 天;未结算陈年行永不清但有 ERROR 告警(battle_retention_stale_unsettled_progress)"},
-		{Table: "battle_progress_player", MaxRows: planDailyMatches * planPerMatch * 90 * 3, MaxAvgRowBytes: 128},
+		{Table: "battle_progress_stream", MaxRows: planDailyMatches * planRetentionDays * 3, MaxAvgRowBytes: 128,
+			Note: "已结算行保留 180 天;未结算陈年行永不清但有 ERROR 告警(battle_retention_stale_unsettled_progress)"},
+		{Table: "battle_progress_player", MaxRows: planDailyMatches * planPerMatch * planRetentionDays * 3, MaxAvgRowBytes: 128},
 		// ── 出箱表:积压告警线 ──
 		{Table: "player_update_outbox", MaxRows: 200_000, MaxAvgRowBytes: 768,
 			Note: "投递成功即删;堆积 = kafka 投递链堵塞,查 RunOutboxPublisher 日志"},

@@ -72,6 +72,21 @@ battle:
   max_progress_exp_per_match: 1000000
   max_progress_items_per_match: 500
 
+  # ── 战报保留期(§9.24 登记例外:180 天)──────────────────────────────────
+  # 产品口径:MySQL 里最多只存最近六个月的战报,超过六个月的就没有数据
+  # (2026-08-03 用户指令)。同一个值也是玩家战报可见窗口(ListPlayerHistory 只读
+  # MySQL,没有冷存归档);要给运营/客服留更久必须另做归档,不是加大这个数。
+  # 取值钳在 [30,180];想留更长要同时改 conf.HistoryRetentionMaxDays、CLAUDE.md §9.24
+  # 登记表和 budgets.go 容量预算,不允许靠配置静默突破。
+  history_retention_days: 180
+  # ⚠️ 本服 retention_mode 留空即 **delete**(真删),与其它域 report_only 默认相反。
+  # 首次上线纪律:开删前先跑 `dbcheck -pending` 看待清理规模 —— 存量库第一轮会把
+  # 全部超期积压按 200 场/批循环删完(批间独立短事务不锁表,但会持续压 DB 一段时间),
+  # 建议低峰期发布。排查误删嫌疑时改 report_only 立即停删(只统计打 WARN)。
+  retention_mode: "delete"
+  retention_sweep_interval: "1h"
+  retention_sweep_batch: 200
+
 # Model-B 回调身份与玩家 SessionToken / DSTicket 完全分域。battle-result 只持有 DS callback
 # verifier 材料，不持有任何玩家签票私钥；普通 stable/canary 发布不轮换本 secret/keyset。
 ds_auth:

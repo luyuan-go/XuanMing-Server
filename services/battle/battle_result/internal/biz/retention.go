@@ -2,7 +2,15 @@
 //
 // 背景:battles / battle_player_stats 每场对局写 1 + N 行,battle_progress_stream /
 // battle_progress_player 每场走实时通道的对局写 1 + N 行,均只增不删,随对局量无界线性增长。
-// 本文件周期批量回收超保留期(默认 90 天)的行:
+// 本文件周期批量回收超保留期(默认 180 天 = 六个月)的行。
+//
+// **本服默认真删**(`retention_mode` 留空即 delete,与其它域的 report_only 默认相反):
+// 产品口径是「MySQL 里最多只存最近六个月的战报,超过六个月的就没有数据」
+// (2026-08-03 用户指令),只报告不删交付不了这条 —— 库会一直涨。战报是产品上
+// 就有寿命的数据,清理窗口同时也是玩家可见的战报窗口(ListPlayerHistory 只读 MySQL)。
+// 需要临时停删(排查误删嫌疑)显式配 `retention_mode: report_only`。
+//
+// 清理口径:
 //
 //	battles + battle_player_stats     服务端落库时间 created_at 超期后同事务批删
 //	                                  (§9.6 数值不信 DS:ended_at_ms 是 DS 上报,不作清理依据)。
@@ -55,8 +63,8 @@ func (u *BattleResultUsecase) sweepRetentionOnce(ctx context.Context) {
 	log := plog.With(ctx)
 	cutoffMs := time.Now().AddDate(0, 0, -u.cfg.HistoryRetentionDays).UnixMilli()
 
-	// mode 默认 report_only:待清理量由 dbguard.ReportPending 统一 WARN 告警(与单表清理同口径),
-	// 这里只在真删发生时补一条业务 INFO。
+	// mode 默认 delete(本服特例);显式配成 report_only 时待清理量由 dbguard.ReportPending
+	// 统一 WARN 告警(与单表清理同口径),这里只在真删发生时补一条业务 INFO。
 	mode := u.cfg.RetentionMode()
 	if n := u.drainPurge(ctx, "battles", mode, cutoffMs, u.repo.SweepExpiredBattles); n > 0 {
 		log.Infow("msg", "battle_retention_battles_purged", "matches", n, "retention_days", u.cfg.HistoryRetentionDays)
