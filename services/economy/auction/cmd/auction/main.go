@@ -88,6 +88,13 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	// 保留期清理模式必须能被识别(§9.24 fail-fast):拼错的值会静默回落 report_only,
+	// 运维以为开了清理、实际一行没删,库继续无界增长且启动期毫无痕迹。
+	if err := cfg.Auction.ValidateRetentionMode(); err != nil {
+		helper.Errorw("msg", "auction_retention_mode_invalid", "err", err,
+			"hint", "auction.retention_mode 只接受 \"report_only\"(默认,不删) 或 \"delete\"")
+		os.Exit(1)
+	}
 
 	// 3. MySQL(强依赖:撮合权威库 pandora_auction)。分库优先,否则单库。
 	var router data.DBRouter

@@ -2204,3 +2204,23 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
   `go build`/`go vet` 全绿,conf + biz 测试包 ok。
 - 规范同步:CLAUDE.md §9.24 开头加"按域覆盖"段 + 登记表 battles/progress 两行改 180 天例外;
   battle_result README 保留期章节与配置表。
+
+## 2026-08-03(续1):ValidateRetentionMode 启动 fail-fast 补齐 7 服务(Claude)
+
+§9.24 原文写着"启动 ValidateRetentionMode fail-fast",但全仓 grep 显示该方法**只有定义、
+没有任何调用方** —— 拼错 `retention_mode`(如 "delet"/"true"/"1")时 `RetentionMode()`
+静默回落 report_only,运维以为开了清理、实际一行没删,库继续增长且启动期毫无痕迹。
+battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"战报只留六个月"。
+
+- 接线(全部在 `cfg.Defaults()` 之后、连 MySQL 之前,Errorw + os.Exit(1)):
+  chat / friend / guild / leaderboard / auction / inventory 各自 main.go;
+  **login 挂在已有的 `Config.Validate()` 里**(main 本就调它,不新增第二个调用点)。
+- 单测:6 个服务新增 `internal/conf/retention_mode_test.go`(留空=report_only 且过校验、
+  delete 生效、"Delete " 大小写空白归一化接受、拼错必须 err≠nil 且绝不猜成 delete);
+  login 在既有 conf_test.go 加同名用例,走 `Config.Validate()` 断言整体拒启。
+- **真跑验证**(不是只看编译):7 个服务各自用 dev yaml 注入坏值启动,全部在触碰 MySQL 前
+  exit 1 —— chat/friend/guild/leaderboard/auction/inventory 打 `*_retention_mode_invalid`,
+  login 打 `config_validation_failed`,err 均为 dbguard 的"无法识别的 retention_mode"。
+- go build / go vet / go test 七个模块全绿。gofmt 另报 6 个**本次未改**的文件不规范
+  (guild data/cache*.go、login data/match_client*.go + service/login.go),疑为并发编辑者
+  在改,未动。

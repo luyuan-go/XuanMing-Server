@@ -81,6 +81,13 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	// 保留期清理模式必须能被识别(§9.24 fail-fast):拼错的值会静默回落 report_only,
+	// 运维以为开了清理、实际一行没删,库继续无界增长且启动期毫无痕迹。
+	if err := cfg.Guild.ValidateRetentionMode(); err != nil {
+		helper.Errorw("msg", "guild_retention_mode_invalid", "err", err,
+			"hint", "guild.retention_mode 只接受 \"report_only\"(默认,不删) 或 \"delete\"")
+		os.Exit(1)
+	}
 
 	// 3. MySQL(强依赖:公会 / 群关系落库不可降级)
 	if cfg.Node.MySQLClient.DSN == "" {

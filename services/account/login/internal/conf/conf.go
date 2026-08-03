@@ -293,6 +293,11 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("login.require_hub_assignment_binding=true requires login.hub_assignment_fence etcd endpoints/keyset revision")
 		}
 	}
+	// 保留期清理模式必须能被识别(§9.24 fail-fast):拼错的值会静默回落 report_only,
+	// 运维以为开了 account_devices 清理、实际一行没删,库继续增长且启动期毫无痕迹。
+	if err := c.Login.ValidateRetentionMode(); err != nil {
+		return err
+	}
 	return nil
 }
 

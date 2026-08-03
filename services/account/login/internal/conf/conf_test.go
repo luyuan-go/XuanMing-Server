@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 )
 
 func TestRequireHubAssignmentBindingValidation(t *testing.T) {
@@ -117,4 +118,40 @@ func TestRedisDSAdmissionRequiresSingleConsistentFence(t *testing.T) {
 			t.Fatal("redis admission must require enforce")
 		}
 	})
+}
+
+// TestRetentionModeValidation 守住 §9.24 的启动 fail-fast:保留期清理模式一度只有
+// ValidateRetentionMode 定义、没有任何调用方,拼错 "delete" 时 RetentionMode() 静默回落
+// report_only —— 运维以为开了 account_devices 清理、实际一行没删。login 把这条校验挂在
+// 已有的 Config.Validate() 上(main 本就调它),本测试守住它不被摘掉。
+func TestRetentionModeValidation(t *testing.T) {
+	var cfg Config
+	cfg.Defaults()
+
+	// 留空 = 默认只报告不删,必须通过启动校验。
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("留空 retention_mode 必须通过启动校验: %v", err)
+	}
+	if mode := cfg.Login.RetentionMode(); mode != dbguard.ModeReportOnly {
+		t.Fatalf("留空 retention_mode 应为 report_only, got %v", mode)
+	}
+
+	cfg.Login.RetentionModeRaw = "delete"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("retention_mode=delete 必须通过启动校验: %v", err)
+	}
+	if mode := cfg.Login.RetentionMode(); mode != dbguard.ModeDelete {
+		t.Fatalf("retention_mode=delete 应为 delete, got %v", mode)
+	}
+
+	// 拼错必须让整个 Config.Validate() 失败(= main 拒启),且绝不能被猜成 delete。
+	for _, raw := range []string{"delet", "true", "1", "purge", "off"} {
+		cfg.Login.RetentionModeRaw = raw
+		if err := cfg.Validate(); err == nil {
+			t.Fatalf("retention_mode=%q 必须启动 fail-fast", raw)
+		}
+		if mode := cfg.Login.RetentionMode(); mode == dbguard.ModeDelete {
+			t.Fatalf("retention_mode=%q 绝不能被猜成 delete", raw)
+		}
+	}
 }
