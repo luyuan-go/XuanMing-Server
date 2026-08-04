@@ -51,6 +51,12 @@ config_table:
   dir: "../../../configtable/dist"
 
 match:
+  # ds_local_profile: Windows 本机联调档,唯一合法值 local-off-v1;生产/灰度必须留空。
+  # 配了 ds_allocator_addr 就要签战斗票,而签/验必须同档:本机 ds_allocator 在 mode=local 下
+  # 只接受 legacy,并给 UE DS 注入 PANDORA_DS_LOCAL_PROFILE=local-off-v1 锁进 HS256LocalOff,
+  # 不交叉接受 RS256 v2 票。声明本档后 battle 票用 jwt.secret 签 HS256(与 UE 占位密钥同值)。
+  # 与 ds_ticket.private_key_file 互斥,同时配置会拒启。
+  ds_local_profile: "local-off-v1"
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
   team_addr: "127.0.0.1:50010"
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(成局后拉战斗 DS);留空用 StubDSAllocator

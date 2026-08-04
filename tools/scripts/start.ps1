@@ -5603,13 +5603,13 @@ function Invoke-K8s {
     # e2e_k8s.ps1 会探测不到宿主 8443 发布而自动回落宿主桥接(他人路径不变)。
     $edgeCertPem = Join-Path $envoyCertDir 'cert.pem'
     $edgeKeyPem  = Join-Path $envoyCertDir 'key.pem'
-    if (-not (Test-Path $edgeCertPem) -or -not (Test-Path $edgeKeyPem)) {
-        # envoy_cert.ps1 是函数库(dot-source 后调 Confirm-EnvoyDevCert 才会校验/mkcert 重签);
-        # 以 -File 直跑只定义函数就退出,是空操作——新机器证书缺失时必须走真实生成路径。
-        Write-Info 'Envoy dev 证书缺失,自动重签(mkcert,SAN 含 localhost/127.0.0.1/本机局域网 IP)...'
-        . (Join-Path $ScriptDir 'envoy_cert.ps1')
-        Confirm-EnvoyDevCert -EnvoyDir $envoyCertDir
-    }
+    # 无条件校验(函数自身幂等):证书不只会"缺失",还会"过期于旧地址"——本机 IP 随 DHCP 变后,
+    # 旧证书 SAN 仍是老 IP,文件俱在却让客户端 TLS 主机名校验失败。只在文件缺失时才校验,
+    # 等于永远发现不了这种情况。
+    # envoy_cert.ps1 是函数库(dot-source 后调 Confirm-EnvoyDevCert 才会校验/mkcert 重签);
+    # 以 -File 直跑只定义函数就退出,是空操作——证书需要重签时必须走真实生成路径。
+    . (Join-Path $ScriptDir 'envoy_cert.ps1')
+    Confirm-EnvoyDevCert -EnvoyDir $envoyCertDir
     if (-not (Test-Path $edgeCertPem) -or -not (Test-Path $edgeKeyPem)) {
         throw 'Envoy dev 证书(deploy/envoy/cert.pem + key.pem)缺失且自动重签失败;边缘 Envoy 无法起 TLS,已中止。多半是 mkcert 不可用:winget install FiloSottile.mkcert 后重跑。'
     }

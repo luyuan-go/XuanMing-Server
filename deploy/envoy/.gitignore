@@ -8,3 +8,7 @@ key.pem
 *.pem
 *.key
 *.crt
+
+# 重签时旧证书被改名留档(envoy_cert.ps1:cert.pem -> cert.pem.bad),换了后缀就不再匹配
+# 上面的 *.pem/*.key —— 私钥会以 untracked 身份出现在 git status 里,极易被 `git add .` 带进去。
+*.bad

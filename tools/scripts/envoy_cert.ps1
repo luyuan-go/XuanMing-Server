@@ -58,6 +58,106 @@ function Get-EnvoyCertSanHosts {
     return @($base + $lan | Select-Object -Unique)
 }
 
+# 从 PEM 文件读出第一张(叶子)证书;读不出返回 $null。
+# 注:Windows PowerShell 5.1 没有 X509Certificate2::CreateFromPemFile(那是 .NET 5+ / pwsh 7),
+# 而 start.ps1 可能在 5.1 下跑,故手工抠 base64 再走 byte[] 构造函数。
+function Get-LeafCertFromPem {
+    param([Parameter(Mandatory)] [string]$Path)
+    try {
+        if (-not (Test-Path $Path)) { return $null }
+        $pem = Get-Content $Path -Raw -ErrorAction Stop
+        $m = [regex]::Match($pem, '(?s)-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----')
+        if (-not $m.Success) { return $null }
+        $bytes = [Convert]::FromBase64String(($m.Groups[1].Value -replace '\s', ''))
+        return New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(, $bytes)
+    } catch {
+        return $null
+    }
+}
+
+# 读一个 DER 长度,返回 @(长度, 值起始偏移)。支持短式与长式。
+function Read-DerLength {
+    param(
+        [Parameter(Mandatory)] [byte[]]$Bytes,
+        [Parameter(Mandatory)] [int]$Index
+    )
+    # 注:PowerShell 里逗号运算符优先级高于加法,@($a, $b + 1) 会被解析成 ($a, $b) + 1
+    # (得到 3 个元素的数组),必须给算术表达式显式加括号。
+    $first = $Bytes[$Index]
+    if ($first -lt 0x80) { return @([int]$first, ($Index + 1)) }
+    $n = $first -band 0x7F
+    $len = 0
+    for ($k = 1; $k -le $n; $k++) { $len = ($len -shl 8) -bor $Bytes[$Index + $k] }
+    return @([int]$len, ($Index + 1 + $n))
+}
+
+# 取出证书 SAN 里的 dNSName 与 iPAddress,IP 统一规范化,便于与期望 SAN 比对。
+# 直接解 DER 而不用 X509Extension.Format():Format() 的字段名随系统语言变
+# (英文 "DNS Name=",中文「DNS 名称=」),按英文字样匹配会在中文机器上误判成
+# "SAN 没覆盖" → 每次启动都重签证书。
+function Get-CertSanNames {
+    param([Parameter(Mandatory)] $Cert)
+
+    $ext = $Cert.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.17' } | Select-Object -First 1
+    if (-not $ext) { return @() }
+    $raw = $ext.RawData
+    if (-not $raw -or $raw.Length -lt 2 -or $raw[0] -ne 0x30) { return @() }  # 外层须是 SEQUENCE
+
+    $r = Read-DerLength -Bytes $raw -Index 1
+    $pos = [int]$r[1]
+    $end = [Math]::Min($pos + [int]$r[0], $raw.Length)
+
+    $names = @()
+    while ($pos -lt $end -and ($pos + 1) -lt $raw.Length) {
+        $tag = $raw[$pos]
+        $r = Read-DerLength -Bytes $raw -Index ($pos + 1)
+        $len = [int]$r[0]
+        $valPos = [int]$r[1]
+        if (($valPos + $len) -gt $raw.Length) { break }   # DER 截断,别越界读
+        if ($tag -eq 0x82) {
+            # [2] dNSName (IA5String)
+            $names += ([System.Text.Encoding]::ASCII.GetString($raw, $valPos, $len)).Trim().ToLowerInvariant()
+        } elseif ($tag -eq 0x87) {
+            # [7] iPAddress (4 字节 IPv4 / 16 字节 IPv6)
+            $ipBytes = New-Object byte[] $len
+            [Array]::Copy($raw, $valPos, $ipBytes, 0, $len)
+            try { $names += ([System.Net.IPAddress]::new($ipBytes)).ToString().ToLowerInvariant() } catch { }
+        }
+        $pos = $valPos + $len
+    }
+    return @($names | Where-Object { $_ } | Select-Object -Unique)
+}
+
+# 把期望 SAN 项规范化成与 Get-CertSanNames 同一形态(IP 走 IPAddress 规范化,域名小写)。
+# 例:'::1' 与证书里的 '0:0:0:0:0:0:0:1' 规范化后同为 '::1',不会误判成缺失。
+function ConvertTo-NormalizedSanHost {
+    param([Parameter(Mandatory)] [string]$SanHost)
+    $h = $SanHost.Trim()
+    $ip = [System.Net.IPAddress]::Any
+    if ([System.Net.IPAddress]::TryParse($h, [ref]$ip)) { return $ip.ToString().ToLowerInvariant() }
+    return $h.ToLowerInvariant()
+}
+
+# 返回「期望 SAN 里、当前证书没覆盖」的项;全覆盖返回空数组。
+# 失败模式刻意选「保守」:证书读不出 / SAN 解不出 / 解析抛异常,一律返回空数组(视为不缺),
+# 把判断权交回原有的 PEM 形式校验。理由:本函数是新增的额外检查,若它自身有 bug 或遇到
+# 非 mkcert 签发的证书,绝不能把别人本来能起的服务器变成起不来或每次启动都重签。
+function Get-MissingCertSanHosts {
+    param(
+        [Parameter(Mandatory)] [string]$CertPath,
+        [Parameter(Mandatory)] [string[]]$SanHosts
+    )
+    try {
+        $cert = Get-LeafCertFromPem -Path $CertPath
+        if (-not $cert) { return @() }
+        $have = Get-CertSanNames -Cert $cert
+        if ($have.Count -eq 0) { return @() }
+        return @($SanHosts | Where-Object { (ConvertTo-NormalizedSanHost $_) -notin $have })
+    } catch {
+        return @()
+    }
+}
+
 # 读取 PEM 证书指纹(Thumbprint),用于判断本机 mkcert CAROOT 里的根 CA 是否就是全队共享 CA。
 # 读不出返回 $null。
 function Get-CertThumbprint {
@@ -164,22 +264,42 @@ function Confirm-EnvoyDevCert {
     $certOk = Test-PemFile -Path $certPath -BeginPattern 'BEGIN CERTIFICATE'
     $keyOk  = Test-PemFile -Path $keyPath  -BeginPattern 'BEGIN (RSA |EC )?PRIVATE KEY'
 
+    $sanHosts = Get-EnvoyCertSanHosts
+
+    # 形式校验通过 ≠ 证书还能用:本机局域网 IP 会随 DHCP 变(实测 192.168.2.46 -> 192.168.2.28),
+    # 旧证书 SAN 仍写着老地址。这种证书 Envoy 照样加载、TLS 握手也成功,但客户端用新 IP 连时
+    # 主机名校验失败,表现为 libcurl error 60 /
+    # "SSL: no alternative certificate subject name matches target ipv4 address"。
+    # 只有走 localhost 的入口还能用,极易误判成"登录服务挂了"。故必须连 SAN 覆盖一起校验。
+    $missingSan = @()
     if ($certOk -and $keyOk) {
-        Write-Host "[ OK ] Envoy dev 证书有效:$certPath" -ForegroundColor Green
-        return
+        $missingSan = Get-MissingCertSanHosts -CertPath $certPath -SanHosts $sanHosts
+        if ($missingSan.Count -eq 0) {
+            Write-Host "[ OK ] Envoy dev 证书有效(SAN 覆盖:$($sanHosts -join ' '))" -ForegroundColor Green
+            return
+        }
     }
 
-    # 报清楚到底哪个文件坏了(便于排障)。
+    # 报清楚到底哪里坏了(便于排障)。
     $reason = @()
     if (-not $certOk) { $reason += "cert.pem 缺失/空/非 PEM 证书" }
     if (-not $keyOk)  { $reason += "key.pem 缺失/空/非 PEM 私钥" }
+    if ($missingSan.Count -gt 0) { $reason += "证书 SAN 未覆盖本机地址:$($missingSan -join ' ')(多半是本机 IP 变了)" }
     Write-Host "[WARN] Envoy dev 证书无效:$($reason -join '; ')" -ForegroundColor Yellow
 
-    $sanHosts = Get-EnvoyCertSanHosts
     Write-Host "[INFO] 证书 SAN 将包含:$($sanHosts -join ' ')" -ForegroundColor Cyan
 
     $mkcert = Get-Command mkcert -ErrorAction SilentlyContinue
     if (-not $mkcert) {
+        # 「只是 SAN 没覆盖全」和「证书文件本身坏了」后果不同,不能一视同仁地 throw:
+        # 前者证书还能加载、走 localhost 的入口照常可用,而别的机器未必装了 mkcert——
+        # 硬失败会把「本来能起」变成「起不来」。所以只警告并继续,让人自己决定要不要重签。
+        if ($certOk -and $keyOk) {
+            Write-Host "[WARN] 未找到 mkcert,无法自动重签;继续用现有证书启动。" -ForegroundColor Yellow
+            Write-Host "       后果:用 $($missingSan -join ' ') 连本机的客户端会 TLS 校验失败(localhost 入口不受影响)。" -ForegroundColor Yellow
+            Write-Host "       要修:winget install FiloSottile.mkcert 后重跑本脚本。" -ForegroundColor Yellow
+            return
+        }
         $sanLine = $sanHosts -join ' '
         $msg = @"
 Envoy 本地 TLS 证书无效,且未找到 mkcert,无法自动修复。

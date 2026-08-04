@@ -45,6 +45,19 @@ type JWTConf struct {
 
 // MatchConf 是 matchmaker 服务私有配置。
 type MatchConf struct {
+	// DSLocalProfile 是 Windows 本机联调档的显式声明,唯一合法值 auth.DSLocalProfileOffV1
+	// ("local-off-v1");留空 = 不启用(生产/灰度必须留空)。
+	//
+	// 为什么需要它:配了 ds_allocator_addr 就走真实 DS 分配链,而战斗票的签/验必须同档 ——
+	// hub_allocator / ds_allocator 在 mode=local 下【只接受】legacy(auth.ValidateDSLocalProfileOffV1),
+	// 并强制给 UE DS 注入 PANDORA_DS_LOCAL_PROFILE=local-off-v1,UE 据此锁进 HS256LocalOff 档。
+	// 此时 matchmaker 若签 RS256 v2 票,DS 会把每个玩家拒在 PreLogin —— 服务起得来、打不了,
+	// 比起不来更难查。反之生产 Fleet 只有公钥 JWKS,legacy HS256 票会被全量拒且重新引入玩家 HMAC。
+	//
+	// 机械纪律:本字段与 ds_ticket.private_key_file 互斥(同时配置 = 启动失败),
+	// 生产配置里两者皆无时仍是启动失败(维持既有 fail-closed,不存在静默降级)。
+	DSLocalProfile string `yaml:"ds_local_profile,omitempty" json:"ds_local_profile,omitempty"`
+
 	// TeamAddr 是 team 服务 gRPC 直连地址(StartMatch 时拉取队伍快照校验 READY)。
 	// 留空则 StartMatch 跳过 team 校验(本机不起 team 也能跑撮合骨架)。
 	TeamAddr string `yaml:"team_addr,omitempty" json:"team_addr,omitempty"`

@@ -197,25 +197,62 @@ func main() {
 	if cfg.Match.DSAllocatorAddr != "" {
 		// 真实 DS 分配链固定使用 Model-B RS256 实例绑定票。配置漂移时禁止回退到
 		// legacy HS256，否则线上 Fleet（只有 public JWKS）会全量拒票，且重新引入玩家 HMAC。
-		if !cfg.DSTicket.SignerEnabled() {
+		//
+		// 唯一例外:Windows 本机联调档 local-off-v1(match.ds_local_profile 显式声明)。
+		// 战斗票的签/验必须同档 —— hub_allocator / ds_allocator 在 mode=local 下【只接受】
+		// legacy(auth.ValidateDSLocalProfileOffV1),并强制给 UE DS 注入
+		// PANDORA_DS_LOCAL_PROFILE=local-off-v1,UE 据此锁进 HS256LocalOff 档且不交叉接受。
+		// 此处若强签 RS256 v2,DS 会把每个玩家拒在 PreLogin:服务起得来、打不了,比起不来更难查。
+		var v2Signer *auth.DSTicketSigner
+		var legacySigner *auth.Signer
+		switch {
+		case cfg.DSTicket.SignerEnabled():
+			// 互斥:v2 私钥与本机档同时配置 = 姿态自相矛盾,拒启,不猜。
+			if cfg.Match.DSLocalProfile != "" {
+				helper.Errorw("msg", "ds_ticket_profile_conflict",
+					"ds_local_profile", cfg.Match.DSLocalProfile,
+					"hint", "ds_ticket.private_key_file (v2/RS256) and match.ds_local_profile (local HS256) are mutually exclusive; pick one")
+				os.Exit(1)
+			}
+			s, verr := auth.NewDSTicketSignerFromConf(cfg.DSTicket)
+			if verr != nil {
+				helper.Errorw("msg", "ds_ticket_v2_signer_init_failed", "err", verr,
+					"hint", "check ds_ticket.private_key_file / active_kid / ttl")
+				os.Exit(1)
+			}
+			v2Signer = s
+			helper.Infow("msg", "ds_ticket_v2_signer_ready", "kid", s.Kid(), "ttl", s.TTL().String())
+		case cfg.Match.DSLocalProfile == auth.DSLocalProfileOffV1:
+			// 本机档:签 legacy HS256 battle 票,密钥与 login / UE 占位密钥同源(jwt.secret)。
+			s, lerr := auth.NewSigner(auth.Config{
+				Issuer:      cfg.JWT.Issuer,
+				Audience:    cfg.JWT.Audience,
+				Secret:      []byte(cfg.JWT.Secret),
+				SessionTTL:  cfg.JWT.SessionTTL.Std(),
+				DSTicketTTL: cfg.JWT.DSTicketTTL.Std(),
+			})
+			if lerr != nil {
+				helper.Errorw("msg", "local_legacy_signer_init_failed", "err", lerr,
+					"hint", "local-off-v1 signs HS256 battle tickets from jwt.secret; it must match login and the UE DS secret")
+				os.Exit(1)
+			}
+			legacySigner = s
+			helper.Warnw("msg", "ds_ticket_local_off_v1_legacy_signer",
+				"profile", auth.DSLocalProfileOffV1,
+				"hint", "Windows local co-debug only: battle tickets are legacy HS256 to match the UE HS256LocalOff profile; never enable in production")
+		default:
 			helper.Errorw("msg", "ds_allocator_requires_ds_ticket_v2",
-				"hint", "configure revisioned ds_ticket.private_key_file + active_kid; legacy fallback is forbidden")
+				"hint", "configure revisioned ds_ticket.private_key_file + active_kid; "+
+					"for Windows local co-debug set match.ds_local_profile=local-off-v1; silent legacy fallback is forbidden")
 			os.Exit(1)
 		}
-		v2Signer, verr := auth.NewDSTicketSignerFromConf(cfg.DSTicket)
-		if verr != nil {
-			helper.Errorw("msg", "ds_ticket_v2_signer_init_failed", "err", verr,
-				"hint", "check ds_ticket.private_key_file / active_kid / ttl")
-			os.Exit(1)
-		}
-		helper.Infow("msg", "ds_ticket_v2_signer_ready", "kid", v2Signer.Kid(), "ttl", v2Signer.TTL().String())
 		abortSigner, abortErr := internalrpcauth.NewSigner(cfg.Match.AllocationAbortAuthSecret,
 			serviceName, cfg.Match.AllocationAbortAuthAudience)
 		if abortErr != nil {
 			helper.Errorw("msg", "allocation_abort_service_auth_init_failed", "err", abortErr)
 			os.Exit(1)
 		}
-		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, nil, v2Signer, abortSigner,
+		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, legacySigner, v2Signer, abortSigner,
 			cfg.Match.MapId, cfg.Match.GameMode, cfg.Match.DSAllocateTimeout.Std())
 		ga.SetSessionGate(sessGate) // R7 P0-2:READY 批签票据绑定当前会话代际
 		defer func() { _ = ga.Close() }()

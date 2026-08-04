@@ -247,16 +247,22 @@ func battleTargetFromFields(
 }
 
 // SignBattleTicket 只使用 READY match 持久化的 exact target。
-// 不允许降级 legacy HMAC 票。
+// 不允许降级 legacy HMAC 票 —— 唯一例外是 Windows 本机联调档 local-off-v1,
+// 此时 main 只注入 legacy signer、不注入 v2(两者互斥,见 cmd/matchmaker/main.go),
+// 因为同机的 ds_allocator/UE DS 被硬锁在 HS256LocalOff 档、不交叉接受 v2 票。
 //
 // R7 复审 P0-2:sessGate 非 nil 时读玩家当前会话 jti 签进 sjti claim。
 //   - 权威不可达 → fail-closed 拒签(票不能在"无法判定会话"时盲签);
 //   - 无会话(已登出/过期) → 拒签:没有现行会话就不存在合法的入场交付对象,
 //     重登后的重连链(login tryBattleReconnect)会用新会话重签。
 func (g *GrpcDSAllocator) SignBattleTicket(ctx context.Context, playerID, matchID uint64, allocation *model.BattleAllocation) (string, error) {
-	if g.v2 == nil || allocation == nil || !allocation.Target.CompleteBattle() {
+	if allocation == nil || !allocation.Target.CompleteBattle() {
 		return "", errcode.New(errcode.ErrDSAllocationFailed,
-			"complete v2 target required, player %d match %d", playerID, matchID)
+			"complete target required, player %d match %d", playerID, matchID)
+	}
+	if g.v2 == nil && g.signer == nil {
+		return "", errcode.New(errcode.ErrDSAllocationFailed,
+			"no battle ticket signer configured, player %d match %d", playerID, matchID)
 	}
 	var sessJTI string
 	if g.sessGate != nil {
@@ -270,6 +276,15 @@ func (g *GrpcDSAllocator) SignBattleTicket(ctx context.Context, playerID, matchI
 				"player %d has no current session; battle ticket withheld, match %d", playerID, matchID)
 		}
 		sessJTI = jti
+	}
+	if g.v2 == nil {
+		// local-off-v1:UE 侧走 HS256LocalOff 分支,只校验 player/match/exp。
+		token, _, err := g.signer.SignDSTicket(playerID, auth.DSTypeBattle, matchID, uuid.NewString())
+		if err != nil {
+			return "", errcode.New(errcode.ErrDSAllocationFailed,
+				"sign local-off-v1 battle ticket for player %d match %d failed: %v", playerID, matchID, err)
+		}
+		return token, nil
 	}
 	target := auth.DSTicketTarget{
 		DSPodName: allocation.Target.PodName, DSInstanceUID: allocation.Target.InstanceUID,
