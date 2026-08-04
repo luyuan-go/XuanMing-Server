@@ -381,7 +381,10 @@ func main() {
 		lf, lerr := biz.NewLocalHubFleetProvider(cfg.LocalHub)
 		if lerr != nil {
 			helper.Errorw("msg", "local_hub_fleet_provider_init_failed", "err", lerr,
-				"hint", "mode=local 需 local_hub.executable_path 指向打包好的 UE Windows DS 可执行文件")
+				"launcher", cfg.LocalHub.Launcher,
+				"hint", "mode=local 两种 DS 形态二选一:launcher=packaged 需 local_hub.executable_path 指向打包好的 UE Windows DS(PandoraServer.exe);"+
+					"launcher=editor 需 executable_path 指向 UnrealEditor.exe 且 project_path 指向 Pandora.uproject(免出包,直接读未 cook 的工程内容)。"+
+					"一键脚本:start.ps1 -Mode local -DsLauncher editor 会自动探测引擎与工程并经 PANDORA_DS_LAUNCHER/PANDORA_DS_EXE/PANDORA_DS_UPROJECT 注入。")
 			os.Exit(1)
 		}
 		// 进程随 hub_allocator 退出而 Kill,避免遗留孤儿 Hub DS。
@@ -389,6 +392,7 @@ func main() {
 		fleet = lf
 		lf.SetDSTokenIssuer(issueLocalHubCredential, true) // 完整 tuple 经 env 下发；签发失败必须 fail-closed
 		helper.Infow("msg", "local_hub_fleet_provider_ready",
+			"launcher", cfg.LocalHub.Launcher, "project", cfg.LocalHub.ProjectPath,
 			"executable", cfg.LocalHub.ExecutablePath, "map", cfg.LocalHub.MapName,
 			"advertise_host", cfg.LocalHub.AdvertiseHost, "port", cfg.LocalHub.Port)
 	default:

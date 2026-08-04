@@ -268,7 +268,10 @@ func main() {
 		ld, lerr := data.NewLocalGameServerAllocator(cfg.LocalDS)
 		if lerr != nil {
 			helper.Errorw("msg", "local_ds_allocator_init_failed", "err", lerr,
-				"hint", "mode=local 需 local_ds.executable_path 指向打包好的 UE Windows DS 可执行文件")
+				"launcher", cfg.LocalDS.Launcher,
+				"hint", "mode=local 两种 DS 形态二选一:launcher=packaged 需 local_ds.executable_path 指向打包好的 UE Windows DS(PandoraServer.exe);"+
+					"launcher=editor 需 executable_path 指向 UnrealEditor.exe 且 project_path 指向 Pandora.uproject(免出包,直接读未 cook 的工程内容)。"+
+					"一键脚本:start.ps1 -Mode local -DsLauncher editor 会自动探测引擎与工程并经 PANDORA_DS_LAUNCHER/PANDORA_DS_EXE/PANDORA_DS_UPROJECT 注入。")
 			os.Exit(1)
 		}
 		// 进程退出时杀掉全部在管 DS,避免遗留孤儿。
@@ -276,6 +279,7 @@ func main() {
 		allocator = ld
 		ld.SetDSTokenIssuer(issueLocalBattleCredential, true) // 完整 tuple 经 env 下发；失败必须 fail-closed
 		helper.Infow("msg", "local_ds_allocator_ready",
+			"launcher", cfg.LocalDS.Launcher, "project", cfg.LocalDS.ProjectPath,
 			"executable", cfg.LocalDS.ExecutablePath, "map", cfg.LocalDS.MapName,
 			"advertise_host", cfg.LocalDS.AdvertiseHost,
 			"port_base", cfg.LocalDS.PortBase, "port_range", cfg.LocalDS.PortRange)
