@@ -59,12 +59,16 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_pand
 namespace pandora {
 namespace login {
 namespace v1 {
+enum ResumeEntryState : int;
+extern const uint32_t ResumeEntryState_internal_data_[];
 enum ResumeMatchStage : int;
 extern const uint32_t ResumeMatchStage_internal_data_[];
 enum ResumePlacementState : int;
 extern const uint32_t ResumePlacementState_internal_data_[];
 enum ResumeRoute : int;
 extern const uint32_t ResumeRoute_internal_data_[];
+enum ResumeWaitReason : int;
+extern const uint32_t ResumeWaitReason_internal_data_[];
 class DSTicket;
 struct DSTicketGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -183,6 +187,9 @@ extern const VerifyDSTicketResponseGlobalsTypeInternal VerifyDSTicketResponse_gl
 namespace google {
 namespace protobuf {
 template <>
+internal::EnumTraitsT<::pandora::login::v1::ResumeEntryState_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::login::v1::ResumeEntryState>;
+template <>
 internal::EnumTraitsT<::pandora::login::v1::ResumeMatchStage_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::login::v1::ResumeMatchStage>;
 template <>
@@ -191,6 +198,9 @@ internal::EnumTraitsT<::pandora::login::v1::ResumePlacementState_internal_data_>
 template <>
 internal::EnumTraitsT<::pandora::login::v1::ResumeRoute_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::login::v1::ResumeRoute>;
+template <>
+internal::EnumTraitsT<::pandora::login::v1::ResumeWaitReason_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::login::v1::ResumeWaitReason>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -323,6 +333,94 @@ template <>
 [[nodiscard]] inline bool ResumePlacementState_Parse(
     ::absl::string_view name, ResumePlacementState* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<ResumePlacementState>(ResumePlacementState_descriptor(), name,
+                                           value);
+}
+enum ResumeEntryState : int {
+  RESUME_ENTRY_STATE_UNSPECIFIED = 0,
+  RESUME_ENTRY_STATE_ROLE_REQUIRED = 1,
+  RESUME_ENTRY_STATE_WAIT = 2,
+  RESUME_ENTRY_STATE_TARGET = 3,
+  RESUME_ENTRY_STATE_REAUTH = 4,
+  RESUME_ENTRY_STATE_TERMINAL = 5,
+  ResumeEntryState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  ResumeEntryState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t ResumeEntryState_internal_data_[];
+inline constexpr ResumeEntryState ResumeEntryState_MIN =
+    static_cast<ResumeEntryState>(0);
+inline constexpr ResumeEntryState ResumeEntryState_MAX =
+    static_cast<ResumeEntryState>(5);
+[[nodiscard]] inline bool ResumeEntryState_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int ResumeEntryState_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ResumeEntryState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(ResumeEntryState) {
+  return ResumeEntryState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& ResumeEntryState_Name(T value) {
+  static_assert(::std::is_same<T, ResumeEntryState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to ResumeEntryState_Name().");
+  return ResumeEntryState_Name(static_cast<ResumeEntryState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& ResumeEntryState_Name(ResumeEntryState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<ResumeEntryState_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool ResumeEntryState_Parse(
+    ::absl::string_view name, ResumeEntryState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<ResumeEntryState>(ResumeEntryState_descriptor(), name,
+                                           value);
+}
+enum ResumeWaitReason : int {
+  RESUME_WAIT_REASON_UNSPECIFIED = 0,
+  RESUME_WAIT_REASON_OWNER_UNKNOWN = 1,
+  RESUME_WAIT_REASON_ADMIT_BARRIER = 2,
+  RESUME_WAIT_REASON_MATCHING = 3,
+  RESUME_WAIT_REASON_ROLE_UNKNOWN = 4,
+  RESUME_WAIT_REASON_NO_CAPACITY = 5,
+  ResumeWaitReason_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  ResumeWaitReason_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t ResumeWaitReason_internal_data_[];
+inline constexpr ResumeWaitReason ResumeWaitReason_MIN =
+    static_cast<ResumeWaitReason>(0);
+inline constexpr ResumeWaitReason ResumeWaitReason_MAX =
+    static_cast<ResumeWaitReason>(5);
+[[nodiscard]] inline bool ResumeWaitReason_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int ResumeWaitReason_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ResumeWaitReason_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(ResumeWaitReason) {
+  return ResumeWaitReason_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& ResumeWaitReason_Name(T value) {
+  static_assert(::std::is_same<T, ResumeWaitReason>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to ResumeWaitReason_Name().");
+  return ResumeWaitReason_Name(static_cast<ResumeWaitReason>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& ResumeWaitReason_Name(ResumeWaitReason value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<ResumeWaitReason_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool ResumeWaitReason_Parse(
+    ::absl::string_view name, ResumeWaitReason* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<ResumeWaitReason>(ResumeWaitReason_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -1170,7 +1268,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResumeContext final : public ::goog
     kPlacementVersionFieldNumber = 4,
     kPlacementStateFieldNumber = 6,
     kDsInstanceEpochFieldNumber = 10,
+    kOwnerEpochFieldNumber = 15,
     kMapIdFieldNumber = 14,
+    kRetryAfterMsFieldNumber = 16,
+    kEntryStateFieldNumber = 17,
+    kWaitReasonFieldNumber = 18,
   };
   // string operation_id = 5 [json_name = "operationId"];
   void clear_operation_id() ;
@@ -1337,6 +1439,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResumeContext final : public ::goog
   void _internal_set_ds_instance_epoch(::uint32_t value);
 
   public:
+  // uint64 owner_epoch = 15 [json_name = "ownerEpoch"];
+  void clear_owner_epoch() ;
+  [[nodiscard]] ::uint64_t owner_epoch() const;
+  void set_owner_epoch(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_owner_epoch() const;
+  void _internal_set_owner_epoch(::uint64_t value);
+
+  public:
   // uint32 map_id = 14 [json_name = "mapId"];
   void clear_map_id() ;
   [[nodiscard]] ::uint32_t map_id() const;
@@ -1347,12 +1459,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResumeContext final : public ::goog
   void _internal_set_map_id(::uint32_t value);
 
   public:
+  // uint32 retry_after_ms = 16 [json_name = "retryAfterMs"];
+  void clear_retry_after_ms() ;
+  [[nodiscard]] ::uint32_t retry_after_ms() const;
+  void set_retry_after_ms(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_retry_after_ms() const;
+  void _internal_set_retry_after_ms(::uint32_t value);
+
+  public:
+  // .pandora.login.v1.ResumeEntryState entry_state = 17 [json_name = "entryState"];
+  void clear_entry_state() ;
+  [[nodiscard]] ::pandora::login::v1::ResumeEntryState entry_state() const;
+  void set_entry_state(::pandora::login::v1::ResumeEntryState value);
+
+  private:
+  ::pandora::login::v1::ResumeEntryState _internal_entry_state() const;
+  void _internal_set_entry_state(::pandora::login::v1::ResumeEntryState value);
+
+  public:
+  // .pandora.login.v1.ResumeWaitReason wait_reason = 18 [json_name = "waitReason"];
+  void clear_wait_reason() ;
+  [[nodiscard]] ::pandora::login::v1::ResumeWaitReason wait_reason() const;
+  void set_wait_reason(::pandora::login::v1::ResumeWaitReason value);
+
+  private:
+  ::pandora::login::v1::ResumeWaitReason _internal_wait_reason() const;
+  void _internal_set_wait_reason(::pandora::login::v1::ResumeWaitReason value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.ResumeContext)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
-                          0, 137,
+      ::google::protobuf::internal::TcParseTable<5, 18,
+                          0, 145,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1393,7 +1535,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResumeContext final : public ::goog
     ::uint64_t placement_version_;
     int placement_state_;
     ::uint32_t ds_instance_epoch_;
+    ::uint64_t owner_epoch_;
     ::uint32_t map_id_;
+    ::uint32_t retry_after_ms_;
+    int entry_state_;
+    int wait_reason_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5652,7 +5798,7 @@ inline void ResumeContext::set_allocated_game_mode(::std::string* PROTOBUF_NULLA
 inline void ResumeContext::clear_map_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.map_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t ResumeContext::map_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.ResumeContext.map_id)
@@ -5660,7 +5806,7 @@ inline ::uint32_t ResumeContext::map_id() const {
 }
 inline void ResumeContext::set_map_id(::uint32_t value) {
   _internal_set_map_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.ResumeContext.map_id)
 }
 inline ::uint32_t ResumeContext::_internal_map_id() const {
@@ -5670,6 +5816,102 @@ inline ::uint32_t ResumeContext::_internal_map_id() const {
 inline void ResumeContext::_internal_set_map_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.map_id_ = value;
+}
+
+// uint64 owner_epoch = 15 [json_name = "ownerEpoch"];
+inline void ResumeContext::clear_owner_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_epoch_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t ResumeContext::owner_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.ResumeContext.owner_epoch)
+  return _internal_owner_epoch();
+}
+inline void ResumeContext::set_owner_epoch(::uint64_t value) {
+  _internal_set_owner_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.ResumeContext.owner_epoch)
+}
+inline ::uint64_t ResumeContext::_internal_owner_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owner_epoch_;
+}
+inline void ResumeContext::_internal_set_owner_epoch(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_epoch_ = value;
+}
+
+// uint32 retry_after_ms = 16 [json_name = "retryAfterMs"];
+inline void ResumeContext::clear_retry_after_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retry_after_ms_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t ResumeContext::retry_after_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.ResumeContext.retry_after_ms)
+  return _internal_retry_after_ms();
+}
+inline void ResumeContext::set_retry_after_ms(::uint32_t value) {
+  _internal_set_retry_after_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.ResumeContext.retry_after_ms)
+}
+inline ::uint32_t ResumeContext::_internal_retry_after_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retry_after_ms_;
+}
+inline void ResumeContext::_internal_set_retry_after_ms(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retry_after_ms_ = value;
+}
+
+// .pandora.login.v1.ResumeEntryState entry_state = 17 [json_name = "entryState"];
+inline void ResumeContext::clear_entry_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::pandora::login::v1::ResumeEntryState ResumeContext::entry_state() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.ResumeContext.entry_state)
+  return _internal_entry_state();
+}
+inline void ResumeContext::set_entry_state(::pandora::login::v1::ResumeEntryState value) {
+  _internal_set_entry_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.ResumeContext.entry_state)
+}
+inline ::pandora::login::v1::ResumeEntryState ResumeContext::_internal_entry_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::login::v1::ResumeEntryState>(_impl_.entry_state_);
+}
+inline void ResumeContext::_internal_set_entry_state(::pandora::login::v1::ResumeEntryState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_state_ = value;
+}
+
+// .pandora.login.v1.ResumeWaitReason wait_reason = 18 [json_name = "waitReason"];
+inline void ResumeContext::clear_wait_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.wait_reason_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::pandora::login::v1::ResumeWaitReason ResumeContext::wait_reason() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.ResumeContext.wait_reason)
+  return _internal_wait_reason();
+}
+inline void ResumeContext::set_wait_reason(::pandora::login::v1::ResumeWaitReason value) {
+  _internal_set_wait_reason(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.ResumeContext.wait_reason)
+}
+inline ::pandora::login::v1::ResumeWaitReason ResumeContext::_internal_wait_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::login::v1::ResumeWaitReason>(_impl_.wait_reason_);
+}
+inline void ResumeContext::_internal_set_wait_reason(::pandora::login::v1::ResumeWaitReason value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.wait_reason_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -7726,6 +7968,18 @@ struct is_proto_enum<::pandora::login::v1::ResumePlacementState> : std::true_typ
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::login::v1::ResumePlacementState>() {
   return ::pandora::login::v1::ResumePlacementState_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::login::v1::ResumeEntryState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::login::v1::ResumeEntryState>() {
+  return ::pandora::login::v1::ResumeEntryState_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::login::v1::ResumeWaitReason> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::login::v1::ResumeWaitReason>() {
+  return ::pandora::login::v1::ResumeWaitReason_descriptor();
 }
 
 }  // namespace protobuf

@@ -813,9 +813,16 @@ spec:
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50022 } ]
           readinessProbe: { grpc: { port: 50022 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
-          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: battle-result.yaml, readOnly: true } ]
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: battle-result.yaml, readOnly: true }
+            # 怪物击杀经验的唯一数值权威(role_level 表)。本服**启动强依赖**:
+            # 缺卷 / 缺表 → 进程直接退出。理由见 main.go 6.1.9 —— 表缺失时每条击杀事实
+            # 都会被按可重试错误退回,服务带病跑没有任何意义。
+            - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: configtable, configMap: { name: pandora-configtable } }
 ---
 apiVersion: v1
 kind: Service

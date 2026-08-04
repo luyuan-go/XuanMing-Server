@@ -126,6 +126,10 @@ type BattleResultUsecase struct {
 	// nil = player_addr 未配 → RunProgressPublisher 跳过经验行,出箱积压不丢。
 	expGranter ExperienceGranter
 
+	// monsterExp 怪物击杀经验查表(configtable role_level;数值权威见 §9.6)。
+	// **非 nil-safe**:nil 时击杀事实按可重试错误拒收,绝不"跳过并推进水位"(会永久丢经验)。
+	monsterExp MonsterExpTable
+
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
 	// 可为 nil:单 Cell / dev / 阶段 1~2 不分区,结算回流落点观测退化为不打日志(行为不变)。
 	// 多 Region 部署(阶段 3)由 main 经 SetCellRouter 注入,ReportResult 落库后额外打一条

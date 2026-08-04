@@ -1,0 +1,83 @@
+{
+  "rows": [
+    {
+      "id": 21,
+      "description": "演示模块",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/Sample/Bp_ModuleSample.Bp_ModuleSample_C"
+    },
+    {
+      "id": 22,
+      "description": "ui管理器",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/View/Bp_ViewModel.Bp_ViewModel_C"
+    },
+    {
+      "id": 23,
+      "description": "消息框",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/View/MsgBox/Bp_MsgBox.Bp_MsgBox_C"
+    },
+    {
+      "id": 24,
+      "description": "飘字",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/View/FloatingText/Bp_FloatingText.Bp_FloatingText_C"
+    },
+    {
+      "id": 25,
+      "description": "账号",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/Account/Model/BP_AccountModel.BP_AccountModel_C",
+      "view_model_class": "/Game/Pkg/Module/Account/Vm/VM_Account.VM_Account_C"
+    },
+    {
+      "id": 26,
+      "description": "关卡模块",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/Level/Model/Bp_LevelModel.Bp_LevelModel_C"
+    },
+    {
+      "id": 27,
+      "description": "网络",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/Net/Model/Bp_NetModel.Bp_NetModel_C"
+    },
+    {
+      "id": 28,
+      "description": "实体模块",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/Entity/Model/BP_EntitySystem.BP_EntitySystem_C"
+    },
+    {
+      "id": 29,
+      "description": "时间膨胀",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/TimeDilation/BP_TimeDilation.BP_TimeDilation_C"
+    },
+    {
+      "id": 30,
+      "description": "玩家角色数据",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/Player/Model/BP_PlayerEntityModel.BP_PlayerEntityModel_C"
+    },
+    {
+      "id": 31,
+      "description": "匹配模块",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/Match/Model/BP_MatchModel.BP_MatchModel_C"
+    },
+    {
+      "id": 32,
+      "description": "Gm管理器",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/Gm/Model/BP_GmMgr.BP_GmMgr_C"
+    },
+    {
+      "id": 33,
+      "description": "Gm模块",
+      "author": "Loong",
+      "module_class": "/Game/Pkg/Module/Gm/Model/BP_GmClient.BP_GmClient_C"
+    }
+  ]
+}

@@ -49,7 +49,7 @@ func NewTeamService(uc *biz.TeamUsecase, teamSF, inviteSF snowflakeGen) *TeamSer
 	return &TeamService{uc: uc, teamSF: teamSF, inviteSF: inviteSF}
 }
 
-// ── 9 RPC ─────────────────────────────────────────────────────────────────────
+// ── 14 RPC(9 个原有 + 5 个"找队伍") ──────────────────────────────────────────
 
 // CreateTeam 创建队伍。player_id 以 JWT ctx 为准(R5)。
 func (s *TeamService) CreateTeam(ctx context.Context, _ *teamv1.CreateTeamRequest) (*teamv1.CreateTeamResponse, error) {
@@ -66,7 +66,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, _ *teamv1.CreateTeamReques
 	return &teamv1.CreateTeamResponse{
 		Code:   commonv1.ErrCode_OK,
 		TeamId: rec.TeamId,
-		Team:   biz.RecordToProto(rec),
+		Team:   s.uc.TeamToProto(rec),
 	}, nil
 }
 
@@ -90,7 +90,7 @@ func (s *TeamService) Invite(ctx context.Context, req *teamv1.InviteRequest) (*t
 	expiresAtMs := time.Now().UnixMilli() + s.uc.InviteTTLMs()
 	return &teamv1.InviteResponse{
 		Code:        commonv1.ErrCode_OK,
-		Team:        biz.RecordToProto(rec),
+		Team:        s.uc.TeamToProto(rec),
 		InviteId:    inviteID,
 		ExpiresAtMs: expiresAtMs,
 	}, nil
@@ -112,7 +112,7 @@ func (s *TeamService) AcceptInvite(ctx context.Context, req *teamv1.AcceptInvite
 	}
 	return &teamv1.AcceptInviteResponse{
 		Code: commonv1.ErrCode_OK,
-		Team: biz.RecordToProto(rec),
+		Team: s.uc.TeamToProto(rec),
 	}, nil
 }
 
@@ -132,7 +132,7 @@ func (s *TeamService) LeaveTeam(ctx context.Context, req *teamv1.LeaveTeamReques
 	}
 	return &teamv1.LeaveTeamResponse{
 		Code: commonv1.ErrCode_OK,
-		Team: biz.RecordToProto(rec),
+		Team: s.uc.TeamToProto(rec),
 	}, nil
 }
 
@@ -152,7 +152,7 @@ func (s *TeamService) Kick(ctx context.Context, req *teamv1.KickRequest) (*teamv
 	}
 	return &teamv1.KickResponse{
 		Code: commonv1.ErrCode_OK,
-		Team: biz.RecordToProto(rec),
+		Team: s.uc.TeamToProto(rec),
 	}, nil
 }
 
@@ -172,7 +172,7 @@ func (s *TeamService) SetReady(ctx context.Context, req *teamv1.SetReadyRequest)
 	}
 	return &teamv1.SetReadyResponse{
 		Code: commonv1.ErrCode_OK,
-		Team: biz.RecordToProto(rec),
+		Team: s.uc.TeamToProto(rec),
 	}, nil
 }
 
@@ -188,7 +188,7 @@ func (s *TeamService) GetTeam(ctx context.Context, req *teamv1.GetTeamRequest) (
 	}
 	return &teamv1.GetTeamResponse{
 		Code: commonv1.ErrCode_OK,
-		Team: biz.RecordToProto(rec),
+		Team: s.uc.TeamToProto(rec),
 	}, nil
 }
 
@@ -210,7 +210,7 @@ func (s *TeamService) GetMyTeam(ctx context.Context, _ *teamv1.GetMyTeamRequest)
 	return &teamv1.GetMyTeamResponse{
 		Code:       commonv1.ErrCode_OK,
 		HasTeamMsg: true,
-		Team:       biz.RecordToProto(rec),
+		Team:       s.uc.TeamToProto(rec),
 	}, nil
 }
 
@@ -240,6 +240,124 @@ func (s *TeamService) ListMyPendingInvites(ctx context.Context, _ *teamv1.ListMy
 	return &teamv1.ListMyPendingInvitesResponse{
 		Code:    commonv1.ErrCode_OK,
 		Invites: invites,
+	}, nil
+}
+
+// ── 找队伍:列表 / 申请 / 审批 ─────────────────────────────────────────────────
+
+// SetTeamMap 队长设置本队目标关卡。captain_id 以 JWT ctx 为准(R5)。
+// map_id=0 合法(清空/未指定),因此不做非零校验。
+func (s *TeamService) SetTeamMap(ctx context.Context, req *teamv1.SetTeamMapRequest) (*teamv1.SetTeamMapResponse, error) {
+	captainID := callerID(ctx)
+	if captainID == 0 {
+		return &teamv1.SetTeamMapResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+	if req.GetTeamId() == 0 {
+		return &teamv1.SetTeamMapResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+
+	rec, err := s.uc.SetTeamMap(ctx, req.GetTeamId(), captainID, req.GetMapId())
+	if err != nil {
+		return &teamv1.SetTeamMapResponse{Code: toProtoCode(err)}, nil
+	}
+	return &teamv1.SetTeamMapResponse{
+		Code: commonv1.ErrCode_OK,
+		Team: s.uc.TeamToProto(rec),
+	}, nil
+}
+
+// ListOpenTeams 列正在招募的队伍(只读)。player_id 以 JWT ctx 为准(R5)。
+//
+// 要求登录:这是面向客户端的枚举接口(GetTeam 那种"知道 team_id 即授权"的口径不适用),
+// 未登录一律拒。map_id=0 表示不限关卡;limit 由 biz 钳到 max_open_teams_per_query。
+// 没有开放队伍是正常态:返 OK + 空列表,不用 errcode 表达。
+func (s *TeamService) ListOpenTeams(ctx context.Context, req *teamv1.ListOpenTeamsRequest) (*teamv1.ListOpenTeamsResponse, error) {
+	playerID := callerID(ctx)
+	if playerID == 0 {
+		return &teamv1.ListOpenTeamsResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+
+	teams, err := s.uc.ListOpenTeams(ctx, req.GetMapId(), int(req.GetLimit()))
+	if err != nil {
+		return &teamv1.ListOpenTeamsResponse{Code: toProtoCode(err)}, nil
+	}
+	return &teamv1.ListOpenTeamsResponse{
+		Code:  commonv1.ErrCode_OK,
+		Teams: teams,
+	}, nil
+}
+
+// ApplyToTeam 申请加入队伍。player_id 以 JWT ctx 为准(R5)。
+// 走"申请待审批"还是"直接入队"由服务端配置决定,客户端不选也不能选。
+func (s *TeamService) ApplyToTeam(ctx context.Context, req *teamv1.ApplyToTeamRequest) (*teamv1.ApplyToTeamResponse, error) {
+	playerID := callerID(ctx)
+	if playerID == 0 {
+		return &teamv1.ApplyToTeamResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+	if req.GetTeamId() == 0 {
+		return &teamv1.ApplyToTeamResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+
+	joined, rec, expiresAtMs, err := s.uc.ApplyToTeam(ctx, req.GetTeamId(), playerID)
+	if err != nil {
+		return &teamv1.ApplyToTeamResponse{Code: toProtoCode(err)}, nil
+	}
+	resp := &teamv1.ApplyToTeamResponse{
+		Code:        commonv1.ErrCode_OK,
+		Joined:      joined,
+		ExpiresAtMs: expiresAtMs,
+	}
+	if joined {
+		resp.Team = s.uc.TeamToProto(rec)
+	}
+	return resp, nil
+}
+
+// ListTeamApplications 队长查本队待处理入队申请(只读)。captain_id 以 JWT ctx 为准(R5)。
+// 没有申请是正常态:返 OK + 空列表。非队长返 ERR_TEAM_NOT_CAPTAIN。
+func (s *TeamService) ListTeamApplications(ctx context.Context, req *teamv1.ListTeamApplicationsRequest) (*teamv1.ListTeamApplicationsResponse, error) {
+	captainID := callerID(ctx)
+	if captainID == 0 {
+		return &teamv1.ListTeamApplicationsResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+	if req.GetTeamId() == 0 {
+		return &teamv1.ListTeamApplicationsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+
+	recs, err := s.uc.ListTeamApplications(ctx, req.GetTeamId(), captainID)
+	if err != nil {
+		return &teamv1.ListTeamApplicationsResponse{Code: toProtoCode(err)}, nil
+	}
+	applications := make([]*teamv1.TeamApplication, 0, len(recs))
+	for _, r := range recs {
+		applications = append(applications, &teamv1.TeamApplication{
+			PlayerId:    r.PlayerID,
+			ExpiresAtMs: r.ExpiresAtMs,
+		})
+	}
+	return &teamv1.ListTeamApplicationsResponse{
+		Code:         commonv1.ErrCode_OK,
+		Applications: applications,
+	}, nil
+}
+
+// HandleTeamApplication 队长同意 / 拒绝一份入队申请。captain_id 以 JWT ctx 为准(R5)。
+func (s *TeamService) HandleTeamApplication(ctx context.Context, req *teamv1.HandleTeamApplicationRequest) (*teamv1.HandleTeamApplicationResponse, error) {
+	captainID := callerID(ctx)
+	if captainID == 0 {
+		return &teamv1.HandleTeamApplicationResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+	if req.GetTeamId() == 0 || req.GetApplicantId() == 0 {
+		return &teamv1.HandleTeamApplicationResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+
+	rec, err := s.uc.HandleTeamApplication(ctx, req.GetTeamId(), captainID, req.GetApplicantId(), req.GetAccept())
+	if err != nil {
+		return &teamv1.HandleTeamApplicationResponse{Code: toProtoCode(err)}, nil
+	}
+	return &teamv1.HandleTeamApplicationResponse{
+		Code: commonv1.ErrCode_OK,
+		Team: s.uc.TeamToProto(rec),
 	}, nil
 }
 

@@ -1,0 +1,82 @@
+// Pandora 配置表:角色(实体)配置表。
+//
+// 源表:Pandora-Client-SVN/Table/角色/j_角色配置表.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/role.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+// 用途:玩家英雄 / 怪物 / NPC / 载具 / 宠物的静态定义(表现资源、AI 参数、类型、技能列表)。
+//   直接消费者是战斗 DS 与客户端(同源导出 FCfgRole);服务端登记本表的理由同 level.proto
+//   的 exp_share_mode —— 两端共用同一张 xlsx,未登记的表头列会被 configtable-gen 判为非法。
+//   服务端自身不据此判定任何战斗数值(CLAUDE.md §9.6:派生数值只在 Go 服务由事实换算)。
+//
+// 版式:第 1 行列名;第 2-6 行是「类型」列取值图例(1.主角 / 2.怪物(默认) / 3.NPC / 4.载具 / 5.宠物)
+//   与各距离列的单位 / 默认值说明;数据区自**第 7 行**起 —— 与 Pandora 通用第 5 行版式不同,
+//   故显式 (excel_data_start_row) = 7。实测判据:客户端导出产物
+//   Tool/Table/Cs/Temp/CfgRole.json 首行即 xlsx 第 7 行的 id=2,共 21 行 = xlsx R7..R27。
+//
+// 列类型与默认值取自客户端表定义 Tool/Table/Cs/Proto/j_角色.json(CfgRole),逐列对齐,
+//   保证同一个空单元格在两端解析出同一个值(实测:空「警戒距离」→ 1000、空「铭牌位置高度」→ 20、
+//   空「呼叫后无视脱战距离」→ false)。**距离 / 高度列在客户端声明为 float**,服务端跟随:
+//   当前样本恰好都是整数,但这些是策划可填小数的连续量,用整型会在策划填 1500.5 时直接卡死整批生成。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// RoleRow 角色表一行(列序 = 字段号序 = 表头 A..S;表头 T 列为空,不登记)。
+message RoleRow {
+  // ID(主键,全链路 role_id / entity_id;2 位 = 测试怪,1xxx = 英雄,2xxx = 怪物)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 角色名称(策划可读名,如「松林近战腐蚀体」)
+  string name = 2 [(excel_col) = "角色名称", (excel_required) = true];
+  // 描述(策划备注列,如「坦克」「治疗」;客户端 CfgRole 未登记本列,
+  //   服务端必须登记 —— configtable-gen 位置敏感且拒绝未登记表头列)
+  string description = 3 [(excel_col) = "描述"];
+  // 资源名称(UE Pawn 蓝图类路径)
+  string resource_path = 4 [(excel_col) = "资源名称", (excel_required) = true, (excel_prefix) = "/"];
+  // 行为树(UE BT 资产路径,空 = 不挂行为树,如纯测试怪)
+  string behavior_tree_path = 5 [(excel_col) = "行为树", (excel_prefix) = "/"];
+  // 图标(UE 贴图资产路径,空 = 无图标)
+  string icon_path = 6 [(excel_col) = "图标", (excel_prefix) = "/"];
+  // 类型(1=主角 2=怪物(默认) 3=NPC 4=载具 5=宠物)。
+  //   刻意**不做 proto enum**:本轮登记只求与源表逐字节等价,造 enum 需要先确定全部取值语义,
+  //   而 0 在 enum 列会被生成器判为非法数据值,与客户端「空 → 0」的既有行为冲突。
+  uint32 entity_type = 7 [(excel_col) = "类型"];
+  // 子类型(怪物档次:1=小怪 2=精英;英雄行留空 = 0)
+  uint32 sub_type = 8 [(excel_col) = "子类型"];
+  // 技能(技能表 ID 列表,**逗号分隔的原文**,如 "100101,100111,100121,100131")。
+  //   导表器不支持 repeated 列((excel_col) 列禁止 repeated/map),故按原始文本落库;
+  //   客户端 CfgRole.skills 按 "," 切分为 int32 列表,服务端当前无消费者,不解析。
+  string skill_ids = 9 [(excel_col) = "技能"];
+  // 默认武器(武器表 ID;客户端声明为字符串,当前全表为空)
+  string default_weapon_id = 10 [(excel_col) = "默认武器"];
+  // 警戒距离(单位厘米;空 = 1000)
+  float guard_distance = 11 [(excel_col) = "警戒距离", (excel_default) = "1000"];
+  // 呼叫距离(单位厘米;空 = 2000)
+  float call_distance = 12 [(excel_col) = "呼叫距离", (excel_default) = "2000"];
+  // 脱战距离(单位厘米;空 = 3000)
+  float fight_exit_distance = 13 [(excel_col) = "脱战距离", (excel_default) = "3000"];
+  // 巡逻距离(单位厘米;空 = 1000)
+  float patrol_distance = 14 [(excel_col) = "巡逻距离", (excel_default) = "1000"];
+  // 搜索距离(单位厘米;空 = 1000)
+  float search_distance = 15 [(excel_col) = "搜索距离", (excel_default) = "1000"];
+  // 铭牌位置高度(单位厘米;空 = 20,英雄行填 50)
+  float nameplate_offset_z = 16 [(excel_col) = "铭牌位置高度", (excel_default) = "20"];
+  // 死亡呼叫范围(单位厘米;空 = 0 表示死亡不呼叫同伴)
+  float call_allies_radius_on_death = 17 [(excel_col) = "死亡呼叫范围", (excel_default) = "0"];
+  // 呼叫后无视脱战距离(空 = 0/false)
+  bool unlimited_pursuit_on_call = 18 [(excel_col) = "呼叫后无视脱战距离", (excel_default) = "0"];
+  // 死亡激活撤离点类(UE Actor 类路径;空 = 该怪死亡不激活撤离点)
+  string evac_point_class = 19 [(excel_col) = "死亡激活撤离点类", (excel_prefix) = "/"];
+}
+
+// RoleTableData 角色表整表容器(dist/role.json 的根对象;注册名 role)。
+message RoleTableData {
+  option (excel_file) = "角色/j_角色配置表.xlsx";
+  // 第 2-6 行是「类型」列图例与单位说明,数据区自第 7 行起(实测,见文件头)。
+  option (excel_data_start_row) = 7;
+
+  repeated RoleRow rows = 1;
+}

@@ -42,6 +42,14 @@ kafka:
   group_id: "pandora-battle-result"
   partition_cnt: 4
 
+# config_table: 策划配置表加载(不变量 §9.15;docs/design/config-table-hotreload.md)。
+#   本服的 **dir 不可留空**:怪物击杀经验的唯一数值权威是 role_level 表
+#   (源表 角色/j_角色等级.xlsx 的「击杀经验」列),缺表时每条击杀事实都会被
+#   ReportProgress 按可重试错误退回,服务带病跑没有意义 —— 故启动即 fail-fast 退出。
+#   dev 直接指仓库 dist(相对服务目录);部署环境用发布脚本落的 <deploy-root>/configtable/active。
+#   热更走 ConfigTableAdminService.ReloadConfigTable,改完数值不必重启。
+config_table:
+  dir: "../../../configtable/dist"
 battle:
   # elo_k_factor: Elo K 系数(胜负 MMR 变化幅度上限 ≈ K)
   elo_k_factor: 32
@@ -78,27 +86,11 @@ battle:
   # (battle_result 全 fleet 升级到含进度收口逻辑的版本后才能置 true,否则混版双发掉落)。
   # 关闭只拒新对局开流;已有水位的进行中对局继续收流到结算(每场模式固化)。
   progress_enabled: true
-  # monster_exp: 怪物击杀经验表(monster_config_id → 单只经验;DS 不可信,换算唯一权威)。
-  # ID 必须与客户端 角色配置表 j_角色配置表.xlsx 的怪物 config id 一致;
-  # 未登记的怪 = 击杀不折算经验(progress_facts_skipped 汇总告警,不阻塞整条流)。
-  #
-  # 数值口径(2026-08-03 首版,**待策划复核**):以 j_玩家等级经验.xlsx「1→2 级需 1000 点」为锚,
-  #   松林系普通怪按 ~25 只升一级定档,精英 / 首领按血量与威胁量级抬档。
-  #   2006 呼叫怪只有 10 血(死亡呼叫刷出的杂兵),刻意给极低值,避免"刷呼叫怪"成为最优练级路径。
-  monster_exp:
-    # 测试怪(Test 地图的 10 万血假人,仅供联调打点)
-    2: 200      # 测试精英怪
-    3: 40       # 测试小怪
-    # 松林镇系列
-    2001: 40    # 松林近战腐蚀体(300 血 / 10 攻)
-    2002: 30    # 松林远程腐蚀体(200 血 / 8 攻)
-    2003: 40    # 松林小型腐蚀体(300 血 / 10 攻)
-    2004: 40    # 双头犬(300 血 / 10 攻)
-    2005: 200   # 熔岩领主(1000 血 / 30 攻 / 10 防,精英)
-    2006: 5     # 临时呼叫怪(10 血,死亡呼叫产出的杂兵)
-    # 北冥
-    2101: 800   # 北冥巨妖(5000 血,首领)
-  # 进度批校验上限(缺省 256 / 100000 / 100 / 10;pickup 单事实上限被夹紧 ≤46 保证单行 CSV)
+  # 怪物击杀经验**不在本文件配置**：数值权威是策划表 角色/j_角色等级.xlsx 的「击杀经验」列，
+  # 经 configtable 的 role_level 表按 (角色ID, 等级) 查（见下方 config_table.dir）。
+  # 2026-08-04 从本文件移除：游戏数值住在服务配置里，策划改不了、与同一只怪的血/攻分家、
+  # ID 一致性也没有任何机制保证（实测漏配过 2007 蛇怪 / 2008 剧毒蛇怪且长期无人发现）。
+  # 残留的 monster_exp 键会被严格解析直接拒绝启动，不会静默忽略。
   max_progress_batch: 256
   max_progress_seq_per_match: 100000
   max_kill_count_per_fact: 100

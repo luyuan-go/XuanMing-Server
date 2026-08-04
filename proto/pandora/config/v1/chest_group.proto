@@ -1,0 +1,62 @@
+// Pandora 配置表:宝箱组表。
+//
+// 源表:Pandora-Client-SVN/Table/关卡/s_宝箱组.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/chest_group.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:一张图的「宝箱组」组头,一行 = 一张关卡的一套宝箱配置;具体每个宝箱点挂在
+//   s_宝箱点.xlsx(chest_point 表)的「宝箱组Id」列下,由本表 id 反查(生成 ListByChestGroupId)。
+//   消费者是战斗 / PVE DS(客户端 CfgChestGroup 同源导出)。服务端登记本表的理由与
+//   spawn_group.proto 一致:两端共用同一张 xlsx,未登记的表 / 列会被 configtable-gen 判为非法;
+//   服务端自身当前不据此判定任何业务,宝箱刷新与掉落发放权威仍在 DS / 服务端 drop_whitelist。
+//
+// 客户端 CfgChestGroup(UE FCfgChestGroup,Tool/Table/Cs/Proto/s_宝箱组.json)与本表同源导出;
+//   本文件的类型 / 必填 / 默认值刻意与客户端列登记逐列一致,避免同一张 xlsx 在两仓被解释成两种数据。
+//
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 必填 / 默认值 / 前缀 / 外键约束全部由 excel.proto 注解承载(proto 即单一事实源)。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+//
+// 类型判定依据(实测全部 2 行数据,行 3..4):
+//   - ID / 关卡Id / 优先级 全部为非负整数 → uint32;
+//   - 关卡资源 / 备注 为文本 → string;
+//   - 启用 取值只有 1 且列名即开关 → bool。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// ChestGroupRow 宝箱组表一行(列序 = 字段号序 = 表头 A..F)。
+// 列集合与 s_刷怪组.xlsx(spawn_group)完全同构,注解处置也刻意保持一致。
+message ChestGroupRow {
+  // ID(主键)。实测两行:80007 / 70007,按「8xxxx = 关卡 8、7xxxx = 关卡 7」编制。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 关卡Id(本组挂在哪张图上)。外键引用 level 表 id;实测取值 8 / 7,均在 g_关卡.xlsx 内
+  //   (dist/level.json 现有 id 1..11)。生成 ListByLevelId 反查(按 map_id 取该图的宝箱组)。
+  uint32 level_id = 2 [(excel_col) = "关卡Id", (excel_required) = true, (excel_fk) = "level"];
+  // 关卡资源(UE 关卡资产路径)。与 level 表「关卡资源」同值,是策划表内的冗余核对列,
+  //   不是第二份权威——按 map_id 取图仍以 level 表为准。
+  //   实测 /Game/ScifiArctic/Maps/ExampleLevel_Artic01.ExampleLevel_Artic01 与
+  //   /Game/Test/Level/SonglinTown.SonglinTown,均以 "/" 开头。
+  string level_asset_path = 3 [(excel_col) = "关卡资源", (excel_required) = true, (excel_prefix) = "/"];
+  // 备注(策划可读说明,如「Artic01宝箱组」「松林镇宝箱组」)。纯注释列,不标 required。
+  string remark = 4 [(excel_col) = "备注"];
+  // 启用(1=启用 / 0=停用)。空单元格按 1 解析:与客户端列登记 defaultValue="1" 及
+  //   FCfgChestGroup::bEnabled=true 一致(同一张 xlsx 不得在两仓被解释成两种数据)。实测两行均为 1。
+  bool enabled = 5 [(excel_col) = "启用", (excel_default) = "1"];
+  // 优先级(同一关卡配了多组时的取用顺序)。实测两行均为 0;
+  //   空单元格取 0,与客户端列登记 defaultValue="0" 对齐。
+  uint32 priority = 6 [(excel_col) = "优先级", (excel_default) = "0"];
+}
+
+// ChestGroupTableData 宝箱组整表容器(dist/chest_group.json 的根对象;excel_file 注解 = 导表登记)。
+message ChestGroupTableData {
+  option (excel_file) = "关卡/s_宝箱组.xlsx";
+  // 实测版式:第 1 行表头,第 2 行 A2..F2 有样式但无任何取值(读取器视为整行空),
+  //   数据自第 3 行起至第 4 行(与通用第 5 行版式不同,必须显式覆盖,否则两行数据会被整体跳过)。
+  option (excel_data_start_row) = 3;
+
+  repeated ChestGroupRow rows = 1;
+}

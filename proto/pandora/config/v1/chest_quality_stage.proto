@@ -1,0 +1,64 @@
+// Pandora 配置表:宝箱品质阶段表。
+//
+// 源表:Pandora-Client-SVN/Table/道具/d_宝箱品质阶段.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/chest_quality_stage.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:同一 rule_set_id 下按 quality=0..5(白/绿/蓝/紫/橙/红)配置开箱读条的分阶段参数。
+//   读条抵达当前阶段末尾(total_unlock_seconds)后,权威 DS 仅在箱内最高品质更高时进入下一阶段。
+//   进度条长度 / 宽度 / 颜色 / 效果时长倍率是客户端 HUD 表现参数,服务端只做同源登记不参与判定
+//   ——两端共用同一张 xlsx,未登记的表头列会被 configtable-gen 判为非法(同 level.proto 的
+//   exp_share_mode / battle_duration_seconds 处置)。
+// 客户端 CfgChestQualityStage(UE FCfgChestQualityStage,Tool/Table/Cs/Proto/d_宝箱品质阶段.json)
+//   与本表同源导出;本文件的类型 / 默认值刻意与客户端列登记逐列一致。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// ChestQualityStageRow 宝箱品质阶段表一行(列序 = 字段号序 = 表头 A..L)。
+message ChestQualityStageRow {
+  // ID(主键,阶段配置行标识)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 品质规则组ID(宝箱点表引用的品质阶段规则组)。
+  // **是字符串不是数字**:客户端 FCfgChestQualityStage::RuleSetId 为 FName,源表当前取值为 "Default"。
+  string rule_set_id = 2 [(excel_col) = "品质规则组ID"];
+  // 道具品质(0 白、1 绿、2 蓝、3 紫、4 橙、5 红)。
+  // 刻意**不做 enum**:本列合法取值含 0(白),而生成器把枚举列的 0 一律判为非法数据值
+  //   (见 tablegen/builder.go parseCell 的 EnumKind 分支),用 enum 会让「白」这一档整行报错。
+  uint32 quality = 3 [(excel_col) = "道具品质"];
+  // 品质名称(策划可读的阶段名称,如「白」「绿」)
+  string display_name = 4 [(excel_col) = "品质名称"];
+  // 累计读条秒数(从开箱开始计的累计秒数,阶段末尾时间点)。
+  // 用 float 而非整型:客户端 FCfgChestQualityStage::TotalUnlockSeconds 就是 float(ClampMin=0.1),
+  //   当前数据恰好全是整数,但按整型登记会在策划填 2.5s 当天炸掉整批生成。以下时长 / 尺寸 / 颜色列同理。
+  float total_unlock_seconds = 5 [(excel_col) = "累计读条秒数"];
+  // 进度条长度厘米(设计语义长度,50 = 0.5 米;客户端 HUD 参数)
+  float progress_bar_length_cm = 6 [(excel_col) = "进度条长度厘米"];
+  // 进度条宽度像素(HUD 实际宽度;客户端 HUD 参数)
+  float progress_bar_width_pixels = 7 [(excel_col) = "进度条宽度像素"];
+  // 颜色R(线性颜色 R 分量,0.0~1.0)
+  float color_r = 8 [(excel_col) = "颜色R"];
+  // 颜色G(线性颜色 G 分量,0.0~1.0)
+  float color_g = 9 [(excel_col) = "颜色G"];
+  // 颜色B(线性颜色 B 分量,0.0~1.0)
+  float color_b = 10 [(excel_col) = "颜色B"];
+  // 颜色A(线性颜色 A 分量,0.0~1.0;空值默认 1,与客户端列登记一致)
+  float color_a = 11 [(excel_col) = "颜色A", (excel_default) = "1"];
+  // 开箱效果时长倍率(开启后效果时长 = 累计读条秒数 × 本倍率;空值默认 5,与客户端列登记一致)
+  float opened_effect_duration_multiplier = 12 [(excel_col) = "开箱效果时长倍率", (excel_default) = "5"];
+}
+
+// ChestQualityStageTableData 宝箱品质阶段整表容器
+// (dist/chest_quality_stage.json 的根对象;excel_file 注解 = 导表登记)。
+message ChestQualityStageTableData {
+  option (excel_file) = "道具/d_宝箱品质阶段.xlsx";
+  // 实测版式:第 1 行表头、第 2 行列说明、第 3 行空行,数据自第 4 行起(不是通用版式的第 5 行)。
+  option (excel_data_start_row) = 4;
+
+  repeated ChestQualityStageRow rows = 1;
+}

@@ -395,6 +395,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     kEntryModeFieldNumber = 11,
     kSideCountFieldNumber = 12,
     kExpShareModeFieldNumber = 13,
+    kBattleDurationSecondsFieldNumber = 14,
   };
   // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
   void clear_name() ;
@@ -546,11 +547,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
   void _internal_set_exp_share_mode(::pandora::config::v1::LevelExpShareMode value);
 
   public:
+  // uint32 battle_duration_seconds = 14 [json_name = "battleDurationSeconds", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
+  void clear_battle_duration_seconds() ;
+  [[nodiscard]] ::uint32_t battle_duration_seconds() const;
+  void set_battle_duration_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_battle_duration_seconds() const;
+  void _internal_set_battle_duration_seconds(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.LevelRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           0, 81,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -592,6 +603,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     int entry_mode_;
     ::uint32_t side_count_;
     int exp_share_mode_;
+    ::uint32_t battle_duration_seconds_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1296,6 +1308,30 @@ inline ::pandora::config::v1::LevelExpShareMode LevelRow::_internal_exp_share_mo
 inline void LevelRow::_internal_set_exp_share_mode(::pandora::config::v1::LevelExpShareMode value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.exp_share_mode_ = value;
+}
+
+// uint32 battle_duration_seconds = 14 [json_name = "battleDurationSeconds", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
+inline void LevelRow::clear_battle_duration_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_duration_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t LevelRow::battle_duration_seconds() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.battle_duration_seconds)
+  return _internal_battle_duration_seconds();
+}
+inline void LevelRow::set_battle_duration_seconds(::uint32_t value) {
+  _internal_set_battle_duration_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.battle_duration_seconds)
+}
+inline ::uint32_t LevelRow::_internal_battle_duration_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_duration_seconds_;
+}
+inline void LevelRow::_internal_set_battle_duration_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_duration_seconds_ = value;
 }
 
 // -------------------------------------------------------------------

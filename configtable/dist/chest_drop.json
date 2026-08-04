@@ -1,0 +1,84 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "loot_table_id": "80007",
+      "item_config_id": 10001,
+      "probability_permyriad": 1700,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 2,
+      "loot_table_id": "80007",
+      "item_config_id": 10002,
+      "probability_permyriad": 2200,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 3,
+      "loot_table_id": "80007",
+      "item_config_id": 10003,
+      "probability_permyriad": 2300,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 4,
+      "loot_table_id": "80007",
+      "item_config_id": 10005,
+      "probability_permyriad": 500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 5,
+      "loot_table_id": "70007",
+      "item_config_id": 10001,
+      "probability_permyriad": 10000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 6,
+      "loot_table_id": "70007",
+      "item_config_id": 10006,
+      "probability_permyriad": 5000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 7,
+      "loot_table_id": "70007",
+      "item_config_id": 10002,
+      "probability_permyriad": 6000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 8,
+      "loot_table_id": "70007",
+      "item_config_id": 10003,
+      "probability_permyriad": 4000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 9,
+      "loot_table_id": "70007",
+      "item_config_id": 10005,
+      "probability_permyriad": 1500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 10,
+      "loot_table_id": "70007",
+      "item_config_id": 10004,
+      "probability_permyriad": 2500,
+      "min_count": 1,
+      "max_count": 1
+    }
+  ]
+}

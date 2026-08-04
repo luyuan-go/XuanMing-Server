@@ -1,0 +1,104 @@
+// Pandora 配置表:刷怪点表。
+//
+// 源表:Pandora-Client-SVN/Table/关卡/s_刷怪点.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/spawn_point.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:一行 = 一个怪物刷新点(位置 / 朝向 / 缩放 / 怪物蓝图 / 重生节奏),按「刷怪组Id」
+//   挂在 s_刷怪组.xlsx(spawn_group 表)下,再由刷怪组挂到关卡上。
+//   消费者是战斗 / PVE DS(客户端 CfgSpawnPoint 同源导出)。服务端登记本表的理由与
+//   spawn_group.proto 一致:两端共用同一张 xlsx,未登记的表 / 列会被 configtable-gen 判为非法;
+//   服务端自身当前不据此判定任何业务,刷怪与怪物数值权威仍在 DS / battle_result。
+//
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 必填 / 前缀 / 外键约束全部由 excel.proto 注解承载(proto 即单一事实源)。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+//
+// 类型判定依据(实测全部 399 行数据,行 3..401):
+//   - 中心X/Y/Z、朝向Yaw、缩放X/Y/Z、首次延迟秒 存在小数(且坐标 / Yaw 可为负)→ float;
+//   - 朝向Pitch/Roll 当前全为 0,但与 Yaw 同属欧拉角(语义上可负可小数)→ 同族用 float,
+//     全 0 时 protojson 直接省略该字段,不产生 JSON 噪声;
+//   - 刷新半径 / 重生间隔秒 / 权重 / 维持数量 / 巡逻路点Id 全部为非负整数 → uint32;
+//   - 启用 / 开局刷新 / 常驻Tick 取值只有 0/1 且列名即开关 → bool。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// SpawnPointRow 刷怪点表一行(列序 = 字段号序 = 表头 A..Y)。
+message SpawnPointRow {
+  // ID(主键)。实测 399 行互不重复,取值区间 8004001 ~ 70001080;
+  //   多数由「刷怪组Id×1000+序号」编制(60001001 属组 60001),但 40001 组用的是 8004001 起的独立段,
+  //   故不可从 ID 反推所属组——组归属只认「刷怪组Id」列。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 刷怪组Id(本刷怪点属于哪一组)。外键引用 spawn_group 表 id;实测取值 40001 / 60001 / 70001,
+  //   均在 s_刷怪组.xlsx 内。生成 ListBySpawnGroupId 反查(按组取全部刷怪点,这是本表主查询)。
+  uint32 spawn_group_id = 2 [(excel_col) = "刷怪组Id", (excel_required) = true, (excel_fk) = "spawn_group"];
+  // 关卡Id(冗余回填的所属关卡,便于策划在单表内筛图)。外键引用 level 表 id;实测 4 / 7 / 8。
+  //   权威归属仍是「刷怪点 → 刷怪组 → 关卡」这条链,本列只是同一事实的表内冗余。
+  uint32 level_id = 3 [(excel_col) = "关卡Id", (excel_required) = true, (excel_fk) = "level"];
+  // 备注(策划可读说明,多为导入时的原 Actor 名,如「导入:CBP_Monster_Melee10」)。纯注释列。
+  string remark = 4 [(excel_col) = "备注"];
+  // 怪物角色Id(刷哪种怪;实测 2001 / 2002 / 2004 / 2005)。
+  //   刻意**不标 (excel_fk)**:目标角色表不在本次登记范围内,标了会让整批生成失败。
+  uint32 monster_role_id = 5 [(excel_col) = "怪物角色Id", (excel_required) = true];
+  // 维持数量(本点同时存活的怪物数上限)。实测 399 行均为 1;空单元格取零值 0。
+  uint32 keep_count = 6 [(excel_col) = "维持数量"];
+  // 中心X(刷新中心世界坐标,UE 单位;可为负)。
+  float center_x = 7 [(excel_col) = "中心X"];
+  // 中心Y(同上)。
+  float center_y = 8 [(excel_col) = "中心Y"];
+  // 中心Z(同上)。
+  float center_z = 9 [(excel_col) = "中心Z"];
+  // 朝向Yaw(出生朝向欧拉角,度;实测 -177.19 ~ 180)。
+  float yaw = 10 [(excel_col) = "朝向Yaw"];
+  // 朝向Pitch(同上;实测全 0)。
+  float pitch = 11 [(excel_col) = "朝向Pitch"];
+  // 朝向Roll(同上;实测全 0)。
+  float roll = 12 [(excel_col) = "朝向Roll"];
+  // 怪物蓝图(UE 怪物 Character 蓝图类路径,如 /Game/.../CBP_Monster_Melee.CBP_Monster_Melee_C)。
+  string monster_blueprint = 13 [(excel_col) = "怪物蓝图", (excel_required) = true, (excel_prefix) = "/"];
+  // 骨骼网格(可选的外观覆盖;留空 = 用蓝图自带网格,故不标 required,只约束非空值须为资产路径)。
+  string skeletal_mesh = 14 [(excel_col) = "骨骼网格", (excel_prefix) = "/"];
+  // 缩放X(实测 1 / 1.2 / 1.5 / 6)。空单元格取零值 0,与客户端同源表语义一致,不在服务端另设默认。
+  float scale_x = 15 [(excel_col) = "缩放X"];
+  // 缩放Y(同上)。
+  float scale_y = 16 [(excel_col) = "缩放Y"];
+  // 缩放Z(同上)。
+  float scale_z = 17 [(excel_col) = "缩放Z"];
+  // 刷新半径(以中心点为圆心的随机散布半径,UE 单位;0 = 固定点刷新)。实测全 0。
+  uint32 respawn_radius = 18 [(excel_col) = "刷新半径"];
+  // 重生间隔秒(死亡后隔多久补刷)。实测取值 30 / 35,全为整数。
+  uint32 respawn_interval_seconds = 19 [(excel_col) = "重生间隔秒"];
+  // 首次延迟秒(开局后延迟多久首次刷出)。实测全为 0.5,是小数列。
+  float first_delay_seconds = 20 [(excel_col) = "首次延迟秒"];
+  // 启用(1=启用 / 0=停用)。实测全 1;空单元格取 false(fail-closed:配漏了就不刷,不猜默认开)。
+  bool enabled = 21 [(excel_col) = "启用"];
+  // 开局刷新(1=开局立即刷 / 0=按首次延迟与触发条件刷)。实测全 1。
+  bool spawn_on_start = 22 [(excel_col) = "开局刷新"];
+  // 巡逻路点Id(0 / 留空 = 原地不巡逻)。实测 399 行中仅 4 行填了 2 / 3,其余为空。
+  //   同 monster_role_id,目标巡逻路点表不在本次登记范围内,刻意不标 (excel_fk)。
+  uint32 patrol_route_id = 23 [(excel_col) = "巡逻路点Id"];
+  // 权重(同组内随机取点时的权重)。实测全为 100。
+  uint32 weight = 24 [(excel_col) = "权重"];
+  // 常驻Tick(1=该怪始终参与 Tick / 0=可按距离休眠)。实测全 0。
+  bool always_tick = 25 [(excel_col) = "常驻Tick"];
+  // 怪物等级:与 monster_role_id 组成 role_level 表的复合键(角色ID×1000 + 等级)。
+  //   **空 / 0 = 1 级**,与本列上线前逐字节等价(此前 DS 的 MySpawnStatics 把等级硬编码成 1)。
+  //   本列决定该点刷出的怪用 j_角色等级.xlsx 里哪一行的属性与击杀经验。
+  //   消费者是 DS(客户端 FCfgSpawnPoint 同源导出);服务端登记本列的理由同其它列——
+  //   两端共用同一张 xlsx,未登记的表头列会被 configtable-gen 判为非法。
+  uint32 monster_level = 26 [(excel_col) = "怪物等级", (excel_default) = "1"];
+}
+
+// SpawnPointTableData 刷怪点整表容器(dist/spawn_point.json 的根对象;excel_file 注解 = 导表登记)。
+message SpawnPointTableData {
+  option (excel_file) = "关卡/s_刷怪点.xlsx";
+  // 实测版式:第 1 行表头,第 2 行是列说明(仅「怪物等级」列有文字),数据自第 3 行起至第 401 行
+  //   (与通用第 5 行版式不同,必须显式覆盖,否则前两行数据会被整体跳过)。
+  option (excel_data_start_row) = 3;
+
+  repeated SpawnPointRow rows = 1;
+}

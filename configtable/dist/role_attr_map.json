@@ -1,0 +1,24 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "code_name": "Hp",
+      "show_name": "血量"
+    },
+    {
+      "id": 3,
+      "code_name": "Atk",
+      "show_name": "攻击力"
+    },
+    {
+      "id": 5,
+      "code_name": "Shield",
+      "show_name": "护盾"
+    },
+    {
+      "id": 7,
+      "code_name": "MoveSpeedRate",
+      "show_name": "移动速度倍率"
+    }
+  ]
+}

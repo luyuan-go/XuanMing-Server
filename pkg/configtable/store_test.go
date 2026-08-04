@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 )
@@ -152,6 +155,11 @@ func writeBatchWithPlayerLevel(t *testing.T, dir string, version uint64, levelRa
 			},
 		},
 	}
+	// 上面四张是用例真正断言的表(level 必须留在下标 0)。除它们之外,本进程注册的**每一张**
+	// 表都必须出现在清单里,否则 Load 走 "manifest 缺少本进程必需的表" 整批拒绝。
+	// 这里按 specByName 自动补空表,而不是把表名手写进夹具——手写的话每加一张配置表
+	// 就会连带压垮十几个与该表无关的用例(2026-08-04 一次性登记 19 张客户端表时实测)。
+	fillRemainingTables(t, dir, m)
 	if mutate != nil {
 		mutate(m)
 	}
@@ -161,6 +169,45 @@ func writeBatchWithPlayerLevel(t *testing.T, dir string, version uint64, levelRa
 	}
 	if err := os.WriteFile(filepath.Join(dir, ManifestFileName), raw, 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// fillRemainingTables 为清单里尚未出现的已注册表写出空表产物并补登记条目。
+// 与 configtable/configtabletest.FillMissingTables 同一件事,但本文件是包内测试
+// (package configtable),引用 configtabletest 会构成 import 环,故保留这份本地实现。
+// 空表(rows 为空)对加载引擎是合法批次:跨表引用校验只校验实际存在的引用,
+// 夹具里有行的四张表都不引用这些空表,故不会触发 fk 失败。
+func fillRemainingTables(t *testing.T, dir string, m *Manifest) {
+	t.Helper()
+	present := make(map[string]bool, len(m.Tables))
+	for _, mt := range m.Tables {
+		present[mt.Name] = true
+	}
+	// specByName 是 map,遍历顺序随机;排序后再写,保证夹具产物可复现。
+	names := make([]string, 0, len(specByName))
+	for name := range specByName {
+		if !present[name] {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		spec := specByName[name]
+		mt, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(spec.protoName))
+		if err != nil {
+			t.Fatalf("夹具补表 %q: 找不到 proto 类型 %q: %v", name, spec.protoName, err)
+		}
+		raw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.Marshal(mt.New().Interface())
+		if err != nil {
+			t.Fatalf("夹具补表 %q: 序列化空表失败: %v", name, err)
+		}
+		file := name + ".json"
+		if err := os.WriteFile(filepath.Join(dir, file), raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		m.Tables = append(m.Tables, ManifestTable{
+			Name: name, File: file, Proto: spec.protoName, Checksum: checksumOf(raw), Rows: 0,
+		})
 	}
 }
 

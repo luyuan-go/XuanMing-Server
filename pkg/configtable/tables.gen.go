@@ -17,30 +17,425 @@ type Tables struct {
 	Version   uint64
 	SourceRev string
 
+	// ChestDrop 配置表 chest_drop(道具/d_宝箱掉落.xlsx)
+	ChestDrop *ChestDropTable
+
+	// ChestGroup 配置表 chest_group(关卡/s_宝箱组.xlsx)
+	ChestGroup *ChestGroupTable
+
+	// ChestPoint 配置表 chest_point(关卡/s_宝箱点.xlsx)
+	ChestPoint *ChestPointTable
+
+	// ChestQualityStage 配置表 chest_quality_stage(道具/d_宝箱品质阶段.xlsx)
+	ChestQualityStage *ChestQualityStageTable
+
+	// Drop 配置表 drop(道具/d_掉落.xlsx)
+	Drop *DropTable
+
+	// GameModule 配置表 game_module(程序/y_游戏模块.xlsx)
+	GameModule *GameModuleTable
+
+	// GmCommand 配置表 gm_command(程序/g_Gm.xlsx)
+	GmCommand *GmCommandTable
+
 	// Item 配置表 item(道具/d_道具.xlsx)
 	Item *ItemTable
 
 	// Level 配置表 level(关卡/g_关卡.xlsx)
 	Level *LevelTable
 
+	// Particle 配置表 particle(资产/l_粒子.xlsx)
+	Particle *ParticleTable
+
 	// PlayerLevelExp 配置表 player_level_exp(角色/j_玩家等级经验.xlsx)
 	PlayerLevelExp *PlayerLevelExpTable
 
+	// RoleAttrMap 配置表 role_attr_map(角色/j_角色数值属性映射.xlsx)
+	RoleAttrMap *RoleAttrMapTable
+
+	// RoleLevel 配置表 role_level(角色/j_角色等级.xlsx)
+	RoleLevel *RoleLevelTable
+
+	// Role 配置表 role(角色/j_角色配置表.xlsx)
+	Role *RoleTable
+
+	// SkillBullet 配置表 skill_bullet(技能/j_技能_方位类型_子弹.xlsx)
+	SkillBullet *SkillBulletTable
+
+	// SkillCircle 配置表 skill_circle(技能/j_技能_方位类型_圆形.xlsx)
+	SkillCircle *SkillCircleTable
+
+	// SkillRect 配置表 skill_rect(技能/j_技能_方位类型_矩形.xlsx)
+	SkillRect *SkillRectTable
+
+	// SkillSector 配置表 skill_sector(技能/j_技能_方位类型_扇形.xlsx)
+	SkillSector *SkillSectorTable
+
+	// Skill 配置表 skill(技能/j_技能.xlsx)
+	Skill *SkillTable
+
+	// SpawnGroup 配置表 spawn_group(关卡/s_刷怪组.xlsx)
+	SpawnGroup *SpawnGroupTable
+
+	// SpawnPoint 配置表 spawn_point(关卡/s_刷怪点.xlsx)
+	SpawnPoint *SpawnPointTable
+
 	// Talent 配置表 talent(角色/z_专精.xlsx)
 	Talent *TalentTable
+
+	// Weapon 配置表 weapon(武器/w_武器配置.xlsx)
+	Weapon *WeaponTable
 }
 
 // specByName 清单表名 → 解析构建注册(Store.Load 消费)。
 var specByName = map[string]tableSpec{
-	"item":             {protoName: "pandora.config.v1.ItemTableData", build: buildItemTable},
-	"level":            {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable},
-	"player_level_exp": {protoName: "pandora.config.v1.PlayerLevelExpTableData", build: buildPlayerLevelExpTable},
-	"talent":           {protoName: "pandora.config.v1.TalentTableData", build: buildTalentTable},
+	"chest_drop":          {protoName: "pandora.config.v1.ChestDropTableData", build: buildChestDropTable},
+	"chest_group":         {protoName: "pandora.config.v1.ChestGroupTableData", build: buildChestGroupTable},
+	"chest_point":         {protoName: "pandora.config.v1.ChestPointTableData", build: buildChestPointTable},
+	"chest_quality_stage": {protoName: "pandora.config.v1.ChestQualityStageTableData", build: buildChestQualityStageTable},
+	"drop":                {protoName: "pandora.config.v1.DropTableData", build: buildDropTable},
+	"game_module":         {protoName: "pandora.config.v1.GameModuleTableData", build: buildGameModuleTable},
+	"gm_command":          {protoName: "pandora.config.v1.GmCommandTableData", build: buildGmCommandTable},
+	"item":                {protoName: "pandora.config.v1.ItemTableData", build: buildItemTable},
+	"level":               {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable},
+	"particle":            {protoName: "pandora.config.v1.ParticleTableData", build: buildParticleTable},
+	"player_level_exp":    {protoName: "pandora.config.v1.PlayerLevelExpTableData", build: buildPlayerLevelExpTable},
+	"role_attr_map":       {protoName: "pandora.config.v1.RoleAttrMapTableData", build: buildRoleAttrMapTable},
+	"role_level":          {protoName: "pandora.config.v1.RoleLevelTableData", build: buildRoleLevelTable},
+	"role":                {protoName: "pandora.config.v1.RoleTableData", build: buildRoleTable},
+	"skill_bullet":        {protoName: "pandora.config.v1.SkillBulletTableData", build: buildSkillBulletTable},
+	"skill_circle":        {protoName: "pandora.config.v1.SkillCircleTableData", build: buildSkillCircleTable},
+	"skill_rect":          {protoName: "pandora.config.v1.SkillRectTableData", build: buildSkillRectTable},
+	"skill_sector":        {protoName: "pandora.config.v1.SkillSectorTableData", build: buildSkillSectorTable},
+	"skill":               {protoName: "pandora.config.v1.SkillTableData", build: buildSkillTable},
+	"spawn_group":         {protoName: "pandora.config.v1.SpawnGroupTableData", build: buildSpawnGroupTable},
+	"spawn_point":         {protoName: "pandora.config.v1.SpawnPointTableData", build: buildSpawnPointTable},
+	"talent":              {protoName: "pandora.config.v1.TalentTableData", build: buildTalentTable},
+	"weapon":              {protoName: "pandora.config.v1.WeaponTableData", build: buildWeaponTable},
 }
 
 // validateCrossTables 批内跨表引用完整性((excel_fk);生成阶段已校验,
 // 服务端加载再 fail-closed 兜底,全过才允许整批切换)。
 func validateCrossTables(dst *Tables) error {
+	for _, row := range dst.ChestDrop.All() {
+		v := row.GetItemConfigId()
+		if v == 0 {
+			continue // 0 = 无引用
+		}
+		if !dst.Item.Exists(v) {
+			return fmt.Errorf("表 chest_drop 主键 %d 的 物品ID(%d)在表 item 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.ChestGroup.All() {
+		v := row.GetLevelId()
+		if v == 0 {
+			return fmt.Errorf("表 chest_group 主键 %d 的 关卡Id 为 0(必填外键)", row.GetId())
+		}
+		if !dst.Level.Exists(v) {
+			return fmt.Errorf("表 chest_group 主键 %d 的 关卡Id(%d)在表 level 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.ChestPoint.All() {
+		v := row.GetChestGroupId()
+		if v == 0 {
+			return fmt.Errorf("表 chest_point 主键 %d 的 宝箱组Id 为 0(必填外键)", row.GetId())
+		}
+		if !dst.ChestGroup.Exists(v) {
+			return fmt.Errorf("表 chest_point 主键 %d 的 宝箱组Id(%d)在表 chest_group 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.ChestPoint.All() {
+		v := row.GetLevelId()
+		if v == 0 {
+			return fmt.Errorf("表 chest_point 主键 %d 的 关卡Id 为 0(必填外键)", row.GetId())
+		}
+		if !dst.Level.Exists(v) {
+			return fmt.Errorf("表 chest_point 主键 %d 的 关卡Id(%d)在表 level 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.Drop.All() {
+		v := row.GetItemConfigId()
+		if v == 0 {
+			continue // 0 = 无引用
+		}
+		if !dst.Item.Exists(v) {
+			return fmt.Errorf("表 drop 主键 %d 的 物品ID(%d)在表 item 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.RoleLevel.All() {
+		v := row.GetRoleId()
+		if v == 0 {
+			return fmt.Errorf("表 role_level 主键 %d 的 角色ID 为 0(必填外键)", row.GetId())
+		}
+		if !dst.Role.Exists(v) {
+			return fmt.Errorf("表 role_level 主键 %d 的 角色ID(%d)在表 role 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.SpawnGroup.All() {
+		v := row.GetLevelId()
+		if v == 0 {
+			return fmt.Errorf("表 spawn_group 主键 %d 的 关卡Id 为 0(必填外键)", row.GetId())
+		}
+		if !dst.Level.Exists(v) {
+			return fmt.Errorf("表 spawn_group 主键 %d 的 关卡Id(%d)在表 level 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.SpawnPoint.All() {
+		v := row.GetSpawnGroupId()
+		if v == 0 {
+			return fmt.Errorf("表 spawn_point 主键 %d 的 刷怪组Id 为 0(必填外键)", row.GetId())
+		}
+		if !dst.SpawnGroup.Exists(v) {
+			return fmt.Errorf("表 spawn_point 主键 %d 的 刷怪组Id(%d)在表 spawn_group 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.SpawnPoint.All() {
+		v := row.GetLevelId()
+		if v == 0 {
+			return fmt.Errorf("表 spawn_point 主键 %d 的 关卡Id 为 0(必填外键)", row.GetId())
+		}
+		if !dst.Level.Exists(v) {
+			return fmt.Errorf("表 spawn_point 主键 %d 的 关卡Id(%d)在表 level 中不存在", row.GetId(), v)
+		}
+	}
+	return nil
+}
+
+// ChestDropItemConfigIdRow 解析 chest_drop.物品ID → item 行(外键正查)。
+func (tb *Tables) ChestDropItemConfigIdRow(row *configpb.ChestDropRow) (*configpb.ItemRow, bool) {
+	return tb.Item.ByID(row.GetItemConfigId())
+}
+
+// ChestDropItemConfigIdRowByID 按 chest_drop 主键取行再解析 物品ID → item 行。
+func (tb *Tables) ChestDropItemConfigIdRowByID(id uint32) (*configpb.ItemRow, bool) {
+	row, ok := tb.ChestDrop.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.ChestDropItemConfigIdRow(row)
+}
+
+// ChestGroupLevelIdRow 解析 chest_group.关卡Id → level 行(外键正查)。
+func (tb *Tables) ChestGroupLevelIdRow(row *configpb.ChestGroupRow) (*configpb.LevelRow, bool) {
+	return tb.Level.ByID(row.GetLevelId())
+}
+
+// ChestGroupLevelIdRowByID 按 chest_group 主键取行再解析 关卡Id → level 行。
+func (tb *Tables) ChestGroupLevelIdRowByID(id uint32) (*configpb.LevelRow, bool) {
+	row, ok := tb.ChestGroup.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.ChestGroupLevelIdRow(row)
+}
+
+// ChestPointChestGroupIdRow 解析 chest_point.宝箱组Id → chest_group 行(外键正查)。
+func (tb *Tables) ChestPointChestGroupIdRow(row *configpb.ChestPointRow) (*configpb.ChestGroupRow, bool) {
+	return tb.ChestGroup.ByID(row.GetChestGroupId())
+}
+
+// ChestPointChestGroupIdRowByID 按 chest_point 主键取行再解析 宝箱组Id → chest_group 行。
+func (tb *Tables) ChestPointChestGroupIdRowByID(id uint32) (*configpb.ChestGroupRow, bool) {
+	row, ok := tb.ChestPoint.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.ChestPointChestGroupIdRow(row)
+}
+
+// ChestPointLevelIdRow 解析 chest_point.关卡Id → level 行(外键正查)。
+func (tb *Tables) ChestPointLevelIdRow(row *configpb.ChestPointRow) (*configpb.LevelRow, bool) {
+	return tb.Level.ByID(row.GetLevelId())
+}
+
+// ChestPointLevelIdRowByID 按 chest_point 主键取行再解析 关卡Id → level 行。
+func (tb *Tables) ChestPointLevelIdRowByID(id uint32) (*configpb.LevelRow, bool) {
+	row, ok := tb.ChestPoint.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.ChestPointLevelIdRow(row)
+}
+
+// DropItemConfigIdRow 解析 drop.物品ID → item 行(外键正查)。
+func (tb *Tables) DropItemConfigIdRow(row *configpb.DropRow) (*configpb.ItemRow, bool) {
+	return tb.Item.ByID(row.GetItemConfigId())
+}
+
+// DropItemConfigIdRowByID 按 drop 主键取行再解析 物品ID → item 行。
+func (tb *Tables) DropItemConfigIdRowByID(id uint32) (*configpb.ItemRow, bool) {
+	row, ok := tb.Drop.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.DropItemConfigIdRow(row)
+}
+
+// RoleLevelRoleIdRow 解析 role_level.角色ID → role 行(外键正查)。
+func (tb *Tables) RoleLevelRoleIdRow(row *configpb.RoleLevelRow) (*configpb.RoleRow, bool) {
+	return tb.Role.ByID(row.GetRoleId())
+}
+
+// RoleLevelRoleIdRowByID 按 role_level 主键取行再解析 角色ID → role 行。
+func (tb *Tables) RoleLevelRoleIdRowByID(id uint32) (*configpb.RoleRow, bool) {
+	row, ok := tb.RoleLevel.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.RoleLevelRoleIdRow(row)
+}
+
+// SpawnGroupLevelIdRow 解析 spawn_group.关卡Id → level 行(外键正查)。
+func (tb *Tables) SpawnGroupLevelIdRow(row *configpb.SpawnGroupRow) (*configpb.LevelRow, bool) {
+	return tb.Level.ByID(row.GetLevelId())
+}
+
+// SpawnGroupLevelIdRowByID 按 spawn_group 主键取行再解析 关卡Id → level 行。
+func (tb *Tables) SpawnGroupLevelIdRowByID(id uint32) (*configpb.LevelRow, bool) {
+	row, ok := tb.SpawnGroup.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.SpawnGroupLevelIdRow(row)
+}
+
+// SpawnPointSpawnGroupIdRow 解析 spawn_point.刷怪组Id → spawn_group 行(外键正查)。
+func (tb *Tables) SpawnPointSpawnGroupIdRow(row *configpb.SpawnPointRow) (*configpb.SpawnGroupRow, bool) {
+	return tb.SpawnGroup.ByID(row.GetSpawnGroupId())
+}
+
+// SpawnPointSpawnGroupIdRowByID 按 spawn_point 主键取行再解析 刷怪组Id → spawn_group 行。
+func (tb *Tables) SpawnPointSpawnGroupIdRowByID(id uint32) (*configpb.SpawnGroupRow, bool) {
+	row, ok := tb.SpawnPoint.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.SpawnPointSpawnGroupIdRow(row)
+}
+
+// SpawnPointLevelIdRow 解析 spawn_point.关卡Id → level 行(外键正查)。
+func (tb *Tables) SpawnPointLevelIdRow(row *configpb.SpawnPointRow) (*configpb.LevelRow, bool) {
+	return tb.Level.ByID(row.GetLevelId())
+}
+
+// SpawnPointLevelIdRowByID 按 spawn_point 主键取行再解析 关卡Id → level 行。
+func (tb *Tables) SpawnPointLevelIdRowByID(id uint32) (*configpb.LevelRow, bool) {
+	row, ok := tb.SpawnPoint.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.SpawnPointLevelIdRow(row)
+}
+
+func buildChestDropTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.ChestDropTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 chest_drop 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 chest_drop 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newChestDropTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.ChestDrop = t
+	return nil
+}
+
+func buildChestGroupTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.ChestGroupTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 chest_group 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 chest_group 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newChestGroupTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.ChestGroup = t
+	return nil
+}
+
+func buildChestPointTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.ChestPointTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 chest_point 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 chest_point 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newChestPointTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.ChestPoint = t
+	return nil
+}
+
+func buildChestQualityStageTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.ChestQualityStageTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 chest_quality_stage 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 chest_quality_stage 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newChestQualityStageTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.ChestQualityStage = t
+	return nil
+}
+
+func buildDropTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.DropTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 drop 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 drop 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newDropTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Drop = t
+	return nil
+}
+
+func buildGameModuleTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.GameModuleTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 game_module 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 game_module 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newGameModuleTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.GameModule = t
+	return nil
+}
+
+func buildGmCommandTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.GmCommandTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 gm_command 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 gm_command 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newGmCommandTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.GmCommand = t
 	return nil
 }
 
@@ -76,6 +471,22 @@ func buildLevelTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	return nil
 }
 
+func buildParticleTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.ParticleTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 particle 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 particle 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newParticleTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Particle = t
+	return nil
+}
+
 func buildPlayerLevelExpTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	var data configpb.PlayerLevelExpTableData
 	if err := unmarshalTable(raw, &data); err != nil {
@@ -92,6 +503,166 @@ func buildPlayerLevelExpTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	return nil
 }
 
+func buildRoleAttrMapTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.RoleAttrMapTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 role_attr_map 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 role_attr_map 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newRoleAttrMapTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.RoleAttrMap = t
+	return nil
+}
+
+func buildRoleLevelTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.RoleLevelTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 role_level 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 role_level 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newRoleLevelTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.RoleLevel = t
+	return nil
+}
+
+func buildRoleTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.RoleTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 role 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 role 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newRoleTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Role = t
+	return nil
+}
+
+func buildSkillBulletTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.SkillBulletTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 skill_bullet 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 skill_bullet 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newSkillBulletTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.SkillBullet = t
+	return nil
+}
+
+func buildSkillCircleTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.SkillCircleTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 skill_circle 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 skill_circle 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newSkillCircleTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.SkillCircle = t
+	return nil
+}
+
+func buildSkillRectTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.SkillRectTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 skill_rect 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 skill_rect 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newSkillRectTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.SkillRect = t
+	return nil
+}
+
+func buildSkillSectorTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.SkillSectorTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 skill_sector 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 skill_sector 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newSkillSectorTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.SkillSector = t
+	return nil
+}
+
+func buildSkillTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.SkillTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 skill 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 skill 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newSkillTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Skill = t
+	return nil
+}
+
+func buildSpawnGroupTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.SpawnGroupTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 spawn_group 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 spawn_group 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newSpawnGroupTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.SpawnGroup = t
+	return nil
+}
+
+func buildSpawnPointTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.SpawnPointTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 spawn_point 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 spawn_point 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newSpawnPointTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.SpawnPoint = t
+	return nil
+}
+
 func buildTalentTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	var data configpb.TalentTableData
 	if err := unmarshalTable(raw, &data); err != nil {
@@ -105,5 +676,21 @@ func buildTalentTable(raw []byte, mt ManifestTable, dst *Tables) error {
 		return err
 	}
 	dst.Talent = t
+	return nil
+}
+
+func buildWeaponTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.WeaponTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 weapon 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 weapon 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newWeaponTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Weapon = t
 	return nil
 }

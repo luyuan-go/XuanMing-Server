@@ -41,6 +41,14 @@ kafka:
   group_id: "pandora-battle-result"
   partition_cnt: 4
 
+# config_table: 策划配置表加载(不变量 §9.15;docs/design/config-table-hotreload.md)。
+#   本服的 **dir 不可留空**:怪物击杀经验的唯一数值权威是 role_level 表
+#   (源表 角色/j_角色等级.xlsx 的「击杀经验」列),缺表时每条击杀事实都会被
+#   ReportProgress 按可重试错误退回,服务带病跑没有意义 —— 故启动即 fail-fast 退出。
+#   dev 直接指仓库 dist(相对服务目录);部署环境用发布脚本落的 <deploy-root>/configtable/active。
+#   热更走 ConfigTableAdminService.ReloadConfigTable,改完数值不必重启。
+config_table:
+  dir: "/app/configtable/active"
 battle:
   elo_k_factor: 32                # 不变量 §6:MMR 在 battle_result 算(DS 不可信)
   base_mmr: 1500
@@ -65,10 +73,11 @@ battle:
   # 旧代码副本结算不感知水位表、不抑制结算掉落 —— 提前打开会在混版窗口双发掉落。
   # 回滚:置 false 只停新对局开流,进行中对局继续收流到结算,不丢已入账产出。
   progress_enabled: false
-  # monster_exp: 怪物击杀经验表(monster_config_id → 单只经验;空 = 击杀不折算经验)。
-  # 正式数值需与玩家等级经验表一起由策划确认；玩家升级曲线已迁 configtable/player_level_exp。
-  monster_exp: {}
-  # 单场累计硬上限(事务权威侧封顶,失陷 DS 跨 seq 刷产出在此拦截)
+  # 怪物击杀经验**不在本文件配置**：数值权威是策划表 角色/j_角色等级.xlsx 的「击杀经验」列，
+  # 经 configtable 的 role_level 表按 (角色ID, 等级) 查（见下方 config_table.dir）。
+  # 2026-08-04 从本文件移除：游戏数值住在服务配置里，策划改不了、与同一只怪的血/攻分家、
+  # ID 一致性也没有任何机制保证（实测漏配过 2007 蛇怪 / 2008 剧毒蛇怪且长期无人发现）。
+  # 残留的 monster_exp 键会被严格解析直接拒绝启动，不会静默忽略。
   max_progress_exp_per_match: 1000000
   max_progress_items_per_match: 500
 

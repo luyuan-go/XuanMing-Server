@@ -59,6 +59,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_pand
 namespace pandora {
 namespace team {
 namespace v1 {
+enum TeamJoinPolicy : int;
+extern const uint32_t TeamJoinPolicy_internal_data_[];
 enum TeamPushEventType : int;
 extern const uint32_t TeamPushEventType_internal_data_[];
 enum TeamState : int;
@@ -80,6 +82,22 @@ extern AcceptInviteResponseGlobalsTypeInternal AcceptInviteResponse_globals_;
 extern const ::google::protobuf::internal::ClassDataFull AcceptInviteResponse_class_data_;
 #else
 extern const AcceptInviteResponseGlobalsTypeInternal AcceptInviteResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ApplyToTeamRequest;
+struct ApplyToTeamRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ApplyToTeamRequestGlobalsTypeInternal ApplyToTeamRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ApplyToTeamRequest_class_data_;
+#else
+extern const ApplyToTeamRequestGlobalsTypeInternal ApplyToTeamRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ApplyToTeamResponse;
+struct ApplyToTeamResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ApplyToTeamResponseGlobalsTypeInternal ApplyToTeamResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ApplyToTeamResponse_class_data_;
+#else
+extern const ApplyToTeamResponseGlobalsTypeInternal ApplyToTeamResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class CreateTeamRequest;
 struct CreateTeamRequestGlobalsTypeInternal;
@@ -128,6 +146,22 @@ extern GetTeamResponseGlobalsTypeInternal GetTeamResponse_globals_;
 extern const ::google::protobuf::internal::ClassDataFull GetTeamResponse_class_data_;
 #else
 extern const GetTeamResponseGlobalsTypeInternal GetTeamResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class HandleTeamApplicationRequest;
+struct HandleTeamApplicationRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern HandleTeamApplicationRequestGlobalsTypeInternal HandleTeamApplicationRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull HandleTeamApplicationRequest_class_data_;
+#else
+extern const HandleTeamApplicationRequestGlobalsTypeInternal HandleTeamApplicationRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class HandleTeamApplicationResponse;
+struct HandleTeamApplicationResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern HandleTeamApplicationResponseGlobalsTypeInternal HandleTeamApplicationResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull HandleTeamApplicationResponse_class_data_;
+#else
+extern const HandleTeamApplicationResponseGlobalsTypeInternal HandleTeamApplicationResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class InviteRequest;
 struct InviteRequestGlobalsTypeInternal;
@@ -193,6 +227,46 @@ extern const ::google::protobuf::internal::ClassDataFull ListMyPendingInvitesRes
 #else
 extern const ListMyPendingInvitesResponseGlobalsTypeInternal ListMyPendingInvitesResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListOpenTeamsRequest;
+struct ListOpenTeamsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListOpenTeamsRequestGlobalsTypeInternal ListOpenTeamsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListOpenTeamsRequest_class_data_;
+#else
+extern const ListOpenTeamsRequestGlobalsTypeInternal ListOpenTeamsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListOpenTeamsResponse;
+struct ListOpenTeamsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListOpenTeamsResponseGlobalsTypeInternal ListOpenTeamsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListOpenTeamsResponse_class_data_;
+#else
+extern const ListOpenTeamsResponseGlobalsTypeInternal ListOpenTeamsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListTeamApplicationsRequest;
+struct ListTeamApplicationsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListTeamApplicationsRequestGlobalsTypeInternal ListTeamApplicationsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListTeamApplicationsRequest_class_data_;
+#else
+extern const ListTeamApplicationsRequestGlobalsTypeInternal ListTeamApplicationsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListTeamApplicationsResponse;
+struct ListTeamApplicationsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListTeamApplicationsResponseGlobalsTypeInternal ListTeamApplicationsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListTeamApplicationsResponse_class_data_;
+#else
+extern const ListTeamApplicationsResponseGlobalsTypeInternal ListTeamApplicationsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class OpenTeamBrief;
+struct OpenTeamBriefGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern OpenTeamBriefGlobalsTypeInternal OpenTeamBrief_globals_;
+extern const ::google::protobuf::internal::ClassDataFull OpenTeamBrief_class_data_;
+#else
+extern const OpenTeamBriefGlobalsTypeInternal OpenTeamBrief_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class PendingInvite;
 struct PendingInviteGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -217,6 +291,22 @@ extern const ::google::protobuf::internal::ClassDataFull SetReadyResponse_class_
 #else
 extern const SetReadyResponseGlobalsTypeInternal SetReadyResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetTeamMapRequest;
+struct SetTeamMapRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetTeamMapRequestGlobalsTypeInternal SetTeamMapRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetTeamMapRequest_class_data_;
+#else
+extern const SetTeamMapRequestGlobalsTypeInternal SetTeamMapRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetTeamMapResponse;
+struct SetTeamMapResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetTeamMapResponseGlobalsTypeInternal SetTeamMapResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetTeamMapResponse_class_data_;
+#else
+extern const SetTeamMapResponseGlobalsTypeInternal SetTeamMapResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class Team;
 struct TeamGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -224,6 +314,14 @@ extern TeamGlobalsTypeInternal Team_globals_;
 extern const ::google::protobuf::internal::ClassDataFull Team_class_data_;
 #else
 extern const TeamGlobalsTypeInternal Team_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TeamApplication;
+struct TeamApplicationGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TeamApplicationGlobalsTypeInternal TeamApplication_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TeamApplication_class_data_;
+#else
+extern const TeamApplicationGlobalsTypeInternal TeamApplication_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class TeamInviteEvent;
 struct TeamInviteEventGlobalsTypeInternal;
@@ -270,6 +368,9 @@ extern const TeamUpdateEventGlobalsTypeInternal TeamUpdateEvent_globals_;
 }  // namespace pandora
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::pandora::team::v1::TeamJoinPolicy_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::team::v1::TeamJoinPolicy>;
 template <>
 internal::EnumTraitsT<::pandora::team::v1::TeamPushEventType_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::team::v1::TeamPushEventType>;
@@ -329,6 +430,47 @@ template <>
   return ::google::protobuf::internal::ParseNamedEnum<TeamState>(TeamState_descriptor(), name,
                                            value);
 }
+enum TeamJoinPolicy : int {
+  TEAM_JOIN_POLICY_UNSPECIFIED = 0,
+  TEAM_JOIN_POLICY_APPROVAL = 1,
+  TEAM_JOIN_POLICY_OPEN = 2,
+  TeamJoinPolicy_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TeamJoinPolicy_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TeamJoinPolicy_internal_data_[];
+inline constexpr TeamJoinPolicy TeamJoinPolicy_MIN =
+    static_cast<TeamJoinPolicy>(0);
+inline constexpr TeamJoinPolicy TeamJoinPolicy_MAX =
+    static_cast<TeamJoinPolicy>(2);
+[[nodiscard]] inline bool TeamJoinPolicy_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int TeamJoinPolicy_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TeamJoinPolicy_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TeamJoinPolicy) {
+  return TeamJoinPolicy_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TeamJoinPolicy_Name(T value) {
+  static_assert(::std::is_same<T, TeamJoinPolicy>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TeamJoinPolicy_Name().");
+  return TeamJoinPolicy_Name(static_cast<TeamJoinPolicy>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TeamJoinPolicy_Name(TeamJoinPolicy value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TeamJoinPolicy_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TeamJoinPolicy_Parse(
+    ::absl::string_view name, TeamJoinPolicy* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TeamJoinPolicy>(TeamJoinPolicy_descriptor(), name,
+                                           value);
+}
 enum TeamPushEventType : int {
   TEAM_PUSH_EVENT_TYPE_UNSPECIFIED = 0,
   TEAM_PUSH_EVENT_TYPE_INVITE = 1,
@@ -380,6 +522,8 @@ enum TeamUpdateReason : int {
   TEAM_UPDATE_REASON_STATE_CHANGED = 7,
   TEAM_UPDATE_REASON_DISBANDED = 8,
   TEAM_UPDATE_REASON_INVITE_SENT = 9,
+  TEAM_UPDATE_REASON_APPLICATION_RECEIVED = 10,
+  TEAM_UPDATE_REASON_MAP_CHANGED = 11,
   TeamUpdateReason_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   TeamUpdateReason_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -390,11 +534,11 @@ extern const uint32_t TeamUpdateReason_internal_data_[];
 inline constexpr TeamUpdateReason TeamUpdateReason_MIN =
     static_cast<TeamUpdateReason>(0);
 inline constexpr TeamUpdateReason TeamUpdateReason_MAX =
-    static_cast<TeamUpdateReason>(9);
+    static_cast<TeamUpdateReason>(11);
 [[nodiscard]] inline bool TeamUpdateReason_IsValid(int value) {
-  return 0 <= value && value <= 9;
+  return 0 <= value && value <= 11;
 }
-inline constexpr int TeamUpdateReason_ARRAYSIZE = 9 + 1;
+inline constexpr int TeamUpdateReason_ARRAYSIZE = 11 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 TeamUpdateReason_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TeamUpdateReason) {
@@ -409,7 +553,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& TeamUpdateReason_Name(TeamUpdateReason value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<TeamUpdateReason_descriptor, 0, 9>(
+  return ::google::protobuf::internal::NameOfDenseEnum<TeamUpdateReason_descriptor, 0, 11>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool TeamUpdateReason_Parse(
@@ -989,7 +1133,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamInviteEvent final : public ::go
   [[nodiscard]] static const TeamInviteEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TeamInviteEvent>(&TeamInviteEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 36;
   friend void swap(TeamInviteEvent& a, TeamInviteEvent& b) { a.Swap(&b); }
   inline void Swap(TeamInviteEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1187,6 +1331,432 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamInviteEvent final : public ::go
     ::uint64_t to_player_id_;
     ::int64_t ts_ms_;
     ::int64_t expires_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamApplication final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.TeamApplication) */ {
+ public:
+  inline TeamApplication() : TeamApplication(nullptr) {}
+  ~TeamApplication() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TeamApplication* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TeamApplication));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TeamApplication(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TeamApplication(const TeamApplication& from) : TeamApplication(nullptr, from) {}
+  inline TeamApplication(TeamApplication&& from) noexcept : TeamApplication(nullptr, ::std::move(from)) {}
+  inline TeamApplication& operator=(const TeamApplication& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TeamApplication& operator=(TeamApplication&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TeamApplication& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TeamApplication>(&TeamApplication_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 30;
+  friend void swap(TeamApplication& a, TeamApplication& b) { a.Swap(&b); }
+  inline void Swap(TeamApplication* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TeamApplication* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TeamApplication* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TeamApplication>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TeamApplication& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TeamApplication& from) { TeamApplication::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TeamApplication* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.TeamApplication"; }
+
+  explicit TeamApplication(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TeamApplication(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TeamApplication& from);
+  TeamApplication(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TeamApplication&& from) noexcept
+      : TeamApplication(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+    kExpiresAtMsFieldNumber = 2,
+  };
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // int64 expires_at_ms = 2 [json_name = "expiresAtMs"];
+  void clear_expires_at_ms() ;
+  [[nodiscard]] ::int64_t expires_at_ms() const;
+  void set_expires_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_expires_at_ms() const;
+  void _internal_set_expires_at_ms(::int64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.TeamApplication)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TeamApplication& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    ::int64_t expires_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetTeamMapRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.SetTeamMapRequest) */ {
+ public:
+  inline SetTeamMapRequest() : SetTeamMapRequest(nullptr) {}
+  ~SetTeamMapRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetTeamMapRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetTeamMapRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetTeamMapRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetTeamMapRequest(const SetTeamMapRequest& from) : SetTeamMapRequest(nullptr, from) {}
+  inline SetTeamMapRequest(SetTeamMapRequest&& from) noexcept : SetTeamMapRequest(nullptr, ::std::move(from)) {}
+  inline SetTeamMapRequest& operator=(const SetTeamMapRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetTeamMapRequest& operator=(SetTeamMapRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetTeamMapRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetTeamMapRequest>(&SetTeamMapRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 23;
+  friend void swap(SetTeamMapRequest& a, SetTeamMapRequest& b) { a.Swap(&b); }
+  inline void Swap(SetTeamMapRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetTeamMapRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetTeamMapRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetTeamMapRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetTeamMapRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetTeamMapRequest& from) { SetTeamMapRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetTeamMapRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.SetTeamMapRequest"; }
+
+  explicit SetTeamMapRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetTeamMapRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetTeamMapRequest& from);
+  SetTeamMapRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetTeamMapRequest&& from) noexcept
+      : SetTeamMapRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamIdFieldNumber = 1,
+    kMapIdFieldNumber = 2,
+  };
+  // uint64 team_id = 1 [json_name = "teamId"];
+  void clear_team_id() ;
+  [[nodiscard]] ::uint64_t team_id() const;
+  void set_team_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_id() const;
+  void _internal_set_team_id(::uint64_t value);
+
+  public:
+  // uint32 map_id = 2 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.SetTeamMapRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetTeamMapRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t team_id_;
+    ::uint32_t map_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1649,6 +2219,693 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PendingInvite final : public ::goog
     ::uint64_t invite_id_;
     ::uint64_t inviter_id_;
     ::int64_t expires_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED OpenTeamBrief final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.OpenTeamBrief) */ {
+ public:
+  inline OpenTeamBrief() : OpenTeamBrief(nullptr) {}
+  ~OpenTeamBrief() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(OpenTeamBrief* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(OpenTeamBrief));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr OpenTeamBrief(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline OpenTeamBrief(const OpenTeamBrief& from) : OpenTeamBrief(nullptr, from) {}
+  inline OpenTeamBrief(OpenTeamBrief&& from) noexcept : OpenTeamBrief(nullptr, ::std::move(from)) {}
+  inline OpenTeamBrief& operator=(const OpenTeamBrief& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline OpenTeamBrief& operator=(OpenTeamBrief&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const OpenTeamBrief& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<OpenTeamBrief>(&OpenTeamBrief_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 25;
+  friend void swap(OpenTeamBrief& a, OpenTeamBrief& b) { a.Swap(&b); }
+  inline void Swap(OpenTeamBrief* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(OpenTeamBrief* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] OpenTeamBrief* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<OpenTeamBrief>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const OpenTeamBrief& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const OpenTeamBrief& from) { OpenTeamBrief::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(OpenTeamBrief* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.OpenTeamBrief"; }
+
+  explicit OpenTeamBrief(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  OpenTeamBrief(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const OpenTeamBrief& from);
+  OpenTeamBrief(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, OpenTeamBrief&& from) noexcept
+      : OpenTeamBrief(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamIdFieldNumber = 1,
+    kCaptainIdFieldNumber = 2,
+    kMemberCountFieldNumber = 3,
+    kMaxSizeFieldNumber = 4,
+    kCreatedAtMsFieldNumber = 6,
+    kMapIdFieldNumber = 5,
+    kJoinPolicyFieldNumber = 7,
+  };
+  // uint64 team_id = 1 [json_name = "teamId"];
+  void clear_team_id() ;
+  [[nodiscard]] ::uint64_t team_id() const;
+  void set_team_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_id() const;
+  void _internal_set_team_id(::uint64_t value);
+
+  public:
+  // uint64 captain_id = 2 [json_name = "captainId"];
+  void clear_captain_id() ;
+  [[nodiscard]] ::uint64_t captain_id() const;
+  void set_captain_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_captain_id() const;
+  void _internal_set_captain_id(::uint64_t value);
+
+  public:
+  // uint32 member_count = 3 [json_name = "memberCount"];
+  void clear_member_count() ;
+  [[nodiscard]] ::uint32_t member_count() const;
+  void set_member_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_member_count() const;
+  void _internal_set_member_count(::uint32_t value);
+
+  public:
+  // uint32 max_size = 4 [json_name = "maxSize"];
+  void clear_max_size() ;
+  [[nodiscard]] ::uint32_t max_size() const;
+  void set_max_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_size() const;
+  void _internal_set_max_size(::uint32_t value);
+
+  public:
+  // int64 created_at_ms = 6 [json_name = "createdAtMs"];
+  void clear_created_at_ms() ;
+  [[nodiscard]] ::int64_t created_at_ms() const;
+  void set_created_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_created_at_ms() const;
+  void _internal_set_created_at_ms(::int64_t value);
+
+  public:
+  // uint32 map_id = 5 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
+  // .pandora.team.v1.TeamJoinPolicy join_policy = 7 [json_name = "joinPolicy"];
+  void clear_join_policy() ;
+  [[nodiscard]] ::pandora::team::v1::TeamJoinPolicy join_policy() const;
+  void set_join_policy(::pandora::team::v1::TeamJoinPolicy value);
+
+  private:
+  ::pandora::team::v1::TeamJoinPolicy _internal_join_policy() const;
+  void _internal_set_join_policy(::pandora::team::v1::TeamJoinPolicy value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.OpenTeamBrief)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const OpenTeamBrief& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t team_id_;
+    ::uint64_t captain_id_;
+    ::uint32_t member_count_;
+    ::uint32_t max_size_;
+    ::int64_t created_at_ms_;
+    ::uint32_t map_id_;
+    int join_policy_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListTeamApplicationsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.ListTeamApplicationsRequest) */ {
+ public:
+  inline ListTeamApplicationsRequest() : ListTeamApplicationsRequest(nullptr) {}
+  ~ListTeamApplicationsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListTeamApplicationsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListTeamApplicationsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListTeamApplicationsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListTeamApplicationsRequest(const ListTeamApplicationsRequest& from) : ListTeamApplicationsRequest(nullptr, from) {}
+  inline ListTeamApplicationsRequest(ListTeamApplicationsRequest&& from) noexcept : ListTeamApplicationsRequest(nullptr, ::std::move(from)) {}
+  inline ListTeamApplicationsRequest& operator=(const ListTeamApplicationsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListTeamApplicationsRequest& operator=(ListTeamApplicationsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListTeamApplicationsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListTeamApplicationsRequest>(&ListTeamApplicationsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 31;
+  friend void swap(ListTeamApplicationsRequest& a, ListTeamApplicationsRequest& b) { a.Swap(&b); }
+  inline void Swap(ListTeamApplicationsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListTeamApplicationsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListTeamApplicationsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListTeamApplicationsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListTeamApplicationsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListTeamApplicationsRequest& from) { ListTeamApplicationsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListTeamApplicationsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.ListTeamApplicationsRequest"; }
+
+  explicit ListTeamApplicationsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListTeamApplicationsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListTeamApplicationsRequest& from);
+  ListTeamApplicationsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListTeamApplicationsRequest&& from) noexcept
+      : ListTeamApplicationsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamIdFieldNumber = 1,
+  };
+  // uint64 team_id = 1 [json_name = "teamId"];
+  void clear_team_id() ;
+  [[nodiscard]] ::uint64_t team_id() const;
+  void set_team_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_id() const;
+  void _internal_set_team_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.ListTeamApplicationsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListTeamApplicationsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t team_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListOpenTeamsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.ListOpenTeamsRequest) */ {
+ public:
+  inline ListOpenTeamsRequest() : ListOpenTeamsRequest(nullptr) {}
+  ~ListOpenTeamsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListOpenTeamsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListOpenTeamsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListOpenTeamsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListOpenTeamsRequest(const ListOpenTeamsRequest& from) : ListOpenTeamsRequest(nullptr, from) {}
+  inline ListOpenTeamsRequest(ListOpenTeamsRequest&& from) noexcept : ListOpenTeamsRequest(nullptr, ::std::move(from)) {}
+  inline ListOpenTeamsRequest& operator=(const ListOpenTeamsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListOpenTeamsRequest& operator=(ListOpenTeamsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListOpenTeamsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListOpenTeamsRequest>(&ListOpenTeamsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 26;
+  friend void swap(ListOpenTeamsRequest& a, ListOpenTeamsRequest& b) { a.Swap(&b); }
+  inline void Swap(ListOpenTeamsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListOpenTeamsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListOpenTeamsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListOpenTeamsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListOpenTeamsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListOpenTeamsRequest& from) { ListOpenTeamsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListOpenTeamsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.ListOpenTeamsRequest"; }
+
+  explicit ListOpenTeamsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListOpenTeamsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListOpenTeamsRequest& from);
+  ListOpenTeamsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListOpenTeamsRequest&& from) noexcept
+      : ListOpenTeamsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMapIdFieldNumber = 1,
+    kLimitFieldNumber = 2,
+  };
+  // uint32 map_id = 1 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
+  // uint32 limit = 2 [json_name = "limit"];
+  void clear_limit() ;
+  [[nodiscard]] ::uint32_t limit() const;
+  void set_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_limit() const;
+  void _internal_set_limit(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.ListOpenTeamsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListOpenTeamsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t map_id_;
+    ::uint32_t limit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2421,6 +3678,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InviteRequest final : public ::goog
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HandleTeamApplicationRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.HandleTeamApplicationRequest) */ {
+ public:
+  inline HandleTeamApplicationRequest() : HandleTeamApplicationRequest(nullptr) {}
+  ~HandleTeamApplicationRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HandleTeamApplicationRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HandleTeamApplicationRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr HandleTeamApplicationRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline HandleTeamApplicationRequest(const HandleTeamApplicationRequest& from) : HandleTeamApplicationRequest(nullptr, from) {}
+  inline HandleTeamApplicationRequest(HandleTeamApplicationRequest&& from) noexcept : HandleTeamApplicationRequest(nullptr, ::std::move(from)) {}
+  inline HandleTeamApplicationRequest& operator=(const HandleTeamApplicationRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HandleTeamApplicationRequest& operator=(HandleTeamApplicationRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const HandleTeamApplicationRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<HandleTeamApplicationRequest>(&HandleTeamApplicationRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 33;
+  friend void swap(HandleTeamApplicationRequest& a, HandleTeamApplicationRequest& b) { a.Swap(&b); }
+  inline void Swap(HandleTeamApplicationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HandleTeamApplicationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] HandleTeamApplicationRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HandleTeamApplicationRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HandleTeamApplicationRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HandleTeamApplicationRequest& from) { HandleTeamApplicationRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HandleTeamApplicationRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.HandleTeamApplicationRequest"; }
+
+  explicit HandleTeamApplicationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HandleTeamApplicationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HandleTeamApplicationRequest& from);
+  HandleTeamApplicationRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HandleTeamApplicationRequest&& from) noexcept
+      : HandleTeamApplicationRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamIdFieldNumber = 1,
+    kApplicantIdFieldNumber = 2,
+    kAcceptFieldNumber = 3,
+  };
+  // uint64 team_id = 1 [json_name = "teamId"];
+  void clear_team_id() ;
+  [[nodiscard]] ::uint64_t team_id() const;
+  void set_team_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_id() const;
+  void _internal_set_team_id(::uint64_t value);
+
+  public:
+  // uint64 applicant_id = 2 [json_name = "applicantId"];
+  void clear_applicant_id() ;
+  [[nodiscard]] ::uint64_t applicant_id() const;
+  void set_applicant_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_applicant_id() const;
+  void _internal_set_applicant_id(::uint64_t value);
+
+  public:
+  // bool accept = 3 [json_name = "accept"];
+  void clear_accept() ;
+  [[nodiscard]] bool accept() const;
+  void set_accept(bool value);
+
+  private:
+  bool _internal_accept() const;
+  void _internal_set_accept(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.HandleTeamApplicationRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HandleTeamApplicationRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t team_id_;
+    ::uint64_t applicant_id_;
+    bool accept_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTeamRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.team.v1.GetTeamRequest) */ {
  public:
@@ -2898,6 +4380,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateTeamRequest final : public ::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyToTeamRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.ApplyToTeamRequest) */ {
+ public:
+  inline ApplyToTeamRequest() : ApplyToTeamRequest(nullptr) {}
+  ~ApplyToTeamRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ApplyToTeamRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ApplyToTeamRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ApplyToTeamRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ApplyToTeamRequest(const ApplyToTeamRequest& from) : ApplyToTeamRequest(nullptr, from) {}
+  inline ApplyToTeamRequest(ApplyToTeamRequest&& from) noexcept : ApplyToTeamRequest(nullptr, ::std::move(from)) {}
+  inline ApplyToTeamRequest& operator=(const ApplyToTeamRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ApplyToTeamRequest& operator=(ApplyToTeamRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ApplyToTeamRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ApplyToTeamRequest>(&ApplyToTeamRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 28;
+  friend void swap(ApplyToTeamRequest& a, ApplyToTeamRequest& b) { a.Swap(&b); }
+  inline void Swap(ApplyToTeamRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ApplyToTeamRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ApplyToTeamRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ApplyToTeamRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ApplyToTeamRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ApplyToTeamRequest& from) { ApplyToTeamRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ApplyToTeamRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.ApplyToTeamRequest"; }
+
+  explicit ApplyToTeamRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ApplyToTeamRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ApplyToTeamRequest& from);
+  ApplyToTeamRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ApplyToTeamRequest&& from) noexcept
+      : ApplyToTeamRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamIdFieldNumber = 1,
+  };
+  // uint64 team_id = 1 [json_name = "teamId"];
+  void clear_team_id() ;
+  [[nodiscard]] ::uint64_t team_id() const;
+  void set_team_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_id() const;
+  void _internal_set_team_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.ApplyToTeamRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ApplyToTeamRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t team_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AcceptInviteRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.team.v1.AcceptInviteRequest) */ {
  public:
@@ -3266,6 +4949,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamStorageRecord final : public ::
     kStateFieldNumber = 3,
     kMaxSizeFieldNumber = 7,
     kUpdatedAtMsFieldNumber = 6,
+    kMapIdFieldNumber = 10,
   };
   // repeated .pandora.team.v1.TeamMemberStorageRecord members = 4 [json_name = "members"];
   [[nodiscard]] int members_size()
@@ -3348,11 +5032,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamStorageRecord final : public ::
   void _internal_set_updated_at_ms(::int64_t value);
 
   public:
+  // uint32 map_id = 10 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.team.v1.TeamStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<4, 8,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3388,6 +5082,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamStorageRecord final : public ::
     int state_;
     ::int32_t max_size_;
     ::int64_t updated_at_ms_;
+    ::uint32_t map_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3549,6 +5244,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Team final : public ::google::proto
     kCreatedAtMsFieldNumber = 5,
     kStateFieldNumber = 4,
     kMaxSizeFieldNumber = 6,
+    kMapIdFieldNumber = 10,
+    kJoinPolicyFieldNumber = 11,
   };
   // repeated .pandora.team.v1.TeamMember members = 3 [json_name = "members"];
   [[nodiscard]] int members_size()
@@ -3621,11 +5318,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Team final : public ::google::proto
   void _internal_set_max_size(::int32_t value);
 
   public:
+  // uint32 map_id = 10 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
+  // .pandora.team.v1.TeamJoinPolicy join_policy = 11 [json_name = "joinPolicy"];
+  void clear_join_policy() ;
+  [[nodiscard]] ::pandora::team::v1::TeamJoinPolicy join_policy() const;
+  void set_join_policy(::pandora::team::v1::TeamJoinPolicy value);
+
+  private:
+  ::pandora::team::v1::TeamJoinPolicy _internal_join_policy() const;
+  void _internal_set_join_policy(::pandora::team::v1::TeamJoinPolicy value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.team.v1.Team)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<4, 8,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3660,6 +5377,456 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Team final : public ::google::proto
     ::int64_t created_at_ms_;
     int state_;
     ::int32_t max_size_;
+    ::uint32_t map_id_;
+    int join_policy_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListTeamApplicationsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.ListTeamApplicationsResponse) */ {
+ public:
+  inline ListTeamApplicationsResponse() : ListTeamApplicationsResponse(nullptr) {}
+  ~ListTeamApplicationsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListTeamApplicationsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListTeamApplicationsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListTeamApplicationsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListTeamApplicationsResponse(const ListTeamApplicationsResponse& from) : ListTeamApplicationsResponse(nullptr, from) {}
+  inline ListTeamApplicationsResponse(ListTeamApplicationsResponse&& from) noexcept : ListTeamApplicationsResponse(nullptr, ::std::move(from)) {}
+  inline ListTeamApplicationsResponse& operator=(const ListTeamApplicationsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListTeamApplicationsResponse& operator=(ListTeamApplicationsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListTeamApplicationsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListTeamApplicationsResponse>(&ListTeamApplicationsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 32;
+  friend void swap(ListTeamApplicationsResponse& a, ListTeamApplicationsResponse& b) { a.Swap(&b); }
+  inline void Swap(ListTeamApplicationsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListTeamApplicationsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListTeamApplicationsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListTeamApplicationsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListTeamApplicationsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListTeamApplicationsResponse& from) { ListTeamApplicationsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListTeamApplicationsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.ListTeamApplicationsResponse"; }
+
+  explicit ListTeamApplicationsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListTeamApplicationsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListTeamApplicationsResponse& from);
+  ListTeamApplicationsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListTeamApplicationsResponse&& from) noexcept
+      : ListTeamApplicationsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kApplicationsFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // repeated .pandora.team.v1.TeamApplication applications = 2 [json_name = "applications"];
+  [[nodiscard]] int applications_size()
+      const;
+  private:
+  int _internal_applications_size() const;
+
+  public:
+  void clear_applications() ;
+  [[nodiscard]] const ::pandora::team::v1::TeamApplication& applications(int index) const;
+  [[nodiscard]] ::pandora::team::v1::TeamApplication* PROTOBUF_NONNULL mutable_applications(int index);
+  ::pandora::team::v1::TeamApplication* PROTOBUF_NONNULL add_applications();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::TeamApplication>&
+  applications() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::team::v1::TeamApplication>* PROTOBUF_NONNULL
+  mutable_applications();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::TeamApplication>& _internal_applications() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::team::v1::TeamApplication>* PROTOBUF_NONNULL _internal_mutable_applications();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.ListTeamApplicationsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListTeamApplicationsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::team::v1::TeamApplication > applications_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListOpenTeamsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.ListOpenTeamsResponse) */ {
+ public:
+  inline ListOpenTeamsResponse() : ListOpenTeamsResponse(nullptr) {}
+  ~ListOpenTeamsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListOpenTeamsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListOpenTeamsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListOpenTeamsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListOpenTeamsResponse(const ListOpenTeamsResponse& from) : ListOpenTeamsResponse(nullptr, from) {}
+  inline ListOpenTeamsResponse(ListOpenTeamsResponse&& from) noexcept : ListOpenTeamsResponse(nullptr, ::std::move(from)) {}
+  inline ListOpenTeamsResponse& operator=(const ListOpenTeamsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListOpenTeamsResponse& operator=(ListOpenTeamsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListOpenTeamsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListOpenTeamsResponse>(&ListOpenTeamsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 27;
+  friend void swap(ListOpenTeamsResponse& a, ListOpenTeamsResponse& b) { a.Swap(&b); }
+  inline void Swap(ListOpenTeamsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListOpenTeamsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListOpenTeamsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListOpenTeamsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListOpenTeamsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListOpenTeamsResponse& from) { ListOpenTeamsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListOpenTeamsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.ListOpenTeamsResponse"; }
+
+  explicit ListOpenTeamsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListOpenTeamsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListOpenTeamsResponse& from);
+  ListOpenTeamsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListOpenTeamsResponse&& from) noexcept
+      : ListOpenTeamsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamsFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // repeated .pandora.team.v1.OpenTeamBrief teams = 2 [json_name = "teams"];
+  [[nodiscard]] int teams_size()
+      const;
+  private:
+  int _internal_teams_size() const;
+
+  public:
+  void clear_teams() ;
+  [[nodiscard]] const ::pandora::team::v1::OpenTeamBrief& teams(int index) const;
+  [[nodiscard]] ::pandora::team::v1::OpenTeamBrief* PROTOBUF_NONNULL mutable_teams(int index);
+  ::pandora::team::v1::OpenTeamBrief* PROTOBUF_NONNULL add_teams();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::OpenTeamBrief>&
+  teams() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::team::v1::OpenTeamBrief>* PROTOBUF_NONNULL
+  mutable_teams();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::OpenTeamBrief>& _internal_teams() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::team::v1::OpenTeamBrief>* PROTOBUF_NONNULL _internal_mutable_teams();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.ListOpenTeamsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListOpenTeamsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::team::v1::OpenTeamBrief > teams_;
+    int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3947,7 +6114,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamUpdateEvent final : public ::go
   [[nodiscard]] static const TeamUpdateEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TeamUpdateEvent>(&TeamUpdateEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(TeamUpdateEvent& a, TeamUpdateEvent& b) { a.Swap(&b); }
   inline void Swap(TeamUpdateEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4151,6 +6318,225 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamUpdateEvent final : public ::go
     ::int64_t ts_ms_;
     ::uint64_t invite_id_;
     int reason_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetTeamMapResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.SetTeamMapResponse) */ {
+ public:
+  inline SetTeamMapResponse() : SetTeamMapResponse(nullptr) {}
+  ~SetTeamMapResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetTeamMapResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetTeamMapResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetTeamMapResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetTeamMapResponse(const SetTeamMapResponse& from) : SetTeamMapResponse(nullptr, from) {}
+  inline SetTeamMapResponse(SetTeamMapResponse&& from) noexcept : SetTeamMapResponse(nullptr, ::std::move(from)) {}
+  inline SetTeamMapResponse& operator=(const SetTeamMapResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetTeamMapResponse& operator=(SetTeamMapResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetTeamMapResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetTeamMapResponse>(&SetTeamMapResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 24;
+  friend void swap(SetTeamMapResponse& a, SetTeamMapResponse& b) { a.Swap(&b); }
+  inline void Swap(SetTeamMapResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetTeamMapResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetTeamMapResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetTeamMapResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetTeamMapResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetTeamMapResponse& from) { SetTeamMapResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetTeamMapResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.SetTeamMapResponse"; }
+
+  explicit SetTeamMapResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetTeamMapResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetTeamMapResponse& from);
+  SetTeamMapResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetTeamMapResponse&& from) noexcept
+      : SetTeamMapResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.team.v1.Team team = 2 [json_name = "team"];
+  [[nodiscard]] bool has_team()
+      const;
+  void clear_team() ;
+  [[nodiscard]] const ::pandora::team::v1::Team& team() const;
+  [[nodiscard]] ::pandora::team::v1::Team* PROTOBUF_NULLABLE release_team();
+  ::pandora::team::v1::Team* PROTOBUF_NONNULL mutable_team();
+  void set_allocated_team(::pandora::team::v1::Team* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_team(::pandora::team::v1::Team* PROTOBUF_NULLABLE value);
+  ::pandora::team::v1::Team* PROTOBUF_NULLABLE unsafe_arena_release_team();
+
+  private:
+  const ::pandora::team::v1::Team& _internal_team() const;
+  ::pandora::team::v1::Team* PROTOBUF_NONNULL _internal_mutable_team();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.SetTeamMapResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetTeamMapResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::team::v1::Team* PROTOBUF_NULLABLE team_;
+    int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5058,6 +7444,225 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InviteResponse final : public ::goo
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HandleTeamApplicationResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.HandleTeamApplicationResponse) */ {
+ public:
+  inline HandleTeamApplicationResponse() : HandleTeamApplicationResponse(nullptr) {}
+  ~HandleTeamApplicationResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HandleTeamApplicationResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HandleTeamApplicationResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr HandleTeamApplicationResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline HandleTeamApplicationResponse(const HandleTeamApplicationResponse& from) : HandleTeamApplicationResponse(nullptr, from) {}
+  inline HandleTeamApplicationResponse(HandleTeamApplicationResponse&& from) noexcept : HandleTeamApplicationResponse(nullptr, ::std::move(from)) {}
+  inline HandleTeamApplicationResponse& operator=(const HandleTeamApplicationResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HandleTeamApplicationResponse& operator=(HandleTeamApplicationResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const HandleTeamApplicationResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<HandleTeamApplicationResponse>(&HandleTeamApplicationResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 34;
+  friend void swap(HandleTeamApplicationResponse& a, HandleTeamApplicationResponse& b) { a.Swap(&b); }
+  inline void Swap(HandleTeamApplicationResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HandleTeamApplicationResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] HandleTeamApplicationResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HandleTeamApplicationResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HandleTeamApplicationResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HandleTeamApplicationResponse& from) { HandleTeamApplicationResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HandleTeamApplicationResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.HandleTeamApplicationResponse"; }
+
+  explicit HandleTeamApplicationResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HandleTeamApplicationResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HandleTeamApplicationResponse& from);
+  HandleTeamApplicationResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HandleTeamApplicationResponse&& from) noexcept
+      : HandleTeamApplicationResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.team.v1.Team team = 2 [json_name = "team"];
+  [[nodiscard]] bool has_team()
+      const;
+  void clear_team() ;
+  [[nodiscard]] const ::pandora::team::v1::Team& team() const;
+  [[nodiscard]] ::pandora::team::v1::Team* PROTOBUF_NULLABLE release_team();
+  ::pandora::team::v1::Team* PROTOBUF_NONNULL mutable_team();
+  void set_allocated_team(::pandora::team::v1::Team* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_team(::pandora::team::v1::Team* PROTOBUF_NULLABLE value);
+  ::pandora::team::v1::Team* PROTOBUF_NULLABLE unsafe_arena_release_team();
+
+  private:
+  const ::pandora::team::v1::Team& _internal_team() const;
+  ::pandora::team::v1::Team* PROTOBUF_NONNULL _internal_mutable_team();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.HandleTeamApplicationResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HandleTeamApplicationResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::team::v1::Team* PROTOBUF_NULLABLE team_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTeamResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.team.v1.GetTeamResponse) */ {
  public:
@@ -5739,6 +8344,249 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateTeamResponse final : public :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyToTeamResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.ApplyToTeamResponse) */ {
+ public:
+  inline ApplyToTeamResponse() : ApplyToTeamResponse(nullptr) {}
+  ~ApplyToTeamResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ApplyToTeamResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ApplyToTeamResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ApplyToTeamResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ApplyToTeamResponse(const ApplyToTeamResponse& from) : ApplyToTeamResponse(nullptr, from) {}
+  inline ApplyToTeamResponse(ApplyToTeamResponse&& from) noexcept : ApplyToTeamResponse(nullptr, ::std::move(from)) {}
+  inline ApplyToTeamResponse& operator=(const ApplyToTeamResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ApplyToTeamResponse& operator=(ApplyToTeamResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ApplyToTeamResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ApplyToTeamResponse>(&ApplyToTeamResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 29;
+  friend void swap(ApplyToTeamResponse& a, ApplyToTeamResponse& b) { a.Swap(&b); }
+  inline void Swap(ApplyToTeamResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ApplyToTeamResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ApplyToTeamResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ApplyToTeamResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ApplyToTeamResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ApplyToTeamResponse& from) { ApplyToTeamResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ApplyToTeamResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.ApplyToTeamResponse"; }
+
+  explicit ApplyToTeamResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ApplyToTeamResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ApplyToTeamResponse& from);
+  ApplyToTeamResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ApplyToTeamResponse&& from) noexcept
+      : ApplyToTeamResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamFieldNumber = 3,
+    kCodeFieldNumber = 1,
+    kJoinedFieldNumber = 2,
+    kExpiresAtMsFieldNumber = 4,
+  };
+  // .pandora.team.v1.Team team = 3 [json_name = "team"];
+  [[nodiscard]] bool has_team()
+      const;
+  void clear_team() ;
+  [[nodiscard]] const ::pandora::team::v1::Team& team() const;
+  [[nodiscard]] ::pandora::team::v1::Team* PROTOBUF_NULLABLE release_team();
+  ::pandora::team::v1::Team* PROTOBUF_NONNULL mutable_team();
+  void set_allocated_team(::pandora::team::v1::Team* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_team(::pandora::team::v1::Team* PROTOBUF_NULLABLE value);
+  ::pandora::team::v1::Team* PROTOBUF_NULLABLE unsafe_arena_release_team();
+
+  private:
+  const ::pandora::team::v1::Team& _internal_team() const;
+  ::pandora::team::v1::Team* PROTOBUF_NONNULL _internal_mutable_team();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // bool joined = 2 [json_name = "joined"];
+  void clear_joined() ;
+  [[nodiscard]] bool joined() const;
+  void set_joined(bool value);
+
+  private:
+  bool _internal_joined() const;
+  void _internal_set_joined(bool value);
+
+  public:
+  // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
+  void clear_expires_at_ms() ;
+  [[nodiscard]] ::int64_t expires_at_ms() const;
+  void set_expires_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_expires_at_ms() const;
+  void _internal_set_expires_at_ms(::int64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.ApplyToTeamResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ApplyToTeamResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::team::v1::Team* PROTOBUF_NULLABLE team_;
+    int code_;
+    bool joined_;
+    ::int64_t expires_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AcceptInviteResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.team.v1.AcceptInviteResponse) */ {
  public:
@@ -6312,6 +9160,54 @@ inline void Team::_internal_set_max_size(::int32_t value) {
   _impl_.max_size_ = value;
 }
 
+// uint32 map_id = 10 [json_name = "mapId"];
+inline void Team::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t Team::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.Team.map_id)
+  return _internal_map_id();
+}
+inline void Team::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.Team.map_id)
+}
+inline ::uint32_t Team::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void Team::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
+}
+
+// .pandora.team.v1.TeamJoinPolicy join_policy = 11 [json_name = "joinPolicy"];
+inline void Team::clear_join_policy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.join_policy_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::pandora::team::v1::TeamJoinPolicy Team::join_policy() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.Team.join_policy)
+  return _internal_join_policy();
+}
+inline void Team::set_join_policy(::pandora::team::v1::TeamJoinPolicy value) {
+  _internal_set_join_policy(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.Team.join_policy)
+}
+inline ::pandora::team::v1::TeamJoinPolicy Team::_internal_join_policy() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::team::v1::TeamJoinPolicy>(_impl_.join_policy_);
+}
+inline void Team::_internal_set_join_policy(::pandora::team::v1::TeamJoinPolicy value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.join_policy_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // TeamMemberStorageRecord
@@ -6677,6 +9573,30 @@ inline ::int32_t TeamStorageRecord::_internal_max_size() const {
 inline void TeamStorageRecord::_internal_set_max_size(::int32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_size_ = value;
+}
+
+// uint32 map_id = 10 [json_name = "mapId"];
+inline void TeamStorageRecord::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t TeamStorageRecord::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.TeamStorageRecord.map_id)
+  return _internal_map_id();
+}
+inline void TeamStorageRecord::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.TeamStorageRecord.map_id)
+}
+inline ::uint32_t TeamStorageRecord::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void TeamStorageRecord::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -8268,6 +11188,1058 @@ ListMyPendingInvitesResponse::_internal_mutable_invites() {
 
 // -------------------------------------------------------------------
 
+// SetTeamMapRequest
+
+// uint64 team_id = 1 [json_name = "teamId"];
+inline void SetTeamMapRequest::clear_team_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t SetTeamMapRequest::team_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.SetTeamMapRequest.team_id)
+  return _internal_team_id();
+}
+inline void SetTeamMapRequest::set_team_id(::uint64_t value) {
+  _internal_set_team_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.SetTeamMapRequest.team_id)
+}
+inline ::uint64_t SetTeamMapRequest::_internal_team_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_id_;
+}
+inline void SetTeamMapRequest::_internal_set_team_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = value;
+}
+
+// uint32 map_id = 2 [json_name = "mapId"];
+inline void SetTeamMapRequest::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t SetTeamMapRequest::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.SetTeamMapRequest.map_id)
+  return _internal_map_id();
+}
+inline void SetTeamMapRequest::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.SetTeamMapRequest.map_id)
+}
+inline ::uint32_t SetTeamMapRequest::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void SetTeamMapRequest::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SetTeamMapResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void SetTeamMapResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode SetTeamMapResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.SetTeamMapResponse.code)
+  return _internal_code();
+}
+inline void SetTeamMapResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.SetTeamMapResponse.code)
+}
+inline ::pandora::common::v1::ErrCode SetTeamMapResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void SetTeamMapResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// .pandora.team.v1.Team team = 2 [json_name = "team"];
+inline bool SetTeamMapResponse::has_team() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.team_ != nullptr);
+  return value;
+}
+inline void SetTeamMapResponse::clear_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.team_ != nullptr) _impl_.team_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::team::v1::Team& SetTeamMapResponse::_internal_team() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::team::v1::Team* p = _impl_.team_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::team::v1::Team>(&::pandora::team::v1::Team_globals_);
+}
+inline const ::pandora::team::v1::Team& SetTeamMapResponse::team() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.SetTeamMapResponse.team)
+  return _internal_team();
+}
+inline void SetTeamMapResponse::unsafe_arena_set_allocated_team(
+    ::pandora::team::v1::Team* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.team_);
+  }
+  _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.team.v1.SetTeamMapResponse.team)
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NULLABLE SetTeamMapResponse::release_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::team::v1::Team* released = _impl_.team_;
+  _impl_.team_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NULLABLE SetTeamMapResponse::unsafe_arena_release_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.team.v1.SetTeamMapResponse.team)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::team::v1::Team* temp = _impl_.team_;
+  _impl_.team_ = nullptr;
+  return temp;
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NONNULL SetTeamMapResponse::_internal_mutable_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.team_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::team::v1::Team>(GetArena());
+    _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(p);
+  }
+  return _impl_.team_;
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NONNULL SetTeamMapResponse::mutable_team()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::team::v1::Team* _msg = _internal_mutable_team();
+  // @@protoc_insertion_point(field_mutable:pandora.team.v1.SetTeamMapResponse.team)
+  return _msg;
+}
+inline void SetTeamMapResponse::set_allocated_team(::pandora::team::v1::Team* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.team_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.team.v1.SetTeamMapResponse.team)
+}
+
+// -------------------------------------------------------------------
+
+// OpenTeamBrief
+
+// uint64 team_id = 1 [json_name = "teamId"];
+inline void OpenTeamBrief::clear_team_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t OpenTeamBrief::team_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.OpenTeamBrief.team_id)
+  return _internal_team_id();
+}
+inline void OpenTeamBrief::set_team_id(::uint64_t value) {
+  _internal_set_team_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.OpenTeamBrief.team_id)
+}
+inline ::uint64_t OpenTeamBrief::_internal_team_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_id_;
+}
+inline void OpenTeamBrief::_internal_set_team_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = value;
+}
+
+// uint64 captain_id = 2 [json_name = "captainId"];
+inline void OpenTeamBrief::clear_captain_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.captain_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t OpenTeamBrief::captain_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.OpenTeamBrief.captain_id)
+  return _internal_captain_id();
+}
+inline void OpenTeamBrief::set_captain_id(::uint64_t value) {
+  _internal_set_captain_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.OpenTeamBrief.captain_id)
+}
+inline ::uint64_t OpenTeamBrief::_internal_captain_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.captain_id_;
+}
+inline void OpenTeamBrief::_internal_set_captain_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.captain_id_ = value;
+}
+
+// uint32 member_count = 3 [json_name = "memberCount"];
+inline void OpenTeamBrief::clear_member_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.member_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t OpenTeamBrief::member_count() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.OpenTeamBrief.member_count)
+  return _internal_member_count();
+}
+inline void OpenTeamBrief::set_member_count(::uint32_t value) {
+  _internal_set_member_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.OpenTeamBrief.member_count)
+}
+inline ::uint32_t OpenTeamBrief::_internal_member_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.member_count_;
+}
+inline void OpenTeamBrief::_internal_set_member_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.member_count_ = value;
+}
+
+// uint32 max_size = 4 [json_name = "maxSize"];
+inline void OpenTeamBrief::clear_max_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t OpenTeamBrief::max_size() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.OpenTeamBrief.max_size)
+  return _internal_max_size();
+}
+inline void OpenTeamBrief::set_max_size(::uint32_t value) {
+  _internal_set_max_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.OpenTeamBrief.max_size)
+}
+inline ::uint32_t OpenTeamBrief::_internal_max_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_size_;
+}
+inline void OpenTeamBrief::_internal_set_max_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_size_ = value;
+}
+
+// uint32 map_id = 5 [json_name = "mapId"];
+inline void OpenTeamBrief::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t OpenTeamBrief::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.OpenTeamBrief.map_id)
+  return _internal_map_id();
+}
+inline void OpenTeamBrief::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.OpenTeamBrief.map_id)
+}
+inline ::uint32_t OpenTeamBrief::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void OpenTeamBrief::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
+}
+
+// int64 created_at_ms = 6 [json_name = "createdAtMs"];
+inline void OpenTeamBrief::clear_created_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_at_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::int64_t OpenTeamBrief::created_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.OpenTeamBrief.created_at_ms)
+  return _internal_created_at_ms();
+}
+inline void OpenTeamBrief::set_created_at_ms(::int64_t value) {
+  _internal_set_created_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.OpenTeamBrief.created_at_ms)
+}
+inline ::int64_t OpenTeamBrief::_internal_created_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_at_ms_;
+}
+inline void OpenTeamBrief::_internal_set_created_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_at_ms_ = value;
+}
+
+// .pandora.team.v1.TeamJoinPolicy join_policy = 7 [json_name = "joinPolicy"];
+inline void OpenTeamBrief::clear_join_policy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.join_policy_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::pandora::team::v1::TeamJoinPolicy OpenTeamBrief::join_policy() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.OpenTeamBrief.join_policy)
+  return _internal_join_policy();
+}
+inline void OpenTeamBrief::set_join_policy(::pandora::team::v1::TeamJoinPolicy value) {
+  _internal_set_join_policy(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.OpenTeamBrief.join_policy)
+}
+inline ::pandora::team::v1::TeamJoinPolicy OpenTeamBrief::_internal_join_policy() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::team::v1::TeamJoinPolicy>(_impl_.join_policy_);
+}
+inline void OpenTeamBrief::_internal_set_join_policy(::pandora::team::v1::TeamJoinPolicy value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.join_policy_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListOpenTeamsRequest
+
+// uint32 map_id = 1 [json_name = "mapId"];
+inline void ListOpenTeamsRequest::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t ListOpenTeamsRequest::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ListOpenTeamsRequest.map_id)
+  return _internal_map_id();
+}
+inline void ListOpenTeamsRequest::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ListOpenTeamsRequest.map_id)
+}
+inline ::uint32_t ListOpenTeamsRequest::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void ListOpenTeamsRequest::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
+}
+
+// uint32 limit = 2 [json_name = "limit"];
+inline void ListOpenTeamsRequest::clear_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t ListOpenTeamsRequest::limit() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ListOpenTeamsRequest.limit)
+  return _internal_limit();
+}
+inline void ListOpenTeamsRequest::set_limit(::uint32_t value) {
+  _internal_set_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ListOpenTeamsRequest.limit)
+}
+inline ::uint32_t ListOpenTeamsRequest::_internal_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.limit_;
+}
+inline void ListOpenTeamsRequest::_internal_set_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListOpenTeamsResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ListOpenTeamsResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode ListOpenTeamsResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ListOpenTeamsResponse.code)
+  return _internal_code();
+}
+inline void ListOpenTeamsResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ListOpenTeamsResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ListOpenTeamsResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ListOpenTeamsResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// repeated .pandora.team.v1.OpenTeamBrief teams = 2 [json_name = "teams"];
+inline int ListOpenTeamsResponse::_internal_teams_size() const {
+  return _internal_teams().size();
+}
+inline int ListOpenTeamsResponse::teams_size() const {
+  return _internal_teams_size();
+}
+inline void ListOpenTeamsResponse::clear_teams() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.teams_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::team::v1::OpenTeamBrief& ListOpenTeamsResponse::teams(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ListOpenTeamsResponse.teams)
+  return _internal_teams().Get(index);
+}
+inline ::pandora::team::v1::OpenTeamBrief* PROTOBUF_NONNULL ListOpenTeamsResponse::mutable_teams(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.team.v1.ListOpenTeamsResponse.teams)
+  return _internal_mutable_teams()->Mutable(index);
+}
+inline ::pandora::team::v1::OpenTeamBrief* PROTOBUF_NONNULL ListOpenTeamsResponse::add_teams()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::team::v1::OpenTeamBrief* _add =
+      _internal_mutable_teams()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.team.v1.ListOpenTeamsResponse.teams)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::OpenTeamBrief>& ListOpenTeamsResponse::teams() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.team.v1.ListOpenTeamsResponse.teams)
+  return _internal_teams();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::team::v1::OpenTeamBrief>* PROTOBUF_NONNULL
+ListOpenTeamsResponse::mutable_teams() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.team.v1.ListOpenTeamsResponse.teams)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_teams();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::OpenTeamBrief>&
+ListOpenTeamsResponse::_internal_teams() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.teams_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::team::v1::OpenTeamBrief>* PROTOBUF_NONNULL
+ListOpenTeamsResponse::_internal_mutable_teams() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.teams_;
+}
+
+// -------------------------------------------------------------------
+
+// ApplyToTeamRequest
+
+// uint64 team_id = 1 [json_name = "teamId"];
+inline void ApplyToTeamRequest::clear_team_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ApplyToTeamRequest::team_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ApplyToTeamRequest.team_id)
+  return _internal_team_id();
+}
+inline void ApplyToTeamRequest::set_team_id(::uint64_t value) {
+  _internal_set_team_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ApplyToTeamRequest.team_id)
+}
+inline ::uint64_t ApplyToTeamRequest::_internal_team_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_id_;
+}
+inline void ApplyToTeamRequest::_internal_set_team_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ApplyToTeamResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ApplyToTeamResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode ApplyToTeamResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ApplyToTeamResponse.code)
+  return _internal_code();
+}
+inline void ApplyToTeamResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ApplyToTeamResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ApplyToTeamResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ApplyToTeamResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// bool joined = 2 [json_name = "joined"];
+inline void ApplyToTeamResponse::clear_joined() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.joined_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool ApplyToTeamResponse::joined() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ApplyToTeamResponse.joined)
+  return _internal_joined();
+}
+inline void ApplyToTeamResponse::set_joined(bool value) {
+  _internal_set_joined(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ApplyToTeamResponse.joined)
+}
+inline bool ApplyToTeamResponse::_internal_joined() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.joined_;
+}
+inline void ApplyToTeamResponse::_internal_set_joined(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.joined_ = value;
+}
+
+// .pandora.team.v1.Team team = 3 [json_name = "team"];
+inline bool ApplyToTeamResponse::has_team() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.team_ != nullptr);
+  return value;
+}
+inline void ApplyToTeamResponse::clear_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.team_ != nullptr) _impl_.team_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::team::v1::Team& ApplyToTeamResponse::_internal_team() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::team::v1::Team* p = _impl_.team_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::team::v1::Team>(&::pandora::team::v1::Team_globals_);
+}
+inline const ::pandora::team::v1::Team& ApplyToTeamResponse::team() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ApplyToTeamResponse.team)
+  return _internal_team();
+}
+inline void ApplyToTeamResponse::unsafe_arena_set_allocated_team(
+    ::pandora::team::v1::Team* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.team_);
+  }
+  _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.team.v1.ApplyToTeamResponse.team)
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NULLABLE ApplyToTeamResponse::release_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::team::v1::Team* released = _impl_.team_;
+  _impl_.team_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NULLABLE ApplyToTeamResponse::unsafe_arena_release_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.team.v1.ApplyToTeamResponse.team)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::team::v1::Team* temp = _impl_.team_;
+  _impl_.team_ = nullptr;
+  return temp;
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NONNULL ApplyToTeamResponse::_internal_mutable_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.team_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::team::v1::Team>(GetArena());
+    _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(p);
+  }
+  return _impl_.team_;
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NONNULL ApplyToTeamResponse::mutable_team()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::team::v1::Team* _msg = _internal_mutable_team();
+  // @@protoc_insertion_point(field_mutable:pandora.team.v1.ApplyToTeamResponse.team)
+  return _msg;
+}
+inline void ApplyToTeamResponse::set_allocated_team(::pandora::team::v1::Team* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.team_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.team.v1.ApplyToTeamResponse.team)
+}
+
+// int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
+inline void ApplyToTeamResponse::clear_expires_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expires_at_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::int64_t ApplyToTeamResponse::expires_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ApplyToTeamResponse.expires_at_ms)
+  return _internal_expires_at_ms();
+}
+inline void ApplyToTeamResponse::set_expires_at_ms(::int64_t value) {
+  _internal_set_expires_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ApplyToTeamResponse.expires_at_ms)
+}
+inline ::int64_t ApplyToTeamResponse::_internal_expires_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expires_at_ms_;
+}
+inline void ApplyToTeamResponse::_internal_set_expires_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expires_at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// TeamApplication
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void TeamApplication::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t TeamApplication::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.TeamApplication.player_id)
+  return _internal_player_id();
+}
+inline void TeamApplication::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.TeamApplication.player_id)
+}
+inline ::uint64_t TeamApplication::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void TeamApplication::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// int64 expires_at_ms = 2 [json_name = "expiresAtMs"];
+inline void TeamApplication::clear_expires_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expires_at_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::int64_t TeamApplication::expires_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.TeamApplication.expires_at_ms)
+  return _internal_expires_at_ms();
+}
+inline void TeamApplication::set_expires_at_ms(::int64_t value) {
+  _internal_set_expires_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.TeamApplication.expires_at_ms)
+}
+inline ::int64_t TeamApplication::_internal_expires_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expires_at_ms_;
+}
+inline void TeamApplication::_internal_set_expires_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expires_at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListTeamApplicationsRequest
+
+// uint64 team_id = 1 [json_name = "teamId"];
+inline void ListTeamApplicationsRequest::clear_team_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ListTeamApplicationsRequest::team_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ListTeamApplicationsRequest.team_id)
+  return _internal_team_id();
+}
+inline void ListTeamApplicationsRequest::set_team_id(::uint64_t value) {
+  _internal_set_team_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ListTeamApplicationsRequest.team_id)
+}
+inline ::uint64_t ListTeamApplicationsRequest::_internal_team_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_id_;
+}
+inline void ListTeamApplicationsRequest::_internal_set_team_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListTeamApplicationsResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ListTeamApplicationsResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode ListTeamApplicationsResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ListTeamApplicationsResponse.code)
+  return _internal_code();
+}
+inline void ListTeamApplicationsResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ListTeamApplicationsResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ListTeamApplicationsResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ListTeamApplicationsResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// repeated .pandora.team.v1.TeamApplication applications = 2 [json_name = "applications"];
+inline int ListTeamApplicationsResponse::_internal_applications_size() const {
+  return _internal_applications().size();
+}
+inline int ListTeamApplicationsResponse::applications_size() const {
+  return _internal_applications_size();
+}
+inline void ListTeamApplicationsResponse::clear_applications() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.applications_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::team::v1::TeamApplication& ListTeamApplicationsResponse::applications(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ListTeamApplicationsResponse.applications)
+  return _internal_applications().Get(index);
+}
+inline ::pandora::team::v1::TeamApplication* PROTOBUF_NONNULL ListTeamApplicationsResponse::mutable_applications(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.team.v1.ListTeamApplicationsResponse.applications)
+  return _internal_mutable_applications()->Mutable(index);
+}
+inline ::pandora::team::v1::TeamApplication* PROTOBUF_NONNULL ListTeamApplicationsResponse::add_applications()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::team::v1::TeamApplication* _add =
+      _internal_mutable_applications()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.team.v1.ListTeamApplicationsResponse.applications)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::TeamApplication>& ListTeamApplicationsResponse::applications() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.team.v1.ListTeamApplicationsResponse.applications)
+  return _internal_applications();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::team::v1::TeamApplication>* PROTOBUF_NONNULL
+ListTeamApplicationsResponse::mutable_applications() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.team.v1.ListTeamApplicationsResponse.applications)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_applications();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::TeamApplication>&
+ListTeamApplicationsResponse::_internal_applications() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.applications_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::team::v1::TeamApplication>* PROTOBUF_NONNULL
+ListTeamApplicationsResponse::_internal_mutable_applications() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.applications_;
+}
+
+// -------------------------------------------------------------------
+
+// HandleTeamApplicationRequest
+
+// uint64 team_id = 1 [json_name = "teamId"];
+inline void HandleTeamApplicationRequest::clear_team_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t HandleTeamApplicationRequest::team_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.HandleTeamApplicationRequest.team_id)
+  return _internal_team_id();
+}
+inline void HandleTeamApplicationRequest::set_team_id(::uint64_t value) {
+  _internal_set_team_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.HandleTeamApplicationRequest.team_id)
+}
+inline ::uint64_t HandleTeamApplicationRequest::_internal_team_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_id_;
+}
+inline void HandleTeamApplicationRequest::_internal_set_team_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = value;
+}
+
+// uint64 applicant_id = 2 [json_name = "applicantId"];
+inline void HandleTeamApplicationRequest::clear_applicant_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.applicant_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t HandleTeamApplicationRequest::applicant_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.HandleTeamApplicationRequest.applicant_id)
+  return _internal_applicant_id();
+}
+inline void HandleTeamApplicationRequest::set_applicant_id(::uint64_t value) {
+  _internal_set_applicant_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.HandleTeamApplicationRequest.applicant_id)
+}
+inline ::uint64_t HandleTeamApplicationRequest::_internal_applicant_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.applicant_id_;
+}
+inline void HandleTeamApplicationRequest::_internal_set_applicant_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.applicant_id_ = value;
+}
+
+// bool accept = 3 [json_name = "accept"];
+inline void HandleTeamApplicationRequest::clear_accept() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accept_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool HandleTeamApplicationRequest::accept() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.HandleTeamApplicationRequest.accept)
+  return _internal_accept();
+}
+inline void HandleTeamApplicationRequest::set_accept(bool value) {
+  _internal_set_accept(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.HandleTeamApplicationRequest.accept)
+}
+inline bool HandleTeamApplicationRequest::_internal_accept() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accept_;
+}
+inline void HandleTeamApplicationRequest::_internal_set_accept(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accept_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// HandleTeamApplicationResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void HandleTeamApplicationResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode HandleTeamApplicationResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.HandleTeamApplicationResponse.code)
+  return _internal_code();
+}
+inline void HandleTeamApplicationResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.HandleTeamApplicationResponse.code)
+}
+inline ::pandora::common::v1::ErrCode HandleTeamApplicationResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void HandleTeamApplicationResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// .pandora.team.v1.Team team = 2 [json_name = "team"];
+inline bool HandleTeamApplicationResponse::has_team() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.team_ != nullptr);
+  return value;
+}
+inline void HandleTeamApplicationResponse::clear_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.team_ != nullptr) _impl_.team_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::team::v1::Team& HandleTeamApplicationResponse::_internal_team() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::team::v1::Team* p = _impl_.team_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::team::v1::Team>(&::pandora::team::v1::Team_globals_);
+}
+inline const ::pandora::team::v1::Team& HandleTeamApplicationResponse::team() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.HandleTeamApplicationResponse.team)
+  return _internal_team();
+}
+inline void HandleTeamApplicationResponse::unsafe_arena_set_allocated_team(
+    ::pandora::team::v1::Team* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.team_);
+  }
+  _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.team.v1.HandleTeamApplicationResponse.team)
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NULLABLE HandleTeamApplicationResponse::release_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::team::v1::Team* released = _impl_.team_;
+  _impl_.team_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NULLABLE HandleTeamApplicationResponse::unsafe_arena_release_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.team.v1.HandleTeamApplicationResponse.team)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::team::v1::Team* temp = _impl_.team_;
+  _impl_.team_ = nullptr;
+  return temp;
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NONNULL HandleTeamApplicationResponse::_internal_mutable_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.team_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::team::v1::Team>(GetArena());
+    _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(p);
+  }
+  return _impl_.team_;
+}
+inline ::pandora::team::v1::Team* PROTOBUF_NONNULL HandleTeamApplicationResponse::mutable_team()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::team::v1::Team* _msg = _internal_mutable_team();
+  // @@protoc_insertion_point(field_mutable:pandora.team.v1.HandleTeamApplicationResponse.team)
+  return _msg;
+}
+inline void HandleTeamApplicationResponse::set_allocated_team(::pandora::team::v1::Team* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.team_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.team.v1.HandleTeamApplicationResponse.team)
+}
+
+// -------------------------------------------------------------------
+
 // TeamUpdateEvent
 
 // .pandora.team.v1.Team team = 1 [json_name = "team"];
@@ -8654,6 +12626,12 @@ struct is_proto_enum<::pandora::team::v1::TeamState> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::team::v1::TeamState>() {
   return ::pandora::team::v1::TeamState_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::team::v1::TeamJoinPolicy> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::team::v1::TeamJoinPolicy>() {
+  return ::pandora::team::v1::TeamJoinPolicy_descriptor();
 }
 template <>
 struct is_proto_enum<::pandora::team::v1::TeamPushEventType> : std::true_type {};

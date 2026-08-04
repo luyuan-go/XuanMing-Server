@@ -1,0 +1,50 @@
+// Pandora 配置表:刷怪组表。
+//
+// 源表:Pandora-Client-SVN/Table/关卡/s_刷怪组.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/spawn_group.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:一张图的「刷怪组」组头,一行 = 一张关卡的一套刷怪配置;具体每个刷怪点挂在
+//   s_刷怪点.xlsx(spawn_point 表)的「刷怪组Id」列下,由本表 id 反查(生成 ListBySpawnGroupId)。
+//   消费者是战斗 / PVE DS(客户端 CfgSpawnGroup 同源导出)。服务端登记本表的理由与
+//   level.proto 的 exp_share_mode 一致:两端共用同一张 xlsx,未登记的表头列 / 表会被
+//   configtable-gen 判为非法;服务端自身当前不据此判定任何业务,刷怪权威仍在 DS。
+//
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 必填 / 默认值 / 前缀 / 外键约束全部由 excel.proto 注解承载(proto 即单一事实源)。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// SpawnGroupRow 刷怪组表一行(列序 = 字段号序 = 表头 A..F)。
+message SpawnGroupRow {
+  // ID(主键)。实测三行:40001 / 60001 / 70001。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 关卡Id(本组挂在哪张图上)。外键引用 level 表 id;实测取值 4 / 7 / 8,均在 g_关卡.xlsx 内。
+  // 生成 ListByLevelId 反查(按 map_id 取该图的刷怪组)。
+  uint32 level_id = 2 [(excel_col) = "关卡Id", (excel_required) = true, (excel_fk) = "level"];
+  // 关卡资源(UE 关卡资产路径)。与 level 表「关卡资源」同值,是策划表内的冗余核对列,
+  //   不是第二份权威——按 map_id 取图仍以 level 表为准。
+  string level_asset_path = 3 [(excel_col) = "关卡资源", (excel_required) = true, (excel_prefix) = "/"];
+  // 备注(策划可读说明,如「松林镇-静态怪导入」)。纯注释列,不标 required。
+  string remark = 4 [(excel_col) = "备注"];
+  // 启用(1=启用 / 0=停用)。源表第 2 行在本列写了取值说明「1:启用(默认)」,
+  //   故空单元格按 1 解析;实测三行取值 1 / 1 / 0。
+  bool enabled = 5 [(excel_col) = "启用", (excel_default) = "1"];
+  // 优先级(同一关卡配了多组时的取用顺序)。实测三行均为 100;空单元格取零值 0。
+  uint32 priority = 6 [(excel_col) = "优先级"];
+}
+
+// SpawnGroupTableData 刷怪组整表容器(dist/spawn_group.json 的根对象;excel_file 注解 = 导表登记)。
+message SpawnGroupTableData {
+  option (excel_file) = "关卡/s_刷怪组.xlsx";
+  // 实测版式:第 1 行表头,第 2 行只在「启用」列写了一句取值说明,数据自第 3 行起
+  //   (与通用第 5 行版式不同,必须显式覆盖,否则前两行数据会被整体跳过)。
+  option (excel_data_start_row) = 3;
+
+  repeated SpawnGroupRow rows = 1;
+}

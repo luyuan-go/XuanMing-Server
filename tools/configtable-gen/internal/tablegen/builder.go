@@ -2,6 +2,7 @@ package tablegen
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -151,6 +152,27 @@ func parseCell(fd protoreflect.FieldDescriptor, cell string) (protoreflect.Value
 			return protoreflect.Value{}, fmt.Errorf("须为整数,实为 %q", cell)
 		}
 		return protoreflect.ValueOfInt64(n), nil
+	case protoreflect.FloatKind:
+		// 概率 / 倍率 / 坐标这类列策划就是按小数填的(暴击率 0.05、缩放 1.5)。
+		// 32 位解析:超出 float32 表示范围直接报错,不静默变成 +Inf——配置表里出现
+		// Inf 会一路带进战斗数值计算,比生成失败难查得多。
+		f, err := strconv.ParseFloat(cell, 32)
+		if err != nil {
+			return protoreflect.Value{}, fmt.Errorf("须为数字(允许小数),实为 %q", cell)
+		}
+		if math.IsInf(f, 0) || math.IsNaN(f) {
+			return protoreflect.Value{}, fmt.Errorf("数值非法(Inf/NaN),实为 %q", cell)
+		}
+		return protoreflect.ValueOfFloat32(float32(f)), nil
+	case protoreflect.DoubleKind:
+		f, err := strconv.ParseFloat(cell, 64)
+		if err != nil {
+			return protoreflect.Value{}, fmt.Errorf("须为数字(允许小数),实为 %q", cell)
+		}
+		if math.IsInf(f, 0) || math.IsNaN(f) {
+			return protoreflect.Value{}, fmt.Errorf("数值非法(Inf/NaN),实为 %q", cell)
+		}
+		return protoreflect.ValueOfFloat64(f), nil
 	case protoreflect.EnumKind:
 		n, err := strconv.ParseInt(cell, 10, 32)
 		if err != nil {

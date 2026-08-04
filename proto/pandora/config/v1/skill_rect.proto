@@ -1,0 +1,62 @@
+// Pandora 配置表:技能方位类型——矩形。
+//
+// 源表:Pandora-Client-SVN/Table/技能/j_技能_方位类型_矩形.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/skill_rect.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:技能在「方位指示器」模式下的矩形表现规格(客户端 CfgSkillRect / FCfgSkillRect 同源导出)。
+//   与 skill_circle / skill_bullet / skill_sector 一样属纯表现数据,不参与命中判定。
+//   服务端自身不据本表做任何数值或准入判定,登记它是为了让两端共用同一份 proto 单一事实源
+//   (未登记的表头列会被 configtable-gen 判为非法)。
+//
+// 版式(实测):第 1 行列名(A..F),第 2 行是各列默认值说明(默认300厘米 / 默认200厘米 / 默认0厘米),
+//   第 3 行标注「特效参数规格」,第 4-6 行为整行空(仅有样式,无值),
+//   数据自**第 7 行**起至第 9 行共 3 行。
+//   显式写 (excel_data_start_row) = 7 是把实测版式钉进 proto:通用默认值 5 当前碰巧也能导出
+//   同样结果(第 5-6 行整行空会被 allEmpty 跳过),但那是巧合——策划一旦在第 5 / 6 行补一句
+//   说明,该行就会被当成数据行、因主键列为空报「主键须为正整数」而整批生成失败。
+//
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 默认值 / 前缀约束全部由 excel.proto 注解承载(proto 即单一事实源)。
+//   默认值刻意与客户端列登记(Tool/Table/Cs/Proto/j_技能_方位类型_矩形.json)逐列一致,
+//   避免同一张 xlsx 在两仓被解释成两种数据。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// SkillRectRow 技能矩形方位表一行(列序 = 字段号序 = 表头 A..F)。
+message SkillRectRow {
+  // ID(主键,方位规格 ID;由技能表按 ID 引用)。实测 3 行:1(测试)/ 101 / 106。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 备注(策划可读说明,如「Crunch技能1」)。纯注释列,客户端未登记本列。
+  string remark = 2 [(excel_col) = "备注"];
+  // 特效(指示器 Niagara 资产路径,实测 3 行同为
+  //   /Game/Fx/SkillRangeLocator/NS_Decal_Rectangle.NS_Decal_Rectangle)。
+  // 标 (excel_prefix) = "/" 是因为本列是**纯资产路径**;前缀只校验非空单元格,
+  //   留空(= 不显示指示器)仍合法,故不标 required —— 客户端列登记 defaultValue="" 同样允许留空。
+  string fx = 3 [(excel_col) = "特效", (excel_prefix) = "/"];
+  // 长度(矩形长度,厘米)。实测 500 / 500 / 800 全为整数,但客户端登记为 float
+  //   且本列是连续几何量,故用 float:uint32 会让策划改成 650.5 时整批生成失败。
+  // 空单元格取 300,与客户端列登记 defaultValue="300" 对齐(源表第 2 行注「默认300厘米」)。
+  float length = 4 [(excel_col) = "长度", (excel_default) = "300"];
+  // 宽度(矩形宽度,厘米)。实测 3 行全为 200;同 length 用 float。
+  // 空单元格取 200,与客户端列登记 defaultValue="200" 对齐(源表第 2 行注「默认200厘米」)。
+  float width = 5 [(excel_col) = "宽度", (excel_default) = "200"];
+  // 位置偏移(厘米;客户端 FCfgSkillRect::OffsetZ 注明是特效的 Z 轴——前后向——偏移)。
+  //   实测 3 行**全为空**,取默认值 0。
+  // 用 float 而非 uint32 有两条理由:①它是**偏移量**,语义上可为负(CLAUDE.md §5.12 例外①);
+  //   ②客户端登记为 float,厘米级偏移策划随时可能填小数。
+  float offset_z = 6 [(excel_col) = "位置偏移", (excel_default) = "0"];
+}
+
+// SkillRectTableData 技能矩形方位整表容器(dist/skill_rect.json 的根对象;excel_file 注解 = 导表登记)。
+message SkillRectTableData {
+  option (excel_file) = "技能/j_技能_方位类型_矩形.xlsx";
+  option (excel_data_start_row) = 7;
+
+  repeated SkillRectRow rows = 1;
+}

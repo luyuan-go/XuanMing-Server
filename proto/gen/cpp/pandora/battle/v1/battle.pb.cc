@@ -593,11 +593,11 @@ constexpr MonsterKillFact::ParseTableT_ MonsterKillFact::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(MonsterKillFact, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -607,7 +607,10 @@ constexpr MonsterKillFact::ParseTableT_ MonsterKillFact::InternalGenerateParseTa
       ::_pbi::TcParser::GetTable<::pandora::battle::v1::MonsterKillFact>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 monster_level = 4 [json_name = "monsterLevel"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MonsterKillFact, _impl_.monster_level_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MonsterKillFact, _impl_.monster_level_)}},
       // uint32 monster_config_id = 1 [json_name = "monsterConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MonsterKillFact, _impl_.monster_config_id_), 0>(),
        {8, 0, 0,
@@ -629,6 +632,8 @@ constexpr MonsterKillFact::ParseTableT_ MonsterKillFact::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(MonsterKillFact, _impl_.count_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 share_permille = 3 [json_name = "sharePermille"];
       {PROTOBUF_FIELD_OFFSET(MonsterKillFact, _impl_.share_permille_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 monster_level = 4 [json_name = "monsterLevel"];
+      {PROTOBUF_FIELD_OFFSET(MonsterKillFact, _impl_.monster_level_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -643,7 +648,8 @@ inline constexpr MonsterKillFact::Impl_::Impl_(
       : _cached_size_{0},
         monster_config_id_{0u},
         count_{0u},
-        share_permille_{0u} {}
+        share_permille_{0u},
+        monster_level_{0u} {}
 
 template <typename>
 constexpr MonsterKillFact::MonsterKillFact(::_pbi::ConstantInitialized,
@@ -2309,13 +2315,15 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::MonsterKillFact, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::MonsterKillFact, _impl_.monster_config_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::MonsterKillFact, _impl_.count_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::MonsterKillFact, _impl_.share_permille_),
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::MonsterKillFact, _impl_.monster_level_),
         0,
         1,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ItemPickupFact, _impl_._has_bits_),
         5, // hasbit index offset
@@ -2365,10 +2373,10 @@ static const ::_pbi::MigrationSchema
         {74, sizeof(::pandora::battle::v1::ListPlayerHistoryRequest)},
         {83, sizeof(::pandora::battle::v1::ListPlayerHistoryResponse)},
         {90, sizeof(::pandora::battle::v1::MonsterKillFact)},
-        {99, sizeof(::pandora::battle::v1::ItemPickupFact)},
-        {106, sizeof(::pandora::battle::v1::BattleProgressEvent)},
-        {121, sizeof(::pandora::battle::v1::ReportProgressRequest)},
-        {128, sizeof(::pandora::battle::v1::ReportProgressResponse)},
+        {101, sizeof(::pandora::battle::v1::ItemPickupFact)},
+        {108, sizeof(::pandora::battle::v1::BattleProgressEvent)},
+        {123, sizeof(::pandora::battle::v1::ReportProgressRequest)},
+        {130, sizeof(::pandora::battle::v1::ReportProgressResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2424,38 +2432,39 @@ const char descriptor_table_protodef_pandora_2fbattle_2fv1_2fbattle_2eproto[] AB
     " \001(\003R\010beforeMs\"\206\001\n\031ListPlayerHistoryResp"
     "onse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.E"
     "rrCodeR\004code\0229\n\007results\030\002 \003(\0132\037.pandora."
-    "battle.v1.BattleResultR\007results\"z\n\017Monst"
-    "erKillFact\022*\n\021monster_config_id\030\001 \001(\rR\017m"
-    "onsterConfigId\022\024\n\005count\030\002 \001(\rR\005count\022%\n\016"
-    "share_permille\030\003 \001(\rR\rsharePermille\"L\n\016I"
-    "temPickupFact\022$\n\016item_config_id\030\001 \001(\rR\014i"
-    "temConfigId\022\024\n\005count\030\002 \001(\rR\005count\"\360\001\n\023Ba"
-    "ttleProgressEvent\022\020\n\003seq\030\001 \001(\004R\003seq\022\033\n\tp"
-    "layer_id\030\002 \001(\004R\010playerId\022G\n\014monster_kill"
-    "\030\003 \001(\0132\".pandora.battle.v1.MonsterKillFa"
-    "ctH\000R\013monsterKill\022D\n\013item_pickup\030\004 \001(\0132!"
-    ".pandora.battle.v1.ItemPickupFactH\000R\nite"
-    "mPickup\022\023\n\005ts_ms\030\005 \001(\003R\004tsMsB\006\n\004fact\"r\n\025"
-    "ReportProgressRequest\022\031\n\010match_id\030\001 \001(\004R"
-    "\007matchId\022>\n\006events\030\002 \003(\0132&.pandora.battl"
-    "e.v1.BattleProgressEventR\006events\"e\n\026Repo"
-    "rtProgressResponse\022.\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCodeR\004code\022\033\n\tacked_seq\030"
-    "\002 \001(\004R\010ackedSeq*h\n\rBattleOutcome\022\036\n\032BATT"
-    "LE_OUTCOME_UNSPECIFIED\020\000\022\031\n\025BATTLE_OUTCO"
-    "ME_NORMAL\020\001\022\034\n\030BATTLE_OUTCOME_ABANDONED\020"
-    "\0022\264\003\n\023BattleResultService\022_\n\014ReportResul"
-    "t\022&.pandora.battle.v1.ReportResultReques"
-    "t\032\'.pandora.battle.v1.ReportResultRespon"
-    "se\022e\n\016GetMatchResult\022(.pandora.battle.v1"
-    ".GetMatchResultRequest\032).pandora.battle."
-    "v1.GetMatchResultResponse\022n\n\021ListPlayerH"
-    "istory\022+.pandora.battle.v1.ListPlayerHis"
-    "toryRequest\032,.pandora.battle.v1.ListPlay"
-    "erHistoryResponse\022e\n\016ReportProgress\022(.pa"
-    "ndora.battle.v1.ReportProgressRequest\032)."
-    "pandora.battle.v1.ReportProgressResponse"
-    "b\006proto3"
+    "battle.v1.BattleResultR\007results\"\237\001\n\017Mons"
+    "terKillFact\022*\n\021monster_config_id\030\001 \001(\rR\017"
+    "monsterConfigId\022\024\n\005count\030\002 \001(\rR\005count\022%\n"
+    "\016share_permille\030\003 \001(\rR\rsharePermille\022#\n\r"
+    "monster_level\030\004 \001(\rR\014monsterLevel\"L\n\016Ite"
+    "mPickupFact\022$\n\016item_config_id\030\001 \001(\rR\014ite"
+    "mConfigId\022\024\n\005count\030\002 \001(\rR\005count\"\360\001\n\023Batt"
+    "leProgressEvent\022\020\n\003seq\030\001 \001(\004R\003seq\022\033\n\tpla"
+    "yer_id\030\002 \001(\004R\010playerId\022G\n\014monster_kill\030\003"
+    " \001(\0132\".pandora.battle.v1.MonsterKillFact"
+    "H\000R\013monsterKill\022D\n\013item_pickup\030\004 \001(\0132!.p"
+    "andora.battle.v1.ItemPickupFactH\000R\nitemP"
+    "ickup\022\023\n\005ts_ms\030\005 \001(\003R\004tsMsB\006\n\004fact\"r\n\025Re"
+    "portProgressRequest\022\031\n\010match_id\030\001 \001(\004R\007m"
+    "atchId\022>\n\006events\030\002 \003(\0132&.pandora.battle."
+    "v1.BattleProgressEventR\006events\"e\n\026Report"
+    "ProgressResponse\022.\n\004code\030\001 \001(\0162\032.pandora"
+    ".common.v1.ErrCodeR\004code\022\033\n\tacked_seq\030\002 "
+    "\001(\004R\010ackedSeq*h\n\rBattleOutcome\022\036\n\032BATTLE"
+    "_OUTCOME_UNSPECIFIED\020\000\022\031\n\025BATTLE_OUTCOME"
+    "_NORMAL\020\001\022\034\n\030BATTLE_OUTCOME_ABANDONED\020\0022"
+    "\264\003\n\023BattleResultService\022_\n\014ReportResult\022"
+    "&.pandora.battle.v1.ReportResultRequest\032"
+    "\'.pandora.battle.v1.ReportResultResponse"
+    "\022e\n\016GetMatchResult\022(.pandora.battle.v1.G"
+    "etMatchResultRequest\032).pandora.battle.v1"
+    ".GetMatchResultResponse\022n\n\021ListPlayerHis"
+    "tory\022+.pandora.battle.v1.ListPlayerHisto"
+    "ryRequest\032,.pandora.battle.v1.ListPlayer"
+    "HistoryResponse\022e\n\016ReportProgress\022(.pand"
+    "ora.battle.v1.ReportProgressRequest\032).pa"
+    "ndora.battle.v1.ReportProgressResponseb\006"
+    "proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto_deps[1] = {
@@ -2465,7 +2474,7 @@ static ::absl::once_flag descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto = {
     false,
     false,
-    2688,
+    2726,
     descriptor_table_protodef_pandora_2fbattle_2fv1_2fbattle_2eproto,
     "pandora/battle/v1/battle.proto",
     &descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto_once,
@@ -4860,9 +4869,9 @@ inline void MonsterKillFact::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, monster_config_id_),
            0,
-           offsetof(Impl_, share_permille_) -
+           offsetof(Impl_, monster_level_) -
                offsetof(Impl_, monster_config_id_) +
-               sizeof(Impl_::share_permille_));
+               sizeof(Impl_::monster_level_));
 }
 MonsterKillFact::~MonsterKillFact() {
   // @@protoc_insertion_point(destructor:pandora.battle.v1.MonsterKillFact)
@@ -4912,10 +4921,10 @@ PROTOBUF_NOINLINE void MonsterKillFact::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     ::memset(&_impl_.monster_config_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.share_permille_) -
-        reinterpret_cast<char*>(&_impl_.monster_config_id_)) + sizeof(_impl_.share_permille_));
+        reinterpret_cast<char*>(&_impl_.monster_level_) -
+        reinterpret_cast<char*>(&_impl_.monster_config_id_)) + sizeof(_impl_.monster_level_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -4967,6 +4976,15 @@ PROTOBUF_NOINLINE void MonsterKillFact::Clear() {
     }
   }
 
+  // uint32 monster_level = 4 [json_name = "monsterLevel"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_monster_level() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_monster_level(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -4992,7 +5010,7 @@ PROTOBUF_NOINLINE void MonsterKillFact::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // uint32 monster_config_id = 1 [json_name = "monsterConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_monster_config_id() != 0) {
@@ -5014,6 +5032,13 @@ PROTOBUF_NOINLINE void MonsterKillFact::Clear() {
             this_._internal_share_permille());
       }
     }
+    // uint32 monster_level = 4 [json_name = "monsterLevel"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_monster_level() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_monster_level());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -5032,7 +5057,7 @@ void MonsterKillFact::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_monster_config_id() != 0) {
         _this->_impl_.monster_config_id_ = from._impl_.monster_config_id_;
@@ -5046,6 +5071,11 @@ void MonsterKillFact::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_share_permille() != 0) {
         _this->_impl_.share_permille_ = from._impl_.share_permille_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_monster_level() != 0) {
+        _this->_impl_.monster_level_ = from._impl_.monster_level_;
       }
     }
   }
@@ -5067,8 +5097,8 @@ void MonsterKillFact::InternalSwap(MonsterKillFact* PROTOBUF_RESTRICT PROTOBUF_N
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MonsterKillFact, _impl_.share_permille_)
-      + sizeof(MonsterKillFact::_impl_.share_permille_)
+      PROTOBUF_FIELD_OFFSET(MonsterKillFact, _impl_.monster_level_)
+      + sizeof(MonsterKillFact::_impl_.monster_level_)
       - PROTOBUF_FIELD_OFFSET(MonsterKillFact, _impl_.monster_config_id_)>(
           reinterpret_cast<char*>(&_impl_.monster_config_id_),
           reinterpret_cast<char*>(&other->_impl_.monster_config_id_));

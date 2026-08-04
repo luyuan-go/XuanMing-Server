@@ -116,9 +116,11 @@ type BattleConf struct {
 	// 水位表、不抑制结算掉落 —— 开关提前打开会在混版窗口双发掉落。
 	ProgressEnabled bool `yaml:"progress_enabled,omitempty" json:"progress_enabled,omitempty"`
 
-	// MonsterExp 怪物击杀经验表:monster_config_id → 单只经验(DS 不可信,换算唯一权威)。
-	// 空 = 击杀事实不折算经验(跳过并告警,水位照常推进);与导表管线接通前先在此配置。
-	MonsterExp map[uint32]uint64 `yaml:"monster_exp,omitempty" json:"monster_exp,omitempty"`
+	// 怪物击杀经验**不在本文件配置**:数值权威是策划表 角色/j_角色等级.xlsx 的「击杀经验」列,
+	// 经 configtable 的 role_level 表按 (角色ID, 等级) 查(见 biz.MonsterExpTable)。
+	// 历史上这里曾有一个 monster_exp map —— 游戏数值不该住在服务配置里:策划改不了、
+	// 与同一只怪的血/攻分家、ID 一致性没有任何机制保证(实测漏配过 2007/2008 两只怪且无人发现)。
+	// 该字段已于 2026-08-04 移除,配置里残留 monster_exp 会被 yaml 严格解析直接拒绝启动。
 
 	// MaxProgressBatch 单次 ReportProgress 最多接受的事件条数(默认 256,超限拒)。
 	MaxProgressBatch int `yaml:"max_progress_batch,omitempty" json:"max_progress_batch,omitempty"`
@@ -301,12 +303,6 @@ func (b *BattleConf) MaxDropsPerPlayer() int {
 }
 
 // ── 实时进度通道访问器(任何构造路径都有安全默认,风格同 MaxDropsPerPlayer)──
-
-// MonsterExpOf 查怪物单只经验。未配置该怪物 → (0, false),调用方跳过并告警。
-func (b *BattleConf) MonsterExpOf(monsterConfigID uint32) (uint64, bool) {
-	exp, ok := b.MonsterExp[monsterConfigID]
-	return exp, ok
-}
 
 // MaxProgressBatchOrDefault 单批事件条数上限(默认 256)。
 func (b *BattleConf) MaxProgressBatchOrDefault() int {

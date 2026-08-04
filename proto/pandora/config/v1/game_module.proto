@@ -1,0 +1,79 @@
+// Pandora 配置表:游戏模块表。
+//
+// 源表:Pandora-Client-SVN/Table/程序/y_游戏模块.xlsx(sheet「游戏」,程序维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/game_module.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 必填 / 前缀约束全部由 excel.proto 注解承载(proto 即单一事实源),
+//   改列只改「xlsx 表头 + 本文件注解」两处,生成器与服务端代码自动跟随。
+//
+// 用途:UE 客户端「游戏模块」注册表 —— 一行 = 一个与 GameInstance 子系统
+//   (UGameInstanceSubsystem)同生命周期的功能模块,记录模块 ID、实现蓝图类路径
+//   与可选的 MVVM ViewModel 类路径,客户端启动时按本表批量创建模块实例。
+//   同源导出为客户端 FCfgGameModule(Pandora/Source/Pandora/Public/Table/CfgGameModule.h,
+//   字段对应关系:Id / Des=描述 / Author=创建者 / ClassPath=模块类型 / ViewModelPath=视图模型)。
+//   服务端自身不消费本表(纯客户端 UI / 子系统装配),登记理由与 weapon / particle 一致:
+//   两端共用同一张 xlsx,登记后列改名 / 挪位会在生成阶段被 checkHeaders 立刻抓到,
+//   避免客户端单方面改表后服务端侧无人察觉。
+//
+// ⚠️ 只覆盖第一张 sheet:xlsxlite.ReadFirstSheet 按工作簿顺序只读 sheet 1「游戏」。
+//   本 xlsx 第二张 sheet「世界」(世界模块,同表头,客户端 FCfgWorldModule,ID 21~28)
+//   **不在本表范围内**,其 ID 段与「游戏」sheet 重叠(都从 21 起),两者是各自独立的
+//   主键空间。将来若需登记世界模块,必须另建一张源表文件(而非另加 sheet),
+//   否则单文件双主键空间无法用 (excel_file) 表达。
+//
+// 版式实测(sheet「游戏」,dimension A1:F66):
+//   第 1 行表头 A..F;第 2 行是「必填」列标记(C2="必填",标注 创建者 列必填);
+//   第 3 行是策划说明(B3="1~20被占用,不要使用");第 4~6 行是同版式的空注释行;
+//   第 7 行空行分隔;**数据自第 8 行起至第 20 行,共 13 行**(ID 21~33,互不重复);
+//   第 21 行及之后全部为空行(builder 的 allEmpty 跳过)。
+//   故显式写 (excel_data_start_row) = 8:虽然第 5~7 行当前为空、按默认值 5 也能产出
+//   同样结果,但 5~7 行属于该表的注释 / 留白区,将来若有人在其中补一条说明文字,
+//   默认值 5 会把它当数据行并因 ID 列为空报「主键须为正整数」而卡住整批生成。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// GameModuleRow 游戏模块表一行(列序 = 字段号序 = 表头 A..F)。
+message GameModuleRow {
+  // ID(主键,模块唯一标识)。实测 13 行取值 21..33 连续且互不重复;
+  //   源表第 3 行注明「1~20被占用,不要使用」,故新模块只能从 21 往后排。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 描述(策划 / 程序可读的模块中文名,如「演示模块」「ui管理器」「匹配模块」)。纯注释列。
+  //   实测 13 行全部有值,但刻意**不标 required**:本列不参与任何判定,
+  //   为一个中文名缺失而让整批生成失败不划算(同 spawn_point.remark 的取舍)。
+  string description = 2 [(excel_col) = "描述"];
+  // 创建者(模块作者署名;实测 13 行全为「Loong」)。纯注释列,同上不标 required。
+  //   注:源表第 2 行在本列填了「必填」标记,那是客户端导表工具的列标注,
+  //   不是服务端约束——本表在服务端无消费者,按注释列处理即可。
+  string author = 3 [(excel_col) = "创建者"];
+  // 模块类型(模块实现的 UE 蓝图类路径,如
+  //   /Game/Pkg/Module/Net/Model/Bp_NetModel.Bp_NetModel_C)。
+  //   本列是模块的功能本体,缺失即该行无意义 → 标 required + 前缀 "/" fail-closed。
+  //   实测 13 行全部有值且全部以 /Game/ 开头。
+  string module_class = 4 [(excel_col) = "模块类型", (excel_required) = true, (excel_prefix) = "/"];
+  // 视图模型(可选的 MVVM ViewModel 类路径;仅当模块使用引擎 MVVM 且视图模型为
+  //   「全局视图模型」创建方式时才需要填)。实测 13 行中只有 ID=25「账号」填了
+  //   /Game/Pkg/Module/Account/Vm/VM_Account.VM_Account_C,其余留空 →
+  //   不标 required;非空值仍按纯类路径约束前缀 "/"(留空时 setCell 直接走零值,不校验前缀)。
+  string view_model_class = 5 [(excel_col) = "视图模型", (excel_prefix) = "/"];
+  // 视图类型(表头已存在但**全表零个数据单元格**,客户端 FCfgGameModule 也没有对应字段,
+  //   属于策划预留列)。表头非空就必须登记(checkHeaders 会拒绝未登记的非空表头列),
+  //   故在此占位。零样本 → 既不标 required 也**刻意不标 (excel_prefix) = "/"**:
+  //   无法证明它将来填的是纯资产 / 类路径,提前加前缀约束等于凭猜想设卡。
+  string view_class = 6 [(excel_col) = "视图类型"];
+}
+
+// GameModuleTableData 游戏模块整表容器(dist/game_module.json 的根对象;excel_file 注解 = 导表登记)。
+message GameModuleTableData {
+  option (excel_file) = "程序/y_游戏模块.xlsx";
+  // 数据区自第 8 行起(实测:1 表头 / 2 必填标记 / 3 策划说明 / 4~6 空注释行 / 7 空行分隔)。
+  option (excel_data_start_row) = 8;
+
+  repeated GameModuleRow rows = 1;
+}

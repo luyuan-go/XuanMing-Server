@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/luyuancpp/pandora/pkg/configtable"
+	"github.com/luyuancpp/pandora/pkg/configtable/configtabletest"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
@@ -62,35 +63,41 @@ func writeLevelBatch(t *testing.T, dir string, version uint64, rows []*configpb.
 	playerLevelExpSum := sha256.Sum256(playerLevelExpRaw)
 	itemSum := sha256.Sum256(itemRaw)
 	talentSum := sha256.Sum256(talentRaw)
+	tables := []map[string]any{
+		{
+			"name": "level", "file": "level.json",
+			"proto":    "pandora.config.v1.LevelTableData",
+			"checksum": "sha256:" + hex.EncodeToString(levelSum[:]),
+			"rows":     len(rows),
+		},
+		{
+			"name": "player_level_exp", "file": "player_level_exp.json",
+			"proto":    "pandora.config.v1.PlayerLevelExpTableData",
+			"checksum": "sha256:" + hex.EncodeToString(playerLevelExpSum[:]),
+			"rows":     len(playerLevelExpRows),
+		},
+		{
+			"name": "item", "file": "item.json",
+			"proto":    "pandora.config.v1.ItemTableData",
+			"checksum": "sha256:" + hex.EncodeToString(itemSum[:]),
+			"rows":     len(itemRows),
+		},
+		{
+			"name": "talent", "file": "talent.json",
+			"proto":    "pandora.config.v1.TalentTableData",
+			"checksum": "sha256:" + hex.EncodeToString(talentSum[:]),
+			"rows":     len(talentRows),
+		},
+	}
+	// 上面四张是本用例真正断言的表。除它们之外,凡本进程注册的表都必须出现在清单里,
+	// 否则 Load 整批拒绝。这里按注册表自动补空表,而不是把表名手写进夹具——手写的话
+	// 每加一张与 matchmaker 无关的配置表都会压垮这几个用例。
+	tables = append(tables, configtabletest.FillMissingTables(t, dir,
+		[]string{"level", "player_level_exp", "item", "talent"})...)
 	manifest := map[string]any{
 		"version":   version,
 		"generator": "test",
-		"tables": []map[string]any{
-			{
-				"name": "level", "file": "level.json",
-				"proto":    "pandora.config.v1.LevelTableData",
-				"checksum": "sha256:" + hex.EncodeToString(levelSum[:]),
-				"rows":     len(rows),
-			},
-			{
-				"name": "player_level_exp", "file": "player_level_exp.json",
-				"proto":    "pandora.config.v1.PlayerLevelExpTableData",
-				"checksum": "sha256:" + hex.EncodeToString(playerLevelExpSum[:]),
-				"rows":     len(playerLevelExpRows),
-			},
-			{
-				"name": "item", "file": "item.json",
-				"proto":    "pandora.config.v1.ItemTableData",
-				"checksum": "sha256:" + hex.EncodeToString(itemSum[:]),
-				"rows":     len(itemRows),
-			},
-			{
-				"name": "talent", "file": "talent.json",
-				"proto":    "pandora.config.v1.TalentTableData",
-				"checksum": "sha256:" + hex.EncodeToString(talentSum[:]),
-				"rows":     len(talentRows),
-			},
-		},
+		"tables":    tables,
 	}
 	mraw, err := json.Marshal(manifest)
 	if err != nil {

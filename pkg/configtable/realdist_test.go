@@ -97,3 +97,71 @@ func TestLoadRealDistIfPresent(t *testing.T) {
 		t.Fatal("超等级上限的分配应被拒")
 	}
 }
+
+// TestRealDistMonsterKillExp 用真实 dist 产物钉住怪物击杀经验。
+//
+// 存在理由:「怪物有行但击杀经验为 0」的失败模式是**静默的** —— battle_result 对 exp==0
+// 直接跳过出箱,一条日志都不打,水位照常推进。玩家表现是"杀怪没经验",而服务端毫无异常。
+// 历史上这份数值住在服务 yaml 里时就漏配过 2007/2008 两只怪且长期无人发现(2026-08-04
+// 迁到 role_level 表时才查出来),所以把"每只怪都有正经验"变成可机械复现的断言。
+//
+// 玩家英雄行(1001~1010)显式配 0,表示"有意不给击杀经验",不在本断言范围内。
+func TestRealDistMonsterKillExp(t *testing.T) {
+	dist := filepath.Join("..", "..", "configtable", "dist")
+	if _, err := os.Stat(filepath.Join(dist, ManifestFileName)); err != nil {
+		t.Skipf("真实 dist 不存在,跳过: %v", err)
+	}
+	s := NewStore()
+	if _, err := s.Load(dist, 0); err != nil {
+		t.Fatalf("加载真实 dist 失败: %v", err)
+	}
+	tb := s.Tables()
+	if tb.RoleLevel == nil || tb.RoleLevel.Count() == 0 {
+		t.Fatal("角色等级表为空")
+	}
+
+	// 怪物角色 ID 段:2xxx 起(1001~1010 是玩家英雄)。逐行断言经验为正。
+	const firstMonsterRoleID = 2000
+	monsters := 0
+	for _, row := range tb.RoleLevel.All() {
+		roleID := row.GetRoleId()
+		if roleID < firstMonsterRoleID && roleID > 10 {
+			continue // 玩家英雄行:显式 0 是有意的
+		}
+		monsters++
+		if row.GetKillExp() == 0 {
+			t.Errorf("怪物 role_id=%d level=%d 的击杀经验为 0(杀它零收益且不打任何日志;"+
+				"若确实不该给经验请在此用例登记豁免)", roleID, row.GetLevel())
+		}
+	}
+	if monsters == 0 {
+		t.Fatal("角色等级表里一只怪都没有,断言失效")
+	}
+
+	// 定点核对历史漏配的两只(2007 蛇怪 / 2008 剧毒蛇怪):它们在 yaml 时代被漏掉过。
+	for _, roleID := range []uint32{2007, 2008} {
+		exp, ok := tb.RoleLevel.KillExpOf(roleID, 1)
+		if !ok {
+			t.Errorf("怪物 %d 在角色等级表里没有 1 级行", roleID)
+			continue
+		}
+		if exp == 0 {
+			t.Errorf("怪物 %d 的 1 级击杀经验为 0", roleID)
+		}
+	}
+
+	// 等级维度:2001 松林近战腐蚀体有 1 级与 11 级两档,经验必须随等级抬高
+	// (11 级血量是 1 级的 4 倍)。这条同时验证复合主键 角色ID×1000+等级 的查表口径。
+	lv1, ok1 := tb.RoleLevel.KillExpOf(2001, 1)
+	lv11, ok11 := tb.RoleLevel.KillExpOf(2001, 11)
+	if !ok1 || !ok11 {
+		t.Fatalf("2001 应同时有 1 级与 11 级行(实得 ok1=%v ok11=%v)", ok1, ok11)
+	}
+	if lv11 <= lv1 {
+		t.Errorf("2001 的 11 级击杀经验 %d 应高于 1 级 %d", lv11, lv1)
+	}
+	// 等级 0 必须按 1 级处理(旧刷怪点表没有「怪物等级」列,导表后取到 0)。
+	if lv0, ok := tb.RoleLevel.KillExpOf(2001, 0); !ok || lv0 != lv1 {
+		t.Errorf("等级 0 应按 1 级处理,实得 exp=%d ok=%v(期望 %d)", lv0, ok, lv1)
+	}
+}

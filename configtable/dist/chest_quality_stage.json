@@ -1,0 +1,87 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "rule_set_id": "Default",
+      "display_name": "白",
+      "total_unlock_seconds": 2,
+      "progress_bar_length_cm": 50,
+      "progress_bar_width_pixels": 100,
+      "color_r": 1,
+      "color_g": 1,
+      "color_b": 1,
+      "color_a": 1,
+      "opened_effect_duration_multiplier": 5
+    },
+    {
+      "id": 2,
+      "rule_set_id": "Default",
+      "quality": 1,
+      "display_name": "绿",
+      "total_unlock_seconds": 4,
+      "progress_bar_length_cm": 100,
+      "progress_bar_width_pixels": 200,
+      "color_r": 0.3,
+      "color_g": 0.85,
+      "color_b": 0.3,
+      "color_a": 1,
+      "opened_effect_duration_multiplier": 5
+    },
+    {
+      "id": 3,
+      "rule_set_id": "Default",
+      "quality": 2,
+      "display_name": "蓝",
+      "total_unlock_seconds": 6,
+      "progress_bar_length_cm": 150,
+      "progress_bar_width_pixels": 300,
+      "color_r": 0.25,
+      "color_g": 0.55,
+      "color_b": 1,
+      "color_a": 1,
+      "opened_effect_duration_multiplier": 5
+    },
+    {
+      "id": 4,
+      "rule_set_id": "Default",
+      "quality": 3,
+      "display_name": "紫",
+      "total_unlock_seconds": 8,
+      "progress_bar_length_cm": 200,
+      "progress_bar_width_pixels": 400,
+      "color_r": 0.65,
+      "color_g": 0.3,
+      "color_b": 0.9,
+      "color_a": 1,
+      "opened_effect_duration_multiplier": 5
+    },
+    {
+      "id": 5,
+      "rule_set_id": "Default",
+      "quality": 4,
+      "display_name": "橙",
+      "total_unlock_seconds": 10,
+      "progress_bar_length_cm": 250,
+      "progress_bar_width_pixels": 500,
+      "color_r": 1,
+      "color_g": 0.55,
+      "color_b": 0.08,
+      "color_a": 1,
+      "opened_effect_duration_multiplier": 5
+    },
+    {
+      "id": 6,
+      "rule_set_id": "Default",
+      "quality": 5,
+      "display_name": "红",
+      "total_unlock_seconds": 12,
+      "progress_bar_length_cm": 300,
+      "progress_bar_width_pixels": 600,
+      "color_r": 1,
+      "color_g": 0.18,
+      "color_b": 0.12,
+      "color_a": 1,
+      "opened_effect_duration_multiplier": 5
+    }
+  ]
+}

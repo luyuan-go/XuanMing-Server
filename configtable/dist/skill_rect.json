@@ -1,0 +1,25 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "remark": "测试",
+      "fx": "/Game/Fx/SkillRangeLocator/NS_Decal_Rectangle.NS_Decal_Rectangle",
+      "length": 500,
+      "width": 200
+    },
+    {
+      "id": 101,
+      "remark": "Boris技能1",
+      "fx": "/Game/Fx/SkillRangeLocator/NS_Decal_Rectangle.NS_Decal_Rectangle",
+      "length": 500,
+      "width": 200
+    },
+    {
+      "id": 106,
+      "remark": "Crunch技能1",
+      "fx": "/Game/Fx/SkillRangeLocator/NS_Decal_Rectangle.NS_Decal_Rectangle",
+      "length": 800,
+      "width": 200
+    }
+  ]
+}

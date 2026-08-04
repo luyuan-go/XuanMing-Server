@@ -1,0 +1,49 @@
+// Pandora 配置表:怪物掉落表。
+//
+// 源表:Pandora-Client-SVN/Table/道具/d_掉落.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/drop.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:一行 = 一条独立掉落候选。怪物死亡时由权威 DS 按 monster_id 取出全部候选行,
+//   每行独立按 probability_permyriad 判定,命中后在 [min_count, max_count] 内取数量;
+//   全部未命中是合法的「不掉落」。掉落发放的数值与白名单仍在服务端(CLAUDE.md §9.6),
+//   DS 只报事实。
+// 客户端 CfgDrop(UE DataTable,Tool/Table/Cs/Proto/d_掉落.json)与本表同源导出;
+//   本文件的必填 / 默认值刻意与客户端列登记逐列一致,避免同一张 xlsx 在两仓被解释成两种数据。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// DropRow 怪物掉落表一行(列序 = 字段号序 = 表头 A..F)。
+message DropRow {
+  // ID(主键,掉落候选行标识;与怪物 / 道具无关,仅用于定位配置行)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 怪物ID(怪物角色配置 ID,来源 j_角色配置表「类型=怪物」)。
+  // 刻意**不标 (excel_fk)**:角色配置表本轮未登记进 configtable,无引用目标可校验。
+  // 刻意**不标 required**:源表 ID=1 行的本列实测为空白单元格(全空格,读取器 TrimSpace 后为 ""),
+  //   与客户端列登记 defaultValue="0" 对齐取 0(= 该行当前未挂到任何怪物,消费侧按无效行跳过)。
+  uint32 monster_id = 2 [(excel_col) = "怪物ID", (excel_default) = "0"];
+  // 物品ID(掉落物品配置 ID = ItemRow.id;实测 32 行引用的 10001~10024 全部存在于 d_道具.xlsx,
+  //   故可安全启用外键校验。0 = 无引用,按非必填列跳过校验)
+  uint32 item_config_id = 3 [(excel_col) = "物品ID", (excel_default) = "0", (excel_fk) = "item"];
+  // 概率万分比(独立掉落概率,10000 = 必掉,0 = 永不掉;与 share_permille 的千分比口径区分)
+  uint32 probability_permyriad = 4 [(excel_col) = "概率万分比", (excel_default) = "0"];
+  // 数量下限(含;空值默认 1,与客户端列登记一致)
+  uint32 min_count = 5 [(excel_col) = "数量下限", (excel_default) = "1"];
+  // 数量上限(含;空值默认 1,与客户端列登记一致)
+  uint32 max_count = 6 [(excel_col) = "数量上限", (excel_default) = "1"];
+}
+
+// DropTableData 怪物掉落整表容器(dist/drop.json 的根对象;excel_file 注解 = 导表登记)。
+message DropTableData {
+  option (excel_file) = "道具/d_掉落.xlsx";
+  // 实测版式:第 1 行表头、第 2 行列说明、第 3 行空行,数据自第 4 行起(不是通用版式的第 5 行)。
+  option (excel_data_start_row) = 4;
+
+  repeated DropRow rows = 1;
+}

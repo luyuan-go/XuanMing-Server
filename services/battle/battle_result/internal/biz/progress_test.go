@@ -15,16 +15,48 @@ import (
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/data"
 )
 
+// fakeMonsterExp 测试用怪物击杀经验表(生产实现是 configtable 的 role_level 表)。
+// 键是怪物角色 ID;等级 0 按 1 级处理(与生产 KillExpOf 同口径),非 1 级需显式登记。
+type fakeMonsterExp map[uint32]map[uint32]uint64 // roleID → level → exp
+
+func (f fakeMonsterExp) KillExpOf(roleID, level uint32) (uint64, bool) {
+	if level == 0 {
+		level = 1
+	}
+	byLevel, ok := f[roleID]
+	if !ok {
+		return 0, false
+	}
+	exp, ok := byLevel[level]
+	return exp, ok
+}
+
+// lv1Exp 把「角色 ID → 经验」简写成只含 1 级的经验表(绝大多数用例只关心 1 级)。
+func lv1Exp(m map[uint32]uint64) fakeMonsterExp {
+	out := make(fakeMonsterExp, len(m))
+	for roleID, exp := range m {
+		out[roleID] = map[uint32]uint64{1: exp}
+	}
+	return out
+}
+
+// withMonsterExp 给 usecase 注入经验表并回传,便于在构造处一行接线。
+func withMonsterExp(uc *BattleResultUsecase, exp fakeMonsterExp) *BattleResultUsecase {
+	uc.SetMonsterExpTable(exp)
+	return uc
+}
+
 // progressUsecase 构造带怪物经验表 + 掉落白名单的测试 usecase(通道显式开启:
 // progress_enabled 缺省 false,§14.2 默认不改变现有行为)。
 func progressUsecase(repo data.BattleRepo) *BattleResultUsecase {
 	cfg := conf.BattleConf{
 		EloKFactor: 32, BaseMMR: 1500,
 		ProgressEnabled: true,
-		MonsterExp:      map[uint32]uint64{101: 10, 102: 25},
 		DropWhitelist:   []uint32{5001, 5002},
 	}
-	return NewBattleResultUsecase(repo, NewStaticMMRReader(cfg.BaseMMR), &fakePusher{}, nil, cfg)
+	return withMonsterExp(
+		NewBattleResultUsecase(repo, NewStaticMMRReader(cfg.BaseMMR), &fakePusher{}, nil, cfg),
+		lv1Exp(map[uint32]uint64{101: 10, 102: 25}))
 }
 
 func killEvent(seq, playerID uint64, monsterID, count uint32) *battlev1.BattleProgressEvent {
@@ -107,9 +139,9 @@ func TestReportProgress_KillswitchKeepsInFlightMatches(t *testing.T) {
 		t.Fatalf("open stream: %v", err)
 	}
 	// 关闭开关(同一 repo,新 usecase 模拟配置翻转 / Stable 关 Canary 开的混配副本)。
-	off := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{
-		MonsterExp: map[uint32]uint64{101: 10}, DropWhitelist: []uint32{5001},
-	})
+	off := withMonsterExp(NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{
+		DropWhitelist: []uint32{5001},
+	}), lv1Exp(map[uint32]uint64{101: 10}))
 	if acked, err := off.ReportProgress(ctx, 905, roster, []*battlev1.BattleProgressEvent{killEvent(2, 7, 101, 1)}); err != nil || acked != 2 {
 		t.Fatalf("in-flight match must keep streaming after killswitch, acked=%d err=%v", acked, err)
 	}
@@ -235,14 +267,13 @@ func TestReportProgress_PerMatchCumulativeCaps(t *testing.T) {
 	repo := newFakeRepo()
 	cfg := conf.BattleConf{
 		ProgressEnabled: true,
-		MonsterExp:      map[uint32]uint64{101: 10},
 		DropWhitelist:   []uint32{5001},
 		// exp 上限 25:第一批 2 杀=20 过,第二批再 1 杀=10 累计 30 超限拒。
 		MaxProgressExpPerMatch: 25,
 		// items 上限 3:一次拾取 4 件直接超限拒。
 		MaxProgressItemsPerMatch: 3,
 	}
-	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg)
+	uc := withMonsterExp(NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg), lv1Exp(map[uint32]uint64{101: 10}))
 	ctx := context.Background()
 	roster := []uint64{7}
 
@@ -268,7 +299,6 @@ func TestReportProgress_PerPlayerCumulativeCaps(t *testing.T) {
 	repo := newFakeRepo()
 	cfg := conf.BattleConf{
 		ProgressEnabled: true,
-		MonsterExp:      map[uint32]uint64{101: 10},
 		DropWhitelist:   []uint32{5001},
 		// 场上限放宽,确保拦截全部来自单玩家上限。
 		MaxProgressExpPerMatch:    1000,
@@ -277,7 +307,7 @@ func TestReportProgress_PerPlayerCumulativeCaps(t *testing.T) {
 		MaxProgressItemsPerPlayer: 3,
 		MaxProgressKillsPerPlayer: 5,
 	}
-	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg)
+	uc := withMonsterExp(NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg), lv1Exp(map[uint32]uint64{101: 10}))
 	ctx := context.Background()
 	roster := []uint64{7, 8}
 
@@ -322,10 +352,9 @@ func TestReportProgress_StaleWatermarkRetryStaysRetryable(t *testing.T) {
 	repo := newFakeRepo()
 	cfg := conf.BattleConf{
 		ProgressEnabled:         true,
-		MonsterExp:              map[uint32]uint64{101: 10},
 		MaxProgressExpPerPlayer: 25, // 首批 2 杀=20:若同批 delta 被重复计入(40)即误超限
 	}
-	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg)
+	uc := withMonsterExp(NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg), lv1Exp(map[uint32]uint64{101: 10}))
 	ctx := context.Background()
 	roster := []uint64{7}
 	batch := []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 2)}
@@ -355,14 +384,14 @@ func TestReportProgress_StaleWatermarkRetryStaysRetryable(t *testing.T) {
 }
 
 func TestReportProgress_ZeroExpMonsterNoOutboxRow(t *testing.T) {
-	// monster_exp 显式配 0(无经验怪):不得产生 0 额度 exp 出箱行(player 拒收会永久重试),
-	// 但击杀仍计入单玩家击杀额度。
+	// 角色等级表里**有行但击杀经验为 0**(如玩家英雄行,或策划有意不给经验的怪):
+	// 不得产生 0 额度 exp 出箱行(player 会拒收并永久重试),但击杀仍计入单玩家击杀额度。
+	// 注意与"表里没有这一行"是两回事:后者走 skippedFact 告警路径(见聚合用例的怪物 777)。
 	repo := newFakeRepo()
 	cfg := conf.BattleConf{
 		ProgressEnabled: true,
-		MonsterExp:      map[uint32]uint64{101: 0},
 	}
-	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg)
+	uc := withMonsterExp(NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg), lv1Exp(map[uint32]uint64{101: 0}))
 	ctx := context.Background()
 
 	if acked, err := uc.ReportProgress(ctx, 913, []uint64{7}, []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 2)}); err != nil || acked != 1 {
@@ -588,9 +617,8 @@ func TestReportProgress_StopRaceFencedByCAS(t *testing.T) {
 // 通道关闭时固化 legacy 标记(审计 P1):对局中途重新开启配置,同一对局也不得晚开流。
 func TestReportProgress_DisabledPersistsLegacyMarker(t *testing.T) {
 	repo := newFakeRepo()
-	off := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{
-		MonsterExp: map[uint32]uint64{101: 10},
-	})
+	off := withMonsterExp(NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{}),
+		lv1Exp(map[uint32]uint64{101: 10}))
 	ctx := context.Background()
 	roster := []uint64{7}
 	batch := []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 1)}
@@ -626,9 +654,8 @@ func TestReportProgress_DisabledClaimLosesToOpenStream(t *testing.T) {
 	}
 
 	// 关闭副本处理后续批:注入"行不存在"旧快照(它读水位发生在开启副本建行之前)。
-	off := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{
-		MonsterExp: map[uint32]uint64{101: 10},
-	})
+	off := withMonsterExp(NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{}),
+		lv1Exp(map[uint32]uint64{101: 10}))
 	repo.staleWatermark = &data.ProgressWatermark{Existed: false}
 	acked, err := off.ReportProgress(ctx, 933, roster, []*battlev1.BattleProgressEvent{killEvent(2, 7, 101, 1)})
 	if err != nil || acked != 2 {
@@ -654,9 +681,9 @@ func TestReportProgress_DisabledClaimLosesToStoppedOrSettled(t *testing.T) {
 	} {
 		repo := newFakeRepo()
 		prep(repo)
-		off := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{
-			MonsterExp: map[uint32]uint64{101: 10},
-		})
+		off := withMonsterExp(
+			NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{}),
+			lv1Exp(map[uint32]uint64{101: 10}))
 		repo.staleWatermark = &data.ProgressWatermark{Existed: false}
 		if _, err := off.ReportProgress(ctx, 934, roster, batch); errcode.As(err) != errcode.ErrInvalidState {
 			t.Fatalf("%s: claim-losing batch must converge to terminal rejection, got %v", name, err)
@@ -778,5 +805,78 @@ func TestApplyExpShare_FloorsWithoutOverflow(t *testing.T) {
 		if got := applyExpShare(c.total, c.share); got != c.want {
 			t.Fatalf("applyExpShare(%d,%d)=%d want %d", c.total, c.share, got, c.want)
 		}
+	}
+}
+
+func TestReportProgress_MonsterLevelSelectsExpRow(t *testing.T) {
+	// 经验按 (怪物角色 ID, 等级) 查表:同一只怪不同等级形态数值不同(11 级血量是 1 级的 4 倍)。
+	// 等级 0 必须按 1 级处理 —— 旧刷怪点表没有「怪物等级」列,导表后取到 0,
+	// 此时行为必须与"等级硬编码 1"的历史逐字节一致,否则整片查不到 → 静默零经验。
+	repo := newFakeRepo()
+	uc := withMonsterExp(
+		NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil,
+			conf.BattleConf{ProgressEnabled: true}),
+		fakeMonsterExp{101: {1: 40, 11: 160}})
+	ctx := context.Background()
+	roster := []uint64{7}
+
+	killAtLevel := func(seq uint64, level uint32) *battlev1.BattleProgressEvent {
+		return &battlev1.BattleProgressEvent{
+			Seq: seq, PlayerId: 7,
+			Fact: &battlev1.BattleProgressEvent_MonsterKill{
+				MonsterKill: &battlev1.MonsterKillFact{
+					MonsterConfigId: 101, Count: 1, MonsterLevel: level,
+				},
+			},
+		}
+	}
+	// seq1: 等级 0(旧 DS / 旧表)→ 按 1 级 = 40
+	// seq2: 等级 1 显式    → 40
+	// seq3: 等级 11        → 160
+	// 合计 240
+	if acked, err := uc.ReportProgress(ctx, 940, roster, []*battlev1.BattleProgressEvent{
+		killAtLevel(1, 0), killAtLevel(2, 1), killAtLevel(3, 11),
+	}); err != nil || acked != 3 {
+		t.Fatalf("acked=%d err=%v", acked, err)
+	}
+	var exp uint64
+	for _, row := range repo.progressOutbox {
+		if row.Kind == data.ProgressGrantExp && row.PlayerID == 7 {
+			exp = row.ExpDelta
+		}
+	}
+	if exp != 240 {
+		t.Fatalf("exp=%d want 240(0级→40 + 1级→40 + 11级→160)", exp)
+	}
+
+	// 表里没有的等级(如 5 级)= 配置漏项:跳过该事实但水位照常推进,不卡整条流。
+	before := len(repo.progressOutbox)
+	if acked, err := uc.ReportProgress(ctx, 940, roster, []*battlev1.BattleProgressEvent{killAtLevel(4, 5)}); err != nil || acked != 4 {
+		t.Fatalf("未配置等级应跳过而非报错: acked=%d err=%v", acked, err)
+	}
+	if len(repo.progressOutbox) != before {
+		t.Fatalf("未配置等级不应产生出箱行,before=%d after=%d", before, len(repo.progressOutbox))
+	}
+}
+
+func TestReportProgress_MissingExpTableIsRetryableNotSkipped(t *testing.T) {
+	// 经验表未注入(配置表没加载 / ConfigMap 没挂)时,击杀事实必须按**可重试**错误整批退回,
+	// 绝不能走"跳过并推进水位"——水位一推进,DS 重发会被 seq<=lastSeq 跳过,
+	// 这批击杀的经验就永久没有补救路径了(只留一条 Warn,玩家表现为"杀怪没经验")。
+	repo := newFakeRepo()
+	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil,
+		conf.BattleConf{ProgressEnabled: true}) // 刻意不注入 MonsterExpTable
+	ctx := context.Background()
+
+	_, err := uc.ReportProgress(ctx, 941, []uint64{7}, []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 1)})
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("want ErrUnavailable(DS 原批重试), got %v", err)
+	}
+	// 零副作用:水位不动、无出箱行。
+	if seq := repo.progressSeq[941]; seq != 0 {
+		t.Fatalf("watermark must not advance, got %d", seq)
+	}
+	if len(repo.progressOutbox) != 0 {
+		t.Fatalf("must not enqueue outbox, got %d", len(repo.progressOutbox))
 	}
 }

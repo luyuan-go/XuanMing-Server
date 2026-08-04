@@ -76,6 +76,13 @@ func main() {
 	}
 	cfg.Defaults()
 
+	// join_policy fail-fast:拼错一个字母(如 "aproval")若被猜成 open,会让全服队伍
+	// 对任何人敞开——这是静默的权限放大,必须启动就拒,不能等第一个玩家点"申请"才暴露。
+	if err := cfg.ValidateJoinPolicy(); err != nil {
+		helper.Errorw("msg", "team_join_policy_invalid", "err", err, "value", cfg.Team.JoinPolicy)
+		os.Exit(1)
+	}
+
 	// 3. Redis(强依赖)
 	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
 	rc := cfg.Node.RedisClient

@@ -547,11 +547,11 @@ constexpr ResumeContext::ParseTableT_ ResumeContext::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_._has_bits_),
       0, // no _extensions_
-      14, 120,  // max_field_number, fast_idx_mask
+      18, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294950912,  // skipmap
+      4294705152,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      14,  // num_field_entries
+      18,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -615,9 +615,37 @@ constexpr ResumeContext::ParseTableT_ ResumeContext::InternalGenerateParseTable_
        {106, 6, 0,
         PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.game_mode_)}},
       // uint32 map_id = 14 [json_name = "mapId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResumeContext, _impl_.map_id_), 13>(),
-       {112, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResumeContext, _impl_.map_id_), 14>(),
+       {112, 14, 0,
         PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.map_id_)}},
+      // uint64 owner_epoch = 15 [json_name = "ownerEpoch"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResumeContext, _impl_.owner_epoch_), 13>(),
+       {120, 13, 0,
+        PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.owner_epoch_)}},
+      // uint32 retry_after_ms = 16 [json_name = "retryAfterMs"];
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.retry_after_ms_)}},
+      // .pandora.login.v1.ResumeEntryState entry_state = 17 [json_name = "entryState"];
+      {::_pbi::TcParser::FastV32S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.entry_state_)}},
+      // .pandora.login.v1.ResumeWaitReason wait_reason = 18 [json_name = "waitReason"];
+      {::_pbi::TcParser::FastV32S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.wait_reason_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -649,11 +677,19 @@ constexpr ResumeContext::ParseTableT_ ResumeContext::InternalGenerateParseTable_
       // string game_mode = 13 [json_name = "gameMode"];
       {PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.game_mode_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 map_id = 14 [json_name = "mapId"];
-      {PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.map_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.map_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 owner_epoch = 15 [json_name = "ownerEpoch"];
+      {PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.owner_epoch_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 retry_after_ms = 16 [json_name = "retryAfterMs"];
+      {PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.retry_after_ms_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .pandora.login.v1.ResumeEntryState entry_state = 17 [json_name = "entryState"];
+      {PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.entry_state_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // .pandora.login.v1.ResumeWaitReason wait_reason = 18 [json_name = "waitReason"];
+      {PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.wait_reason_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
     {{
-      "\36\0\0\0\0\14\0\13\17\21\0\15\15\11\0\0"
+      "\36\0\0\0\0\14\0\13\17\21\0\15\15\11\0\0\0\0\0\0\0\0\0\0"
       "pandora.login.v1.ResumeContext"
       "operation_id"
       "ds_pod_name"
@@ -698,7 +734,11 @@ inline constexpr ResumeContext::Impl_::Impl_(
         placement_version_{::uint64_t{0u}},
         placement_state_{static_cast< ::pandora::login::v1::ResumePlacementState >(0)},
         ds_instance_epoch_{0u},
-        map_id_{0u} {}
+        owner_epoch_{::uint64_t{0u}},
+        map_id_{0u},
+        retry_after_ms_{0u},
+        entry_state_{static_cast< ::pandora::login::v1::ResumeEntryState >(0)},
+        wait_reason_{static_cast< ::pandora::login::v1::ResumeWaitReason >(0)} {}
 
 template <typename>
 constexpr ResumeContext::ResumeContext(::_pbi::ConstantInitialized,
@@ -2631,7 +2671,7 @@ const ::_pbi::ClassData* GetResumeContextResponse_get_class_data() {
 }  // namespace login
 }  // namespace pandora
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_pandora_2flogin_2fv1_2flogin_2eproto[3];
+    file_level_enum_descriptors_pandora_2flogin_2fv1_2flogin_2eproto[5];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_pandora_2flogin_2fv1_2flogin_2eproto = nullptr;
 const ::uint32_t
@@ -2681,7 +2721,7 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_._has_bits_),
-        17, // hasbit index offset
+        21, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.route_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.match_stage_),
@@ -2696,6 +2736,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.release_track_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.game_mode_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.map_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.owner_epoch_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.retry_after_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.entry_state_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_.wait_reason_),
         8,
         7,
         9,
@@ -2709,7 +2753,11 @@ const ::uint32_t
         4,
         5,
         6,
+        14,
         13,
+        15,
+        16,
+        17,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::GetResumeContextRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -2836,17 +2884,17 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::pandora::login::v1::LoginRequest)},
         {15, sizeof(::pandora::login::v1::LoginResponse)},
         {42, sizeof(::pandora::login::v1::ResumeContext)},
-        {73, sizeof(::pandora::login::v1::GetResumeContextRequest)},
-        {78, sizeof(::pandora::login::v1::GetResumeContextResponse)},
-        {85, sizeof(::pandora::login::v1::LogoutRequest)},
-        {90, sizeof(::pandora::login::v1::LogoutResponse)},
-        {95, sizeof(::pandora::login::v1::DSTicket)},
-        {144, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
-        {153, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
-        {162, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
-        {171, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
-        {178, sizeof(::pandora::login::v1::SelectRoleRequest)},
-        {183, sizeof(::pandora::login::v1::SelectRoleResponse)},
+        {81, sizeof(::pandora::login::v1::GetResumeContextRequest)},
+        {86, sizeof(::pandora::login::v1::GetResumeContextResponse)},
+        {93, sizeof(::pandora::login::v1::LogoutRequest)},
+        {98, sizeof(::pandora::login::v1::LogoutResponse)},
+        {103, sizeof(::pandora::login::v1::DSTicket)},
+        {152, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
+        {161, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
+        {170, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
+        {179, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
+        {186, sizeof(::pandora::login::v1::SelectRoleRequest)},
+        {191, sizeof(::pandora::login::v1::SelectRoleResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2886,7 +2934,7 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "ket\022\031\n\010match_id\030\n \001(\004R\007matchId\022(\n\020select"
     "ed_role_id\030\013 \001(\rR\016selectedRoleId\022F\n\016resu"
     "me_context\030\014 \001(\0132\037.pandora.login.v1.Resu"
-    "meContextR\rresumeContext\"\343\004\n\rResumeConte"
+    "meContextR\rresumeContext\"\264\006\n\rResumeConte"
     "xt\0223\n\005route\030\001 \001(\0162\035.pandora.login.v1.Res"
     "umeRouteR\005route\022\031\n\010match_id\030\002 \001(\004R\007match"
     "Id\022C\n\013match_stage\030\003 \001(\0162\".pandora.login."
@@ -2901,84 +2949,101 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "nce_epoch\030\n \001(\rR\017dsInstanceEpoch\022#\n\rallo"
     "cation_id\030\013 \001(\tR\014allocationId\022#\n\rrelease"
     "_track\030\014 \001(\tR\014releaseTrack\022\033\n\tgame_mode\030"
-    "\r \001(\tR\010gameMode\022\025\n\006map_id\030\016 \001(\rR\005mapId\">"
-    "\n\027GetResumeContextRequest\022#\n\rsession_tok"
-    "en\030\001 \001(\tR\014sessionToken\"\205\001\n\030GetResumeCont"
-    "extResponse\022.\n\004code\030\001 \001(\0162\032.pandora.comm"
-    "on.v1.ErrCodeR\004code\0229\n\007context\030\002 \001(\0132\037.p"
-    "andora.login.v1.ResumeContextR\007context\"4"
-    "\n\rLogoutRequest\022#\n\rsession_token\030\001 \001(\tR\014"
-    "sessionToken\"@\n\016LogoutResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\"\302"
-    "\006\n\010DSTicket\022\033\n\tplayer_id\030\001 \001(\004R\010playerId"
-    "\022\031\n\010match_id\030\002 \001(\004R\007matchId\022 \n\014issued_at"
-    "_ms\030\003 \001(\003R\nissuedAtMs\022\"\n\rexpires_at_ms\030\004"
-    " \001(\003R\013expiresAtMs\022\027\n\007ds_type\030\005 \001(\tR\006dsTy"
-    "pe\022\020\n\003jti\030\006 \001(\tR\003jti\022\033\n\tregion_id\030\007 \001(\rR"
-    "\010regionId\022\027\n\007cell_id\030\010 \001(\rR\006cellId\022\027\n\007ro"
-    "le_id\030\n \001(\rR\006roleId\022\036\n\013ds_pod_name\030\013 \001(\t"
-    "R\tdsPodName\022&\n\017ds_instance_uid\030\014 \001(\tR\rds"
-    "InstanceUid\022*\n\021ds_protocol_epoch\030\r \001(\rR\017"
-    "dsProtocolEpoch\022*\n\021ds_credential_gen\030\016 \001"
-    "(\004R\017dsCredentialGen\022*\n\021ds_credential_jti"
-    "\030\017 \001(\tR\017dsCredentialJti\022*\n\021hub_assignmen"
-    "t_id\030\020 \001(\tR\017hubAssignmentId\022&\n\017ds_writer"
-    "_epoch\030\021 \001(\rR\rdsWriterEpoch\022\027\n\007dst_ver\030\022"
-    " \001(\rR\006dstVer\022*\n\021ds_instance_epoch\030\023 \001(\rR"
-    "\017dsInstanceEpoch\022#\n\rallocation_id\030\024 \001(\tR"
-    "\014allocationId\022#\n\rrelease_track\030\025 \001(\tR\014re"
-    "leaseTrack\022+\n\021placement_version\030\026 \001(\004R\020p"
-    "lacementVersion\0224\n\026placement_operation_i"
-    "d\030\027 \001(\tR\024placementOperationId\022&\n\017source_"
-    "match_id\030\030 \001(\004R\rsourceMatchIdJ\004\010\t\020\n\"q\n\024I"
-    "ssueDSTicketRequest\022#\n\rsession_token\030\001 \001"
-    "(\tR\014sessionToken\022\027\n\007ds_type\030\002 \001(\tR\006dsTyp"
-    "e\022\033\n\ttarget_id\030\003 \001(\004R\010targetId\"\177\n\025IssueD"
-    "STicketResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
-    "common.v1.ErrCodeR\004code\022\026\n\006ticket\030\002 \001(\tR"
-    "\006ticket\022\036\n\013hub_ds_addr\030\003 \001(\tR\thubDsAddr\""
-    "r\n\025VerifyDSTicketRequest\022\026\n\006ticket\030\001 \001(\t"
-    "R\006ticket\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName"
-    "\022!\n\014admission_id\030\003 \001(\tR\013admissionId\"|\n\026V"
-    "erifyDSTicketResponse\022.\n\004code\030\001 \001(\0162\032.pa"
-    "ndora.common.v1.ErrCodeR\004code\0222\n\006claims\030"
-    "\002 \001(\0132\032.pandora.login.v1.DSTicketR\006claim"
-    "s\",\n\021SelectRoleRequest\022\027\n\007role_id\030\001 \001(\rR"
-    "\006roleId\"\203\001\n\022SelectRoleResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022\036"
-    "\n\013hub_ds_addr\030\002 \001(\tR\thubDsAddr\022\035\n\nhub_ti"
-    "cket\030\003 \001(\tR\thubTicket*t\n\013ResumeRoute\022\034\n\030"
-    "RESUME_ROUTE_UNSPECIFIED\020\000\022\024\n\020RESUME_ROU"
-    "TE_HUB\020\001\022\027\n\023RESUME_ROUTE_BATTLE\020\002\022\030\n\024RES"
-    "UME_ROUTE_UNKNOWN\020\003*\366\001\n\020ResumeMatchStage"
-    "\022\"\n\036RESUME_MATCH_STAGE_UNSPECIFIED\020\000\022\033\n\027"
-    "RESUME_MATCH_STAGE_NONE\020\001\022\035\n\031RESUME_MATC"
-    "H_STAGE_QUEUED\020\002\022!\n\035RESUME_MATCH_STAGE_C"
-    "ONFIRMING\020\003\022!\n\035RESUME_MATCH_STAGE_ALLOCA"
-    "TING\020\004\022\034\n\030RESUME_MATCH_STAGE_READY\020\005\022\036\n\032"
-    "RESUME_MATCH_STAGE_RUNNING\020\006*\205\001\n\024ResumeP"
-    "lacementState\022&\n\"RESUME_PLACEMENT_STATE_"
-    "UNSPECIFIED\020\000\022\"\n\036RESUME_PLACEMENT_STATE_"
-    "PENDING\020\001\022!\n\035RESUME_PLACEMENT_STATE_STAB"
-    "LE\020\0022\334\005\n\014LoginService\022^\n\005Login\022\036.pandora"
-    ".login.v1.LoginRequest\032\037.pandora.login.v"
-    "1.LoginResponse\"\024\202\323\344\223\002\016\"\t/v1/login:\001*\022b\n"
-    "\006Logout\022\037.pandora.login.v1.LogoutRequest"
-    "\032 .pandora.login.v1.LogoutResponse\"\025\202\323\344\223"
-    "\002\017\"\n/v1/logout:\001*\022\200\001\n\rIssueDSTicket\022&.pa"
-    "ndora.login.v1.IssueDSTicketRequest\032\'.pa"
-    "ndora.login.v1.IssueDSTicketResponse\"\036\202\323"
-    "\344\223\002\030\"\023/v1/ds/ticket/issue:\001*\022s\n\nSelectRo"
-    "le\022#.pandora.login.v1.SelectRoleRequest\032"
-    "$.pandora.login.v1.SelectRoleResponse\"\032\202"
-    "\323\344\223\002\024\"\017/v1/role/select:\001*\022\204\001\n\016VerifyDSTi"
-    "cket\022\'.pandora.login.v1.VerifyDSTicketRe"
-    "quest\032(.pandora.login.v1.VerifyDSTicketR"
-    "esponse\"\037\202\323\344\223\002\031\"\024/v1/ds/ticket/verify:\001*"
-    "\022\210\001\n\020GetResumeContext\022).pandora.login.v1"
-    ".GetResumeContextRequest\032*.pandora.login"
-    ".v1.GetResumeContextResponse\"\035\202\323\344\223\002\027\"\022/v"
-    "1/resume/context:\001*b\006proto3"
+    "\r \001(\tR\010gameMode\022\025\n\006map_id\030\016 \001(\rR\005mapId\022\037"
+    "\n\013owner_epoch\030\017 \001(\004R\nownerEpoch\022$\n\016retry"
+    "_after_ms\030\020 \001(\rR\014retryAfterMs\022C\n\013entry_s"
+    "tate\030\021 \001(\0162\".pandora.login.v1.ResumeEntr"
+    "yStateR\nentryState\022C\n\013wait_reason\030\022 \001(\0162"
+    "\".pandora.login.v1.ResumeWaitReasonR\nwai"
+    "tReason\">\n\027GetResumeContextRequest\022#\n\rse"
+    "ssion_token\030\001 \001(\tR\014sessionToken\"\205\001\n\030GetR"
+    "esumeContextResponse\022.\n\004code\030\001 \001(\0162\032.pan"
+    "dora.common.v1.ErrCodeR\004code\0229\n\007context\030"
+    "\002 \001(\0132\037.pandora.login.v1.ResumeContextR\007"
+    "context\"4\n\rLogoutRequest\022#\n\rsession_toke"
+    "n\030\001 \001(\tR\014sessionToken\"@\n\016LogoutResponse\022"
+    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
+    "eR\004code\"\302\006\n\010DSTicket\022\033\n\tplayer_id\030\001 \001(\004R"
+    "\010playerId\022\031\n\010match_id\030\002 \001(\004R\007matchId\022 \n\014"
+    "issued_at_ms\030\003 \001(\003R\nissuedAtMs\022\"\n\rexpire"
+    "s_at_ms\030\004 \001(\003R\013expiresAtMs\022\027\n\007ds_type\030\005 "
+    "\001(\tR\006dsType\022\020\n\003jti\030\006 \001(\tR\003jti\022\033\n\tregion_"
+    "id\030\007 \001(\rR\010regionId\022\027\n\007cell_id\030\010 \001(\rR\006cel"
+    "lId\022\027\n\007role_id\030\n \001(\rR\006roleId\022\036\n\013ds_pod_n"
+    "ame\030\013 \001(\tR\tdsPodName\022&\n\017ds_instance_uid\030"
+    "\014 \001(\tR\rdsInstanceUid\022*\n\021ds_protocol_epoc"
+    "h\030\r \001(\rR\017dsProtocolEpoch\022*\n\021ds_credentia"
+    "l_gen\030\016 \001(\004R\017dsCredentialGen\022*\n\021ds_crede"
+    "ntial_jti\030\017 \001(\tR\017dsCredentialJti\022*\n\021hub_"
+    "assignment_id\030\020 \001(\tR\017hubAssignmentId\022&\n\017"
+    "ds_writer_epoch\030\021 \001(\rR\rdsWriterEpoch\022\027\n\007"
+    "dst_ver\030\022 \001(\rR\006dstVer\022*\n\021ds_instance_epo"
+    "ch\030\023 \001(\rR\017dsInstanceEpoch\022#\n\rallocation_"
+    "id\030\024 \001(\tR\014allocationId\022#\n\rrelease_track\030"
+    "\025 \001(\tR\014releaseTrack\022+\n\021placement_version"
+    "\030\026 \001(\004R\020placementVersion\0224\n\026placement_op"
+    "eration_id\030\027 \001(\tR\024placementOperationId\022&"
+    "\n\017source_match_id\030\030 \001(\004R\rsourceMatchIdJ\004"
+    "\010\t\020\n\"q\n\024IssueDSTicketRequest\022#\n\rsession_"
+    "token\030\001 \001(\tR\014sessionToken\022\027\n\007ds_type\030\002 \001"
+    "(\tR\006dsType\022\033\n\ttarget_id\030\003 \001(\004R\010targetId\""
+    "\177\n\025IssueDSTicketResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\022\026\n\006tick"
+    "et\030\002 \001(\tR\006ticket\022\036\n\013hub_ds_addr\030\003 \001(\tR\th"
+    "ubDsAddr\"r\n\025VerifyDSTicketRequest\022\026\n\006tic"
+    "ket\030\001 \001(\tR\006ticket\022\036\n\013ds_pod_name\030\002 \001(\tR\t"
+    "dsPodName\022!\n\014admission_id\030\003 \001(\tR\013admissi"
+    "onId\"|\n\026VerifyDSTicketResponse\022.\n\004code\030\001"
+    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\0222"
+    "\n\006claims\030\002 \001(\0132\032.pandora.login.v1.DSTick"
+    "etR\006claims\",\n\021SelectRoleRequest\022\027\n\007role_"
+    "id\030\001 \001(\rR\006roleId\"\203\001\n\022SelectRoleResponse\022"
+    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
+    "eR\004code\022\036\n\013hub_ds_addr\030\002 \001(\tR\thubDsAddr\022"
+    "\035\n\nhub_ticket\030\003 \001(\tR\thubTicket*t\n\013Resume"
+    "Route\022\034\n\030RESUME_ROUTE_UNSPECIFIED\020\000\022\024\n\020R"
+    "ESUME_ROUTE_HUB\020\001\022\027\n\023RESUME_ROUTE_BATTLE"
+    "\020\002\022\030\n\024RESUME_ROUTE_UNKNOWN\020\003*\366\001\n\020ResumeM"
+    "atchStage\022\"\n\036RESUME_MATCH_STAGE_UNSPECIF"
+    "IED\020\000\022\033\n\027RESUME_MATCH_STAGE_NONE\020\001\022\035\n\031RE"
+    "SUME_MATCH_STAGE_QUEUED\020\002\022!\n\035RESUME_MATC"
+    "H_STAGE_CONFIRMING\020\003\022!\n\035RESUME_MATCH_STA"
+    "GE_ALLOCATING\020\004\022\034\n\030RESUME_MATCH_STAGE_RE"
+    "ADY\020\005\022\036\n\032RESUME_MATCH_STAGE_RUNNING\020\006*\205\001"
+    "\n\024ResumePlacementState\022&\n\"RESUME_PLACEME"
+    "NT_STATE_UNSPECIFIED\020\000\022\"\n\036RESUME_PLACEME"
+    "NT_STATE_PENDING\020\001\022!\n\035RESUME_PLACEMENT_S"
+    "TATE_STABLE\020\002*\330\001\n\020ResumeEntryState\022\"\n\036RE"
+    "SUME_ENTRY_STATE_UNSPECIFIED\020\000\022$\n RESUME"
+    "_ENTRY_STATE_ROLE_REQUIRED\020\001\022\033\n\027RESUME_E"
+    "NTRY_STATE_WAIT\020\002\022\035\n\031RESUME_ENTRY_STATE_"
+    "TARGET\020\003\022\035\n\031RESUME_ENTRY_STATE_REAUTH\020\004\022"
+    "\037\n\033RESUME_ENTRY_STATE_TERMINAL\020\005*\354\001\n\020Res"
+    "umeWaitReason\022\"\n\036RESUME_WAIT_REASON_UNSP"
+    "ECIFIED\020\000\022$\n RESUME_WAIT_REASON_OWNER_UN"
+    "KNOWN\020\001\022$\n RESUME_WAIT_REASON_ADMIT_BARR"
+    "IER\020\002\022\037\n\033RESUME_WAIT_REASON_MATCHING\020\003\022#"
+    "\n\037RESUME_WAIT_REASON_ROLE_UNKNOWN\020\004\022\"\n\036R"
+    "ESUME_WAIT_REASON_NO_CAPACITY\020\0052\334\005\n\014Logi"
+    "nService\022^\n\005Login\022\036.pandora.login.v1.Log"
+    "inRequest\032\037.pandora.login.v1.LoginRespon"
+    "se\"\024\202\323\344\223\002\016\"\t/v1/login:\001*\022b\n\006Logout\022\037.pan"
+    "dora.login.v1.LogoutRequest\032 .pandora.lo"
+    "gin.v1.LogoutResponse\"\025\202\323\344\223\002\017\"\n/v1/logou"
+    "t:\001*\022\200\001\n\rIssueDSTicket\022&.pandora.login.v"
+    "1.IssueDSTicketRequest\032\'.pandora.login.v"
+    "1.IssueDSTicketResponse\"\036\202\323\344\223\002\030\"\023/v1/ds/"
+    "ticket/issue:\001*\022s\n\nSelectRole\022#.pandora."
+    "login.v1.SelectRoleRequest\032$.pandora.log"
+    "in.v1.SelectRoleResponse\"\032\202\323\344\223\002\024\"\017/v1/ro"
+    "le/select:\001*\022\204\001\n\016VerifyDSTicket\022\'.pandor"
+    "a.login.v1.VerifyDSTicketRequest\032(.pando"
+    "ra.login.v1.VerifyDSTicketResponse\"\037\202\323\344\223"
+    "\002\031\"\024/v1/ds/ticket/verify:\001*\022\210\001\n\020GetResum"
+    "eContext\022).pandora.login.v1.GetResumeCon"
+    "textRequest\032*.pandora.login.v1.GetResume"
+    "ContextResponse\"\035\202\323\344\223\002\027\"\022/v1/resume/cont"
+    "ext:\001*b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_deps[2] = {
@@ -2989,7 +3054,7 @@ static ::absl::once_flag descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto = {
     false,
     false,
-    4467,
+    5134,
     descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto,
     "pandora/login/v1/login.proto",
     &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_once,
@@ -3026,6 +3091,20 @@ ResumePlacementState_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t ResumePlacementState_internal_data_[] = {
     196608u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ResumeEntryState_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto);
+  return file_level_enum_descriptors_pandora_2flogin_2fv1_2flogin_2eproto[3];
+}
+PROTOBUF_CONSTINIT const uint32_t ResumeEntryState_internal_data_[] = {
+    393216u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ResumeWaitReason_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto);
+  return file_level_enum_descriptors_pandora_2flogin_2fv1_2flogin_2eproto[4];
+}
+PROTOBUF_CONSTINIT const uint32_t ResumeWaitReason_internal_data_[] = {
+    393216u, 0u, };
 // ===================================================================
 
 LoginRequest::LoginRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -3993,9 +4072,9 @@ ResumeContext::ResumeContext(
                offsetof(Impl_, match_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, match_id_),
-           offsetof(Impl_, map_id_) -
+           offsetof(Impl_, wait_reason_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::map_id_));
+               sizeof(Impl_::wait_reason_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.login.v1.ResumeContext)
 }
@@ -4016,9 +4095,9 @@ inline void ResumeContext::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, match_id_),
            0,
-           offsetof(Impl_, map_id_) -
+           offsetof(Impl_, wait_reason_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::map_id_));
+               sizeof(Impl_::wait_reason_));
 }
 ResumeContext::~ResumeContext() {
   // @@protoc_insertion_point(destructor:pandora.login.v1.ResumeContext)
@@ -4099,10 +4178,15 @@ PROTOBUF_NOINLINE void ResumeContext::Clear() {
     }
   }
   _impl_.match_id_ = ::uint64_t{0u};
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.route_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.map_id_) -
-        reinterpret_cast<char*>(&_impl_.route_)) + sizeof(_impl_.map_id_));
+        reinterpret_cast<char*>(&_impl_.retry_after_ms_) -
+        reinterpret_cast<char*>(&_impl_.route_)) + sizeof(_impl_.retry_after_ms_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    ::memset(&_impl_.entry_state_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.wait_reason_) -
+        reinterpret_cast<char*>(&_impl_.entry_state_)) + sizeof(_impl_.wait_reason_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -4252,11 +4336,47 @@ PROTOBUF_NOINLINE void ResumeContext::Clear() {
   }
 
   // uint32 map_id = 14 [json_name = "mapId"];
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_map_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           14, this_._internal_map_id(), target);
+    }
+  }
+
+  // uint64 owner_epoch = 15 [json_name = "ownerEpoch"];
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_owner_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          15, this_._internal_owner_epoch(), target);
+    }
+  }
+
+  // uint32 retry_after_ms = 16 [json_name = "retryAfterMs"];
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_retry_after_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_retry_after_ms(), target);
+    }
+  }
+
+  // .pandora.login.v1.ResumeEntryState entry_state = 17 [json_name = "entryState"];
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_entry_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          17, this_._internal_entry_state(), target);
+    }
+  }
+
+  // .pandora.login.v1.ResumeWaitReason wait_reason = 18 [json_name = "waitReason"];
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_wait_reason() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          18, this_._internal_wait_reason(), target);
     }
   }
 
@@ -4343,7 +4463,7 @@ PROTOBUF_NOINLINE void ResumeContext::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // .pandora.login.v1.ResumeRoute route = 1 [json_name = "route"];
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_route() != 0) {
@@ -4379,11 +4499,41 @@ PROTOBUF_NOINLINE void ResumeContext::Clear() {
             this_._internal_ds_instance_epoch());
       }
     }
-    // uint32 map_id = 14 [json_name = "mapId"];
+    // uint64 owner_epoch = 15 [json_name = "ownerEpoch"];
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_owner_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_owner_epoch());
+      }
+    }
+    // uint32 map_id = 14 [json_name = "mapId"];
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_map_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_map_id());
+      }
+    }
+    // uint32 retry_after_ms = 16 [json_name = "retryAfterMs"];
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_retry_after_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_retry_after_ms());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    // .pandora.login.v1.ResumeEntryState entry_state = 17 [json_name = "entryState"];
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_entry_state() != 0) {
+        total_size += 2 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_entry_state());
+      }
+    }
+    // .pandora.login.v1.ResumeWaitReason wait_reason = 18 [json_name = "waitReason"];
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_wait_reason() != 0) {
+        total_size += 2 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_wait_reason());
       }
     }
   }
@@ -4474,7 +4624,7 @@ void ResumeContext::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_route() != 0) {
         _this->_impl_.route_ = from._impl_.route_;
@@ -4501,8 +4651,30 @@ void ResumeContext::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_owner_epoch() != 0) {
+        _this->_impl_.owner_epoch_ = from._impl_.owner_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_map_id() != 0) {
         _this->_impl_.map_id_ = from._impl_.map_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_retry_after_ms() != 0) {
+        _this->_impl_.retry_after_ms_ = from._impl_.retry_after_ms_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_entry_state() != 0) {
+        _this->_impl_.entry_state_ = from._impl_.entry_state_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_wait_reason() != 0) {
+        _this->_impl_.wait_reason_ = from._impl_.wait_reason_;
       }
     }
   }
@@ -4533,8 +4705,8 @@ void ResumeContext::InternalSwap(ResumeContext* PROTOBUF_RESTRICT PROTOBUF_NONNU
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.release_track_, &other->_impl_.release_track_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_, &other->_impl_.game_mode_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.map_id_)
-      + sizeof(ResumeContext::_impl_.map_id_)
+      PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.wait_reason_)
+      + sizeof(ResumeContext::_impl_.wait_reason_)
       - PROTOBUF_FIELD_OFFSET(ResumeContext, _impl_.match_id_)>(
           reinterpret_cast<char*>(&_impl_.match_id_),
           reinterpret_cast<char*>(&other->_impl_.match_id_));

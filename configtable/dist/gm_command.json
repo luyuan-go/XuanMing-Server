@@ -1,0 +1,21 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "display_name": "测试",
+      "search_keywords": "测试,样本,样例",
+      "param_sets": "物品Id,物品Id",
+      "run_on_ds": true,
+      "command_class": "/Script/Pandora.MySampleGmCmd"
+    },
+    {
+      "id": 2,
+      "display_name": "清档"
+    },
+    {
+      "id": 3,
+      "display_name": "添加物品",
+      "param_sets": "物品Id,物品Id;物品数量,物品数量"
+    }
+  ]
+}

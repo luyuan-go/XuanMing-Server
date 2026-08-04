@@ -1,0 +1,9 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "weapon_type": 2,
+      "model_info": "/Game/Pkg/Weapon/Sword/Sword01.Sword01_C,weapon_01"
+    }
+  ]
+}

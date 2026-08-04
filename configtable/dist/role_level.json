@@ -1,0 +1,224 @@
+{
+  "rows": [
+    {
+      "id": 2001,
+      "role_id": 2,
+      "level": 1,
+      "hp": 100000,
+      "attack": 100,
+      "hit_chance": 1,
+      "kill_exp": "200"
+    },
+    {
+      "id": 3001,
+      "role_id": 3,
+      "level": 1,
+      "hp": 100000,
+      "attack": 100,
+      "hit_chance": 1,
+      "kill_exp": "40"
+    },
+    {
+      "id": 1001001,
+      "role_id": 1001,
+      "level": 1,
+      "hp": 1400,
+      "attack": 100,
+      "defense": 10,
+      "hit_chance": 1
+    },
+    {
+      "id": 1002001,
+      "role_id": 1002,
+      "level": 1,
+      "hp": 700,
+      "attack": 100,
+      "defense": 6,
+      "hit_chance": 1
+    },
+    {
+      "id": 1003001,
+      "role_id": 1003,
+      "level": 1,
+      "hp": 1200,
+      "attack": 100,
+      "defense": 4,
+      "hit_chance": 1
+    },
+    {
+      "id": 1004001,
+      "role_id": 1004,
+      "level": 1,
+      "hp": 800,
+      "attack": 100,
+      "defense": 4,
+      "hit_chance": 1
+    },
+    {
+      "id": 1005001,
+      "role_id": 1005,
+      "level": 1,
+      "hp": 900,
+      "attack": 100,
+      "defense": 6,
+      "hit_chance": 1
+    },
+    {
+      "id": 1006001,
+      "role_id": 1006,
+      "level": 1,
+      "hp": 900,
+      "attack": 100,
+      "defense": 6,
+      "hit_chance": 1
+    },
+    {
+      "id": 1007001,
+      "role_id": 1007,
+      "level": 1,
+      "hp": 1400,
+      "attack": 100,
+      "defense": 10,
+      "hit_chance": 1
+    },
+    {
+      "id": 1008001,
+      "role_id": 1008,
+      "level": 1,
+      "hp": 800,
+      "attack": 100,
+      "defense": 10,
+      "hit_chance": 1
+    },
+    {
+      "id": 1009001,
+      "role_id": 1009,
+      "level": 1,
+      "hp": 800,
+      "attack": 100,
+      "defense": 10,
+      "hit_chance": 1
+    },
+    {
+      "id": 1010001,
+      "role_id": 1010,
+      "level": 1,
+      "hp": 800,
+      "attack": 100,
+      "defense": 10,
+      "hit_chance": 1
+    },
+    {
+      "id": 2001001,
+      "role_id": 2001,
+      "level": 1,
+      "hp": 300,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "40"
+    },
+    {
+      "id": 2002001,
+      "role_id": 2002,
+      "level": 1,
+      "hp": 200,
+      "attack": 8,
+      "hit_chance": 1,
+      "kill_exp": "30"
+    },
+    {
+      "id": 2003001,
+      "role_id": 2003,
+      "level": 1,
+      "hp": 300,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "40"
+    },
+    {
+      "id": 2004001,
+      "role_id": 2004,
+      "level": 1,
+      "hp": 300,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "40"
+    },
+    {
+      "id": 2005001,
+      "role_id": 2005,
+      "level": 1,
+      "hp": 1000,
+      "attack": 30,
+      "defense": 10,
+      "hit_chance": 1,
+      "kill_exp": "200"
+    },
+    {
+      "id": 2006001,
+      "role_id": 2006,
+      "level": 1,
+      "hp": 10,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "5"
+    },
+    {
+      "id": 2007001,
+      "role_id": 2007,
+      "level": 1,
+      "hp": 800,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "120"
+    },
+    {
+      "id": 2008001,
+      "role_id": 2008,
+      "level": 1,
+      "hp": 800,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "140"
+    },
+    {
+      "id": 2101001,
+      "role_id": 2101,
+      "level": 1,
+      "hp": 5000,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "800"
+    },
+    {
+      "id": 2001011,
+      "role_id": 2001,
+      "role_name": "松林近战腐蚀体",
+      "level": 11,
+      "hp": 1200,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "160"
+    },
+    {
+      "id": 2002011,
+      "role_id": 2002,
+      "role_name": "松林远程腐蚀体",
+      "level": 11,
+      "hp": 800,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "120"
+    },
+    {
+      "id": 2003011,
+      "role_id": 2003,
+      "role_name": "松林小型腐蚀体",
+      "level": 11,
+      "hp": 600,
+      "attack": 10,
+      "hit_chance": 1,
+      "kill_exp": "80"
+    }
+  ]
+}

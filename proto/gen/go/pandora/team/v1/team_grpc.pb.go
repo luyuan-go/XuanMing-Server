@@ -29,15 +29,20 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TeamService_CreateTeam_FullMethodName           = "/pandora.team.v1.TeamService/CreateTeam"
-	TeamService_Invite_FullMethodName               = "/pandora.team.v1.TeamService/Invite"
-	TeamService_AcceptInvite_FullMethodName         = "/pandora.team.v1.TeamService/AcceptInvite"
-	TeamService_LeaveTeam_FullMethodName            = "/pandora.team.v1.TeamService/LeaveTeam"
-	TeamService_Kick_FullMethodName                 = "/pandora.team.v1.TeamService/Kick"
-	TeamService_SetReady_FullMethodName             = "/pandora.team.v1.TeamService/SetReady"
-	TeamService_GetTeam_FullMethodName              = "/pandora.team.v1.TeamService/GetTeam"
-	TeamService_GetMyTeam_FullMethodName            = "/pandora.team.v1.TeamService/GetMyTeam"
-	TeamService_ListMyPendingInvites_FullMethodName = "/pandora.team.v1.TeamService/ListMyPendingInvites"
+	TeamService_CreateTeam_FullMethodName            = "/pandora.team.v1.TeamService/CreateTeam"
+	TeamService_Invite_FullMethodName                = "/pandora.team.v1.TeamService/Invite"
+	TeamService_AcceptInvite_FullMethodName          = "/pandora.team.v1.TeamService/AcceptInvite"
+	TeamService_LeaveTeam_FullMethodName             = "/pandora.team.v1.TeamService/LeaveTeam"
+	TeamService_Kick_FullMethodName                  = "/pandora.team.v1.TeamService/Kick"
+	TeamService_SetReady_FullMethodName              = "/pandora.team.v1.TeamService/SetReady"
+	TeamService_GetTeam_FullMethodName               = "/pandora.team.v1.TeamService/GetTeam"
+	TeamService_GetMyTeam_FullMethodName             = "/pandora.team.v1.TeamService/GetMyTeam"
+	TeamService_ListMyPendingInvites_FullMethodName  = "/pandora.team.v1.TeamService/ListMyPendingInvites"
+	TeamService_SetTeamMap_FullMethodName            = "/pandora.team.v1.TeamService/SetTeamMap"
+	TeamService_ListOpenTeams_FullMethodName         = "/pandora.team.v1.TeamService/ListOpenTeams"
+	TeamService_ApplyToTeam_FullMethodName           = "/pandora.team.v1.TeamService/ApplyToTeam"
+	TeamService_ListTeamApplications_FullMethodName  = "/pandora.team.v1.TeamService/ListTeamApplications"
+	TeamService_HandleTeamApplication_FullMethodName = "/pandora.team.v1.TeamService/HandleTeamApplication"
 )
 
 // TeamServiceClient is the client API for TeamService service.
@@ -59,6 +64,12 @@ type TeamServiceClient interface {
 	GetTeam(ctx context.Context, in *GetTeamRequest, opts ...grpc.CallOption) (*GetTeamResponse, error)
 	GetMyTeam(ctx context.Context, in *GetMyTeamRequest, opts ...grpc.CallOption) (*GetMyTeamResponse, error)
 	ListMyPendingInvites(ctx context.Context, in *ListMyPendingInvitesRequest, opts ...grpc.CallOption) (*ListMyPendingInvitesResponse, error)
+	// ── 找队伍(玩家没有队伍时的入口) ──────────────────────────────────────────
+	SetTeamMap(ctx context.Context, in *SetTeamMapRequest, opts ...grpc.CallOption) (*SetTeamMapResponse, error)
+	ListOpenTeams(ctx context.Context, in *ListOpenTeamsRequest, opts ...grpc.CallOption) (*ListOpenTeamsResponse, error)
+	ApplyToTeam(ctx context.Context, in *ApplyToTeamRequest, opts ...grpc.CallOption) (*ApplyToTeamResponse, error)
+	ListTeamApplications(ctx context.Context, in *ListTeamApplicationsRequest, opts ...grpc.CallOption) (*ListTeamApplicationsResponse, error)
+	HandleTeamApplication(ctx context.Context, in *HandleTeamApplicationRequest, opts ...grpc.CallOption) (*HandleTeamApplicationResponse, error)
 }
 
 type teamServiceClient struct {
@@ -159,6 +170,56 @@ func (c *teamServiceClient) ListMyPendingInvites(ctx context.Context, in *ListMy
 	return out, nil
 }
 
+func (c *teamServiceClient) SetTeamMap(ctx context.Context, in *SetTeamMapRequest, opts ...grpc.CallOption) (*SetTeamMapResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetTeamMapResponse)
+	err := c.cc.Invoke(ctx, TeamService_SetTeamMap_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *teamServiceClient) ListOpenTeams(ctx context.Context, in *ListOpenTeamsRequest, opts ...grpc.CallOption) (*ListOpenTeamsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOpenTeamsResponse)
+	err := c.cc.Invoke(ctx, TeamService_ListOpenTeams_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *teamServiceClient) ApplyToTeam(ctx context.Context, in *ApplyToTeamRequest, opts ...grpc.CallOption) (*ApplyToTeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApplyToTeamResponse)
+	err := c.cc.Invoke(ctx, TeamService_ApplyToTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *teamServiceClient) ListTeamApplications(ctx context.Context, in *ListTeamApplicationsRequest, opts ...grpc.CallOption) (*ListTeamApplicationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTeamApplicationsResponse)
+	err := c.cc.Invoke(ctx, TeamService_ListTeamApplications_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *teamServiceClient) HandleTeamApplication(ctx context.Context, in *HandleTeamApplicationRequest, opts ...grpc.CallOption) (*HandleTeamApplicationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HandleTeamApplicationResponse)
+	err := c.cc.Invoke(ctx, TeamService_HandleTeamApplication_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TeamServiceServer is the server API for TeamService service.
 // All implementations should embed UnimplementedTeamServiceServer
 // for forward compatibility.
@@ -178,6 +239,12 @@ type TeamServiceServer interface {
 	GetTeam(context.Context, *GetTeamRequest) (*GetTeamResponse, error)
 	GetMyTeam(context.Context, *GetMyTeamRequest) (*GetMyTeamResponse, error)
 	ListMyPendingInvites(context.Context, *ListMyPendingInvitesRequest) (*ListMyPendingInvitesResponse, error)
+	// ── 找队伍(玩家没有队伍时的入口) ──────────────────────────────────────────
+	SetTeamMap(context.Context, *SetTeamMapRequest) (*SetTeamMapResponse, error)
+	ListOpenTeams(context.Context, *ListOpenTeamsRequest) (*ListOpenTeamsResponse, error)
+	ApplyToTeam(context.Context, *ApplyToTeamRequest) (*ApplyToTeamResponse, error)
+	ListTeamApplications(context.Context, *ListTeamApplicationsRequest) (*ListTeamApplicationsResponse, error)
+	HandleTeamApplication(context.Context, *HandleTeamApplicationRequest) (*HandleTeamApplicationResponse, error)
 }
 
 // UnimplementedTeamServiceServer should be embedded to have
@@ -213,6 +280,21 @@ func (UnimplementedTeamServiceServer) GetMyTeam(context.Context, *GetMyTeamReque
 }
 func (UnimplementedTeamServiceServer) ListMyPendingInvites(context.Context, *ListMyPendingInvitesRequest) (*ListMyPendingInvitesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListMyPendingInvites not implemented")
+}
+func (UnimplementedTeamServiceServer) SetTeamMap(context.Context, *SetTeamMapRequest) (*SetTeamMapResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetTeamMap not implemented")
+}
+func (UnimplementedTeamServiceServer) ListOpenTeams(context.Context, *ListOpenTeamsRequest) (*ListOpenTeamsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListOpenTeams not implemented")
+}
+func (UnimplementedTeamServiceServer) ApplyToTeam(context.Context, *ApplyToTeamRequest) (*ApplyToTeamResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyToTeam not implemented")
+}
+func (UnimplementedTeamServiceServer) ListTeamApplications(context.Context, *ListTeamApplicationsRequest) (*ListTeamApplicationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListTeamApplications not implemented")
+}
+func (UnimplementedTeamServiceServer) HandleTeamApplication(context.Context, *HandleTeamApplicationRequest) (*HandleTeamApplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HandleTeamApplication not implemented")
 }
 func (UnimplementedTeamServiceServer) testEmbeddedByValue() {}
 
@@ -396,6 +478,96 @@ func _TeamService_ListMyPendingInvites_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TeamService_SetTeamMap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTeamMapRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).SetTeamMap(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_SetTeamMap_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).SetTeamMap(ctx, req.(*SetTeamMapRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TeamService_ListOpenTeams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOpenTeamsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).ListOpenTeams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_ListOpenTeams_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).ListOpenTeams(ctx, req.(*ListOpenTeamsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TeamService_ApplyToTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyToTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).ApplyToTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_ApplyToTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).ApplyToTeam(ctx, req.(*ApplyToTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TeamService_ListTeamApplications_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTeamApplicationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).ListTeamApplications(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_ListTeamApplications_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).ListTeamApplications(ctx, req.(*ListTeamApplicationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TeamService_HandleTeamApplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HandleTeamApplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).HandleTeamApplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_HandleTeamApplication_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).HandleTeamApplication(ctx, req.(*HandleTeamApplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TeamService_ServiceDesc is the grpc.ServiceDesc for TeamService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -438,6 +610,26 @@ var TeamService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListMyPendingInvites",
 			Handler:    _TeamService_ListMyPendingInvites_Handler,
+		},
+		{
+			MethodName: "SetTeamMap",
+			Handler:    _TeamService_SetTeamMap_Handler,
+		},
+		{
+			MethodName: "ListOpenTeams",
+			Handler:    _TeamService_ListOpenTeams_Handler,
+		},
+		{
+			MethodName: "ApplyToTeam",
+			Handler:    _TeamService_ApplyToTeam_Handler,
+		},
+		{
+			MethodName: "ListTeamApplications",
+			Handler:    _TeamService_ListTeamApplications_Handler,
+		},
+		{
+			MethodName: "HandleTeamApplication",
+			Handler:    _TeamService_HandleTeamApplication_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1,0 +1,150 @@
+// Pandora 配置表:宝箱点表。
+//
+// 源表:Pandora-Client-SVN/Table/关卡/s_宝箱点.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/chest_point.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:一行 = 一个宝箱刷新点(位置 / 朝向 / 缩放 / 网格 / 重刷节奏 / 开锁与背负参数),按「宝箱组Id」
+//   挂在 s_宝箱组.xlsx(chest_group 表)下,再由宝箱组挂到关卡上;掉落候选按「宝箱掉落组ID」
+//   引用 d_宝箱掉落.xlsx(chest_drop 表)的 loot_table_id,读条分段按「品质规则组ID」引用
+//   d_宝箱品质阶段.xlsx(chest_quality_stage 表)的 rule_set_id。
+//   消费者是战斗 / PVE DS(客户端 CfgChestPoint 同源导出,运行时由 UMyChestSpawnModel 生成
+//   AMyLootChestActor)。服务端登记本表的理由与 spawn_point.proto 一致:两端共用同一张 xlsx,
+//   未登记的表 / 列会被 configtable-gen 判为非法;服务端自身当前不据此判定任何业务,
+//   宝箱刷新在 DS,实际入包仍走服务端权威发放与 drop_whitelist(CLAUDE.md §9.6)。
+//
+// 客户端 CfgChestPoint(UE FCfgChestPoint,Tool/Table/Cs/Proto/s_宝箱点.json)与本表同源导出;
+//   本文件的类型 / 必填 / 默认值刻意与客户端列登记逐列一致,避免同一张 xlsx 在两仓被解释成两种数据。
+//   注意客户端列登记按 colName 匹配、与顺序无关,本表则是**列序 = 字段号序**,故字段顺序以 xlsx
+//   表头 A..AI 为准,不照抄客户端 items 数组顺序。
+//
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 必填 / 默认值 / 前缀 / 外键约束全部由 excel.proto 注解承载(proto 即单一事实源)。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+//
+// 类型判定依据(实测全部 151 行数据,行 3..153):
+//   - 中心X/Y/Z、朝向Yaw、首次延迟秒、背负移速动画倍率 存在小数(中心X 1 行、中心Y 15 行为负,
+//     背负偏移X 全 151 行为 -35)→ 必须 float:parseCell 的 uint32 分支走 ParseUint,
+//     负数与 "0.5" 一律解析失败;
+//   - 其余尺寸 / 角度 / 时长 / 倍率列当前恰好全为整数,但客户端登记与 FCfgChestPoint 均为 float
+//     (且带 ClampMin 语义),按整型登记会在策划填 2.5 当天炸掉整批生成 → 同族统一 float
+//     (处置同 chest_quality_stage.proto);
+//   - 宝箱组Id / 关卡Id 是数值 ID(客户端列登记为 Int32)→ uint32 + 外键;
+//   - 宝箱掉落组ID / 品质规则组ID **是字符串不是数字**:客户端登记为 String、
+//     FCfgChestPoint 对应字段为 FName,且它们引用的是 chest_drop.loot_table_id /
+//     chest_quality_stage.rule_set_id 这两个 **string** 列(不是目标表 id),
+//     故既不能按 uint32 登记(策划改成非数字组名当天即炸),也无法标 (excel_fk)
+//     ——(excel_fk) 只支持引用目标表的 uint32 id;
+//   - 启用 / 开局刷新 / 允许背起 / 开锁者专属 取值只有 0/1 且列名即开关 → bool。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// ChestPointRow 宝箱点表一行(列序 = 字段号序 = 表头 A..AI,共 35 列)。
+message ChestPointRow {
+  // ID(主键)。实测 151 行互不重复,连续取值 80007001 ~ 80007151(整段按 80007 组的号段顺编)。
+  //   注意**不可从 ID 反推所属组**:唯一属于 70007 组的那一行 ID 是 80007151,仍落在 80007 号段里,
+  //   组归属只认「宝箱组Id」列。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 宝箱组Id(本宝箱点属于哪一组)。外键引用 chest_group 表 id;实测取值 80007(150 行)/ 70007(1 行),
+  //   两者均在 s_宝箱组.xlsx 内。生成 ListByChestGroupId 反查(按组取全部宝箱点,这是本表主查询)。
+  uint32 chest_group_id = 2 [(excel_col) = "宝箱组Id", (excel_required) = true, (excel_fk) = "chest_group"];
+  // 关卡Id(冗余回填的所属关卡,便于策划在单表内筛图)。外键引用 level 表 id;实测 8(150 行)/ 7(1 行)。
+  //   权威归属仍是「宝箱点 → 宝箱组 → 关卡」这条链,本列只是同一事实的表内冗余。
+  uint32 level_id = 3 [(excel_col) = "关卡Id", (excel_required) = true, (excel_fk) = "level"];
+  // 宝箱掉落组ID(本箱专属掉落组,取值对应 chest_drop 表的 loot_table_id 列)。
+  //   实测 "80007" / "70007",与 d_宝箱掉落.xlsx 的组名一致。
+  //   刻意**不标 required**:客户端 FCfgChestPoint::LootTableId 注释明确「0/None 表示使用 Actor 上的
+  //   内联 Drops 兼容配置」,即留空是合法配置,标 required 会把合法行判成非法并拖垮整批生成。
+  string loot_table_id = 4 [(excel_col) = "宝箱掉落组ID"];
+  // 备注(策划可读说明,多为导入时的原 Actor 名,如「箱 SquareChest(原 SM_Crate_12)」)。纯注释列。
+  string remark = 5 [(excel_col) = "备注"];
+  // 中心X(刷新中心世界坐标,UE 单位;可为负,实测 1 行为负)。
+  float center_x = 6 [(excel_col) = "中心X"];
+  // 中心Y(同上;实测 15 行为负)。
+  float center_y = 7 [(excel_col) = "中心Y"];
+  // 中心Z(同上;实测全为正,1600 上下)。
+  float center_z = 8 [(excel_col) = "中心Z"];
+  // 朝向Yaw(出生朝向欧拉角,度;实测 0 ~ 348.7,含小数)。
+  float yaw = 9 [(excel_col) = "朝向Yaw"];
+  // 朝向Pitch(同上;实测全 0)。
+  float pitch = 10 [(excel_col) = "朝向Pitch"];
+  // 朝向Roll(同上;实测全 0)。
+  float roll = 11 [(excel_col) = "朝向Roll"];
+  // 宝箱蓝图(可选的宝箱 Actor 类路径;留空 = 用默认 AMyLootChestActor)。
+  //   实测 151 行**全部为空**,故只约束非空值须为类路径,不标 required 也不设默认。
+  string chest_blueprint = 12 [(excel_col) = "宝箱蓝图", (excel_prefix) = "/"];
+  // 静态网格(箱体外观,如 /Game/Vefects/LootBox/Shared/Meshes/SM_SquareChest_Closed...)。
+  //   实测 151 行同值且非空,但刻意**不标 required**:本列与「宝箱蓝图」是二选一的外观来源,
+  //   标 required 会禁掉「改用宝箱蓝图、静态网格留空」这一合法配法,并让整批生成失败。
+  string static_mesh = 13 [(excel_col) = "静态网格", (excel_prefix) = "/"];
+  // 缩放X(实测全 1)。空单元格按 1 解析,与客户端列登记 defaultValue="1" 及 ClampMin=0.01 一致
+  //   (取零值 0 会得到不可见的零缩放箱体,故此处必须给默认值)。
+  float scale_x = 14 [(excel_col) = "缩放X", (excel_default) = "1"];
+  // 缩放Y(同上)。
+  float scale_y = 15 [(excel_col) = "缩放Y", (excel_default) = "1"];
+  // 缩放Z(同上)。
+  float scale_z = 16 [(excel_col) = "缩放Z", (excel_default) = "1"];
+  // 开锁秒数(**已废弃**:客户端 DisplayName 为「旧开锁秒数(废弃)」,运行时不再读取,
+  //   实际读条时长改由 chest_quality_stage 表按品质分段给出)。列仍在表头,故必须登记,
+  //   否则 checkHeaders 判为「未登记的列」。实测全 0;空值默认 0,与客户端列登记一致。
+  float unlock_seconds = 17 [(excel_col) = "开锁秒数", (excel_default) = "0"];
+  // 开锁范围厘米(玩家须进入该半径才能开箱)。实测全 300;空值默认 300,与客户端列登记一致。
+  float unlock_range_cm = 18 [(excel_col) = "开锁范围厘米", (excel_default) = "300"];
+  // 掉落散布半径(开箱后掉落物在地面的散布半径,UE 单位)。实测全 400;空值默认 400,同客户端。
+  float scatter_radius = 19 [(excel_col) = "掉落散布半径", (excel_default) = "400"];
+  // 开锁者专属(1=掉落只归开箱者 / 0=所有人可拾取)。实测全 0;
+  //   空单元格取零值 false,与客户端 FCfgChestPoint::bExclusiveToOpener=false 及无 defaultValue 登记一致。
+  bool exclusive_to_opener = 20 [(excel_col) = "开锁者专属"];
+  // 重刷秒数(被开启后隔多久重新刷出;0 = 不重刷)。实测全 60;空值取零值 0,同客户端(无 defaultValue)。
+  float respawn_seconds = 21 [(excel_col) = "重刷秒数"];
+  // 首次延迟秒(开局后延迟多久首次刷出)。实测全为 0.5,是小数列;空值取零值 0,同客户端。
+  float first_delay_seconds = 22 [(excel_col) = "首次延迟秒"];
+  // 启用(1=启用 / 0=停用)。实测全 1;空单元格按 1 解析,与客户端列登记 defaultValue="1" 一致。
+  bool enabled = 23 [(excel_col) = "启用", (excel_default) = "1"];
+  // 开局刷新(1=开局立即刷 / 0=按首次延迟与触发条件刷)。实测全 1;空值按 1 解析,同客户端。
+  bool spawn_on_start = 24 [(excel_col) = "开局刷新", (excel_default) = "1"];
+  // 品质规则组ID(开箱读条分段规则,取值对应 chest_quality_stage 表的 rule_set_id 列)。
+  //   实测 151 行全为 "Default";空值按 "Default" 解析,与客户端列登记 defaultValue="Default" 及
+  //   FCfgChestPoint::QualityRuleSetId 的初值一致。
+  string quality_rule_set_id = 25 [(excel_col) = "品质规则组ID", (excel_default) = "Default"];
+  // 允许背起(1=玩家可把箱子背走 / 0=只能原地开)。实测全 1;空值按 1 解析,同客户端 defaultValue="1"。
+  bool allow_carry = 26 [(excel_col) = "允许背起", (excel_default) = "1"];
+  // 背负移速动画倍率(背箱时角色移速与 locomotion 动画播放倍率,客户端 ClampMin=0.01 / ClampMax=1.0)。
+  //   实测全为 0.5,是小数列;空值默认 0.5,同客户端。
+  float carry_move_anim_rate = 27 [(excel_col) = "背负移速动画倍率", (excel_default) = "0.5"];
+  // 背部挂点(角色骨骼上的背箱插槽名;客户端注释:不存在时拒绝背起并记录配置错误)。
+  //   实测全为 "spine_03";空值默认 spine_03,同客户端。**不标 (excel_prefix)**:这是骨骼 socket 名,
+  //   不是资产路径。
+  string carry_socket_name = 28 [(excel_col) = "背部挂点", (excel_default) = "spine_03"];
+  // 背负偏移X(箱体相对背部挂点的位置偏移,UE 单位)。实测 151 行全为 -35(负数 → 必须 float);
+  //   空值默认 -35,同客户端。
+  float carry_offset_x = 29 [(excel_col) = "背负偏移X", (excel_default) = "-35"];
+  // 背负偏移Y(同上;实测全 0)。空值默认 0,同客户端。
+  float carry_offset_y = 30 [(excel_col) = "背负偏移Y", (excel_default) = "0"];
+  // 背负偏移Z(同上;实测全 0)。空值默认 0,同客户端。
+  float carry_offset_z = 31 [(excel_col) = "背负偏移Z", (excel_default) = "0"];
+  // 背负旋转Yaw(箱体相对背部挂点的旋转,度)。实测全 90;空值默认 90,同客户端。
+  float carry_yaw = 32 [(excel_col) = "背负旋转Yaw", (excel_default) = "90"];
+  // 背负旋转Pitch(同上;实测全 0)。空值默认 0,同客户端。
+  float carry_pitch = 33 [(excel_col) = "背负旋转Pitch", (excel_default) = "0"];
+  // 背负旋转Roll(同上;实测全 90)。空值默认 90,同客户端。
+  float carry_roll = 34 [(excel_col) = "背负旋转Roll", (excel_default) = "90"];
+  // 丢下前向距离(手动丢下时箱子放在角色正前方多远,厘米;客户端 ClampMin=0.0)。
+  //   实测全 100;空值默认 100,同客户端。
+  float drop_forward_distance = 35 [(excel_col) = "丢下前向距离", (excel_default) = "100"];
+}
+
+// ChestPointTableData 宝箱点整表容器(dist/chest_point.json 的根对象;excel_file 注解 = 导表登记)。
+message ChestPointTableData {
+  option (excel_file) = "关卡/s_宝箱点.xlsx";
+  // 实测版式:第 1 行表头,第 2 行 A2..AI2 有样式但无任何取值(读取器视为整行空),
+  //   数据自第 3 行起至第 153 行连续 151 行
+  //   (与通用第 5 行版式不同,必须显式覆盖,否则前两行数据会被整体跳过)。
+  option (excel_data_start_row) = 3;
+
+  repeated ChestPointRow rows = 1;
+}

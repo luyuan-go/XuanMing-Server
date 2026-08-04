@@ -1,0 +1,45 @@
+// Pandora 配置表:粒子(Niagara 特效)表。
+//
+// 源表:Pandora-Client-SVN/Table/资产/l_粒子.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/particle.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+// 版式:第 1 行列名,第 2-3 行策划取值说明,第 4 行空,第 5 行起数据
+//   (= Pandora 通用版式,(excel_data_start_row) 显式写 5 只为把实测结果留在 proto 里)。
+// 用途:客户端 / DS 按 ID 取 Niagara 资产与挂点参数播放特效(技能 / BUFF / 状态引用本表 ID)。
+//   服务端自身不据本表做任何数值或准入判定——登记它是为了让两端共用同一份 proto 单一事实源,
+//   改列只改「xlsx 表头 + 本文件注解」两处(未登记的表头列会被 configtable-gen 判为非法)。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// ParticleRow 粒子表一行(列序 = 字段号序 = 表头 A..H)。
+message ParticleRow {
+  // ID(主键,特效配置 ID;源表现有取值 500 / 501 / 1000 / 100101 … 无固定分段规则)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 备注(策划可读名,如「Boris普攻」「眩晕特效」;仅供人读,不参与逻辑)
+  string remark = 2 [(excel_col) = "备注"];
+  // 资产(UE Niagara 系统资产路径,形如 /Game/…/NS_Xxx.NS_Xxx)
+  string asset_path = 3 [(excel_col) = "资产", (excel_required) = true, (excel_prefix) = "/"];
+  // 插槽名(挂载的骨骼 Socket 名,如 pelvis / root_fx;表头注「默认:无」,留空 = 不挂插槽)
+  string socket_name = 4 [(excel_col) = "插槽名"];
+  // 附加(特效是否附着到宿主随其移动:0=否(默认) 1=是)
+  bool attached = 5 [(excel_col) = "附加", (excel_default) = "0"];
+  // 位置偏移(格式 x,y,z 的逗号串,非数值列;表头注「默认:0,0,0」)
+  string location_offset = 6 [(excel_col) = "位置偏移", (excel_default) = "0,0,0"];
+  // 旋转偏移(格式 Pitch,Yaw,Roll 的逗号串;表头注「默认:0,0,0」;当前源表全列未填)
+  string rotation_offset = 7 [(excel_col) = "旋转偏移", (excel_default) = "0,0,0"];
+  // 缩放(格式 x,y,z 的逗号串;表头注「默认:1,1,1」)
+  string scale = 8 [(excel_col) = "缩放", (excel_default) = "1,1,1"];
+}
+
+// ParticleTableData 粒子表整表容器(dist/particle.json 的根对象;excel_file 注解 = 导表登记)。
+message ParticleTableData {
+  option (excel_file) = "资产/l_粒子.xlsx";
+  option (excel_data_start_row) = 5;
+
+  repeated ParticleRow rows = 1;
+}

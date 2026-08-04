@@ -1,0 +1,32 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "remark": "测试",
+      "fx": "/Game/Fx/SkillRangeLocator/NS_Decal_Arc.NS_Decal_Arc",
+      "radius": 500,
+      "angle": 45
+    },
+    {
+      "id": 101,
+      "remark": "Boris技能1",
+      "fx": "/Game/Fx/SkillRangeLocator/NS_Decal_Arc.NS_Decal_Arc",
+      "radius": 500,
+      "angle": 45
+    },
+    {
+      "id": 106,
+      "remark": "Crunch技能1",
+      "fx": "/Game/Fx/SkillRangeLocator/NS_Decal_Arc.NS_Decal_Arc",
+      "radius": 800,
+      "angle": 45
+    },
+    {
+      "id": 100921,
+      "remark": "120°8米半径",
+      "fx": "/Game/Fx/SkillRangeLocator/NS_Decal_Arc.NS_Decal_Arc",
+      "radius": 800,
+      "angle": 120
+    }
+  ]
+}

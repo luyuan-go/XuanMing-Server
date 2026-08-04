@@ -1,0 +1,66 @@
+// Pandora 配置表:技能方位类型——子弹。
+//
+// 源表:Pandora-Client-SVN/Table/技能/j_技能_方位类型_子弹.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/skill_bullet.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:技能在「方位指示器」模式下的子弹(箭形)表现规格(客户端 CfgSkillBullet / FCfgSkillBullet 同源导出)。
+//   与 skill_circle 一样属纯表现数据:只描述施法时给玩家看的指示器长宽 / 子弹数 / 夹角,
+//   不参与命中判定。服务端自身不据本表做任何数值或准入判定,登记它是为了让两端共用同一份
+//   proto 单一事实源(未登记的表头列会被 configtable-gen 判为非法)。
+//
+// 版式(实测):第 1 行列名(A..G),第 2 行是各列默认值说明(默认300厘米 / 默认20厘米 / 默认1 / 单位度),
+//   第 3 行标注「特效参数规格 / 默认0度」,第 4-6 行为整行空(仅有样式,无值),
+//   数据自**第 7 行**起至第 9 行共 3 行。
+//   显式写 (excel_data_start_row) = 7 是把实测版式钉进 proto:通用默认值 5 当前碰巧也能导出
+//   同样结果(第 5-6 行整行空会被 allEmpty 跳过),但那是巧合——策划一旦在第 5 / 6 行补一句
+//   说明,该行就会被当成数据行、因主键列为空报「主键须为正整数」而整批生成失败。
+//
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 默认值 / 前缀约束全部由 excel.proto 注解承载(proto 即单一事实源)。
+//   默认值刻意与客户端列登记(Tool/Table/Cs/Proto/j_技能_方位类型_子弹.json)逐列一致,
+//   避免同一张 xlsx 在两仓被解释成两种数据。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// SkillBulletRow 技能子弹方位表一行(列序 = 字段号序 = 表头 A..G)。
+message SkillBulletRow {
+  // ID(主键,方位规格 ID;由技能表按 ID 引用)。实测 3 行:1(测试)/ 101 / 106。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 备注(策划可读说明,如「Boris技能1」)。纯注释列,客户端未登记本列。
+  string remark = 2 [(excel_col) = "备注"];
+  // 特效(指示器 Niagara 资产路径,实测 3 行同为
+  //   /Game/Fx/SkillRangeLocator/NS_Decal_Arrow.NS_Decal_Arrow)。
+  // 标 (excel_prefix) = "/" 是因为本列是**纯资产路径**(不同于 skill_circle.circles 的复合值);
+  //   前缀只校验非空单元格,留空(= 不显示指示器)仍合法,故不标 required
+  //   —— 客户端列登记 defaultValue="" 同样允许留空。
+  string fx = 3 [(excel_col) = "特效", (excel_prefix) = "/"];
+  // 长度(指示器长度,厘米)。实测 500 / 1000 / 900 全为整数,但客户端登记为 float
+  //   且本列是连续几何量(策划随时可能填 850.5),故用 float:uint32 会让这种改表直接
+  //   炸掉整批生成(parseCell 对 "850.5" 报「须为非负整数」)。
+  // 空单元格取 300,与客户端列登记 defaultValue="300" 对齐(源表第 2 行亦注「默认300厘米」)。
+  float length = 4 [(excel_col) = "长度", (excel_default) = "300"];
+  // 宽度(指示器宽度,厘米)。实测 20 / 400 / 300;同 length 用 float。
+  // 空单元格取 20,与客户端列登记 defaultValue="20" 对齐(源表第 2 行注「默认20厘米」)。
+  float width = 5 [(excel_col) = "宽度", (excel_default) = "20"];
+  // 数量(同时发出的子弹条数)。实测 3 行**全为空**,取默认值 1。
+  //   客户端 FCfgSkillBullet::Num 是 uint8 = 1,是纯计数 → uint32(CLAUDE.md §5.12)。
+  uint32 count = 6 [(excel_col) = "数量", (excel_default) = "1"];
+  // 夹角(多子弹时相邻两条子弹间的夹角,单位度;客户端注:数量为奇数时以中间那条对称,
+  //   偶数时以中间两条对称)。实测 3 行**全为空**,取默认值 0(= 平行,不扇开)。
+  // 角度是连续量且客户端登记为 float,同 length 用 float 而非 uint32。
+  float angle = 7 [(excel_col) = "夹角", (excel_default) = "0"];
+}
+
+// SkillBulletTableData 技能子弹方位整表容器(dist/skill_bullet.json 的根对象;excel_file 注解 = 导表登记)。
+message SkillBulletTableData {
+  option (excel_file) = "技能/j_技能_方位类型_子弹.xlsx";
+  option (excel_data_start_row) = 7;
+
+  repeated SkillBulletRow rows = 1;
+}

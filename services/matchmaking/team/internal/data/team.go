@@ -9,6 +9,19 @@
 //	pandora:team:invite:target:%d → zset(member=invite_id,score=expires_at_ms),被邀请人维度的
 //	                           pending 邀请索引:写入侧限流(不变量 §9-18)+ 拉取兜底查询。
 //	                           TTL=InviteTTL(每次写入刷新);过期成员由 score 惰性清理。
+//	pandora:team:apply:{%d}  → zset(member=applicant_id,score=expires_at_ms),队伍维度的
+//	                           pending 入队申请索引。hashtag 与 pandora:team:{%d} 同源,
+//	                           保证申请与队伍主体落同一 cluster slot。写入侧限流
+//	                           (不变量 §9-18,上限 max_applications_per_team)+ 队长拉取查询。
+//	                           TTL=ApplyTTL(每次写入刷新);过期成员由 score 惰性清理。
+//	pandora:team:open:all    → zset(member=team_id,score=索引项过期时刻 ms),开放招募队伍索引
+//	pandora:team:open:map:%d → zset(同上),按目标关卡分桶,供 ListOpenTeams 的 map_id 筛选
+//
+// ⚠️ open 索引是**非权威投影**(不变量 §9.22):唯一权威永远是 pandora:team:{id} 记录本身。
+// 索引只用来"找候选",biz 逐条回权威记录复核后才返回给客户端;索引脏了只会少返几条或多读
+// 几次,永远不会返回一支实际已满/已解散/已开打的队伍。因此索引写失败一律 best-effort 告警,
+// 不回滚已提交的队伍状态机迁移。悬挂成员由两道机制收敛:①score = 队伍 key 的最晚存活时刻,
+// ZREMRANGEBYSCORE 惰性清掉;②复核不通过时顺手 ZREM。
 //
 // 状态机写用 WATCH/MULTI/EXEC 乐观锁:
 //
@@ -63,6 +76,22 @@ func inviteTargetKey(playerID uint64) string {
 	return fmt.Sprintf("pandora:team:invite:target:%d", playerID)
 }
 
+// applyKey returns "pandora:team:apply:{teamID}" — 队伍维度的 pending 入队申请索引
+// (zset,member=applicant_id,score=expires_at_ms)。
+// hashtag 内容与 teamKey 一致(都是 teamID),保证申请索引与队伍主体同 cluster slot。
+func applyKey(teamID uint64) string {
+	return fmt.Sprintf("pandora:team:apply:{%d}", teamID)
+}
+
+// openAllKey 是"全部开放招募队伍"索引(ListOpenTeams 的 map_id=0 路径)。
+const openAllKey = "pandora:team:open:all"
+
+// openMapKey returns "pandora:team:open:map:mapID" — 按目标关卡分桶的开放队伍索引
+// (ListOpenTeams 的 map_id>0 路径)。mapID=0 也有自己的桶(队长未选图的队伍)。
+func openMapKey(mapID uint32) string {
+	return fmt.Sprintf("pandora:team:open:map:%d", mapID)
+}
+
 // ── 数据模型 ──────────────────────────────────────────────────────────────────
 //
 // 队伍主体直接使用 proto 存储类型 teamv1.TeamStorageRecord /
@@ -79,6 +108,16 @@ type InviteRecord struct {
 	// InviterID / ExpiresAtMs 供 ListPendingInvites 拉取兜底展示。
 	// 历史记录(旧版本写入、无这两个字段)解析为 0,不报错(记录只活 60s,自然换代)。
 	InviterID   uint64
+	ExpiresAtMs int64
+}
+
+// ApplicationRecord 是一份 pending 入队申请的内存表示,对应 zset
+// pandora:team:apply:{teamID} 里的一个成员(member=PlayerID,score=ExpiresAtMs)。
+//
+// 为什么不像邀请那样再配一个 hash:申请只需要"谁、到期时刻"两项,zset 成员本身就装得下,
+// 多一个 hash 只会多一个可漂移的存储(§15.2 能一份就不拆两份)。
+type ApplicationRecord struct {
+	PlayerID    uint64
 	ExpiresAtMs int64
 }
 
@@ -145,6 +184,48 @@ type TeamRepo interface {
 	// 不变量 §9-22:推送只是投影,这里才是唯一权威查询)。按过期时间升序,
 	// 至多返回 limit 条(读取侧上限)。顺手惰性清理已过期/已接受的残留索引成员。
 	ListPendingInvites(ctx context.Context, targetPlayerID uint64, limit int) ([]*InviteRecord, error)
+
+	// ── 入队申请(找队伍) ────────────────────────────────────────────────────
+
+	// ClaimApplication 写入或刷新一份 pending 入队申请,返回该申请的过期时刻(unix ms)。
+	//
+	// 写入侧上限(不变量 §9-18):同一队伍未过期 pending 申请数 ≥ maxPending 且
+	// applicantID 尚未在列表内时拒绝,返回 ErrTeamApplyPendingLimit(3009)。
+	// 清理过期成员 → 校验上限 → 写入/刷新 在同一段 Lua 内原子完成(单 key,cluster 安全),
+	// 无 TOCTOU。重复申请同一队伍幂等:成员已存在时只刷新 score,不再占一个新名额。
+	ClaimApplication(ctx context.Context, teamID, applicantID uint64, ttl time.Duration, maxPending int) (int64, error)
+
+	// TakeApplication 原子取走一份申请(校验未过期 + 删除),返回是否取到有效申请。
+	// 已过期的成员也会被顺手删掉,但返回 false(按"申请已失效"处理)。
+	// 队长审批(同意/拒绝)与申请人重复提交之间靠本操作的原子性定序:先取到的那次才算数。
+	TakeApplication(ctx context.Context, teamID, applicantID uint64) (bool, error)
+
+	// ListApplications 列出 teamID 的未过期 pending 申请(拉取兜底,权威查询)。
+	// 按过期时间升序,至多返回 limit 条(读取侧上限)。顺手惰性清理已过期成员。
+	ListApplications(ctx context.Context, teamID uint64, limit int) ([]*ApplicationRecord, error)
+
+	// DeleteApplications 删除整支队伍的申请索引(解散时清理,避免残留占 Redis)。
+	// best-effort:失败无碍,索引自带 TTL。
+	DeleteApplications(ctx context.Context, teamID uint64) error
+
+	// ── 开放招募队伍索引(非权威投影,见文件头注释) ──────────────────────────
+
+	// SyncOpenTeam 同步队伍在"开放招募"索引中的存在性。
+	//   open=true  → 写入 pandora:team:open:all 与 open:map:{mapID},score=expiresAtMs,并刷新索引 key 的 TTL;
+	//   open=false → 从上述两个 key 移除。
+	// prevMapID != mapID 时(队长换了目标关卡),无论 open 与否都先从 open:map:{prevMapID} 移除。
+	// 跨 slot 多 key,不做原子保证:索引是非权威投影,部分失败最坏只是多/少几条候选,
+	// 由 score 过期与读取侧复核收敛。
+	SyncOpenTeam(ctx context.Context, teamID uint64, mapID, prevMapID uint32, open bool, expiresAtMs int64, ttl time.Duration) error
+
+	// ListOpenTeamIDs 惰性清理过期成员后,按最近活跃(score 降序)返回至多 limit 个候选 team_id。
+	// mapID=0 读 open:all(不限关卡);mapID>0 读对应分桶。
+	// 返回的只是**候选**,调用方必须逐条回权威队伍记录复核(见文件头注释)。
+	ListOpenTeamIDs(ctx context.Context, mapID uint32, limit int) ([]uint64, error)
+
+	// RemoveOpenTeamCandidate 从索引里剔除一个复核不通过的候选(已满/已解散/已开打/已不存在)。
+	// best-effort 自愈,失败无碍(score 过期兜底)。
+	RemoveOpenTeamCandidate(ctx context.Context, teamID uint64, mapID uint32) error
 }
 
 // ── Redis 实现 ────────────────────────────────────────────────────────────────
@@ -484,6 +565,174 @@ func (r *RedisTeamRepo) ListPendingInvites(ctx context.Context, targetPlayerID u
 		_ = r.rdb.ZRem(ctx, idxKey, stale...).Err()
 	}
 	return invites, nil
+}
+
+// --- Application(入队申请) ---
+
+// claimApplicationScript 在队伍申请索引(单 key,cluster 安全)上原子完成:
+// 清理已过期成员 → 仅当申请人不在列表内时才校验上限 → 写入/刷新 + 刷新 TTL。
+// 返回 1=写入成功(含幂等刷新),0=已达上限。
+// KEYS[1]=applyKey ARGV[1]=now_ms ARGV[2]=applicant_id ARGV[3]=expires_at_ms
+// ARGV[4]=max_pending ARGV[5]=ttl_ms
+//
+// 「已存在则不查上限」是幂等的关键:申请人重复点申请只是刷新自己那条的过期时间,
+// 不应该因为队伍恰好满 10 条(其中一条就是他自己)而被自己挤掉。
+var claimApplicationScript = redis.NewScript(`
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+if redis.call('ZSCORE', KEYS[1], ARGV[2]) == false then
+	if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[4]) then
+		return 0
+	end
+end
+redis.call('ZADD', KEYS[1], ARGV[3], ARGV[2])
+redis.call('PEXPIRE', KEYS[1], ARGV[5])
+return 1`)
+
+func (r *RedisTeamRepo) ClaimApplication(ctx context.Context, teamID, applicantID uint64, ttl time.Duration, maxPending int) (int64, error) {
+	now := time.Now().UnixMilli()
+	expiresAtMs := now + ttl.Milliseconds()
+
+	ok, err := claimApplicationScript.Run(ctx, r.rdb,
+		[]string{applyKey(teamID)},
+		now, strconv.FormatUint(applicantID, 10), expiresAtMs, maxPending, ttl.Milliseconds()).Int()
+	if err != nil {
+		return 0, err
+	}
+	if ok == 0 {
+		return 0, errcode.New(errcode.ErrTeamApplyPendingLimit,
+			"team %d has too many pending applications (max %d)", teamID, maxPending)
+	}
+	return expiresAtMs, nil
+}
+
+// takeApplicationScript 原子取走一份申请:存在即删,并按 score 判定是否仍有效。
+// 返回 1=取到有效申请,0=不存在或已过期(过期成员同样被删掉,顺手清理)。
+// KEYS[1]=applyKey ARGV[1]=now_ms ARGV[2]=applicant_id
+var takeApplicationScript = redis.NewScript(`
+local score = redis.call('ZSCORE', KEYS[1], ARGV[2])
+if score == false then
+	return 0
+end
+redis.call('ZREM', KEYS[1], ARGV[2])
+if tonumber(score) <= tonumber(ARGV[1]) then
+	return 0
+end
+return 1`)
+
+func (r *RedisTeamRepo) TakeApplication(ctx context.Context, teamID, applicantID uint64) (bool, error) {
+	taken, err := takeApplicationScript.Run(ctx, r.rdb,
+		[]string{applyKey(teamID)},
+		time.Now().UnixMilli(), strconv.FormatUint(applicantID, 10)).Int()
+	if err != nil {
+		return false, err
+	}
+	return taken == 1, nil
+}
+
+func (r *RedisTeamRepo) ListApplications(ctx context.Context, teamID uint64, limit int) ([]*ApplicationRecord, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	key := applyKey(teamID)
+	now := time.Now().UnixMilli()
+
+	// 惰性清理已过期成员,再按过期时间升序取前 limit 条(读取侧上限)。
+	if err := r.rdb.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatInt(now, 10)).Err(); err != nil {
+		return nil, err
+	}
+	items, err := r.rdb.ZRangeArgsWithScores(ctx, redis.ZRangeArgs{
+		Key: key, Start: "-inf", Stop: "+inf", ByScore: true, Offset: 0, Count: int64(limit),
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*ApplicationRecord, 0, len(items))
+	for _, it := range items {
+		member, _ := it.Member.(string)
+		playerID, perr := strconv.ParseUint(member, 10, 64)
+		if perr != nil {
+			return nil, fmt.Errorf("team %d application index bad member %q: %w", teamID, member, perr)
+		}
+		out = append(out, &ApplicationRecord{PlayerID: playerID, ExpiresAtMs: int64(it.Score)})
+	}
+	return out, nil
+}
+
+func (r *RedisTeamRepo) DeleteApplications(ctx context.Context, teamID uint64) error {
+	return r.rdb.Del(ctx, applyKey(teamID)).Err()
+}
+
+// --- Open team index(开放招募队伍索引,非权威投影) ---
+
+func (r *RedisTeamRepo) SyncOpenTeam(ctx context.Context, teamID uint64, mapID, prevMapID uint32, open bool, expiresAtMs int64, ttl time.Duration) error {
+	member := strconv.FormatUint(teamID, 10)
+
+	// 换图:先把旧分桶里的残留摘掉,否则同一支队伍会同时挂在两个 map 桶下。
+	// 与下面的写入不在同一 slot,不做原子保证(索引非权威,读取侧会复核 map_id)。
+	if prevMapID != mapID {
+		if err := r.rdb.ZRem(ctx, openMapKey(prevMapID), member).Err(); err != nil {
+			return err
+		}
+	}
+
+	if !open {
+		if err := r.rdb.ZRem(ctx, openAllKey, member).Err(); err != nil {
+			return err
+		}
+		return r.rdb.ZRem(ctx, openMapKey(mapID), member).Err()
+	}
+
+	z := redis.Z{Score: float64(expiresAtMs), Member: member}
+	if err := r.rdb.ZAdd(ctx, openAllKey, z).Err(); err != nil {
+		return err
+	}
+	if err := r.rdb.Expire(ctx, openAllKey, ttl).Err(); err != nil {
+		return err
+	}
+	if err := r.rdb.ZAdd(ctx, openMapKey(mapID), z).Err(); err != nil {
+		return err
+	}
+	return r.rdb.Expire(ctx, openMapKey(mapID), ttl).Err()
+}
+
+func (r *RedisTeamRepo) ListOpenTeamIDs(ctx context.Context, mapID uint32, limit int) ([]uint64, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	key := openAllKey
+	if mapID > 0 {
+		key = openMapKey(mapID)
+	}
+	now := time.Now().UnixMilli()
+
+	// score = 索引项最晚存活时刻;已过期 = 对应队伍 key 也早该没了,直接清掉。
+	if err := r.rdb.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatInt(now, 10)).Err(); err != nil {
+		return nil, err
+	}
+	// score 降序 = 最近一次写入(最近活跃)在前,让玩家优先看到还在动的队伍。
+	members, err := r.rdb.ZRevRangeByScore(ctx, key, &redis.ZRangeBy{
+		Min: "-inf", Max: "+inf", Offset: 0, Count: int64(limit),
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]uint64, 0, len(members))
+	for _, m := range members {
+		teamID, perr := strconv.ParseUint(m, 10, 64)
+		if perr != nil {
+			return nil, fmt.Errorf("open team index %q bad member %q: %w", key, m, perr)
+		}
+		out = append(out, teamID)
+	}
+	return out, nil
+}
+
+func (r *RedisTeamRepo) RemoveOpenTeamCandidate(ctx context.Context, teamID uint64, mapID uint32) error {
+	member := strconv.FormatUint(teamID, 10)
+	if err := r.rdb.ZRem(ctx, openAllKey, member).Err(); err != nil {
+		return err
+	}
+	return r.rdb.ZRem(ctx, openMapKey(mapID), member).Err()
 }
 
 // inviteFromHash 把 invite hash 字段解析成 InviteRecord。

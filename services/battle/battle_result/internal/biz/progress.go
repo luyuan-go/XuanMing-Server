@@ -44,6 +44,28 @@ func (u *BattleResultUsecase) SetExperienceGranter(g ExperienceGranter) {
 	u.expGranter = g
 }
 
+// MonsterExpTable 按 (怪物角色 ID, 怪物等级) 查击杀经验。
+//
+// 唯一实现是 configtable 的 role_level 表(源表 角色/j_角色等级.xlsx 的「击杀经验」列)。
+// 抽成接口只为让 biz 不直接依赖 pkg/configtable(该包会随注册表增长牵动整个进程的启动依赖),
+// 以及让换算逻辑可以脱离真实配置表跑单测。
+//
+// 返回 ok=false 表示**该 (角色, 等级) 在表里没有行**;调用方必须把它与"有行但经验为 0"
+// 区分开:前者是配置漏项(告警),后者是策划有意不给经验(如玩家英雄行显式填 0)。
+type MonsterExpTable interface {
+	KillExpOf(roleID, level uint32) (uint64, bool)
+}
+
+// SetMonsterExpTable 注入怪物击杀经验表。
+//
+// **不是 nil-safe 的可选依赖**:未注入时 ReportProgress 对每条击杀事实一律返回可重试错误,
+// 而不是"查不到 → 跳过 → 水位照常推进"。理由是后者会让整批击杀经验**永久丢失**且只留一条
+// Warn —— seq 一旦推进,DS 重发会被 `seq <= lastSeq` 跳过,没有任何补救路径。
+// 启动接线见 cmd/battle_result/main.go(配置表是 battle_result 的启动强依赖)。
+func (u *BattleResultUsecase) SetMonsterExpTable(t MonsterExpTable) {
+	u.monsterExp = t
+}
+
 // expSharePermilleFull 是「一整份经验」对应的归属权重(千分比满值)。
 const expSharePermilleFull = 1000
 
@@ -221,14 +243,26 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 				return 0, errcode.New(errcode.ErrInvalidArg,
 					"share_permille %d exceeds %d (seq=%d)", share, expSharePermilleFull, seq)
 			}
-			expPer, ok := u.cfg.MonsterExpOf(fact.MonsterKill.GetMonsterConfigId())
+			// 经验查表:(怪物角色 ID, 怪物等级) → 整份经验。等级 0 = 1 级(见 battle.proto)。
+			// 表未注入时**不能**走"跳过并推进水位"那条路 —— 水位一推进,这批击杀的经验
+			// 就永久没有补救路径了(DS 重发会被 seq<=lastSeq 跳过)。按可重试错误整批退回。
+			if u.monsterExp == nil {
+				plog.With(ctx).Errorw("msg", "monster_exp_table_unavailable",
+					"match_id", matchID, "seq", seq,
+					"hint", "configtable role_level 未注入;经验无法换算,整批退回等待重试(绝不推进水位)")
+				return 0, errcode.New(errcode.ErrUnavailable,
+					"monster exp table unavailable, retry batch (seq=%d)", seq)
+			}
+			monsterID := fact.MonsterKill.GetMonsterConfigId()
+			expPer, ok := u.monsterExp.KillExpOf(monsterID, fact.MonsterKill.GetMonsterLevel())
 			if !ok {
+				// 表里没有这一 (角色, 等级) 行 = 配置漏项。只丢该事实的发放,水位照常推进:
+				// 坏配置不能把整条流卡死(与非白名单拾取同一纪律)。
 				skippedFact++
-				id := fact.MonsterKill.GetMonsterConfigId()
-				if _, seen := unconfiguredMonsters[id]; !seen {
-					unconfiguredMonsters[id] = struct{}{}
+				if _, seen := unconfiguredMonsters[monsterID]; !seen {
+					unconfiguredMonsters[monsterID] = struct{}{}
 					if sampleMonsterID == 0 {
-						sampleMonsterID = id
+						sampleMonsterID = monsterID
 					}
 				}
 				continue

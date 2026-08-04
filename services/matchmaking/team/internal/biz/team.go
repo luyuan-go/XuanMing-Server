@@ -133,7 +133,12 @@ const touchInterval = 15 * time.Minute
 // maybeTouchTeam 在线心跳保活:玩家仍在轮询自己的队伍 → 续期队伍与索引 TTL,
 // 避免在线队伍被 active_ttl 误回收;停止轮询后 TTL 自然到期,僵尸队伍 GC 仍在。
 // 15 分钟节流 + best-effort:失败只告警,不影响读返回。
-func (u *TeamUsecase) maybeTouchTeam(ctx context.Context, teamID, playerID uint64) {
+//
+// 同时刷新开放队伍索引的 score:索引成员的 score 是"索引项最晚存活时刻",与队伍 key 的
+// TTL 同源。只续队伍 key 而不续索引,会让一支持续在线、持续招募的队伍在 active_ttl 后
+// 被 ZREMRANGEBYSCORE 当成过期项清掉,从"获取队伍"列表里静默消失(队伍还活着但没人找得到)。
+// 节流间隔(15min)远小于 active_ttl(60min),续期不会断流。
+func (u *TeamUsecase) maybeTouchTeam(ctx context.Context, team *teamv1.TeamStorageRecord, playerID uint64) {
 	now := time.Now()
 	if v, ok := u.lastTouch.Load(playerID); ok {
 		if last, ok2 := v.(time.Time); ok2 && now.Sub(last) < touchInterval {
@@ -142,10 +147,11 @@ func (u *TeamUsecase) maybeTouchTeam(ctx context.Context, teamID, playerID uint6
 	}
 	u.lastTouch.Store(playerID, now)
 	u.maybeSweepLastTouch(now)
-	if err := u.repo.TouchTeam(ctx, teamID, playerID, u.activeTTL()); err != nil {
+	if err := u.repo.TouchTeam(ctx, team.GetTeamId(), playerID, u.activeTTL()); err != nil {
 		plog.With(ctx).Warnw("msg", "team_touch_failed",
-			"player_id", playerID, "team_id", teamID, "err", err)
+			"player_id", playerID, "team_id", team.GetTeamId(), "err", err)
 	}
+	u.syncOpenIndex(ctx, team, team.GetMapId())
 }
 
 // maybeSweepLastTouch 惰性清扫 lastTouch 里已过节流窗口的条目,防止长跑进程内存
@@ -209,6 +215,10 @@ func (u *TeamUsecase) CreateTeam(ctx context.Context, teamID, playerID uint64) (
 	// 3. push 给队长自己(创建者收到快照确认)
 	u.pushUpdate(ctx, 0, []uint64{playerID}, team,
 		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
+
+	// 新建队伍只有队长一人、状态 FORMING → 立即进入"开放招募"索引,让别人能找到它。
+	// prevMapID 与 MapId 同为 0(新建队尚未选图),不产生换桶操作。
+	u.syncOpenIndex(ctx, team, team.MapId)
 
 	plog.With(ctx).Debugw("msg", "team_created", "team_id", teamID, "captain_id", playerID)
 	// 分片:队伍锁定队长 owner cell(TeamShardKey=captain_id);新建队仅队长一人,region 分布
@@ -290,9 +300,41 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 		}
 	}
 
-	// 2. 原子声明 playerID 归属(SETNX),保证不变量 §1:一人只能在一个队。
-	//    必须在改成员列表前声明,杜绝两个并发 AcceptInvite 把同一玩家加进两个队的 TOCTOU。
-	//    孤儿索引(索引指向的队伍主体已过期/解散)会自愈,不误拦成 3004。
+	// 2. 走共用入队事务(内部先 ClaimPlayer 保不变量 §1,再改成员表)。
+	result, err := u.joinTeam(ctx, teamID, playerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 删 invite 令牌(同时释放被邀请人 pending 索引配额)
+	if inviteID != 0 {
+		_ = u.repo.DeleteInvite(ctx, inviteID, playerID)
+	}
+
+	// push MEMBER_JOINED 给所有成员(不发给 playerID — 原则 2)
+	u.pushUpdate(ctx, playerID, memberIDs(result), result,
+		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
+
+	// 人数变了 → 可能从"招募中"变成"已满",同步开放队伍索引(非权威投影)。
+	u.syncOpenIndex(ctx, result, result.MapId)
+
+	plog.With(ctx).Debugw("msg", "team_accept_invite", "team_id", teamID, "player_id", playerID)
+	// 分片:成员加入后队伍 region 分布可能变跨 region(影响 §4.4 battle DS 放置)。router 为 nil → 不打。
+	u.logTeamComposition(ctx, result)
+	return result, nil
+}
+
+// joinTeam 是"把 playerID 加进 teamID"的唯一入队事务,由三条路径共用:
+// AcceptInvite(接受邀请)、ApplyToTeam(open 策略直接入队)、HandleTeamApplication(队长同意)。
+//
+// 为什么必须共用一份:入队是不变量 §1(一人只能在一个可操作队伍)的关键写路径,
+// 顺序铁律是**先 ClaimPlayer 原子声明归属,后改成员表**——两个并发入队路径若各写一份,
+// 迟早有一条忘了先声明,同一玩家就会同时出现在两支队伍。共用后新增入队入口不可能绕过它。
+//
+// 失败时用 CAS 回滚 claim(仅当索引仍指向本队才删),防误删并发路径刚写入的新归属;
+// 回滚失败会把玩家锁在"claim 指向一支没真进的队"的状态(靠 claimPlayerHealingOrphan
+// 下次自愈),因此必须留 Warn 可观测。
+func (u *TeamUsecase) joinTeam(ctx context.Context, teamID, playerID uint64) (*teamv1.TeamStorageRecord, error) {
 	ttl := u.activeTTL()
 	if err := u.claimPlayerHealingOrphan(ctx, playerID, teamID, ttl); err != nil {
 		return nil, err
@@ -321,32 +363,14 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 		result = cloneTeam(team)
 		return nil
 	}, ttl); err != nil {
-		// 入队失败(满员/解散/冲突),回滚 claim 释放玩家。CAS:仅当索引仍指向本队才删,
-		// 防误删并发路径刚写入的新归属。
-		// 回滚删除失败会留下"claim 指向一支没真进的队"的残留索引,把玩家锁在无法重新组队的
-		// 状态(靠 claimPlayerHealingOrphan 下次自愈)。LeaveTeam / Kick 的同类清理失败都有
-		// Warn,唯独此回滚路径原先静默 → 补齐(不变量 §1 残留索引可观测)。
 		if derr := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); derr != nil {
-			plog.With(ctx).Warnw("msg", "team_accept_rollback_index_delete_failed",
+			plog.With(ctx).Warnw("msg", "team_join_rollback_index_delete_failed",
 				"player_id", playerID, "team_id", teamID, "err", derr)
 		}
 		return nil, err
 	}
 
 	// player index 已由 ClaimPlayer 在锁前原子写入,此处无需再写。
-
-	// 删 invite 令牌(同时释放被邀请人 pending 索引配额)
-	if inviteID != 0 {
-		_ = u.repo.DeleteInvite(ctx, inviteID, playerID)
-	}
-
-	// push MEMBER_JOINED 给所有成员(不发给 playerID — 原则 2)
-	u.pushUpdate(ctx, playerID, memberIDs(result), result,
-		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
-
-	plog.With(ctx).Debugw("msg", "team_accept_invite", "team_id", teamID, "player_id", playerID)
-	// 分片:成员加入后队伍 region 分布可能变跨 region(影响 §4.4 battle DS 放置)。router 为 nil → 不打。
-	u.logTeamComposition(ctx, result)
 	return result, nil
 }
 
@@ -398,9 +422,17 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 	// 匹配联动:离队成员若正在排队/确认期 → 撤销整张票据(best-effort,不阻断离队)
 	u.cancelMatchmaking(ctx, teamID, playerID)
 
+	// 人数/状态变了 → 同步开放队伍索引(解散或满员时会被摘掉)。
+	u.syncOpenIndex(ctx, result, result.MapId)
+
 	// 解散时用短 TTL 刷新 key
 	if result.State == stateDisbanded {
 		u.refreshDisbandedTTL(ctx, teamID, disbandedTTL)
+		// 队伍没了,残留的入队申请再无人能处理 → 顺手清掉,不留到 TTL(best-effort)。
+		if err := u.repo.DeleteApplications(ctx, teamID); err != nil {
+			plog.With(ctx).Warnw("msg", "team_disband_delete_applications_failed",
+				"team_id", teamID, "err", err)
+		}
 		u.pushUpdate(ctx, playerID, memberIDs(result), result,
 			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_DISBANDED, 0)
 	} else {
@@ -455,6 +487,9 @@ func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerI
 
 	// 匹配联动:被踢成员若正在排队/确认期 → 撤销整张票据(best-effort,不阻断踢人)
 	u.cancelMatchmaking(ctx, teamID, targetPlayerID)
+
+	// 人数变了(满员队踢掉一人后重新开放招募)→ 同步开放队伍索引。
+	u.syncOpenIndex(ctx, result, result.MapId)
 
 	// push 给剩余成员 + 被踢者(不发给 captain — 原则 2)
 	recipients := append(memberIDs(result), targetPlayerID)
@@ -511,6 +546,9 @@ func (u *TeamUsecase) SetReady(ctx context.Context, teamID, playerID uint64, rea
 	// push 给其他成员(不发给自己 — 原则 2)
 	u.pushUpdate(ctx, playerID, memberIDs(result), result, reason, 0)
 
+	// FORMING ↔ READY 会改变"是否还在招募"(只有 FORMING 才进列表)→ 同步索引。
+	u.syncOpenIndex(ctx, result, result.MapId)
+
 	plog.With(ctx).Debugw("msg", "team_set_ready", "team_id", teamID, "player_id", playerID,
 		"ready", ready, "new_state", result.State)
 	return result, nil
@@ -557,7 +595,7 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 	// 在线心跳:玩家仍在轮询自己的队伍 → 续期(15s 节流,best-effort)。
 	// 只在 GetMyTeam(本人+索引校验过)续,GetTeam(任意 teamID)绝不续,
 	// 防旁人反复读把已抛弃队伍永久续命;disbanded 分支已在上方 return,不续。
-	u.maybeTouchTeam(ctx, teamID, playerID)
+	u.maybeTouchTeam(ctx, team, playerID)
 	return team, true, nil
 }
 
@@ -570,6 +608,343 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 // 读取侧上限 = MaxPendingInvites(写入侧硬上限已兜住总量,单次全量返回即达标)。
 func (u *TeamUsecase) ListPendingInvites(ctx context.Context, playerID uint64) ([]*data.InviteRecord, error) {
 	return u.repo.ListPendingInvites(ctx, playerID, u.cfg.MaxPendingInvites)
+}
+
+// ── 找队伍:列表 / 申请 / 审批 ─────────────────────────────────────────────────
+//
+// 玩家没有队伍时的入口:ListOpenTeams 拉一批正在招募的队伍(全部 / 指定 map_id,上限 10),
+// ApplyToTeam 申请其中一支。ApplyToTeam 按服务端配置 join_policy 走两条路径之一,
+// 客户端不分叉、也不自己判定能不能进(§17.3 准入条件只有服务端一份权威判定)。
+
+const (
+	// openCandidateFactor 是候选超取倍数。索引是非权威投影,候选里可能混着已满 / 已开打 /
+	// 已解散的队伍,复核会刷掉一部分;只取 limit 条会导致"明明有队伍却返回不足 limit 条"。
+	openCandidateFactor = 3
+	// openCandidateMax 是单次候选读取的硬上限,保证单次 Redis 读与复核开销有界
+	// (limit 已被 max_open_teams_per_query 钳住,这里是第二道闸)。
+	openCandidateMax = 64
+)
+
+// joinPolicy 返回当前生效的入队策略。
+//
+// 启动时 ValidateJoinPolicy 已 fail-fast,正常永远解析成功;万一运行期配置被改坏,
+// 一律退回最保守的 approval——绝不因为解析失败就把全服队伍对陌生人敞开(权限放大是
+// 不可接受的失败模式,同 conf.ParseJoinPolicy 的口径)。
+func (u *TeamUsecase) joinPolicy() string {
+	policy, err := conf.ParseJoinPolicy(u.cfg.JoinPolicy)
+	if err != nil {
+		return conf.JoinPolicyApproval
+	}
+	return policy
+}
+
+// joinPolicyProto 把生效策略映射成客户端可见枚举(填进每份 Team 快照)。
+func (u *TeamUsecase) joinPolicyProto() teamv1.TeamJoinPolicy {
+	if u.joinPolicy() == conf.JoinPolicyOpen {
+		return teamv1.TeamJoinPolicy_TEAM_JOIN_POLICY_OPEN
+	}
+	return teamv1.TeamJoinPolicy_TEAM_JOIN_POLICY_APPROVAL
+}
+
+// maxOpenTeams 返回单次列表的返回上限(读取侧上限,不变量 §9-18)。
+func (u *TeamUsecase) maxOpenTeams() int {
+	if u.cfg.MaxOpenTeamsPerQuery > 0 {
+		return u.cfg.MaxOpenTeamsPerQuery
+	}
+	return 10
+}
+
+// maxApplications 返回单队 pending 申请上限(写入侧 + 读取侧共用,不变量 §9-18)。
+func (u *TeamUsecase) maxApplications() int {
+	if u.cfg.MaxApplicationsPerTeam > 0 {
+		return u.cfg.MaxApplicationsPerTeam
+	}
+	return 10
+}
+
+// isOpenForRecruit 判定队伍是否"正在招募"(会出现在 ListOpenTeams 结果里)。
+//
+// 只认 FORMING:READY 表示全员已准备、下一步就是开局,MATCHING 已进撮合队列,
+// IN_BATTLE 已在打,DISBANDED 已解散——这几种状态下把陌生人放进来都会打断队伍已有进程。
+// 这是**唯一**判定口径:写索引和读复核都调它,避免"写进去的和读出来的不是同一套标准"。
+func isOpenForRecruit(team *teamv1.TeamStorageRecord) bool {
+	if team == nil || team.State != stateForming {
+		return false
+	}
+	count := len(team.Members)
+	return count > 0 && count < int(team.MaxSize)
+}
+
+// syncOpenIndex 把队伍在开放招募索引里的存在性同步为当前权威状态。
+//
+// 索引是非权威投影(不变量 §9.22):写失败只告警,**绝不回滚已提交的队伍状态机迁移**——
+// 为了一个用来"找候选"的加速结构而回退已经落地的入队/离队,才是真的破坏正确性。
+// score 取"现在 + active_ttl",与队伍 key 的 TTL 同源:队伍 key 到期消失时索引成员恰好
+// 也过期,ZREMRANGEBYSCORE 一扫即净,不留悬挂。
+func (u *TeamUsecase) syncOpenIndex(ctx context.Context, team *teamv1.TeamStorageRecord, prevMapID uint32) {
+	if team == nil || team.TeamId == 0 {
+		return
+	}
+	ttl := u.activeTTL()
+	expiresAtMs := time.Now().Add(ttl).UnixMilli()
+	if err := u.repo.SyncOpenTeam(ctx, team.TeamId, team.MapId, prevMapID, isOpenForRecruit(team), expiresAtMs, ttl); err != nil {
+		plog.With(ctx).Warnw("msg", "team_open_index_sync_failed",
+			"team_id", team.TeamId, "map_id", team.MapId, "prev_map_id", prevMapID, "err", err)
+	}
+}
+
+// SetTeamMap 队长设置本队目标关卡(招募展示 + ListOpenTeams 的 map_id 筛选依据)。
+//
+// 不校验 map_id 是否在关卡表内:本字段只是招募标签,真正的准入判定在进入链
+// (MatchService.StartMatch 已有 ERR_MATCH_INVALID_MAP),在这里再判一次就是第二份判定
+// (§17.3 明确禁止)。填了非法值的后果仅限于"这支队伍出现在一个没人筛的分桶里",
+// 且换图会把它从旧分桶摘掉,分桶数因此被在线队伍数有界(空 ZSET 被 Redis 自动删除)。
+func (u *TeamUsecase) SetTeamMap(ctx context.Context, teamID, captainID uint64, mapID uint32) (*teamv1.TeamStorageRecord, error) {
+	ttl := u.activeTTL()
+	var result *teamv1.TeamStorageRecord
+	var prevMapID uint32
+
+	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
+		if team.State == stateDisbanded {
+			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
+		}
+		if team.CaptainId != captainID {
+			return errcode.New(errcode.ErrTeamNotCaptain, "player %d is not captain of team %d", captainID, teamID)
+		}
+		// 已进撮合/战斗的队伍改目标关卡没有意义(本次对局的图早已定死),拒绝以免误导队员。
+		if team.State != stateForming && team.State != stateReady {
+			return errcode.New(errcode.ErrTeamWrongState, "team %d state %d not allows set_map", teamID, team.State)
+		}
+
+		prevMapID = team.MapId
+		team.MapId = mapID
+		team.UpdatedAtMs = time.Now().UnixMilli()
+		result = cloneTeam(team)
+		return nil
+	}, ttl); err != nil {
+		return nil, err
+	}
+
+	// 换桶:先摘旧 map 分桶再写新分桶(由 repo.SyncOpenTeam 内部按 prevMapID 处理)。
+	u.syncOpenIndex(ctx, result, prevMapID)
+
+	u.pushUpdate(ctx, captainID, memberIDs(result), result,
+		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MAP_CHANGED, 0)
+
+	plog.With(ctx).Debugw("msg", "team_set_map", "team_id", teamID, "captain_id", captainID,
+		"prev_map_id", prevMapID, "map_id", mapID)
+	return result, nil
+}
+
+// ListOpenTeams 列出正在招募的队伍(只读)。
+//
+//	mapID = 0 → 全部;mapID > 0 → 只要目标关卡等于该值的。
+//	limit ≤ 0 或超过 max_open_teams_per_query → 钳到 max_open_teams_per_query(默认 10)。
+//
+// 两段式:先从非权威索引取候选,再逐条回权威队伍记录复核。复核不通过(已满 / 已开打 /
+// 已解散 / 记录已没 / map 已改)的候选顺手从索引剔除(best-effort 自愈)。
+// 因此索引脏不会让玩家看到一支实际进不去的队伍,最坏只是这一次少返几条。
+//
+// 单条 Get 失败(网络抖 / 该条记录 proto 损坏)只跳过该候选并计数告警,不整单失败:
+// 这里返回的是候选展示列表,跳过一条不授权任何东西;真正的准入判定在 ApplyToTeam,
+// 那条路径是 fail-closed 的。索引本身读失败则照常返回错误,由客户端退避重试。
+func (u *TeamUsecase) ListOpenTeams(ctx context.Context, mapID uint32, limit int) ([]*teamv1.OpenTeamBrief, error) {
+	maxTeams := u.maxOpenTeams()
+	if limit <= 0 || limit > maxTeams {
+		limit = maxTeams
+	}
+
+	candidateLimit := limit * openCandidateFactor
+	if candidateLimit > openCandidateMax {
+		candidateLimit = openCandidateMax
+	}
+	candidates, err := u.repo.ListOpenTeamIDs(ctx, mapID, candidateLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	policy := u.joinPolicyProto()
+	out := make([]*teamv1.OpenTeamBrief, 0, limit)
+	skipped := 0
+
+	for _, teamID := range candidates {
+		if len(out) >= limit {
+			break
+		}
+		team, found, gerr := u.repo.Get(ctx, teamID)
+		if gerr != nil {
+			skipped++
+			continue
+		}
+		if !found || !isOpenForRecruit(team) || (mapID > 0 && team.MapId != mapID) {
+			// 索引脏了。剔除时用权威记录里的 map_id(记录已没就用查询用的 mapID),
+			// 保证摘的是它真正挂着的那个分桶。
+			bucket := mapID
+			if found {
+				bucket = team.MapId
+			}
+			if rerr := u.repo.RemoveOpenTeamCandidate(ctx, teamID, bucket); rerr != nil {
+				plog.With(ctx).Warnw("msg", "team_open_index_prune_failed",
+					"team_id", teamID, "map_id", bucket, "err", rerr)
+			}
+			continue
+		}
+
+		out = append(out, &teamv1.OpenTeamBrief{
+			TeamId:      team.TeamId,
+			CaptainId:   team.CaptainId,
+			MemberCount: uint32(len(team.Members)),
+			MaxSize:     uint32(team.MaxSize),
+			MapId:       team.MapId,
+			CreatedAtMs: team.CreatedAtMs,
+			JoinPolicy:  policy,
+		})
+	}
+
+	if skipped > 0 {
+		plog.With(ctx).Warnw("msg", "team_open_list_candidates_skipped",
+			"map_id", mapID, "skipped", skipped, "returned", len(out))
+	}
+	return out, nil
+}
+
+// ApplyToTeam 申请加入队伍。返回 (joined, team, expiresAtMs, err):
+//   - joined=true  → open 策略下已当场入队,team 为入队后完整快照;
+//   - joined=false → approval 策略下已写入申请令牌,expiresAtMs 为其过期时刻。
+//
+// 前置校验读的是权威队伍记录(不是索引):队伍存在、未解散、正在招募、申请人不在队内。
+// open 路径复用 joinTeam(与接受邀请同一入队事务,保不变量 §1)。
+// approval 路径的上限校验与占位在 data 层 Lua 内原子完成,无 TOCTOU;重复申请同一队伍
+// 幂等(只刷新自己那条的过期时间,不再占新名额)。
+func (u *TeamUsecase) ApplyToTeam(ctx context.Context, teamID, applicantID uint64) (bool, *teamv1.TeamStorageRecord, int64, error) {
+	team, found, err := u.repo.Get(ctx, teamID)
+	if err != nil {
+		return false, nil, 0, err
+	}
+	if !found {
+		return false, nil, 0, errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
+	}
+	if team.State == stateDisbanded {
+		return false, nil, 0, errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
+	}
+	if hasMember(team, applicantID) {
+		return false, nil, 0, errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", applicantID, teamID)
+	}
+	if !isOpenForRecruit(team) {
+		// 满员与状态不对分开报,客户端才能给出正确提示(而不是笼统的"进不去")。
+		if len(team.Members) >= int(team.MaxSize) {
+			return false, nil, 0, errcode.New(errcode.ErrTeamFull,
+				"team %d is full (%d/%d)", teamID, len(team.Members), team.MaxSize)
+		}
+		return false, nil, 0, errcode.New(errcode.ErrTeamWrongState,
+			"team %d state %d not recruiting", teamID, team.State)
+	}
+
+	// open 策略:当场入队。上面的读只是快速失败,真正的满员/重复入队判定在 joinTeam 的
+	// WATCH/MULTI/EXEC 事务内重做一遍(读到写之间队伍可能已被别人填满)。
+	if u.joinPolicy() == conf.JoinPolicyOpen {
+		result, jerr := u.joinTeam(ctx, teamID, applicantID)
+		if jerr != nil {
+			return false, nil, 0, jerr
+		}
+		u.pushUpdate(ctx, applicantID, memberIDs(result), result,
+			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
+		u.syncOpenIndex(ctx, result, result.MapId)
+		plog.With(ctx).Debugw("msg", "team_apply_joined_open",
+			"team_id", teamID, "player_id", applicantID)
+		u.logTeamComposition(ctx, result)
+		return true, result, 0, nil
+	}
+
+	// approval 策略:写申请令牌,等队长审批。
+	expiresAtMs, err := u.repo.ClaimApplication(ctx, teamID, applicantID, u.cfg.ApplyTTL.Std(), u.maxApplications())
+	if err != nil {
+		return false, nil, 0, err
+	}
+
+	// 推送只是"去重查申请列表"的提示(§9.22 权威是 ListTeamApplications),丢帧最多延迟
+	// 队长看到申请,不丢申请。只发队长,不打扰其他队员。
+	u.pushUpdate(ctx, applicantID, []uint64{team.CaptainId}, team,
+		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_APPLICATION_RECEIVED, 0)
+
+	plog.With(ctx).Debugw("msg", "team_apply_pending",
+		"team_id", teamID, "player_id", applicantID, "expires_at_ms", expiresAtMs)
+	return false, nil, expiresAtMs, nil
+}
+
+// ListTeamApplications 队长查本队待处理入队申请(只读,拉取兜底)。
+// 申请人名单不对普通成员开放:非队长返回 ErrTeamNotCaptain(3003)。
+func (u *TeamUsecase) ListTeamApplications(ctx context.Context, teamID, captainID uint64) ([]*data.ApplicationRecord, error) {
+	team, found, err := u.repo.Get(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
+	}
+	if team.CaptainId != captainID {
+		return nil, errcode.New(errcode.ErrTeamNotCaptain, "player %d is not captain of team %d", captainID, teamID)
+	}
+	return u.repo.ListApplications(ctx, teamID, u.maxApplications())
+}
+
+// HandleTeamApplication 队长同意 / 拒绝一份入队申请。
+//
+// 定序:先用 TakeApplication 原子取走令牌,再决定做什么。这保证同一份申请只被处理一次
+// (队长连点两次"同意"→ 第二次拿不到令牌,返回 3010,不会重复入队);也保证"同意"与
+// "拒绝"竞争时只有一方生效。
+//
+// 已知取舍:accept 路径若在取走令牌后入队失败(期间队伍被填满 / 申请人已加入别队),
+// 令牌不会被放回。理由是"放回一份队长已经处理过的申请"会让队长再看到一次幽灵申请,
+// 比让申请人重新申请更糟(§3 宁可 fail-closed 拒一次,也不写出不自洽的状态)。
+// 队长收到明确错误码,申请人的本地待处理态到期后按钮自动恢复可点。
+func (u *TeamUsecase) HandleTeamApplication(ctx context.Context, teamID, captainID, applicantID uint64, accept bool) (*teamv1.TeamStorageRecord, error) {
+	team, found, err := u.repo.Get(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
+	}
+	if team.State == stateDisbanded {
+		return nil, errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
+	}
+	if team.CaptainId != captainID {
+		return nil, errcode.New(errcode.ErrTeamNotCaptain, "player %d is not captain of team %d", captainID, teamID)
+	}
+
+	taken, err := u.repo.TakeApplication(ctx, teamID, applicantID)
+	if err != nil {
+		return nil, err
+	}
+	if !taken {
+		return nil, errcode.New(errcode.ErrTeamApplyNotFound,
+			"application of player %d to team %d not found or expired", applicantID, teamID)
+	}
+
+	if !accept {
+		// 拒绝:令牌已消耗、配额已释放,队伍状态不变。不给申请人发推送——
+		// 申请人的等待本来就是有界的(令牌 TTL),到期即恢复可申请,不需要为"被拒"
+		// 单开一条推送通道(§15.3 不为可能的将来预留机制)。
+		plog.With(ctx).Debugw("msg", "team_application_rejected",
+			"team_id", teamID, "captain_id", captainID, "applicant_id", applicantID)
+		return team, nil
+	}
+
+	result, err := u.joinTeam(ctx, teamID, applicantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// push 给全体成员(含刚入队的申请人;不发给队长自己 — 原则 2)。
+	u.pushUpdate(ctx, captainID, memberIDs(result), result,
+		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
+	u.syncOpenIndex(ctx, result, result.MapId)
+
+	plog.With(ctx).Debugw("msg", "team_application_accepted",
+		"team_id", teamID, "captain_id", captainID, "applicant_id", applicantID)
+	u.logTeamComposition(ctx, result)
+	return result, nil
 }
 
 // claimPlayerHealingOrphan 原子声明 player→teamID 归属(SETNX,不变量 §1),并对
@@ -682,7 +1057,7 @@ func (u *TeamUsecase) pushUpdate(
 	}
 
 	now := time.Now().UnixMilli()
-	protoTeam := recordToProto(team)
+	protoTeam := u.teamToProto(team)
 
 	for _, pid := range toPlayerIDs {
 		event := &teamv1.TeamUpdateEvent{
@@ -760,8 +1135,13 @@ func (u *TeamUsecase) refreshDisbandedTTL(ctx context.Context, teamID uint64, tt
 
 // ── 类型转换 ──────────────────────────────────────────────────────────────────
 
-// recordToProto 把 teamv1.TeamStorageRecord 转成 proto Team。
-func recordToProto(r *teamv1.TeamStorageRecord) *teamv1.Team {
+// teamToProto 把存储快照 TeamStorageRecord 转成客户端可见结构 Team(不变量 §9.14)。
+//
+// join_policy 不是存储字段,而是**每次组装时从服务端配置派生**(§9.11 派生字段服务端重算 /
+// §9.22 不重复影子状态):改配置即时对全服生效,也不存在"队伍里存的策略"与配置漂移的问题。
+// 因此本转换必须是 TeamUsecase 的方法而不是自由函数——离开 usecase 就拿不到权威配置,
+// 只能填 UNSPECIFIED,客户端就会一直按保守策略渲染。
+func (u *TeamUsecase) teamToProto(r *teamv1.TeamStorageRecord) *teamv1.Team {
 	if r == nil {
 		return nil
 	}
@@ -782,12 +1162,14 @@ func recordToProto(r *teamv1.TeamStorageRecord) *teamv1.Team {
 		State:       r.State,
 		CreatedAtMs: r.CreatedAtMs,
 		MaxSize:     r.MaxSize,
+		MapId:       r.MapId,
+		JoinPolicy:  u.joinPolicyProto(),
 	}
 }
 
-// RecordToProto 导出供 service 层使用。
-func RecordToProto(r *teamv1.TeamStorageRecord) *teamv1.Team {
-	return recordToProto(r)
+// TeamToProto 导出供 service 层使用。
+func (u *TeamUsecase) TeamToProto(r *teamv1.TeamStorageRecord) *teamv1.Team {
+	return u.teamToProto(r)
 }
 
 // ── 成员辅助函数 ──────────────────────────────────────────────────────────────

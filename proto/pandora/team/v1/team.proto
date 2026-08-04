@@ -28,6 +28,13 @@ service TeamService {
   rpc GetTeam(GetTeamRequest) returns (GetTeamResponse);                 // 只读,按 team_id 查任意队伍快照
   rpc GetMyTeam(GetMyTeamRequest) returns (GetMyTeamResponse);           // 只读,登录后进大厅查"我的队伍"完整快照(队伍主界面)
   rpc ListMyPendingInvites(ListMyPendingInvitesRequest) returns (ListMyPendingInvitesResponse);  // 只读,拉取兜底:查"发给我的待处理邀请"
+
+  // ── 找队伍(玩家没有队伍时的入口) ──────────────────────────────────────────
+  rpc SetTeamMap(SetTeamMapRequest) returns (SetTeamMapResponse);        // 立即完成型;队长设置本队目标关卡(招募/列表筛选依据)
+  rpc ListOpenTeams(ListOpenTeamsRequest) returns (ListOpenTeamsResponse);  // 只读,列开放招募的队伍(全部 / 指定 map_id),单次上限见 max_open_teams_per_query
+  rpc ApplyToTeam(ApplyToTeamRequest) returns (ApplyToTeamResponse);     // 立即完成型;按服务端 join_policy 走"申请待审批"或"直接入队"
+  rpc ListTeamApplications(ListTeamApplicationsRequest) returns (ListTeamApplicationsResponse);  // 只读,队长查本队待处理入队申请
+  rpc HandleTeamApplication(HandleTeamApplicationRequest) returns (HandleTeamApplicationResponse);  // 立即完成型;队长同意/拒绝一份入队申请
 }
 
 enum TeamState {
@@ -37,6 +44,20 @@ enum TeamState {
   TEAM_STATE_MATCHING    = 3;
   TEAM_STATE_IN_BATTLE   = 4;
   TEAM_STATE_DISBANDED   = 5;
+}
+
+// TeamJoinPolicy 决定 ApplyToTeam 的语义:走"申请 → 队长审批"还是"直接入队"。
+//
+// **不是每队一份存储状态**:取值来自服务端配置 TeamConf.join_policy,由服务端在组装
+// 客户端可见结构时填入(§9.11 派生字段服务端重算 / §9.22 不重复影子状态)。改配置即时
+// 对全服生效,不需要给每支队伍存一份、也不存在队伍存的值与配置漂移的问题。
+//
+// 客户端只用它决定按钮文案与交互(「申请入队」还是「加入队伍」),不得据此跳过服务端校验;
+// UNSPECIFIED(老服务端未填 / 未知新值)一律按 APPROVAL 保守渲染,能不能进以服务端返回为准。
+enum TeamJoinPolicy {
+  TEAM_JOIN_POLICY_UNSPECIFIED = 0;  // 未知:客户端按 APPROVAL 保守处理
+  TEAM_JOIN_POLICY_APPROVAL    = 1;  // 申请进入队伍待处理列表,队长同意才入队
+  TEAM_JOIN_POLICY_OPEN        = 2;  // 未满即直接入队,无需队长操作
 }
 
 message TeamMember {
@@ -58,6 +79,12 @@ message Team {
   int32  max_size      = 6;  // MOBA 5
   // 7-9 reserved
   reserved 7 to 9;
+  // 本队目标关卡(FCfgLevel::Id / 配置表 ID,§5.6 用 uint32)。0 = 队长尚未选图。
+  // 队长通过 SetTeamMap 设置;ListOpenTeams 按它做"固定 map_id"筛选;StartMatch 仍以
+  // 客户端本次请求携带的 map_id 为准(本字段是招募展示与筛选依据,不改匹配入口签名,§17.1)。
+  uint32 map_id        = 10;
+  // 本次响应组装时的入队策略(派生自服务端配置,非队伍存储状态,见 TeamJoinPolicy 注释)。
+  TeamJoinPolicy join_policy = 11;
 }
 
 // Redis 内部存储快照,对应 key `pandora:team:{team_id}` 的 protobuf bytes。
@@ -82,6 +109,11 @@ message TeamStorageRecord {
   int32  max_size      = 7;
   // 8-9 reserved
   reserved 8 to 9;
+  // 队长设置的目标关卡(配置表 ID,§5.6 uint32)。0 = 未选图,仍会出现在"全部"列表里。
+  // 存储侧只存这一份权威;join_policy 不存(全局配置派生,§9.22 不重复影子状态)。
+  // 新增字段,老副本写回不会丢(§9.17:read-modify-write 全走 proto.Unmarshal→改→Marshal,
+  // 不 DiscardUnknown)。
+  uint32 map_id        = 10;
 }
 
 // ===== RPC =====
@@ -222,6 +254,121 @@ message ListMyPendingInvitesResponse {
   repeated PendingInvite invites = 2;  // 按过期时间升序;数量 ≤ max_pending_invites
 }
 
+// ===== 找队伍:列表 / 申请 / 审批 =====
+//
+// 场景:玩家没有队伍时,大厅给一个"获取队伍"入口,拉一批正在招募的队伍,点其中一支申请加入。
+//
+// 为什么不是新开一条进场链:本组 RPC 只处理**组队**,不碰进入场景/副本的那一条链
+// (§17 进入接口仍只有 MatchService.StartMatch)。队伍目标关卡 map_id 是招募展示与筛选
+// 依据,读关卡表判定,不引入按关卡分叉的业务逻辑。
+
+// SetTeamMap:队长设置本队目标关卡(招募展示 + ListOpenTeams 的 map_id 筛选依据)。
+// 队长身份以 JWT + 服务端队伍快照为准;map_id=0 合法,表示"未指定",只出现在"全部"列表里。
+message SetTeamMapRequest {
+  uint64 team_id = 1;
+  uint32 map_id  = 2;  // 目标关卡配置 ID;0 = 清空(未指定)
+}
+
+message SetTeamMapResponse {
+  pandora.common.v1.ErrCode code = 1;
+  Team team = 2;  // 设置后的完整队伍快照
+}
+
+// OpenTeamBrief 是"正在招募的队伍"在列表里的最小展示视图(§9.14 客户端只拿客户端可见结构)。
+//
+// 刻意不含成员数组:列表页只需要"哪支队、队长是谁、几个人、打哪张图、怎么加入";
+// 点进去要看成员再走 GetTeam。也刻意不含昵称——当前 TeamMemberStorageRecord.nickname
+// 全链没有任何写入方(建队/入队都只写 player_id),放一个恒为空的字段等于给客户端喂假字段;
+// 等昵称在组队域真正落地后再按 §9.21 加字段(只增不改号)。
+message OpenTeamBrief {
+  uint64 team_id       = 1;
+  uint64 captain_id    = 2;
+  uint32 member_count  = 3;  // 当前人数
+  uint32 max_size      = 4;  // 队伍容量
+  uint32 map_id        = 5;  // 目标关卡;0 = 队长未选图
+  int64  created_at_ms = 6;
+  TeamJoinPolicy join_policy = 7;  // 决定客户端渲染"申请入队"还是"加入队伍"
+}
+
+// ListOpenTeams:列"开放招募"的队伍。开放 = state=FORMING 且未满员。
+//
+// 筛选(用户需求的两个参数):
+//   - map_id = 0  → 全部开放队伍;
+//   - map_id > 0  → 只要目标关卡等于该值的队伍。
+// 数量(用户需求的上限 10):limit=0 取服务端默认,服务端一律钳到 [1, max_open_teams_per_query]
+// (默认 10)。这是读取侧上限(不变量 §9-18);列表本身是从 Redis 索引读的**非权威投影**,
+// 服务端逐条回权威队伍记录复核后才返回,索引脏了只会少返几条,不会返回错的队伍。
+message ListOpenTeamsRequest {
+  uint32 map_id = 1;  // 0 = 不限关卡
+  uint32 limit  = 2;  // 0 = 服务端默认;服务端钳到 [1, max_open_teams_per_query]
+}
+
+message ListOpenTeamsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated OpenTeamBrief teams = 2;  // 按最近活跃降序;数量 ≤ max_open_teams_per_query
+}
+
+// ApplyToTeam:申请加入指定队伍。申请人以 JWT x-pandora-player-id 为准。
+//
+// 一个 RPC 承载两种策略(TeamConf.join_policy),客户端不分叉:
+//   - open     → 服务端当场入队,返回 joined=true + 入队后完整快照(与 AcceptInvite 同一入队事务);
+//   - approval → 写一份短 TTL 申请令牌,返回 joined=false + expires_at_ms,等队长审批。
+// 重复申请同一队伍是幂等的:刷新同一条令牌的过期时间,不额外占配额。
+message ApplyToTeamRequest {
+  uint64 team_id = 1;
+}
+
+message ApplyToTeamResponse {
+  pandora.common.v1.ErrCode code = 1;
+  bool   joined        = 2;  // true = 已直接入队(open 策略)
+  Team   team          = 3;  // joined=true 时为入队后完整快照;joined=false 时不填
+  int64  expires_at_ms = 4;  // joined=false 时申请令牌过期时间(unix ms),供客户端显示有界等待
+}
+
+// TeamApplication 是一份待处理入队申请的查询视图。
+// 同 OpenTeamBrief,不含昵称(组队域当前没有昵称写入方)。
+message TeamApplication {
+  uint64 player_id     = 1;  // 申请人
+  int64  expires_at_ms = 2;  // 申请过期时间(unix ms)
+}
+
+// ListTeamApplications:队长查本队待处理入队申请(只读,拉取兜底)。
+//
+// 与 ListMyPendingInvites 同构:申请令牌唯一权威在 Redis,kafka→push
+// (TeamUpdateEvent reason=APPLICATION_RECEIVED)只是加速器(§9.22)。队长在打开组队 UI、
+// 回前台、收到推送时调用本 RPC 兜底,丢推送最多延迟看到申请,不丢申请。
+//
+// 上限治理(不变量 §9-18,入队申请是"客户端可写入的堆积列表"):
+//   - 写入侧:同一队伍 pending 申请数上限 TeamConf.max_applications_per_team(默认 10),
+//     超限 ApplyToTeam 返回 ERR_TEAM_APPLY_PENDING_LIMIT(3009);
+//   - 读取侧:单次全量返回,服务端按同一上限截断(写入侧硬上限已兜住总量,无需分页)。
+// 非队长调用返回 ERR_TEAM_NOT_CAPTAIN(3003):申请人名单不对普通成员开放。
+message ListTeamApplicationsRequest {
+  uint64 team_id = 1;
+}
+
+message ListTeamApplicationsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated TeamApplication applications = 2;  // 按过期时间升序;数量 ≤ max_applications_per_team
+}
+
+// HandleTeamApplication:队长同意 / 拒绝一份入队申请。队长身份以 JWT + 队伍快照为准。
+//
+// accept=true  → 与 AcceptInvite 完全相同的入队事务(先 ClaimPlayer 保不变量 §1,再改成员表),
+//                入队失败(满员/申请人已在别队)按业务错误返回,申请令牌一并消耗;
+// accept=false → 只删申请令牌,释放该队配额。
+// 两种结果都幂等:令牌已不在(过期/已被处理/申请人已进队)返回 ERR_TEAM_APPLY_NOT_FOUND(3010)。
+message HandleTeamApplicationRequest {
+  uint64 team_id      = 1;
+  uint64 applicant_id = 2;
+  bool   accept       = 3;
+}
+
+message HandleTeamApplicationResponse {
+  pandora.common.v1.ErrCode code = 1;
+  Team team = 2;  // 处理后的完整队伍快照(accept 成功时含新成员)
+}
+
 // ===== Kafka 推送 payload =====
 //
 // topic: pandora.team.update
@@ -263,6 +410,12 @@ enum TeamUpdateReason {
   TEAM_UPDATE_REASON_STATE_CHANGED    = 7;
   TEAM_UPDATE_REASON_DISBANDED        = 8;
   TEAM_UPDATE_REASON_INVITE_SENT      = 9;
+  // 有人申请加入本队(只推给队长)。事件本身不改队伍,只是"去重查申请列表"的提示:
+  // 申请令牌的唯一权威在 Redis,ListTeamApplications 才是权威查询(§9.22),推送丢帧
+  // 最多延迟队长看到申请,不丢申请。
+  TEAM_UPDATE_REASON_APPLICATION_RECEIVED = 10;
+  // 队长改了本队目标关卡(SetTeamMap)。
+  TEAM_UPDATE_REASON_MAP_CHANGED          = 11;
 }
 
 message TeamUpdateEvent {

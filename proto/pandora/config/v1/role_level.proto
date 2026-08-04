@@ -1,0 +1,74 @@
+// Pandora 配置表:角色等级数值表。
+//
+// 源表:Pandora-Client-SVN/Table/角色/j_角色等级.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/role_level.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+// 用途:每个角色(英雄 / 怪物)在每一等级上的基础战斗属性(血量 / 攻防 / 暴击 / 命中 / 闪避)。
+//   直接消费者是战斗 DS 与客户端(同源导出 FCfgRoleLv,GAS 属性初始化前置数据);
+//   服务端登记本表同 role.proto —— 两端共用同一张 xlsx,未登记的表头列会被判为非法。
+//   服务端自身不据此判定任何派生数值(CLAUDE.md §9.6)。
+//
+// 版式:第 1 行列名;第 2 行是各列默认值说明(「指角色表的ID」「默认1000」…);第 3 行空;
+//   数据区自**第 4 行**起,故显式 (excel_data_start_row) = 4(与 player_level_exp 同版式)。
+//   实测判据:客户端导出产物 Tool/Table/Cs/Temp/CfgRoleLv.json 首行即 xlsx 第 4 行的 id=2001。
+// 注意源表数据区中段有整段空行(R25..R37)后又续了数据(R38..R40):导表器按「整行全空跳过」
+//   处理,客户端产物同样包含尾段三行,两端一致,不需要额外处理。
+// 主键 ID 是 xlsx 里的公式列(= 角色ID×1000 + 角色等级),xlsxlite 读的是公式缓存值 <v>,
+//   所以策划改行后必须让 Excel 重算并保存,否则缓存值会与两侧列漂移。
+//
+// 列类型与默认值取自客户端表定义 Tool/Table/Cs/Proto/j_角色等级.json(CfgRoleLv),逐列对齐,
+//   保证同一个空单元格在两端解析出同一个值(实测 Tool/Table/Cs/Temp/CfgRoleLv.json:
+//   空「攻击力」→ 100、空「命中率」→ 1、空「防御力」→ 0)。
+//   四个概率 / 倍率列在客户端声明为 float,服务端跟随(策划本就按 0.05 这种小数填)。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);非负整数用无符号(§5.12)。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// RoleLevelRow 角色等级表一行(列序 = 字段号序 = 表头 A..K)。
+message RoleLevelRow {
+  // ID(主键,公式列:角色ID×1000 + 角色等级,如 2001×1000+11 = 2001011)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 角色ID(指角色表 j_角色配置表 的 ID)。标 (excel_fk) 做批内引用完整性校验:
+  //   删角色却留着等级行、或等级行写错角色 ID,都会在生成阶段被拦住而不是运行期才发现。
+  //   同时生成反查索引 ListByRoleId(某角色的全部等级行)。
+  uint32 role_id = 2 [(excel_col) = "角色ID", (excel_required) = true, (excel_fk) = "role"];
+  // 角色名(策划备注列,便于人工核对;客户端 CfgRoleLv 未登记本列,
+  //   服务端必须登记 —— configtable-gen 位置敏感且拒绝未登记表头列)
+  string role_name = 3 [(excel_col) = "角色名"];
+  // 角色等级(从 1 起;当前样本只有 1 与 11 两档)
+  uint32 level = 4 [(excel_col) = "角色等级", (excel_required) = true];
+  // 血量(空 = 1000)
+  uint32 hp = 5 [(excel_col) = "血量", (excel_default) = "1000"];
+  // 攻击力(空 = 100)
+  uint32 attack = 6 [(excel_col) = "攻击力", (excel_default) = "100"];
+  // 防御力(空 = 0)
+  uint32 defense = 7 [(excel_col) = "防御力", (excel_default) = "0"];
+  // 暴击率(0~1 概率;空 = 0)
+  float crit_chance = 8 [(excel_col) = "暴击率", (excel_default) = "0"];
+  // 暴击伤害(暴击加成倍率;空 = 0)
+  float crit_damage = 9 [(excel_col) = "暴击伤害", (excel_default) = "0"];
+  // 命中率(0~1 概率;空 = 1 表示必中)
+  float hit_chance = 10 [(excel_col) = "命中率", (excel_default) = "1"];
+  // 闪避率(0~1 概率;空 = 0)
+  float dodge_chance = 11 [(excel_col) = "闪避率", (excel_default) = "0"];
+  // 击杀经验:杀死该角色的**该等级形态**给多少经验(整份;实际入账还要乘 share_permille 归属权重)。
+  //   这是击杀经验换算的**唯一权威**(CLAUDE.md §9.6「数值不信 DS」——DS 只报"杀了哪只怪、
+  //   什么等级、占多少权重",经验值只在 battle_result 查本列)。
+  //   0 = 有意不给经验(玩家英雄行 1001~1010 显式填 0,与"漏填"区分靠 (excel_required))。
+  //   ⚠️ 本列刻意标 required:留空会静默落 0,而 battle_result 对 exp==0 直接跳过出箱、
+  //   一条日志都不打 —— 新增怪物忘填经验将完全无声。宁可生成期整批失败,也不要静默零收益。
+  uint64 kill_exp = 12 [(excel_col) = "击杀经验", (excel_required) = true];
+}
+
+// RoleLevelTableData 角色等级表整表容器(dist/role_level.json 的根对象;注册名 role_level)。
+message RoleLevelTableData {
+  option (excel_file) = "角色/j_角色等级.xlsx";
+  // 第 2 行是默认值说明、第 3 行空,数据区自第 4 行起(实测,见文件头)。
+  option (excel_data_start_row) = 4;
+
+  repeated RoleLevelRow rows = 1;
+}

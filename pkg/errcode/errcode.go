@@ -88,6 +88,8 @@ const (
 	ErrTeamWrongState         Code = 3006
 	ErrTeamConcurrent         Code = 3007 // WATCH/MULTI/EXEC 乐观锁重试耗尽
 	ErrTeamInvitePendingLimit Code = 3008 // 被邀请人待处理邀请数已达上限(不变量 §9-18 写入侧上限)
+	ErrTeamApplyPendingLimit  Code = 3009 // 该队伍待处理入队申请数已达上限(不变量 §9-18 写入侧上限)
+	ErrTeamApplyNotFound      Code = 3010 // 入队申请不存在 / 已过期 / 已被处理
 )
 
 // match(4000-4999)

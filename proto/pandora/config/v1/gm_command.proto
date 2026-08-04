@@ -1,0 +1,59 @@
+// Pandora 配置表:GM 命令表。
+//
+// 源表:Pandora-Client-SVN/Table/程序/g_Gm.xlsx(sheet「gm」,程序维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/gm_command.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 必填 / 默认值 / 前缀约束全部由 excel.proto 注解承载(proto 即单一事实源),
+//   改列只改「xlsx 表头 + 本文件注解」两处。
+//
+// 用途:GM 命令注册表(命令 ID → 展示名 / 参数形状 / 执行端 / 命令实现类)。
+//   与 x_消息协议.xlsx 里的 GMCommandData2C(601) / GMCommand2S(602) / GMCommand2C(603)
+//   是同一条链的两端:协议负责传输,本表负责「命令 601~603 传的是哪条命令、怎么执行」。
+//   「在DS上执行」列决定该命令由 UE DS 就地执行还是回落到 Go 服务侧执行,
+//   服务端据此 fail-closed 拒绝执行端不匹配的命令(不得由客户端自报执行端,CLAUDE.md §9.6)。
+//
+// ⚠️ 当前源表是脚手架而非终稿:仅 3 行示例(1=测试 / 2=清档 / 3=添加物品),
+//   且「命令名称」列 3 行全空(策划/程序尚未填)。proto 契约与列语义不随行数变动;
+//   本文件刻意只把「ID + 显示名称」标 required,其余列留空取类型零值,
+//   避免半成品源表卡住整批生成(store.go 全局校验:任一表加载失败则所有服务拒绝启动)。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// GmCommandRow GM 命令表一行(列序 = 字段号序 = 表头 A..G)。
+message GmCommandRow {
+  // ID(主键,GM 命令号;实测取值 1 / 2 / 3)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 命令名称(程序侧标识名)。⚠️ 实测 3 行数据全空,故不标 required、不标 excel_key
+  //   ——现在标唯一键会因「三行都是空串」判重复直接炸掉整批生成。
+  //   源表补齐后可再评估加 (excel_key) 生成 ByCommandName 查询。
+  string command_name = 2 [(excel_col) = "命令名称"];
+  // 显示名称(GM 面板上给人看的名字;实测「测试」/「清档」/「添加物品」全有值)
+  string display_name = 3 [(excel_col) = "显示名称", (excel_required) = true];
+  // 可索引文本(GM 面板搜索用的别名,英文逗号分隔;如「测试,样本,样例」。空 = 只按显示名搜)
+  string search_keywords = 4 [(excel_col) = "可索引文本"];
+  // 参数集合(参数描述串;分号分隔参数、逗号分隔该参数的候选/别名,
+  //   如「物品Id,物品Id;物品数量,物品数量」。空 = 无参数命令)
+  string param_sets = 5 [(excel_col) = "参数集合"];
+  // 在DS上执行(源表表头下方图例明确「0:否」「1:是(默认)」,故空值默认 1=在 DS 上执行;
+  //   实测 ID=2「清档」与 ID=3「添加物品」显式填 0,由 Go 服务侧执行)
+  bool run_on_ds = 6 [(excel_col) = "在DS上执行", (excel_default) = "1"];
+  // Gm命令类(UE 类路径,如 /Script/Pandora.MySampleGmCmd;空 = 无专用实现类,走通用分发)
+  string command_class = 7 [(excel_col) = "Gm命令类", (excel_prefix) = "/"];
+}
+
+// GmCommandTableData GM 命令整表容器(dist/gm_command.json 的根对象;excel_file 注解 = 导表登记)。
+message GmCommandTableData {
+  option (excel_file) = "程序/g_Gm.xlsx";
+  // 实测版式:第 1 行表头,第 2~3 行是「在DS上执行」列的取值图例(0:否 / 1:是(默认)),
+  // 第 4 行空行,数据自第 5 行起(= 通用版式默认值,此处显式写出以记录已实测)。
+  option (excel_data_start_row) = 5;
+
+  repeated GmCommandRow rows = 1;
+}

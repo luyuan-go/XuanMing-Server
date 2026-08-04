@@ -76,6 +76,8 @@ enum ErrCode {
   ERR_TEAM_WRONG_STATE         = 3006;
   ERR_TEAM_CONCURRENT          = 3007;  // WATCH/MULTI/EXEC 乐观锁重试耗尽
   ERR_TEAM_INVITE_PENDING_LIMIT = 3008; // 被邀请人待处理邀请数已达上限(不变量 §9-18 写入侧上限)
+  ERR_TEAM_APPLY_PENDING_LIMIT = 3009;  // 该队伍待处理入队申请数已达上限(不变量 §9-18 写入侧上限)
+  ERR_TEAM_APPLY_NOT_FOUND     = 3010;  // 入队申请不存在 / 已过期 / 已被处理
 
   // 4000-4999 match
   ERR_MATCH_NOT_FOUND          = 4001;

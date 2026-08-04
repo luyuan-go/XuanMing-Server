@@ -34,6 +34,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
@@ -265,6 +266,33 @@ func main() {
 			"hint", "inventory_addr 未配置 → 战斗装备掉落不发放(drop 出箱积压不丢,配好地址重启补发)")
 	}
 
+	// 6.1.9 配置表(不变量 §9.15):怪物击杀经验的**唯一数值权威**(role_level 表的「击杀经验」列)。
+	//
+	// 与 matchmaker 的可选模式不同,这里是**启动强依赖**:progress 通道开着却没有经验表时,
+	// 每条击杀事实都会被 ReportProgress 按可重试错误退回,DS 原批重试到天荒地老 —— 与其
+	// 让服务带病跑,不如起不来。progress 通道关闭时表也照样加载(结算路径不用它,但配置齐备
+	// 是部署契约的一部分,少一张表说明 ConfigMap 没挂对,早失败早发现)。
+	ctStore := configtable.NewStore()
+	ctDir := cfg.ConfigTable.Dir
+	if ctDir == "" {
+		helper.Errorw("msg", "configtable_dir_required",
+			"hint", "battle_result 的怪物击杀经验只来自 role_level 表;请配置 config_table.dir 并挂载 configtable 卷")
+		os.Exit(1)
+	}
+	ctRes, err := ctStore.Load(ctDir, 0)
+	if err != nil {
+		helper.Errorw("msg", "configtable_load_failed", "dir", ctDir, "err", err)
+		os.Exit(1)
+	}
+	for _, w := range ctRes.Warnings {
+		helper.Warnw("msg", "configtable_load_warning", "warning", w)
+	}
+	helper.Infow("msg", "configtable_loaded", "dir", ctDir, "version", ctRes.Version,
+		"role_level_rows", ctStore.Tables().RoleLevel.Count())
+	// 注入的是"当前批次"的表指针。热更(ReloadConfigTable)后 Store 原子换指针,
+	// 而这里注入的是快照 —— 经验表要跟随热更必须注入 Store 而非 Tables。
+	uc.SetMonsterExpTable(monsterExpFromStore{store: ctStore})
+
 	// 6.2.0 player 经验入账器(实时成长,弱依赖:PlayerAddr 空 → 进度出箱经验行积压不丢,
 	// 配好地址重启补发)。AddExperience 是系统接口,走内网 insecure 直连(复用 MMR reader 地址)。
 	if cfg.Battle.PlayerAddr != "" {
@@ -272,7 +300,7 @@ func main() {
 		defer func() { _ = expGranter.Close() }()
 		uc.SetExperienceGranter(expGranter)
 		helper.Infow("msg", "experience_granter_grpc", "player_addr", cfg.Battle.PlayerAddr,
-			"monster_exp_entries", len(cfg.Battle.MonsterExp), "progress_enabled", cfg.Battle.ProgressEnabled)
+			"progress_enabled", cfg.Battle.ProgressEnabled)
 	} else {
 		helper.Warnw("msg", "experience_granter_disabled",
 			"hint", "player_addr 未配置 → 击杀经验不入账(进度出箱积压不丢,配好地址重启补发)")
@@ -493,4 +521,23 @@ func maskDSN(dsn string) string {
 		return dsn[:colon+1] + "***" + dsn[at:]
 	}
 	return dsn
+}
+
+// monsterExpFromStore 把 configtable Store 适配成 biz.MonsterExpTable。
+//
+// 刻意持有 *Store 而不是 *Tables 快照:ReloadConfigTable 热更时 Store 原子换批次指针,
+// 持快照会让服务一直用启动那一版的经验表,策划改完数值要重启才生效(§9.15 热更流水线的意义
+// 就在于不重启)。每次查询经 Tables() 取当前批次,读的是 atomic 指针,无锁无拷贝。
+type monsterExpFromStore struct {
+	store *configtable.Store
+}
+
+// KillExpOf 查 (怪物角色 ID, 等级) 的整份击杀经验。
+// 表未加载(理论上不可达:启动已 fail-fast)时返回 ok=false,由调用方按"配置漏项"处理。
+func (m monsterExpFromStore) KillExpOf(roleID, level uint32) (uint64, bool) {
+	tb := m.store.Tables()
+	if tb == nil || tb.RoleLevel == nil {
+		return 0, false
+	}
+	return tb.RoleLevel.KillExpOf(roleID, level)
 }

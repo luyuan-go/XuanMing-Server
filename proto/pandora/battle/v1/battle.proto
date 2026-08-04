@@ -153,6 +153,15 @@ message MonsterKillFact {
   //    否则一只怪会按参与人数倍数放大(仍被累计上限兜住,但数值不正确)。
   //    「最后一击」(默认)与「全队共享」两档权重恒 1000,新旧版本行为一致,无此约束。
   uint32 share_permille    = 3;
+  // monster_level 被击杀怪物的等级;**0 / 未设置 = 1 级**。
+  //
+  // 经验按 (monster_config_id, monster_level) 查角色等级表 role_level
+  // (源表 角色/j_角色等级.xlsx,主键 = 角色ID×1000 + 等级)。同一只怪不同等级形态
+  // 数值不同(如松林近战腐蚀体 1 级 300 血 / 11 级 1200 血),经验自然也不同。
+  //
+  // DS 侧取值来自刷怪点表「怪物等级」列(客户端 FCfgSpawnPoint::MonsterLv);
+  // 该列留空同样是 0 → 按 1 级处理,与本列上线前"刷怪等级硬编码 1"逐字节等价。
+  uint32 monster_level     = 4;
 }
 
 // ItemPickupFact 拾取物品事实:DS 只报"拾了哪个配置物品、几件"。

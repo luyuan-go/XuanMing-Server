@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -154,4 +155,26 @@ func strayFileWarnings(dir string, m *Manifest) []string {
 		}
 	}
 	return warns
+}
+
+// RegisteredTable 本二进制注册的一张配置表(注册名 + proto 全名)。
+type RegisteredTable struct {
+	Name  string
+	Proto string
+}
+
+// RegisteredTables 列出本进程注册的全部配置表,按注册名升序。
+//
+// 用途:Load 要求 manifest **覆盖全部**注册表,缺一张就整批拒绝(见上文 "缺少本进程必需的表")。
+// 这条约束是单向的——清单里多出本进程不认识的表只告警跳过,少一张则直接拒绝。也就是说
+// **二进制先于配置发布是不兼容的**,必须先让新批次(dist / ConfigMap)就位再滚二进制。
+// 把注册表暴露出来,是为了让"这个二进制到底需要哪些表"可被机械核对,而不是靠人去数
+// proto 目录:发布前核对 ConfigMap 是否齐备、测试夹具补齐批次,都用它。
+func RegisteredTables() []RegisteredTable {
+	out := make([]RegisteredTable, 0, len(specByName))
+	for name, spec := range specByName {
+		out = append(out, RegisteredTable{Name: name, Proto: spec.protoName})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }

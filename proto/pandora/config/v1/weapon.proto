@@ -1,0 +1,45 @@
+// Pandora 配置表:武器配置表。
+//
+// 源表:Pandora-Client-SVN/Table/武器/w_武器配置.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/weapon.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+// 用途:武器静态定义(类型 / 名称 / 模型挂载信息)。当前消费者主要是客户端与 DS
+//   (同源导出 FCfgWeapon);服务端登记本表是因为两端共用同一张 w_武器配置.xlsx,
+//   未登记的表头列会被 configtable-gen 判为非法(与 level 表登记 exp_share_mode 同理)。
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 必填 / 默认值 / 前缀约束全部由 excel.proto 注解承载(proto 即单一事实源),
+//   改列只改「xlsx 表头 + 本文件注解」两处,生成器与服务端代码自动跟随。
+// 版式:第 1 行表头,第 2-4 行为「类型」列取值说明(A 列空),第 5 行起数据区
+//   —— 与 Pandora 通用版式一致,故不写 (excel_data_start_row)(默认即 5)。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6)。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// WeaponRow 武器配置表一行(列序 = 字段号序 = 表头 A..D)。
+message WeaponRow {
+  // ID(主键,即全链路 weapon_id)。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 类型:源表第 2-4 行注明取值 0=无、1=空手、2=巨型剑。
+  // 本轮刻意**不造 enum**:取值语义尚未穷举(策划会继续加武器类别),
+  //   按 CLAUDE.md §5.12 用无符号整型承载即可;且枚举列的 0 会被生成器判为非法数据值,
+  //   而这里的 0(无)恰恰是合法取值。空单元格不设默认 → 取类型零值 0(= 无),与表意一致。
+  uint32 weapon_type = 2 [(excel_col) = "类型"];
+  // 名称:策划可读名(当前唯一数据行留空,故不标 required)。
+  string name = 3 [(excel_col) = "名称"];
+  // 模型信息:UE 武器 Actor 类路径 + 挂点名,逗号分隔
+  //   (实例:"/Game/Pkg/Weapon/Sword/Sword01.Sword01_C,weapon_01")。
+  // 刻意**不标 (excel_prefix) = "/"**:本列是复合值而非纯资产路径,前缀约束会把
+  //   「只填挂点名 / 留空表示无模型」这类合法写法卡死;路径合法性由 UE 侧加载时暴露。
+  string model_info = 4 [(excel_col) = "模型信息"];
+}
+
+// WeaponTableData 武器配置表整表容器(dist/weapon.json 的根对象;excel_file 注解 = 导表登记)。
+message WeaponTableData {
+  option (excel_file) = "武器/w_武器配置.xlsx";
+
+  repeated WeaponRow rows = 1;
+}

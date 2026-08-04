@@ -1,0 +1,160 @@
+{
+  "rows": [
+    {
+      "id": 100101,
+      "remark": "Boris普攻",
+      "asset_path": "/Game/NiagaraUltimateHits/Fx/Hit/NS_Hit8_01.NS_Hit8_01",
+      "socket_name": "pelvis",
+      "attached": true,
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 100121,
+      "remark": "Boris护盾",
+      "asset_path": "/Game/RPGEffects/ParticlesNiagara/StatusEffects/TeleportPortal/NS_Status_Teleport_Portal1.NS_Status_Teleport_Portal1",
+      "socket_name": "root_fx",
+      "attached": true,
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "0.75,0.75,0.75"
+    },
+    {
+      "id": 100201,
+      "remark": "Kallari普攻",
+      "asset_path": "/Game/NiagaraUltimateHits/Fx/Hit/NS_PetalHit_02.NS_PetalHit_02",
+      "socket_name": "pelvis",
+      "attached": true,
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 100301,
+      "remark": "Dekker普攻",
+      "asset_path": "/Game/NiagaraUltimateHits/Fx/Hit/NS_Hit9_01.NS_Hit9_01",
+      "socket_name": "pelvis",
+      "attached": true,
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 100311,
+      "remark": "治疗特效（持续）",
+      "asset_path": "/Game/RPGEffects/ParticlesNiagara/Priest/HealOverTime/NS_Preist_Heal_Over_Time.NS_Preist_Heal_Over_Time",
+      "socket_name": "root_fx",
+      "attached": true,
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 100331,
+      "remark": "治疗特效",
+      "asset_path": "/Game/RPGEffects/ParticlesNiagara/Priest/HealBurst/NS_Priest_Heal_Burst.NS_Priest_Heal_Burst",
+      "socket_name": "root_fx",
+      "attached": true,
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 100401,
+      "remark": "Murdock普攻",
+      "asset_path": "/Game/NiagaraUltimateHits/Fx/Hit/NS_LightningHitA_03.NS_LightningHitA_03",
+      "socket_name": "pelvis",
+      "attached": true,
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 100501,
+      "remark": "互换位置特效",
+      "asset_path": "/Game/RPGEffects/ParticlesNiagara/Mage/LightningBolt/NS_Mage_LIghtning_Bolt.NS_Mage_LIghtning_Bolt",
+      "socket_name": "root_fx",
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 100601,
+      "remark": "瞬移特效",
+      "asset_path": "/Game/ParagonKallari/FX/Particles/Kallari/Abilities/ShadowPlane/FX/ShadowPlaneEnter2.ShadowPlaneEnter2",
+      "socket_name": "root_fx",
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 500,
+      "remark": "脚下光圈",
+      "asset_path": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange.NS_Decal_CycleRange",
+      "socket_name": "root_fx",
+      "attached": true,
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 501,
+      "remark": "眩晕特效",
+      "asset_path": "/Game/RPGEffects/ParticlesNiagara/StatusEffects/Stun/NS_Status_Stun.NS_Status_Stun",
+      "socket_name": "root_fx",
+      "attached": true,
+      "location_offset": "0,0,200",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 502,
+      "remark": "无敌",
+      "asset_path": "/Game/RPGEffects/ParticlesNiagara/Warrior/Spin/NS_Warrior_Spin.NS_Warrior_Spin",
+      "socket_name": "root_fx",
+      "attached": true,
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 503,
+      "remark": "减速",
+      "asset_path": "/Game/RPGEffects/ParticlesNiagara/StatusEffects/Confusion/NS_Status_Confusion.NS_Status_Confusion",
+      "socket_name": "root_fx",
+      "attached": true,
+      "location_offset": "0,0,200",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 1000,
+      "remark": "位面转移",
+      "asset_path": "/Game/RPGEffects/ParticlesNiagara/StatusEffects/ItemHighlight/NS_Status_ItemHighlight.NS_Status_ItemHighlight",
+      "socket_name": "root_fx",
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 101011,
+      "remark": "定身术受击特效",
+      "asset_path": "/Game/CharacterAuras/Effects/NS_Fire_01_02.NS_Fire_01_02",
+      "socket_name": "root_fx",
+      "attached": true,
+      "location_offset": "0,0,200",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    },
+    {
+      "id": 210101,
+      "remark": "Kraken普攻受击特效",
+      "asset_path": "/Game/ParagonProps/FX/Particles/Turret/P_SentryTurret_Chunk_Hit.P_SentryTurret_Chunk_Hit",
+      "socket_name": "root_fx",
+      "location_offset": "0,0,0",
+      "rotation_offset": "0,0,0",
+      "scale": "1,1,1"
+    }
+  ]
+}

@@ -2,6 +2,7 @@
 package conf
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
@@ -54,6 +55,64 @@ type TeamConf struct {
 	// 超限 Invite 返 ErrTeamInvitePendingLimit(3008);ListMyPendingInvites 单次返回
 	// 也按此值截断(写入侧硬上限已兜住总量,无需分页)。默认 10。
 	MaxPendingInvites int `yaml:"max_pending_invites,omitempty" json:"max_pending_invites,omitempty"`
+
+	// ── 找队伍(ListOpenTeams / ApplyToTeam / HandleTeamApplication) ──────────
+
+	// JoinPolicy 决定 ApplyToTeam 的语义,全服一份配置(不给每支队伍存,§9.22 不重复影子状态):
+	//   - "approval"(默认):申请进入队伍待处理列表,队长同意才入队;
+	//   - "open"          :队伍未满即当场入队,不需要队长操作。
+	// 空串按 "approval" 处理(见 Defaults):默认保守——不经队长同意就把陌生人塞进队伍
+	// 属于"多做了玩家没授权的事",反过来只是多一次点击。
+	// ParseJoinPolicy 对无法识别的值**报错而非猜**(拼错一个字母就变成任何人都能进队,
+	// 是不可接受的失败模式),启动 ValidateJoinPolicy fail-fast。
+	JoinPolicy string `yaml:"join_policy,omitempty" json:"join_policy,omitempty"`
+
+	// MaxOpenTeamsPerQuery 单次 ListOpenTeams 返回的队伍数上限(读取侧上限,不变量 §9-18)。
+	// 请求里的 limit=0 取本值,>本值一律钳到本值。默认 10。
+	MaxOpenTeamsPerQuery int `yaml:"max_open_teams_per_query,omitempty" json:"max_open_teams_per_query,omitempty"`
+
+	// MaxApplicationsPerTeam 同一队伍未过期 pending 入队申请数上限(写入侧上限,不变量 §9-18:
+	// 入队申请是客户端可写入、可堆积、会被队长拉取展示的列表)。
+	// 超限 ApplyToTeam 返 ErrTeamApplyPendingLimit(3009);ListTeamApplications 单次返回
+	// 也按此值截断(写入侧硬上限已兜住总量,无需分页)。默认 10。
+	MaxApplicationsPerTeam int `yaml:"max_applications_per_team,omitempty" json:"max_applications_per_team,omitempty"`
+
+	// ApplyTTL 入队申请令牌的存活时长。取值依据:队长要能在一次组队界面停留内看到并处理
+	// (推送到达 + 人眼反应 + 点击),同时申请人不该被无限期挂着——到期后客户端按钮自动
+	// 恢复可点,是"有界等待 + 可见出口"(验收底线第 1 条)。默认 120s(邀请是 60s,
+	// 申请方向多一次队长注意力成本,故取两倍)。**待实测复核**:若线上出现大量
+	// "队长还没看到就过期",优先调大本值而不是取消上限。
+	ApplyTTL config.Duration `yaml:"apply_ttl,omitempty" json:"apply_ttl,omitempty"`
+}
+
+// 入队策略取值(JoinPolicy)。
+const (
+	// JoinPolicyApproval 申请 → 队长审批 → 入队。
+	JoinPolicyApproval = "approval"
+	// JoinPolicyOpen 未满即直接入队。
+	JoinPolicyOpen = "open"
+)
+
+// ParseJoinPolicy 把配置字符串解析成合法策略值。
+//
+// 空串 = 默认 approval(保守)。**无法识别的值报错,绝不猜**:把 "aproval" 猜成 open
+// 会让全服队伍对陌生人敞开,属于静默的权限放大,失败模式不可接受(同 dbguard.ParseMode
+// 对 retention_mode 的处理口径)。
+func ParseJoinPolicy(s string) (string, error) {
+	switch s {
+	case "":
+		return JoinPolicyApproval, nil
+	case JoinPolicyApproval, JoinPolicyOpen:
+		return s, nil
+	default:
+		return "", fmt.Errorf("team: unknown join_policy %q (want %q or %q)", s, JoinPolicyApproval, JoinPolicyOpen)
+	}
+}
+
+// ValidateJoinPolicy 供 main 启动时 fail-fast:配置写错不该等到第一个玩家点"申请"才暴露。
+func (c *Config) ValidateJoinPolicy() error {
+	_, err := ParseJoinPolicy(c.Team.JoinPolicy)
+	return err
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发 panic。
@@ -79,6 +138,19 @@ func (c *Config) Defaults() {
 	}
 	if c.Team.MaxPendingInvites == 0 {
 		c.Team.MaxPendingInvites = 10
+	}
+	if c.Team.JoinPolicy == "" {
+		// 保守默认:需要队长同意。改成 open 必须是显式配置动作。
+		c.Team.JoinPolicy = JoinPolicyApproval
+	}
+	if c.Team.MaxOpenTeamsPerQuery == 0 {
+		c.Team.MaxOpenTeamsPerQuery = 10
+	}
+	if c.Team.MaxApplicationsPerTeam == 0 {
+		c.Team.MaxApplicationsPerTeam = 10
+	}
+	if c.Team.ApplyTTL == 0 {
+		c.Team.ApplyTTL = config.Duration(120 * time.Second)
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50010"

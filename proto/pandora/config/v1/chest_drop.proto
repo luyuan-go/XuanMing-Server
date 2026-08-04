@@ -1,0 +1,47 @@
+// Pandora 配置表:宝箱掉落表。
+//
+// 源表:Pandora-Client-SVN/Table/道具/d_宝箱掉落.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/chest_drop.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:一行 = 一条独立掉落候选。宝箱点表(s_宝箱点.xlsx)按 loot_table_id 引用一组候选行,
+//   宝箱每次刷新时由权威 DS 对该组全部行各判定一次概率,全部未命中是合法空箱。
+//   实际入包仍走服务端权威发放与 drop_whitelist(CLAUDE.md §9.6),本表只提供候选与权重。
+// 客户端 CfgChestDrop(UE FCfgChestDrop,Tool/Table/Cs/Proto/d_宝箱掉落.json)与本表同源导出;
+//   本文件的类型 / 必填 / 默认值刻意与客户端列登记逐列一致,避免同一张 xlsx 在两仓被解释成两种数据。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// ChestDropRow 宝箱掉落表一行(列序 = 字段号序 = 表头 A..F)。
+message ChestDropRow {
+  // ID(主键,掉落候选行标识)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 宝箱掉落组ID(宝箱点表引用的专属掉落组)。
+  // **是字符串不是数字**:客户端 FCfgChestDrop::LootTableId 为 FName,源表当前取值
+  //   "80007"/"70007" 只是恰好长得像数字;按 uint32 登记会在策划改成非数字组名当天炸掉整批生成。
+  string loot_table_id = 2 [(excel_col) = "宝箱掉落组ID"];
+  // 物品ID(掉落物品配置 ID = ItemRow.id;实测 10 行引用的 10001~10006 全部存在于 d_道具.xlsx,
+  //   故可安全启用外键校验。0 = 无引用,按非必填列跳过校验)
+  uint32 item_config_id = 3 [(excel_col) = "物品ID", (excel_fk) = "item"];
+  // 概率万分比(独立掉落概率,10000 = 必掉,0 = 永不掉)
+  uint32 probability_permyriad = 4 [(excel_col) = "概率万分比"];
+  // 数量下限(含;空值默认 1,与客户端列登记一致)
+  uint32 min_count = 5 [(excel_col) = "数量下限", (excel_default) = "1"];
+  // 数量上限(含;空值默认 1,与客户端列登记一致)
+  uint32 max_count = 6 [(excel_col) = "数量上限", (excel_default) = "1"];
+}
+
+// ChestDropTableData 宝箱掉落整表容器(dist/chest_drop.json 的根对象;excel_file 注解 = 导表登记)。
+message ChestDropTableData {
+  option (excel_file) = "道具/d_宝箱掉落.xlsx";
+  // 实测版式:第 1 行表头、第 2 行列说明、第 3 行空行,数据自第 4 行起(不是通用版式的第 5 行)。
+  option (excel_data_start_row) = 4;
+
+  repeated ChestDropRow rows = 1;
+}

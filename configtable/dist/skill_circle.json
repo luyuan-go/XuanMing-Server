@@ -1,0 +1,70 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "remark": "0.1米半径",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,10"
+    },
+    {
+      "id": 2,
+      "remark": "测试",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,300"
+    },
+    {
+      "id": 4,
+      "remark": "4米半径圆形",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,400"
+    },
+    {
+      "id": 5,
+      "remark": "5米半径圆形",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,500"
+    },
+    {
+      "id": 6,
+      "remark": "5米半径圆形",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,600"
+    },
+    {
+      "id": 8,
+      "remark": "8米半径圆形",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,800"
+    },
+    {
+      "id": 100211,
+      "remark": "侦查输出Kallari技能1",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,10"
+    },
+    {
+      "id": 100311,
+      "remark": "控场辅助Dekker技能1",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,400"
+    },
+    {
+      "id": 100321,
+      "remark": "控场辅助Dekker技能2",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,600"
+    },
+    {
+      "id": 100331,
+      "remark": "控场辅助Dekker技能3",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,350"
+    },
+    {
+      "id": 100421,
+      "remark": "Murdock技能2",
+      "pos_option": 2,
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,1000"
+    }
+  ]
+}

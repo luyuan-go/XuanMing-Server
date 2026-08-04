@@ -1,0 +1,27 @@
+{
+  "rows": [
+    {
+      "id": 60001,
+      "level_id": 7,
+      "level_asset_path": "/Game/Test/Level/SonglinTown.SonglinTown",
+      "remark": "松林镇-静态怪导入",
+      "enabled": true,
+      "priority": 100
+    },
+    {
+      "id": 70001,
+      "level_id": 8,
+      "level_asset_path": "/Game/ScifiArctic/Maps/ExampleLevel_Artic01.ExampleLevel_Artic01",
+      "remark": "Artic01-自动铺怪",
+      "enabled": true,
+      "priority": 100
+    },
+    {
+      "id": 40001,
+      "level_id": 4,
+      "level_asset_path": "/Game/Test/Level/Fight/Lvl_Test_Fight.Lvl_Test_Fight",
+      "remark": "战斗测试-手动摆怪",
+      "priority": 100
+    }
+  ]
+}
