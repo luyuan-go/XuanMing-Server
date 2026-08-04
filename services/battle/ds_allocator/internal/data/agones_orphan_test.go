@@ -62,6 +62,80 @@ func TestListAllocatedGameServersFiltersStateAndMapsFields(t *testing.T) {
 	}
 }
 
+// 分页回归(2026-08-03 补审 P2):单次响应撑不下全部 GameServer 时必须逐页取全,
+// 而不是只拿第一页(半份清单会把仍被引用的 GS 误判为孤儿)。
+func TestListAllocatedGameServersFollowsContinuePages(t *testing.T) {
+	var gotLimits, gotContinues []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotLimits = append(gotLimits, r.URL.Query().Get("limit"))
+		cont := r.URL.Query().Get("continue")
+		gotContinues = append(gotContinues, cont)
+		switch cont {
+		case "":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"metadata": map[string]any{"continue": "token-page-2"},
+				"items": []any{
+					gsListItem("gs-p1", "uid-p1", "battle-fleet", "alloc-p1", agonesStateAllocated, ""),
+				}})
+		case "token-page-2":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"metadata": map[string]any{"continue": ""},
+				"items": []any{
+					gsListItem("gs-p2", "uid-p2", "battle-fleet", "alloc-p2", agonesStateAllocated, ""),
+					gsListItem("gs-p2-ready", "uid-p2r", "battle-fleet", "", "Ready", ""),
+				}})
+		default:
+			t.Errorf("unexpected continue token %q", cont)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	a := newTestAllocator(t, srv.URL)
+	out, err := a.ListAllocatedGameServers(t.Context())
+	if err != nil {
+		t.Fatalf("ListAllocatedGameServers: %v", err)
+	}
+	if len(out) != 2 || out[0].Name != "gs-p1" || out[1].Name != "gs-p2" {
+		t.Fatalf("must collect Allocated across all pages, got %+v", out)
+	}
+	if len(gotContinues) != 2 || gotContinues[0] != "" || gotContinues[1] != "token-page-2" {
+		t.Fatalf("must follow continue token exactly once, got %v", gotContinues)
+	}
+	for i, lim := range gotLimits {
+		if lim == "" {
+			t.Fatalf("page %d must request a bounded limit, got empty", i)
+		}
+	}
+}
+
+// 截断可检测回归:响应超过读上限时必须显式报错,绝不把半截 body 当完整结果返回
+// (裸 io.LimitReader 会返回「截断字节 + err=nil」,只留下误导性的 JSON 解码错误)。
+func TestOversizedResponseFailsLoudlyInsteadOfTruncating(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// 写一份语法完整但超限的 JSON:若实现静默截断,解码会失败并掩盖真因;
+		// 正确实现应在读取层就报「超过上限」。
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"metadata":{"continue":""},"items":[],"pad":"`))
+		blob := make([]byte, agonesMaxResponseBytes+4096)
+		for i := range blob {
+			blob[i] = 'x'
+		}
+		_, _ = w.Write(blob)
+		_, _ = w.Write([]byte(`"}`))
+	}))
+	defer srv.Close()
+
+	a := newTestAllocator(t, srv.URL)
+	_, err := a.ListAllocatedGameServers(t.Context())
+	if err == nil {
+		t.Fatalf("oversized response must surface an error, not a truncated success")
+	}
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("error must name the size limit as the cause (got %v)", err)
+	}
+}
+
 func TestListAllocatedGameServersFailsClosedOnHTTPError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

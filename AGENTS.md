@@ -68,6 +68,7 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 - 大决策 → `docs/design/pandora-arch.md` §11
 - 服务级 → `docs/design/<service>.md`
 - 压测结果 → `docs/design/stress-<round>-*.md`
+- **性能画像 / 性能优化 / profiling 工具链 → `docs/ops/`(含 UE 客户端 / DS 的性能工作,客户端仓库不另存一份)**:案例坑追加 `ue-ds-perf-pitfalls.md`,工具链进 `perf-profiling-toolchain.md`,完整专项新建 `docs/ops/性能优化-<主题>-<YYYYMMDD>.md`。必须含样本口径(地图 / 镜像版本 / 窗口时长 / 人数怪数)、原始数字与基线、验证判据、未验证项、埋点还原步骤;无前后对比数字不算完成。细则见 `CLAUDE.md §7`
 - 进度 → `PROGRESS.md`(每周追加,不删旧的)
 
 **没写文档 = 没说过**(下个 AI 不会记得)。

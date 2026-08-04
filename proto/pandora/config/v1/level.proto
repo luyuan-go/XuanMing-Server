@@ -27,6 +27,22 @@ enum LevelEntryMode {
   LEVEL_ENTRY_MODE_WALK_IN     = 2;
 }
 
+// LevelExpShareMode 击杀经验归属方式:这张图里「怪物经验判给谁」。
+// 消费者是战斗 DS(怪物死亡时按本列决定给哪些玩家上报 MonsterKillFact 及其 share_permille);
+// 经验数值换算仍只在 battle_result 的 monster_exp 表,DS 只报事实不报数值(CLAUDE.md §9.6)。
+enum LevelExpShareMode {
+  // 未配置:按最后一击处理(= 本列上线前的既定行为,滚动混版下新旧表都安全)。
+  LEVEL_EXP_SHARE_MODE_UNSPECIFIED  = 0;
+  // 最后一击:整份经验只给打出致命一击的玩家(share_permille=1000,单条事实)。
+  LEVEL_EXP_SHARE_MODE_LAST_HIT     = 1;
+  // 全队共享:本场在册且对该怪造成过伤害的玩家每人各拿一整份,不按伤害稀释
+  //   (share_permille 恒 1000,每人一条事实)。
+  LEVEL_EXP_SHARE_MODE_TEAM_SHARE   = 2;
+  // 伤害占比均分:一整份经验按各玩家对该怪的伤害占比切分(share_permille 合计 ≤1000)。
+  //   ⚠️ 放量前必须先升 battle_result 全 fleet,理由见 battle/v1 MonsterKillFact.share_permille。
+  LEVEL_EXP_SHARE_MODE_DAMAGE_SPLIT = 3;
+}
+
 // LevelCategory 关卡类别(对齐 g_关卡.xlsx「关卡类别」列取值,JSON 里用数字)。
 enum LevelCategory {
   LEVEL_CATEGORY_UNSPECIFIED = 0;
@@ -77,6 +93,20 @@ message LevelRow {
   //   0 = 未配置,沿用服务端默认 2(与历史 need=2×team_size 逐字节等价)。
   // 撮合凑齐人数 = side_count × team_size;直进(walk-in)不看本列。
   uint32 side_count = 12 [(excel_col) = "对局方数", (excel_default) = "0"];
+  // 经验归属方式(枚举数字;空单元格=未配置,按最后一击处理)。见 LevelExpShareMode。
+  // 与 entry_mode 同规则**刻意不写 (excel_default)**:枚举列的 0 被生成器视为非法数据值,
+  //   而本列的"未配置"恰恰要落 0;非战斗类关卡(登录/选角/主城)没有怪物,留空即可。
+  // 本列由战斗 DS 读取(客户端 FCfgLevel 同源导出);服务端登记本列是因为两端共用同一张
+  //   g_关卡.xlsx —— 未登记的表头列会被 configtable-gen 判为非法。服务端自身暂不按本列
+  //   判定归属(归属只影响"给谁产事实",数值权威与全部上限仍在 battle_result)。
+  LevelExpShareMode exp_share_mode = 13 [(excel_col) = "经验归属方式"];
+  // 对局时长(秒):本图一局最多打多久,到点由战斗 DS 权威结算收局。
+  //   0 = 未配置 → **不限时**,与本列上线前逐字节等价(滚动混版下新旧表都安全)。
+  // 消费者是战斗 DS(客户端 FCfgLevel 同源导出,只用来显示倒计时)。服务端登记本列同 exp_share_mode
+  //   的理由:两端共用同一张 g_关卡.xlsx,未登记的表头列会被 configtable-gen 判为非法。
+  //   服务端自身不据此判定任何东西——"这一局到点了没"只有 DS 知道,后端仍按既有 battle_result
+  //   / 心跳超时路径处理,不引入第二个计时权威。
+  uint32 battle_duration_seconds = 14 [(excel_col) = "对局时长", (excel_default) = "0"];
 }
 
 // LevelTableData 关卡表整表容器(dist/level.json 的根对象;excel_file 注解 = 导表登记)。

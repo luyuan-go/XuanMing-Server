@@ -29,7 +29,9 @@
       "team_size": 1,
       "game_mode": "5v5_ranked",
       "entry_mode": 1,
-      "side_count": 2
+      "side_count": 2,
+      "exp_share_mode": 1,
+      "battle_duration_seconds": 1800
     },
     {
       "id": 5,
@@ -39,7 +41,9 @@
       "team_size": 1,
       "game_mode": "5v5_ranked",
       "entry_mode": 1,
-      "side_count": 2
+      "side_count": 2,
+      "exp_share_mode": 1,
+      "battle_duration_seconds": 1800
     },
     {
       "id": 6,
@@ -51,20 +55,25 @@
       "team_size": 1,
       "game_mode": "5v5_ranked",
       "entry_mode": 1,
-      "side_count": 2
+      "side_count": 2,
+      "exp_share_mode": 1,
+      "battle_duration_seconds": 1800
     },
     {
       "id": 7,
-      "name": "松林镇副本",
+      "name": "松林镇",
       "asset_path": "/Game/Test/Level/SonglinTown.SonglinTown",
       "game_mode_class": "/Script/Pandora.PandoraPveGameMode",
       "category": 4,
+      "disable_ui_shortcut": true,
       "show_in_match_list": true,
       "team_size": 1,
       "allow_exit": true,
       "game_mode": "pve_coop",
       "entry_mode": 2,
-      "side_count": 1
+      "side_count": 1,
+      "exp_share_mode": 2,
+      "battle_duration_seconds": 1200
     },
     {
       "id": 8,
@@ -78,7 +87,9 @@
       "allow_exit": true,
       "game_mode": "pve_coop",
       "entry_mode": 2,
-      "side_count": 1
+      "side_count": 1,
+      "exp_share_mode": 2,
+      "battle_duration_seconds": 1200
     },
     {
       "id": 9,
@@ -90,7 +101,9 @@
       "team_size": 3,
       "game_mode": "5v5_ranked",
       "entry_mode": 1,
-      "side_count": 2
+      "side_count": 2,
+      "exp_share_mode": 1,
+      "battle_duration_seconds": 1800
     },
     {
       "id": 10,
@@ -103,7 +116,24 @@
       "allow_exit": true,
       "game_mode": "pve_coop",
       "entry_mode": 2,
-      "side_count": 1
+      "side_count": 1,
+      "exp_share_mode": 2,
+      "battle_duration_seconds": 1200
+    },
+    {
+      "id": 11,
+      "name": "PVE战斗",
+      "asset_path": "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk.StylizedCyberpunk",
+      "game_mode_class": "/Script/Pandora.PandoraPveGameMode",
+      "category": 4,
+      "show_in_match_list": true,
+      "team_size": 3,
+      "allow_exit": true,
+      "game_mode": "pve_coop",
+      "entry_mode": 2,
+      "side_count": 1,
+      "exp_share_mode": 2,
+      "battle_duration_seconds": 1200
     }
   ]
 }

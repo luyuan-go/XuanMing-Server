@@ -106,8 +106,10 @@ func writerHasAllReaderFields(writerMask, readerMask []byte) bool {
 	return true
 }
 
-func guildInfoKey(guildID uint64) string   { return fmt.Sprintf("pandora:guild:info:{%d}", guildID) }
-func guildMemberKey(playerID uint64) string { return fmt.Sprintf("pandora:guild:member:{%d}", playerID) }
+func guildInfoKey(guildID uint64) string { return fmt.Sprintf("pandora:guild:info:{%d}", guildID) }
+func guildMemberKey(playerID uint64) string {
+	return fmt.Sprintf("pandora:guild:member:{%d}", playerID)
+}
 
 // guildRowToProto / guildProtoToRow 在存储行与缓存 proto 快照间转换(字段一一对应)。
 func guildRowToProto(g *GuildRow) *guildv1.Guild {

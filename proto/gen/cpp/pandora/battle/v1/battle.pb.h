@@ -1147,6 +1147,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterKillFact final : public ::go
   enum : int {
     kMonsterConfigIdFieldNumber = 1,
     kCountFieldNumber = 2,
+    kSharePermilleFieldNumber = 3,
   };
   // uint32 monster_config_id = 1 [json_name = "monsterConfigId"];
   void clear_monster_config_id() ;
@@ -1168,11 +1169,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterKillFact final : public ::go
   void _internal_set_count(::uint32_t value);
 
   public:
+  // uint32 share_permille = 3 [json_name = "sharePermille"];
+  void clear_share_permille() ;
+  [[nodiscard]] ::uint32_t share_permille() const;
+  void set_share_permille(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_share_permille() const;
+  void _internal_set_share_permille(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.battle.v1.MonsterKillFact)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1203,6 +1214,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterKillFact final : public ::go
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t monster_config_id_;
     ::uint32_t count_;
+    ::uint32_t share_permille_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4542,6 +4554,30 @@ inline void MonsterKillFact::_internal_set_count(::uint32_t value) {
   _impl_.count_ = value;
 }
 
+// uint32 share_permille = 3 [json_name = "sharePermille"];
+inline void MonsterKillFact::clear_share_permille() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.share_permille_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t MonsterKillFact::share_permille() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.MonsterKillFact.share_permille)
+  return _internal_share_permille();
+}
+inline void MonsterKillFact::set_share_permille(::uint32_t value) {
+  _internal_set_share_permille(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.MonsterKillFact.share_permille)
+}
+inline ::uint32_t MonsterKillFact::_internal_share_permille() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.share_permille_;
+}
+inline void MonsterKillFact::_internal_set_share_permille(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.share_permille_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // ItemPickupFact
@@ -4716,7 +4752,7 @@ inline ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NONNULL BattleProgressEv
   if (fact_case() != kMonsterKill) {
     clear_fact();
     set_has_monster_kill();
-    _impl_.fact_.monster_kill_ =
+    _impl_.fact_.monster_kill_ = 
         ::google::protobuf::Message::DefaultConstruct<::pandora::battle::v1::MonsterKillFact>(GetArena());
   }
   return _impl_.fact_.monster_kill_;
@@ -4798,7 +4834,7 @@ inline ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NONNULL BattleProgressEve
   if (fact_case() != kItemPickup) {
     clear_fact();
     set_has_item_pickup();
-    _impl_.fact_.item_pickup_ =
+    _impl_.fact_.item_pickup_ = 
         ::google::protobuf::Message::DefaultConstruct<::pandora::battle::v1::ItemPickupFact>(GetArena());
   }
   return _impl_.fact_.item_pickup_;

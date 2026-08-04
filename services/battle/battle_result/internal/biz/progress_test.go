@@ -666,3 +666,117 @@ func TestReportProgress_DisabledClaimLosesToStoppedOrSettled(t *testing.T) {
 		}
 	}
 }
+
+// sharedKillEvent 带经验归属权重的击杀事实(0 = 不设置该字段,模拟旧 DS)。
+func sharedKillEvent(seq, playerID uint64, monsterID, count, sharePermille uint32) *battlev1.BattleProgressEvent {
+	e := killEvent(seq, playerID, monsterID, count)
+	e.GetMonsterKill().SharePermille = sharePermille
+	return e
+}
+
+func TestReportProgress_SharePermilleSplitsMonsterExp(t *testing.T) {
+	// 「伤害占比均分」档:同一只 25 经验的怪按 500/300/200 切给三个玩家。
+	// 击杀数各计一只(未被权重稀释)——反作弊额度按击杀次数算,不按经验份额算。
+	repo := newFakeRepo()
+	uc := progressUsecase(repo)
+	ctx := context.Background()
+	roster := []uint64{7, 8, 9}
+
+	events := []*battlev1.BattleProgressEvent{
+		sharedKillEvent(1, 7, 102, 1, 500), // 25×500‰ = 12(向下取整)
+		sharedKillEvent(2, 8, 102, 1, 300), // 25×300‰ = 7
+		sharedKillEvent(3, 9, 102, 1, 200), // 25×200‰ = 5
+	}
+	if acked, err := uc.ReportProgress(ctx, 940, roster, events); err != nil || acked != 3 {
+		t.Fatalf("acked=%d err=%v, want 3/nil", acked, err)
+	}
+
+	got := map[uint64]uint64{}
+	for _, row := range repo.progressOutbox {
+		if row.Kind == data.ProgressGrantExp {
+			got[row.PlayerID] = row.ExpDelta
+		}
+	}
+	for playerID, want := range map[uint64]uint64{7: 12, 8: 7, 9: 5} {
+		if got[playerID] != want {
+			t.Fatalf("player %d exp=%d want %d (全部份额: %v)", playerID, got[playerID], want, got)
+		}
+	}
+	// 切分只能少给不能多给:三份之和必须 ≤ 一整份,否则均分档反而比独享还赚。
+	if total := got[7] + got[8] + got[9]; total > 25 {
+		t.Fatalf("切分后合计 %d 超过单只整份 25", total)
+	}
+	if repo.progressExp[940] != 24 {
+		t.Fatalf("单场累计 exp=%d want 24(12+7+5)", repo.progressExp[940])
+	}
+	for _, playerID := range roster {
+		if kills := repo.progressPlayers[940][playerID].TotalKills; kills != 1 {
+			t.Fatalf("player %d kills=%d want 1(击杀额度按次数算,不被经验权重稀释)", playerID, kills)
+		}
+	}
+}
+
+func TestReportProgress_ShareUnsetMeansFullGrant(t *testing.T) {
+	// 不设 share_permille = 整份(旧 DS 上报、以及「最后一击」「全队共享」两档的常态)。
+	// 这条是滚动混版的兼容底线:新 Go 收到旧 DS 的批,经验必须与升级前逐字节一致。
+	repo := newFakeRepo()
+	uc := progressUsecase(repo)
+	ctx := context.Background()
+
+	if _, err := uc.ReportProgress(ctx, 941, []uint64{7}, []*battlev1.BattleProgressEvent{
+		killEvent(1, 7, 102, 2), // 旧 DS:字段缺省
+	}); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if repo.progressExp[941] != 50 {
+		t.Fatalf("缺省权重应按整份入账,exp=%d want 50", repo.progressExp[941])
+	}
+
+	// 显式 1000 与缺省必须等价,否则新 DS 换档时数值会跳。
+	repo2 := newFakeRepo()
+	uc2 := progressUsecase(repo2)
+	if _, err := uc2.ReportProgress(ctx, 942, []uint64{7}, []*battlev1.BattleProgressEvent{
+		sharedKillEvent(1, 7, 102, 2, 1000),
+	}); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if repo2.progressExp[942] != 50 {
+		t.Fatalf("显式满权重应与缺省等价,exp=%d want 50", repo2.progressExp[942])
+	}
+}
+
+func TestReportProgress_ShareOverFullRejected(t *testing.T) {
+	// >1000 = 单条事实拿到超过一整份,只可能来自坏 DS / 坏改动:按坏批拒收,零副作用。
+	repo := newFakeRepo()
+	uc := progressUsecase(repo)
+	ctx := context.Background()
+
+	if _, err := uc.ReportProgress(ctx, 943, []uint64{7}, []*battlev1.BattleProgressEvent{
+		sharedKillEvent(1, 7, 102, 1, 1001),
+	}); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("want ErrInvalidArg, got %v", err)
+	}
+	if repo.progressSeq[943] != 0 {
+		t.Fatalf("坏批不得推水位,seq=%d", repo.progressSeq[943])
+	}
+	if len(repo.progressOutbox) != 0 {
+		t.Fatalf("坏批不得产出箱行,got %d", len(repo.progressOutbox))
+	}
+}
+
+func TestApplyExpShare_FloorsWithoutOverflow(t *testing.T) {
+	for _, c := range []struct {
+		total, share, want uint64
+	}{
+		{total: 25, share: 1000, want: 25},
+		{total: 25, share: 500, want: 12},  // 12.5 向下取整
+		{total: 25, share: 1, want: 0},     // 份额小到归零:不产出箱行,不是丢账
+		{total: 0, share: 500, want: 0},
+		// 大数不走乘法溢出:total*share 会超 uint64,拆商余后仍精确。
+		{total: 1 << 62, share: 500, want: (1 << 62) / 2},
+	} {
+		if got := applyExpShare(c.total, c.share); got != c.want {
+			t.Fatalf("applyExpShare(%d,%d)=%d want %d", c.total, c.share, got, c.want)
+		}
+	}
+}

@@ -318,10 +318,12 @@ func TestOwnerRepoMySQL(t *testing.T) {
 	})
 
 	t.Run("BarrierFromOldLeaseObservedAtCAS", func(t *testing.T) {
+		// 保守屏障只对旧 owner=BATTLE 生效(2026-08-03 分流:失联对局 DS 的双可玩/迟到写
+		// 风险场景,如战斗实例替换/重连改派)。旧 owner=HUB 的路径见下一个用例。
 		const player = 303
 		oldTarget := testTarget("uid-c-old")
 		newTarget := testTarget("uid-c-new")
-		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, oldTarget, 0); err != nil {
+		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeBattle, oldTarget, 0); err != nil {
 			t.Fatalf("旧 owner 建立: %v", err)
 		}
 		if _, _, err := repo.Admit(ctx, player, 1, testOpA, oldTarget); err != nil {
@@ -362,6 +364,44 @@ func TestOwnerRepoMySQL(t *testing.T) {
 		forged.InstanceUID = "uid-c-forged"
 		if _, _, err := repo.Admit(ctx, player, 2, testOpB, forged); errcode.As(err) != errcode.ErrOwnerIdentityMismatch {
 			t.Fatalf("换实例 Admit 应拒: %v", err)
+		}
+	})
+
+	t.Run("HubOriginMigrationHasNoBarrier", func(t *testing.T) {
+		// 2026-08-03 屏障分流回归:旧 owner=HUB(大厅)迁出是玩家在线主动触发的协作迁移,
+		// 双写由 owner_epoch fencing 拦、双可玩由客户端单连接拆链拦,屏障必须为 now——
+		// 修复前这里会取 max(now, hub 实例租约截止)+margin,而 hub 实例租约被 allocator
+		// 整机级持续代续(永不过期),导致每次"大厅→战斗"都干等 ~27s,客户端 30s 权威
+		// 等待窗口随之耗尽,玩家现象是"匹配没反应"(实测 2026-08-03 02:02 事故)。
+		const player = 306
+		hubTarget := testTarget("uid-h-hub")
+		battleTarget := testTarget("uid-h-battle")
+		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, hubTarget, 0); err != nil {
+			t.Fatalf("hub owner 建立: %v", err)
+		}
+		if _, _, err := repo.Admit(ctx, player, 1, testOpA, hubTarget); err != nil {
+			t.Fatalf("hub admit: %v", err)
+		}
+		// hub 实例租约续到远未来(模拟 allocator 整机级持续代续):它不得进入屏障计算。
+		if _, err := repo.RenewInstanceLease(ctx, hubTarget, 60*time.Second); err != nil {
+			t.Fatalf("hub 实例续租: %v", err)
+		}
+		const margin = 5 * time.Second
+		beforeMs := time.Now().UnixMilli()
+		rec, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeBattle, battleTarget, margin)
+		if err != nil {
+			t.Fatalf("hub→battle 迁移: %v", err)
+		}
+		// 屏障 = CAS 时点 now:不含 hub 租约(60s 后),也不叠 margin(见实现处举证)。
+		// 上界取"调用前后本地时钟窗口 + 1s 容差",防跨进程时钟抖动导致偶发红。
+		afterMs := time.Now().UnixMilli()
+		if rec.AdmitNotBeforeMs < beforeMs || rec.AdmitNotBeforeMs > afterMs+1000 {
+			t.Fatalf("HUB 旧 owner 的屏障应为 now(不等租约不叠余量): admit=%d 窗口=[%d,%d]",
+				rec.AdmitNotBeforeMs, beforeMs, afterMs+1000)
+		}
+		// 立即 Admit 必须成功——这就是"点匹配立刻能进"的服务端语义。
+		if _, retry, err := repo.Admit(ctx, player, 2, testOpB, battleTarget); err != nil {
+			t.Fatalf("hub→battle 应立即可 Admit(无屏障): retry=%d err=%v", retry, err)
 		}
 	})
 

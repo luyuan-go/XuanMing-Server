@@ -112,7 +112,7 @@
 - `tools/scripts/e2e_k8s.ps1` 全量清场:压测纪律授权的测试重置,但零守卫 —— Confirmed 同型,已修(fail-closed + 显式开关 + 非 force 路径逐台复查 + 与 `-SkipImageLoad` 互斥 fail-fast)。
 - `tools/scripts/start.ps1 -Down` 的 Fleet 级联删除:第三条能杀载人 Allocated 的脚本路径(闭环审查第四轮补入,此前本节漏登记)—— **按 §9.21 豁免执行**:Down 语义是用户显式拆除整套本地栈(后端一并删,保留 DS 无意义),不加确认开关;但已补 Allocated 点名告警(列出将被级联杀掉的实例 + Ctrl+C 提示),消除「以为只是收工」与「正有人在打局」的静默重合。
 - `ds_allocator` 判弃链的 `ReleaseExpected`/fenced delete:带 UID precondition 且由权威记录驱动,非同型,排除。
-- 未覆盖边界:直接手敲 `kubectl delete` 无法技术性禁止,靠规则(§9.21/记忆)+ 消除动机(自动清扫)兜底。
+- 未覆盖边界:①直接手敲 `kubectl delete` 无法技术性禁止,靠规则(§9.21/记忆)+ 消除动机(自动清扫)兜底;②第五轮补审的 `control-flow`(reconcile 控制流状态机)与 `wiring-and-tests`(装配/并发域/测试盲区)两个切片连续多次死于连接中断,**从未产出结论** —— 这两个角度的对抗审查是缺口,当前仅由全套单测 + 多轮变异实验兜底,不得据此宣称"逐行审过"。
 
 ## 7. 处置与永久修复
 
@@ -135,10 +135,12 @@
 | e2e `Wait-FleetReady` 收敛判据计入 Allocated(`Ready+Allocated ≥ desired`):保留载人 Allocated 后,一局在打时 buffer autoscaler 钳满 replicas,旧判据 `ready≥desired` 会把成功部署空转 240s 误报失败且错误归因 | 已落码 | `tools/scripts/e2e_k8s.ps1` Wait-FleetReady | 契约测试 PASS;闭环验证第三轮确认项(P1) |
 | 契约测试补 §9.21 守卫断言(e2e 必须有 `-ForceDeleteAllocated` fail-closed 门、批删必须在授权分支内、start.ps1 强制重建必须逐台过滤非 Allocated + 删前重查、函数体内禁止整批删) | 已落码 | `tools/scripts/tests/local_k8s_profile_contract_test.ps1` | **变异实验 3/3 击落**(去门/批删逃出授权分支/回退整批删均使测试红),复原后基线绿——满足 §16.6「修复前失败、修复后通过」 |
 | hub Fleet 可见性:注释澄清孤儿清扫只覆盖 battle Fleet(hub 常驻分片不走 GSA、原理上无 Allocated);强制重建删 Ready hub 副本前显式告警「hub 载人时仍是 Ready,在线玩家将被踢去重连」 | 已落码 | `tools/scripts/start.ps1` | 契约测试 PASS |
+| **LIST 响应静默截断 → 孤儿回收在规模上停摆**(第五轮补审确认 P2):`ListAllocatedGameServers` 复用通用 `do()`,其 `io.ReadAll(io.LimitReader(body, 1MiB))` 到顶返回「截断字节 + err=nil」,零信号;该 LIST 不分页、Allocated 只能客户端过滤(CRD `status.state` 无索引),受管 Fleet 总量约 200 台即撑破上限 → 半截 JSON → 每轮 `orphan_gs_list_failed` → 回收永久停摆,且错误文本形似 apiserver 故障。修法:①读上限改为多读 1 字节以**可检测**,超限显式报错并指明须分页;②LIST 改 `limit=100` + `continue` 逐页取全,任一页失败整轮 fail-closed | 已落码待部署 | `internal/data/agones_allocator.go`(`agonesMaxResponseBytes` / `agonesListPageSize` / 分页循环 / `doWithContentType` 超限检测) | 新增 2 用例;**变异实验 2/2 击落**:回退裸 LimitReader → 测试红且复现审查者预言的误导错误 `unexpected end of JSON input`;不跟随 continue → 只收到第一页而红。复原后 ds_allocator 全套绿 |
 
 **对抗审查记录(三轮,视角 × 每发现 2 名反驳者)**:
 - 第一轮确认 3 缺陷(start.ps1 LIST→DELETE 竞态 / e2e 零秒警告 / 注释安全依据缺半边),修复后被复核代理对照代码逐字确认落地;
 - 第二轮确认 5 缺陷 —— **P0 权威视图零绑定**(台账整改)、P2 孤儿轮无预算、P2 节流测试为空测(变异实验证伪,已改真实调用计数断言)、P2 e2e 门检→批删 TOCTOU、P2「每轮核验」声明与实现不符(证据中断重新起算),全部落码回归绿;
+- 第五轮(补审 Go 新代码逐行正确性,此前四次因连接中断/额度耗尽未跑成):`ledger-and-data` 切片确认 1 项 P2(上表 LIST 静默截断),双反驳者均无法反驳且各自做了实测(本机集群 GameServer 对象紧凑 JSON 4.1~5.8 KB/个,含 managedFields)——已修并变异验证。另 1 项(台账 7 天保留期与可配置观察阈值无一致性约束)判定为 contested:反驳者指出 `orphanGSFirstSeen` 是进程内表且权威读失败即重置、leader 迁移即清空,阈值配到 >7d 时候选根本活不到台账检查,故台账保留期与阈值之间不存在可达的冲突窗口;方向是 fail-closed(退化为不删+告警),**不改代码**。`control-flow` 与 `wiring-and-tests` 两切片仍死于连接中断,未产出结论(如实登记为未覆盖边界)。
 - 第三轮(对修复的闭环验证):**P0 攻击角确认清扫误删向量已关死**(台账/refs/claim 绑定同一 Redis 实例,空/错配 Redis 一台都删不掉);其「心跳向量同拓扑攻击」被双反驳者以三层独立机制驳回(生产 Model B 门禁 fail-fast、空 Redis 心跳只回 ERR_UNAUTHORIZED 无指令、UE 凭据 ACK 五元组精确匹配才消费 stop——心跳向量由凭据 ACK 绑定承重,与台账同源等价);脚本回归角确认上表 P1/P2 两项,已修。
 
 ### 7.3 防复发规则

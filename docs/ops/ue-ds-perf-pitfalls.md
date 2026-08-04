@@ -6,6 +6,8 @@
 > 关联:
 > - `docs/ops/linux-ds-observability.md`(DS 崩溃与性能观测手册:第一现场、堆栈还原)
 > - `docs/ops/perf-profiling-toolchain.md`(监控 vs profiler、函数热点工具链)
+> - `docs/ops/性能优化-战斗DS画像与修复-20260803.md`(战斗 DS 完整画像专项:无头 Insights 导出
+>   runbook、CPU/内存定谳、修复清单与验收基线;本文 §5b/§5c 是它二轮复测的提炼)
 > - 完整证据链见事故档案 `docs/incidents/2026-07-29-p0-battle-ds-reclaimed-client-exit-stuck.md`
 >   §2.2.7~§2.2.11、§5.5~§5.9(本文是其可复用部分的提炼,不替代事故档案)。
 >
@@ -23,6 +25,8 @@
 | 3 | **stdout 块缓冲** | 容器里 stdout 攒满 4KB 才 flush,进程被杀时最后一分钟日志整体丢失 | ✅ 容器特有 |
 | 4 | **tick ≠ 物理** | 关 tick 省 CPU,但不减物理体;物理卡顿要减碰撞/减常驻,不是减 tick | — |
 | 5 | **流送的时机而非空间** | 服务端流送后"零玩家时零加载",BeginPlay 就 spawn 的受重力物会坠落 | — |
+| 6 | **Chaos 加速结构强制全量重建** | 单批入队 >1000 粒子引擎就放弃时间切片,一帧内全量重建+拷贝 175MB 结构 → 秒级停摆 | — |
+| 7 | **画像埋点撞 ACTIVE 判弃线** | `-llm -trace` 把加载期游戏线程阻塞推到 15~22s,>15s 心跳判弃 → 带埋点的 DS 进场即被杀 | ✅ 只在带埋点时 |
 
 **贯穿全篇的方法论(§6)**:先修取证 → 再看中间帧 → 先量后改 → 分清"看着相关"和"真的相关"。
 
@@ -206,6 +210,78 @@ cell(令 `LoadingRange ≈ CellSize` 即九宫格 3×3);多玩家取**并集**�
 
 这套改动**顺带解决了 5.1 的坠落**:刷怪只发生在某玩家(=source)的激活半径内 → 必在加载
 范围内 → 脚下有地形。
+
+---
+
+## 5b. 陷阱六:Chaos 加速结构"超阈值就放弃时间切片"——玩家一移动就秒级卡死
+
+> 来源:2026-08-03 map8 官方 Insights 画像(405s 战斗窗,146 刷怪点,poison malloc 已按 §1
+> 关闭的 r1647 镜像——即本条是 §1 修完后**剩余**的秒级卡点,两者在同一条
+> `FEndPhysicsTickFunction → FChaosScene::EndFrame` 路径上接力)。
+
+### 症状
+战斗期帧时长中位数 2.4ms,但 `FEngineLoop::Tick` I.Max = **5.24s**;业务心跳相邻启动间隔
+每分钟窗出现 6~8.4s 尖峰;玩家体感"一移动就卡住,动都动不了"(服务器整帧停摆时移动输入
+无人处理,客户端预测被拉回原地)。Insights 里尖峰帧落在:
+`TG_EndPhysics → Flip Results → CreateExternalAccelerationStructure`(单帧 3.58s)与
+`TG_StartPhysics → ComputeIntermediateSpatialAcceleration`(单帧 0.78s)。
+
+### 根因(UE 5.8 源码,PBDRigidsEvolution.cpp)
+引擎本有分帧(时间切片)重建,但有一个保守的放弃阈值:
+
+- `:912` — `ForceFullBuild = AsyncAccelerationQueue.Num() > AccelerationStructureTimeSlicingMaxQueueSizeBeforeForce`(默认 **1000**);
+- `:185` — ForceFullBuild 时 `MaxNumToProcess=0`,构建不再分帧;
+- `:411` — ForceFullBuild 时 `ProgressCopyTimeSliced(..., -1)`,外部结构**无上限一帧拷完**
+  (平时限额 `MaxBytesCopy` 默认仅 100KB/帧;实测 Artic01 ChaosAcceleration 结构 175MB)。
+
+玩家移动 → WP 服务端流送换 cell → PCG 岩石 ISM **数千静态粒子一批入队** → 必然击穿 1000 →
+强制全量重建 + 全量拷贝,全部发生在游戏线程一帧内。站桩不动时只有便宜的周期性增量 swap
+(实测 405s 内 1301 次、均值 1.86ms),**不是"流送一直在重建"**;九宫格加载窗本身无罪,
+罪在"单批变更量 × 放弃切片阈值"。
+
+### 修法(fleet env 一行,已落 `deploy/k8s/agones/20-fleet-battle.yaml`)
+```
+-dpcvars=...,p.Chaos.AccelerationStructureTimeSlicingMaxQueueSizeBeforeForce=1000000,p.Chaos.AccelerationStructureTimeSlicingMaxBytesCopy=2000000
+```
+- 阈值 100 万 = cell 交换永不触发全量重建,走引擎自带分帧路径(新增静态体在 dirty 树中可查,
+  正确性由引擎既有机制保证,代价是结构"追赶期"内查询略贵——平滑退化换掉硬停摆);
+- 拷贝限额 100KB→2MB/帧:175MB ÷ 2MB ≈ 90 帧(1.5s)摊完,单帧 2MB memcpy 亚毫秒;
+  默认 100KB 要 1750 帧,追赶期过长。
+- **治本仍在资产侧**(与 §4 同一因果链):63 个 `CTF_UseComplexAsSimple` 岩石凸包化、
+  纯装饰岩 DS 上 `NoCollision`,把单 cell 粒子量降到阈值量级以下。
+
+### 验证判据
+重图 map8 跑 ≥5 分钟并**持续跨 cell 移动**:①心跳摘要 `相邻启动最大间隔` 回落到 ~5.5s
+节奏(不再出现 6s+ 尖峰);②(若带 trace)`CreateExternalAccelerationStructure` I.Max 从
+3580ms 降到 <50ms;③`SceneQueryTotal` 总量无显著上涨(dirty 树代价可接受的证据)。
+
+---
+
+## 5c. 陷阱七:画像埋点会把 DS 加载期阻塞推过 ACTIVE 判弃线,带埋点的 DS 进场即被杀
+
+### 症状
+按画像手册注入 `-trace=... -llm -llmcsv -statnamedevents` 后,玩家进图 ~3 秒断线,DS 在分配
+后 ~35s 被回收;DS 日志:`Battle 心跳启动间隔 15.64s/22.18s 超过后端 ACTIVE 判弃阈值 15s
+(游戏线程被阻塞?)` → `收到 ds_allocator 指令 stop`。
+
+### 根因
+战斗业务心跳由**游戏线程**驱动,首跳要等地图加载完;LLM 逐分配打标 + trace 落盘让 Artic01
+加载期游戏线程阻塞实测 **15.6~22.2s**(无埋点时 <15s 勉强过线),超过 ds_allocator
+`heartbeat_timeout: "15s"` → 判弃。结构性对照:同配置 READY 阶段早因冷加载证据放宽
+`ready_wait_timeout=120s`(INC-20260727-001),ACTIVE 阶段没有加载期宽限。
+**根治方向(待立项,动判弃代码必须带回归测试)**:业务心跳线程化,或 allocator 对
+"分配后首跳"给 phase-aware 宽限;不要一刀切抬 15s——那是所有真实崩溃场景的补偿时延(§9.4)。
+
+### 画像期临时操作(用完必还原)
+```bash
+# 抬线(45s 依据:埋点加载实测最坏 22.2s ×2 余量;minikube 冷加载先例 45s)
+kubectl get secret pandora-config -n pandora -o jsonpath='{.data.ds-allocator\.yaml}' | base64 -d \
+  | sed 's/heartbeat_timeout: "15s"/heartbeat_timeout: "45s"/' | base64 -w0  # patch 回 secret 同 key
+kubectl rollout restart deploy ds-allocator -n pandora   # distroless 无 sh,验证看启动日志 service_ready.heartbeat_timeout
+# 画像结束后按原值还原并再次 rollout restart
+```
+注意:①生效配置在 Secret `pandora-config`(key `ds-allocator.yaml`),仓库 `etc/*.yaml` 只是
+模板,只改仓库文件不生效;②DS 侧告警文案里的"15s"是硬编码,抬线后文案不会跟着变。
 
 ---
 

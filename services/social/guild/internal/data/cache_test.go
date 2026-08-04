@@ -19,7 +19,7 @@ func TestWriterHasAllReaderFields(t *testing.T) {
 	}{
 		{"equal", []byte{0b0111_1110}, []byte{0b0111_1110}, true},
 		{"writer_superset", []byte{0b0111_1111}, []byte{0b0111_1110}, true},
-		{"writer_missing_one", []byte{0b0111_1100}, []byte{0b0111_1110}, false},   // reader 有 bit1,writer 缺
+		{"writer_missing_one", []byte{0b0111_1100}, []byte{0b0111_1110}, false}, // reader 有 bit1,writer 缺
 		{"writer_shorter_but_covers", []byte{0b0000_0110}, []byte{0b0000_0110, 0}, true},
 		{"writer_shorter_missing", []byte{0b0000_0110}, []byte{0b0000_0110, 0b1}, false}, // reader 高字节有位,writer 无
 	}

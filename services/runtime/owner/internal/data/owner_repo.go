@@ -82,8 +82,10 @@ type OwnerRepo interface {
 	// Query 读当前记录(无行返回 epoch=0/none;附带派生 lease 截止)。
 	Query(ctx context.Context, playerID uint64) (OwnerRecord, error)
 
-	// BeginTransition CAS expect_epoch → epoch+1/PENDING/newTarget;同事务读旧实例租约
-	// 计算 admit_not_before(= max(now, 旧 deadline) + skewMargin;无旧 owner → now)。
+	// BeginTransition CAS expect_epoch → epoch+1/PENDING/newTarget;admit_not_before 按旧
+	// owner 类型分流:旧 owner=BATTLE → 同事务读旧实例租约,= max(now, 旧 deadline)+skewMargin
+	// (失联对局 DS 的双可玩/迟到写风险);旧 owner=HUB 或无 → now(协作迁移,双写由 epoch
+	// fencing 拦,双可玩由客户端单连接拆链拦;详见实现处举证)。
 	// 同 (player, operationID) 幂等重放。expect 不符 → ErrOwnerEpochConflict(附当前记录)。
 	BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target OwnerTarget, skewMargin time.Duration) (OwnerRecord, error)
 
@@ -296,11 +298,31 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 			"operation_id required for a real transition player=%d", playerID)
 	}
 
-	// admit_not_before:取 CAS 线性化点观察到的旧实例租约最晚截止(FOR UPDATE 挡在途续租)
-	// + 时钟/网络安全余量。无旧 owner → 无需屏障(没有要围栏的旧 DS)。
+	// admit_not_before:按旧 owner 类型分流(2026-08-03,实测事故:大厅每次进战斗都要干等
+	// ~27s 屏障,客户端 30s 权威等待窗口随之耗尽,玩家看到的是"匹配没反应")。
+	//
+	// ① 旧 owner 是 **BATTLE**:保守屏障 = max(now, 旧实例租约截止) + 时钟/网络余量。
+	//    失联战斗 DS 上该玩家的 Pawn 仍可能被模拟(AI/其他玩家仍与之交互),且 DS 是受信
+	//    写者(§9.6)可能有 journal 迟到写在途——"双可玩 + 迟到写"风险真实存在,必须等旧
+	//    实例本地自 fencing 的最晚时刻(其租约截止)过去后才许新 DS 接管。
+	//
+	// ② 旧 owner 是 **HUB**:屏障 = now,不等实例租约。举证(§15.4):
+	//    - 双写防护不靠屏障:hub 对该玩家的权威写全部走 §9.6 五要件,本 CAS 提交后
+	//      owner_epoch 已 +1,旧 epoch 的写与时间无关地被下游拒(五要件③ fencing);
+	//    - "双可玩"防护不靠屏障:玩家只有一个客户端,travel 去新 DS 时旧 hub 连接被
+	//      客户端协调器主动拆除,hub 侧 Pawn 随连接断开清退;大厅 Pawn 无对局语义,
+	//      不存在"残留 Pawn 继续演化影响权威态"(对局内那种风险正是 ① 保守的原因);
+	//    - hub 与后端分区也不改变上述两条(fencing 在写入侧、连接归属在客户端侧)。
+	//    等实例租约唯一"防住"的是——该实例上其它逻辑仍自认持有玩家——而那正是 epoch
+	//    fencing 的职责。hub 实例租约被 allocator 持续代续(整机级,承载数百玩家,永不
+	//    过期),对 HUB 旧 owner 等它 = 恒定 ~27s 纯延迟、零安全收益,且违反验收底线
+	//    第 1 条(无收益的强制等待)。margin 也一并省去:本分支不依赖旧 DS 本地自
+	//    fencing 时钟,Admit 的屏障判定与本处写入同库同钟,无跨机偏移可补。
+	//
+	// 无旧 owner → 无需屏障(没有要围栏的旧 DS)。
 	now := nowUnixMs()
 	admitNotBefore := now
-	if rec.OwnerType != OwnerTypeNone && rec.Target.InstanceUID != "" {
+	if rec.OwnerType == OwnerTypeBattle && rec.Target.InstanceUID != "" {
 		oldDeadline, derr := readLeaseDeadline(ctx, tx, rec.Target.InstanceUID, true)
 		if derr != nil {
 			return OwnerRecord{}, derr

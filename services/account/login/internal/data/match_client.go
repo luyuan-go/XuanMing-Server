@@ -41,8 +41,8 @@ type PlayerMatchAuthority struct {
 	//   UNSPECIFIED = 读取错误/索引漂移(fail-closed,B1 下可重试)
 	//   NONE        = 明确无活跃撮合/对局
 	//   ACTIVE      = 有活跃 claim(排队/确认/分配/READY)
-	State matchv1.PlayerMatchContextState
-	Stage matchv1.PlayerMatchResumeStage
+	State        matchv1.PlayerMatchContextState
+	Stage        matchv1.PlayerMatchResumeStage
 	MatchID      uint64
 	BattleDSAddr string
 	// GameMode 是撮合命名空间的 canonical 值(如 5v5_ranked / pve_coop),来自 matchmaker

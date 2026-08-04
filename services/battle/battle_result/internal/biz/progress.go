@@ -44,6 +44,21 @@ func (u *BattleResultUsecase) SetExperienceGranter(g ExperienceGranter) {
 	u.expGranter = g
 }
 
+// expSharePermilleFull 是「一整份经验」对应的归属权重(千分比满值)。
+const expSharePermilleFull = 1000
+
+// applyExpShare 按千分比权重切一份经验,向下取整(拆成商余两段算,等价 total*share/1000
+// 但不会在 total 很大时溢出;余项乘积上界 999*1000 远小于 uint64)。
+// 向下取整意味着小额经验 × 小权重可能归零 —— 归零的份额不产出箱行(0 额度会被 player 拒收),
+// 这是「均分」档刻意接受的舍入损失,不是丢账。
+func applyExpShare(total, sharePermille uint64) uint64 {
+	if sharePermille >= expSharePermilleFull {
+		return total
+	}
+	return total/expSharePermilleFull*sharePermille +
+		total%expSharePermilleFull*sharePermille/expSharePermilleFull
+}
+
 // ReportProgress 处理 DS 的一批进度事实事件,返回已应用水位 acked_seq。
 //
 // roster 是凭据检查器从权威 BattleStorageRecord 取的本场玩家名单(service 层注入);
@@ -195,6 +210,17 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			// 击杀计数在经验换算前累计:未配置经验的怪也计入单玩家击杀上限,
 			// 失陷 DS 不能靠刷未知怪 ID 绕过反作弊额度。
 			killsByPlayer[playerID] += cnt
+			// 归属权重(千分比):0 / 未设置 = 整份。旧 DS 不带本字段,「最后一击」「全队共享」
+			// 两档也恒 1000,只有「伤害占比均分」会给出小于 1000 的值(battle.proto 同款注释)。
+			// >1000 = 坏批(单条事实拿到超过一整份),按 ErrInvalidArg 让 DS 丢批告警。
+			share := uint64(fact.MonsterKill.GetSharePermille())
+			if share == 0 {
+				share = expSharePermilleFull
+			}
+			if share > expSharePermilleFull {
+				return 0, errcode.New(errcode.ErrInvalidArg,
+					"share_permille %d exceeds %d (seq=%d)", share, expSharePermilleFull, seq)
+			}
 			expPer, ok := u.cfg.MonsterExpOf(fact.MonsterKill.GetMonsterConfigId())
 			if !ok {
 				skippedFact++
@@ -207,8 +233,9 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 				}
 				continue
 			}
-			expByPlayer[playerID] += expPer * uint64(cnt)
-			batchExp += expPer * uint64(cnt)
+			gained := applyExpShare(expPer*uint64(cnt), share)
+			expByPlayer[playerID] += gained
+			batchExp += gained
 		case *battlev1.BattleProgressEvent_ItemPickup:
 			cnt := fact.ItemPickup.GetCount()
 			if cnt == 0 || cnt > maxPickup {

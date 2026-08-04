@@ -218,8 +218,21 @@ type gameServerResponse struct {
 const agonesStateUnhealthy = "Unhealthy"
 
 type gameServerListResponse struct {
+	Metadata struct {
+		// Continue 非空表示服务端还有下一页(k8s chunked list);逐页取直到为空。
+		Continue string `json:"continue"`
+	} `json:"metadata"`
 	Items []gameServerResponse `json:"items"`
 }
+
+// agonesMaxResponseBytes 是单次 apiserver 响应的读上限。超限时 do() 显式报错而不是
+// 静默截断(见 doWithContentType 注释);大清单必须靠分页而不是提高本值。
+const agonesMaxResponseBytes = 1 << 20
+
+// agonesListPageSize 是 GameServer 分页 LIST 的每页对象数。单个 GameServer 序列化后
+// 约 4~8 KB(含整份 pod template、managedFields 与 pandora 注解,2026-08-03 本机实测
+// 4.1~5.8 KB),100 个/页 ≈ 0.4~0.8 MiB,稳在 agonesMaxResponseBytes 之内。
+const agonesListPageSize = 100
 
 type k8sOwnerReference struct {
 	APIVersion string `json:"apiVersion"`
@@ -1121,34 +1134,47 @@ func (a *AgonesGameServerAllocator) ListAllocatedGameServers(
 		return nil, nil
 	}
 	selector := fleetLabelKey + " in (" + strings.Join(fleets, ",") + ")"
-	listURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers?labelSelector=%s",
-		a.apiServer, a.namespace, url.QueryEscape(selector))
-	respBytes, status, err := a.do(ctx, http.MethodGet, listURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("agones: list allocated gameservers: %w", err)
-	}
-	if status < 200 || status >= 300 {
-		return nil, fmt.Errorf("agones: list allocated gameservers http %d: %s",
-			status, truncate(respBytes, 256))
-	}
-	var list gameServerListResponse
-	if err := json.Unmarshal(respBytes, &list); err != nil {
-		return nil, fmt.Errorf("agones: decode allocated gameserver list: %w", err)
-	}
-	out := make([]AllocatedGameServerInfo, 0, len(list.Items))
-	for _, item := range list.Items {
-		if item.Status.State != agonesStateAllocated {
-			continue
+	// 分页 LIST(2026-08-03 补审确认 P2):Allocated 只能在客户端过滤(CRD 的 status.state
+	// 未建索引,fieldSelector 不可用),故拉回的是受管 Fleet 下**全部** GameServer;
+	// 不分页时 Fleet 一大就会撞上单响应读上限。逐页取直到 metadata.continue 为空;
+	// 任一页失败整轮报错(fail-closed:半份清单会把仍被引用的 GS 误判为孤儿)。
+	out := make([]AllocatedGameServerInfo, 0, agonesListPageSize)
+	continueToken := ""
+	for page := 0; ; page++ {
+		listURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers?labelSelector=%s&limit=%d",
+			a.apiServer, a.namespace, url.QueryEscape(selector), agonesListPageSize)
+		if continueToken != "" {
+			listURL += "&continue=" + url.QueryEscape(continueToken)
 		}
-		out = append(out, AllocatedGameServerInfo{
-			Name:         item.Metadata.Name,
-			UID:          item.Metadata.UID,
-			Fleet:        item.Metadata.Labels[fleetLabelKey],
-			AllocationID: item.Metadata.Labels[battleAllocationMetadataKey],
-			Deleting:     item.Metadata.DeletionTimestamp != "",
-		})
+		respBytes, status, err := a.do(ctx, http.MethodGet, listURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("agones: list allocated gameservers (page %d): %w", page, err)
+		}
+		if status < 200 || status >= 300 {
+			return nil, fmt.Errorf("agones: list allocated gameservers (page %d) http %d: %s",
+				page, status, truncate(respBytes, 256))
+		}
+		var list gameServerListResponse
+		if err := json.Unmarshal(respBytes, &list); err != nil {
+			return nil, fmt.Errorf("agones: decode allocated gameserver list (page %d): %w", page, err)
+		}
+		for _, item := range list.Items {
+			if item.Status.State != agonesStateAllocated {
+				continue
+			}
+			out = append(out, AllocatedGameServerInfo{
+				Name:         item.Metadata.Name,
+				UID:          item.Metadata.UID,
+				Fleet:        item.Metadata.Labels[fleetLabelKey],
+				AllocationID: item.Metadata.Labels[battleAllocationMetadataKey],
+				Deleting:     item.Metadata.DeletionTimestamp != "",
+			})
+		}
+		if list.Metadata.Continue == "" {
+			return out, nil
+		}
+		continueToken = list.Metadata.Continue
 	}
-	return out, nil
 }
 
 // DeleteAllocatedGameServerExact 回收一台已被 biz 层判定为孤儿的 Allocated GameServer。
@@ -1387,9 +1413,18 @@ func (a *AgonesGameServerAllocator) doWithContentType(
 		return nil, 0, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	// 读上限必须**可检测**(2026-08-03 补审确认 P2):裸 io.LimitReader 到顶时 ReadAll
+	// 返回「被截断的字节 + err=nil」,调用方只会看到形如 "unexpected end of JSON input"
+	// 的解码错误,永远查不到真因是清单太大。多读 1 字节即可区分「恰好读完」与「还有更多」,
+	// 超限时显式报错并指明修法(分页),绝不把半截响应当完整结果交出去。
+	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, agonesMaxResponseBytes+1))
 	if err != nil {
 		return nil, resp.StatusCode, err
+	}
+	if len(respBytes) > agonesMaxResponseBytes {
+		return nil, resp.StatusCode, fmt.Errorf(
+			"agones: response body exceeds %d bytes limit (url=%s);单次响应过大,需改用分页(limit+continue)而不是提高全局上限",
+			agonesMaxResponseBytes, url)
 	}
 	return respBytes, resp.StatusCode, nil
 }

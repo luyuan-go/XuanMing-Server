@@ -154,8 +154,25 @@ spec:
                 # 代价（已知且必须知晓）：服务端只加载 streaming source（玩家）附近的 cell，
                 # 远处 Actor 在服务端不存在。刷怪已按此设计（SpawnActivationRadius=25600
                 # 与 WP CellSize 对齐）；新增依赖"全图 Actor 常驻服务端"的玩法前需复核。
+                #
+                # 2026-08-03：追加两个 Chaos 加速结构时间切片参数，治「玩家一移动就整秒卡死」。
+                #
+                # 画像实锤（map8 405s 战斗窗，官方 Insights）：玩家移动 → WP 流送换 cell →
+                # PCG 岩石 ISM 数千静态粒子一次性入队 → 击穿引擎默认
+                # AccelerationStructureTimeSlicingMaxQueueSizeBeforeForce=1000 →
+                # ForceFullBuild（PBDRigidsEvolution.cpp:912，构建不切片 :185、外部结构拷贝
+                # 无上限一次拷完 :411）→ TG_EndPhysics CreateExternalAccelerationStructure
+                # 单帧 3.58s / TG_StartPhysics 0.78s，帧 I.Max 5.24s，游戏线程整帧停摆，
+                # 移动输入无人处理（业务心跳相邻间隔同窗实测 6~8.4s 尖峰）。
+                #
+                # MaxQueueSizeBeforeForce=1000000：cell 交换永不触发全量重建，走引擎自带的
+                # 分帧构建路径（新增静态体在 dirty 树中可查询，正确性由引擎既有机制保证）。
+                # MaxBytesCopy=100KB→2MB/帧：175MB 外部结构（LLM ChaosAcceleration 实测峰值）
+                # 约 90 帧摊完，单帧 2MB memcpy 亚毫秒；默认 100KB 需 1750 帧，追赶期过长。
+                # 治本（资产侧）另行进行：63 个 CTF_UseComplexAsSimple 岩石凸包化 + 纯装饰岩
+                # DS 去碰撞，粒子量降下来后多数 cell 交换根本不再接近阈值。
                 - name: PANDORA_DS_EXTRA_ARGS
-                  value: "-dpcvars=wp.Runtime.EnableServerStreaming=1"
+                  value: "-dpcvars=wp.Runtime.EnableServerStreaming=1,p.Chaos.AccelerationStructureTimeSlicingMaxQueueSizeBeforeForce=1000000,p.Chaos.AccelerationStructureTimeSlicingMaxBytesCopy=2000000"
               volumeMounts:
                 - name: dsticket-jwks
                   mountPath: /etc/pandora/dsticket

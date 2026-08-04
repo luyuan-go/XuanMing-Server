@@ -139,6 +139,20 @@ message ListPlayerHistoryResponse {
 message MonsterKillFact {
   uint32 monster_config_id = 1;  // 怪物配置 ID(§12)
   uint32 count             = 2;  // 本事件击杀数(>0,通常为 1;服务端按配置上限校验)
+  // share_permille 本条事实的经验归属权重(千分比);0 / 未设置 = 1000(整份)。
+  //
+  // 归属方式由关卡表「经验归属方式」列驱动(config/v1/level.proto LevelExpShareMode),
+  // 由战斗 DS 在怪物死亡时决定给哪些玩家各产一条事实:
+  //   最后一击 / 全队共享 → 每条恒 1000(各拿整份);
+  //   伤害占比均分       → 该玩家对这只怪的伤害占比(同一只怪各条合计 ≤1000)。
+  // 权重是"谁打了多少"的**事实**,经验数值换算仍只在 battle_result 的 monster_exp 表(§9.6),
+  // 且单场 / 单玩家累计上限照常兜底失陷 DS。
+  //
+  // ⚠️ 混版纪律(§9.21 Go 先行):不认本字段的旧 battle_result 会把每条事实按整份入账。
+  //    因此「伤害占比均分」必须先把 battle_result 全 fleet 升到认本字段的版本再在关卡表放量,
+  //    否则一只怪会按参与人数倍数放大(仍被累计上限兜住,但数值不正确)。
+  //    「最后一击」(默认)与「全队共享」两档权重恒 1000,新旧版本行为一致,无此约束。
+  uint32 share_permille    = 3;
 }
 
 // ItemPickupFact 拾取物品事实:DS 只报"拾了哪个配置物品、几件"。

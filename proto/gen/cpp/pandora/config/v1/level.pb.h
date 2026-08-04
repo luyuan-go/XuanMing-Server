@@ -60,6 +60,10 @@ namespace config {
 namespace v1 {
 enum LevelCategory : int;
 extern const uint32_t LevelCategory_internal_data_[];
+enum LevelEntryMode : int;
+extern const uint32_t LevelEntryMode_internal_data_[];
+enum LevelExpShareMode : int;
+extern const uint32_t LevelExpShareMode_internal_data_[];
 class LevelRow;
 struct LevelRowGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -84,12 +88,101 @@ namespace protobuf {
 template <>
 internal::EnumTraitsT<::pandora::config::v1::LevelCategory_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::config::v1::LevelCategory>;
+template <>
+internal::EnumTraitsT<::pandora::config::v1::LevelEntryMode_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::config::v1::LevelEntryMode>;
+template <>
+internal::EnumTraitsT<::pandora::config::v1::LevelExpShareMode_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::config::v1::LevelExpShareMode>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace pandora {
 namespace config {
 namespace v1 {
+enum LevelEntryMode : int {
+  LEVEL_ENTRY_MODE_UNSPECIFIED = 0,
+  LEVEL_ENTRY_MODE_MATCHMAKE = 1,
+  LEVEL_ENTRY_MODE_WALK_IN = 2,
+  LevelEntryMode_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  LevelEntryMode_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t LevelEntryMode_internal_data_[];
+inline constexpr LevelEntryMode LevelEntryMode_MIN =
+    static_cast<LevelEntryMode>(0);
+inline constexpr LevelEntryMode LevelEntryMode_MAX =
+    static_cast<LevelEntryMode>(2);
+[[nodiscard]] inline bool LevelEntryMode_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int LevelEntryMode_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+LevelEntryMode_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(LevelEntryMode) {
+  return LevelEntryMode_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& LevelEntryMode_Name(T value) {
+  static_assert(::std::is_same<T, LevelEntryMode>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to LevelEntryMode_Name().");
+  return LevelEntryMode_Name(static_cast<LevelEntryMode>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& LevelEntryMode_Name(LevelEntryMode value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<LevelEntryMode_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool LevelEntryMode_Parse(
+    ::absl::string_view name, LevelEntryMode* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<LevelEntryMode>(LevelEntryMode_descriptor(), name,
+                                           value);
+}
+enum LevelExpShareMode : int {
+  LEVEL_EXP_SHARE_MODE_UNSPECIFIED = 0,
+  LEVEL_EXP_SHARE_MODE_LAST_HIT = 1,
+  LEVEL_EXP_SHARE_MODE_TEAM_SHARE = 2,
+  LEVEL_EXP_SHARE_MODE_DAMAGE_SPLIT = 3,
+  LevelExpShareMode_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  LevelExpShareMode_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t LevelExpShareMode_internal_data_[];
+inline constexpr LevelExpShareMode LevelExpShareMode_MIN =
+    static_cast<LevelExpShareMode>(0);
+inline constexpr LevelExpShareMode LevelExpShareMode_MAX =
+    static_cast<LevelExpShareMode>(3);
+[[nodiscard]] inline bool LevelExpShareMode_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int LevelExpShareMode_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+LevelExpShareMode_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(LevelExpShareMode) {
+  return LevelExpShareMode_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& LevelExpShareMode_Name(T value) {
+  static_assert(::std::is_same<T, LevelExpShareMode>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to LevelExpShareMode_Name().");
+  return LevelExpShareMode_Name(static_cast<LevelExpShareMode>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& LevelExpShareMode_Name(LevelExpShareMode value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<LevelExpShareMode_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool LevelExpShareMode_Parse(
+    ::absl::string_view name, LevelExpShareMode* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<LevelExpShareMode>(LevelExpShareMode_descriptor(), name,
+                                           value);
+}
 enum LevelCategory : int {
   LEVEL_CATEGORY_UNSPECIFIED = 0,
   LEVEL_CATEGORY_LOGIN = 1,
@@ -292,12 +385,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     kNameFieldNumber = 2,
     kAssetPathFieldNumber = 3,
     kGameModeClassFieldNumber = 4,
+    kGameModeFieldNumber = 10,
     kIdFieldNumber = 1,
     kCategoryFieldNumber = 5,
     kDisableUiShortcutFieldNumber = 6,
     kShowInMatchListFieldNumber = 7,
     kAllowExitFieldNumber = 9,
     kTeamSizeFieldNumber = 8,
+    kEntryModeFieldNumber = 11,
+    kSideCountFieldNumber = 12,
+    kExpShareModeFieldNumber = 13,
   };
   // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
   void clear_name() ;
@@ -342,6 +439,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
   const ::std::string& _internal_game_mode_class() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode_class(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_game_mode_class();
+
+  public:
+  // string game_mode = 10 [json_name = "gameMode", (.pandora.config.v1.excel_col) = "\347\216\251\346\263\225\346\250\241\345\274\217", (.pandora.config.v1.excel_default) = ""];
+  void clear_game_mode() ;
+  [[nodiscard]] const ::std::string& game_mode() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_game_mode(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_game_mode();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_game_mode();
+  void set_allocated_game_mode(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_game_mode() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_game_mode();
 
   public:
   // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
@@ -404,12 +516,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
   void _internal_set_team_size(::uint32_t value);
 
   public:
+  // .pandora.config.v1.LevelEntryMode entry_mode = 11 [json_name = "entryMode", (.pandora.config.v1.excel_col) = "\345\205\245\345\217\243\346\250\241\345\274\217"];
+  void clear_entry_mode() ;
+  [[nodiscard]] ::pandora::config::v1::LevelEntryMode entry_mode() const;
+  void set_entry_mode(::pandora::config::v1::LevelEntryMode value);
+
+  private:
+  ::pandora::config::v1::LevelEntryMode _internal_entry_mode() const;
+  void _internal_set_entry_mode(::pandora::config::v1::LevelEntryMode value);
+
+  public:
+  // uint32 side_count = 12 [json_name = "sideCount", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\226\271\346\225\260", (.pandora.config.v1.excel_default) = "0"];
+  void clear_side_count() ;
+  [[nodiscard]] ::uint32_t side_count() const;
+  void set_side_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_side_count() const;
+  void _internal_set_side_count(::uint32_t value);
+
+  public:
+  // .pandora.config.v1.LevelExpShareMode exp_share_mode = 13 [json_name = "expShareMode", (.pandora.config.v1.excel_col) = "\347\273\217\351\252\214\345\275\222\345\261\236\346\226\271\345\274\217"];
+  void clear_exp_share_mode() ;
+  [[nodiscard]] ::pandora::config::v1::LevelExpShareMode exp_share_mode() const;
+  void set_exp_share_mode(::pandora::config::v1::LevelExpShareMode value);
+
+  private:
+  ::pandora::config::v1::LevelExpShareMode _internal_exp_share_mode() const;
+  void _internal_set_exp_share_mode(::pandora::config::v1::LevelExpShareMode value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.LevelRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
-                          0, 72,
+      ::google::protobuf::internal::TcParseTable<4, 13,
+                          0, 81,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -440,12 +582,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr asset_path_;
     ::google::protobuf::internal::ArenaStringPtr game_mode_class_;
+    ::google::protobuf::internal::ArenaStringPtr game_mode_;
     ::uint32_t id_;
     int category_;
     bool disable_ui_shortcut_;
     bool show_in_match_list_;
     bool allow_exit_;
     ::uint32_t team_size_;
+    int entry_mode_;
+    ::uint32_t side_count_;
+    int exp_share_mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -684,7 +830,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelTableData final : public ::goo
 inline void LevelRow::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t LevelRow::id() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.id)
@@ -692,7 +838,7 @@ inline ::uint32_t LevelRow::id() const {
 }
 inline void LevelRow::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.id)
 }
 inline ::uint32_t LevelRow::_internal_id() const {
@@ -900,7 +1046,7 @@ inline void LevelRow::set_allocated_game_mode_class(::std::string* PROTOBUF_NULL
 inline void LevelRow::clear_category() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.category_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::pandora::config::v1::LevelCategory LevelRow::category() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.category)
@@ -908,7 +1054,7 @@ inline ::pandora::config::v1::LevelCategory LevelRow::category() const {
 }
 inline void LevelRow::set_category(::pandora::config::v1::LevelCategory value) {
   _internal_set_category(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.category)
 }
 inline ::pandora::config::v1::LevelCategory LevelRow::_internal_category() const {
@@ -924,7 +1070,7 @@ inline void LevelRow::_internal_set_category(::pandora::config::v1::LevelCategor
 inline void LevelRow::clear_disable_ui_shortcut() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.disable_ui_shortcut_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline bool LevelRow::disable_ui_shortcut() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.disable_ui_shortcut)
@@ -932,7 +1078,7 @@ inline bool LevelRow::disable_ui_shortcut() const {
 }
 inline void LevelRow::set_disable_ui_shortcut(bool value) {
   _internal_set_disable_ui_shortcut(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.disable_ui_shortcut)
 }
 inline bool LevelRow::_internal_disable_ui_shortcut() const {
@@ -948,7 +1094,7 @@ inline void LevelRow::_internal_set_disable_ui_shortcut(bool value) {
 inline void LevelRow::clear_show_in_match_list() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.show_in_match_list_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline bool LevelRow::show_in_match_list() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.show_in_match_list)
@@ -956,7 +1102,7 @@ inline bool LevelRow::show_in_match_list() const {
 }
 inline void LevelRow::set_show_in_match_list(bool value) {
   _internal_set_show_in_match_list(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.show_in_match_list)
 }
 inline bool LevelRow::_internal_show_in_match_list() const {
@@ -972,7 +1118,7 @@ inline void LevelRow::_internal_set_show_in_match_list(bool value) {
 inline void LevelRow::clear_team_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t LevelRow::team_size() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.team_size)
@@ -980,7 +1126,7 @@ inline ::uint32_t LevelRow::team_size() const {
 }
 inline void LevelRow::set_team_size(::uint32_t value) {
   _internal_set_team_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.team_size)
 }
 inline ::uint32_t LevelRow::_internal_team_size() const {
@@ -996,7 +1142,7 @@ inline void LevelRow::_internal_set_team_size(::uint32_t value) {
 inline void LevelRow::clear_allow_exit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allow_exit_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline bool LevelRow::allow_exit() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.allow_exit)
@@ -1004,7 +1150,7 @@ inline bool LevelRow::allow_exit() const {
 }
 inline void LevelRow::set_allow_exit(bool value) {
   _internal_set_allow_exit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.allow_exit)
 }
 inline bool LevelRow::_internal_allow_exit() const {
@@ -1014,6 +1160,142 @@ inline bool LevelRow::_internal_allow_exit() const {
 inline void LevelRow::_internal_set_allow_exit(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allow_exit_ = value;
+}
+
+// string game_mode = 10 [json_name = "gameMode", (.pandora.config.v1.excel_col) = "\347\216\251\346\263\225\346\250\241\345\274\217", (.pandora.config.v1.excel_default) = ""];
+inline void LevelRow::clear_game_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& LevelRow::game_mode() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.game_mode)
+  return _internal_game_mode();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void LevelRow::set_game_mode(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.game_mode_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.game_mode)
+}
+inline ::std::string* PROTOBUF_NONNULL LevelRow::mutable_game_mode()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_game_mode();
+  // @@protoc_insertion_point(field_mutable:pandora.config.v1.LevelRow.game_mode)
+  return _s;
+}
+inline const ::std::string& LevelRow::_internal_game_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.game_mode_.Get();
+}
+inline void LevelRow::_internal_set_game_mode(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL LevelRow::_internal_mutable_game_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.game_mode_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE LevelRow::release_game_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.config.v1.LevelRow.game_mode)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.game_mode_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.game_mode_.Set("", GetArena());
+  }
+  return released;
+}
+inline void LevelRow::set_allocated_game_mode(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.game_mode_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.game_mode_.IsDefault()) {
+    _impl_.game_mode_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.LevelRow.game_mode)
+}
+
+// .pandora.config.v1.LevelEntryMode entry_mode = 11 [json_name = "entryMode", (.pandora.config.v1.excel_col) = "\345\205\245\345\217\243\346\250\241\345\274\217"];
+inline void LevelRow::clear_entry_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::pandora::config::v1::LevelEntryMode LevelRow::entry_mode() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.entry_mode)
+  return _internal_entry_mode();
+}
+inline void LevelRow::set_entry_mode(::pandora::config::v1::LevelEntryMode value) {
+  _internal_set_entry_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.entry_mode)
+}
+inline ::pandora::config::v1::LevelEntryMode LevelRow::_internal_entry_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::config::v1::LevelEntryMode>(_impl_.entry_mode_);
+}
+inline void LevelRow::_internal_set_entry_mode(::pandora::config::v1::LevelEntryMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_mode_ = value;
+}
+
+// uint32 side_count = 12 [json_name = "sideCount", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\226\271\346\225\260", (.pandora.config.v1.excel_default) = "0"];
+inline void LevelRow::clear_side_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t LevelRow::side_count() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.side_count)
+  return _internal_side_count();
+}
+inline void LevelRow::set_side_count(::uint32_t value) {
+  _internal_set_side_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.side_count)
+}
+inline ::uint32_t LevelRow::_internal_side_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.side_count_;
+}
+inline void LevelRow::_internal_set_side_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_count_ = value;
+}
+
+// .pandora.config.v1.LevelExpShareMode exp_share_mode = 13 [json_name = "expShareMode", (.pandora.config.v1.excel_col) = "\347\273\217\351\252\214\345\275\222\345\261\236\346\226\271\345\274\217"];
+inline void LevelRow::clear_exp_share_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_share_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::pandora::config::v1::LevelExpShareMode LevelRow::exp_share_mode() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.exp_share_mode)
+  return _internal_exp_share_mode();
+}
+inline void LevelRow::set_exp_share_mode(::pandora::config::v1::LevelExpShareMode value) {
+  _internal_set_exp_share_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.exp_share_mode)
+}
+inline ::pandora::config::v1::LevelExpShareMode LevelRow::_internal_exp_share_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::config::v1::LevelExpShareMode>(_impl_.exp_share_mode_);
+}
+inline void LevelRow::_internal_set_exp_share_mode(::pandora::config::v1::LevelExpShareMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_share_mode_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -1088,6 +1370,18 @@ LevelTableData::_internal_mutable_rows() {
 namespace google {
 namespace protobuf {
 
+template <>
+struct is_proto_enum<::pandora::config::v1::LevelEntryMode> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::config::v1::LevelEntryMode>() {
+  return ::pandora::config::v1::LevelEntryMode_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::config::v1::LevelExpShareMode> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::config::v1::LevelExpShareMode>() {
+  return ::pandora::config::v1::LevelExpShareMode_descriptor();
+}
 template <>
 struct is_proto_enum<::pandora::config::v1::LevelCategory> : std::true_type {};
 template <>

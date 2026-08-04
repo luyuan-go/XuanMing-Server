@@ -4,7 +4,9 @@
 > **怎么看到函数级热点(CPU / 内存 / 网络)**。
 >
 > 关联:`docs/ops/linux-ds-observability.md`(DS 崩溃与性能观测手册)、
-> `docs/ops/ue-ds-perf-pitfalls.md`(UE 专服性能陷阱案例:poison malloc / tick≠物理 / 流送时机)、
+> `docs/ops/ue-ds-perf-pitfalls.md`(UE 专服性能陷阱案例:poison malloc / tick≠物理 / 流送时机 / Chaos 全量重建)、
+> `docs/ops/性能优化-战斗DS画像与修复-20260803.md`(战斗 DS 官方 Insights + LLM 完整画像专项:
+> **无头 trace 导出与 fleet 埋点注入的可复用 runbook 在其 §1**、修复清单与验收基线在 §3/§4/§8)、
 > `docs/design/stress-discipline.md`(压测纪律)、
 > `docs/design/stress-single-cell-client.md`(单 Cell 压测客户端)、
 > `robot/stress/`(业务语义压测机器人 stressbot)。

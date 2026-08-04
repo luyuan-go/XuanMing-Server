@@ -69,6 +69,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 - 服务级决策:写入对应 [`docs/design/<service>.md`](./docs/design/) 或服务 README。
 - 压测结论:写入 `docs/design/stress-<round>-*.md`。
 - 崩溃与 P0 事故:按 [`docs/incidents/index.md`](./docs/incidents/index.md) 当次建档并持续更新；稳定约束再同步到 design/ops，不能用设计文档或审核交接替代事故档案。
+- **性能画像 / 性能优化 / profiling 工具链:一律写入 [`docs/ops/`](./docs/ops/)**——**含 UE 客户端 / DS 的性能工作,客户端仓库不另存一份**(避免两边漂移;客户端侧同条款见 `Pandora-Client-SVN/CLAUDE.md「性能优化文档归档规则」`)。落点:案例化的「坑 → 因 → 修 → 验」追加 `docs/ops/ue-ds-perf-pitfalls.md`;工具选型 / 采集流程进 `docs/ops/perf-profiling-toolchain.md`;一次完整专项(画像数据 + 修复清单 + 待办 + 决策记录)新建 `docs/ops/性能优化-<主题>-<YYYYMMDD>.md` 并在上述两份手册的「关联」里加一行指回去。每份必须写清**样本口径**(地图 / 镜像版本 / 窗口时长 / 玩家与怪物数量)、**原始数字与基线**、**验证判据**、**未验证项**;只写"优化了 XX"而无前后对比数字不算完成(同 §8 压测纪律)。埋点注入、临时抬阈值等运维操作必须写明还原步骤并注明是否已还原;画像期间发现的 P0 / 崩溃仍按事故档案流程走,性能文档只引用不替代。
 - 周期进度与流水账:追加到 [`PROGRESS.md`](./PROGRESS.md),只追加不删旧条目。
 
 ## 8. 压测纪律
