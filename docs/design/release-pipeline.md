@@ -111,7 +111,7 @@ per-commit 快验编译(dev 快照轨,§5)→ nightly 全量 cook(可用 dev 轨
 |---|---|---|
 | 内网机起后端服务 | svn/git 同步拿入库 tar | `fetch_offline_images.ps1`(共享盘设 `PANDORA_ARTIFACT_ROOT`)→ 一键启动照常 |
 | 拿 UE 打包产物 | `svn update` Packages | 制品目录 `client\<branch>\<flavor>\r<rev>\` 直接取(带校验和) |
-| DS 镜像构建取 Linux 包 | 同级仓库 Packages 自动发现 | **已切换(2026-07-25)**:客户端 `Packages\` 已物理删除;`build-image-minikube.ps1` 的 `Resolve-LinuxPkg` 优先级改为 ①`-SourcePkg` ②`PANDORA_DS_LINUX_PKG` ③制品库(两轨扫 `Server_Linux_Development` 最新发布) ④同级 Packages(**已退役**,仅兼容旧机器,回退时打黄字提示去跑 `PublishPackages.ps1`);新增 `-ResolveOnly` 只打印来源不构建,便于验证 |
+| DS 镜像构建取 Linux 包 | 同级仓库 Packages 自动发现 | **已切换(2026-07-25)**:`build-image-minikube.ps1` 的 `Resolve-LinuxPkg` 优先级改为 ①`-SourcePkg` ②`PANDORA_DS_LINUX_PKG` ③制品库(两轨扫 `Server_Linux_Development` 最新发布) ④同级 `Packages\`(**已退役**,仅兼容旧机器,回退时打黄字提示去跑 `PublishPackages.ps1`);新增 `-ResolveOnly` 只打印来源不构建,便于验证。<br>2026-08-04:客户端把打包输出根从 SVN 工作副本内移到与客户端仓库【平级】(`F:\work\Packages`),④ 同时兼容新旧两种布局 |
 | 正式发布 | 无 manifest | `make_release.ps1` → 按 `releases/<name>.json` 交付/回滚 |
 
 ## 6b. 版本化发布(语义版本 + 修复内容)

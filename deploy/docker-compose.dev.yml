@@ -251,8 +251,9 @@ services:
     container_name: pandora-envoy
     restart: unless-stopped
     ports:
-      # 默认只绑本机回环(仅本机可连);内网多机联调由 start.ps1 的 local -Lan / intranet/battle/k8s
-      # 局域网路径显式导出 PANDORA_EDGE_BIND_HOST=0.0.0.0 才把【客户端面 8443】对局域网开放。
+      # 【客户端面 8443】start.ps1 的 local 模式默认导出 PANDORA_EDGE_BIND_HOST=0.0.0.0,
+      # 对局域网开放(队友能直接连你的机器);加 -LocalOnly 则只绑回环,仅本机可连。
+      # 直接 docker compose(不经 start.ps1)时缺省 127.0.0.1,保持最保守行为。
       # DS 面 8444 未鉴权,单独用 PANDORA_DS_EDGE_BIND_HOST 控制,默认恒绑本机 —— 即使客户端面已开到
       # 局域网,未鉴权的 DS 面也不会跟着暴露;只有真有异机 DS 需回连时(start.ps1 -ExposeDsFace)才开放。
       # 端口与本机 k8s 的边缘 Envoy(NodePort 映射到宿主 8443)是同一个 —— 两者互斥,

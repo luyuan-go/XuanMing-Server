@@ -41,10 +41,10 @@ rem  镜像构建使用宿主 Go 交叉编译 linux/amd64 静态二进制,再封
 rem  pandora/<svc>:dev scratch 镜像并加载到 minikube。该路径不是离线
 rem  docker load 导入包路径。
 rem
-rem  UE 战斗/大厅 DS(Linux)镜像会自动构建:脚本从【同级客户端仓库】的
-rem  Packages\Server_Linux_Development\LinuxServer 取 UE Linux 打包产物
-rem  (不写死路径,优先匹配同级 Pandora-Client* 仓库),同步进 deploy/ds/stage
-rem  后构建 pandora/battle-ds:dev / pandora/hub-ds:dev 到 minikube。
+rem  UE 战斗/大厅 DS(Linux)镜像会自动构建:脚本优先从【制品库】取 UE Linux
+rem  打包产物(PANDORA_ARTIFACT_ROOT,默认 F:\work\artifacts),没有时才回退到
+rem  【同级目录】的 Packages\Server_Linux_Development\LinuxServer(不写死路径),
+rem  同步进 deploy/ds/stage 后构建 pandora/battle-ds:dev / pandora/hub-ds:dev 到 minikube。
 rem  DS 起来后看 UE 日志: kubectl get gameservers; kubectl logs -f <pod>。
 rem  想手动指定 DS 包路径,先设环境变量 PANDORA_DS_LINUX_PKG 再双击本脚本。
 rem

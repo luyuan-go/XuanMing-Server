@@ -29,8 +29,9 @@
 # UE Linux DS 包来源（不写死路径，按下列优先级解析）：
 #   1) 显式 -SourcePkg 参数
 #   2) 环境变量 PANDORA_DS_LINUX_PKG
-#   3) 后端仓库【同级目录】下的客户端仓库：<sibling>\Packages\Server_Linux_Development\LinuxServer
-#      （优先名字匹配 Pandora-Client* 的同级仓库）
+#   3) 后端仓库【同级目录】下的打包产物：<sibling>\Packages\Server_Linux_Development\LinuxServer
+#      （2026-08 起客户端把 Packages 放到客户端仓库【外】与之平级，即 <parent>\Packages；
+#        旧布局 <sibling 客户端仓库>\Packages\... 仍兼容）
 # 解析到就 robocopy /MIR 同步进 stage\LinuxServer（docker build 只能 COPY 构建上下文内的目录）；
 # 没解析到则沿用已暂存的 stage\LinuxServer。
 #
@@ -91,7 +92,7 @@ $RepoRoot = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
 #   ① 显式 -SourcePkg
 #   ② 环境变量 PANDORA_DS_LINUX_PKG
 #   ③ **制品库**（新标准来源）：<制品根>\{releases,snapshots}\client\<branch>\Server_Linux_Development\<版本>\LinuxServer
-#   ④ 同级客户端仓库的 Packages\...（**旧来源，已退役**，仅为兼容尚未清理的机器保留）
+#   ④ 同级目录的 `Packages\...`（**旧来源，已退役**，仅为兼容尚未清理的机器保留）
 #
 # 2026-07-25 变更：客户端打包产物不再经 SVN 工作副本的 Packages 目录分发，改由
 # Tool\Build\PublishPackages.ps1 发布到制品库。③ 因此取代 ④ 成为默认来源。
@@ -135,11 +136,21 @@ function Resolve-LinuxPkg {
         }
     }
 
-    # ④ 旧来源（已退役）：同级客户端仓库的 Packages。仅兼容尚未清理的机器。
-    $rel = 'Packages\Server_Linux_Development\LinuxServer'
+    # ④ 旧来源（已退役）：同级目录的 Packages。仅兼容尚未清理的机器。
+    # 2026-08 起客户端把 Packages 从 SVN 工作副本里移到与之平级（<parent>\Packages），
+    # 所以先看同级的 Packages\，再回退看旧布局的 <客户端仓库>\Packages\。
+    $rel = 'Server_Linux_Development\LinuxServer'
     $parent = Split-Path $RepoRoot -Parent
+    $flat = Join-Path $parent (Join-Path 'Packages' $rel)
+    if (Test-Path -LiteralPath $flat) {
+        Write-Host "[build-image-minikube] !! DS 包来源：同级目录 'Packages' —— 这是【已退役】来源。" -ForegroundColor Yellow
+        Write-Host "[build-image-minikube] !! 制品库里没有可用的 Server_Linux_Development 产物，才回退到这里。" -ForegroundColor Yellow
+        Write-Host "[build-image-minikube] !! 正确做法：在客户端仓库跑 Tool\Build\PublishPackages.ps1 发布到制品库。" -ForegroundColor Yellow
+        return (Resolve-Path -LiteralPath $flat).Path
+    }
+    $legacyRel = Join-Path 'Packages' $rel
     $cands = Get-ChildItem -LiteralPath $parent -Directory -ErrorAction SilentlyContinue |
-        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName $rel) }
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName $legacyRel) }
     if (-not $cands) { return $null }
     $pref = $cands | Where-Object { $_.Name -like 'Pandora-Client*' } | Select-Object -First 1
     $repo = if ($pref) { $pref } else { ($cands | Select-Object -First 1) }
@@ -149,7 +160,7 @@ function Resolve-LinuxPkg {
     if (-not $pref -and $cands.Count -gt 1) {
         Write-Host "[build-image-minikube] !! 且同级有 $($cands.Count) 个候选、无 'Pandora-Client*' 可优先：$([string]::Join('、', ($cands | ForEach-Object { $_.Name })))，按枚举顺序取了 '$($repo.Name)'。" -ForegroundColor Yellow
     }
-    return (Join-Path $repo.FullName $rel)
+    return (Join-Path $repo.FullName $legacyRel)
 }
 
 # 若解析到客户端 Linux 包，就 robocopy /MIR 同步进 stage\LinuxServer（build 上下文内才能被 docker COPY）。

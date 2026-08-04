@@ -33,15 +33,38 @@ if ($Down) {
 }
 
 # 1) 基础设施
-Write-Host "===== [1/2] 基础设施 =====" -ForegroundColor Cyan
+Write-Host "===== [1/4] 基础设施 =====" -ForegroundColor Cyan
 if ($Pull) { & "$ScriptDir/dev_up.ps1" -Pull } else { & "$ScriptDir/dev_up.ps1" }
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERR] 基础设施启动失败,中止" -ForegroundColor Red
     exit 1
 }
 
-# 2) 业务服务
+# 2) TiDB 集群。friend / chat / guild / mail 四个服务在 run_services.ps1 里被钉死用
+# *-dev-tidb.yaml(DSN 指向 127.0.0.1:4000),不起 TiDB 它们必然启动即崩
+# (panic: ping mysql: dial tcp 127.0.0.1:4000 ... 拒绝)。tidb_up.ps1 幂等,已在跑则快速返回。
+# ⚠️ 首次会拉 pingcap/{pd,tikv,tidb} 镜像(数百 MB,需联网)。
 Write-Host ""
-Write-Host "===== [2/2] 业务服务 =====" -ForegroundColor Cyan
+Write-Host "===== [2/4] TiDB 集群(社交库) =====" -ForegroundColor Cyan
+& "$ScriptDir/tidb_up.ps1"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERR] TiDB 启动失败,中止(friend/chat/guild/mail 连的就是它)" -ForegroundColor Red
+    exit 1
+}
+
+# 3) 数据库结构升级。必须夹在「基础设施起好」与「业务服务启动」之间:
+# mysql-init 只在数据卷首次创建时跑一次,之后新增的迁移不会自动进库,服务连上旧
+# 结构会启动即崩(实测 player: Unknown column 'exp')。幂等,已最新则空跑。
+Write-Host ""
+Write-Host "===== [3/4] 数据库结构 =====" -ForegroundColor Cyan
+& "$ScriptDir/dev_migrate.ps1"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERR] 数据库结构升级失败,中止(继续启动只会让服务连着旧结构崩溃)" -ForegroundColor Red
+    exit 1
+}
+
+# 4) 业务服务
+Write-Host ""
+Write-Host "===== [4/4] 业务服务 =====" -ForegroundColor Cyan
 & "$ScriptDir/run_services.ps1" -Exclude $Exclude
 exit $LASTEXITCODE

@@ -3688,6 +3688,18 @@ function Ensure-Go {
 # 客户端面 8443 归 $PANDORA_EDGE_BIND_HOST(默认 127.0.0.1),DS 面 8444 归
 # $PANDORA_DS_EDGE_BIND_HOST(默认 127.0.0.1),两者都由 deploy/docker-compose.dev.yml 直接发布。
 # 只把「真正会撞的地址」判为冲突:绑 127.0.0.1 时 0.0.0.0 的监听也会挡路,反之亦然。
+
+# 占用方是「local 模式自己上一轮留下的 pandora-envoy」时不算冲突 —— dev_up 的
+# `docker compose up -d` 会直接复用/重建它。不排掉的话「一键启动」第二次必失败:
+# 第一次起完不停、再点一次就报端口被占,而人根本没起别的东西(本机实测踩到)。
+# 注:监听方显示的是 com.docker.backend / wslrelay 这类 Docker 转发进程,从 PID 根本
+# 反查不到是哪个容器,故改从 docker 实际发布端口这一侧认。
+function Test-EdgePortHeldByOwnEnvoy([int]$Port) {
+    $published = (& docker port pandora-envoy 2>$null | Out-String)
+    if ([string]::IsNullOrWhiteSpace($published)) { return $false }
+    return ($published -match ('(?m)->\s*\S+:{0}\s*$' -f $Port))
+}
+
 function Assert-LocalEdgePortsFree {
     $targets = @(
         @{ Port = 8443; Host = $(if ($env:PANDORA_EDGE_BIND_HOST) { $env:PANDORA_EDGE_BIND_HOST } else { '127.0.0.1' }); Face = '客户端面' },
@@ -3705,6 +3717,11 @@ function Assert-LocalEdgePortsFree {
                 $_.LocalAddress -eq $t.Host -or ($wildcards -contains $_.LocalAddress) -or ($wildcards -contains $t.Host)
             })
         if ($blocking.Count -eq 0) { continue }
+
+        if (Test-EdgePortHeldByOwnEnvoy -Port $t.Port) {
+            Write-Info ("Envoy {0} {1}:{2} 当前就是本项目自己的 pandora-envoy 占着(上一轮没停),会被直接重建,不算冲突。" -f $t.Face.Trim(), $t.Host, $t.Port)
+            continue
+        }
 
         $who = ($blocking | ForEach-Object {
                 $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
@@ -5044,7 +5061,8 @@ function Ensure-EnvoyImageInMinikube {
 # DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)不是 21 个 go 业务镜像的一部分,
 # 由本函数从【同级客户端仓库】的 Linux 打包产物构建。策略(2026-07-09 改为宿主构建 + load):
 #   1) 调 build-image-minikube.ps1 -BuildOnHost:自动解析同级客户端仓库
-#      <sibling>\Packages\Server_Linux_Development\LinuxServer(不写死路径),robocopy /MIR
+#   1) 调 build-image-minikube.ps1 -BuildOnHost:优先从制品库取 Linux DS 包,没有时回退到
+#      同级目录 <sibling>\Packages\Server_Linux_Development\LinuxServer(不写死路径),robocopy /MIR
 #      同步进 deploy/ds/stage/LinuxServer,再在【宿主 docker daemon】docker build。
 #   2) Sync-ImagesToMinikube 把宿主镜像 load 进 minikube(rmi+overwrite+校验,复用业务镜像同款安全路径)。
 # 为什么不再在 minikube 内置 daemon 里直接 build:内网/断网机 minikube daemon 既没有 ubuntu:22.04

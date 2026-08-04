@@ -79,7 +79,8 @@ UE 本机联调可以直接用同版本发行版 Editor 当客户端:先启动 `
 > 详见 `deploy/k8s/agones/README.md`。
 > `local` 模式依赖 cook 好的 WindowsServer staged 包。该 staged 包由客户端/UE 侧的打包
 > 流水线产出(后端仓库不再维护 DS 编译脚本);拿到后让 allocator 配置指向
-> `F:\work\Pandora-Client-SVN\Packages\Server_Win64_Development\WindowsServer\PandoraServer.exe`;
+> `F:\work\Packages\Server_Win64_Development\WindowsServer\PandoraServer.exe`
+> (打包输出目录在客户端仓库【同级】,不在 `Pandora-Client-SVN\` 里);
 > 不能使用 `Pandora\Binaries\Win64` 下的裸 server 二进制,否则 DS 加载资产会崩。
 > 本地 dev 的 DS 面 Envoy `:8444` 是明文 grpc-web,local DS env 里 `PANDORA_DS_ALLOCATOR_TLS`
 > 应保持 `0`。
