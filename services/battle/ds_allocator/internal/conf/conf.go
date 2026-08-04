@@ -487,9 +487,13 @@ func (c *Config) Defaults() {
 			c.LocalDS.ProjectPath = filepath.FromSlash(envProj)
 		}
 	}
-	// editor 形态(UnrealEditor.exe -server)启动显著慢于打包 DS:要加载编辑器模块、按需编译
-	// shader、读未 cook 的资产,首次进一张新图可达数分钟。沿用打包 DS 的 10s/15s 会让
-	// AllocateBattle 在 DS 还没起来时就判 ready 超时回收,editor 模式永远开不了局。
+	// editor 形态(UnrealEditor.exe -server)启动显著慢于打包 DS:要加载一大批编辑器模块、
+	// 读未 cook 的散装资产(比 pak 慢),首次进一张新图还可能现场构 DDC(网格/贴图的
+	// render data),可达数分钟。沿用打包 DS 的 10s/15s 会让 AllocateBattle 在 DS 还没起来时
+	// 就判 ready 超时回收,editor 模式永远开不了局。
+	// 注:并**不包括编 shader** —— -server 下 IsRunningDedicatedServer()==true,引擎会跳过全局
+	// 着色器(RenderCore/ShaderCore.cpp AllowGlobalShaderLoad)与材质着色器(Material.cpp PostLoad
+	// 的 FApp::CanEverRender() 守卫);要编 shader 的是 listen server / PIE 那类会出画面的形态。
 	// 因此仅在「用户没显式配置(==0)」且 launcher=editor 时放宽;显式配置永远优先。
 	// 只影响本机 local 调试路径,Agones/线上默认值一字不动。
 	editorLocal := c.Mode == ModeLocal && c.LocalDS.Launcher == LauncherEditor

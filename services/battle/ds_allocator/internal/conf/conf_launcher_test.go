@@ -52,8 +52,10 @@ func TestLocalDSLauncherDefaults(t *testing.T) {
 	})
 }
 
-// TestLocalDSEditorWidensTimeouts:editor 形态要加载编辑器模块 + 按需编 shader,
-// 首次进图可能几十秒到几分钟,沿用 15s/10s 会在 DS 就绪前就被判定失联/超时回收。
+// TestLocalDSEditorWidensTimeouts:editor 形态要加载一大批编辑器模块、读未 cook 的散装资产
+// (首次进新图还可能现场构网格/贴图的 DDC),首次进图可能几十秒到几分钟,沿用 15s/10s 会在
+// DS 就绪前就被判定失联/超时回收。(注:并不包括编 shader —— -server 下 IsRunningDedicatedServer()
+// 为真,引擎跳过全局着色器与材质着色器编译;要编 shader 的是 listen server / PIE 那类会出画面的形态。)
 // 只在 mode=local && launcher=editor && 未显式配置时放宽;显式值与其它模式一律不动。
 func TestLocalDSEditorWidensTimeouts(t *testing.T) {
 	os.Unsetenv("PANDORA_DS_LAUNCHER")

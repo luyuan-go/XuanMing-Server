@@ -55,8 +55,13 @@ pwsh tools/scripts/start.ps1 -Mode local -Down
   (源码版走 `HKCU\...\Unreal Engine\Builds` 的 GUID,Epic 发行版走 `HKLM\...\EpicGames\Unreal Engine\<版本>`),
   工程则在「与本仓库平级的客户端仓」里自动找。所以你引擎装在 `E:\Program Files\UE_5.8` 还是别的盘都行。
   实在找不到再显式指定:`-DsProject <...\Pandora.uproject>` / `-DsEditorExe <...\UnrealEditor.exe>`。
-- **DS 启动会慢**:要加载编辑器模块 + 按需编 shader,首次进大厅/进图等一两分钟是正常的
+- **DS 启动会慢**:要加载一大批编辑器模块 + 读未 cook 的散装资产(首次进新图还可能现场构网格/贴图的 DDC),
+  首次进大厅/进图等一两分钟是正常的
   (后端已自动把就绪等待放宽到 300s、心跳超时放宽到 120s,不会被误判掉线回收)。
+  > 顺便澄清一个常见误解:这个形态**不会编 shader**。`-server` 下引擎认为自己是专服,
+  > 会直接跳过全局着色器和材质着色器的编译(引擎源码 `AllowGlobalShaderLoad()` /
+  > `FApp::CanEverRender()` 都带 `!IsRunningDedicatedServer()`)。要编 shader 的是
+  > listen server / PIE 那类要出画面的形态。
 - **不传 `-DsLauncher` 就是原来的行为**(跑打包好的 `PandoraServer.exe`),什么都没变。
 - 改**代码**(C++/蓝图节点新增)仍需编译;这个模式解决的是**改资源**的即时验证。
 

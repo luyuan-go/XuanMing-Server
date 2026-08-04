@@ -63,8 +63,9 @@ param(
     # editor  :跑引擎的 UnrealEditor.exe + Pandora.uproject,仍带 -server(NetMode 依旧是
     #           NM_DedicatedServer),直接读工程里未 cook 的 Content/ —— 策划存盘后重进大厅/重开一局
     #           即生效,免出包免编译。登录/大厅/匹配链路一字不改,后端不感知这个差别。
-    #           代价:DS 启动慢(加载编辑器模块 + 按需编 shader),首次进图可能要等一两分钟;
+    #           代价:DS 启动慢(加载一大批编辑器模块 + 读未 cook 的散装资产),首次进图可能等一两分钟;
     #           allocator 会自动把 ready 等待/心跳超时放宽到 300s/120s。
+    #           (不包括编 shader:-server 下引擎跳过全局与材质着色器编译。)
     [ValidateSet('', 'packaged', 'editor')]
     [string]$DsLauncher = '',
     # editor:Pandora.uproject 路径。留空则自动探测「与本仓库平级的客户端仓」,策划零手改。
@@ -3746,7 +3747,68 @@ function Set-LocalDsLauncherEnv {
     Write-Info "DS 进程形态:editor(免出包,直接读工程里未 cook 的资源)"
     Write-Info "  引擎  : $editorExe"
     Write-Info "  工程  : $uproject"
-    Write-Warn "editor 形态的 DS 启动慢(加载编辑器模块 + 按需编 shader),首次进大厅/进图可能等一两分钟属正常;allocator 已自动放宽 ready/心跳超时。"
+    Assert-PandoraEditorModulesMatch -EditorExe $editorExe -UProjectPath $uproject
+    Write-Warn "editor 形态的 DS 启动慢(加载一大批编辑器模块 + 读未 cook 的散装资产),首次进大厅/进图等一两分钟属正常;allocator 已自动放宽 ready/心跳超时。"
+}
+
+# Assert-PandoraEditorModulesMatch:校验「工程编辑器 DLL 的血统」与「即将用来跑 DS 的引擎」一致。
+#
+# 为什么必须查:UE 用 .modules 里的 BuildId 判断工程 DLL 是不是这个引擎编的。对不上时编辑器要弹
+# 「模块过期,是否重新编译」对话框 —— 但 DS 是 headless 跑的,弹不出来,进程直接退。表现只是
+# allocator 干等到 ready 超时,是这个模式最难查的坑,所以在启动前就拦下并给出可执行的修复指引。
+#
+# 血统对应(客户端仓 Tool/Build/README.md):源码版血统的 BuildId 是 GUID,Epic 发行版是 CL 号。
+# 两条血统各自都能跑 editor 形态的 DS —— 本函数不要求用哪条,只要求**工程 DLL 和引擎是同一条**。
+# 读不到任何一边(工程没编过 / 引擎目录结构特殊)时只告警不拦截,避免误伤。
+function Assert-PandoraEditorModulesMatch {
+    param([string]$EditorExe, [string]$UProjectPath)
+
+    function Get-ModulesBuildId([string]$ModulesPath) {
+        if (-not (Test-Path -LiteralPath $ModulesPath)) { return $null }
+        try { return [string](Get-Content -Raw -LiteralPath $ModulesPath | ConvertFrom-Json).BuildId } catch { return $null }
+    }
+
+    $projModules   = Join-Path (Split-Path -Parent $UProjectPath) 'Binaries\Win64\UnrealEditor.modules'
+    $engineModules = Join-Path (Split-Path -Parent $EditorExe) 'UnrealEditor.modules'
+
+    $projId   = Get-ModulesBuildId $projModules
+    $engineId = Get-ModulesBuildId $engineModules
+
+    if (-not $projId) {
+        Write-Warn "没读到工程编辑器模块信息($projModules);若 DS 启动后立刻退出,多半是工程还没用这个引擎编译过编辑器二进制。"
+        return
+    }
+    if (-not $engineId) {
+        Write-Info "  血统  : 引擎侧未提供 BuildId,跳过血统校验(工程侧 = $projId)。"
+        return
+    }
+    if ($projId -eq $engineId) {
+        Write-Info "  血统  : 工程 DLL 与引擎一致($projId)。"
+        return
+    }
+
+    $clientRepo = Split-Path -Parent (Split-Path -Parent $UProjectPath)
+    $msg = @"
+editor 形态无法启动:工程编辑器 DLL 与引擎不是同一血统(BuildId 对不上)。
+  工程 DLL : $projId   ($projModules)
+  引擎     : $engineId   ($EditorExe)
+这种情况下 UE 会认为模块过期并要求重新编译,而 DS 是 headless 跑的、弹不出对话框,进程会直接退出
+(表现为一直等不到 DS ready)。请先让两者对齐再重跑本脚本 —— 用哪条血统都行,本模式不挑血统
+(源码版 / Epic 发行版都能跑 editor 形态的 DS),只要求工程 DLL 和引擎是同一条。
+对齐办法(二选一):
+  * 用当前这个引擎重新编译一次工程的编辑器二进制;
+  * 或换一个与工程 DLL 同血统的引擎(改 $UProjectPath 的 EngineAssociation)。
+"@
+    # 客户端仓若仍带着引擎切换脚本,补一条现成的一键指引;脚本已被移除的仓库不会显示死链。
+    $switchHints = @(
+        @{ Path = (Join-Path $clientRepo 'Tool\Build\策划\切到IB引擎.bat');  Desc = '切到源码版血统(Installed Build)' },
+        @{ Path = (Join-Path $clientRepo 'Tool\Build\策划\切回发行版.bat');  Desc = '切回发行版(Epic Launcher)     ' }
+    ) | Where-Object { Test-Path -LiteralPath $_.Path }
+    if ($switchHints) {
+        $msg += "本仓库自带的一键切换脚本:`n"
+        foreach ($h in $switchHints) { $msg += ("  {0} : {1}`n" -f $h.Desc, $h.Path) }
+    }
+    throw $msg
 }
 
 # ===== local 模式(宿主 go 进程 + docker 基础设施)=====

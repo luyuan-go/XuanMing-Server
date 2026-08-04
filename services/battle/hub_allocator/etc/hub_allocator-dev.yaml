@@ -161,8 +161,9 @@ local_hub:
   # 大厅心跳/SetLocationHub/在线准入完全一致)。
   #   packaged (默认) 跑打包好的 PandoraServer.exe。内容已 cook,改 .uasset 要重新出包才生效。
   #   editor          跑引擎的 UnrealEditor.exe + 下面的 project_path,直接读工程里未 cook 的
-  #                   Content/。策划存盘后重进大厅即生效,免出包;代价是启动慢(要加载编辑器模块、
-  #                   按需编 shader),首次进大厅可能要等一两分钟。
+  #                   Content/。策划存盘后重进大厅即生效,免出包;代价是启动慢(要加载一大批
+  #                   编辑器模块、读散装资产、首次可能现场构 DDC),首次进大厅可能要等一两分钟。
+  #                   注:editor 形态**不编 shader** —— -server 下引擎跳过全局与材质着色器编译。
   # 也可用环境变量 PANDORA_DS_LAUNCHER=editor 临时切换(同时作用于大厅和战斗 DS),免改本文件。
   launcher: "packaged"
   # 策划机可改用 ${PANDORA_DS_ROOT} 拼接(play.ps1 -Battle 启动时自动探测平级 Client 仓并设该变量,策划零操作):

@@ -20,9 +20,14 @@ rem
 rem  Engine and project paths are auto-detected (uproject EngineAssociation ->
 rem  registry), so it works no matter which drive/folder UE is installed in.
 rem
-rem  Note: the editor-form DS starts slowly (editor modules + on-demand shader
-rem  compile). One or two minutes on first entry to a map is normal; the backend
-rem  already widens ready/heartbeat timeouts for this mode.
+rem  Note: the editor-form DS starts slowly (it loads a large set of editor
+rem  modules and reads loose UNCOOKED assets; the first entry to a new map may
+rem  also build mesh/texture DDC). One or two minutes on first entry to a map is
+rem  normal; the backend already widens ready/heartbeat timeouts for this mode.
+rem  It does NOT compile shaders: under -server the engine skips both global and
+rem  material shader compilation (AllowGlobalShaderLoad / FApp::CanEverRender
+rem  both test !IsRunningDedicatedServer). Shader compiling is what a listen
+rem  server or PIE would do, because those actually render.
 rem
 rem  Stop: 策划一键停止.cmd  (or: pwsh tools\scripts\start.ps1 -Mode local -Down)
 rem ============================================================
