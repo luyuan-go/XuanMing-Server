@@ -174,12 +174,13 @@ local_ds:
   #                   (要编的是 listen server / PIE 那类要出画面的形态)。
   # 也可用环境变量 PANDORA_DS_LAUNCHER=editor 临时切换,免改本文件。
   launcher: "packaged"
-  # 策划机可改用 ${PANDORA_DS_ROOT} 拼接(play.ps1 -Battle 启动时自动探测平级 Client 仓并设该变量,策划零操作):
+  # 策划机可改用 ${PANDORA_DS_ROOT} 拼接(指向客户端仓库【同级】的出包根目录,如 F:/work):
   #   executable_path: "${PANDORA_DS_ROOT}/Packages/Server_Win64_Shipping/WindowsServer/PandoraServer.exe"
   # 路径分隔符正斜杠 / 反斜杠都行(go 侧 filepath.FromSlash 归一化);下面是本开发机绝对路径。
   # launcher=editor 时这里要改成引擎的 UnrealEditor.exe,例如(策划机引擎目录各不相同,按本机实际填):
   #   executable_path: "E:/Program Files/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe"
-  executable_path: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer\\PandoraServer.exe"
+  # 2026-08-04:出包输出根已从客户端 SVN 工作副本内移到与之【平级】(F:\work\Packages)。
+  executable_path: "F:\\work\\Packages\\Server_Win64_Development\\WindowsServer\\PandoraServer.exe"
   # project_path:仅 launcher=editor 时必填(packaged 忽略)。UE 只把命令行第一个不以 '-' 开头的
   # token 当工程,所以它会被排在关卡 URL 之前;填错/不存在会在启动时直接报错,不会静默秒退。
   # 也可用环境变量 PANDORA_DS_UPROJECT 注入。
@@ -206,7 +207,7 @@ local_ds:
   advertise_host: "127.0.0.1"
   port_base: 7800                              # 战斗 DS 端口池基址(与 hub 7777 错开)
   port_range: 100                              # 端口池大小,实际端口在 [base, base+range) 取空闲
-  working_dir: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer" # DS 进程工作目录(staged 根目录)
+  working_dir: "F:\\work\\Packages\\Server_Win64_Development\\WindowsServer" # DS 进程工作目录(staged 根目录)
   log_dir: "run/dev/logs/ds"                   # 每个 DS 进程 stdout/stderr 落 <pod>.log
   # extra_args: ["-PANDORA_BACKEND=http://127.0.0.1:8444"]   # 追加 UE DS 命令行参数(本地 DS 面明文)
   extra_env:                                   # 注入 DS 进程额外环境变量
