@@ -117,6 +117,7 @@ func (l *LocalGameServerAllocator) SetDSTokenIssuer(f func(matchID uint64, podNa
 // 失败场景(返 error,main 据此 fatal):
 //   - ExecutablePath 空
 //   - ExecutablePath 指向的文件不存在
+//   - launcher=editor 但 ProjectPath 空 / 指向的 .uproject 不存在
 //   - PortRange <= 0
 func NewLocalGameServerAllocator(cfg conf.LocalDSConf) (*LocalGameServerAllocator, error) {
 	if cfg.ExecutablePath == "" {
@@ -124,6 +125,16 @@ func NewLocalGameServerAllocator(cfg conf.LocalDSConf) (*LocalGameServerAllocato
 	}
 	if _, err := os.Stat(cfg.ExecutablePath); err != nil {
 		return nil, fmt.Errorf("local_ds: executable_path %q not found: %w", cfg.ExecutablePath, err)
+	}
+	// editor 形态必须能定位 .uproject:否则 UnrealEditor.exe 会把关卡路径当工程名解析失败,
+	// 表现为 DS 秒退 + ready 等待超时,排查成本高 —— 在启动时 fail-fast。
+	if cfg.Launcher == conf.LauncherEditor {
+		if cfg.ProjectPath == "" {
+			return nil, fmt.Errorf("local_ds: project_path required when launcher=%s", conf.LauncherEditor)
+		}
+		if _, err := os.Stat(cfg.ProjectPath); err != nil {
+			return nil, fmt.Errorf("local_ds: project_path %q not found: %w", cfg.ProjectPath, err)
+		}
 	}
 	if cfg.PortRange <= 0 {
 		return nil, fmt.Errorf("local_ds: port_range must be > 0")
@@ -301,11 +312,19 @@ func (l *LocalGameServerAllocator) defaultStart(podName string, port int, matchI
 	return &execProcess{cmd: cmd, logF: logF}, nil
 }
 
-// buildArgs 拼 UE DS 命令行:关卡 + -server -log -port=<port> + 额外参数。
+// buildArgs 拼 UE DS 命令行:[.uproject] + 关卡 + -server -log -port=<port> + 额外参数。
 // 首个加载关卡由 cfg.ResolveStartupMap(mapID) 决定:配了 LoaderMap 则统一启到加载/分发关卡(UE 侧
 // 读 PANDORA_MAP_ID → 查表 → ServerTravel);否则按 map_id 从 Maps 直接选副本图(未命中回退 MapName)。
+//
+// launcher=editor 时在最前面插 .uproject:UE 的 LaunchSetGameName 只把命令行里**第一个**不以 '-'
+// 开头的 token 当工程/关卡,所以 .uproject 必须排在关卡 URL 之前,否则引擎会把关卡路径当工程名解析失败。
+// -server 两种形态都带 —— NetMode 恒为 NM_DedicatedServer,IsRunningDedicatedServer() 为 true,
+// DS 子系统/心跳/在线准入全链路与打包 DS 完全一致,后端对此无感。
 func (l *LocalGameServerAllocator) buildArgs(port int, mapID uint32) []string {
-	args := make([]string, 0, 4+len(l.cfg.ExtraArgs))
+	args := make([]string, 0, 5+len(l.cfg.ExtraArgs))
+	if l.cfg.Launcher == conf.LauncherEditor && l.cfg.ProjectPath != "" {
+		args = append(args, l.cfg.ProjectPath)
+	}
 	if mapName := l.cfg.ResolveStartupMap(mapID); mapName != "" {
 		args = append(args, mapName)
 	}

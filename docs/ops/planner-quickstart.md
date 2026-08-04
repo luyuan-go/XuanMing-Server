@@ -27,6 +27,56 @@
 - **更新后启动**:`git pull` 之后再双击启动,会自动重建有改动的服务。
 - 启动成功后,客户端网关在 **https://127.0.0.1:8443**。
 
+## 二之二、改了资源想立刻在真链路里验证(免出包)
+
+> 场景:你改了关卡/蓝图/数值,想**存盘后马上进游戏看效果**,又不想等程序出一次服务器包,
+> 而且必须走**真正的登录 → 大厅 → 匹配 → 战斗**链路(不是单机 PIE)。
+
+做法:让本机 DS 用**引擎的 `UnrealEditor.exe`** 跑,而不是打包好的 `PandoraServer.exe`。
+两者都带 `-server`,对后端来说完全是同一种 DS,**登录/大厅/匹配一行代码都没变**;
+区别只是 editor 形态直接读工程里**未 cook 的 `Content/`**,所以你存盘就生效。
+
+| 操作 | 怎么做 |
+|---|---|
+| 启动 | 双击 `策划一键启动-改资源即时生效.cmd` |
+| 停止 | 双击 `策划一键停止-改资源即时生效.cmd` |
+
+等价的命令行:
+
+```powershell
+# 起后端 + 本机 DS(DS 用引擎跑,免出包)
+pwsh tools/scripts/start.ps1 -Mode local -DsLauncher editor
+
+# 停止
+pwsh tools/scripts/start.ps1 -Mode local -Down
+```
+
+- **引擎/工程路径不用填**:脚本按 `Pandora.uproject` 里的 `EngineAssociation` 查注册表定位引擎
+  (源码版走 `HKCU\...\Unreal Engine\Builds` 的 GUID,Epic 发行版走 `HKLM\...\EpicGames\Unreal Engine\<版本>`),
+  工程则在「与本仓库平级的客户端仓」里自动找。所以你引擎装在 `E:\Program Files\UE_5.8` 还是别的盘都行。
+  实在找不到再显式指定:`-DsProject <...\Pandora.uproject>` / `-DsEditorExe <...\UnrealEditor.exe>`。
+- **DS 启动会慢**:要加载编辑器模块 + 按需编 shader,首次进大厅/进图等一两分钟是正常的
+  (后端已自动把就绪等待放宽到 300s、心跳超时放宽到 120s,不会被误判掉线回收)。
+- **不传 `-DsLauncher` 就是原来的行为**(跑打包好的 `PandoraServer.exe`),什么都没变。
+- 改**代码**(C++/蓝图节点新增)仍需编译;这个模式解决的是**改资源**的即时验证。
+
+### 本机没装 Go 怎么办
+
+`local` 模式是「宿主跑 21 个 Go 进程 + Docker 跑基础设施」。默认要现场 `go build`,所以需要 Go 工具链。
+不想装 Go 的话,让后端同学在他机器上跑一次:
+
+```powershell
+pwsh tools/scripts/build_release_binaries.ps1 -Zip
+```
+
+把生成的 `run/artifacts` 目录(或那个 zip 解开)放到你本地仓库的同名位置即可 ——
+启动脚本检测到本机没有 Go 会**自动改用这批预编译二进制**,秒级启动。
+以后升级也只需**替换 `run/artifacts` 这一个目录**,不用重装任何东西。
+
+> 唯一绕不开的安装项仍然是 **Docker Desktop**:MySQL/Redis/Kafka/etcd 都跑在容器里,
+> 而 Docker 在 Windows 上是系统级组件(装虚拟化 + 驱动 + 服务),没法塞进项目目录里"绿色免安装"。
+> 除它之外的东西(镜像、二进制、配置、证书)都已经在仓库目录里,拷过去就能用。
+
 ## 三、机器拉不到镜像（内网 / 断网 / 镜像加速失效）
 
 若这台机器连不上 Docker Hub / 国内加速站(双击启动时会卡在「拉 golang / alpine 镜像失败」,

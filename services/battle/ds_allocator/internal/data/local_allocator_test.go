@@ -6,6 +6,9 @@ package data
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -280,6 +283,140 @@ func TestBuildArgs_LoaderMapOverridesDirectSelect(t *testing.T) {
 	args := l.buildArgs(7788, 2)
 	if len(args) == 0 || args[0] != "/Game/Maps/Loader?game=/Script/Pandora.PandoraDSLoaderGameMode" {
 		t.Fatalf("loader_map should override direct map select, args=%v", args)
+	}
+}
+
+// launcher=packaged(默认/缺省)必须与改造前逐字节一致:关卡打头,不带 .uproject。
+// 这是「加 editor 模式不影响原有 packaged 路径」的回归护栏。
+func TestBuildArgs_PackagedLauncherUnchanged(t *testing.T) {
+	base := conf.LocalDSConf{
+		MapName:   "/Game/Maps/Default",
+		PortBase:  7777,
+		PortRange: 10,
+	}
+	want := []string{"/Game/Maps/Default", "-server", "-log", "-port=7788"}
+
+	for _, tc := range []struct {
+		name string
+		cfg  conf.LocalDSConf
+	}{
+		// 缺省(零值):老配置不写 launcher 时的行为。
+		{"zero value", base},
+		// 显式 packaged。
+		{"explicit packaged", func() conf.LocalDSConf {
+			c := base
+			c.Launcher = conf.LauncherPackaged
+			return c
+		}()},
+		// packaged 下即便误配了 project_path 也必须忽略,绝不混入命令行。
+		{"packaged ignores project_path", func() conf.LocalDSConf {
+			c := base
+			c.Launcher = conf.LauncherPackaged
+			c.ProjectPath = `C:\x\Pandora.uproject`
+			return c
+		}()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			l, _ := newLocalTestAllocator(t, tc.cfg)
+			got := l.buildArgs(7788, 0)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("packaged args changed:\n got=%v\nwant=%v", got, want)
+			}
+		})
+	}
+}
+
+// launcher=editor 时 .uproject 必须是命令行**第一个**参数(排在关卡 URL 之前):
+// UE 的 LaunchSetGameName 只把首个不以 '-' 开头的 token 当工程,顺序错了引擎会把关卡路径
+// 当工程名解析失败 → DS 秒退。-server 仍在,NetMode 依旧是 NM_DedicatedServer。
+func TestBuildArgs_EditorLauncherPutsProjectFirst(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{
+		Launcher:    conf.LauncherEditor,
+		ProjectPath: `F:\work\Pandora-Client-SVN\Pandora\Pandora.uproject`,
+		MapName:     "/Game/Maps/Default",
+		PortBase:    7777,
+		PortRange:   10,
+		Maps:        []conf.MapEntry{{MapID: 2, MapName: "/Game/Maps/PVE"}},
+	})
+
+	got := l.buildArgs(7788, 2)
+	want := []string{
+		`F:\work\Pandora-Client-SVN\Pandora\Pandora.uproject`,
+		"/Game/Maps/PVE",
+		"-server", "-log", "-port=7788",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("editor args:\n got=%v\nwant=%v", got, want)
+	}
+}
+
+// editor 形态仍必须带 -server:它决定 NetMode=NM_DedicatedServer,
+// 进而决定 IsRunningDedicatedServer()=true → DS 子系统/心跳/在线准入全链路照常工作。
+// 丢了 -server 就退化成 listen server,后端对接全断,故单列一条护栏。
+func TestBuildArgs_EditorKeepsServerFlag(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{
+		Launcher:    conf.LauncherEditor,
+		ProjectPath: `C:\p\Pandora.uproject`,
+		PortBase:    7777,
+		PortRange:   10,
+	})
+	var hasServer bool
+	for _, a := range l.buildArgs(7788, 0) {
+		if a == "-server" {
+			hasServer = true
+		}
+	}
+	if !hasServer {
+		t.Fatal("editor 形态必须保留 -server,否则退化成 listen server,后端链路全断")
+	}
+}
+
+func TestNewLocalGameServerAllocator_EditorRequiresProjectPath(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "UnrealEditor.exe")
+	if err := os.WriteFile(exe, []byte("stub"), 0o644); err != nil {
+		t.Fatalf("write stub exe: %v", err)
+	}
+
+	// project_path 缺失 → 构造失败(fail-fast,而不是让 DS 秒退后干等 ready 超时)。
+	if _, err := NewLocalGameServerAllocator(conf.LocalDSConf{
+		Launcher:       conf.LauncherEditor,
+		ExecutablePath: exe,
+		PortRange:      10,
+	}); err == nil {
+		t.Fatal("launcher=editor 缺 project_path 应构造失败")
+	}
+
+	// project_path 指向不存在的文件 → 同样构造失败。
+	if _, err := NewLocalGameServerAllocator(conf.LocalDSConf{
+		Launcher:       conf.LauncherEditor,
+		ExecutablePath: exe,
+		ProjectPath:    filepath.Join(dir, "missing", "Pandora.uproject"),
+		PortRange:      10,
+	}); err == nil {
+		t.Fatal("launcher=editor 的 project_path 不存在应构造失败")
+	}
+
+	// 齐活 → 构造成功。
+	proj := filepath.Join(dir, "Pandora.uproject")
+	if err := os.WriteFile(proj, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write stub uproject: %v", err)
+	}
+	if _, err := NewLocalGameServerAllocator(conf.LocalDSConf{
+		Launcher:       conf.LauncherEditor,
+		ExecutablePath: exe,
+		ProjectPath:    proj,
+		PortRange:      10,
+	}); err != nil {
+		t.Fatalf("齐活时应构造成功: %v", err)
+	}
+
+	// packaged 不要求 project_path(旧配置零改动)。
+	if _, err := NewLocalGameServerAllocator(conf.LocalDSConf{
+		ExecutablePath: exe,
+		PortRange:      10,
+	}); err != nil {
+		t.Fatalf("packaged 不应要求 project_path: %v", err)
 	}
 }
 

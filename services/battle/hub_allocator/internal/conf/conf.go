@@ -24,6 +24,14 @@ const (
 	ModeMock   = "mock"
 )
 
+// 本机 Hub DS 的两种进程形态(LocalHubConf.Launcher 的合法取值,与 ds_allocator 对齐)。
+const (
+	// LauncherPackaged 跑打包好的 PandoraServer.exe(默认,现状行为)。
+	LauncherPackaged = "packaged"
+	// LauncherEditor 跑 UnrealEditor.exe + .uproject -server,读未 cook 的工程内容,免出包。
+	LauncherEditor = "editor"
+)
+
 // Config 是 hub_allocator 服务的完整配置。
 type Config struct {
 	config.Base `yaml:",inline" mapstructure:",squash"`
@@ -67,9 +75,25 @@ type Config struct {
 // 首次 AssignHub 时懒拉起一个常驻 Hub DS 进程(加载 hub 关卡 / PandoraHubGameMode),把它作为
 // 唯一分片返回给 login;进程随 hub_allocator 退出而 Kill。常驻不按对局回收(与战斗 DS 不同)。
 type LocalHubConf struct {
-	// ExecutablePath 打包好的 UE Windows Dedicated Server 可执行文件绝对路径
-	// (与战斗 DS 同一个 PandoraServer.exe,靠 map_name 区分大厅/战斗关卡)。mode=local 时必填且必须存在。
+	// Launcher 选择本机 Hub DS 的「进程形态」,与 ds_allocator.LocalDSConf.Launcher 对称;
+	// 两种模式并存、互不影响,只改这一个字段即可切换:
+	//   - LauncherPackaged("packaged",默认)= 现状:跑打包好的 PandoraServer.exe。
+	//   - LauncherEditor("editor")= 跑 UnrealEditor.exe + .uproject,仍带 -server
+	//     (NetMode 依旧是 NM_DedicatedServer,登录/大厅/匹配全链路一字不改),
+	//     但直接读工程里未 cook 的 Content/,策划存盘后重进大厅即生效,免出包。
+	Launcher string `yaml:"launcher,omitempty" json:"launcher,omitempty"`
+
+	// ExecutablePath 本机要 exec 的可执行文件绝对路径,含义随 Launcher 变化:
+	//   - packaged:打包好的 UE Windows Dedicated Server
+	//     (与战斗 DS 同一个 PandoraServer.exe,靠 map_name 区分大厅/战斗关卡)。
+	//   - editor:  引擎的 UnrealEditor.exe。
+	// mode=local 时必填且必须存在。
 	ExecutablePath string `yaml:"executable_path,omitempty" json:"executable_path,omitempty"`
+
+	// ProjectPath 工程 .uproject 绝对路径,仅 Launcher=editor 时必填且必须存在(packaged 忽略)。
+	// UE 的 LaunchSetGameName 只认命令行里第一个不以 '-' 开头的 token,所以它必须排在关卡 URL 之前;
+	// buildArgs 已保证该顺序。
+	ProjectPath string `yaml:"project_path,omitempty" json:"project_path,omitempty"`
 
 	// MapName 启动时加载的大厅关卡(DS 命令行首个位置参数,例如 /Game/Maps/HubMap)。
 	// 留空则不带关卡参数,由 DS 自身默认关卡决定。
@@ -382,6 +406,21 @@ func (c *Config) Defaults() {
 			if envDir := os.Getenv("PANDORA_DS_DIR"); envDir != "" {
 				c.LocalHub.WorkingDir = filepath.FromSlash(envDir)
 			}
+		}
+	}
+	// Launcher 两模式开关:缺省/非法值一律归一到 packaged(现状行为),旧配置零改动。
+	// PANDORA_DS_LAUNCHER / PANDORA_DS_UPROJECT 让一键脚本免改 yaml 就能切换,
+	// 与 ds_allocator 同名变量同语义(一次注入同时切大厅和战斗 DS)。
+	if envLauncher := strings.TrimSpace(os.Getenv("PANDORA_DS_LAUNCHER")); envLauncher != "" {
+		c.LocalHub.Launcher = envLauncher
+	}
+	if c.LocalHub.Launcher = strings.ToLower(strings.TrimSpace(c.LocalHub.Launcher)); c.LocalHub.Launcher != LauncherEditor {
+		c.LocalHub.Launcher = LauncherPackaged
+	}
+	c.LocalHub.ProjectPath = filepath.FromSlash(os.ExpandEnv(c.LocalHub.ProjectPath))
+	if envProj := strings.TrimSpace(os.Getenv("PANDORA_DS_UPROJECT")); envProj != "" {
+		if _, err := os.Stat(c.LocalHub.ProjectPath); c.LocalHub.ProjectPath == "" || err != nil {
+			c.LocalHub.ProjectPath = filepath.FromSlash(envProj)
 		}
 	}
 	// AdvertiseHost 是「返回给客户端连接的 Hub DS host」,属每台机器各异的运行期值:内网测试服要用

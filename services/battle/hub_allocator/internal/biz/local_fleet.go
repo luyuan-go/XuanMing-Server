@@ -70,12 +70,23 @@ func (l *LocalHubFleetProvider) SetDSTokenIssuer(f func(pod, instanceUID string,
 // 失败场景(返 error,main 据此 fatal):
 //   - ExecutablePath 空
 //   - ExecutablePath 指向的文件不存在
+//   - launcher=editor 但 ProjectPath 空 / 指向的 .uproject 不存在
 func NewLocalHubFleetProvider(cfg conf.LocalHubConf) (*LocalHubFleetProvider, error) {
 	if cfg.ExecutablePath == "" {
 		return nil, fmt.Errorf("local_hub: executable_path required when mode=local")
 	}
 	if _, err := os.Stat(cfg.ExecutablePath); err != nil {
 		return nil, fmt.Errorf("local_hub: executable_path %q not found: %w", cfg.ExecutablePath, err)
+	}
+	// editor 形态必须能定位 .uproject:否则 UnrealEditor.exe 会把关卡路径当工程名解析失败,
+	// 表现为 Hub DS 秒退、客户端登录后连不上大厅 —— 在启动时 fail-fast。
+	if cfg.Launcher == conf.LauncherEditor {
+		if cfg.ProjectPath == "" {
+			return nil, fmt.Errorf("local_hub: project_path required when launcher=%s", conf.LauncherEditor)
+		}
+		if _, err := os.Stat(cfg.ProjectPath); err != nil {
+			return nil, fmt.Errorf("local_hub: project_path %q not found: %w", cfg.ProjectPath, err)
+		}
 	}
 	mapURL, err := hubMapURLWithMaxPlayers(cfg.MapName, cfg.Capacity)
 	if err != nil {
@@ -182,9 +193,16 @@ func (l *LocalHubFleetProvider) start() error {
 	return nil
 }
 
-// buildArgs 拼 UE DS 命令行:大厅关卡 + -server -log -port=<port> + 额外参数。
+// buildArgs 拼 UE DS 命令行:[.uproject] + 大厅关卡 + -server -log -port=<port> + 额外参数。
+//
+// launcher=editor 时在最前面插 .uproject:UE 的 LaunchSetGameName 只把命令行里**第一个**不以 '-'
+// 开头的 token 当工程/关卡,所以 .uproject 必须排在关卡 URL 之前。-server 两种形态都带 ——
+// NetMode 恒为 NM_DedicatedServer,大厅心跳/SetLocationHub/在线准入与打包 DS 完全一致。
 func (l *LocalHubFleetProvider) buildArgs() []string {
-	args := make([]string, 0, 4+len(l.cfg.ExtraArgs))
+	args := make([]string, 0, 5+len(l.cfg.ExtraArgs))
+	if l.cfg.Launcher == conf.LauncherEditor && l.cfg.ProjectPath != "" {
+		args = append(args, l.cfg.ProjectPath)
+	}
 	if l.mapURL != "" {
 		args = append(args, l.mapURL)
 	}

@@ -156,10 +156,25 @@ agones:
 # 与本服务器仓库平级的目录,play.ps1 -Battle 会自动探测 Packages\Server_Win64_*\WindowsServer\
 # PandoraServer.exe 并经 PANDORA_DS_EXE / PANDORA_DS_DIR 注入;此处路径在本机不存在时自动回退到注入值。
 local_hub:
+  # launcher:本机 Hub DS 的「进程形态」,与 ds_allocator.local_ds.launcher 对称,两种模式并存,
+  # 只改这一行即可切换,后端链路一字不改(两种形态都带 -server,NetMode 恒为 NM_DedicatedServer,
+  # 大厅心跳/SetLocationHub/在线准入完全一致)。
+  #   packaged (默认) 跑打包好的 PandoraServer.exe。内容已 cook,改 .uasset 要重新出包才生效。
+  #   editor          跑引擎的 UnrealEditor.exe + 下面的 project_path,直接读工程里未 cook 的
+  #                   Content/。策划存盘后重进大厅即生效,免出包;代价是启动慢(要加载编辑器模块、
+  #                   按需编 shader),首次进大厅可能要等一两分钟。
+  # 也可用环境变量 PANDORA_DS_LAUNCHER=editor 临时切换(同时作用于大厅和战斗 DS),免改本文件。
+  launcher: "packaged"
   # 策划机可改用 ${PANDORA_DS_ROOT} 拼接(play.ps1 -Battle 启动时自动探测平级 Client 仓并设该变量,策划零操作):
   #   executable_path: "${PANDORA_DS_ROOT}/Packages/Server_Win64_Shipping/WindowsServer/PandoraServer.exe"
   # 路径分隔符正斜杠 / 反斜杠都行(go 侧 filepath.FromSlash 归一化);下面是本开发机绝对路径。
+  # launcher=editor 时这里要改成引擎的 UnrealEditor.exe,例如(策划机引擎目录各不相同,按本机实际填):
+  #   executable_path: "E:/Program Files/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe"
   executable_path: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer\\PandoraServer.exe"
+  # project_path:仅 launcher=editor 时必填(packaged 忽略)。UE 只把命令行第一个不以 '-' 开头的
+  # token 当工程,所以它会被排在关卡 URL 之前;填错/不存在会在启动时直接报错,不会静默秒退。
+  # 也可用环境变量 PANDORA_DS_UPROJECT 注入。
+  # project_path: "F:/work/Pandora-Client-SVN/Pandora/Pandora.uproject"
   map_name: "/Game/Test/Level/MainCity?game=/Script/Pandora.PandoraHubGameMode" # 大厅关卡(留空用 DS 默认关卡)
   # advertise_host:返回给客户端 NetDriver 连接的大厅 host。本机自测用 127.0.0.1;
   # 内网测试服(play.ps1 -Battle -Intranet)会自动探测本机内网 IPv4 并经环境变量

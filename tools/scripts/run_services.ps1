@@ -41,7 +41,15 @@ param(
     [switch]$Foreground,
 
     # 跳过 go build(进程已是最新二进制时加速)
-    [switch]$NoBuild
+    [switch]$NoBuild,
+
+    # 强制用预编译产物(run/artifacts/windows/bin)而不是现场 go build。
+    # 没装 Go 的机器(策划机)会自动走这条路,不必显式传。
+    [switch]$UseArtifacts,
+
+    # 配合 -Action build:把产物编到 run/artifacts/windows/bin(而不是 run/dev/bin),
+    # 供打包分发给没装 Go 的机器。
+    [switch]$PublishArtifacts
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +70,11 @@ $RunDir = Join-Path $ProjectRoot 'run/dev'
 $BinDir = Join-Path $RunDir 'bin'
 $LogDir = Join-Path $RunDir 'logs'
 New-Item -ItemType Directory -Force -Path $BinDir, $LogDir | Out-Null
+
+# 预编译产物目录:由 tools/scripts/build_release_binaries.ps1 在装了 Go 的机器上生成并随目录分发。
+# 没装 Go 的机器(策划机)启动时直接拷这里的 exe,免装 Go 工具链、免联网拉模块。
+$ArtifactBinDir = Join-Path $ProjectRoot 'run/artifacts/windows/bin'
+$script:HasGo = [bool](Get-Command go -ErrorAction SilentlyContinue)
 
 # ===== 服务清单(数组顺序 = 依赖启动顺序:leaf 依赖在前,login 最后)=====
 # 全部 21 个服务(含 social/friend、social/chat、social/guild、social/mail、social/dialogue、
@@ -236,9 +249,36 @@ function Test-InfraReady {
     return $false
 }
 
+# Build-Service:产出可执行文件路径。
+#
+# 两条路,按「本机有没有 Go」自动选,不需要调用方关心:
+#   有 Go(开发机)     → 现场 go build,保持原有行为不变(改代码即时生效)。
+#   没 Go(策划机)     → 直接拷 run/artifacts/windows/bin 下的预编译产物。
+# -UseArtifacts 可在有 Go 的机器上强制走预编译(验证分发包用);两条路都不通时给出
+# 可执行的修复指引,而不是抛一个 'go 不是内部命令' 让策划自己猜。
 function Build-Service($svc) {
+    $outDir = if ($PublishArtifacts) { $ArtifactBinDir } else { $BinDir }
+    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+    $exe = Join-Path $outDir "$($svc.Name).exe"
+
+    if (($UseArtifacts -or -not $script:HasGo) -and -not $PublishArtifacts) {
+        $artifact = Join-Path $ArtifactBinDir "$($svc.Name).exe"
+        if (Test-Path -LiteralPath $artifact) {
+            Write-Host "  [use ] $($svc.Name) (预编译产物)" -ForegroundColor DarkGray
+            Copy-Item -LiteralPath $artifact -Destination $exe -Force
+            return $exe
+        }
+        if (-not $script:HasGo) {
+            Write-Host "[ERR] 本机没装 Go,也没找到预编译产物: $artifact" -ForegroundColor Red
+            Write-Host "      修复(二选一):" -ForegroundColor Yellow
+            Write-Host "        a) 找后端同学在装了 Go 的机器上跑 pwsh tools/scripts/build_release_binaries.ps1," -ForegroundColor Yellow
+            Write-Host "           把 run/artifacts/ 整个目录一起发过来(以后升级也只需替换这个目录);" -ForegroundColor Yellow
+            Write-Host "        b) 本机装 Go: winget install GoLang.Go" -ForegroundColor Yellow
+            exit 1
+        }
+    }
+
     $svcDir = Join-Path $ProjectRoot $svc.Dir
-    $exe = Join-Path $BinDir "$($svc.Name).exe"
     Write-Host "  [build] $($svc.Name) ..." -ForegroundColor DarkGray
     Push-Location $svcDir
     try {
@@ -379,6 +419,13 @@ switch ($Action) {
             }
             $svcDir = Join-Path $ProjectRoot $svc.Dir
             Write-Host "===== 前台运行 $($svc.Name) (:$($svc.Port),Ctrl+C 退出) =====" -ForegroundColor Cyan
+            # 没装 Go 的机器跑不了 go run,退回「预编译产物 + 前台执行」,日志一样直出。
+            if (-not $script:HasGo -or $UseArtifacts) {
+                $exe = Build-Service $svc
+                Push-Location $svcDir
+                try { & $exe -conf $svc.Conf } finally { Pop-Location }
+                break
+            }
             Push-Location $svcDir
             try { & go run "./cmd/$($svc.Cmd)" -conf $svc.Conf } finally { Pop-Location }
             break

@@ -58,6 +58,21 @@ param(
     # 仅当真有【异机 UE DS】需要回连本机 Envoy :8444 时才加此开关显式开放(务必配合网络隔离)。
     [switch]$ExposeDsFace,
 
+    # ---- 本机 DS「进程形态」(仅 -Mode local 生效;不传 = 完全沿用 yaml,原有链路零变化)----
+    # packaged:跑打包好的 PandoraServer.exe(内容已 cook,改 .uasset 要重新出包才生效)。
+    # editor  :跑引擎的 UnrealEditor.exe + Pandora.uproject,仍带 -server(NetMode 依旧是
+    #           NM_DedicatedServer),直接读工程里未 cook 的 Content/ —— 策划存盘后重进大厅/重开一局
+    #           即生效,免出包免编译。登录/大厅/匹配链路一字不改,后端不感知这个差别。
+    #           代价:DS 启动慢(加载编辑器模块 + 按需编 shader),首次进图可能要等一两分钟;
+    #           allocator 会自动把 ready 等待/心跳超时放宽到 300s/120s。
+    [ValidateSet('', 'packaged', 'editor')]
+    [string]$DsLauncher = '',
+    # editor:Pandora.uproject 路径。留空则自动探测「与本仓库平级的客户端仓」,策划零手改。
+    [string]$DsProject = '',
+    # editor:UnrealEditor.exe 路径。留空则按 .uproject 里的 EngineAssociation 查注册表定位引擎,
+    # 所以策划机引擎装在哪个盘/哪个目录都行(源码版走 HKCU Builds GUID,发行版走 HKLM 版本号)。
+    [string]$DsEditorExe = '',
+
     [switch]$Down,        # 停止该模式
     [switch]$Resume,      # 电脑重启后快速恢复:不重建镜像,把上次停掉的集群/容器拉回来
     [switch]$Reset,       # 一键重置:彻底清掉旧状态再全新启动(线上 online 模式禁用)
@@ -3564,7 +3579,18 @@ function Resolve-Prerequisites([string]$mode) {
     $allOk = $true
     switch ($mode) {
         'local' {
-            if (-not (Ensure-Go))     { $allOk = $false }
+            # Go 只在需要现场编译时才是硬前置:仓库里带了 run/artifacts/windows/bin 预编译产物
+            # (由 tools/scripts/build_release_binaries.ps1 在后端开发机/CI 上生成并随目录分发)时,
+            # 策划机不装 Go 也能跑 local 模式 —— run_services.ps1 会自动改用这批二进制。
+            if (-not (Test-CommandExists 'go')) {
+                $prebuilt = @(Get-ChildItem -LiteralPath (Join-Path $ProjectRoot 'run/artifacts/windows/bin') -Filter '*.exe' -ErrorAction SilentlyContinue)
+                if ($prebuilt.Count -gt 0) {
+                    Write-Info "本机没装 Go,但找到 $($prebuilt.Count) 个预编译二进制(run/artifacts/windows/bin),将直接使用,免装 Go。"
+                } elseif (-not (Ensure-Go)) {
+                    Write-Info "或者:让后端同学在装了 Go 的机器上跑 pwsh tools/scripts/build_release_binaries.ps1,把 run/artifacts 目录同步过来,本机就不用装 Go。"
+                    $allOk = $false
+                }
+            }
             if (-not (Ensure-Docker)) { $allOk = $false }
         }
         'docker' {
@@ -3600,6 +3626,129 @@ function Resolve-Prerequisites([string]$mode) {
     return $allOk
 }
 
+# ===== 本机 DS 进程形态(-DsLauncher)解析 =====
+
+# Resolve-PandoraUProject:定位 Pandora.uproject。
+# 优先级:-DsProject > $env:PANDORA_DS_UPROJECT > 与本仓库平级的客户端仓常见布局。
+# 「平级探测」是为了策划机零手改:只要把客户端仓和服务器仓放在同一个父目录下就能自动找到,
+# 不依赖任何写死的盘符(开发机 F:\work、策划机 D:\game 都一样能用)。
+function Resolve-PandoraUProject {
+    param([string]$Explicit)
+
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($Explicit)) { $candidates += $Explicit.Trim() }
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_UPROJECT)) { $candidates += $env:PANDORA_DS_UPROJECT.Trim() }
+
+    $parent = Split-Path -Parent $ProjectRoot
+    if ($parent) {
+        foreach ($repo in @('Pandora-Client-SVN', 'Pandora-Client', 'ClientBase')) {
+            $candidates += (Join-Path $parent "$repo\Pandora\Pandora.uproject")
+        }
+        # 兜底:平级目录里任意一个 <repo>\Pandora\Pandora.uproject(容忍策划自定义仓名)。
+        foreach ($dir in @(Get-ChildItem -LiteralPath $parent -Directory -ErrorAction SilentlyContinue)) {
+            $candidates += (Join-Path $dir.FullName 'Pandora\Pandora.uproject')
+        }
+    }
+
+    foreach ($c in $candidates) {
+        if ((-not [string]::IsNullOrWhiteSpace($c)) -and (Test-Path -LiteralPath $c -PathType Leaf)) {
+            return (Resolve-Path -LiteralPath $c).Path
+        }
+    }
+    return $null
+}
+
+# Resolve-UnrealEditorExe:按 .uproject 的 EngineAssociation 定位 UnrealEditor.exe。
+# EngineAssociation 有两种形态,对应引擎的两条安装路线,都要支持(策划用发行版,程序用源码版):
+#   "{GUID}" 源码/自建版 → HKCU:\Software\Epic Games\Unreal Engine\Builds 里 GUID→引擎根目录
+#                          (由客户端仓的 Tool\Build\RegisterEngine.bat 写入)
+#   "5.8"    Epic 发行版 → HKLM:\SOFTWARE\EpicGames\Unreal Engine\5.8 的 InstalledDirectory
+# 全都查不到时再退回「注册表里版本号最高的一个发行版」,避免策划漏跑 RegisterEngine 就卡住。
+function Resolve-UnrealEditorExe {
+    param([string]$Explicit, [string]$UProjectPath)
+
+    if (-not [string]::IsNullOrWhiteSpace($Explicit)) {
+        if (Test-Path -LiteralPath $Explicit.Trim() -PathType Leaf) { return (Resolve-Path -LiteralPath $Explicit.Trim()).Path }
+        throw "-DsEditorExe 指向的文件不存在: $Explicit"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_EXE)) {
+        $fromEnv = $env:PANDORA_DS_EXE.Trim()
+        if (Test-Path -LiteralPath $fromEnv -PathType Leaf) { return (Resolve-Path -LiteralPath $fromEnv).Path }
+    }
+
+    $roots = New-Object System.Collections.Generic.List[string]
+
+    $assoc = $null
+    if ($UProjectPath -and (Test-Path -LiteralPath $UProjectPath -PathType Leaf)) {
+        try { $assoc = (Get-Content -LiteralPath $UProjectPath -Raw | ConvertFrom-Json).EngineAssociation } catch { $assoc = $null }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($assoc)) {
+        if ($assoc -match '^\{.*\}$') {
+            $builds = Get-ItemProperty -Path 'HKCU:\Software\Epic Games\Unreal Engine\Builds' -ErrorAction SilentlyContinue
+            if ($builds -and $builds.PSObject.Properties[$assoc]) { $roots.Add([string]$builds.$assoc) }
+        } else {
+            $key = Get-ItemProperty -Path "HKLM:\SOFTWARE\EpicGames\Unreal Engine\$assoc" -ErrorAction SilentlyContinue
+            if ($key -and $key.InstalledDirectory) { $roots.Add([string]$key.InstalledDirectory) }
+        }
+    }
+
+    # 兜底:注册表里所有已装引擎(源码版 + 发行版),发行版按版本号从高到低。
+    $builds = Get-ItemProperty -Path 'HKCU:\Software\Epic Games\Unreal Engine\Builds' -ErrorAction SilentlyContinue
+    if ($builds) {
+        foreach ($p in $builds.PSObject.Properties) {
+            if ($p.Name -like '{*}' -and $p.Value) { $roots.Add([string]$p.Value) }
+        }
+    }
+    $installed = @(Get-ChildItem -Path 'HKLM:\SOFTWARE\EpicGames\Unreal Engine' -ErrorAction SilentlyContinue |
+        Sort-Object { try { [version]$_.PSChildName } catch { [version]'0.0' } } -Descending)
+    foreach ($k in $installed) {
+        $dir = (Get-ItemProperty -Path $k.PSPath -ErrorAction SilentlyContinue).InstalledDirectory
+        if ($dir) { $roots.Add([string]$dir) }
+    }
+
+    foreach ($root in $roots) {
+        if ([string]::IsNullOrWhiteSpace($root)) { continue }
+        $exe = Join-Path $root 'Engine\Binaries\Win64\UnrealEditor.exe'
+        if (Test-Path -LiteralPath $exe -PathType Leaf) { return (Resolve-Path -LiteralPath $exe).Path }
+    }
+    return $null
+}
+
+# Set-LocalDsLauncherEnv:把 -DsLauncher 的选择翻译成 allocator 认的环境变量。
+# 走环境变量而不是改 yaml:与既有 PANDORA_DS_EXE / PANDORA_DS_DIR / PANDORA_DS_ADVERTISE_HOST
+# 的注入方式一致 —— 仓库里的 dev yaml 保持 packaged 不动,策划要免出包就加一个开关,
+# 不传开关时这里一个环境变量都不设,原有链路逐字节不变。
+function Set-LocalDsLauncherEnv {
+    if ([string]::IsNullOrWhiteSpace($DsLauncher)) { return }
+
+    if ($DsLauncher -eq 'packaged') {
+        $env:PANDORA_DS_LAUNCHER = 'packaged'
+        Write-Info "DS 进程形态:packaged(打包好的 PandoraServer.exe;改资源需重新出包)。"
+        return
+    }
+
+    $uproject = Resolve-PandoraUProject -Explicit $DsProject
+    if (-not $uproject) {
+        throw "-DsLauncher editor 需要 Pandora.uproject,但没找到。请把客户端仓放到与本仓库平级的目录,或显式传 -DsProject <...\Pandora.uproject>。"
+    }
+    $editorExe = Resolve-UnrealEditorExe -Explicit $DsEditorExe -UProjectPath $uproject
+    if (-not $editorExe) {
+        throw "-DsLauncher editor 需要 UnrealEditor.exe,但按 $uproject 的 EngineAssociation 在注册表里没查到引擎。请先在客户端仓跑 Tool\Build\RegisterEngine.bat,或显式传 -DsEditorExe <...\Engine\Binaries\Win64\UnrealEditor.exe>。"
+    }
+
+    $env:PANDORA_DS_LAUNCHER = 'editor'
+    $env:PANDORA_DS_UPROJECT = $uproject
+    $env:PANDORA_DS_EXE      = $editorExe
+    # 工作目录跟引擎走(与 packaged 时指向 staged 根目录同理)。
+    $env:PANDORA_DS_DIR      = Split-Path -Parent $editorExe
+
+    Write-Info "DS 进程形态:editor(免出包,直接读工程里未 cook 的资源)"
+    Write-Info "  引擎  : $editorExe"
+    Write-Info "  工程  : $uproject"
+    Write-Warn "editor 形态的 DS 启动慢(加载编辑器模块 + 按需编 shader),首次进大厅/进图可能等一两分钟属正常;allocator 已自动放宽 ready/心跳超时。"
+}
+
 # ===== local 模式(宿主 go 进程 + docker 基础设施)=====
 function Invoke-Local {
     if ($Down) {
@@ -3608,6 +3757,9 @@ function Invoke-Local {
     }
     Write-Step "local 模式:基础设施(docker) + 21 个 go 服务(宿主进程)"
     Write-Info "策划本地联调用这个;服务可在 VS Code 断点调试。"
+
+    # 本机 DS 用打包 exe 还是引擎编辑器(不传 -DsLauncher 则完全沿用 yaml,行为不变)。
+    Set-LocalDsLauncherEnv
 
     # docker 业务容器会占用同一批端口(50001-50022),与宿主 go 进程互斥。
     # 若上一轮跑过 docker / intranet(非战斗)模式,业务容器还在跑 → 宿主 hub_allocator 起来即

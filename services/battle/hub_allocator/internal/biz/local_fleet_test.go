@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -110,6 +111,105 @@ func TestLocalFleetExtraEnvCannotOverrideLocalProfile(t *testing.T) {
 	}
 	if value := lastEnvValue(env, "PANDORA_DS_LOCAL_PROFILE"); value != "local-off-v1" {
 		t.Fatalf("profile 被 extra_env 覆盖: %q", value)
+	}
+}
+
+// newHubFleetWithLauncher 造一个指定 launcher 的 provider(桩 exe / 桩 .uproject 都落在 TempDir)。
+func newHubFleetWithLauncher(t *testing.T, launcher string, withProject bool) *LocalHubFleetProvider {
+	t.Helper()
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "stub.exe")
+	if err := os.WriteFile(exe, []byte("stub"), 0o644); err != nil {
+		t.Fatalf("write stub exe: %v", err)
+	}
+	cfg := conf.LocalHubConf{
+		Launcher:       launcher,
+		ExecutablePath: exe,
+		MapName:        "/Game/Hub?game=/Script/Pandora.PandoraHubGameMode",
+		AdvertiseHost:  "127.0.0.1",
+		Port:           7777,
+		Region:         "cn-1",
+		Capacity:       500,
+	}
+	if withProject {
+		proj := filepath.Join(dir, "Pandora.uproject")
+		if err := os.WriteFile(proj, []byte("{}"), 0o644); err != nil {
+			t.Fatalf("write stub uproject: %v", err)
+		}
+		cfg.ProjectPath = proj
+	}
+	p, err := NewLocalHubFleetProvider(cfg)
+	if err != nil {
+		t.Fatalf("NewLocalHubFleetProvider: %v", err)
+	}
+	return p
+}
+
+// packaged(含缺省零值)的命令行必须与改造前一致:关卡打头,不带 .uproject。
+func TestHubBuildArgs_PackagedLauncherUnchanged(t *testing.T) {
+	want := []string{
+		"/Game/Hub?game=/Script/Pandora.PandoraHubGameMode?MaxPlayers=500",
+		"-server", "-log", "-port=7777",
+	}
+	for _, launcher := range []string{"", conf.LauncherPackaged} {
+		p := newHubFleetWithLauncher(t, launcher, false)
+		if got := p.buildArgs(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("launcher=%q args changed:\n got=%v\nwant=%v", launcher, got, want)
+		}
+	}
+	// packaged 下即便配了 project_path 也必须忽略。
+	p := newHubFleetWithLauncher(t, conf.LauncherPackaged, true)
+	if got := p.buildArgs(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("packaged 不应把 project_path 混入命令行: %v", got)
+	}
+}
+
+// editor 形态:.uproject 必须排在关卡 URL 之前(UE 只认第一个非 '-' token 作工程),
+// 且 -server 仍在(NetMode=NM_DedicatedServer,后端对接与打包 DS 完全一致)。
+func TestHubBuildArgs_EditorLauncherPutsProjectFirst(t *testing.T) {
+	p := newHubFleetWithLauncher(t, conf.LauncherEditor, true)
+	got := p.buildArgs()
+	if len(got) != 5 || !strings.HasSuffix(got[0], "Pandora.uproject") {
+		t.Fatalf("editor 形态 .uproject 应为第一个参数: %v", got)
+	}
+	want := []string{
+		got[0],
+		"/Game/Hub?game=/Script/Pandora.PandoraHubGameMode?MaxPlayers=500",
+		"-server", "-log", "-port=7777",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("editor args:\n got=%v\nwant=%v", got, want)
+	}
+}
+
+// editor 缺 project_path / 路径不存在 → 构造期 fail-fast(而不是 DS 秒退后客户端干等大厅)。
+func TestNewLocalHubFleetProvider_EditorRequiresProjectPath(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "UnrealEditor.exe")
+	if err := os.WriteFile(exe, []byte("stub"), 0o644); err != nil {
+		t.Fatalf("write stub exe: %v", err)
+	}
+	base := conf.LocalHubConf{
+		Launcher:       conf.LauncherEditor,
+		ExecutablePath: exe,
+		MapName:        "/Game/Hub",
+		AdvertiseHost:  "127.0.0.1",
+		Port:           7777,
+		Capacity:       500,
+	}
+	if _, err := NewLocalHubFleetProvider(base); err == nil {
+		t.Fatal("launcher=editor 缺 project_path 应构造失败")
+	}
+	missing := base
+	missing.ProjectPath = filepath.Join(dir, "nope", "Pandora.uproject")
+	if _, err := NewLocalHubFleetProvider(missing); err == nil {
+		t.Fatal("launcher=editor 的 project_path 不存在应构造失败")
+	}
+	// packaged 不要求 project_path(老配置零改动)。
+	packaged := base
+	packaged.Launcher = conf.LauncherPackaged
+	if _, err := NewLocalHubFleetProvider(packaged); err != nil {
+		t.Fatalf("packaged 不应要求 project_path: %v", err)
 	}
 }
 

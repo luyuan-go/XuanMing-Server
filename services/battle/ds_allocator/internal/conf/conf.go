@@ -118,9 +118,28 @@ type LocalDSConf struct {
 	// Enabled 打开本机拉起 Windows DS 进程(默认 false)。
 	Enabled bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 
-	// ExecutablePath 打包好的 UE Windows Dedicated Server 可执行文件绝对路径
-	// (例如 C:\work\Pandora-Client-SVN\...\PandoraServer.exe)。Enabled=true 时必填且必须存在。
+	// Launcher 选择本机 DS 的「进程形态」,两种模式并存、互不影响,只改这一个字段即可切换:
+	//   - LauncherPackaged("packaged",默认)= 现状:跑打包好的 PandoraServer.exe。
+	//     内容已 cook,策划改 .uasset 必须重新出包才生效;性能接近线上,适合验收/压测。
+	//   - LauncherEditor("editor")= 跑 UnrealEditor.exe + .uproject,仍带 -server
+	//     (NetMode 依旧是 NM_DedicatedServer,登录/大厅/匹配/心跳/结算全链路一字不改),
+	//     但直接读工程里未 cook 的 Content/,策划存盘后下一局即生效,免出包。
+	//
+	// 两种模式对后端完全透明:差异只在 exec 哪个 exe、命令行首个参数是否要带 .uproject。
+	Launcher string `yaml:"launcher,omitempty" json:"launcher,omitempty"`
+
+	// ExecutablePath 本机要 exec 的可执行文件绝对路径,含义随 Launcher 变化:
+	//   - packaged:打包好的 UE Windows Dedicated Server
+	//     (例如 C:\work\Pandora-Client-SVN\...\PandoraServer.exe)。
+	//   - editor:  引擎的 UnrealEditor.exe
+	//     (例如 E:\Program Files\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe)。
+	// Enabled=true 时必填且必须存在。
 	ExecutablePath string `yaml:"executable_path,omitempty" json:"executable_path,omitempty"`
+
+	// ProjectPath 工程 .uproject 绝对路径,仅 Launcher=editor 时必填且必须存在(packaged 忽略)。
+	// UE 的 LaunchSetGameName 只认命令行里第一个不以 '-' 开头的 token,所以它必须排在关卡 URL 之前;
+	// buildArgs 已保证该顺序。
+	ProjectPath string `yaml:"project_path,omitempty" json:"project_path,omitempty"`
 
 	// MapName 启动时加载的 UE 关卡(DS 命令行首个位置参数,例如 /Game/Maps/BattleMap)。
 	// 留空则不带关卡参数,由 DS 自身默认关卡决定。
@@ -167,6 +186,14 @@ type LocalDSConf struct {
 	// ExtraEnv 注入 DS 进程的额外环境变量(在 PANDORA_MATCH_ID 等内置变量之后追加)。
 	ExtraEnv map[string]string `yaml:"extra_env,omitempty" json:"extra_env,omitempty"`
 }
+
+// 本机 DS 的两种进程形态(LocalDSConf.Launcher 的合法取值)。
+const (
+	// LauncherPackaged 跑打包好的 PandoraServer.exe(默认,现状行为)。
+	LauncherPackaged = "packaged"
+	// LauncherEditor 跑 UnrealEditor.exe + .uproject -server,读未 cook 的工程内容,免出包。
+	LauncherEditor = "editor"
+)
 
 // MapEntry 是「选副本」表的一行:把请求 map_id 映射到具体的 UE 关卡 URL(见 LocalDSConf.Maps)。
 type MapEntry struct {
@@ -443,6 +470,34 @@ func (c *Config) Defaults() {
 		default:
 			c.Mode = ModeMock
 		}
+	}
+	// Launcher 两模式开关:缺省/非法值一律归一到 packaged(现状行为),旧配置零改动。
+	// PANDORA_DS_LAUNCHER / PANDORA_DS_UPROJECT 让一键脚本免改 yaml 就能切换(与
+	// PANDORA_DS_EXE 同一套注入机制);非空时优先级高于 yaml 写死值。
+	// 归一化必须早于下面的 Allocator 超时默认值 —— editor 形态启动更慢,超时要按它放宽。
+	if envLauncher := strings.TrimSpace(os.Getenv("PANDORA_DS_LAUNCHER")); envLauncher != "" {
+		c.LocalDS.Launcher = envLauncher
+	}
+	if c.LocalDS.Launcher = strings.ToLower(strings.TrimSpace(c.LocalDS.Launcher)); c.LocalDS.Launcher != LauncherEditor {
+		c.LocalDS.Launcher = LauncherPackaged
+	}
+	c.LocalDS.ProjectPath = filepath.FromSlash(os.ExpandEnv(c.LocalDS.ProjectPath))
+	if envProj := strings.TrimSpace(os.Getenv("PANDORA_DS_UPROJECT")); envProj != "" {
+		if _, err := os.Stat(c.LocalDS.ProjectPath); c.LocalDS.ProjectPath == "" || err != nil {
+			c.LocalDS.ProjectPath = filepath.FromSlash(envProj)
+		}
+	}
+	// editor 形态(UnrealEditor.exe -server)启动显著慢于打包 DS:要加载编辑器模块、按需编译
+	// shader、读未 cook 的资产,首次进一张新图可达数分钟。沿用打包 DS 的 10s/15s 会让
+	// AllocateBattle 在 DS 还没起来时就判 ready 超时回收,editor 模式永远开不了局。
+	// 因此仅在「用户没显式配置(==0)」且 launcher=editor 时放宽;显式配置永远优先。
+	// 只影响本机 local 调试路径,Agones/线上默认值一字不动。
+	editorLocal := c.Mode == ModeLocal && c.LocalDS.Launcher == LauncherEditor
+	if c.Allocator.HeartbeatTimeout == 0 && editorLocal {
+		c.Allocator.HeartbeatTimeout = config.Duration(120 * time.Second)
+	}
+	if c.Allocator.ReadyWaitTimeout == 0 && editorLocal {
+		c.Allocator.ReadyWaitTimeout = config.Duration(300 * time.Second)
 	}
 	if c.Allocator.HeartbeatTimeout == 0 {
 		c.Allocator.HeartbeatTimeout = config.Duration(15 * time.Second)
