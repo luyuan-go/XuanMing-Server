@@ -58,6 +58,12 @@ param(
     # 仅当真有【异机 UE DS】需要回连本机 Envoy :8444 时才加此开关显式开放(务必配合网络隔离)。
     [switch]$ExposeDsFace,
 
+    # -LocalOnly(仅 -Mode local):恢复「只绑回环 127.0.0.1」的老行为。
+    # 不加此开关时,local 模式默认把【客户端面 8443】绑到 0.0.0.0 并把 DS advertise 指向本机
+    # 局域网 IP(自动解析,可用 -AdvertiseHost 覆盖),局域网里其它人能直接连进你的服务器。
+    # 未鉴权的 DS 面 8444 与 admin 9901 不受影响,仍恒绑本机。
+    [switch]$LocalOnly,
+
     # ---- 本机 DS「进程形态」(仅 -Mode local 生效;不传 = 完全沿用 yaml,原有链路零变化)----
     # packaged:跑打包好的 PandoraServer.exe(内容已 cook,改 .uasset 要重新出包才生效)。
     # editor  :跑引擎的 UnrealEditor.exe + Pandora.uproject,仍带 -server(NetMode 依旧是
@@ -199,18 +205,72 @@ function Assert-LastExit([string]$what) {
     if ($LASTEXITCODE -ne 0) { throw "$what 失败(exit=$LASTEXITCODE)" }
 }
 
-# Agones 尚未安装时自定义资源类型不存在。Down 语义下这等价于无残留对象，
-# 但 --ignore-not-found 只忽略“对象不存在”，不忽略“CRD 不存在”，因此需要单独容错。
-function Invoke-KubectlDeleteTolerateMissingKind {
+# ---- Down 幂等性:Down 必须能被反复执行 ----------------------------------------
+# 真实现场里 Down 极少「从头干净跑到尾」:人会中途关窗口、按 Ctrl+C、拔电源;别人可能
+# 同时在另一个窗口 minikube stop/delete。于是下一次双击「一键停止」面对的必然是一个
+# **拆了一半**的集群。这些残缺状态对 Down 的目标(集群内不再有我们起的东西)而言全部
+# 等价于「已经没有残留可删」,不是错误——重跑必须照样成功。
+#
+# 旧写法 `kubectl delete ... --ignore-not-found 2>$null; Assert-LastExit '...'` 有三个硬伤:
+#   ① `--ignore-not-found` 只忽略「对象不存在」,不忽略「namespace 不存在」「CRD 不存在」;
+#   ② stderr 被 `2>$null` 丢掉,真出错时只剩一句「失败(exit=1)」,人完全不知道发生了什么;
+#   ③ 集群在 Down 执行中途被停掉时,剩下的每一条 delete 都 connection refused 硬抛,
+#      于是「点了一半关掉」的机器,下次重跑还是一片红字。
+# 下面这些谓词把「良性残缺」与「真故障」分开,是 Down 可重入的根据。
+function Test-K8sDownBenignMissingText([string]$Text) {
+    return ($Text -match '(?i)not found' -or
+        $Text -match '(?i)no matches for kind' -or
+        $Text -match '(?i)unable to recognize' -or
+        $Text -match '(?i)the server doesn''t have a resource type')
+}
+
+# apiserver 已经不可达(集群被停/被删/正在关闭中)。此时集群内对象已随集群一并消失,
+# Down 的目标天然达成;继续 delete 只会刷屏 connection refused。
+function Test-K8sApiserverUnreachableText([string]$Text) {
+    return ($Text -match '(?i)connection refused' -or
+        $Text -match '(?i)connection was refused' -or
+        $Text -match '(?i)no such host' -or
+        $Text -match '(?i)i/o timeout' -or
+        $Text -match '(?i)dial tcp' -or
+        $Text -match '(?i)couldn''t get current server API group list' -or
+        $Text -match '(?i)the server is currently unable to handle the request' -or
+        $Text -match '(?i)did you specify the right host or port' -or
+        $Text -match '(?i)unable to connect to the server')
+}
+
+# 一旦确认 apiserver 没了,后续所有集群侧删除整体跳过,让 Down 平静收尾而不是刷一屏红字。
+$script:K8sDownApiserverGone = $false
+
+function Invoke-K8sDownDelete {
     param(
         [Parameter(Mandatory = $true)][string]$What,
         [Parameter(Mandatory = $true)][string[]]$Arguments
     )
-    $lines = @(& kubectl @Arguments 2>&1)
-    if ($LASTEXITCODE -eq 0) { return }
-    $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n")
-    if ($text -match '(?i)the server doesn''t have a resource type' -or $text -match '(?i)no matches for kind') {
-        Write-Skip "$What:目标资源类型不存在(Agones 未安装),无残留可删,跳过。"
+    if ($script:K8sDownApiserverGone) { Write-Skip "${What}:集群 apiserver 已不可达,跳过。"; return }
+
+    # apiserver 偶发抖动(minikube 刚起/正在换 leader)与「集群真没了」在文本上无法区分,
+    # 只能靠重试区分:连试 3 次仍不可达才判定集群已消失。
+    $text = ''
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $lines = @(& kubectl @Arguments 2>&1)
+        if ($LASTEXITCODE -eq 0) {
+            foreach ($line in @($lines)) { if (-not [string]::IsNullOrWhiteSpace($line)) { Write-Host $line } }
+            return
+        }
+        $text = ((@($lines) | ForEach-Object { $_.ToString() }) -join "`n")
+        if (-not (Test-K8sApiserverUnreachableText $text)) { break }
+        if ($attempt -lt 3) {
+            Write-Info "  ${What}:apiserver 暂不可达,${attempt}/3 重试..."
+            Start-Sleep -Seconds 2
+        }
+    }
+    if (Test-K8sApiserverUnreachableText $text) {
+        $script:K8sDownApiserverGone = $true
+        Write-Ok "${What}:集群 apiserver 不可达,集群内对象已随集群一并停止,后续集群侧删除跳过。"
+        return
+    }
+    if (Test-K8sDownBenignMissingText $text) {
+        Write-Skip "${What}:目标对象/资源类型/namespace 已不存在,无残留可删,跳过。"
         return
     }
     throw "$What 失败(exit=$LASTEXITCODE):$text"
@@ -262,16 +322,23 @@ function Remove-K8sManifestObjectsPreserving {
         [Parameter(Mandatory = $true)][string]$What
     )
     $identities = @(Get-K8sManifestObjectIdentities -KubeContext $KubeContext -ManifestText $ManifestText)
-    if ($identities.Count -eq 0) { throw "$What:清单为空，拒绝在未知状态下继续 Down。" }
+    if ($identities.Count -eq 0) { throw "${What}:清单为空，拒绝在未知状态下继续 Down。" }
     $toDelete = @($identities | Where-Object { -not (& $ShouldPreserve $_) })
     if ($toDelete.Count -eq 0) { return , $identities }
+    if ($script:K8sDownApiserverGone) { Write-Skip "${What}:集群 apiserver 已不可达,跳过。"; return , $identities }
     $payload = ($toDelete | ForEach-Object { $_.Doc }) -join "`n---`n"
     $deleteLines = @($payload | & kubectl --context $KubeContext delete -f - --ignore-not-found 2>&1)
     if ($LASTEXITCODE -ne 0) {
         $text = ((@($deleteLines) | ForEach-Object { $_.ToString() }) -join "`n")
+        # 集群已随 minikube stop/delete 消失 → 集群内对象天然无残留,平静收尾。
+        if (Test-K8sApiserverUnreachableText $text) {
+            $script:K8sDownApiserverGone = $true
+            Write-Ok "${What}:集群 apiserver 不可达,集群内对象已随集群一并停止,后续集群侧删除跳过。"
+            return , $identities
+        }
         # namespace 早已不存在 → 其内 namespaced 对象天然无残留，等价 not-found，容忍。
-        if ($text -match '(?i)namespaces .*not found' -or $text -match '(?i)not found') {
-            Write-Skip "$What:目标 namespace/对象已不存在，无残留可删，跳过。"
+        if (Test-K8sDownBenignMissingText $text) {
+            Write-Skip "${What}:目标 namespace/对象已不存在，无残留可删，跳过。"
             return , $identities
         }
         throw "$What 失败:$text"
@@ -280,14 +347,16 @@ function Remove-K8sManifestObjectsPreserving {
     return , $identities
 }
 
-# 读取本地 etcd-data PVC 是否存在。namespace 缺失也按“不存在”处理，不抛错。
+# 读取本地 etcd-data PVC 是否存在。namespace 缺失、集群已不可达都按“不存在”处理，不抛错——
+# 这个探针只用来决定「Down 后要不要校验保留」，在拆了一半的集群上不该成为重跑的障碍。
 function Test-LocalEtcdDataPvcExists {
     param([Parameter(Mandatory = $true)][string]$KubeContext)
     $out = @(& kubectl --context $KubeContext get pvc/etcd-data -n $K8sNamespace --ignore-not-found -o name 2>&1)
     $flat = ((@($out) | ForEach-Object { $_.ToString() }) -join "`n").Trim()
     if ($flat -match 'persistentvolumeclaim/etcd-data') { return $true }
     if ($LASTEXITCODE -eq 0) { return $false }
-    if ($flat -match '(?i)not found') { return $false }
+    if (Test-K8sApiserverUnreachableText $flat) { $script:K8sDownApiserverGone = $true; return $false }
+    if (Test-K8sDownBenignMissingText $flat) { return $false }
     throw "读取 pvc/etcd-data 状态失败:$flat"
 }
 
@@ -899,14 +968,54 @@ function New-LocalGenesisContinuityToken {
     return 'nonce:' + [Convert]::ToHexString($bytes).ToLowerInvariant()
 }
 
+# `minikube profile list -o json` 的**唯一**解析入口。两个坑都是实测出来的:
+#  ① minikube 会把诊断行写进 **stderr**,例如
+#       E0804 08:42:43 status.go:457] kubeconfig endpoint: got: 127.0.0.1:54356, want: 127.0.0.1:60129
+#     —— 只要本机有一个 kubeconfig endpoint 已过期的旧 profile(停过的集群很常见)就稳定出现,
+#     且命令仍退出 0。谁用 `2>&1` 把它并进 stdout 再 ConvertFrom-Json,必炸
+#     「Unexpected character encountered while parsing value: E」—— 一键停止就是死在这里。
+#  ② 个别版本还会往 stdout 打前导提示行。
+# 故统一:只取 stdout,并从第一个 '{' 截起。返回 JSON 文本(拿不到则返回空串);
+# 退出码存进 $script:MinikubeProfileListExitCode,供需要 fail-fast 的调用方区分
+# 「本机确实一个 profile 都没有」与「minikube 自身坏了」。
+$script:MinikubeProfileListExitCode = 0
+function Get-MinikubeProfileListJsonText {
+    $text = ((& minikube profile list -o json 2>$null | ForEach-Object { $_.ToString() }) -join "`n")
+    $script:MinikubeProfileListExitCode = $LASTEXITCODE
+    $brace = $text.IndexOf('{')
+    if ($brace -lt 0) { return '' }
+    return $text.Substring($brace).Trim()
+}
+
+# 解析后的 profile 对象(valid + invalid 合并后的名字列表调用方自己取)。
+# 拿不到/解析不了一律返回 $null——容错路径用,不做 fail-fast。
+function Get-MinikubeProfileListObject {
+    $text = Get-MinikubeProfileListJsonText
+    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+    try { return ($text | ConvertFrom-Json -ErrorAction Stop) } catch { return $null }
+}
+
+# 本机所有 minikube profile 名(读不到时返回空数组,不抛:调用方要能在「没装过集群」的机器上空跑)。
+function Get-MinikubeProfileNames {
+    $parsed = Get-MinikubeProfileListObject
+    if ($null -eq $parsed) { return @() }
+    return @(@($parsed.valid) + @($parsed.invalid) |
+        ForEach-Object { [string]$_.Name } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object -Unique)
+}
+
 function Test-MinikubeProfileExists {
     param([Parameter(Mandatory = $true)][string]$Profile)
-    $lines = @(& minikube profile list -o json 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "无法列出 minikube profile，不能安全判定是否 fresh cluster:$($lines -join [Environment]::NewLine)"
+    $text = Get-MinikubeProfileListJsonText
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        # 退出 0 + 无 JSON = 本机真的一个 profile 都没有(全新机器),这是合法状态。
+        # 退出非 0 才是「minikube 不可用」——那时不能假装知道集群是否 fresh(会影响 DS auth genesis 判定)。
+        if ($script:MinikubeProfileListExitCode -ne 0) {
+            throw "minikube profile list 执行失败(exit=$script:MinikubeProfileListExitCode),不能安全判定是否 fresh cluster。"
+        }
+        return $false
     }
-    $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
-    if ([string]::IsNullOrWhiteSpace($text)) { return $false }
     try { $profiles = $text | ConvertFrom-Json -ErrorAction Stop }
     catch { throw "minikube profile list 返回非法 JSON:$($_.Exception.Message)" }
     foreach ($entry in @($profiles.valid) + @($profiles.invalid)) {
@@ -3575,6 +3684,59 @@ function Ensure-Go {
 }
 
 # 检查给定模式需要的工具;返回 $true=全就绪
+# Assert-LocalEdgePortsFree:local 模式起 Envoy 前,先确认边缘端口没被别人占着。
+# 客户端面 8443 归 $PANDORA_EDGE_BIND_HOST(默认 127.0.0.1),DS 面 8444 归
+# $PANDORA_DS_EDGE_BIND_HOST(默认 127.0.0.1),两者都由 deploy/docker-compose.dev.yml 直接发布。
+# 只把「真正会撞的地址」判为冲突:绑 127.0.0.1 时 0.0.0.0 的监听也会挡路,反之亦然。
+function Assert-LocalEdgePortsFree {
+    $targets = @(
+        @{ Port = 8443; Host = $(if ($env:PANDORA_EDGE_BIND_HOST) { $env:PANDORA_EDGE_BIND_HOST } else { '127.0.0.1' }); Face = '客户端面' },
+        @{ Port = 8444; Host = $(if ($env:PANDORA_DS_EDGE_BIND_HOST) { $env:PANDORA_DS_EDGE_BIND_HOST } else { '127.0.0.1' }); Face = 'DS 面   ' }
+    )
+
+    $ok = $true
+    foreach ($t in $targets) {
+        $listens = @(Get-NetTCPConnection -State Listen -LocalPort $t.Port -ErrorAction SilentlyContinue)
+        if ($listens.Count -eq 0) { continue }
+
+        # 宿主要绑 X,已有监听在 Y:仅当 X/Y 相同,或任一方是通配地址时才真正冲突。
+        $wildcards = @('0.0.0.0', '::', '*')
+        $blocking = @($listens | Where-Object {
+                $_.LocalAddress -eq $t.Host -or ($wildcards -contains $_.LocalAddress) -or ($wildcards -contains $t.Host)
+            })
+        if ($blocking.Count -eq 0) { continue }
+
+        $who = ($blocking | ForEach-Object {
+                $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+                if ($proc) { "$($proc.ProcessName)(pid $($proc.Id))" } else { "pid $($_.OwningProcess)" }
+            } | Sort-Object -Unique) -join ', '
+
+        Write-Warn ("Envoy {0} {1}:{2} 已被占用 —— {3}" -f $t.Face.Trim(), $t.Host, $t.Port, $who)
+        $ok = $false
+    }
+
+    if ($ok) { return $true }
+
+    Write-Info ''
+    # -Check 是干跑,故意没执行 Stop-K8sStackForLocal;真正启动时 k8s 会被先停掉,
+    # 此处若占用方正是本机集群,就不该判成"前置不通过"。
+    if ($Check -and (Test-CommandExists 'minikube')) {
+        $mkHolder = Find-MinikubeProfileHoldingEdgePort
+        if (-not [string]::IsNullOrWhiteSpace($mkHolder)) {
+            Write-Info "占用方是本机 k8s 集群『$mkHolder』(与 local 互斥)。-Check 是干跑不做停服;"
+            Write-Info "真正启动 local 时会自动 minikube stop 把它停掉再起,无需手工处理。"
+            return $true
+        }
+    }
+    Write-Info 'local 模式的 Envoy 用固定宿主端口,被占就起不来(dev_up 会报 port is already allocated)。'
+    # 本机 k8s 曾是最常见的占用方,现在 local 启动前会自动 minikube stop(见 Stop-K8sStackForLocal),
+    # 所以走到这里的占用方通常是别的进程:老的 envoy 容器、别人手工起的服务、或另一个 IDE 终端。
+    Write-Info '请先停掉上面点名的进程/容器再重跑;若那是上一轮没停干净的本项目服务,可先执行:'
+    Write-Info '    pwsh tools/scripts/start.ps1 -Mode local -Down'
+    Write-Info '只想自己本机玩、不对局域网开放时,可加 -LocalOnly 只绑回环。'
+    return $false
+}
+
 function Resolve-Prerequisites([string]$mode) {
     Write-Step "检查必要工具($mode 模式)"
     $allOk = $true
@@ -3593,6 +3755,15 @@ function Resolve-Prerequisites([string]$mode) {
                 }
             }
             if (-not (Ensure-Docker)) { $allOk = $false }
+            # 先定下 Envoy 边缘绑定地址(默认 0.0.0.0 对局域网开放 / -LocalOnly 只绑回环),
+            # 后面的端口占用判定才能按真实绑定地址算。
+            Initialize-LocalEdgeBinding
+            # local 与 k8s 互斥(两者都占宿主 8443):先用 k8s 自己的关闭流程停掉集群。
+            # -Check 是干跑,不做任何停服副作用。
+            if (-not $Check) { Stop-K8sStackForLocal }
+            # Envoy 的 8443/8444 是 compose 发布的固定宿主端口,被占时 dev_up 只会抛一句
+            # "port is already allocated",看不出是谁占的。提前点名省得来回猜。
+            if (-not (Assert-LocalEdgePortsFree)) { $allOk = $false }
         }
         'docker' {
             if (-not (Ensure-Docker)) { $allOk = $false }
@@ -3613,12 +3784,16 @@ function Resolve-Prerequisites([string]$mode) {
             if (-not (Ensure-Docker)) { $allOk = $false }
             if (-not (Ensure-Tool -Name 'kubectl'  -CheckCmd 'kubectl'  -WingetId 'Kubernetes.kubectl'  -ManualUrl 'https://kubernetes.io/docs/tasks/tools/')) { $allOk = $false }
             if (-not (Ensure-Tool -Name 'minikube' -CheckCmd 'minikube' -WingetId 'Kubernetes.minikube' -ManualUrl 'https://minikube.sigs.k8s.io/docs/start/')) { $allOk = $false }
-            if (-not (Ensure-Tool -Name 'helm'     -CheckCmd 'helm'     -WingetId 'Helm.Helm'           -ManualUrl 'https://helm.sh/docs/intro/install/')) { $allOk = $false }
-            # [5/8] 构建 21 个服务镜像 = 宿主 Go 交叉编译,Go 缺失会在最贵的步骤中途才炸。
-            if (-not (Ensure-Tool -Name 'Go' -CheckCmd 'go' -WingetId 'GoLang.Go' -ManualUrl 'https://go.dev/dl/')) { $allOk = $false }
-            # [7.5/8] 集群内边缘 Envoy 的 dev 证书(deploy/envoy/cert.pem,不入库)缺失时由
-            # envoy_cert.ps1 用 mkcert 自动重签——新机器必经此路径,mkcert 缺失会中止部署。
-            if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
+            # -Down 只做「清宿主桥接 + 删集群内对象」:不装 Agones(helm)、不构建镜像(Go)、
+            # 不签 Envoy 证书(mkcert)。再拿部署期的工具卡停止,只会让没装全的机器连停都停不下来。
+            if (-not $Down) {
+                if (-not (Ensure-Tool -Name 'helm' -CheckCmd 'helm' -WingetId 'Helm.Helm' -ManualUrl 'https://helm.sh/docs/intro/install/')) { $allOk = $false }
+                # [5/8] 构建 21 个服务镜像 = 宿主 Go 交叉编译,Go 缺失会在最贵的步骤中途才炸。
+                if (-not (Ensure-Tool -Name 'Go' -CheckCmd 'go' -WingetId 'GoLang.Go' -ManualUrl 'https://go.dev/dl/')) { $allOk = $false }
+                # [7.5/8] 集群内边缘 Envoy 的 dev 证书(deploy/envoy/cert.pem,不入库)缺失时由
+                # envoy_cert.ps1 用 mkcert 自动重签——新机器必经此路径,mkcert 缺失会中止部署。
+                if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
+            }
         }
         'online' {
             if (-not (Ensure-Tool -Name 'kubectl' -CheckCmd 'kubectl' -WingetId 'Kubernetes.kubectl' -ManualUrl 'https://kubernetes.io/docs/tasks/tools/')) { $allOk = $false }
@@ -3793,25 +3968,74 @@ editor 形态无法启动:工程编辑器 DLL 与引擎不是同一血统(BuildI
   工程 DLL : $projId   ($projModules)
   引擎     : $engineId   ($EditorExe)
 这种情况下 UE 会认为模块过期并要求重新编译,而 DS 是 headless 跑的、弹不出对话框,进程会直接退出
-(表现为一直等不到 DS ready)。请先让两者对齐再重跑本脚本 —— 用哪条血统都行,本模式不挑血统
-(源码版 / Epic 发行版都能跑 editor 形态的 DS),只要求工程 DLL 和引擎是同一条。
-对齐办法(二选一):
-  * 用当前这个引擎重新编译一次工程的编辑器二进制;
-  * 或换一个与工程 DLL 同血统的引擎(改 $UProjectPath 的 EngineAssociation)。
+(表现为一直等不到 DS ready)。请先让两者对齐再重跑本脚本 —— 用哪条引擎都行,本模式不挑引擎
+(自建源码版 / Epic 发行版都能跑 editor 形态的 DS),只要求工程 DLL 是这台引擎编出来的。
+对齐办法:
+
 "@
-    # 客户端仓若仍带着引擎切换脚本,补一条现成的一键指引;脚本已被移除的仓库不会显示死链。
-    $switchHints = @(
-        @{ Path = (Join-Path $clientRepo 'Tool\Build\策划\切到IB引擎.bat');  Desc = '切到源码版血统(Installed Build)' },
-        @{ Path = (Join-Path $clientRepo 'Tool\Build\策划\切回发行版.bat');  Desc = '切回发行版(Epic Launcher)     ' }
-    ) | Where-Object { Test-Path -LiteralPath $_.Path }
-    if ($switchHints) {
-        $msg += "本仓库自带的一键切换脚本:`n"
-        foreach ($h in $switchHints) { $msg += ("  {0} : {1}`n" -f $h.Desc, $h.Path) }
+    # 客户端仓自带的重编入口;仓库结构变动时不显示死链。
+    $buildEditor = Join-Path $clientRepo 'Tool\Build\BuildEditor.bat'
+    if (Test-Path -LiteralPath $buildEditor) {
+        $msg += "  用当前这台引擎重编一次工程的编辑器二进制(推荐):`n    $buildEditor`n"
     }
+    else {
+        $msg += "  用当前这台引擎重编一次工程的编辑器二进制(推荐)。`n"
+    }
+    $registerEngine = Join-Path $clientRepo 'Tool\Build\RegisterEngine.bat'
+    if (Test-Path -LiteralPath $registerEngine) {
+        $msg += "  或改用与工程 DLL 匹配的那台引擎(改本机注册):`n    $registerEngine ""<引擎目录>""`n"
+    }
+    $msg += "  也可以直接设环境变量 PANDORA_DS_EXE 指到匹配的 UnrealEditor.exe,或用 -DsEditorExe 传入。`n"
     throw $msg
 }
 
 # ===== local 模式(宿主 go 进程 + docker 基础设施)=====
+# ===== local / k8s 互斥 =====
+# 两种模式的边缘入口都占用宿主 8443(local 是 docker-compose 的 pandora-envoy;k8s 是 minikube
+# 节点容器把 NodePort 31443 发布到宿主 8443),同一台机器不可能同时成立。
+# 因此起一个之前,先用**另一个模式自己的关闭流程**把它停干净,而不是让用户去猜
+# `port is already allocated` 是谁占的。
+# 注意:k8s 的端口发布属于 minikube 节点容器本身,`-Mode k8s -Down`(只删集群内对象)
+# 并不会释放它,必须 `minikube stop`——数据保留,下次 -Mode k8s 会自动 start 回来。
+# 找出「当前正占着宿主 8443」的 minikube profile 名(找不到返回 $null)。
+# 注意不能用 Get-K8sManagedProfile / `minikube profile`:那是**active profile**,是全局可变状态,
+# 完全可能指向另一个(甚至已停的)集群 —— 实测本机 active=minikube(已停),真正占 8443 的却是
+# pandora-agones。停错集群 = 端口没释放且用户毫不知情,故按 docker 实际发布端口反查。
+function Find-MinikubeProfileHoldingEdgePort {
+    foreach ($p in @(Get-MinikubeProfileNames)) {
+        $ports = (& docker port $p 2>$null | Out-String)
+        if ($ports -match '(?m)->\s*\S+:8443\s*$') { return $p }
+    }
+    return $null
+}
+
+function Stop-K8sStackForLocal {
+    if (-not (Test-CommandExists 'minikube')) { return }
+    $mkProfile = Find-MinikubeProfileHoldingEdgePort
+    if ([string]::IsNullOrWhiteSpace($mkProfile)) { return }
+
+    Write-Info "检测到本机 k8s 集群『$mkProfile』占着宿主 8443,local 模式与它互斥,先停掉..."
+    # 宿主侧桥接(port-forward / relay 容器)也是 k8s 模式起的,一并清掉,否则残留进程继续占端口。
+    Stop-K8sHostBridge
+    & minikube stop -p $mkProfile 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "自动停止 minikube『$mkProfile』失败,local 模式的 Envoy 会因 8443 被占而起不来。请手动执行:minikube stop -p $mkProfile"
+    }
+    Write-Ok "k8s 集群已停止(数据保留,下次 -Mode k8s 会自动起回来)。"
+}
+
+function Stop-LocalStackForK8s {
+    # local 模式 = docker 基础设施(含 pandora-envoy 占 8443)+ 宿主 go 进程(占 50001-50022)。
+    # 用 local 自己的关闭流程停干净;没起过时这步是空跑。
+    $envoyRunning = @(docker ps --filter 'name=pandora-envoy' --format '{{.Names}}' 2>$null | Where-Object { $_ })
+    $hostSvc = @(Get-Process -Name 'gateway', 'login', 'player' -ErrorAction SilentlyContinue)
+    if ($envoyRunning.Count -eq 0 -and $hostSvc.Count -eq 0) { return }
+
+    Write-Info "检测到 local 模式的服务在跑(占着宿主 8443 / 50001-50022),k8s 模式与它互斥,先停掉..."
+    & "$ScriptDir/dev_all.ps1" -Down
+    Write-Ok "local 模式已停止。"
+}
+
 function Invoke-Local {
     if ($Down) {
         & "$ScriptDir/dev_all.ps1" -Down
@@ -3819,6 +4043,8 @@ function Invoke-Local {
     }
     Write-Step "local 模式:基础设施(docker) + 21 个 go 服务(宿主进程)"
     Write-Info "策划本地联调用这个;服务可在 VS Code 断点调试。"
+
+    # 与 k8s 模式互斥 + 局域网绑定已在 Resolve-Prerequisites 里做完(必须早于端口占用检查)。
 
     # 本机 DS 用打包 exe 还是引擎编辑器(不传 -DsLauncher 则完全沿用 yaml,行为不变)。
     Set-LocalDsLauncherEnv
@@ -3917,6 +4143,37 @@ function Set-EdgeBindHost([string]$ClientHost) {
             Write-Info "DS 面 :8444(未鉴权)保持只绑本机;异机 DS 需回连时加 -ExposeDsFace 显式开放。"
         }
     }
+}
+
+# ===== 局域网 IP 解析(local / k8s 共用)=====
+# 两种模式都默认对局域网开放,对外地址一律取**自动解析**的本机局域网 IPv4:
+# 不写死,DHCP 换了地址下次启动自动跟上。可用 -AdvertiseHost / $env:PANDORA_DS_ADVERTISE_HOST 覆盖。
+function Resolve-EdgeAdvertiseHost {
+    if (-not [string]::IsNullOrWhiteSpace($AdvertiseHost)) { return $AdvertiseHost.Trim() }
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_ADVERTISE_HOST)) { return $env:PANDORA_DS_ADVERTISE_HOST.Trim() }
+    return Resolve-LanIp
+}
+
+# local 模式的边缘绑定决策。必须在 Assert-LocalEdgePortsFree 之前跑,
+# 否则端口占用判定会按错误的绑定地址算。只设环境变量,不做任何启停副作用(-Check 也安全)。
+function Initialize-LocalEdgeBinding {
+    if ($LocalOnly) {
+        Set-EdgeBindHost '127.0.0.1'
+        Write-Info "已按 -LocalOnly 只绑回环 127.0.0.1:8443,仅本机可连。"
+        return
+    }
+    $lan = Resolve-EdgeAdvertiseHost
+    if ([string]::IsNullOrWhiteSpace($lan)) {
+        Set-EdgeBindHost '127.0.0.1'
+        Write-Warn "未解析到局域网 IPv4,回落只绑回环 127.0.0.1:8443(仅本机可连);可用 -AdvertiseHost 显式指定。"
+        return
+    }
+    Set-EdgeBindHost '0.0.0.0'
+    # DS(Hub/Battle)返回给客户端 NetDriver 的连接地址必须是局域网 IP —— 写 127.0.0.1 的话
+    # 异机客户端拿到回环地址会去连自己。此环境变量优先级高于 *-dev.yaml 里的写死值。
+    $env:PANDORA_DS_ADVERTISE_HOST = $lan
+    Write-Ok "已对局域网开放:客户端面 https://${lan}:8443(证书 SAN 自动含该 IP);DS advertise = $lan"
+    Write-Info "局域网其它人:把客户端后端地址改成 ${lan}:8443(需先装内网 CA);只想自己玩加 -LocalOnly。"
 }
 
 function Invoke-Intranet {
@@ -4271,12 +4528,36 @@ function Apply-AgonesManifests {
 # 集群共存期)时,active profile 是全局可变状态,靠它路由会把镜像 load/delete 打到另一个集群
 # (2026-07-07 有镜像落错 daemon 的实锤前科)。env 覆盖 + 下游 context 锁(Test-KubeContextIsLocalMinikube)
 # 双保险;env 未设时行为与旧版完全一致。
+# Pandora 本地 k8s 集群的规范 profile 名。仓库其它脚本(e2e_k8s.ps1 / udp_relay.ps1 /
+# deploy/ds/build-image-minikube.ps1 / reset_data_service_schema.ps1)早就以它为默认值,
+# start.ps1 是唯一的例外 —— 统一到这里。
+$script:K8sCanonicalProfile = 'pandora-agones'
+
+# 解析「本机 Pandora 集群」的 minikube profile。
+# 绝不再用 `minikube profile`:那读的是 minikube 的**全局 active profile**,它是本机全局可变
+# 状态,且在没人显式 `minikube profile <名>` 过的机器上恒为字面量 'minikube' —— 与本项目集群
+# 毫无关系。据它去 delete/apply,就会对着一个不存在或早已停掉的集群狂报 connection refused,
+# 「一键停止」在几乎每台机器上都必炸(本机实测:active=minikube 已停,真集群是 pandora-agones)。
+# 改为按本机**实际证据**推断,顺序固定、可复现:
 function Get-ActiveMinikubeProfile {
     $override = $env:PANDORA_MINIKUBE_PROFILE
     if (-not [string]::IsNullOrWhiteSpace($override)) { return $override.Trim() }
-    $p = ((& minikube profile 2>$null | Select-Object -First 1) -replace '^\*\s*', '').Trim()
-    if ([string]::IsNullOrWhiteSpace($p)) { $p = 'minikube' }
-    return $p
+
+    # ① 正占着宿主 8443 的 profile = 正在跑的 Pandora 集群,证据最硬(与 local 互斥判定同源)。
+    $holding = Find-MinikubeProfileHoldingEdgePort
+    if (-not [string]::IsNullOrWhiteSpace($holding)) { return $holding }
+
+    $profiles = @(Get-MinikubeProfileNames)
+    # ② 规范名已存在(集群停着时 ① 探不到,走这条)。
+    if ($profiles -ccontains $script:K8sCanonicalProfile) { return $script:K8sCanonicalProfile }
+    # ③ 一个 profile 都没有:全新机器,按规范名创建。
+    if ($profiles.Count -eq 0) { return $script:K8sCanonicalProfile }
+    # ④ 本机只有一个 profile:它就是唯一可能的目标(兼容早年被建成 'minikube' 的机器)。
+    if ($profiles.Count -eq 1) { return $profiles[0] }
+    # ⑤ 多个 profile 且没有规范名:无从判断,交给人显式指定,绝不乱删乱建。
+    throw ("本机存在多个 minikube profile($($profiles -join ', ')),且没有本项目规范名" +
+        "『$($script:K8sCanonicalProfile)』,无法判定哪个是 Pandora 集群。请显式指定后重跑:" +
+        "`$env:PANDORA_MINIKUBE_PROFILE='<profile 名>'")
 }
 
 # 本次运行内固定的 minikube profile(解析一次后缓存)。
@@ -4382,13 +4663,15 @@ function Get-MinikubeStartArgs([string]$Profile) {
         $startArgs += "--image-repository=$($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY.Trim())"
     }
     # 端口发布:把宿主 8443 发布到节点 NodePort 31443 —— 集群内边缘 Envoy(pandora-edge-envoy)
-    # 的客户端入口,客户端保持连 127.0.0.1:8443 不变,不再需要 21 条 kubectl port-forward 桥。
+    # 的客户端入口,不再需要 21 条 kubectl port-forward 桥。
     # **docker/podman driver 专属参数**,别的 driver(hyperv/vmware 等)传了会直接报错:那些
     # driver 的节点有可路由 IP,客户端直连 <节点IP>:31443 即可,无需发布。
-    # 内网多机联调把 PANDORA_MINIKUBE_PORTS 设成 "0.0.0.0:8443:31443";既有集群无法追加发布
-    # 端口,必须 -Reset 重建时携带。
+    # 默认绑 0.0.0.0(本机 + 局域网都能连),与 local 模式的默认对局域网开放保持一致;
+    # 两种模式都占宿主 8443,故互为互斥(Invoke-K8s 会先停 local,Invoke-Local 会先停集群)。
+    # PANDORA_MINIKUBE_PORTS 可显式覆盖(如只想本机可连就设 "127.0.0.1:8443:31443");
+    # 既有集群无法追加/修改发布端口,改了必须 -Reset 重建才生效。
     $portSpecs = if ([string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_PORTS)) {
-        if ($driver -in @('docker', 'podman')) { @('127.0.0.1:8443:31443') } else { @() }
+        if ($driver -in @('docker', 'podman')) { @('0.0.0.0:8443:31443') } else { @() }
     } else { @($env:PANDORA_MINIKUBE_PORTS -split ',') }
     foreach ($portSpec in $portSpecs) {
         if (-not [string]::IsNullOrWhiteSpace($portSpec)) { $startArgs += "--ports=$($portSpec.Trim())" }
@@ -4403,18 +4686,15 @@ $script:MinikubeRuntimeCache = @{}
 function Get-MinikubeNodeRuntime([string]$Profile) {
     if ($script:MinikubeRuntimeCache.ContainsKey($Profile)) { return $script:MinikubeRuntimeCache[$Profile] }
     $runtime = 'docker'
-    $json = (& minikube profile list -o json 2>$null | Out-String)
-    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($json)) {
-        try {
-            $profiles = ($json | ConvertFrom-Json).valid
-            foreach ($p in @($profiles)) {
-                if ([string]$p.Name -ceq $Profile) {
-                    $cr = [string]$p.Config.KubernetesConfig.ContainerRuntime
-                    if (-not [string]::IsNullOrWhiteSpace($cr)) { $runtime = $cr.Trim() }
-                    break
-                }
+    $parsed = Get-MinikubeProfileListObject
+    if ($null -ne $parsed) {
+        foreach ($p in @($parsed.valid)) {
+            if ([string]$p.Name -ceq $Profile) {
+                $cr = [string]$p.Config.KubernetesConfig.ContainerRuntime
+                if (-not [string]::IsNullOrWhiteSpace($cr)) { $runtime = $cr.Trim() }
+                break
             }
-        } catch { }
+        }
     }
     $script:MinikubeRuntimeCache[$Profile] = $runtime
     return $runtime
@@ -4858,6 +5138,23 @@ function Stop-K8sHostBridge {
     Write-Ok "宿主侧桥接/中继已清理"
 }
 
+# Assert-K8sEdgePublishReachable:核对既有集群的 8443 发布地址是不是对局域网开放的。
+# minikube 的 --ports 只在**建集群时**生效,既有集群改不了 —— 老集群沿用旧默认
+# 127.0.0.1:8443,集群一切正常但局域网就是连不进来,且全程无报错。这里如实点名并给出代价。
+function Assert-K8sEdgePublishReachable([string]$Profile) {
+    $publish = [regex]::Match((docker port $Profile 2>$null | Out-String), '(?m)^31443/tcp\s*->\s*(\S+):8443')
+    if (-not $publish.Success) { return }
+    $bind = $publish.Groups[1].Value
+    if ($bind -in @('0.0.0.0', '[::]', '::')) { return }
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_MINIKUBE_PORTS)) { return }  # 用户显式指定过,尊重之
+
+    Write-Warn "既有集群『$Profile』的客户端入口只发布在 ${bind}:8443,局域网其它机器连不进来。"
+    Write-Info "  minikube 的端口发布在建集群时钉死,既有集群改不了;要对局域网开放只能重建:"
+    Write-Info "    pwsh tools/scripts/start.ps1 -Mode k8s -Reset"
+    Write-Info "  代价:-Reset 会销毁集群(含正在跑的对局与集群内数据),请确认没人在打局再执行。"
+    Write-Info "  只自己本机连则无需处理。"
+}
+
 function Invoke-K8s {
     $servicesDir = Join-Path $ProjectRoot 'deploy/k8s/services'
     $infraYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/infra.yaml'
@@ -4881,6 +5178,19 @@ function Invoke-K8s {
         # 是否可删无关——无论 context 在不在都要先清掉,否则残留进程/容器会占端口、误导后续启动。
         Stop-K8sHostBridge
         $mkProfile = Get-K8sManagedProfile
+        # 集群不存在 / 没在跑 = 集群内没有任何东西在跑,Down 的目标本来就已经达成。
+        # 这不是错误,是空跑:早期版本在这里硬抛(或对着停掉的集群狂 connection refused 后
+        # 被 Assert-LastExit 抛出),让每台机器双击「一键停止」都以一片红字收场。
+        if (-not (Test-MinikubeProfileExists -Profile $mkProfile)) {
+            Write-Ok "本机没有 minikube 集群『$mkProfile』,集群侧无对象可删(宿主桥接已清理)。"
+            return
+        }
+        & minikube -p $mkProfile status *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Ok "minikube 集群『$mkProfile』未在运行,集群内服务已随之全部停止(宿主桥接已清理)。"
+            Write-Info "  数据保留,下次一键启动会自动拉回来;要彻底删掉集群(含数据):minikube delete -p $mkProfile"
+            return
+        }
         $contexts = @(kubectl config get-contexts -o name 2>$null)
         if ($contexts -cnotcontains $mkProfile) {
             throw "宿主桥接已清理，但 kubeconfig 中找不到 minikube context『$mkProfile』，无法证明集群侧对象已删除。为避免假报 Down 成功，已中止；请先修复该 profile/context 或确认集群已销毁。"
@@ -4915,17 +5225,18 @@ function Invoke-K8s {
         # Fleet 是启动时 Apply-AgonesManifests 起的,也要停干净(DS Pod 别留着空跑)。
         # 先删 FleetAutoscaler 再删 Fleet:避免删 Fleet 期间 autoscaler 还在按 buffer 补建 GameServer。
         foreach ($fleetFile in @('25-fleetautoscaler-battle.yaml', '31-fleet-hub-canary.yaml', '30-fleet-hub.yaml', '21-fleet-battle-canary.yaml', '20-fleet-battle.yaml')) {
-            Invoke-KubectlDeleteTolerateMissingKind -What "kubectl delete Fleet $fleetFile" -Arguments @(
+            Invoke-K8sDownDelete -What "kubectl delete Fleet $fleetFile" -Arguments @(
                 '--context', $mkProfile, 'delete', '-f', (Join-Path $ProjectRoot "deploy/k8s/agones/$fleetFile"), '--ignore-not-found'
             )
         }
         # Down 是用户明确要求停掉整套本地 DS，因此也清理旧版单轨对象。
-        Invoke-KubectlDeleteTolerateMissingKind -What 'kubectl delete legacy local Fleets' -Arguments @(
+        Invoke-K8sDownDelete -What 'kubectl delete legacy local Fleets' -Arguments @(
             '--context', $mkProfile, 'delete', 'fleet/pandora-battle', 'fleet/pandora-hub', '-n', 'default', '--ignore-not-found'
         )
         # in-cluster Envoy「DS 面」网关也是启动时 Apply-AgonesManifests 起的(本地专属),一并清理
-        kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/16-ds-envoy.yaml') --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete in-cluster Envoy'
+        Invoke-K8sDownDelete -What 'kubectl delete in-cluster Envoy' -Arguments @(
+            '--context', $mkProfile, 'delete', '-f', (Join-Path $ProjectRoot 'deploy/k8s/agones/16-ds-envoy.yaml'), '--ignore-not-found'
+        )
         # 只有 Down 前确实存在 etcd-data PVC，才要求 Down 后仍保留；对早已拆空的集群空跑不误报数据丢失。
         $etcdPvcExistedBeforeDown = Test-LocalEtcdDataPvcExists -KubeContext $mkProfile
         # 业务服务:渲染 kustomize 后删除除 Namespace 外的全部对象。
@@ -4939,22 +5250,20 @@ function Invoke-K8s {
             param($o)
             ([string]$o.Kind -ceq 'Namespace') -and ([string]$o.Name -ceq $K8sNamespace)
         }
-        kubectl --context $mkProfile delete -f $lokiYaml --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete Loki'
-        kubectl --context $mkProfile delete -f $monitoringYaml --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete Prometheus/Grafana'
-        kubectl --context $mkProfile delete -f $tidbYaml --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete TiDB'
-        kubectl --context $mkProfile delete -f $tidbInitJobYaml --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete tidb-init Job'
-        kubectl --context $mkProfile delete -f $sentinelYaml --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete Redis Sentinel'
-        kubectl --context $mkProfile delete -f $edgeEnvoyYaml --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete edge Envoy'
-        kubectl --context $mkProfile delete configmap pandora-tidb-init pandora-redis-sentinel-entrypoint `
-            pandora-edge-envoy-config pandora-grafana-alerting -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
-        kubectl --context $mkProfile delete secret pandora-edge-envoy-certs pandora-grafana-alert-env `
-            -n $K8sNamespace --ignore-not-found 2>$null | Out-Null
+        Invoke-K8sDownDelete -What 'kubectl delete Loki' -Arguments @('--context', $mkProfile, 'delete', '-f', $lokiYaml, '--ignore-not-found')
+        Invoke-K8sDownDelete -What 'kubectl delete Prometheus/Grafana' -Arguments @('--context', $mkProfile, 'delete', '-f', $monitoringYaml, '--ignore-not-found')
+        Invoke-K8sDownDelete -What 'kubectl delete TiDB' -Arguments @('--context', $mkProfile, 'delete', '-f', $tidbYaml, '--ignore-not-found')
+        Invoke-K8sDownDelete -What 'kubectl delete tidb-init Job' -Arguments @('--context', $mkProfile, 'delete', '-f', $tidbInitJobYaml, '--ignore-not-found')
+        Invoke-K8sDownDelete -What 'kubectl delete Redis Sentinel' -Arguments @('--context', $mkProfile, 'delete', '-f', $sentinelYaml, '--ignore-not-found')
+        Invoke-K8sDownDelete -What 'kubectl delete edge Envoy' -Arguments @('--context', $mkProfile, 'delete', '-f', $edgeEnvoyYaml, '--ignore-not-found')
+        Invoke-K8sDownDelete -What 'kubectl delete 附属 ConfigMap' -Arguments @(
+            '--context', $mkProfile, 'delete', 'configmap', 'pandora-tidb-init', 'pandora-redis-sentinel-entrypoint',
+            'pandora-edge-envoy-config', 'pandora-grafana-alerting', '-n', $K8sNamespace, '--ignore-not-found'
+        )
+        Invoke-K8sDownDelete -What 'kubectl delete 附属 Secret' -Arguments @(
+            '--context', $mkProfile, 'delete', 'secret', 'pandora-edge-envoy-certs', 'pandora-grafana-alert-env',
+            '-n', $K8sNamespace, '--ignore-not-found'
+        )
         # 基础设施:删除除 PVC/etcd-data 外的全部对象，保留 etcd 数据卷。
         $infraManifest = (Get-Content -LiteralPath $infraYaml -Raw)
         $null = Remove-K8sManifestObjectsPreserving -KubeContext $mkProfile -ManifestText $infraManifest `
@@ -4964,13 +5273,18 @@ function Invoke-K8s {
             ([string]$o.Name -ceq 'etcd-data') -and
             ([string]$o.Namespace -ceq $K8sNamespace)
         }
+        if ($script:K8sDownApiserverGone) {
+            Write-Ok "集群已在 Down 期间停止/消失，集群内服务已全部停止（宿主桥接已清理）。"
+            Write-Info "  etcd 数据随集群磁盘保留，下次一键启动会自动拉回来。"
+            return
+        }
         if ($etcdPvcExistedBeforeDown) {
             Assert-LocalEtcdDataPreservedAfterDown -KubeContext $mkProfile
         }
         else {
             Write-Info "Down 前本地无 etcd-data PVC，无 DS auth 基线可保留（跳过保留校验）。"
         }
-        Write-Info "minikube 仍在运行;彻底关:minikube stop"
+        Write-Info "minikube 仍在运行;彻底关:minikube stop -p $mkProfile"
         return
     }
 
@@ -4997,6 +5311,8 @@ function Invoke-K8s {
 
     # 1) minikube 起没起。拓扑参数由 Get-MinikubeStartArgs 决定:既有 profile 空参续跑,
     # 新建 profile 按默认(docker/4C/6144M)或 PANDORA_MINIKUBE_* 环境覆盖创建。
+    # 起集群前先与 local 模式互斥:两者都要占宿主 8443,local 在跑就用它自己的关闭流程停掉。
+    Stop-LocalStackForK8s
     minikube -p $mkProfile status *> $null
     if ($LASTEXITCODE -ne 0) {
         $mkStartArgs = Get-MinikubeStartArgs $mkProfile
@@ -5006,6 +5322,9 @@ function Invoke-K8s {
     } else {
         Write-Ok "minikube 已在运行(profile=$mkProfile)"
     }
+    # 发布端口是**建集群时**钉死的,既有集群改不了。老集群(建于默认还是 127.0.0.1:8443 的年代)
+    # 会导致「集群跑着但局域网连不进来」,且没有任何报错——这里如实点名,给出 -Reset 的代价说明。
+    Assert-K8sEdgePublishReachable -Profile $mkProfile
 
     # 上下文锁:本地 k8s 部署会 apply/删除大量对象,必须确认 current-context 就是本机 minikube,
     # 否则会把本地开发部署误发到用户 kubectl 当前指向的远端/生产集群。不匹配直接 fail-fast。
@@ -6560,7 +6879,17 @@ function Invoke-Reset {
             # 只操作本机 profile,此时仍要执行，才能兑现 Reset 的“彻底清掉再重建”语义。
             Write-Warn "将 minikube delete -p $mkProfile(仅销毁本机集群『$mkProfile』,已 load 镜像一并清掉),然后全新部署。"
             minikube delete -p $mkProfile 2>$null
-            Assert-LastExit "minikube delete -p $mkProfile"
+            # 「目标本来就不存在」不是失败:Reset 要的是「删干净」这个**终态**,不是「这次删到了东西」。
+            # minikube delete 对不存在的 profile 返回非 0(实测 exit=80),此前直接 Assert-LastExit,
+            # 于是上一轮在 delete 之后、重建之前中断的机器会永远卡死在 Reset 的第一步:
+            # 集群已被删掉 → 再跑 Reset 又因「删不到」而中止 → 永远重建不回来(本机实测踩到)。
+            # 故按终态判定:delete 后 profile 确已不存在就放行,仍存在才是真失败。
+            if ($LASTEXITCODE -ne 0) {
+                if (Test-MinikubeProfileExists -Profile $mkProfile) {
+                    throw "minikube delete -p $mkProfile 失败(exit=$LASTEXITCODE)且该 profile 仍然存在,已中止(避免在没删干净的集群上重建)。"
+                }
+                Write-Info "minikube delete 返回 $LASTEXITCODE,但『$mkProfile』确认已不存在(多半是上一轮已删),按已清理继续重建。"
+            }
             Invoke-K8s
         }
         'local' {

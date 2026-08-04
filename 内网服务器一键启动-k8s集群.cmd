@@ -16,15 +16,19 @@ rem   不需要导任何环境变量;已存在的 profile 不受影响,拓扑只
 rem    - 容器运行时 containerd(与线上同构;节点内不再用 Docker 跑 Pod)
 rem    - CNI calico(可强制 NetworkPolicy)、K8s 版本钉 v1.35.1
 rem    - 节点底图走阿里云镜像(墙内可达;gcr.io 会卡在 Pulling base image)
-rem    - 发布宿主 127.0.0.1:8443 → 节点 NodePort 31443,即集群内边缘 Envoy
-rem      的客户端入口(客户端仍连 127.0.0.1:8443,不再需要 21 条 port-forward)
+rem    - 发布宿主 0.0.0.0:8443 → 节点 NodePort 31443,即集群内边缘 Envoy 的
+rem      客户端入口(本机与局域网都能连,不再需要 21 条 port-forward)。
+rem      客户端后端地址填 <本机局域网IP>:8443;本机自测填 127.0.0.1:8443 也行。
 rem    - 节点规格随本机自适应:内存 min(宿主上限x0.85, 40G)、CPU min(逻辑核, 16)。
 rem      **内存低于 16G 会直接报错退出**——battle DS 单副本 limits 就是 14Gi,
 rem      内存不够时 DS 永远调度不上,与其卡到超时不如立刻讲清楚。
 rem    - 逐项覆盖用 PANDORA_MINIKUBE_DRIVER/CPUS/MEMORY/RUNTIME/CNI/K8S_VERSION/
 rem      BASE_IMAGE/IMAGE_REPOSITORY/PORTS(创建后再改需 -Reset 重建才生效)。
-rem    - 内网其它机器要连本机业务面时:先设 PANDORA_MINIKUBE_PORTS=0.0.0.0:8443:31443
-rem      再重建集群(默认只发布到回环,别的机器连不到 8443)。
+rem    - 只想本机可连时设 PANDORA_MINIKUBE_PORTS=127.0.0.1:8443:31443 再重建集群。
+rem      老集群(建于默认还是回环的年代)局域网连不进来,启动时脚本会点名提示。
+rem
+rem  【与 local 模式互斥】两者都占宿主 8443:本脚本会先停掉 local 模式的服务;
+rem  反过来启动 local 时也会自动 minikube stop 停掉本集群(数据保留,下次自动起回)。
 rem
 rem  前置要求:Go / Docker Desktop / kubectl / minikube / helm 已安装且可用;
 rem  客户端面 TLS 证书(deploy/envoy/cert.pem+key.pem)不入库,缺失时脚本会调
