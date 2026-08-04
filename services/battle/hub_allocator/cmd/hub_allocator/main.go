@@ -417,9 +417,30 @@ func main() {
 		defer func() { _ = ownerLease.Close() }()
 		uc.SetOwnerLeaseRenewer(ownerLease, cfg.Hub.OwnerLeaseRequired)
 		// migrate ①/③④:签票点 Begin(HUB) + census 代提交 Admit(同一连接,弱依赖)。
-		uc.SetOwnerAuthority(ownerLease)
+		//
+		// **只在 Model B 生效时接权威面**:owner Begin 要求 exact owner 身份
+		// (pod + instance_uid + instance_epoch + assignment_id),而这些字段的唯一写入点
+		// bindAssignmentAuth 在 seat==nil(legacy/off)时直接 return——即归属记录压根不带
+		// writer-v2 绑定。此时 ticketBindingFromAssignment 恒返回零值,Begin 必然携带空身份,
+		// 被 owner 判 15005(ErrOwnerInvalidOperation),而签票是 fail-closed 的
+		// (§9.3/§9.22:归属未定案不签票)→ 玩家永远拿不到 hub 票、永远进不了大厅。
+		// 2026-08-04 实测:mode=local + authority_mode=legacy 下登录必现
+		// owner_begin_failed(pod= instance_uid= 皆空)→ hub_assign_failed_fallback_self_sign
+		// → GetResumeContext 返回 ROLE_REQUIRED → 客户端在"登录↔选角"之间死循环。
+		//
+		// 这不是放宽 fail-closed:凡是接了权威面的部署(Model B),写不进 owner 一律照旧拒签;
+		// 这里只是不把一个结构上无法满足的强依赖接到根本产不出 exact 身份的形态上。
+		// 实例租约双写(SetOwnerLeaseRenewer)与 exact 身份无关,保持无条件启用。
+		if modelBAuthority {
+			uc.SetOwnerAuthority(ownerLease)
+		} else {
+			helper.Warnw("msg", "owner_authority_skipped_without_model_b",
+				"authority_mode", cfg.DSAuth.AuthorityMode, "mode", cfg.Mode,
+				"hint", "legacy/off 归属记录无 writer-v2 绑定,接权威面会让签票恒 15005;仅保留租约双写")
+		}
 		helper.Infow("msg", "owner_lease_dual_write_enabled",
-			"owner_addr", cfg.Hub.OwnerAddr, "required", cfg.Hub.OwnerLeaseRequired)
+			"owner_addr", cfg.Hub.OwnerAddr, "required", cfg.Hub.OwnerLeaseRequired,
+			"owner_authority", modelBAuthority)
 	}
 	canaryPercent, canarySeed := uint32(0), ""
 	if cfg.Mode == conf.ModeAgones {
