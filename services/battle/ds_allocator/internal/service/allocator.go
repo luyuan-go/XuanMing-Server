@@ -237,7 +237,11 @@ func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatReq
 		}); checkErr != nil {
 			return &dsv1.HeartbeatResponse{Code: toProtoCode(checkErr)}, nil
 		}
-		res, err = s.uc.Heartbeat(ctx, req.GetMatchId(), req.GetDsPodName(), req.GetPlayerCount(), req.GetState(), req.GetTsMs())
+		// census 一并透传:legacy 面据此续 owner 实例租约并代提交在场玩家 Admit
+		// (不传则 owner 恒 PENDING、租约恒过期,客户端永远等不到 STABLE,2026-08-04)。
+		res, err = s.uc.HeartbeatWithCensus(ctx, req.GetMatchId(), req.GetDsPodName(),
+			req.GetPlayerCount(), req.GetState(), req.GetTsMs(),
+			req.GetActivePlayerSnapshotPresent(), req.GetActivePlayerIds())
 	}
 	if err != nil {
 		return &dsv1.HeartbeatResponse{Code: toProtoCode(err)}, nil

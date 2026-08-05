@@ -76,6 +76,11 @@ type launchedProc struct {
 	proc dsProcess
 	port int
 	addr string
+	// instanceUID / instanceEpoch 是本机 DS 的 exact 实例身份,与下发给该进程的
+	// DS 回调令牌**同源**(Allocate 处一次生成,既签进令牌又留台账)。留存的意义在于
+	// 幂等重分配必须返回同一身份:身份漂移会让票据绑到一个不存在的实例。
+	instanceUID   string
+	instanceEpoch uint32
 }
 
 // LocalGameServerAllocator 在本机 exec UE Windows Dedicated Server 进程。
@@ -195,13 +200,37 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 	}
 
 	addr := fmt.Sprintf("%s:%d", l.cfg.AdvertiseHost, port)
-	lp := &launchedProc{proc: proc, port: port, addr: addr}
+	lp := &launchedProc{proc: proc, port: port, addr: addr,
+		instanceUID: instanceUID, instanceEpoch: instanceEpoch}
 	l.procs[podName] = lp
 	l.usedPorts[port] = struct{}{}
 
 	go l.reap(podName, lp)
 
 	return podName, addr, releaseTrack, nil
+}
+
+// LocalInstanceIdentity 返回本机 DS 进程的 exact 实例身份(供 legacy 面回填战斗记录)。
+//
+// 为什么必须有:legacy(非 Model B)分配路径只回 (pod, addr, track),BattleStorageRecord
+// 的 gameserver_uid / instance_epoch 恒为零值,matchmaker 据此判「ds_allocator 未回填完整
+// DS 目标」拒签 v2 战斗票,对局直接判 FAILED —— 玩家永远进不去副本
+// (2026-08-04 mode=local 实测)。这里给出的身份**就是**签进该 DS 回调令牌的那一组
+// (Allocate 处同一次生成),所以与 DS 自报身份逐字段相等,不是另造一份。
+//
+// pod 不在台账(已回收 / 名字不符)时返回 false —— 调用方必须据此**不回填**,
+// 绝不能拿别的进程或半截身份糊一个实例身份出来。
+func (l *LocalGameServerAllocator) LocalInstanceIdentity(podName string) (string, uint32, bool) {
+	if podName == "" {
+		return "", 0, false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	lp, ok := l.procs[podName]
+	if !ok || lp.instanceUID == "" || lp.instanceEpoch == 0 {
+		return "", 0, false
+	}
+	return lp.instanceUID, lp.instanceEpoch, true
 }
 
 // Release 终止指定 DS 进程;台账无此记录视作已释放(幂等)。

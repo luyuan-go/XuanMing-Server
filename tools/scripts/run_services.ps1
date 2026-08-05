@@ -169,6 +169,56 @@ function Test-PortOpen([int]$port) {
     }
 }
 
+# 清理 allocator 在 mode=local 下用 exec 拉起的 UE DS 子进程(Hub DS / Battle DS)。
+#
+# 背景(为什么脚本非管不可):`LocalHubFleetProvider.Close()` 里确实有 `cmd.Process.Kill()`,
+# 但它挂在 main() 的 defer 上;本脚本停服用的是 `Stop-Process -Force`(= Windows
+# TerminateProcess),Go 的 defer **一行都不会跑**,而且 allocator 没注册 signal handler。
+# 加上 Windows 不像 Linux 那样有进程组连坐、`exec.Command` 也没套 Job Object,
+# 父进程一被强杀,DS 立刻变成无主进程继续占着 UDP 7777 → 下一轮新 DS 起不来。
+#
+# 误杀防护(绝不能碰策划自己开着的 UnrealEditor):三重收敛
+#   1. 只认 UnrealEditor.exe / PandoraServer.exe 两个进程名;
+#   2. 命令行必须同时含 `-server` 和关卡 URL `?game=/Script/Pandora.` —— 手工开的编辑器两者都没有;
+#   3. 孤儿扫描额外要求父进程已不存在(即真的无主),在跑的正常 DS 不受影响。
+$LocalDsProcNames = @('UnrealEditor', 'PandoraServer')
+# 只有这两个 allocator 会在 mode=local 下 exec 拉起 DS(其余服务跳过整套扫描)。
+$LocalDsSpawners = @('hub_allocator', 'ds_allocator')
+
+function Test-IsLocalDsProcess($cim) {
+    if (-not $cim) { return $false }
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($cim.Name)
+    if ($LocalDsProcNames -notcontains $name) { return $false }
+    $cmdline = $cim.CommandLine
+    if (-not $cmdline) { return $false }
+    return ($cmdline -match '(?i)(^|\s)-server(\s|$)') -and ($cmdline -match '(?i)\?game=/Script/Pandora\.')
+}
+
+# $svc 传入时先杀它的直系子进程(停服路径);-OrphansOnly 只清父进程已死的无主 DS(启动前路径)。
+function Clear-LocalDsProcesses($svc, $ownerProc, [switch]$OrphansOnly) {
+    $all = @()
+    try { $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue) } catch { return }
+    if (-not $all) { return }
+
+    $livePids = @{}
+    foreach ($p in $all) { $livePids[[int]$p.ProcessId] = $true }
+
+    foreach ($p in $all) {
+        if (-not (Test-IsLocalDsProcess $p)) { continue }
+
+        $reason = $null
+        if (-not $OrphansOnly -and $ownerProc -and [int]$p.ParentProcessId -eq [int]$ownerProc.Id) {
+            $reason = "$($svc.Name) 拉起的 DS 子进程"
+        } elseif (-not $livePids.ContainsKey([int]$p.ParentProcessId)) {
+            $reason = '无主 DS(父进程已退出)'
+        }
+        if (-not $reason) { continue }
+
+        Write-Host "  [kill] $reason (PID $($p.ProcessId) $($p.Name));否则它会一直占着 DS 端口" -ForegroundColor Yellow
+        Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # 清理"占着本服务 gRPC 端口的残留进程"。
 # 背景:上一轮启动没干净退出(或 pidfile 丢了),旧实例还占着端口 → 新实例 app.Run() 直接
 # `listen tcp :5002x: bind: Only one usage of each socket address` 崩溃退出;进程是隐藏窗口,
@@ -302,6 +352,9 @@ function Start-Service($svc) {
 
     # 启动前清理占端口的残留实例,避免新进程 bind 端口失败静默崩溃。
     Clear-PortSquatter $svc
+    # 同理清无主 DS:它占着 7777,新 allocator 拉起的 DS 会 bind 失败(allocator 自己没事,
+    # 于是表现成"服务全绿但进不去大厅",极难排查)。
+    if ($LocalDsSpawners -contains $svc.Name) { Clear-LocalDsProcesses $svc $null -OrphansOnly }
 
     $exe = Join-Path $BinDir "$($svc.Name).exe"
     if (-not $NoBuild -or -not (Test-Path $exe)) {
@@ -343,10 +396,14 @@ function Stop-Service($svc) {
     $proc = Get-RunningProcess $svc
     $pidFile = Get-PidFile $svc
     if ($proc) {
+        # 先杀 DS 子进程再杀 allocator:反过来的话子进程会先失去父进程变成无主,
+        # ParentProcessId 指向已回收的 PID,直系关系就认不出来了。
+        if ($LocalDsSpawners -contains $svc.Name) { Clear-LocalDsProcesses $svc $proc }
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
         Write-Host "  [stop] $($svc.Name) (PID $($proc.Id))" -ForegroundColor DarkGray
     } else {
         Write-Host "  [----] $($svc.Name) 未运行" -ForegroundColor DarkGray
+        if ($LocalDsSpawners -contains $svc.Name) { Clear-LocalDsProcesses $svc $null -OrphansOnly }
     }
     if (Test-Path $pidFile) { Remove-Item $pidFile -Force }
 }

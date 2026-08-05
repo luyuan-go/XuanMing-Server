@@ -258,19 +258,31 @@ func main() {
 	// local-off-v1 仍只把 K8s/Redis 权威功能关闭，不会退回 legacy JWT。UE 对所有受保护
 	// DS RPC 一律要求完整 Model-B tuple；本地实例以唯一 UID、epoch=1、随机 jti 和持久 gen
 	// 签发一次性凭据，随后由 UE 的机械隔离 profile 直接设为 active（不等待 Redis ACK）。
-	issueLocalHubCredential := func(pod, instanceUID string, epoch uint32) (string, int64, uint64, error) {
+	//
+	// 注意:"不等待 Redis ACK" 只免掉了 staged→active 的提升,**没有**免掉心跳应答的 ACK 回显。
+	// UE 的 IsAcceptingNewPlayers() 对 local-off-v1 无豁免,准入租约只认绑定式心跳 ACK,
+	// 所以这里必须把 jti/writer_epoch 一并返回给 provider 留存,供 Heartbeat 逐字段回显。
+	issueLocalHubCredential := func(pod, instanceUID string, epoch uint32) (string, biz.LocalHubCredential, error) {
 		genCtx, genCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer genCancel()
 		gen, gerr := rdb.Incr(genCtx, hubTokenGenKey(pod)).Result()
 		if gerr != nil {
-			return "", 0, 0, fmt.Errorf("local hub credential gen incr for pod %s: %w", pod, gerr)
+			return "", biz.LocalHubCredential{}, fmt.Errorf("local hub credential gen incr for pod %s: %w", pod, gerr)
 		}
+		jti := uuid.NewString()
 		res, serr := dsSigner.SignHubCredential(
-			pod, instanceUID, epoch, uint64(gen), uuid.NewString(), cfg.DSAuth.HubTokenTTL.Std())
+			pod, instanceUID, epoch, uint64(gen), jti, cfg.DSAuth.HubTokenTTL.Std())
 		if serr != nil {
-			return "", 0, 0, fmt.Errorf("local hub credential sign for pod %s: %w", pod, serr)
+			return "", biz.LocalHubCredential{}, fmt.Errorf("local hub credential sign for pod %s: %w", pod, serr)
 		}
-		return res.Token, res.ExpMs, uint64(gen), nil
+		return res.Token, biz.LocalHubCredential{
+			InstanceUID:   instanceUID,
+			ProtocolEpoch: epoch,
+			Gen:           uint64(gen),
+			JTI:           jti,
+			WriterEpoch:   res.WriterEpoch,
+			ExpiresAtMs:   res.ExpMs,
+		}, nil
 	}
 	// verifyHubCredential 把 pkg/auth 已完整验签的 JWT claims 映射成投递侧严格比对 tuple。
 	// annotation 的 gen/exp 永远只是镜像,不能绕过这里的签名/iss/aud/exp 校验。
@@ -418,29 +430,32 @@ func main() {
 		uc.SetOwnerLeaseRenewer(ownerLease, cfg.Hub.OwnerLeaseRequired)
 		// migrate ①/③④:签票点 Begin(HUB) + census 代提交 Admit(同一连接,弱依赖)。
 		//
-		// **只在 Model B 生效时接权威面**:owner Begin 要求 exact owner 身份
-		// (pod + instance_uid + instance_epoch + assignment_id),而这些字段的唯一写入点
-		// bindAssignmentAuth 在 seat==nil(legacy/off)时直接 return——即归属记录压根不带
-		// writer-v2 绑定。此时 ticketBindingFromAssignment 恒返回零值,Begin 必然携带空身份,
-		// 被 owner 判 15005(ErrOwnerInvalidOperation),而签票是 fail-closed 的
-		// (§9.3/§9.22:归属未定案不签票)→ 玩家永远拿不到 hub 票、永远进不了大厅。
-		// 2026-08-04 实测:mode=local + authority_mode=legacy 下登录必现
-		// owner_begin_failed(pod= instance_uid= 皆空)→ hub_assign_failed_fallback_self_sign
-		// → GetResumeContext 返回 ROLE_REQUIRED → 客户端在"登录↔选角"之间死循环。
+		// **接权威面的前提是本形态能产出 exact owner 身份**(pod + instance_uid +
+		// instance_epoch + assignment_id + release_track),否则 Begin 携空身份必被 owner 判
+		// 15005,而签票是 fail-closed 的(§9.3/§9.22)→ 玩家永远拿不到 hub 票。
+		//   - agones + Model B:身份来自 Redis 授权记录 promote 后写入的 writer-v2 绑定。
+		//   - local:身份来自本进程 exec 的 Hub DS(LocalHubFleetProvider 播种的 uid + epoch=1,
+		//     与下发给 DS 的凭据同源),由 biz.ownerTargetForHubTicket 回源分片镜像取得。
+		//   - mock:没有真实实例,取不出身份 → ownerTargetForHubTicket 返回 false,签票点自动
+		//     跳过 Begin,行为与历史一致(故这里也不接)。
 		//
-		// 这不是放宽 fail-closed:凡是接了权威面的部署(Model B),写不进 owner 一律照旧拒签;
-		// 这里只是不把一个结构上无法满足的强依赖接到根本产不出 exact 身份的形态上。
+		// 为什么 local 也必须接:owner 是 §9.23 query-first 的第一权威,login 的
+		// GetResumeContext 先问 owner。若本机永远不写 owner,玩家选完角、Hub 也分配成功,
+		// 回查仍恒落 WAIT/OWNER_UNKNOWN,客户端退避重查到超时,永远进不了大厅
+		// (2026-08-04 mode=local 实测:owner.err.log 全程只有 QueryOwner,无任何 BeginTransition)。
+		//
 		// 实例租约双写(SetOwnerLeaseRenewer)与 exact 身份无关,保持无条件启用。
-		if modelBAuthority {
+		ownerAuthorityEnabled := modelBAuthority || cfg.Mode == conf.ModeLocal
+		if ownerAuthorityEnabled {
 			uc.SetOwnerAuthority(ownerLease)
 		} else {
-			helper.Warnw("msg", "owner_authority_skipped_without_model_b",
+			helper.Warnw("msg", "owner_authority_skipped_without_exact_identity",
 				"authority_mode", cfg.DSAuth.AuthorityMode, "mode", cfg.Mode,
-				"hint", "legacy/off 归属记录无 writer-v2 绑定,接权威面会让签票恒 15005;仅保留租约双写")
+				"hint", "该形态产不出 exact 实例身份(如 mock),接权威面会让签票恒 15005;仅保留租约双写")
 		}
 		helper.Infow("msg", "owner_lease_dual_write_enabled",
 			"owner_addr", cfg.Hub.OwnerAddr, "required", cfg.Hub.OwnerLeaseRequired,
-			"owner_authority", modelBAuthority)
+			"owner_authority", ownerAuthorityEnabled)
 	}
 	canaryPercent, canarySeed := uint32(0), ""
 	if cfg.Mode == conf.ModeAgones {
@@ -516,6 +531,11 @@ func main() {
 	svc := service.NewHubService(uc)
 	svc.SetDSCallbackGuard(dsGuard)         // DS 回调令牌校验(Heartbeat);nil=off
 	svc.SetModelBAuthority(modelBAuthority) // Model B:心跳必须携带 Model B 凭据,legacy 令牌一律拒(CE1/CE2)
+	// mode=local 专用准入通道:local-off-v1 无 Redis 授权面(authRepo=nil)也无 DS 回调令牌,
+	// Model B 那条 AcknowledgeAdmission 必拒 → Hub DS 把玩家踢下线。此开关仅在 ModeLocal 置位;
+	// 上面 case conf.ModeLocal 已用 ValidateDSLocalHubProfileOffV1 校验过 off+legacy 组合,
+	// agones/mock 恒为 false,线上不受影响。
+	svc.SetLocalAdmission(cfg.Mode == conf.ModeLocal)
 
 	// 6. gRPC + HTTP
 	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):ListHubLines/TransferToLine 两个

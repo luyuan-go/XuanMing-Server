@@ -1179,7 +1179,51 @@ type HubEvictionOrder struct {
 // tokenGen:本次心跳携带的**已验签**DS 回调令牌代际(service 层从 Guard claims 的 ds_gen 取,
 // 无已验签令牌时为 0)。代际绑定下 warming→ready 只接受与镜像代际**精确相等**的心跳(审核 P1-6/P1-8)。
 func (u *HubUsecase) Heartbeat(ctx context.Context, pod string, playerCount int32, state string, tsMs int64, tokenGen uint64) (*HeartbeatResult, error) {
-	return u.heartbeat(ctx, pod, playerCount, nil, 0, state, tsMs, tokenGen, nil)
+	res, err := u.heartbeat(ctx, pod, playerCount, nil, 0, state, tsMs, tokenGen, nil)
+	if err != nil {
+		return nil, err
+	}
+	u.applyLocalCredentialACK(pod, res)
+	return res, nil
+}
+
+// localHubCredentialSource 由 mode=local 的 fleet provider 实现,给出本机 Hub DS 的完整凭据身份。
+// 只有 LocalHubFleetProvider 实现它:agones / mock provider 都不实现,故下面的回显分支
+// 在生产(Model B)与离线 mock 下是死代码,两条路径的应答逐字节不变。
+type localHubCredentialSource interface {
+	LocalCredentialACK(pod string) (LocalHubCredential, bool)
+}
+
+// applyLocalCredentialACK 在 mode=local 回显本机 Hub DS 的凭据 ACK。
+//
+// 为什么必须回显:UE 的 SendHubHeartbeat 无条件用 IsBoundToRequest 校验应答里的
+// CredentialAck(InstanceUID/InstanceEpoch/Gen/JTI/WriterEpoch 五项须与 DS 自持凭据
+// 逐字段相等),不通过就不调 NotifyAuthorizedActiveHeartbeat;而 IsAcceptingNewPlayers()
+// 对 local-off-v1 **没有豁免** —— 拿不到绑定式 ACK,准入租约永不打开,玩家连上大厅
+// 也会被拒。local-off-v1 只免掉了 staged→active 的 Redis 提升,没免掉这道租约门。
+//
+// 为什么这不是"伪造回显":ACK 的值直接取自本进程签发、并经 env 下发给该 DS 的**同一份**
+// 凭据,确是"服务端仍授权本实例"的真实证据。且严格 fail-closed:
+//   - pod 与本机 DS 不匹配、或凭据五元组不全 → 不回显,DS 继续拒新玩家;
+//   - 已有 Accepted 身份(Model B promote 已回填)→ 不覆盖;
+//   - 只有 legacy 心跳入口会走到这里,Model B 心跳有自己的 ActivateHeartbeat 线性化点。
+func (u *HubUsecase) applyLocalCredentialACK(pod string, res *HeartbeatResult) {
+	if res == nil || res.AcceptedInstanceUID != "" {
+		return
+	}
+	src, ok := u.fleet.(localHubCredentialSource)
+	if !ok {
+		return
+	}
+	cred, ok := src.LocalCredentialACK(pod)
+	if !ok {
+		return
+	}
+	res.AcceptedTokenGen = cred.Gen
+	res.AcceptedTokenJTI = cred.JTI
+	res.AcceptedInstanceUID = cred.InstanceUID
+	res.AcceptedProtocolEpoch = cred.ProtocolEpoch
+	res.AcceptedWriterEpoch = cred.WriterEpoch
 }
 
 // HeartbeatWithCredential 是 Model B 心跳入口(§7):service 层验签抽出 Model B 凭据后调用。
@@ -1229,6 +1273,18 @@ func (u *HubUsecase) heartbeat(ctx context.Context, pod string, playerCount int3
 	}
 	// 分片被标记 draining/stopping → 下发迁移/停机指令(与 Kafka 推送双通道)。
 	if shard, ok, gerr := u.repo.GetShard(ctx, pod); gerr == nil && ok {
+		// legacy 面 owner 实例租约续写(与 Model B 心跳同语义、同时序约束,2026-08-04):
+		// login 的 applyOwnerPlacement 只在「ADMITTED 且实例租约剩余 > 安全余量」时报 STABLE,
+		// legacy 心跳不续租 = 租约恒过期,客户端 Admission ACK 已到手却永远等不到 STABLE,
+		// 30s deadline 后反复重查(mode=local 实测的第三道墙)。实例身份回源分片镜像
+		// (LocalHubFleetProvider 播种,与 ownerTargetForHubTicket 的 legacy 回源同源同值);
+		// mock 镜像无实例身份 → uid 为空跳过,行为不变。Model B(authRepo != nil)不进本分支。
+		if uid := shard.GetGameserverUid(); uid != "" {
+			if lerr := renewOwnerLeaseGate(ctx, u.ownerLease, u.ownerLeaseRequired,
+				pod, uid, 0, ""); lerr != nil {
+				return nil, lerr
+			}
+		}
 		switch shard.State {
 		case stateDraining:
 			return &HeartbeatResult{Command: commandDrain, GraceSeconds: u.cfg.MigrateGraceSeconds}, nil
@@ -1611,6 +1667,65 @@ func assignmentMatchesAdmission(a *hubv1.HubAssignmentStorageRecord, playerID ui
 		a.GetAuthWriterEpoch() == cred.WriterEpoch
 }
 
+// AcknowledgeLocalAdmission 是 mode=local(legacy 权威面)下的准入完成点。
+//
+// **为什么必须单开一条路径**:上面的 AcknowledgeAdmission 消费的是 Redis 授权面
+// (authRepo)的 reservation,而 local-off-v1 压根没有 authRepo —— 走那条路第一行就撞
+// "hub admission requires model B authority" 返回 ErrUnauthorized。DS 侧
+// FPandoraHubAdmissionRetryPolicy::ShouldRetry 只把传输失败/负码/瞬态码判为可重试,
+// UNAUTHORIZED/INVALID_ARG 都是"明确拒绝" → FailAdmission → GameSession->KickPlayer。
+// 于是玩家过了 PostLogin 的可信 claims 门,却在紧接着的 Admission ACK 上被踢,
+// 表现为"连上大厅立刻掉线"(2026-08-04 mode=local 实测的第二道墙)。
+//
+// **本路径不发明新的授权语义**,只做 Model B 也做的两件事:
+//  1. 用归属记录复核 (player, assignment, pod) 三元组仍是当前分配;
+//  2. 调用与 Model B **完全相同**的 admitOwnerForAdmission,把 owner 记录从 PENDING
+//     推进到 ADMITTED(§9.23 完成点)。目标由 ownerTargetForHubTicket 推导,与签票点
+//     ownerBeginPlayer 的 exact 四元组逐字段同源,Admit 的行锁 CAS 因此自洽;
+//     归属若已指向别处(顶号/传送),那里会 fail-closed 拒绝,不会误开门。
+//
+// **被刻意省略的是 reservation 消费与 admission_id/seq 排序**:它们是 Redis 授权面的
+// 对象,用来在多实例下仲裁"谁是当前 owner"。local 下 LocalHubFleetProvider 只拉起一台
+// Hub DS,不存在第二个竞争者,没有可仲裁的对象。真要多实例就该上 Model B,而不是给
+// legacy 面打补丁伪造一套 reservation。
+//
+// 调用方 service 层已按 mode=local 硬门控;这里再自查一次 authRepo,双保险。
+func (u *HubUsecase) AcknowledgeLocalAdmission(ctx context.Context, playerID uint64,
+	assignmentID, pod string) (*AcknowledgeAdmissionResult, error) {
+	if err := u.requireWriter(); err != nil {
+		return nil, err
+	}
+	if u.authRepo != nil {
+		// 装了 Redis 授权面还走 legacy 准入 = 绕过 reservation 仲裁,fail-closed。
+		return nil, errcode.New(errcode.ErrUnauthorized,
+			"local hub admission is rejected while model B authority is configured")
+	}
+	if playerID == 0 || assignmentID == "" || pod == "" {
+		return nil, errcode.New(errcode.ErrInvalidArg, "incomplete local hub admission identity")
+	}
+	assignment, found, err := u.repo.GetAssignment(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	if !found || assignment.GetPlayerId() != playerID ||
+		assignment.GetAssignmentId() != assignmentID || assignment.GetHubPodName() != pod {
+		// 与 Model B 同语义:票据签发后玩家已被重新分配/释放,这张票不再代表当前归属。
+		return nil, errcode.New(errcode.ErrInvalidState,
+			"hub admission assignment is no longer current player=%d", playerID)
+	}
+	target, ok := u.ownerTargetForHubTicket(ctx, assignment)
+	if !ok {
+		// 拼不出 exact 身份就不能 Admit(§9.22)。签票点同样拼不出时压根不会 Begin,
+		// 此刻 owner 面无记录,开门等于无权威背书 —— 宁可拒一次让客户端重试。
+		return nil, errcode.New(errcode.ErrInvalidState,
+			"hub admission lacks exact owner identity player=%d", playerID)
+	}
+	if err := u.admitOwnerForAdmission(ctx, playerID, target); err != nil {
+		return nil, err
+	}
+	return &AcknowledgeAdmissionResult{Admitted: true}, nil
+}
+
 // AcknowledgeDeparture exact 删除当前 admission owner；Conflict 由旧连接晚到 Logout 触发。
 func (u *HubUsecase) AcknowledgeDeparture(ctx context.Context, playerID uint64, assignmentID, pod,
 	admissionID string, admissionSeq uint64, cred *HubCredential) (*AcknowledgeDepartureResult, error) {
@@ -1861,6 +1976,10 @@ func (u *HubUsecase) ensureShards(ctx context.Context, region, releaseTrack stri
 			CurrentTokenExpMs: u.candidateTokenExp(c.TokenExpMs), // exp 镜像(调试用,仅 enforce 门控下非 0)
 			CurrentTokenGen:   u.candidateTokenGen(c.TokenGen),   // 令牌代际(仅 enforce 门控下非 0)
 			ReleaseTrack:      c.ReleaseTrack,
+			// exact 实例身份:仅 mode=local 非空(见 ShardCandidate.InstanceUID)。agones 留空,
+			// 其身份由 Model B promote 后投影,不能由拓扑发现抢先写。
+			GameserverUid: c.InstanceUID,
+			AuthEpoch:     c.ProtocolEpoch,
 		}
 		if cerr := u.repo.CreateShard(ctx, rec, u.shardTTL()); cerr != nil {
 			return cerr
@@ -1983,6 +2102,8 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 				CurrentTokenExpMs: u.candidateTokenExp(c.TokenExpMs),
 				CurrentTokenGen:   u.candidateTokenGen(c.TokenGen),
 				ReleaseTrack:      c.ReleaseTrack,
+				GameserverUid:     c.InstanceUID,
+				AuthEpoch:         c.ProtocolEpoch,
 			}
 			if cerr := u.repo.CreateShard(ctx, rec, u.shardTTL()); cerr != nil {
 				plog.With(ctx).Warnw("msg", "reconcile_topology_create_failed", "pod", c.PodName, "err", cerr)
@@ -2592,6 +2713,89 @@ func ticketBindingFromAssignment(a *hubv1.HubAssignmentStorageRecord) HubTicketB
 	}
 }
 
+// localTicketBinding 在 legacy 本地面为 hub 票据补齐完整实例绑定(七元组)。
+//
+// legacy 面 writer-v2 绑定的唯一写入点 bindAssignmentAuth 在 seat==nil 时不写,归属记录
+// 恒为零值绑定,ticketBindingFromAssignment 只能返回零值 → 签出的票缺 hub_assignment_id
+// 与实例绑定,UE Hub DS PostLogin fail-closed 踢人,客户端陷入 7s 重连循环
+// (2026-08-04 mode=local 实测)。这里取 LocalCredentialACK —— 与 env 一次性下发给本机
+// Hub DS 的**同一份**凭据(心跳应答 ACK 回显的也是它),拼出的绑定与 DS 自持身份逐字段
+// 相等,与 Model B 占座绑定语义等价,不是伪造;WriterEpoch 由 SignHubCredential 恒盖
+// DSAuthWriterEpochV2,login 回验的 requireHubAssignmentBinding 分支同样能过。
+//
+// 线上隔离(双重机械门,均与 applyLocalCredentialACK 同手法):
+//   - u.authRepo != nil(Model B 权威面)直接返回零值,不碰本地凭据源;
+//   - localHubCredentialSource 仅 LocalHubFleetProvider 实现,Agones/Mock fleet 类型断言
+//     恒 false。任一门不过都保持旧行为(签无绑定票),k8s/Agones 生产路径零变更。
+func (u *HubUsecase) localTicketBinding(a *hubv1.HubAssignmentStorageRecord) HubTicketBinding {
+	if u.authRepo != nil {
+		return HubTicketBinding{}
+	}
+	src, ok := u.fleet.(localHubCredentialSource)
+	if !ok {
+		return HubTicketBinding{}
+	}
+	releaseTrack, trackErr := stickyReleaseTrack(a.GetReleaseTrack())
+	if trackErr != nil || a.GetHubPodName() == "" || a.GetAssignmentId() == "" {
+		return HubTicketBinding{}
+	}
+	cred, ok := src.LocalCredentialACK(a.GetHubPodName())
+	if !ok {
+		return HubTicketBinding{}
+	}
+	return HubTicketBinding{
+		PodName: a.GetHubPodName(), InstanceUID: cred.InstanceUID, ProtocolEpoch: cred.ProtocolEpoch,
+		CredentialGen: cred.Gen, CredentialJTI: cred.JTI, HubAssignmentID: a.GetAssignmentId(),
+		WriterEpoch:  cred.WriterEpoch,
+		ReleaseTrack: releaseTrack,
+	}
+}
+
+// ownerTargetForHubTicket 推导签票点 owner Begin 的 exact 实例目标(§9.22 四元组 + 分配 ID + 轨道)。
+//
+// **Model B(authRepo != nil)**:调用方已过 assignmentBindingV2Complete,归属记录必带完整
+// writer-v2 绑定,目标逐字段取自归属记录 —— 与历史(取自 ticketBindingFromAssignment)完全
+// 同源同值,生产路径行为零变更。取不出 = 数据不自洽,返回 false 由调用方 fail-closed 拒签。
+//
+// **legacy(authRepo == nil,即 mock / local)**:writer-v2 绑定的唯一写入点 bindAssignmentAuth
+// 在 seat==nil 时直接 return,归属记录恒无 instance_uid/auth_epoch,历史上因此拼不出 exact
+// 身份、owner Begin 必被判 15005,只能把整个权威面关掉 —— 代价是 owner 权威里永远不存在任何
+// 记录,而 login 的 §9.23 query-first 回查以 owner 为第一权威:玩家选完角、Hub 也分配成功,
+// GetResumeContext 仍恒落 WAIT/OWNER_UNKNOWN,客户端退避重查到超时,永远进不去大厅
+// (2026-08-04 mode=local 实测)。
+// 这里回源分片镜像补齐 uid/epoch:mode=local 的分片带真实进程实例身份(LocalHubFleetProvider
+// 播种,与下发给 Hub DS 的凭据同源),据此拼出的目标与 §9.22 语义等价,不是伪造。
+// mock 模式镜像里没有实例身份 → 返回 false,调用方跳过 Begin,保持历史行为不变。
+func (u *HubUsecase) ownerTargetForHubTicket(ctx context.Context,
+	a *hubv1.HubAssignmentStorageRecord) (data.OwnerTargetView, bool) {
+	releaseTrack, trackErr := stickyReleaseTrack(a.GetReleaseTrack())
+	if trackErr != nil || a.GetHubPodName() == "" || a.GetAssignmentId() == "" {
+		return data.OwnerTargetView{}, false
+	}
+	uid, epoch := a.GetHubInstanceUid(), a.GetAuthEpoch()
+	if uid == "" || epoch == 0 {
+		if u.authRepo != nil {
+			// Model B 不允许回源降级:授权权威是 Redis 授权记录,分片镜像只是投影。
+			return data.OwnerTargetView{}, false
+		}
+		shard, found, err := u.repo.GetShard(ctx, a.GetHubPodName())
+		if err != nil || !found {
+			return data.OwnerTargetView{}, false
+		}
+		uid, epoch = shard.GetGameserverUid(), shard.GetAuthEpoch()
+		if uid == "" || epoch == 0 {
+			return data.OwnerTargetView{}, false
+		}
+	}
+	return data.OwnerTargetView{
+		PodName:                  a.GetHubPodName(),
+		InstanceUID:              uid,
+		InstanceEpoch:            epoch,
+		AssignmentOrAllocationID: a.GetAssignmentId(),
+		ReleaseTrack:             releaseTrack,
+	}, true
+}
+
 func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID uint32,
 	assignment *hubv1.HubAssignmentStorageRecord, sourceMatchID uint64, sessionJTI string,
 ) (string, int64, error) {
@@ -2603,6 +2807,9 @@ func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID 
 			"refuse to sign hub ticket from incomplete writer-v2 assignment")
 	}
 	binding := ticketBindingFromAssignment(assignment)
+	if binding.PodName == "" && u.authRepo == nil {
+		binding = u.localTicketBinding(assignment)
+	}
 	binding.SourceMatchID = sourceMatchID
 	binding.SessionJTI = sessionJTI
 	token, expMs, err := u.signer.SignHubTicket(playerID, roleID, binding)
@@ -2621,17 +2828,20 @@ func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID 
 	//
 	// 预算 3s:单玩家最多 2 轮 (Query+Begin)(EPOCH_CONFLICT 重查一次),留足跨服务往返与
 	// 一次 TiDB 事务的余量。超时按失败处理,调用方重试——待实测复核。
-	if err := ownerBeginPlayer(ctx, u.ownerAuth, playerID, ownerTypeHub, data.OwnerTargetView{
-		PodName:                  binding.PodName,
-		InstanceUID:              binding.InstanceUID,
-		InstanceEpoch:            binding.ProtocolEpoch,
-		AssignmentOrAllocationID: binding.HubAssignmentID,
-		ReleaseTrack:             binding.ReleaseTrack,
-	}, 3*time.Second); err != nil {
-		plog.With(ctx).Warnw("msg", "hub_ticket_refused_owner_begin_failed",
-			"player_id", playerID, "pod", binding.PodName, "err", err,
-			"hint", "归属未定案不签票(§9.3/§9.22);调用方重试")
-		return "", 0, err
+	target, targetOK := u.ownerTargetForHubTicket(ctx, assignment)
+	if !targetOK && u.authRepo != nil {
+		// Model B 下 exact 身份必然可得(上方 assignmentBindingV2Complete 已保证);取不出
+		// 说明数据不自洽,照 §9.22 fail-closed,绝不用不完整身份去写权威。
+		return "", 0, errcode.New(errcode.ErrInvalidState,
+			"refuse to sign hub ticket without exact owner identity")
+	}
+	if targetOK {
+		if err := ownerBeginPlayer(ctx, u.ownerAuth, playerID, ownerTypeHub, target, 3*time.Second); err != nil {
+			plog.With(ctx).Warnw("msg", "hub_ticket_refused_owner_begin_failed",
+				"player_id", playerID, "pod", target.PodName, "err", err,
+				"hint", "归属未定案不签票(§9.3/§9.22);调用方重试")
+			return "", 0, err
+		}
 	}
 	return token, expMs, nil
 }

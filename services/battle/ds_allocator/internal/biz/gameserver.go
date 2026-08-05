@@ -21,6 +21,16 @@ type GameServerAllocator interface {
 	Release(ctx context.Context, podName string) error
 }
 
+// localInstanceIdentitySource 由 mode=local 的分配器实现,给出本机 DS 进程的 exact 实例身份。
+//
+// 只有 data.LocalGameServerAllocator 实现它:Agones / Mock 分配器都不实现,故 legacy 回填分支
+// 在生产(Model B)与离线 mock 下是机械死代码,两条路径的分配结果逐字段不变。
+// 与 Model B 的差别只在**身份来自哪**:Model B 取 K8s 严格 GET 确认的 GameServer UID,
+// local 取拉起进程时生成、且已签进该 DS 回调令牌的同一组值——都不是凭空构造。
+type localInstanceIdentitySource interface {
+	LocalInstanceIdentity(podName string) (instanceUID string, instanceEpoch uint32, ok bool)
+}
+
 // AuthoritativeGameServerAllocator 是 Agones Model B 的额外能力：分配时先取得实例 UID/RV，
 // Redis stage 成功后再用 UID+RV 条件 PATCH 投递 annotation。K8s 仅是投递镜像，不是授权权威。
 type AuthoritativeGameServerAllocator interface {

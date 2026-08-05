@@ -37,6 +37,15 @@ type ShardCandidate struct {
 	// 递增的 gen 并签进令牌,拓扑对账据此复位分片为 warming 并记录新代际,心跳侧只有携带 gen 精确
 	// 相等的已验签令牌才能翻回 ready(替代 TokenExpMs 秒级代际,消除同秒重签碰撞,审核 P1-6/P1-8)。
 	TokenGen uint64
+	// InstanceUID / ProtocolEpoch 是该候选分片背后的 **exact DS 实例身份**(§9.22 四元组的前两项)。
+	// 仅 mode=local 播种:本机 Hub DS 是本进程 exec 出来的,身份(进程级 UUID + protocol_epoch=1)
+	// 在拉起时就已确定且全程不变,拓扑对账把它写进分片镜像 gameserver_uid / auth_epoch,
+	// 供 legacy 归属定案拼出完整 owner 目标(否则 owner 权威里永远没有记录,见 hub.go
+	// ownerTargetForHubTicket 注释)。
+	// agones 留空:线上实例身份由 Model B 授权记录 promote 后投影,不能由拓扑发现抢先写。
+	// mock 留空:没有真实实例,不允许伪造身份。
+	InstanceUID   string
+	ProtocolEpoch uint32
 }
 
 // HubFleetProvider 返回某 region 的候选分片拓扑(W4 ⑤ Mock / W4+ Agones Fleet)。

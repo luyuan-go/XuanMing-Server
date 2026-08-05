@@ -543,6 +543,22 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 	if authoritative != nil {
 		battle.GameserverUid = authoritative.InstanceUID
 		battle.PodUid = authoritative.PodUID
+	} else if !u.modelB {
+		// legacy 本地面回填 exact 实例身份(2026-08-04):不回填则 gameserver_uid /
+		// instance_epoch 恒零,matchmaker 判「未回填完整 DS 目标」拒签 v2 战斗票、对局
+		// 直接 FAILED,玩家永远进不去副本。身份取自拉起该进程时生成、且已签进其 DS 回调
+		// 令牌的同一组值(见 data.LocalGameServerAllocator.LocalInstanceIdentity),
+		// 与 DS 自报身份天然相等。
+		//
+		// 双重机械隔离(与 hub 侧 localTicketBinding 同手法):①!u.modelB;
+		// ②接口断言——AgonesGameServerAllocator 不实现 localInstanceIdentitySource,
+		// 生产恒 false。任一门不过都保持旧行为(留零值),Agones 路径零变更。
+		if src, ok := u.alloc.(localInstanceIdentitySource); ok {
+			if uid, epoch, found := src.LocalInstanceIdentity(podName); found {
+				battle.GameserverUid = uid
+				battle.InstanceEpoch = epoch
+			}
+		}
 	}
 	var finalized bool
 	if u.modelB {
@@ -1991,10 +2007,37 @@ func legacyPodUIDPreflightCredentialMatches(
 // release 失败 / 延迟终止)会不断推迟 sweep 补偿重试并刷新 BattleTTL 上界,使 active
 // 重新可能无限堆积(W4 ⑧ Codex 复审 P1)。
 func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podName string, playerCount int32, state string, tsMs int64) (*HeartbeatResult, error) {
+	return u.HeartbeatWithCensus(ctx, matchID, podName, playerCount, state, tsMs, false, nil)
+}
+
+// HeartbeatWithCensus 是带在场名单的 legacy 心跳(2026-08-04)。
+//
+// 相对 Heartbeat 多做两件事,**与 Model B 心跳(HeartbeatAuthorizedWithPlayers)同语义**:
+// ①续写 owner 权威实例租约;②对在场玩家代提交 owner Admit。
+//
+// 为什么必须补:legacy 面此前两件都不做,于是玩家 travel 进战斗 DS、连接也建好了,
+// owner 记录却永远停在 PENDING、实例租约永远过期 —— login 的 applyOwnerPlacement 只在
+// 「ADMITTED 且租约剩余 > 安全余量」才报 STABLE,客户端因此恒收到
+// "post-travel owner target is still PENDING",撑到 30s deadline 弹兜底面板,进不去副本
+// (2026-08-04 mode=local 实测,与 hub 侧同一形状的洞)。
+//
+// 实例身份取自战斗记录的 gameserver_uid / instance_epoch —— 与签票时写进 owner 目标的
+// 是同一份权威快照,Admit 的 exact 全等校验因此自洽;取不出(mock 镜像无身份)则两件都
+// 不做,保持旧行为。census 只用 DS 实际上报的在场名单,不拿 roster 充数:roster 里可能有
+// 尚未连入的玩家,拿它 Admit 等于替一个还没到场的玩家宣称"已准入"(§9.22 禁冒充状态)。
+//
+// 线上隔离:本函数只在 !RedisAuthorityEnabled() 时被 service 层调用,Model B 恒走
+// HeartbeatAuthorizedWithPlayers,生产路径零变更。
+func (u *AllocatorUsecase) HeartbeatWithCensus(ctx context.Context, matchID uint64, podName string,
+	playerCount int32, state string, tsMs int64, snapshotPresent bool, activePlayerIDs []uint64,
+) (*HeartbeatResult, error) {
 	if matchID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
 	now := time.Now().UnixMilli()
+	// owner 接线所需的 exact 实例身份(CAS 内捕获,与本轮写回的镜像同一快照)。
+	var ownerUID, ownerTrack string
+	var ownerEpoch uint32
 
 	var becameReady bool
 	// 断线重连(docs/design/battle-reconnect.md §2.2):捕获对局在 ready/running 时的玩家名单 +
@@ -2071,6 +2114,7 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 			refreshActive = true
 			refreshAddr = b.DsAddr
 			refreshPlayers = append(refreshPlayers[:0], b.PlayerIds...)
+			ownerUID, ownerEpoch, ownerTrack = b.GameserverUid, b.InstanceEpoch, b.ReleaseTrack
 		}
 		return nil
 	}, u.battleTTL())
@@ -2108,6 +2152,20 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 		return u.finishEmptyAbandon(ctx, matchID, abandonPod, abandonUID,
 			abandonPodUID, abandonAllocationID, abandonReleaseTrack, abandonInstanceEpoch,
 			abandonPlayers, abandonMapID, abandonGameMode), nil
+	}
+	// owner 权威实例租约双写 + 在场玩家准入代提交(与 Model B 心跳同语义,见函数注释)。
+	// 时序同 owner-authority.md §4:必须在心跳响应返回前完成租约续写。
+	// 身份取不出(mock 镜像无实例身份)则整段跳过,保持旧行为。
+	if refreshActive && ownerUID != "" {
+		if lerr := renewOwnerLeaseGate(ctx, u.ownerLease, u.ownerLeaseRequired,
+			podName, ownerUID, ownerEpoch, ownerTrack); lerr != nil {
+			return nil, lerr
+		}
+		// 弱依赖:失败/屏障未开都不影响心跳(下一跳重试)。只用真实上报的在场名单。
+		if snapshotPresent && len(activePlayerIDs) > 0 {
+			ownerAdmitCensusWeak(ctx, u.ownerAuth, &u.ownerAdmitted, activePlayerIDs,
+				ownerTypeBattle, podName, ownerUID, 2*time.Second)
+		}
 	}
 	// 断线重连(docs/design/battle-reconnect.md §2.2):对局活跃时续期玩家 BATTLE 位置 TTL,
 	// 使玩家整局在线期间 login 都能检测到"在战斗中",支持中途掉线重登直连回原 battle DS。

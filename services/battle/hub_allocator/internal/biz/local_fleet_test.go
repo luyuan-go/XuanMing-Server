@@ -36,8 +36,8 @@ func newLocalFleetForTest(t *testing.T, required bool) *LocalHubFleetProvider {
 		t.Fatalf("NewLocalHubFleetProvider: %v", err)
 	}
 	// 令牌签发器恒失败:enforce 下应导致 start 失败并 fail-closed。
-	p.SetDSTokenIssuer(func(string, string, uint32) (string, int64, uint64, error) {
-		return "", 0, 0, errors.New("boom: ds token sign failed")
+	p.SetDSTokenIssuer(func(string, string, uint32) (string, LocalHubCredential, error) {
+		return "", LocalHubCredential{}, errors.New("boom: ds token sign failed")
 	}, required)
 	return p
 }
@@ -75,9 +75,11 @@ func TestLocalFleetBuildEnvCarriesModelBIdentityAndLocalProfile(t *testing.T) {
 	p := newLocalFleetForTest(t, false)
 	var gotPod, gotUID string
 	var gotEpoch uint32
-	p.SetDSTokenIssuer(func(pod, uid string, epoch uint32) (string, int64, uint64, error) {
+	p.SetDSTokenIssuer(func(pod, uid string, epoch uint32) (string, LocalHubCredential, error) {
 		gotPod, gotUID, gotEpoch = pod, uid, epoch
-		return "model-b-token", 123, 7, nil
+		return "model-b-token", LocalHubCredential{
+			InstanceUID: uid, ProtocolEpoch: epoch, Gen: 7, JTI: "jti-7", WriterEpoch: 2, ExpiresAtMs: 123,
+		}, nil
 	}, true)
 
 	env, err := p.buildEnv()
@@ -96,8 +98,20 @@ func TestLocalFleetBuildEnvCarriesModelBIdentityAndLocalProfile(t *testing.T) {
 	if value := lastEnvValue(env, "PANDORA_DS_LOCAL_PROFILE"); value != "local-off-v1" {
 		t.Fatalf("PANDORA_DS_LOCAL_PROFILE=%q", value)
 	}
-	if p.tokenGen != 7 {
-		t.Fatalf("tokenGen=%d, want 7", p.tokenGen)
+	if p.cred.Gen != 7 {
+		t.Fatalf("cred.Gen=%d, want 7", p.cred.Gen)
+	}
+	// 心跳 ACK 回显的五元组必须与 env 下发的同一份凭据同源,否则 UE 判 mismatched。
+	ack, ok := p.LocalCredentialACK(p.podName)
+	if !ok {
+		t.Fatal("LocalCredentialACK 应在签发成功后可用")
+	}
+	if ack.InstanceUID != p.instanceUID || ack.ProtocolEpoch != 1 || ack.Gen != 7 ||
+		ack.JTI != "jti-7" || ack.WriterEpoch != 2 {
+		t.Fatalf("ACK tuple=%+v 与下发凭据不同源", ack)
+	}
+	if _, ok := p.LocalCredentialACK("pandora-hub-local-other"); ok {
+		t.Fatal("别的 pod 不得拿到本机 ACK")
 	}
 }
 

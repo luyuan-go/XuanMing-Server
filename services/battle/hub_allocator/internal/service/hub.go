@@ -34,6 +34,11 @@ type HubService struct {
 	// 令牌(ds_gen 但无 uid/epoch/jti)→ 直接拒 ErrUnauthorized,不给旧令牌借心跳保活/翻 ready
 	// (审核二轮 CE1/CE2:彻底删除 Redis 授权下的 legacy 心跳回退分支)。
 	modelBAuthority bool
+	// localAdmission:mode=local(local-off-v1)专用准入通道。仅 main 在 case conf.ModeLocal
+	// 且 local-off-v1 profile 校验通过后置 true;与 modelBAuthority 互斥(agones 恒 false)。
+	// 置 true 后 AcknowledgeAdmission 走 uc.AcknowledgeLocalAdmission(归属记录复核 + 与
+	// Model B 同一个 owner Admit 完成点),否则本机 DS 会在 Admission ACK 上被拒并踢玩家。
+	localAdmission bool
 }
 
 // NewHubService 构造 HubService。
@@ -46,6 +51,9 @@ func (s *HubService) SetDSCallbackGuard(g *pmw.DSCallbackGuard) { s.dsGuard = g 
 
 // SetModelBAuthority 开启 Model B「Redis 唯一授权权威」(见字段注释;仅 authority_mode=redis 时置 true)。
 func (s *HubService) SetModelBAuthority(b bool) { s.modelBAuthority = b }
+
+// SetLocalAdmission 开启 mode=local 专用准入通道(见字段注释;仅 conf.ModeLocal 时置 true)。
+func (s *HubService) SetLocalAdmission(b bool) { s.localAdmission = b }
 
 // AssignHub 为玩家分配大厅 DS 分片(login 登录成功后调)。
 func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest) (*hubv1.AssignHubResponse, error) {
@@ -183,6 +191,22 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 // AcknowledgeAdmission 只接受 :8444 DS callback credential；请求里的 player/assignment
 // 仍须由 Redis reservation + 当前 active instance identity 二次核验。
 func (s *HubService) AcknowledgeAdmission(ctx context.Context, req *hubv1.AcknowledgeAdmissionRequest) (*hubv1.AcknowledgeAdmissionResponse, error) {
+	// local-off-v1:没有 Redis 授权面可消费 reservation,也没有 DS 回调令牌可验
+	// (ds_auth.mode=off → CheckHubCredential 恒返回 cred=nil)。走下面的 Model B 分支
+	// 只会得到 INVALID_ARG/UNAUTHORIZED,而 DS 侧 ShouldRetry 把这两个码当"明确拒绝"
+	// → FailAdmission → KickPlayer,玩家刚连上大厅就被踢。
+	// 改走 legacy 准入:仍复核归属三元组,并推进与 Model B 同一个 owner Admit 完成点。
+	if !s.modelBAuthority && s.localAdmission {
+		if req.GetPlayerId() == 0 || req.GetAssignmentId() == "" || req.GetHubPodName() == "" {
+			return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+		}
+		result, err := s.uc.AcknowledgeLocalAdmission(ctx, req.GetPlayerId(),
+			req.GetAssignmentId(), req.GetHubPodName())
+		if err != nil {
+			return &hubv1.AcknowledgeAdmissionResponse{Code: toProtoCode(err)}, nil
+		}
+		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_OK, Admitted: result.Admitted}, nil
+	}
 	if !s.modelBAuthority || req.GetPlayerId() == 0 || req.GetAssignmentId() == "" ||
 		req.GetHubPodName() == "" || req.GetAdmissionId() == "" || req.GetAdmissionSeq() == 0 {
 		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil

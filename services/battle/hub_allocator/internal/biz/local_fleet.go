@@ -28,6 +28,28 @@ import (
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
 )
 
+// LocalHubCredential 是 mode=local 一次性下发给本机 Hub DS 的**完整凭据身份**。
+//
+// 必须整组留存,不能只留 gen:UE 的 SendHubHeartbeat 会用 IsBoundToRequest 把心跳应答里的
+// CredentialAck 与 DS 自持凭据逐字段比对(InstanceUID/InstanceEpoch/Gen/JTI/WriterEpoch),
+// 任一缺失即判 "heartbeat response credential ACK missing" —— 而 IsAcceptingNewPlayers()
+// 对 local-off-v1 **没有豁免**(豁免只在验票档 IsOnlineVerificationRequired),
+// 拿不到绑定式 ACK 就等于准入租约永不打开,玩家连上大厅也进不去。
+type LocalHubCredential struct {
+	InstanceUID   string
+	ProtocolEpoch uint32
+	Gen           uint64
+	JTI           string
+	WriterEpoch   uint32
+	ExpiresAtMs   int64
+}
+
+// Complete 判定五元组是否齐备,可用于回显 ACK。缺任一项都不得回显半截 ACK
+// (UE 侧 IsComplete 会拒,回半截只会把"缺字段"伪装成"不匹配",更难排查)。
+func (c LocalHubCredential) Complete() bool {
+	return c.InstanceUID != "" && c.ProtocolEpoch != 0 && c.Gen != 0 && c.JTI != "" && c.WriterEpoch != 0
+}
+
 // LocalHubFleetProvider 在本机 exec 一个常驻 UE Windows Hub Dedicated Server 进程。
 type LocalHubFleetProvider struct {
 	cfg           conf.LocalHubConf
@@ -40,14 +62,15 @@ type LocalHubFleetProvider struct {
 	// dsTokenIssuer 签发 DS 回调服务令牌(审核 P1 #1;main 在 ds_auth.secret 已配时、
 	// 懒拉起前注入)。local 模式经 PANDORA_DS_TOKEN env 一次性下发(进程常驻无法改 env,
 	// 不支持续期;dev 自测会话远短于 hub_token_ttl 默认 24h,够用)。签发失败只告警不阻断拉起。
-	dsTokenIssuer func(pod, instanceUID string, protocolEpoch uint32) (token string, expiresAtMs int64, gen uint64, err error)
+	dsTokenIssuer func(pod, instanceUID string, protocolEpoch uint32) (token string, cred LocalHubCredential, err error)
 	// dsTokenRequired=true 时签发失败则不拉起 Hub DS。local-off-v1 虽不做服务端 Guard，
 	// UE 仍强制完整凭据，故 main 也必须把它设为 true，防止启动“能连但所有回调都发不出”的半成品。
 	dsTokenRequired bool
-	// tokenGen 是本机 Hub DS 当前令牌的代际(拉起时经签发器 Redis INCR 领取,经 env 一次性下发)。
-	// local 不续期 → gen 全程不变,心跳回显同一 gen 与分片记录精确相等(审核 P1-6)。
-	// once.Do 建立 happens-before:ensureStarted 完成后 ListShards 方读,无需额外锁。
-	tokenGen uint64
+	// cred 是本机 Hub DS 当前令牌的完整身份(拉起时经签发器 Redis INCR 领 gen,经 env 一次性下发)。
+	// local 不续期 → 全程不变,心跳回显同一组值与分片记录精确相等(审核 P1-6)。
+	// 心跳来自 DS 侧独立 goroutine(不经 ensureStarted),故 once.Do 的 happens-before 不覆盖它,
+	// 一律用 mu 保护读写。
+	cred LocalHubCredential
 
 	once sync.Once // 懒拉起只执行一次
 	mu   sync.Mutex
@@ -60,9 +83,25 @@ type LocalHubFleetProvider struct {
 
 // SetDSTokenIssuer 注入 DS 回调令牌签发器(可选依赖;须在首次 ListShards 前调用)。
 // required=true 时签发失败则懒拉起失败(fail-closed)。
-func (l *LocalHubFleetProvider) SetDSTokenIssuer(f func(pod, instanceUID string, protocolEpoch uint32) (string, int64, uint64, error), required bool) {
+func (l *LocalHubFleetProvider) SetDSTokenIssuer(f func(pod, instanceUID string, protocolEpoch uint32) (string, LocalHubCredential, error), required bool) {
 	l.dsTokenIssuer = f
 	l.dsTokenRequired = required
+}
+
+// LocalCredentialACK 返回下发给指定 pod 的完整凭据身份,供心跳应答回显 ACK。
+// pod 不匹配或凭据不全时返回 false —— 调用方必须据此**不回显**,
+// 绝不能拿别的 pod 或半截身份糊一个 ACK 出去。
+func (l *LocalHubFleetProvider) LocalCredentialACK(pod string) (LocalHubCredential, bool) {
+	if pod == "" || pod != l.podName {
+		return LocalHubCredential{}, false
+	}
+	l.mu.Lock()
+	cred := l.cred
+	l.mu.Unlock()
+	if !cred.Complete() {
+		return LocalHubCredential{}, false
+	}
+	return cred, true
 }
 
 // NewLocalHubFleetProvider 构造本机 Hub DS 拉起器。
@@ -124,6 +163,11 @@ func (l *LocalHubFleetProvider) ListShards(_ context.Context, region string) ([]
 	if region == "" {
 		region = l.cfg.Region
 	}
+	// 分片镜像里的 gen 必须与 env 下发给 DS 的凭据同源;签发被跳过(off/permissive 且非 required)
+	// 时 cred 为零值,TokenGen 回落 0 与旧行为一致。
+	l.mu.Lock()
+	cred := l.cred
+	l.mu.Unlock()
 	return []ShardCandidate{{
 		PodName:      l.podName,
 		Addr:         l.addr,
@@ -132,7 +176,11 @@ func (l *LocalHubFleetProvider) ListShards(_ context.Context, region string) ([]
 		Capacity:     l.cfg.Capacity,
 		ReleaseTrack: releasetrack.Stable,
 		TokenReady:   true,
-		TokenGen:     l.tokenGen,
+		TokenGen:     cred.Gen,
+		// exact 实例身份:与 buildEnv 下发给 Hub DS 的凭据同源(同一 instanceUID/protocolEpoch),
+		// 因此分片镜像里的身份与 DS 自报身份天然相等,不存在两处各写一份的漂移。
+		InstanceUID:   l.instanceUID,
+		ProtocolEpoch: l.protocolEpoch,
 	}}, nil
 }
 
@@ -252,13 +300,20 @@ func (l *LocalHubFleetProvider) buildEnv() ([]string, error) {
 	// DS 回调服务令牌(审核 P1 #1):local 模式经 env 一次性下发(agones 模式走 annotation 可续期)。
 	// required(dsTokenRequired):签发失败 fail-closed 不拉起；否则失败只告警照拉。
 	if l.dsTokenIssuer != nil {
-		if tok, _, gen, err := l.dsTokenIssuer(l.podName, l.instanceUID, l.protocolEpoch); err != nil {
+		if tok, cred, err := l.dsTokenIssuer(l.podName, l.instanceUID, l.protocolEpoch); err != nil {
 			if l.dsTokenRequired {
 				return nil, fmt.Errorf("required hub_ds_token sign failed for pod %s: %w", l.podName, err)
 			}
 			plog.With(context.Background()).Warnw("msg", "hub_ds_token_sign_failed", "pod", l.podName, "err", err)
 		} else {
-			l.tokenGen = gen // once.Do 内写,ListShards 在 ensureStarted 后读(happens-before)
+			// 签发失败以外的所有路径都必须让 cred 与 env 里的 token 严格同源:
+			// 心跳 ACK 就是拿它逐字段回显的,漂移一处 UE 即判 mismatched。
+			if !cred.Complete() && l.dsTokenRequired {
+				return nil, fmt.Errorf("required hub_ds_token for pod %s is missing ACK identity fields", l.podName)
+			}
+			l.mu.Lock()
+			l.cred = cred
+			l.mu.Unlock()
 			env = append(env, "PANDORA_DS_TOKEN="+tok)
 		}
 	}
