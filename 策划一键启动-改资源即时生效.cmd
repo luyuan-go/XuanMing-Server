@@ -50,5 +50,8 @@ set "PS=pwsh"
 %PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -DsLauncher editor
 set "RC=%ERRORLEVEL%"
 
-pause
+rem Keep the window open only for interactive (double-click) runs. The web admin
+rem runs this headless with PANDORA_NONINTERACTIVE=1 and shows the output there,
+rem so the misleading "Press any key" line must not be printed.
+if not defined PANDORA_NONINTERACTIVE pause
 exit /b %RC%

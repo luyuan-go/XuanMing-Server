@@ -177,6 +177,12 @@ function Sync-ProcessPathFromRegistry {
     $env:PATH = $entries -join ';'
 }
 
+# kubectl/helm/docker/minikube 的 stdout 一律是 UTF-8。控制台默认代码页(中文机器为 GBK/936)
+# 会让 PowerShell 按 GB2312 解码这些字节，含中文的 JSON(如 pandora-configtable 的配表数据)
+# 被解成乱码后 ConvertFrom-Json 直接报 "Invalid property identifier character"。
+# 这里把本进程的控制台解码固定成 UTF-8，保证捕获原生命令输出与写文件一致。
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
+
 Sync-ProcessPathFromRegistry
 . (Join-Path $ScriptDir 'lib/online_manifest_contract.ps1')
 . (Join-Path $ScriptDir 'lib/ds_auth_activation_contract.ps1')
@@ -3856,7 +3862,22 @@ function Resolve-PandoraUProject {
 #   "{GUID}" 源码/自建版 → HKCU:\Software\Epic Games\Unreal Engine\Builds 里 GUID→引擎根目录
 #                          (由客户端仓的 Tool\Build\RegisterEngine.bat 写入)
 #   "5.8"    Epic 发行版 → HKLM:\SOFTWARE\EpicGames\Unreal Engine\5.8 的 InstalledDirectory
-# 全都查不到时再退回「注册表里版本号最高的一个发行版」,避免策划漏跑 RegisterEngine 就卡住。
+#                          注册表项可能缺失(实测有机器装了 UE_5.8 但启动器没写 HKLM),
+#                          故再兜一层启动器自己的安装清单 LauncherInstalled.dat。
+# 全都查不到时再退回「已装引擎里版本号最高的一个发行版」,避免策划漏跑 RegisterEngine 就卡住。
+function Get-LauncherInstalledEngineRoots {
+    # 返回 [pscustomobject]{ Version; Root },按版本号从高到低。发行版条目形如 AppName="UE_5.8"。
+    $dat = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'Epic\UnrealEngineLauncher\LauncherInstalled.dat'
+    if (-not (Test-Path -LiteralPath $dat -PathType Leaf)) { return @() }
+    try { $list = (Get-Content -LiteralPath $dat -Raw | ConvertFrom-Json).InstallationList } catch { return @() }
+    $rows = foreach ($item in @($list)) {
+        if (-not $item.AppName -or -not $item.InstallLocation) { continue }
+        if ([string]$item.AppName -notmatch '^UE_(\d+\.\d+)$') { continue }
+        [pscustomobject]@{ Version = $Matches[1]; Root = [string]$item.InstallLocation }
+    }
+    return @($rows | Sort-Object { try { [version]$_.Version } catch { [version]'0.0' } } -Descending)
+}
+
 function Resolve-UnrealEditorExe {
     param([string]$Explicit, [string]$UProjectPath)
 
@@ -3870,6 +3891,7 @@ function Resolve-UnrealEditorExe {
     }
 
     $roots = New-Object System.Collections.Generic.List[string]
+    $launcherRoots = @(Get-LauncherInstalledEngineRoots)
 
     $assoc = $null
     if ($UProjectPath -and (Test-Path -LiteralPath $UProjectPath -PathType Leaf)) {
@@ -3883,6 +3905,11 @@ function Resolve-UnrealEditorExe {
         } else {
             $key = Get-ItemProperty -Path "HKLM:\SOFTWARE\EpicGames\Unreal Engine\$assoc" -ErrorAction SilentlyContinue
             if ($key -and $key.InstalledDirectory) { $roots.Add([string]$key.InstalledDirectory) }
+            # 注册表缺项时用启动器清单补齐:工程写了 5.8 就必须优先拿 5.8,不能掉进下面的兜底
+            # 去挑源码版引擎 —— 血统对不上会被 Assert-PandoraEditorModulesMatch 拦下。
+            foreach ($row in $launcherRoots) {
+                if ($row.Version -eq ([string]$assoc).Trim()) { $roots.Add($row.Root) }
+            }
         }
     }
 
@@ -3899,13 +3926,36 @@ function Resolve-UnrealEditorExe {
         $dir = (Get-ItemProperty -Path $k.PSPath -ErrorAction SilentlyContinue).InstalledDirectory
         if ($dir) { $roots.Add([string]$dir) }
     }
+    foreach ($row in $launcherRoots) { $roots.Add($row.Root) }
 
+    $candidates = New-Object System.Collections.Generic.List[string]
     foreach ($root in $roots) {
         if ([string]::IsNullOrWhiteSpace($root)) { continue }
         $exe = Join-Path $root 'Engine\Binaries\Win64\UnrealEditor.exe'
-        if (Test-Path -LiteralPath $exe -PathType Leaf) { return (Resolve-Path -LiteralPath $exe).Path }
+        if (Test-Path -LiteralPath $exe -PathType Leaf) { $candidates.Add((Resolve-Path -LiteralPath $exe).Path) }
     }
-    return $null
+    if ($candidates.Count -eq 0) { return $null }
+
+    # 血统优先:这台机器上往往同时装着「出包用的 Installed Build」和「Epic 发行版」,而工程的
+    # 编辑器 DLL 只可能由其中一台编出来(Tool\Build\_Common.bat 固定用 Installed Build 出包,
+    # 但编辑器二进制也可能是发行版编的)。谁编的就用谁跑,否则 BuildId 对不上,DS 会被
+    # Assert-PandoraEditorModulesMatch 拦下 —— 与其让人工去猜,不如按 BuildId 自动挑。
+    $projId = $null
+    if ($UProjectPath) {
+        $projModules = Join-Path (Split-Path -Parent $UProjectPath) 'Binaries\Win64\UnrealEditor.modules'
+        if (Test-Path -LiteralPath $projModules -PathType Leaf) {
+            try { $projId = [string](Get-Content -Raw -LiteralPath $projModules | ConvertFrom-Json).BuildId } catch { $projId = $null }
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($projId)) {
+        foreach ($exe in $candidates) {
+            $engModules = Join-Path (Split-Path -Parent $exe) 'UnrealEditor.modules'
+            if (-not (Test-Path -LiteralPath $engModules -PathType Leaf)) { continue }
+            try { $engId = [string](Get-Content -Raw -LiteralPath $engModules | ConvertFrom-Json).BuildId } catch { continue }
+            if ($engId -eq $projId) { return $exe }
+        }
+    }
+    return $candidates[0]
 }
 
 # Set-LocalDsLauncherEnv:把 -DsLauncher 的选择翻译成 allocator 认的环境变量。
@@ -5096,7 +5146,9 @@ function Build-DsImagesForMinikube {
         $artifactRoot = if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_ARTIFACT_ROOT)) { $env:PANDORA_ARTIFACT_ROOT.Trim() } else { 'F:\work\artifacts' }
         foreach ($verGroup in ($pinnedMissing | Group-Object { ($_ -split ':', 2)[1] })) {
             $ver = $verGroup.Name
-            $pkg = Join-Path $artifactRoot "snapshots\client\trunk_Client\Server_Linux_Development\$ver\LinuxServer"
+            # 用 [IO.Path]::Combine 而非 Join-Path:制品根可能指向本机不存在的盘符(默认 F:\),
+            # Join-Path 会先解析盘符并抛 "Cannot find drive",把下面那条可操作的 fail-fast 提示吞掉。
+            $pkg = [System.IO.Path]::Combine($artifactRoot, 'snapshots', 'client', 'trunk_Client', 'Server_Linux_Development', $ver, 'LinuxServer')
             if (-not (Test-Path -LiteralPath $pkg)) {
                 throw ("Fleet 钉定镜像 $($verGroup.Group -join ', ') 宿主缺失,且制品库找不到同版本 DS 包:$pkg`n" +
                     "处理方式:①确认 PANDORA_ARTIFACT_ROOT 指向共享制品根(当前=$artifactRoot);" +
@@ -6610,7 +6662,11 @@ function Build-Images-Host {
     if (-not (Test-CommandExists 'go')) {
         throw "host 构建方式需要本机安装 Go 1.26.5。装好后重试,或改用 -BuildMode incontainer(容器内编译,无需本机 Go)。"
     }
-    $hostGoVersion = ((& go env GOVERSION) | Out-String).Trim()
+    # go env GOVERSION 受 cwd 影响:在 go.work 所在目录下 Go 会按 toolchain 指令自动切到
+    # go1.26.5,在仓库外则只报基础工具链版本(如 go1.26.4)。门禁必须按后端工程根目录判定,
+    # 否则从别处调用本脚本会误报版本不符。
+    Push-Location $ProjectRoot
+    try { $hostGoVersion = ((& go env GOVERSION) | Out-String).Trim() } finally { Pop-Location }
     if ($LASTEXITCODE -ne 0 -or $hostGoVersion -ne 'go1.26.5') {
         throw "host 构建要求 go env GOVERSION=go1.26.5，当前=$hostGoVersion。"
     }

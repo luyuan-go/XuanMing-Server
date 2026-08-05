@@ -203,3 +203,53 @@ func TestLegacyReleaseBattle_SkipsOwnerPointingElsewhere(t *testing.T) {
 		t.Fatalf("归属指向别处时不得释放, got %v", auth.released)
 	}
 }
+
+// 终态心跳(对局已 ended)必须释放 owner —— 这是 legacy 正常结算的**真实**收口点。
+//
+// 教训:上一版把释放接在 ReleaseBattle 上,单测同样全绿,但真机计数显示
+// ReleaseBattle 在这条流程里一次都不会被调用,玩家照样回不了大厅。
+// 本测试直接驱动「记录已 ended → 再来一跳心跳」这条真实路径,不测那个不会被走到的函数。
+func TestLegacyTerminalHeartbeat_ReleasesOwner(t *testing.T) {
+	const matchID uint64 = 93001
+	uc, _, pod := legacyOwnerFixture(t, matchID, []uint64{4001})
+	ctx := context.Background()
+	auth := &releaseRecordingOwnerAuthority{pod: pod, uid: "uid-legacy-battle"}
+	uc.SetOwnerAuthority(auth)
+
+	// 第一跳把对局推进到 ended(此跳尚未触发终态分支)。
+	if _, err := uc.Heartbeat(ctx, matchID, pod, 1, "ended", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("ended 心跳 err: %v", err)
+	}
+	if len(auth.released) != 0 {
+		t.Fatal("推进到 ended 的那一跳本身不应释放(DS 尚未被回收)")
+	}
+	// 第二跳撞终态分支:回收 DS + 释放 owner。
+	res, err := uc.Heartbeat(ctx, matchID, pod, 1, "ended", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("终态心跳 err: %v", err)
+	}
+	if res.Command != commandStop {
+		t.Fatalf("终态心跳应下发 stop, got %q", res.Command)
+	}
+	if len(auth.released) != 1 || auth.released[0] != 4001 {
+		t.Fatalf("终态心跳必须释放本局玩家 owner 归属, got %v", auth.released)
+	}
+}
+
+// 终态心跳同样受 exact 身份门保护:归属指向别处时不得误删。
+func TestLegacyTerminalHeartbeat_SkipsOwnerPointingElsewhere(t *testing.T) {
+	const matchID uint64 = 93002
+	uc, _, pod := legacyOwnerFixture(t, matchID, []uint64{4002})
+	ctx := context.Background()
+	auth := &releaseRecordingOwnerAuthority{pod: pod + "-other", uid: "uid-somewhere-else"}
+	uc.SetOwnerAuthority(auth)
+
+	for i := 0; i < 2; i++ {
+		if _, err := uc.Heartbeat(ctx, matchID, pod, 1, "ended", time.Now().UnixMilli()); err != nil {
+			t.Fatalf("心跳 err: %v", err)
+		}
+	}
+	if len(auth.released) != 0 {
+		t.Fatalf("归属指向别处时不得释放, got %v", auth.released)
+	}
+}

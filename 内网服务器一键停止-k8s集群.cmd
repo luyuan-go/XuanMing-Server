@@ -27,5 +27,6 @@ set "PS=pwsh"
 %PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode k8s -Down
 set "RC=%ERRORLEVEL%"
 
-pause
+rem 双击运行时保留窗口；web 后台调用会设 PANDORA_NONINTERACTIVE=1，输出改在网页上看。
+if not defined PANDORA_NONINTERACTIVE pause
 exit /b %RC%

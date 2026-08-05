@@ -24,8 +24,16 @@ node:
     host: "127.0.0.1:6380"
     db: 0
     dial_timeout: "2s"
-    read_timeout: "1s"
-    write_timeout: "1s"
+    # 2026-08-04 由 1s 放宽到 5s(仅 dev):本客户端就是战斗记录仓(main.go NewRedisBattleRepo)。
+    # AllocateBattle 要等 editor 形态 DS 冷启动约 60s,期间持续轮询 Redis;本机同时跑
+    # UE 编辑器 + Hub DS + 战斗 DS + 游戏客户端 + 21 个 Go 服务时,**任意一次**读超过 1s
+    # 就抛原始错误(非 errcode 包装)→ 上层判 ErrUnknown(code=1) → 整局分配失败 →
+    # matchmaker 回滚 owner Begin → 玩家被弹回大厅(2026-08-04 实测:AllocateBattle
+    # 59.6s code=1、Heartbeat 1018ms code=1,重试则 allocate_idempotent_hit 成功)。
+    # 放宽只影响「多久判定 Redis 不可用」,不拖慢正常路径(命中即返回)。
+    # 生产 Redis 与服务同机房、无此争抢,prod 配置不动。
+    read_timeout: "5s"
+    write_timeout: "5s"
 
 # ── DS 启动后端模式(标准两模式开关)─────────────────────────────────────────
 # mode 单一开关决定战斗 DS 怎么起,与 hub_allocator.mode 对齐:

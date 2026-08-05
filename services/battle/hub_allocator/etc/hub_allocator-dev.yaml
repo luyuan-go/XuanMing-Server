@@ -24,8 +24,11 @@ node:
     host: "127.0.0.1:6380"
     db: 0
     dial_timeout: "2s"
-    read_timeout: "1s"
-    write_timeout: "1s"
+    # 2026-08-04 由 1s 放宽到 5s(仅 dev),与 ds_allocator-dev.yaml 同因同改:
+    # 本机同时跑 UE 编辑器 + 多个 DS + 客户端 + 21 个 Go 服务时,单次 Redis 读偶发超 1s
+    # 会抛原始错误 → 上层判 ErrUnknown → 分配/心跳整体失败。生产不受影响(prod 配置不动)。
+    read_timeout: "5s"
+    write_timeout: "5s"
 
 # jwt: 给玩家签 hub DSTicket(不变量 §3 短时效 5min)
 # secret/issuer/audience 必须与 login 服务 + Envoy jwt_authn provider 完全一致

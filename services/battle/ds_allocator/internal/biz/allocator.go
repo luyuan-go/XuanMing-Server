@@ -912,7 +912,35 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 		if u.modelB {
 			snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
 			if err != nil {
-				return nil, err
+				// 基础设施抖动容忍到下个 tick(与下方 legacy 分支同语义,2026-08-04)。
+				//
+				// 本循环要等 DS 冷启动,每 tick 读一次 Redis 授权面。原先任意一次读错误就
+				// 整局放弃,而 Redis 读超时抛的是**原始错误**(非 errcode),上层判
+				// ErrUnknown → matchmaker ds_allocate_failed → 回滚 owner Begin → 玩家进不去。
+				// 生产 Redis 主从切换、网络毛刺、GC 停顿任一下都会触发;k8s 里概率低于本机,
+				// 但「一次抖动打掉整局分配」是结构性脆弱,不是概率问题。
+				//
+				// **只容忍这一类**:ReadAuthority 的传输/基础设施错误。下面全部 return 都是
+				// **权威判定**(battle 键已 purge、分配被取代、auth 相位 TERMINATING/QUARANTINED、
+				// 状态不可推进),它们是确定性事实,必须立即失败 —— 混进来一起吞会把
+				// 「本分配已失效」拖成空转满 ready_wait(那正是历史上 141.85s 的根因)。
+				// 容忍不会变成无限等待:循环末尾的 deadline 检查仍是唯一上界。
+				//
+				// ⚠️ 本分支是**生产路径**(Model B = authority_mode=redis,强制 agones+enforce)。
+				// 行为变更:单次读失败由「立即失败」改为「重试到 deadline」。真集群未验证,
+				// 见 PENDING-VERIFICATION 清单。
+				plog.With(ctx).Warnw("msg", "battle_ready_wait_authority_read_transient",
+					"match_id", matchID, "pod", podName, "err", err,
+					"hint", "基础设施抖动,下个 tick 重读;deadline 仍是唯一上界")
+				if !time.Now().Before(deadline) {
+					return nil, errReadyWaitTimeout
+				}
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-ticker.C:
+				}
+				continue
 			}
 			b := snapshot.Battle
 			// battle 键是分配的第一条持久痕迹:wait 上下文里它消失(无论 auth 是否残留)
@@ -975,7 +1003,35 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 		} else {
 			b, found, err := u.repo.GetBattle(ctx, matchID)
 			if err != nil {
-				return nil, err
+				// 基础设施抖动容忍到下个 tick(legacy/local 面,2026-08-04)。
+				//
+				// 本循环要等 DS 冷启动(editor 形态可达 60s+),每 tick 读一次 Redis。原先
+				// 任意一次读错误就整局放弃,而 Redis 读超时抛的是**原始错误**(非 errcode),
+				// 上层判 ErrUnknown(code=1)→ matchmaker ds_allocate_failed → 回滚 owner Begin
+				// → 玩家被弹回大厅。本机同时跑 UE 编辑器 + 多个 DS + 21 个服务时,单次读
+				// 偶发超过 read_timeout 即触发(2026-08-04 实测:AllocateBattle 59.6s code=1,
+				// 紧接着的重试 allocate_idempotent_hit 就成功了 —— 证明 DS 其实好好的)。
+				//
+				// **只容忍这一类**:GetBattle 的传输/基础设施错误。下面三个 return 是
+				// **权威判定**(记录已被回收、分配被取代、状态不可推进),它们是确定性事实,
+				// 必须立即失败,绝不能一起吞掉 —— 那会把「本分配已失效」拖成空转满 ready_wait。
+				// 容忍不会变成无限等待:循环末尾的 deadline 检查(见下方 !time.Now().Before)
+				// 仍是唯一上界,到点照常 errReadyWaitTimeout。
+				//
+				// 作用域:仅 legacy 分支。上面的 Model B 分支**刻意不动** —— 它是生产路径,
+				// 同样的容忍是对的但属行为变更,须真集群验证后另行评估(见事故档案行动项)。
+				plog.With(ctx).Warnw("msg", "battle_ready_wait_read_transient",
+					"match_id", matchID, "pod", podName, "err", err,
+					"hint", "基础设施抖动,下个 tick 重读;deadline 仍是唯一上界")
+				if !time.Now().Before(deadline) {
+					return nil, errReadyWaitTimeout
+				}
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-ticker.C:
+				}
+				continue
 			}
 			// wait 由 finalize 之后进入,镜像消失只可能是回收/TTL,同 modelB 立即失败。
 			if !found {
@@ -1690,6 +1746,30 @@ func (u *AllocatorUsecase) ReleaseBattleExpected(
 		return errcode.NewCause(errcode.ErrUnavailable, err,
 			"battle %d terminal gameserver release not confirmed", matchID)
 	}
+	// owner 精确释放(Model B 正常结算收口;2026-08-04,INC-20260804-001 缺口⑦-B)。
+	//
+	// 与 legacy 面同因、同性质:全仓 owner 释放此前只接了「登出 / 判弃 / saga 中止」三条
+	// **异常或主动离场**路径,**对局正常打完这条路一个都没接** —— 本函数(Model B 正常结算
+	// 唯一收口)此前对 owner 权威零动作。后果:玩家正常结束对局后,owner 记录仍是
+	// BATTLE/ADMITTED 指向一台刚被 K8s 删除的 GameServer;login 的 §9.23 query-first 会
+	// 一直把玩家指回该实例,客户端 Travel 到不存在的 Pod → 重试 → 拿到同一 TARGET,
+	// 正是 ownerReleaseAbandonedPlayersWeak 注释里点名的「比不接 owner 更糟」。
+	// (local 面已由真实客户端两轮实测复现;本条为同一缺陷在 Model B 的对应位置,
+	//  **尚未在真集群验证** —— 见事故档案 §10 行动项。)
+	//
+	// 时序:必须在 releaseGameServer **成功之后**。该调用是 K8s UID precondition 删除,
+	// 返回 nil 即「本实例回收已确认」,满足安全边界①(提前释放会在旧 DS 可能仍在跑时
+	// 放行新归属 = 双 DS)。上面任一步失败都已 return,走不到这里。
+	// 边界②exact 身份门(只动仍指向本 pod+uid 的 BATTLE 记录)与 ③compare-delete(按
+	// owner_epoch 拒陈旧释放)由 ownerReleaseAbandonedPlayersWeak 自身保证;玩家若已被
+	// 分到别处(epoch/pod/uid 已变)双重跳过,不误伤活归属。
+	//
+	// 弱依赖:失败只告警,不改变本函数的返回值。phase-1 已完成的事实(Redis 终态 CAS +
+	// GameServer 已删)不能因为 owner 抖动而回退成"未完成",否则 battle_result 的 outbox
+	// 会重放一次已经删过 GameServer 的回收。owner 未释放的兜底是 login 侧
+	// InspectBattleRoute 的 Terminal→Hub 旧门,以及玩家登出时的释放。
+	ownerReleaseAbandonedPlayersWeak(ctx, u.ownerAuth, snapshot.Battle.GetPlayerIds(),
+		podName, expected.InstanceUID, 2*time.Second)
 	plog.With(ctx).Infow("msg", "battle_terminal_release_phase1_completed",
 		"match_id", matchID, "allocation_id", expected.AllocationID,
 		"pod", podName, "uid", expected.InstanceUID)
@@ -2153,6 +2233,39 @@ func (u *AllocatorUsecase) HeartbeatWithCensus(ctx context.Context, matchID uint
 			// 终态 DS:不写回、通知停机,补偿重试与 TTL 上界不受影响
 			plog.With(ctx).Infow("msg", "heartbeat_terminal_stop", "match_id", matchID, "pod", podName)
 			u.killStrandedDS(ctx, matchID, podName, "terminal")
+			// owner 精确释放(legacy 正常结算的**真实**收口点,2026-08-04;INC-20260804-001 缺口⑦)。
+			//
+			// 为什么在这里而不是 ReleaseBattle:legacy 面对局正常结束(含 PVE 主动退出)后,
+			// battle_result 记账 + outbox 投递完成,DS 转 ended 并继续上报心跳,由**本分支**
+			// 判终态并回收 DS —— `ReleaseBattle` 在这条流程里**一次都不会被调用**(实测计数 0)。
+			// 此前把释放接在 ReleaseBattle 上是接错了位置,owner 因此仍停在 BATTLE/ADMITTED
+			// 指向一台已销毁的 DS:login 的 query-first 一直把玩家指回去,而对局记录已终态,
+			// 客户端拿到的 TARGET 缺 match_id → `incomplete owner identity` → 撞 30s 线,
+			// 玩家打完副本回不了大厅(2026-08-04 两轮实测)。
+			//
+			// 时序满足 ownerReleaseAbandonedPlayersWeak 的安全边界①:killStrandedDS 已发起
+			// 本实例回收,此后释放不会在旧 DS 仍可服务时放行新归属。边界②exact 身份门与
+			// ③compare-delete 由该函数自身保证 —— 玩家已被分到别处时双重跳过,不误伤。
+			// 记录读取失败或无实例身份时整体跳过(退化为改动前行为),绝不用半截身份去删归属。
+			//
+			// **作用域是刻意的,不是漏了隔离门(2026-08-04 用户拍板)**:本分支的唯一门是
+			// service 层的 `!RedisAuthorityEnabled()`,没有像 localTicketBinding /
+			// localInstanceIdentitySource / localBattleRosterSink 那样再叠一道类型断言。
+			// 后果:标准生产姿态(authority_mode=redis ⇒ 强制 agones+enforce,见 main.go
+			// battle_model_b_invalid_activation 门)恒走 HeartbeatAuthorizedWithPlayers,
+			// 本段不可达;但 **Agones + legacy authority_mode 的灰度部署会执行到这里**。
+			// 那正是我们要的:同一个「结算后 owner 不释放 ⇒ 玩家回不了大厅」的缺陷在灰度面
+			// 同样存在,一并修好;安全性由上述三条边界兜住,不因部署形态而不同。
+			// 将来若要把灰度面排除在外,加 `u.cfg.Mode == conf.ModeLocal` 一道门即可 ——
+			// 但那等于明知灰度面有同样的 bug 而不修,需要重新拍板。
+			if terminal, found, gerr := u.repo.GetBattle(ctx, matchID); gerr == nil && found {
+				ownerReleaseAbandonedPlayersWeak(ctx, u.ownerAuth, terminal.GetPlayerIds(),
+					terminal.GetDsPodName(), terminal.GetGameserverUid(), 2*time.Second)
+			} else if gerr != nil {
+				plog.With(ctx).Warnw("msg", "terminal_owner_release_read_failed",
+					"match_id", matchID, "pod", podName, "err", gerr,
+					"hint", "owner 未释放,玩家可能回不了大厅;下一跳心跳会重试")
+			}
 			return &HeartbeatResult{Command: commandStop}, nil
 		case errors.Is(err, errHeartbeatPodMismatch):
 			// pod 不匹配:不写回镜像,令旧/孤儿 DS 停机(防污染新对局)

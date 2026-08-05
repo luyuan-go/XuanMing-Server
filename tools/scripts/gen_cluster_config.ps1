@@ -1739,8 +1739,11 @@ function Assert-GeneratedSet {
                 throw '[FATAL] -Prod 产物 battle-result progress_enabled 必须且只能为 false(实时通道启用是独立显式动作)。'
             }
         }
-        if ($svc.Name -in @('matchmaker', 'matchmaker-pve', 'player')) {
-            if (([regex]::Matches($yaml, '(?m)^[ \t]{2}dir:[ \t]*"/app/configtable/active"[ \t]*$')).Count -ne 1) {
+        if ($svc.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result')) {
+            # \r? 不能省:battle_result-dev.yaml 是 CRLF(其余模板 LF),生成器按源文件换行符原样
+            # 回写。.NET 多行模式的 $ 只锚在 \n 前,行尾残留的 \r 会让 [ \t]*$ 匹配 0 次,
+            # 于是"改写明明成功却断言失败"。
+            if (([regex]::Matches($yaml, '(?m)^[ \t]{2}dir:[ \t]*"/app/configtable/active"[ \t]*\r?$')).Count -ne 1) {
                 throw "[FATAL] $($svc.Name) 集群产物必须只读 /app/configtable/active。"
             }
         }
@@ -1943,7 +1946,7 @@ try {
         $src = Join-Path $ProjectRoot $s.Conf
         $raw = Get-Content -LiteralPath $src -Raw
         $out = Convert-DevToCluster $raw
-        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player')) {
+        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result')) {
             $out = Set-ServiceClusterConfigTableDir $s.Name $out
         }
         if ($s.Name -in $script:MultiReplicaSnowflakeServices) {

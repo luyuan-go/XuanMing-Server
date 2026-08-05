@@ -9,6 +9,9 @@
 > **受影响服务/版本**：`hub_allocator` / `ds_allocator` / UE DS（`PandoraEditor Win64 Development`）；基线 commit `8e23b63`
 > **最后更新**：2026-08-04
 
+> ⚠️ **待验证清单见 [PENDING-VERIFICATION](2026-08-04-p0-local-legacy-owner-wiring-PENDING-VERIFICATION.md)**。
+> 其中 Model B / Agones 面（⑦-B 等）**只有代码级证据，本机无法验证**，在真集群证据填上之前一律按未修复对待。
+
 ## 0. 一句话结论
 
 `Model B`（Redis 授权权威 / Agones）落地后新增的 **owner 权威接线**在 `legacy`（`mode=local`）面**成片漏接**：票据不带实例绑定、心跳不续 owner 实例租约、分配不回传实例身份、DS 拿不到权威花名册。六处缺口逐个在玩家链路上表现为「进大厅被踢 → 进大厅确认不了 → PVE 对局判 FAILED → 进副本确认不了 → 退副本被拒」。六处均已落码并经真实客户端验证到「进副本确认成功」；**退副本结算的端到端验证尚未完成**，故本档不关闭。
@@ -134,6 +137,15 @@ LogPandoraPveDungeonLeave: Warning: 单人 PVE 主动退出被拒：result=4
 | ④ | battle legacy 心跳不续租、不 Admit | `ds_allocator/internal/biz/allocator.go` `Heartbeat` | `renewOwnerLeaseGate` 与 `ownerAdmitCensusWeak` 只在 `HeartbeatAuthorizedWithPlayers` 内 |
 | ⑤ | editor 超时被 packaged 配置顶掉 | `ds_allocator-dev.yaml` | 代码的 editor 放宽条件是「仅当该项未显式配置」，而 yaml 按 packaged 写死了 120s/15s |
 | ⑥ | 权威花名册无 local 投递通道 | UE `PandoraBattleGameMode::ApplyAgonesAdmissionMetadata` | `ExpectedPlayers` 只从 Agones annotation 装载；local 无 annotation |
+| ⑦ | **对局正常结算不释放 owner（全部署形态，非 local 专属）** | legacy：心跳终态分支；Model B：`ReleaseBattleExpected` | 全仓 owner 释放此前只接了「登出 / 判弃 / saga 中止」三条**异常或主动离场**路径，**「对局正常打完」一条都没接** |
+
+**⑦ 的作用域必须单独说明**：它不是 local 专属。全仓 `ReleaseOwner` 仅三个调用点（login 登出、`rollbackOwnerBegins`、`ownerReleaseAbandonedPlayersWeak`），而后者此前只被 `ReleaseBattle`（legacy release RPC，实测本流程调用次数 **0**）、`AbortPreactiveBattle`、`deliverAbandoned` 调用。三种部署形态的实际覆盖：
+
+| 部署形态 | 正常结算是否释放 owner（修复前） | 证据强度 |
+|---|---|---|
+| `mode=local` | ❌ | **真实客户端两轮实测复现** |
+| Agones + legacy authority | ❌ | 代码阅读（同一 legacy 心跳终态分支） |
+| Agones + Model B（标准生产） | ❌ | 代码阅读（`ReleaseBattleExpected` 内 `ownerRelease*` 出现次数为 0） |
 
 **缺口⑥有一条额外的结构性约束**，使它无法靠"补 census"绕过：UE 的 `BuildCompleteBattlePlayerCensus` 要求每个 owner 的 claims 满足 `IsCompleteBattleOwnerClaims`（`dst_ver==2` 且带 `ds_pod`/`ds_uid`/`ds_epoch`/`allocation_id`）；而 `local-off-v1` 刻意只签 HS256 legacy 战斗票；legacy 战斗票又**带不了**实例绑定（`pkg/auth.signDSTicket` 明令 binding 只许 hub 票用）。三者叠加 ⇒ **census 在该档位下结构上不可能成立**。
 
@@ -190,7 +202,13 @@ LogPandoraPveDungeonLeave: Warning: 单人 PVE 主动退出被拒：result=4
 | ④ battle legacy 心跳续租 + 花名册兜底 Admit | 已落码 | `allocator.go` 新增 `HeartbeatWithCensus`；`service/allocator.go` 透传 census | `OWNER_PHASE_ADMITTED` + `confirmed BATTLE admission` |
 | ⑤ editor 超时放宽 | 已落码 | `ds_allocator-dev.yaml` `ready_wait 120s→300s`、`heartbeat 15s→120s`、`grpc timeout 150s→330s`、`grace 180s→360s`；`matchmaker-pve.yaml` `ds_allocate_timeout 150s→330s` | 分配成功，不再 `ready_wait_timeout` |
 | ⑥ 权威花名册 env 投递 | 已落码 | Go：`local_allocator.go` `SetPendingBattleRoster` + `canonicalRosterText`；UE：`PandoraAgonesSubsystem::StageEnvironmentBattleAdmission` + `PandoraBattleGameMode` 装载门 | DS 日志 `roster_count=1`（修复前恒 0） |
-| ⑦ **修复引入的自锁死** | 已落码 | `buildEnv` 内误取 `l.mu`，而 `Allocate` 全程持锁（Go 互斥不可重入）；改为按「调用方持锁」约定直接读写 | 新增带 5s 超时的 `TestAllocate_WithPendingRosterDoesNotDeadlock` |
+| ⑦ 正常结算释放 owner | 已落码 | **收口点在心跳终态分支**（`errHeartbeatTerminal` → `killStrandedDS` 之后），复用 `ownerReleaseAbandonedPlayersWeak`。第一版误接在 `ReleaseBattle` 上，实测该函数在本流程调用次数为 **0**，单测全绿但真机无效 | `TestLegacyTerminalHeartbeat_ReleasesOwner` + `..._SkipsOwnerPointingElsewhere`（直接驱动「记录已 ended → 再来一跳」真实路径） |
+| ⑦-B **Model B 正常结算释放 owner** | 已落码 | `ReleaseBattleExpected` 在 `releaseGameServer` **成功之后**（＝K8s UID precondition 删除已确认）释放；弱依赖，失败只告警不改返回值（否则 outbox 会重放已删 GameServer 的回收） | `TestModelBTerminalRelease_ReleasesOwner` / `..._SkipsOwnerPointingElsewhere` / `..._OwnerAbsentDoesNotFailRelease`；**真集群未验证** |
+| ⑧ **修复引入的自锁死** | 已落码 | `buildEnv` 内误取 `l.mu`，而 `Allocate` 全程持锁（Go 互斥不可重入）；改为按「调用方持锁」约定直接读写 | 新增带 5s 超时的 `TestAllocate_WithPendingRosterDoesNotDeadlock` |
+| ⑨ **ready 等待被单次 Redis 抖动打掉**（**排查中新发现，全部署形态**） | 已落码 | `waitBattleReady` 两个分支（Model B 的 `ReadAuthority` + legacy 的 `GetBattle`）原先任一次读错误即 `return nil, err`；Redis 读超时抛的是**原始错误**→上层判 `ErrUnknown(code=1)`→ matchmaker 回滚 owner Begin → 玩家被弹回大厅。改为**只**容忍传输层错误到下个 tick，deadline 仍是唯一上界；权威判定（battle purge / 分配被取代 / auth fenced / 状态不可推进）保持立即失败 | `TestWaitBattleReady_ToleratesTransientReadError` / `_PersistentReadErrorStillTimesOut` / `_ModelBToleratesTransientReadError` / `_ModelBAuthoritativeLossStillFailsFast`；**Model B 分支真集群未验证（V-10）** |
+| — 配套 | 已落码 | dev 面 Redis `read_timeout`/`write_timeout` 1s→5s（`ds_allocator-dev.yaml` + `hub_allocator-dev.yaml`）。**生产 1s 刻意不动**：放宽只是让超时更难触发，代价是 Redis 真挂时 goroutine 多占 5 倍时间；⑨ 的重试才是正解 | 本机实测（AllocateBattle 59.6s code=1 → 修复后不再整局失败） |
+
+**⑦ 与 ⑦-B 的隔离性与前六处不同，是刻意的（2026-08-04 用户拍板）**：前六处修复都有「运行模式门 + 类型断言门」双重机械隔离，生产二进制里是死代码；⑦/⑦-B **只有运行模式门，没有类型断言**，因此 Agones + legacy authority 的灰度部署与标准 Model B 生产都会执行到。这是有意为之——同一缺陷在这些形态下同样存在，一并修复；安全性由 `ownerReleaseAbandonedPlayersWeak` 的三条边界（回收后时序、exact 身份门、compare-delete）保证，不因部署形态而不同。
 
 **线上隔离（为什么 Agones 生产路径零变更）**：每处修复均有双重机械门——①运行模式判定（`authRepo == nil` / `!u.modelB` / `!RedisAuthorityEnabled()` / `!bAgonesEnabled`）；②Go 侧类型断言（`localHubCredentialSource` / `localInstanceIdentitySource` / `localBattleRosterSink` 三个接口**只有 Local\* 实现，Agones 与 Mock 均不实现**，生产二进制里是机械死代码）。配置改动只触碰 `*-dev.yaml` 与 `matchmaker-pve.yaml`，未触碰任何 prod/agones 配置。
 

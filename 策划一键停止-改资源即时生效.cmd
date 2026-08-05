@@ -29,5 +29,7 @@ set "PS=pwsh"
 %PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -Down
 set "RC=%ERRORLEVEL%"
 
-pause
+rem Interactive (double-click) runs keep the window; the web admin sets
+rem PANDORA_NONINTERACTIVE=1 and shows the output on the page instead.
+if not defined PANDORA_NONINTERACTIVE pause
 exit /b %RC%
