@@ -45,12 +45,27 @@ type TeamEventPusher interface {
 }
 
 // MatchCanceler 是“离队/踢人 → 撤销 matchmaker 匹配票据”联动的抽象接口。
-// 实现由 main 装配时注入(data.GrpcMatchCanceler,直连 matchmaker 内网 gRPC)。
+// 实现由 main 装配时注入(data.GrpcMatchClient,直连 matchmaker 内网 gRPC)。
 // 可为 nil:本机不起 matchmaker 的骨架联调 / 未配 matchmaker_addr 时跳过联动。
 type MatchCanceler interface {
 	// CancelMatch 撤销 playerID 当前所在的匹配票据(整张票据,含全体队友)。
 	// 玩家未在排队时返回 ErrMatchNotFound(4004),调用方按常态忽略。
 	CancelMatch(ctx context.Context, playerID uint64) error
+}
+
+// MatchCommitmentReader 是“入队 / 列表复核前确认这支队伍没有被一场对局占住”的抽象接口。
+// 实现由 main 装配时注入(data.GrpcMatchClient,与 MatchCanceler 同一条 matchmaker 连接)。
+//
+// 为什么不看 team.State:`TEAM_STATE_MATCHING` / `TEAM_STATE_IN_BATTLE` 在本服务
+// **没有任何写入点**(全仓只有 stateMatching / stateInBattle 两行常量定义),队伍在排队、
+// 确认期、拉 DS、整场战斗期间 State 都停在 READY —— 光看 State 分不出“全员点了准备”
+// 和“已经在打了”。唯一权威是 matchmaker 的 player→ticket claim(无 TTL SETNX,只有显式
+// 取消 / 失败 / battle_result 调 ReleaseMatch 才删),ResolvePlayerMatchContext 读的就是它。
+type MatchCommitmentReader interface {
+	// IsPlayerCommittedToMatch 返回 playerID 当前是否已被一场对局占住
+	// (STARTING / 排队 / 确认期 / 拉 DS / 战斗中,直到本局释放为止)。
+	// 读取不确定(RPC 失败 / 权威返回 UNKNOWN)时返回 error,调用方必须 fail-closed。
+	IsPlayerCommittedToMatch(ctx context.Context, playerID uint64) (bool, error)
 }
 
 // ── 常量 ─────────────────────────────────────────────────────────────────────
@@ -80,6 +95,11 @@ type TeamUsecase struct {
 	// matchCanceler 是“离队/踢人 → 撤销 matchmaker 票据”联动。可为 nil(未配
 	// matchmaker_addr / 骨架联调)→ 不联动,行为与历史一致。nil-safe。
 	matchCanceler MatchCanceler
+
+	// matchCommitment 是“入队闸门”:队伍已提交对局时拒绝新人进来。可为 nil(未配
+	// matchmaker_addr / 骨架联调)→ 跳过闸门;那种部署下根本没有匹配链路,不存在
+	// 被对局占住的队伍,与 matchCanceler 的弱依赖口径一致。nil-safe。
+	matchCommitment MatchCommitmentReader
 
 	// lastTouch 记录每个玩家上次 GetMyTeam 续期队伍 TTL 的时刻(节流,避免每次
 	// 轮询都敲 Redis EXPIRE)。key=playerID(uint64) value=time.Time。
@@ -114,6 +134,14 @@ func (u *TeamUsecase) SetCellRouter(r *cellroute.Router) {
 // SetCellRouter 一致)。
 func (u *TeamUsecase) SetMatchCanceler(c MatchCanceler) {
 	u.matchCanceler = c
+}
+
+// SetMatchCommitmentReader 注入“入队闸门”所需的 matchmaker 权威读取。
+//
+// nil-safe:不调用 / 传 nil 时(未配 matchmaker_addr / 骨架联调)不做闸门校验,
+// 行为与历史一致。用 setter 而非构造参数,与 SetMatchCanceler 一致。
+func (u *TeamUsecase) SetMatchCommitmentReader(r MatchCommitmentReader) {
+	u.matchCommitment = r
 }
 
 // InviteTTLMs 返回邀请令牌 TTL 的毫秒数,供 service 层计算 expires_at_ms。
@@ -336,6 +364,14 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 // 下次自愈),因此必须留 Warn 可观测。
 func (u *TeamUsecase) joinTeam(ctx context.Context, teamID, playerID uint64) (*teamv1.TeamStorageRecord, error) {
 	ttl := u.activeTTL()
+
+	// 入队闸门:队伍一旦提交过对局,成员名单已被 matchmaker.resolveMembers 冻结进票据,
+	// 此刻放人进来 = 他不在票据里、也没有 match claim,永远不会被拉进这一局,只能占着
+	// 队伍名额干等(§9.20 不准把玩家卡住)。必须在 ClaimPlayer 之前判,避免拒绝后还要回滚归属。
+	if err := u.ensureTeamNotCommittedToMatch(ctx, teamID); err != nil {
+		return nil, err
+	}
+
 	if err := u.claimPlayerHealingOrphan(ctx, playerID, teamID, ttl); err != nil {
 		return nil, err
 	}
@@ -356,9 +392,16 @@ func (u *TeamUsecase) joinTeam(ctx context.Context, teamID, playerID uint64) (*t
 		team.Members = append(team.Members, &teamv1.TeamMemberStorageRecord{PlayerId: playerID})
 		team.UpdatedAtMs = time.Now().UnixMilli()
 
-		// 全员 ready → READY
-		if team.State == stateForming && allReady(team.Members) {
+		// 入队后**重算**就绪态,而不是只处理 FORMING→READY 一个方向:新成员默认
+		// ready=false,加入一支已经 READY 的队伍(邀请路径可达)必须把队伍打回 FORMING。
+		// 否则会留下“State=READY 但有人没准备”的脏态,而 matchmaker.resolveMembers 只校验
+		// State==READY、不逐人校验 ready,会带着没准备的人开局。
+		// 到这里 State 只可能是 FORMING / READY(disbanded 已在上面拒掉;MATCHING / IN_BATTLE
+		// 本服务无写入点,见 MatchCommitmentReader 注释),所以两分支覆盖完备。
+		if allReady(team.Members) {
 			team.State = stateReady
+		} else {
+			team.State = stateForming
 		}
 		result = cloneTeam(team)
 		return nil
@@ -372,6 +415,57 @@ func (u *TeamUsecase) joinTeam(ctx context.Context, teamID, playerID uint64) (*t
 
 	// player index 已由 ClaimPlayer 在锁前原子写入,此处无需再写。
 	return result, nil
+}
+
+// ensureTeamNotCommittedToMatch 是入队闸门:队伍已被一场对局占住时拒绝新人进来。
+//
+// 判据取 matchmaker 的权威 claim 而不是 team.State,原因见 MatchCommitmentReader 注释
+// (MATCHING / IN_BATTLE 在本服务没有写入点,排队和战斗期间 State 都是 READY)。
+// 查队长一人即可代表整队:StartMatch 由队长发起,队长的 start 索引先于成员 claim 写入,
+// 成员 claim 与队长同属一张票据,ReleaseMatch 也整票释放。
+//
+// **fail-closed**:matchmaker 不可达或返回 UNKNOWN 一律拒绝入队。放进一支已开打的队伍
+// 会让玩家既进不去这一局又占着队伍名额(§9.20),比让他重试一次严重得多;§9.22 也要求
+// 状态不确定时返回 UNKNOWN 并 fail-closed,不得冒充“空闲”。
+//
+// 残留窗口:本检查与随后写成员表之间存在毫秒级 TOCTOU(跨服务无法原子)。后果有界——
+// 挤进来的人没有 match claim,绝不会被拉进那一局;他只是留在大厅的队伍里,随时可离队。
+func (u *TeamUsecase) ensureTeamNotCommittedToMatch(ctx context.Context, teamID uint64) error {
+	if u.matchCommitment == nil {
+		return nil
+	}
+	team, found, err := u.repo.Get(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
+	}
+
+	committed, err := u.isTeamCommittedToMatch(ctx, team)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_join_match_gate_unavailable",
+			"team_id", teamID, "captain_id", team.CaptainId, "err", err)
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"team %d match commitment unknown, join rejected", teamID)
+	}
+	if committed {
+		plog.With(ctx).Debugw("msg", "team_join_rejected_match_committed",
+			"team_id", teamID, "captain_id", team.CaptainId)
+		return errcode.New(errcode.ErrTeamWrongState,
+			"team %d already committed to a match", teamID)
+	}
+	return nil
+}
+
+// isTeamCommittedToMatch 读“这支队伍是否已被一场对局占住”,复用调用方已取到的队伍记录。
+// 未注入 reader(骨架联调 / 未配 matchmaker_addr)时恒为 false,与历史行为一致。
+// 判定口径与失败语义见 ensureTeamNotCommittedToMatch 与 MatchCommitmentReader 注释。
+func (u *TeamUsecase) isTeamCommittedToMatch(ctx context.Context, team *teamv1.TeamStorageRecord) (bool, error) {
+	if u.matchCommitment == nil || team == nil || team.CaptainId == 0 {
+		return false, nil
+	}
+	return u.matchCommitment.IsPlayerCommittedToMatch(ctx, team.CaptainId)
 }
 
 // LeaveTeam 玩家主动离队。
@@ -664,11 +758,25 @@ func (u *TeamUsecase) maxApplications() int {
 
 // isOpenForRecruit 判定队伍是否"正在招募"(会出现在 ListOpenTeams 结果里)。
 //
-// 只认 FORMING:READY 表示全员已准备、下一步就是开局,MATCHING 已进撮合队列,
-// IN_BATTLE 已在打,DISBANDED 已解散——这几种状态下把陌生人放进来都会打断队伍已有进程。
-// 这是**唯一**判定口径:写索引和读复核都调它,避免"写进去的和读出来的不是同一套标准"。
+// 口径:**只要没满员且没解散就还在招募**,FORMING 与 READY 一视同仁。
+//
+// 为什么 READY 也算(2026-08-05 修订,原先只认 FORMING):READY 只表示“当前成员都点了
+// 准备”,不表示“已经开打”。而 StartMatch 要求队伍必须是 READY 才能开局,于是原口径下
+// “想被人搜到就不能准备、想开局就必须准备”互斥——单人队长点了准备就从招募列表消失,
+// 谁也搜不到他(实测:23:58 建队 → 23:58 点准备 → 另一个号连点三次获取队伍全是空列表)。
+//
+// 那“已经在排队 / 在打的队伍别被打扰”由谁保证?**不由本函数**:MATCHING / IN_BATTLE 在
+// 本服务没有写入点,队伍从提交票据到打完全程停在 READY,靠 State 根本分不出来。真正的
+// 闸门是入队路径的 ensureTeamNotCommittedToMatch(查 matchmaker 权威 claim),以及
+// ListOpenTeams 复核时的同一道闸门 —— 权威判定只有那一份,本函数只管“满没满 / 散没散”。
+//
+// 这是**唯一**的满员/解散判定口径:写索引和读复核都调它,避免"写进去的和读出来的不是
+// 同一套标准"。
 func isOpenForRecruit(team *teamv1.TeamStorageRecord) bool {
-	if team == nil || team.State != stateForming {
+	if team == nil {
+		return false
+	}
+	if team.State != stateForming && team.State != stateReady {
 		return false
 	}
 	count := len(team.Members)
@@ -790,6 +898,27 @@ func (u *TeamUsecase) ListOpenTeams(ctx context.Context, mapID uint32, limit int
 			continue
 		}
 
+		// 已提交对局的队伍不该出现在招募列表里。isOpenForRecruit 分不出这一档(排队/战斗
+		// 期间 State 都是 READY),必须查 matchmaker 权威 claim —— 与入队闸门同一份判定,
+		// 避免"列表说能进、点了却被拒"。这里只对**已通过前面全部复核、即将返回**的候选查,
+		// 不是对全部 candidates 查:返回数被 limit(默认 10)钳住,RPC 次数有界。
+		//
+		// 与入队闸门的关键差异是**失败方向相反**:这里查不到只跳过本条(少列一支队伍),
+		// 不整体报错——列表是加速器,不是准入判定,让一次 matchmaker 抖动把整个"找队伍"
+		// 打成失败没有必要;真正的准入 fail-closed 在 ensureTeamNotCommittedToMatch。
+		if committed, cerr := u.isTeamCommittedToMatch(ctx, team); cerr != nil || committed {
+			if cerr != nil {
+				plog.With(ctx).Warnw("msg", "team_open_list_commitment_unknown",
+					"team_id", teamID, "captain_id", team.CaptainId, "err", cerr)
+			} else if rerr := u.repo.RemoveOpenTeamCandidate(ctx, teamID, team.MapId); rerr != nil {
+				// 已确认在对局中 → 顺手摘索引自愈,下次浏览就不用再查它。
+				plog.With(ctx).Warnw("msg", "team_open_index_prune_failed",
+					"team_id", teamID, "map_id", team.MapId, "err", rerr)
+			}
+			skipped++
+			continue
+		}
+
 		out = append(out, &teamv1.OpenTeamBrief{
 			TeamId:      team.TeamId,
 			CaptainId:   team.CaptainId,
@@ -803,7 +932,8 @@ func (u *TeamUsecase) ListOpenTeams(ctx context.Context, mapID uint32, limit int
 
 	if skipped > 0 {
 		plog.With(ctx).Warnw("msg", "team_open_list_candidates_skipped",
-			"map_id", mapID, "skipped", skipped, "returned", len(out))
+			"map_id", mapID, "skipped", skipped, "returned", len(out),
+			"hint", "候选被复核刷掉:读队伍失败 / 已在对局中 / 匹配状态不确定")
 	}
 	return out, nil
 }

@@ -244,13 +244,31 @@ func main() {
 	}
 	// local-off-v1 不接 Redis pending/ACK，但仍必须给 UE 完整 Model-B tuple，不能回退 legacy JWT。
 	// 每个本机进程有随机实例 UID 与 jti；一局一实例，epoch/gen 从 1 起且不会在实例内回退。
-	issueLocalBattleCredential := func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (string, error) {
+	//
+	// 注意:"不接 Redis ACK" 只免掉了 staged→active 的提升,**没有**免掉心跳应答的 ACK 回显。
+	// UE 的 SendBattleHeartbeat 无条件按 uid/epoch/gen/jti/writer_epoch 五项比对应答 ACK,
+	// 不过就丢掉整个 Command 与驱逐单,所以这里必须把 jti/writer_epoch 一并回吐给分配器留存,
+	// 供 legacy 心跳逐字段回显(2026-08-05;与 hub 侧 issueLocalHubCredential 同形)。
+	// gen 恒 1 是自洽的:一局一进程、实例内不换令牌,不需要 Redis 单调计数器。
+	issueLocalBattleCredential := func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (string, data.BattleCredentialIdentity, error) {
+		const localBattleGen uint64 = 1
+		jti := uuid.NewString()
 		res, serr := dsSigner.SignBattleCredential(
-			matchID, podName, instanceUID, instanceEpoch, 1, uuid.NewString(), cfg.DSAuth.BattleTokenTTL.Std())
+			matchID, podName, instanceUID, instanceEpoch, localBattleGen, jti, cfg.DSAuth.BattleTokenTTL.Std())
 		if serr != nil {
-			return "", serr
+			return "", data.BattleCredentialIdentity{}, serr
 		}
-		return res.Token, nil
+		return res.Token, data.BattleCredentialIdentity{
+			PodName:       podName,
+			InstanceUID:   instanceUID,
+			InstanceEpoch: instanceEpoch,
+			Gen:           localBattleGen,
+			JTI:           jti,
+			ExpMs:         uint64(res.ExpMs),
+			Kid:           res.Kid,
+			TokenSHA256:   res.TokenSHA256,
+			WriterEpoch:   res.WriterEpoch,
+		}, nil
 	}
 	// enforce 下签发失败必须 fail-closed(不分配无令牌的 DS,否则回调被守卫全拒)。
 	dsEnforce := dsGuard.Mode() == middleware.DSAuthEnforce

@@ -2136,6 +2136,53 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 func (u *AllocatorUsecase) HeartbeatWithCensus(ctx context.Context, matchID uint64, podName string,
 	playerCount int32, state string, tsMs int64, snapshotPresent bool, activePlayerIDs []uint64,
 ) (*HeartbeatResult, error) {
+	// ACK 必须在**进入本体之前**快照:终态 / pod_mismatch / 孤儿三条分支都会调
+	// killStrandedDS,而它是异步 goroutine —— 本体返回后再读台账,进程记录可能已被 Release
+	// 删掉,同一条 stop 应答带不带 ACK 就成了竞态。先快照后回显,应答与调用时刻的授权事实一致。
+	ack, hasACK := u.localCredentialACK(podName)
+	res, err := u.heartbeatLegacy(ctx, matchID, podName, playerCount, state, tsMs,
+		snapshotPresent, activePlayerIDs)
+	if err != nil {
+		return nil, err
+	}
+	// 回显在**所有** legacy 应答上,含 stop/drain:UE 校验不过时会把 Command 连同驱逐单
+	// 一起清空(见 data.LocalGameServerAllocator.LocalCredentialACK 注释),
+	// 而"让这台 DS 停机"恰恰是最需要送达的一条。
+	if hasACK && res != nil && res.AcceptedInstanceUID == "" {
+		res.AcceptedTokenGen = ack.Gen
+		res.AcceptedTokenJTI = ack.JTI
+		res.AcceptedInstanceUID = ack.InstanceUID
+		res.AcceptedInstanceEpoch = ack.InstanceEpoch
+		res.AcceptedWriterEpoch = ack.WriterEpoch
+	}
+	return res, nil
+}
+
+// localCredentialACK 取本机战斗 DS 的完整凭据身份(mode=local 才有)。
+//
+// 手法与边界同 hub 侧 HubUsecase.applyLocalCredentialACK:值取自本进程签发、经 env 下发给
+// 该 DS 的同一份凭据(不是凭空构造),且严格 fail-closed —— pod 不在台账或五元组不全时
+// 一律不回显,绝不糊半截 ACK。
+//
+// 线上隔离(双重机械门):①只有 !RedisAuthorityEnabled() 的 legacy 心跳会走到这里;
+// ②localBattleCredentialSource 仅 data.LocalGameServerAllocator 实现,Agones / Mock
+// 分配器类型断言直接不成立,两条路径的应答逐字节不变。
+func (u *AllocatorUsecase) localCredentialACK(podName string) (data.BattleCredentialIdentity, bool) {
+	if podName == "" {
+		return data.BattleCredentialIdentity{}, false
+	}
+	src, ok := u.alloc.(localBattleCredentialSource)
+	if !ok {
+		return data.BattleCredentialIdentity{}, false
+	}
+	return src.LocalCredentialACK(podName)
+}
+
+// heartbeatLegacy 是 legacy 心跳本体(镜像 CAS + owner 接线 + 位置续期)。
+// 凭据 ACK 回显由唯一调用方 HeartbeatWithCensus 统一收口,避免每条 return 各补一次。
+func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, podName string,
+	playerCount int32, state string, tsMs int64, snapshotPresent bool, activePlayerIDs []uint64,
+) (*HeartbeatResult, error) {
 	if matchID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}

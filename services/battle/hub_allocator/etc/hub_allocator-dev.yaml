@@ -190,7 +190,17 @@ local_hub:
   # capacity: 500                              # 留空取 hub.default_capacity
   working_dir: "F:\\work\\Packages\\Server_Win64_Development\\WindowsServer" # DS 进程工作目录(staged 根目录)
   log_dir: "run/dev/logs/ds"                   # Hub DS stdout/stderr 落 pandora-hub-local.log
-  # extra_args: ["-PANDORA_BACKEND=http://127.0.0.1:8444"]   # 本地 DS 面明文
+  # extra_args:追加 UE DS 命令行参数(本地 DS 面明文)。例:["-PANDORA_BACKEND=http://127.0.0.1:8444"]
+  #
+  # -NoZenAutoLaunch=127.0.0.1:8558 (2026-08-05):与 ds_allocator-dev.yaml 同因同解 —— 本机 IPv6
+  # 回环连出被拦(connect [::1]:8558 报 WSAEACCES 10013,127.0.0.1 正常),引擎默认按
+  # http://[::1]:8558 探活 Zen,每次 Hub DS 冷启动白等满健康超时(实测 ~30.9s)才降级文件 DDC。
+  # 改走 ConnectExisting 指向 IPv4,跳过等待且保住 Zen DDC 命中。两处必须一起改,否则 Hub 侧照付。
+  # 根治是放行本机 IPv6 回环;修好后删掉本行即可回到引擎默认。
+  #
+  # -AssetGatherSync=false (2026-08-05):同 ds_allocator-dev.yaml,把 -server 启动期的资产扫描
+  # 挪到后台线程(约 1 秒量级)。本段只在本机 local 形态被读,线上 Agones 不走这里。
+  extra_args: ["-NoZenAutoLaunch=127.0.0.1:8558", "-AssetGatherSync=false"]
   extra_env:
     PANDORA_HUB_ALLOCATOR_ADDR: "127.0.0.1:8444"
     PANDORA_DS_ADMISSION_ADDR: "127.0.0.1:8444"

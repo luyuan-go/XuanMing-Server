@@ -135,9 +135,9 @@ func TestAllocatePassesUniqueModelBIdentityAndTokenToProcess(t *testing.T) {
 	var gotMatch uint64
 	var gotPod, gotUID, gotToken string
 	var gotEpoch uint32
-	l.SetDSTokenIssuer(func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (string, error) {
+	l.SetDSTokenIssuer(func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (string, BattleCredentialIdentity, error) {
 		gotMatch, gotPod, gotUID, gotEpoch = matchID, podName, instanceUID, instanceEpoch
-		return "model-b-token", nil
+		return "model-b-token", testLocalBattleCredential(podName, instanceUID, instanceEpoch), nil
 	}, true)
 	l.startProc = func(_ string, _ int, _ uint64, _ uint32, _, _, token string) (dsProcess, error) {
 		gotToken = token
@@ -153,6 +153,70 @@ func TestAllocatePassesUniqueModelBIdentityAndTokenToProcess(t *testing.T) {
 	}
 	if _, err := uuid.Parse(gotUID); err != nil {
 		t.Fatalf("instance uid 不是 UUID: %q: %v", gotUID, err)
+	}
+}
+
+// testLocalBattleCredential 造一份与 (pod,uid,epoch) 自洽的完整 tuple,模拟 main 的签发器。
+func testLocalBattleCredential(pod, uid string, epoch uint32) BattleCredentialIdentity {
+	return BattleCredentialIdentity{
+		PodName: pod, InstanceUID: uid, InstanceEpoch: epoch,
+		Gen: 1, JTI: "jti-" + uid, WriterEpoch: BattleDSWriterEpochV2,
+	}
+}
+
+// 心跳应答要回显的 ACK 必须是"下发给该 pod 的那一份",且严格 fail-closed。
+// 回不出 ACK 时 UE 会丢掉整个 Command 与驱逐单(实测 DS 每 5s 一条 ACK missing)。
+func TestLocalCredentialACKEchoesIssuedTupleAndFailsClosed(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
+	l.SetDSTokenIssuer(func(_ uint64, podName, instanceUID string, instanceEpoch uint32) (string, BattleCredentialIdentity, error) {
+		return "model-b-token", testLocalBattleCredential(podName, instanceUID, instanceEpoch), nil
+	}, true)
+
+	pod, _, _, err := l.Allocate(context.Background(), 88, 2, "moba", "stable")
+	if err != nil {
+		t.Fatalf("Allocate: %v", err)
+	}
+	uid, epoch, ok := l.LocalInstanceIdentity(pod)
+	if !ok {
+		t.Fatal("LocalInstanceIdentity 应在分配后可用")
+	}
+	ack, ok := l.LocalCredentialACK(pod)
+	if !ok {
+		t.Fatal("LocalCredentialACK 应在签发成功后可用")
+	}
+	// ACK 与实例身份、与签发进 token 的那份 tuple 必须逐字段同源,不能是另造一份。
+	if ack.InstanceUID != uid || ack.InstanceEpoch != epoch || ack.Gen != 1 ||
+		ack.JTI != "jti-"+uid || ack.WriterEpoch != BattleDSWriterEpochV2 || ack.PodName != pod {
+		t.Fatalf("ACK tuple 与下发凭据不一致: %+v (uid=%s epoch=%d)", ack, uid, epoch)
+	}
+	if _, ok := l.LocalCredentialACK("pandora-battle-local-999"); ok {
+		t.Fatal("不在台账的 pod 必须拒绝回显 ACK")
+	}
+	if _, ok := l.LocalCredentialACK(""); ok {
+		t.Fatal("空 pod 必须拒绝回显 ACK")
+	}
+}
+
+// 签发"成功"但 tuple 不全 = 心跳 ACK 注定回显不出去。required 下必须在拉起前就失败,
+// 不能拉起一个注定收不到 allocator 指令的 DS(§14 接线完整性)。
+func TestAllocateRejectsIncompleteCredentialTupleWhenRequired(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
+	started := false
+	l.startProc = func(_ string, _ int, _ uint64, _ uint32, _, _, _ string) (dsProcess, error) {
+		started = true
+		return newFakeProc(), nil
+	}
+	l.SetDSTokenIssuer(func(_ uint64, podName, instanceUID string, instanceEpoch uint32) (string, BattleCredentialIdentity, error) {
+		cred := testLocalBattleCredential(podName, instanceUID, instanceEpoch)
+		cred.JTI = "" // 少一项即整份不可用
+		return "model-b-token", cred, nil
+	}, true)
+
+	if _, _, _, err := l.Allocate(context.Background(), 88, 2, "moba", "stable"); err == nil {
+		t.Fatal("tuple 不全时 required 下必须 fail-closed")
+	}
+	if started {
+		t.Fatal("fail-closed 时不得拉起 DS 进程")
 	}
 }
 

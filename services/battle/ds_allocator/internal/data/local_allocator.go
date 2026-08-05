@@ -82,6 +82,18 @@ type launchedProc struct {
 	// 幂等重分配必须返回同一身份:身份漂移会让票据绑到一个不存在的实例。
 	instanceUID   string
 	instanceEpoch uint32
+	// cred 是经 env 下发给该进程的**完整凭据身份**(与 instanceUID/instanceEpoch 同一次签发)。
+	// 必须整组留存而不只留 uid/epoch:UE 的 SendBattleHeartbeat 用 IsBoundToRequest 把心跳应答
+	// 里的 CredentialAck 与 DS 自持凭据逐字段比对(uid/epoch/gen/jti/writer_epoch),缺一即判
+	// "heartbeat response credential ACK missing" —— 见 LocalCredentialACK 注释。
+	// local 不续期 → 全程不变。
+	cred BattleCredentialIdentity
+}
+
+// completeForACK 判定五元组是否齐备,可用于回显心跳 ACK。缺任一项都不得回显半截 ACK:
+// UE 侧 IsComplete 会拒,回半截只会把"缺字段"伪装成"不匹配",更难排查。
+func (c BattleCredentialIdentity) completeForACK() bool {
+	return c.InstanceUID != "" && c.InstanceEpoch != 0 && c.Gen != 0 && c.JTI != "" && c.WriterEpoch != 0
 }
 
 // LocalGameServerAllocator 在本机 exec UE Windows Dedicated Server 进程。
@@ -109,7 +121,10 @@ type LocalGameServerAllocator struct {
 	// dsTokenIssuer 签发 DS 回调服务令牌(审核 P1 #1;main 在 ds_auth.secret 已配时注入)。
 	// 非 nil 时 defaultStart 把令牌注入 DS 进程 env PANDORA_DS_TOKEN,DS 回调时带 Bearer 头。
 	// 签发失败只告警不阻断拉起(guard 默认 off/permissive,先保对局可开)。
-	dsTokenIssuer func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (token string, err error)
+	//
+	// 除 token 外还必须回吐**完整凭据身份**:心跳应答要逐字段回显它作为 ACK(见
+	// LocalCredentialACK),只拿到 token 串是回显不出 gen/jti 的。
+	dsTokenIssuer func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (token string, cred BattleCredentialIdentity, err error)
 	// dsTokenRequired 为 guard=enforce 时 true:签发失败则 fail-closed 不拉起 DS(否则该 DS
 	// 回调会被 enforce 守卫全拒)。off/permissive 下 false,签发失败只告警照拉。
 	dsTokenRequired bool
@@ -131,8 +146,8 @@ func (l *LocalGameServerAllocator) SetMapURLResolver(f func(mapID uint32) (strin
 }
 
 // SetDSTokenIssuer 注入 DS 回调令牌签发器(可选依赖,main 在 ds_auth.secret 已配时调用)。
-// required=true(guard=enforce)时签发失败会让 Allocate 返回错误(fail-closed)。
-func (l *LocalGameServerAllocator) SetDSTokenIssuer(f func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (string, error), required bool) {
+// required=true(guard=enforce / local-off-v1)时签发失败会让 Allocate 返回错误(fail-closed)。
+func (l *LocalGameServerAllocator) SetDSTokenIssuer(f func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (string, BattleCredentialIdentity, error), required bool) {
 	l.dsTokenIssuer = f
 	l.dsTokenRequired = required
 }
@@ -211,18 +226,34 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 	//   enforce(dsTokenRequired):签发失败 fail-closed,不拉起。
 	//   off/permissive:签发失败只告警,token 置空(DS 无令牌照常运行,守卫放行)。
 	var dsToken string
+	var dsCred BattleCredentialIdentity
 	instanceUID := uuid.NewString()
 	const instanceEpoch uint32 = 1
 	if l.dsTokenIssuer != nil {
-		tok, terr := l.dsTokenIssuer(matchID, podName, instanceUID, instanceEpoch)
-		if terr != nil {
+		tok, cred, terr := l.dsTokenIssuer(matchID, podName, instanceUID, instanceEpoch)
+		switch {
+		case terr != nil:
 			if l.dsTokenRequired {
 				return "", "", "", errcode.New(errcode.ErrDSAllocationFailed,
 					"ds_callback_token sign failed under enforce for match %d: %v", matchID, terr)
 			}
 			plog.With(context.Background()).Warnw("msg", "ds_callback_token_sign_failed", "match_id", matchID, "err", terr)
-		} else {
+		// 签发"成功"但 tuple 不全 = 心跳 ACK 一定回显不出去(DS 会永远拿不到准入租约、
+		// 收不到 stop/驱逐指令)。required 下这属于半成品接线,必须在拉起前就失败,
+		// 而不是拉起一个注定每 5s 打一条 ACK missing 的 DS(§14 接线完整性)。
+		case !cred.completeForACK() || cred.InstanceUID != instanceUID || cred.InstanceEpoch != instanceEpoch:
+			if l.dsTokenRequired {
+				return "", "", "", errcode.New(errcode.ErrDSAllocationFailed,
+					"ds_callback_token for match %d signed with incomplete/mismatched credential tuple", matchID)
+			}
+			plog.With(context.Background()).Warnw("msg", "ds_callback_credential_incomplete",
+				"match_id", matchID, "pod", podName,
+				"hint", "心跳应答无法回显绑定式 ACK,DS 将拒收 allocator 指令")
 			dsToken = tok
+		default:
+			dsToken = tok
+			dsCred = cred
+			dsCred.PodName = podName
 		}
 	}
 
@@ -234,7 +265,7 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 
 	addr := fmt.Sprintf("%s:%d", l.cfg.AdvertiseHost, port)
 	lp := &launchedProc{proc: proc, port: port, addr: addr,
-		instanceUID: instanceUID, instanceEpoch: instanceEpoch}
+		instanceUID: instanceUID, instanceEpoch: instanceEpoch, cred: dsCred}
 	l.procs[podName] = lp
 	l.usedPorts[port] = struct{}{}
 
@@ -327,6 +358,36 @@ func (l *LocalGameServerAllocator) LocalInstanceIdentity(podName string) (string
 		return "", 0, false
 	}
 	return lp.instanceUID, lp.instanceEpoch, true
+}
+
+// LocalCredentialACK 返回下发给指定 pod 的完整凭据身份,供 legacy 心跳应答回显 ACK。
+//
+// 为什么必须有:UE 的 SendBattleHeartbeat 无条件用 IsBoundToRequest 校验应答里的
+// CredentialAck(uid/instance_epoch/gen/jti/writer_epoch 五项须与 DS 自持凭据逐字段相等)。
+// 不通过时它会**清空 Command 与 BattleEvictionOrders 并置错**,于是:
+//   - allocator 的 stop / drain 指令永远送不到 DS(local 面靠 killStrandedDS 兜底,
+//     Agones+legacy 灰度面则真的没人收);
+//   - 精确驱逐单被整份丢弃,PendingBattleDepartureAcks 永不消费,每跳重发;
+//   - NotifyAuthorizedActiveHeartbeat 不触发,本地准入租约永不打开
+//     (local-off-v1 战斗票走 HS256 档不撞这道门,验票档会直接拒收玩家)。
+// 2026-08-05 实测 DS 日志每 5s 一条 "heartbeat response credential ACK missing"。
+//
+// 为什么这不是"伪造回显":ACK 的值直接取自本进程签发、并经 env 下发给该 DS 的**同一份**
+// 凭据(Allocate 处一次生成),确是"服务端仍授权本实例"的真实证据。且严格 fail-closed:
+//   - pod 不在台账(已回收 / 名字不符)→ 不回显;
+//   - 凭据五元组不全 → 不回显(绝不糊半截 ACK);
+//   - 只有 legacy 心跳入口会走到这里,Model B 心跳有自己的 ActivateHeartbeat 线性化点。
+func (l *LocalGameServerAllocator) LocalCredentialACK(podName string) (BattleCredentialIdentity, bool) {
+	if podName == "" {
+		return BattleCredentialIdentity{}, false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	lp, ok := l.procs[podName]
+	if !ok || !lp.cred.completeForACK() {
+		return BattleCredentialIdentity{}, false
+	}
+	return lp.cred, true
 }
 
 // Release 终止指定 DS 进程;台账无此记录视作已释放(幂等)。

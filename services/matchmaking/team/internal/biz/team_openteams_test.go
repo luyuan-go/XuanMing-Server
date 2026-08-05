@@ -205,12 +205,17 @@ func TestSetTeamMap_NonCaptainRejected(t *testing.T) {
 // ── ListOpenTeams:只列"正在招募"的队伍 ──────────────────────────────────────
 
 // 满员 / 非 FORMING 的队伍不得出现在列表里,而且要被顺手从索引剔除(自愈)。
-func TestListOpenTeams_ExcludesFullAndNonForming(t *testing.T) {
+// 满员的队伍必须从列表消失;**已准备但没满员的队伍仍在列表里**。
+//
+// 2026-08-05 修订:原口径把 READY 也排除掉,导致"想被人搜到就不能准备、想开局又必须
+// 准备"互斥——单人队长一点准备就从招募列表消失。现口径只看满没满 / 散没散,"已经在
+// 排队 / 在打"由 matchmaker 权威闸门负责(见 TestListOpenTeams_ExcludesCommittedTeams)。
+func TestListOpenTeams_ExcludesFullKeepsReady(t *testing.T) {
 	uc, _, cleanup := newPolicyUsecase(t, conf.JoinPolicyApproval)
 	defer cleanup()
 	ctx := context.Background()
 
-	// 队伍 A:填满 5 人。
+	// 队伍 A:填满 5 人 → 满员,不再招募。
 	mustCreateTeam(t, uc, 9301, 7301)
 	for i := 1; i < 5; i++ {
 		if _, err := uc.AcceptInvite(ctx, 0, 9301, uint64(7310+i)); err != nil {
@@ -218,7 +223,7 @@ func TestListOpenTeams_ExcludesFullAndNonForming(t *testing.T) {
 		}
 	}
 
-	// 队伍 B:单人且已准备 → 状态进入 READY,不再招募。
+	// 队伍 B:单人且已准备 → 状态 READY,但没满员,仍在招募。
 	mustCreateTeam(t, uc, 9302, 7302)
 	if _, err := uc.SetReady(ctx, 9302, 7302, true, 0); err != nil {
 		t.Fatalf("SetReady: %v", err)
@@ -232,14 +237,20 @@ func TestListOpenTeams_ExcludesFullAndNonForming(t *testing.T) {
 		t.Fatalf("ListOpenTeams: %v", err)
 	}
 	got := listedTeamIDs(teams)
-	if len(got) != 1 || got[9303] == nil {
-		t.Fatalf("只有招募中的 9303 应出现,实际 %v", got)
+	if got[9301] != nil {
+		t.Fatalf("满员的 9301 不应出现,实际 %v", got)
+	}
+	if got[9302] == nil {
+		t.Fatalf("已准备但未满员的 9302 应留在招募列表,实际 %v", got)
+	}
+	if got[9303] == nil {
+		t.Fatalf("招募中的 9303 应出现,实际 %v", got)
 	}
 	if got[9303].GetMemberCount() != 1 || got[9303].GetMaxSize() != 5 {
 		t.Fatalf("人数/容量投影错误:%d/%d", got[9303].GetMemberCount(), got[9303].GetMaxSize())
 	}
 
-	// 取消准备后 B 回到 FORMING,应重新出现在列表里(索引跟随状态机双向同步)。
+	// 取消准备后 B 仍在列表里(索引跟随状态机双向同步,两个方向都不该掉出去)。
 	if _, err := uc.SetReady(ctx, 9302, 7302, false, 0); err != nil {
 		t.Fatalf("SetReady(false): %v", err)
 	}
@@ -248,7 +259,130 @@ func TestListOpenTeams_ExcludesFullAndNonForming(t *testing.T) {
 		t.Fatalf("ListOpenTeams: %v", err)
 	}
 	if listedTeamIDs(teams)[9302] == nil {
-		t.Fatalf("取消准备后 9302 应重新进入招募列表,实际 %v", listedTeamIDs(teams))
+		t.Fatalf("取消准备后 9302 仍应在招募列表,实际 %v", listedTeamIDs(teams))
+	}
+}
+
+// ── 入队闸门:队伍已被一场对局占住 ────────────────────────────────────────────
+
+// mockCommitment 模拟 matchmaker 的"这个玩家是否已被对局占住"权威读取。
+type mockCommitment struct {
+	committed map[uint64]bool
+	err       error
+	calls     []uint64
+}
+
+func (m *mockCommitment) IsPlayerCommittedToMatch(_ context.Context, playerID uint64) (bool, error) {
+	m.calls = append(m.calls, playerID)
+	if m.err != nil {
+		return false, m.err
+	}
+	return m.committed[playerID], nil
+}
+
+// 队伍已提交对局(排队 / 确认 / 拉 DS / 战斗中)时必须拒绝入队:
+// 名单已被 resolveMembers 冻结进票据,这时放人进来他永远进不去这一局。
+func TestJoinTeam_RejectedWhenTeamCommittedToMatch(t *testing.T) {
+	uc, _, cleanup := newPolicyUsecase(t, conf.JoinPolicyApproval)
+	defer cleanup()
+	ctx := context.Background()
+
+	mustCreateTeam(t, uc, 9501, 7501)
+	uc.SetMatchCommitmentReader(&mockCommitment{committed: map[uint64]bool{7501: true}})
+
+	if _, err := uc.AcceptInvite(ctx, 0, 9501, 7502); err == nil {
+		t.Fatal("队伍已在对局中,入队必须被拒")
+	} else if errcode.As(err) != errcode.ErrTeamWrongState {
+		t.Fatalf("错误码应为 ErrTeamWrongState,实际 %v", err)
+	}
+
+	// 被拒的玩家不得留下归属残留(不变量 §1:否则他建不了新队,人就卡住了)。
+	if _, found, gerr := uc.repo.GetPlayerTeamID(ctx, 7502); gerr != nil {
+		t.Fatalf("GetPlayerTeamID: %v", gerr)
+	} else if found {
+		t.Fatal("入队被拒后不应残留 player→team 归属")
+	}
+}
+
+// matchmaker 不可达 / 返回 UNKNOWN 时必须 fail-closed 拒绝入队(§9.22),
+// 不得把"查不到"当成"没在对局"放行。
+func TestJoinTeam_RejectedWhenCommitmentUnknown(t *testing.T) {
+	uc, _, cleanup := newPolicyUsecase(t, conf.JoinPolicyApproval)
+	defer cleanup()
+	ctx := context.Background()
+
+	mustCreateTeam(t, uc, 9511, 7511)
+	uc.SetMatchCommitmentReader(&mockCommitment{err: errcode.New(errcode.ErrUnavailable, "matchmaker down")})
+
+	if _, err := uc.AcceptInvite(ctx, 0, 9511, 7512); err == nil {
+		t.Fatal("匹配状态不确定时入队必须 fail-closed 拒绝")
+	} else if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("错误码应为 ErrUnavailable,实际 %v", err)
+	}
+}
+
+// 未注入 reader(未配 matchmaker_addr / 骨架联调)时闸门跳过,入队行为与历史一致。
+func TestJoinTeam_GateSkippedWithoutReader(t *testing.T) {
+	uc, _, cleanup := newPolicyUsecase(t, conf.JoinPolicyApproval)
+	defer cleanup()
+	ctx := context.Background()
+
+	mustCreateTeam(t, uc, 9521, 7521)
+	if _, err := uc.AcceptInvite(ctx, 0, 9521, 7522); err != nil {
+		t.Fatalf("未注入 reader 时入队不应被拒: %v", err)
+	}
+}
+
+// 已被对局占住的队伍不该出现在招募列表里,并且顺手从索引摘掉自愈。
+func TestListOpenTeams_ExcludesCommittedTeams(t *testing.T) {
+	uc, _, cleanup := newPolicyUsecase(t, conf.JoinPolicyApproval)
+	defer cleanup()
+	ctx := context.Background()
+
+	mustCreateTeam(t, uc, 9601, 7601) // 已开打
+	mustCreateTeam(t, uc, 9602, 7602) // 正常招募
+
+	uc.SetMatchCommitmentReader(&mockCommitment{committed: map[uint64]bool{7601: true}})
+
+	teams, err := uc.ListOpenTeams(ctx, 0, 0)
+	if err != nil {
+		t.Fatalf("ListOpenTeams: %v", err)
+	}
+	got := listedTeamIDs(teams)
+	if got[9601] != nil {
+		t.Fatalf("已在对局中的 9601 不应出现,实际 %v", got)
+	}
+	if got[9602] == nil {
+		t.Fatalf("招募中的 9602 应出现,实际 %v", got)
+	}
+
+	// 自愈:已确认在对局中的候选被摘出索引,下次浏览不必再查它。
+	uc.SetMatchCommitmentReader(nil)
+	teams, err = uc.ListOpenTeams(ctx, 0, 0)
+	if err != nil {
+		t.Fatalf("ListOpenTeams(2): %v", err)
+	}
+	if listedTeamIDs(teams)[9601] != nil {
+		t.Fatal("已在对局中的候选应已从索引摘除")
+	}
+}
+
+// 列表侧闸门读取失败只跳过该条,不把整个"找队伍"打成失败(与入队侧 fail-closed 相反,
+// 列表是加速器不是准入判定)。
+func TestListOpenTeams_CommitmentErrorSkipsOnlyThatTeam(t *testing.T) {
+	uc, _, cleanup := newPolicyUsecase(t, conf.JoinPolicyApproval)
+	defer cleanup()
+	ctx := context.Background()
+
+	mustCreateTeam(t, uc, 9701, 7701)
+	uc.SetMatchCommitmentReader(&mockCommitment{err: errcode.New(errcode.ErrUnavailable, "matchmaker down")})
+
+	teams, err := uc.ListOpenTeams(ctx, 0, 0)
+	if err != nil {
+		t.Fatalf("列表不该整体失败: %v", err)
+	}
+	if len(teams) != 0 {
+		t.Fatalf("状态不确定的队伍应跳过,实际 %v", listedTeamIDs(teams))
 	}
 }
 

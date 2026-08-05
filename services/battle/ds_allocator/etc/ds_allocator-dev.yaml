@@ -240,7 +240,26 @@ local_ds:
   port_range: 100                              # 端口池大小,实际端口在 [base, base+range) 取空闲
   working_dir: "F:\\work\\Packages\\Server_Win64_Development\\WindowsServer" # DS 进程工作目录(staged 根目录)
   log_dir: "run/dev/logs/ds"                   # 每个 DS 进程 stdout/stderr 落 <pod>.log
-  # extra_args: ["-PANDORA_BACKEND=http://127.0.0.1:8444"]   # 追加 UE DS 命令行参数(本地 DS 面明文)
+  # extra_args:追加 UE DS 命令行参数(本地 DS 面明文)。例:["-PANDORA_BACKEND=http://127.0.0.1:8444"]
+  #
+  # -NoZenAutoLaunch=127.0.0.1:8558 (2026-08-05):本机 zenserver 监听 `::`:8558(双栈)且进程健康,
+  # 但 IPv6 回环连出被安全软件拦掉 —— 实测 TCP connect [::1]:8558 报 WSAEACCES(10013)、
+  # 同端口 127.0.0.1 正常。引擎默认走 Zen AutoLaunch 并按 http://[::1]:8558 探活,于是每个 DS
+  # 冷启动都白等满健康超时才降级到文件 DDC(实测 30.938s / 30.897s 两次,见 Pandora_2/_3.log)。
+  # 这段纯等待不影响正确性,但直接吃掉 AllocateBattle 的 ready 预算。
+  # 该参数走 ZenServerInterface.cpp FServiceSettings::TryApplyAutoLaunchOverride:把 AutoLaunch
+  # 换成 ConnectExisting 指向 IPv4,既跳过健康等待又保住 Zen DDC 命中(不是关掉 Zen)。
+  # 根治是放行本机 IPv6 回环;修好后删掉本行即可回到引擎默认。
+  #
+  # -AssetGatherSync=false (2026-08-05):与客户端 DefaultEngine.ini 的 EditorGameScansAR=Async 同义,
+  # 但作用在单个 DS 进程上(AssetDataGatherer.cpp FGatherSettings::Initialize,
+  # 门在 #if WITH_EDITOR || !UE_BUILD_SHIPPING)。ini 没被读到时这条仍然生效,两条互为兜底。
+  # 收益约 1 秒(本机实测 gather 0.54~1.08s),不是 PVE 进不去的原因;留着只为 -server 启动期
+  # 不把扫描压在游戏线程上。
+  #
+  # 本段只在 mode: "local" 下被读(main.go ModeLocal → NewLocalGameServerAllocator);
+  # 生产是 mode: agones + local_ds.enabled: false,这两个参数在线上不参与任何路径。
+  extra_args: ["-NoZenAutoLaunch=127.0.0.1:8558", "-AssetGatherSync=false"]
   extra_env:                                   # 注入 DS 进程额外环境变量
     PANDORA_DS_ALLOCATOR_ADDR: "127.0.0.1:8444"
     PANDORA_DS_ADMISSION_ADDR: "127.0.0.1:8444"

@@ -31,6 +31,18 @@ type localInstanceIdentitySource interface {
 	LocalInstanceIdentity(podName string) (instanceUID string, instanceEpoch uint32, ok bool)
 }
 
+// localBattleCredentialSource 由 mode=local 的分配器实现,给出经 env 下发给本机 DS 的
+// **完整凭据身份**,供 legacy 心跳应答逐字段回显 ACK。
+//
+// 与 localInstanceIdentitySource 是两件事:那个只回 uid/epoch(够 legacy 回填战斗记录),
+// 而 UE 的心跳 ACK 比对要求 uid/epoch/gen/jti/writer_epoch 五项全等,少一项即整份判不匹配。
+//
+// 只有 data.LocalGameServerAllocator 实现它:Agones / Mock 分配器都不实现,故回显分支在生产
+// (Model B)与离线 mock 下是机械死代码,两条路径的应答逐字节不变。
+type localBattleCredentialSource interface {
+	LocalCredentialACK(podName string) (data.BattleCredentialIdentity, bool)
+}
+
 // localBattleRosterSink 由 mode=local 的分配器实现,接收本局的权威准入元数据。
 //
 // 生产走 Agones GameServer annotation 下发 roster/allocation-id/release-track;local 没有

@@ -481,6 +481,49 @@ func TestSetReadyAllReady(t *testing.T) {
 	}
 }
 
+// 加入一支已经 READY 的队伍必须把队伍打回 FORMING —— 新成员默认 ready=false。
+//
+// 回归 2026-08-05 线上实录:单人队长点准备 → 队伍 READY;另一个号 AcceptInvite 进队后
+// 队伍**仍是 READY**,而他自己 ready=false。这几秒里队长点开始,matchmaker.resolveMembers
+// 只校验 State==READY、不逐人校验 ready,会带着没准备的人开局。
+func TestJoinTeamDemotesReadyTeamBackToForming(t *testing.T) {
+	uc, _, cleanup := newTestUsecase(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	if _, err := uc.CreateTeam(ctx, 1001, 2001); err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	// 单人队长点准备 → 全员(就他一个)已准备 → READY。
+	ready, err := uc.SetReady(ctx, 1001, 2001, true, 0)
+	if err != nil {
+		t.Fatalf("SetReady: %v", err)
+	}
+	if ready.State != stateReady {
+		t.Fatalf("单人准备后应为 READY,实际 %d", ready.State)
+	}
+
+	joined, err := uc.AcceptInvite(ctx, 0, 1001, 3001)
+	if err != nil {
+		t.Fatalf("AcceptInvite: %v", err)
+	}
+	if joined.State != stateForming {
+		t.Fatalf("有人没准备时队伍必须回退 FORMING,实际 %d", joined.State)
+	}
+	if allReady(joined.Members) {
+		t.Fatal("新成员默认不该是已准备")
+	}
+
+	// 新成员点完准备后重新回到 READY(两个方向都要通)。
+	after, err := uc.SetReady(ctx, 1001, 3001, true, 0)
+	if err != nil {
+		t.Fatalf("SetReady 3001: %v", err)
+	}
+	if after.State != stateReady {
+		t.Fatalf("全员准备后应为 READY,实际 %d", after.State)
+	}
+}
+
 // ── GetMyTeam ─────────────────────────────────────────────────────────────────
 
 // TestGetMyTeamHasTeam 验证已在队伍中的玩家能查回自己队伍。

@@ -137,14 +137,17 @@ func main() {
 	// 6. 装配链
 	repo := data.NewRedisTeamRepo(rdb)
 	uc := biz.NewTeamUsecase(repo, pusher, cfg.Team)
-	// matchmaker 联动(弱依赖:matchmaker_addr 留空 → 离队/踢人不撤匹配票据)
+	// matchmaker 联动(弱依赖:matchmaker_addr 留空 → 离队/踢人不撤匹配票据,
+	// 且入队闸门跳过 —— 没有匹配链路的部署本就不存在"被对局占住的队伍")
 	if cfg.Team.MatchmakerAddr != "" {
-		canceler := data.NewGrpcMatchCanceler(cfg.Team.MatchmakerAddr)
-		defer func() { _ = canceler.Close() }()
-		uc.SetMatchCanceler(canceler)
-		helper.Infow("msg", "match_canceler_ready", "matchmaker_addr", cfg.Team.MatchmakerAddr)
+		matchCli := data.NewGrpcMatchClient(cfg.Team.MatchmakerAddr)
+		defer func() { _ = matchCli.Close() }()
+		uc.SetMatchCanceler(matchCli)
+		uc.SetMatchCommitmentReader(matchCli)
+		helper.Infow("msg", "match_client_ready", "matchmaker_addr", cfg.Team.MatchmakerAddr)
 	} else {
-		helper.Warnw("msg", "matchmaker_addr_empty", "hint", "leave/kick will not cancel matchmaking tickets")
+		helper.Warnw("msg", "matchmaker_addr_empty",
+			"hint", "leave/kick will not cancel matchmaking tickets; team join match-gate disabled")
 	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
