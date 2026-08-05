@@ -59,9 +59,16 @@ func newLocalTestAllocator(t *testing.T, cfg conf.LocalDSConf) (*LocalGameServer
 		procs:     make(map[string]*launchedProc),
 		usedPorts: make(map[int]struct{}),
 	}
+	// 关卡表解析器在生产由 main 按 configtable 注入;与关卡无关的用例(端口/幂等/回收)
+	// 给一个恒成功的桩即可,否则 Allocate 会按"关卡无法解析"fail-closed。
+	if cfg.LoaderMap == "" {
+		l.mapURLResolver = func(mapID uint32) (string, error) {
+			return fmt.Sprintf("/Game/Test/Map%d", mapID), nil
+		}
+	}
 	var mu sync.Mutex
 	created := make([]*fakeProc, 0)
-	l.startProc = func(_ string, _ int, _ uint64, _ uint32, _, _ string) (dsProcess, error) {
+	l.startProc = func(_ string, _ int, _ uint64, _ uint32, _, _, _ string) (dsProcess, error) {
 		fp := newFakeProc()
 		mu.Lock()
 		created = append(created, fp)
@@ -131,7 +138,7 @@ func TestAllocatePassesUniqueModelBIdentityAndTokenToProcess(t *testing.T) {
 		gotMatch, gotPod, gotUID, gotEpoch = matchID, podName, instanceUID, instanceEpoch
 		return "model-b-token", nil
 	}, true)
-	l.startProc = func(_ string, _ int, _ uint64, _ uint32, _, token string) (dsProcess, error) {
+	l.startProc = func(_ string, _ int, _ uint64, _ uint32, _, _, token string) (dsProcess, error) {
 		gotToken = token
 		return newFakeProc(), nil
 	}
@@ -243,46 +250,72 @@ func TestAllocate_ProbeAllBusy(t *testing.T) {
 	}
 }
 
-func TestBuildArgs_ResolvesMapByID(t *testing.T) {
-	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{
-		MapName:   "/Game/Maps/Default",
-		PortBase:  7777,
-		PortRange: 10,
-		Maps: []conf.MapEntry{
-			{MapID: 1, MapName: "/Game/Maps/PVP"},
-			{MapID: 2, MapName: "/Game/Maps/PVE"},
-		},
+// 关卡由注入的解析器(生产 = 现查 g_关卡.xlsx)决定,allocator 不再有第二份 map_id → URL 映射。
+func TestResolveStartupMap_UsesInjectedResolver(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
+	l.SetMapURLResolver(func(mapID uint32) (string, error) {
+		if mapID != 7 {
+			return "", fmt.Errorf("关卡表没有 map_id=%d 的行", mapID)
+		}
+		return "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode", nil
 	})
 
-	args := l.buildArgs(7788, 2)
-	if len(args) == 0 || args[0] != "/Game/Maps/PVE" {
-		t.Fatalf("map_id=2 should select PVE map, args=%v", args)
+	got, err := l.resolveStartupMap(7)
+	if err != nil || got != "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode" {
+		t.Fatalf("resolveStartupMap(7)=(%q,%v)", got, err)
 	}
-
-	args = l.buildArgs(7789, 99)
-	if len(args) == 0 || args[0] != "/Game/Maps/Default" {
-		t.Fatalf("unknown map_id should fallback to default map, args=%v", args)
+	if _, err := l.resolveStartupMap(99); err == nil {
+		t.Fatal("关卡表查不到的 map_id 必须报错,绝不回退兜底图")
 	}
 }
 
-// LoaderMap 一旦配置,DS 一律启到加载/分发关卡(忽略 map_id 直选),目标副本改由 UE Loader
-// 读 PANDORA_MAP_ID → 查表 → ServerTravel 决定(「填表即用」权威路径)。map_id 仍经 env 注入,不影响本参数。
-func TestBuildArgs_LoaderMapOverridesDirectSelect(t *testing.T) {
+// 关卡表查不到 map_id 时 Allocate 必须整体失败:这是 2026-08-04 事故的护栏 ——
+// 旧实现会静默起兜底图,DS 侧关卡门随后判 Mismatch 自杀,分配卡到超时,玩家只看到"排队中"。
+func TestAllocate_FailsClosedWhenMapUnresolvable(t *testing.T) {
+	l, created := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
+	l.SetMapURLResolver(func(mapID uint32) (string, error) {
+		return "", fmt.Errorf("关卡表(g_关卡.xlsx)没有 map_id=%d 的行", mapID)
+	})
+
+	_, _, _, err := l.Allocate(context.Background(), 42, 11, "pve_coop", "stable")
+	if err == nil {
+		t.Fatal("关卡解析失败必须让 Allocate 失败")
+	}
+	if errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("expected ErrInvalidArg, got %v", err)
+	}
+	if len(*created) != 0 {
+		t.Fatalf("解析失败不得拉起任何 DS 进程,got %d", len(*created))
+	}
+	// 端口也不能被占用(失败发生在取端口之前)。
+	if len(l.usedPorts) != 0 {
+		t.Fatalf("失败路径不得占用端口,used=%v", l.usedPorts)
+	}
+}
+
+// 没有解析器又没配 loader_map = 无处得知 map_id 对应哪张图,只能 fail-closed
+// (启动期 conf.ValidateLocalMapSourceConfig 已挡住,这里是最后一道)。
+func TestResolveStartupMap_NoSourceFailsClosed(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
+	l.mapURLResolver = nil
+	if _, err := l.resolveStartupMap(7); err == nil {
+		t.Fatal("既无 config_table 也无 loader_map 时必须报错")
+	}
+}
+
+// LoaderMap 一旦配置,DS 一律启到加载/分发关卡(不再由 allocator 查表拼 URL),目标副本改由 UE Loader
+// 读 PANDORA_MAP_ID → 查同一张 g_关卡.xlsx → ServerTravel 决定。map_id 仍经 env 注入,不影响本参数。
+func TestResolveStartupMap_LoaderMapWins(t *testing.T) {
 	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{
-		MapName:   "/Game/Maps/Default",
 		LoaderMap: "/Game/Maps/Loader?game=/Script/Pandora.PandoraDSLoaderGameMode",
 		PortBase:  7777,
 		PortRange: 10,
-		Maps: []conf.MapEntry{
-			{MapID: 1, MapName: "/Game/Maps/PVP"},
-			{MapID: 2, MapName: "/Game/Maps/PVE"},
-		},
 	})
+	l.SetMapURLResolver(func(uint32) (string, error) { return "/Game/Maps/PVE", nil })
 
-	// 即便 map_id=2 在 Maps 命中 PVE,配了 LoaderMap 也一律启 Loader 关卡。
-	args := l.buildArgs(7788, 2)
-	if len(args) == 0 || args[0] != "/Game/Maps/Loader?game=/Script/Pandora.PandoraDSLoaderGameMode" {
-		t.Fatalf("loader_map should override direct map select, args=%v", args)
+	got, err := l.resolveStartupMap(2)
+	if err != nil || got != "/Game/Maps/Loader?game=/Script/Pandora.PandoraDSLoaderGameMode" {
+		t.Fatalf("loader_map should win, got=(%q,%v)", got, err)
 	}
 }
 

@@ -53,6 +53,18 @@ kafka:
   group_id: "pandora-ds-allocator"
   partition_cnt: 4
 
+# config_table: 策划配置表加载(不变量 §9.15;docs/design/config-table-hotreload.md)。
+#   本服只用其中的**关卡表**:mode=local 起战斗 DS 时按 map_id 现查 g_关卡.xlsx 得到关卡资源
+#   与 GameMode 类,拼成 DS 命令行地图参数 —— 关卡数据的唯一权威源就是这张表(§9.22)。
+#   dir 非空 = 启动强依赖:加载/校验失败直接退出(fail-closed),坏批次不会带着上线。
+#   热更:重导表后 `grpcurl -plaintext -d '{}' 127.0.0.1:50020
+#         pandora.config.v1.ConfigTableAdminService/ReloadConfigTable`,**无需重启本服务**,
+#         下一局即可进新加的副本(加载失败保留旧表)。
+#   mode=agones 可留空:那条路的关卡由 DS 侧 Loader GameMode 查同一张表决定,allocator 只传 map_id。
+#   dev 直接指仓库 dist(相对服务目录,进程 CWD = services/battle/ds_allocator)。
+config_table:
+  dir: "../../../configtable/dist"
+
 # player_locator gRPC 地址(短 TTL presence/监控续期,docs/design/battle-reconnect.md §2.2)。
 # 留空 → 不续期 presence(弱依赖,不影响权威 placement；不得据此把玩家降级路由到 Hub)。
 locator_addr: "127.0.0.1:50006"
@@ -202,39 +214,23 @@ local_ds:
   # token 当工程,所以它会被排在关卡 URL 之前;填错/不存在会在启动时直接报错,不会静默秒退。
   # 也可用环境变量 PANDORA_DS_UPROJECT 注入。
   # project_path: "F:/work/Pandora-Client-SVN/Pandora/Pandora.uproject"
-  map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode" # 默认/兜底关卡:map_id 未在下方 maps 命中时用它(留空则用 DS 默认关卡)
-  # loader_map:填了它就切到「填表即用」权威路径——DS 统一启到这张加载/分发关卡,不再直接启到目标图;
-  # 目标副本由 UE 侧 Loader GameMode 在 BeginPlay 读 PANDORA_MAP_ID(已注入)→ 查 g_关卡.xlsx → ServerTravel。
-  # 之后策划新增副本只改表 + 重打 DS 内容,本 yaml 的 maps 桥可退休。Loader 复用已在包内的空入口图
-  # Lvl_Server_Entry(无需新建 Lvl_DS_Loader 资产),GameMode 由 ?game= 覆盖。启用前提:DS 包含
-  # APandoraDSLoaderGameMode + 关卡上下文修复(2026-07-07)的重新编译产物。留空(默认)= 走下面 maps 直接启到目标图的 dev 桥。
-  # loader_map: "/Game/Entry/Level/Lvl_Server_Entry?game=/Script/Pandora.PandoraDSLoaderGameMode"
-  # 选副本表:客户端选择的 map_id 经 matchmaker 透传到 AllocateBattle,命中则起对应关卡,
-  # 未命中回退上面的 map_name。同一个 ds_allocator 进程凭 map_id 起不同副本(PVP / PVE 共存)。
-  # map_id 对齐策划 g_关卡.xlsx 的关卡 id(= configtable/dist/level.json 里 category=4 的全部行)。
+  # ── 起哪张图?一律现查策划关卡表,本文件不再抄第二份 ──────────────────────────
+  # map_id 经客户端选择 → matchmaker 透传 → AllocateBattle;allocator 拿它查上面 config_table
+  # 指的关卡表(g_关卡.xlsx → configtable/dist/level.json),按 asset_path + game_mode_class
+  # 拼出 DS 命令行关卡 URL(规则与 UE 侧 PandoraDSLoaderGameMode::BuildTravelURL 逐字一致)。
+  # **策划新增一张副本 = 关卡表加一行 + 重导表,本文件一个字都不用改。**
   #
-  # ⚠️ **漏配的后果不是「回退到默认图」而是「这张图永远进不去」**(2026-08-04 实测 map_id=11):
-  # 未命中 → 起默认 map_name(MobaLevel)→ DS 侧关卡门发现「已加载世界 ≠ 注入 map_id 期望资源」
-  # → 判 Mismatch → fail-closed 自杀退出 → 战斗 DS 进程消失 → 分配卡在 warming 直到超时。
-  # 那道门是对的(防玩家进错图),所以**关卡表新增一行战斗关卡,这里必须同步加一行**。
-  # 校验方法:`category=4` 的 id 集合必须与下方 map_id 集合完全一致。
-  maps:
-    - map_id: 4                                # 战斗测试(Lvl_Test_Fight)
-      map_name: "/Game/Test/Level/Fight/Lvl_Test_Fight?game=/Script/Pandora.PandoraBattleGameMode"
-    - map_id: 5                                # 测试场景(TopDown_Test02;关卡表未指定 GameMode,沿用战斗默认)
-      map_name: "/Game/Test/Level/_Test/Level_TopDown_Test02?game=/Script/Pandora.PandoraBattleGameMode"
-    - map_id: 6                                # PVP 5v5(MobaLevel,对齐 g_关卡.xlsx Id=6)
-      map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode"
-    - map_id: 7                                # PVE 副本(松林镇 SonglinTown,对齐 g_关卡.xlsx Id=7)
-      map_name: "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode"
-    - map_id: 8                                # PVE 副本(Artic01)
-      map_name: "/Game/ScifiArctic/Maps/ExampleLevel_Artic01?game=/Script/Pandora.PandoraPveGameMode"
-    - map_id: 9                                # PVP 战斗(Fantastic Dungeon)
-      map_name: "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon?game=/Script/Pandora.PandoraBattleGameMode"
-    - map_id: 10                               # PVE 战斗(Fantastic Dungeon PVE)
-      map_name: "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon_Pve?game=/Script/Pandora.PandoraPveGameMode"
-    - map_id: 11                               # PVE 战斗(StylizedCyberpunk)
-      map_name: "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk?game=/Script/Pandora.PandoraPveGameMode"
+  # 2026-08-04 之前这里有一张 maps 手抄映射(map_id → 关卡 URL)和一个 map_name 兜底,已整块删除:
+  # 那是把关卡表两列抄了第二份(违反 §9.22),而且抄漏一行的后果不是「回退默认图」而是
+  # 「这张图永远进不去」—— 起了兜底图的 DS 会被 DS 侧关卡门判 Mismatch 后 fail-closed 自杀,
+  # 分配卡在 warming 直到超时,玩家侧只显示「一直排队中」(map_id=11 实测)。现在查不到表就
+  # 直接让本次分配失败并写明 map_id,不再有静默起错图这条路。
+  #
+  # loader_map:另一条同源路径(生产 Agones 走的就是它)——DS 统一启到加载/分发关卡,由 UE 侧
+  # Loader GameMode 读 PANDORA_MAP_ID(已注入)查**同一张** g_关卡.xlsx 后 ServerTravel。
+  # 填了它就不再由 allocator 拼 URL。Loader 复用包内已有的空入口图 Lvl_Server_Entry。
+  # 本机 local 至今未实测过这条路,默认留空。
+  # loader_map: "/Game/Entry/Level/Lvl_Server_Entry?game=/Script/Pandora.PandoraDSLoaderGameMode"
 
   # advertise_host:返回给客户端 NetDriver 连接的 host。本机自测用 127.0.0.1;
   # 内网测试服(play.ps1 -Battle -Intranet)会自动探测本机内网 IPv4 并经环境变量

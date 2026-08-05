@@ -141,13 +141,6 @@ type LocalDSConf struct {
 	// buildArgs 已保证该顺序。
 	ProjectPath string `yaml:"project_path,omitempty" json:"project_path,omitempty"`
 
-	// MapName 启动时加载的 UE 关卡(DS 命令行首个位置参数,例如 /Game/Maps/BattleMap)。
-	// 留空则不带关卡参数,由 DS 自身默认关卡决定。
-	//
-	// 当请求携带的 map_id 在 Maps 里命中时,用命中的关卡覆盖本字段;未命中(或 Maps 为空)才回退本字段。
-	// 因此 MapName 语义 = 「默认关卡 / 未知 map_id 的兜底」(通常配 PVP 主图)。
-	MapName string `yaml:"map_name,omitempty" json:"map_name,omitempty"`
-
 	// LoaderMap 非空时,DS 统一启动到这张「加载 / 分发关卡」,而不是直接启到目标副本图。
 	// 目标副本由 UE 侧 Loader GameMode 在 BeginPlay 读 PANDORA_MAP_ID(本 allocator 已经注入)→
 	// 查 g_关卡.xlsx → ServerTravel 过去(见 Doc/服务器/副本选择_UE侧交接_Codex.md)。
@@ -157,13 +150,6 @@ type LocalDSConf struct {
 	//
 	// 例:"/Game/Test/Level/Lvl_DS_Loader?game=/Script/Pandora.PandoraDSLoaderGameMode"。
 	LoaderMap string `yaml:"loader_map,omitempty" json:"loader_map,omitempty"`
-
-	// Maps 是「副本选择」表:把请求里的 map_id 映射到具体要加载的 UE 关卡 URL。
-	// 选副本链路的服务端落点——同一个 ds_allocator 进程凭请求 map_id 起不同副本(PVP MobaLevel /
-	// PVE SonglinTown …),而非一进程一张死图。map_id 由客户端选择、经 matchmaker 透传到
-	// AllocateBattle(见 proto AllocateBattleRequest.map_id)。命中则用条目的 map_name 起 DS;
-	// 未命中回退顶层 MapName。留空 = 不启用选副本,永远用 MapName(向后兼容,老配置零改动)。
-	Maps []MapEntry `yaml:"maps,omitempty" json:"maps,omitempty"`
 
 	// AdvertiseHost 返回给客户端的可连接 host(默认 127.0.0.1,本机联调)。
 	AdvertiseHost string `yaml:"advertise_host,omitempty" json:"advertise_host,omitempty"`
@@ -195,38 +181,26 @@ const (
 	LauncherEditor = "editor"
 )
 
-// MapEntry 是「选副本」表的一行:把请求 map_id 映射到具体的 UE 关卡 URL(见 LocalDSConf.Maps)。
-type MapEntry struct {
-	// MapID 客户端选择、经 matchmaker 透传到 AllocateBattle 的副本编号(对齐策划 g_关卡.xlsx 的关卡 id)。
-	MapID uint32 `yaml:"map_id" json:"map_id"`
-
-	// MapName 该 map_id 对应要加载的 UE 关卡 URL(含可选 ?game= GameMode),例如
-	// "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode"。
-	MapName string `yaml:"map_name" json:"map_name"`
-}
-
-// ResolveMapName 按请求 map_id 返回要加载的 UE 关卡 URL:命中 Maps 用命中项,否则回退顶层 MapName。
-// 未启用选副本(Maps 空)或 map_id 未配置时,行为与旧版一致(永远用 MapName),保证向后兼容。
-func (c LocalDSConf) ResolveMapName(mapID uint32) string {
-	for _, m := range c.Maps {
-		if m.MapID == mapID && m.MapName != "" {
-			return m.MapName
-		}
-	}
-	return c.MapName
-}
-
-// ResolveStartupMap 返回 DS 进程「首个加载」的关卡 URL(命令行位置参数)。
-//   - LoaderMap 非空 → 统一启到加载 / 分发关卡,目标副本由 UE Loader GameMode 读 PANDORA_MAP_ID
-//     查 g_关卡.xlsx 后 ServerTravel 决定(生产权威路径,allocator 只传数字 map_id,策划填表即用)。
-//   - LoaderMap 空(默认)→ 按 map_id 直接启到目标图(Maps/MapName 的 dev 桥),向后兼容。
+// ValidateLocalMapSourceConfig 锁死 mode=local 的「关卡从哪来」:必须有唯一权威源。
 //
-// 无论走哪条,PANDORA_MAP_ID env 都已注入(见 buildEnv),故切换只影响「首个加载哪张图」。
-func (c LocalDSConf) ResolveStartupMap(mapID uint32) string {
-	if c.LoaderMap != "" {
-		return c.LoaderMap
+// 2026-08-04 之前这里是一张 local_ds.maps 手抄表(map_id → UE 关卡 URL),它把关卡表
+// (g_关卡.xlsx → configtable/dist/level.json)的 asset_path / game_mode_class 两列抄了第二份,
+// 违反 §9.22(不重复存储影子状态)。抄漏一行的后果不是"回退默认图"而是"这张图永远进不去":
+// DS 起了默认图 → DS 侧关卡门判「已加载世界 ≠ 注入 map_id」→ fail-closed 自杀 → 分配卡到超时,
+// 玩家侧只看到"一直排队中"(map_id=11 实测)。该表已整块删除,关卡一律现查关卡表。
+//
+// 因此 mode=local 必须二选一,都没有就拒绝启动(而不是启动后每局失败):
+//   - config_table.dir:allocator 读关卡表按 map_id 拼启动 URL(默认路径);
+//   - local_ds.loader_map:DS 统一启到加载 / 分发关卡,由 UE 侧 Loader GameMode 读同一张表决定目标图。
+func (c *Config) ValidateLocalMapSourceConfig() error {
+	if c.Mode != ModeLocal {
+		return nil
 	}
-	return c.ResolveMapName(mapID)
+	if strings.TrimSpace(c.LocalDS.LoaderMap) != "" || strings.TrimSpace(c.ConfigTable.Dir) != "" {
+		return nil
+	}
+	return fmt.Errorf("ds_allocator: mode=local 必须配 config_table.dir(关卡按 map_id 现查 g_关卡.xlsx)" +
+		"或 local_ds.loader_map(DS 侧 Loader 查同一张表);两者皆空则无处得知 map_id 对应哪张图")
 }
 
 // AgonesConf 是真 Agones GameServerAllocation 后端配置(W4 ⑫)。

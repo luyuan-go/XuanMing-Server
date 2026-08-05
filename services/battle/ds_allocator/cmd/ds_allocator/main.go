@@ -31,6 +31,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	pconfig "github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence/writerlease"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
@@ -40,6 +41,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
+	configv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/biz"
@@ -150,6 +152,33 @@ func main() {
 	if err := cfg.ValidateAllocationAbortAuthConfig(); err != nil {
 		helper.Errorw("msg", "allocation_abort_auth_config_invalid", "err", err)
 		os.Exit(1)
+	}
+	if err := cfg.ValidateLocalMapSourceConfig(); err != nil {
+		helper.Errorw("msg", "local_map_source_config_invalid", "err", err)
+		os.Exit(1)
+	}
+
+	// 2.5 策划配置表(不变量 §9.15):config_table.dir 配置后是启动强依赖,加载失败直接退出。
+	// ds_allocator 只用其中的关卡表:mode=local 起 DS 时按 map_id 现查 g_关卡.xlsx 拼关卡 URL
+	// (asset_path + game_mode_class),取代 2026-08-04 之前那张手抄的 local_ds.maps 影子表。
+	// mode=agones 不读它(关卡由 DS 侧 Loader GameMode 查同一张表决定),留空即可。
+	var ctStore *configtable.Store
+	if dir := strings.TrimSpace(cfg.ConfigTable.Dir); dir != "" {
+		ctStore = configtable.NewStore()
+		// 批次级校验器:关卡表里**每一张**战斗类关卡都必须能构造出合法启动 URL。
+		// 启动首载与之后每次热 reload 走同一门禁,坏批次整批不切换、保留旧表——
+		// 把"某张图资源列填错"挡在加载边界,而不是等玩家恰好选中那张图才炸。
+		ctStore.AddValidator(func(tb *configtable.Tables) error { return tb.Level.ValidateBattleLaunchURLs() })
+		res, lerr := ctStore.Load(dir, 0)
+		if lerr != nil {
+			helper.Errorw("msg", "configtable_load_failed", "dir", dir, "err", lerr)
+			os.Exit(1)
+		}
+		for _, w := range res.Warnings {
+			helper.Warnw("msg", "configtable_load_warning", "warning", w)
+		}
+		helper.Infow("msg", "configtable_loaded", "dir", dir,
+			"version", res.Version, "levels", ctStore.Tables().Level.Count())
 	}
 
 	// 3. Redis(强依赖)
@@ -278,9 +307,24 @@ func main() {
 		defer func() { _ = ld.Close() }()
 		allocator = ld
 		ld.SetDSTokenIssuer(issueLocalBattleCredential, true) // 完整 tuple 经 env 下发；失败必须 fail-closed
+		// 关卡解析器:每局现查关卡表(唯一权威源 g_关卡.xlsx),不再有第二份 yaml 映射。
+		// 现查而非启动时快照 —— 这样 ReloadConfigTable 之后新增的副本无需重启本服务即可开局。
+		// ctStore 为空时不注入:此时必然配了 loader_map(ValidateLocalMapSourceConfig 已挡),
+		// DS 侧 Loader GameMode 查同一张表决定目标图。
+		if ctStore != nil {
+			ld.SetMapURLResolver(func(mapID uint32) (string, error) {
+				tb := ctStore.Tables()
+				if tb == nil {
+					return "", fmt.Errorf("配置表尚未加载成功")
+				}
+				return tb.Level.BattleLaunchURL(mapID)
+			})
+		}
 		helper.Infow("msg", "local_ds_allocator_ready",
 			"launcher", cfg.LocalDS.Launcher, "project", cfg.LocalDS.ProjectPath,
-			"executable", cfg.LocalDS.ExecutablePath, "map", cfg.LocalDS.MapName,
+			"executable", cfg.LocalDS.ExecutablePath,
+			"map_source", localMapSource(cfg.LocalDS.LoaderMap, ctStore != nil),
+			"loader_map", cfg.LocalDS.LoaderMap,
 			"advertise_host", cfg.LocalDS.AdvertiseHost,
 			"port_base", cfg.LocalDS.PortBase, "port_range", cfg.LocalDS.PortRange)
 	default:
@@ -400,7 +444,13 @@ func main() {
 	gmSvc.SetBattleChecker(repo)
 
 	// 5. gRPC + HTTP
-	grpcSrv := server.NewGRPCServer(&cfg, svc, gmSvc)
+	// 配置表热更入口(§9.15 标准流水线):启用配置表时一并注册,策划改完 g_关卡.xlsx 重导表后
+	// 直接 ReloadConfigTable 即可让新副本可开局,无需重启 ds_allocator(通用实现,内部接口不对玩家开放)。
+	var ctAdmin configv1.ConfigTableAdminServiceServer
+	if ctStore != nil {
+		ctAdmin = configtable.NewAdminService(ctStore, cfg.ConfigTable.Dir)
+	}
+	grpcSrv := server.NewGRPCServer(&cfg, svc, gmSvc, ctAdmin)
 	writerHealth := &server.WriterHealthHolder{}
 	httpSrv := server.NewHTTPServer(&cfg, writerHealth)
 
@@ -548,6 +598,18 @@ func (d *dsLifecyclePusher) PublishLifecycle(ctx context.Context, evt *dsv1.DSLi
 		return err
 	}
 	return d.p.SendRaw(ctx, strconv.FormatUint(evt.GetMatchId(), 10), payload)
+}
+
+// localMapSource 只用于启动日志:说清 mode=local 这台 allocator 的关卡到底由谁查表决定,
+// 免得下一个人再去 yaml 里找那张已经删掉的 maps 映射。
+func localMapSource(loaderMap string, configTableReady bool) string {
+	if strings.TrimSpace(loaderMap) != "" {
+		return "loader_map(DS 侧 Loader GameMode 查 g_关卡.xlsx)"
+	}
+	if configTableReady {
+		return "config_table(allocator 现查 g_关卡.xlsx)"
+	}
+	return "none"
 }
 
 // rawLifecycleProducer 是启动测试可替换的 Kafka 最小能力面。

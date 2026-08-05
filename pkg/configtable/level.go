@@ -2,6 +2,7 @@ package configtable
 
 import (
 	"fmt"
+	"strings"
 
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 )
@@ -31,6 +32,65 @@ func validateLevelRow(row *configpb.LevelRow) error {
 	// 把「热更超大 team_size 打爆撮合」挡在加载边界,而不是等撮合时预分配爆内存。
 	if ts := row.GetTeamSize(); ts > MaxLevelTeamSize {
 		return fmt.Errorf("队伍人数(team_size=%d)超过上限 %d(防撮合预分配爆内存)", ts, MaxLevelTeamSize)
+	}
+	return nil
+}
+
+// LevelPackagePath 把关卡表「关卡资源」列(asset_path)归一成 UE **长包名**。
+//
+// 表里的值可能是 ObjectPath(`/Game/A/B.B`,导表从 SoftObjectPath 落下来就是这形状),
+// 而 UE 的 ServerTravel / DS 命令行地图参数只吃包路径,带 `.对象名` 会解析失败。
+// 规则与 UE 侧 APandoraDSLoaderGameMode::BuildTravelURL 逐字一致:剥掉**最后一个斜杠之后**
+// 的那个点及其后缀(点在斜杠之前的路径原样返回,不误伤 `/Game/A.B/C` 这类目录名带点的情况)。
+func LevelPackagePath(assetPath string) string {
+	p := strings.TrimSpace(assetPath)
+	if dot := strings.LastIndex(p, "."); dot > strings.LastIndex(p, "/") {
+		p = p[:dot]
+	}
+	return p
+}
+
+// BattleLaunchURL 按 map_id 返回战斗 DS 要加载的关卡 URL(`<长包名>[?game=<GameMode 类>]`)。
+//
+// 这是「关卡表是唯一权威源」在服务端的落点:ds_allocator 起本机 DS 时按本函数拼命令行地图参数,
+// 与 UE 侧 Loader GameMode(APandoraDSLoaderGameMode::BuildTravelURL)同规则、同数据源
+// (g_关卡.xlsx),两端不会各拼一套。策划新增一张副本 = 关卡表加一行,服务端零改配置。
+//
+// **失败一律返回 error,绝不给兜底关卡**:调用方必须让本次分配整体失败。回退默认图会让 DS 起错图,
+// 随后被 DS 侧关卡门判 Mismatch 自杀,表现成"玩家一直排队中"——2026-08-04 map_id=11 事故的形状。
+//
+// game_mode_class 为空 = 沿用关卡自带的 GameMode(不拼 `?game=`),与 UE 侧同义;
+// 不在这里塞猜的默认 GameMode(要改就改表)。
+func (t *LevelTable) BattleLaunchURL(id uint32) (string, error) {
+	row, ok := t.byID[id]
+	if !ok {
+		return "", fmt.Errorf("关卡表(g_关卡.xlsx)没有 map_id=%d 的行", id)
+	}
+	if row.GetCategory() != configpb.LevelCategory_LEVEL_CATEGORY_BATTLE {
+		return "", fmt.Errorf("map_id=%d(%s)关卡类别=%d,不是战斗 / 副本类关卡,不能开局",
+			id, row.GetName(), row.GetCategory())
+	}
+	pkg := LevelPackagePath(row.GetAssetPath())
+	if pkg == "" {
+		return "", fmt.Errorf("map_id=%d(%s)关卡资源(asset_path)为空", id, row.GetName())
+	}
+	if gameMode := strings.TrimSpace(row.GetGameModeClass()); gameMode != "" {
+		return pkg + "?game=" + gameMode, nil
+	}
+	return pkg, nil
+}
+
+// ValidateBattleLaunchURLs 断言表里**每一张**战斗类关卡都能构造出合法启动 URL。
+// 供服务注册成批次级校验器(Store.AddValidator):坏批次整批不切换、保留旧表(§9.15),
+// 把"某张图的资源列填错"挡在加载边界,而不是等玩家选中那张图才炸。
+func (t *LevelTable) ValidateBattleLaunchURLs() error {
+	for _, row := range t.rows {
+		if row.GetCategory() != configpb.LevelCategory_LEVEL_CATEGORY_BATTLE {
+			continue
+		}
+		if _, err := t.BattleLaunchURL(row.GetId()); err != nil {
+			return err
+		}
 	}
 	return nil
 }

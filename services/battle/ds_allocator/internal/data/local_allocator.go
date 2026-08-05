@@ -97,7 +97,8 @@ type LocalGameServerAllocator struct {
 
 	// startProc 拉起一个 DS 进程;单测注入假实现绕过真 exec。
 	// token 是本对局的 DS 回调令牌(Allocate 处一次性签发,避免二次签发失败只告警的空窗)。
-	startProc func(podName string, port int, matchID uint64, mapID uint32, gameMode, token string) (dsProcess, error)
+	// mapURL 是本次已解析定型的启动关卡(Allocate 处一次性解析,见 resolveStartupMap)。
+	startProc func(podName string, port int, matchID uint64, mapID uint32, mapURL, gameMode, token string) (dsProcess, error)
 
 	// portProbe 探测端口在本机是否真的空闲(可绑定)。nil=不探测(单测默认放行)。
 	// 用于挡住「台账已释放但进程未退出(幽灵 DS)」或外部程序占用的端口:否则 allocator 把
@@ -112,6 +113,21 @@ type LocalGameServerAllocator struct {
 	// dsTokenRequired 为 guard=enforce 时 true:签发失败则 fail-closed 不拉起 DS(否则该 DS
 	// 回调会被 enforce 守卫全拒)。off/permissive 下 false,签发失败只告警照拉。
 	dsTokenRequired bool
+
+	// mapURLResolver 把 map_id 解析成 DS 要加载的关卡 URL,由 main 在配置表就绪时注入
+	// (与 SetDSTokenIssuer 同范式,不动 GameServerAllocator 接口)。唯一实现是"现查关卡表"
+	// —— 关卡数据的唯一权威源是 g_关卡.xlsx(configtable),allocator 不再留第二份手抄映射。
+	// 每次 Allocate 现查:配置表热更(ConfigTableAdminService.ReloadConfigTable)后新增的副本
+	// 无需重启本服务即可开局。
+	//
+	// nil 表示未注入:只有配了 loader_map(DS 侧自己查表决定目标图)时才允许,否则 Allocate
+	// fail-closed —— 见 resolveStartupMap。conf.ValidateLocalMapSourceConfig 在启动期就挡住。
+	mapURLResolver func(mapID uint32) (string, error)
+}
+
+// SetMapURLResolver 注入「map_id → 关卡 URL」解析器(main 在 config_table.dir 配置时调用)。
+func (l *LocalGameServerAllocator) SetMapURLResolver(f func(mapID uint32) (string, error)) {
+	l.mapURLResolver = f
 }
 
 // SetDSTokenIssuer 注入 DS 回调令牌签发器(可选依赖,main 在 ds_auth.secret 已配时调用)。
@@ -170,6 +186,19 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 		return podName, p.addr, releaseTrack, nil
 	}
 
+	// 关卡在拉起进程前就解析定型:解析失败必须让整次分配失败,**绝不回退兜底图**。
+	// 起错图的 DS 会被 DS 侧关卡门判 Mismatch 后自杀,分配卡在 warming 直到 ready_wait 超时,
+	// 玩家侧只看到"一直排队中",排查成本极高(2026-08-04 map_id=11 实测)。这里失败则
+	// matchmaker 立刻拿到一条写明原因的错误。
+	mapURL, mapErr := l.resolveStartupMap(mapID)
+	if mapErr != nil {
+		plog.With(context.Background()).Errorw("msg", "local_ds_map_resolve_failed",
+			"match_id", matchID, "map_id", mapID, "err", mapErr,
+			"hint", "关卡由 g_关卡.xlsx(configtable/dist/level.json)权威决定;新增战斗关卡改表重导即可,不改 yaml")
+		return "", "", "", errcode.New(errcode.ErrInvalidArg,
+			"local_ds: resolve startup map for map_id %d: %v", mapID, mapErr)
+	}
+
 	port, ok := l.pickPortLocked()
 	if !ok {
 		return "", "", "", errcode.New(errcode.ErrDSNoAvailable,
@@ -197,7 +226,7 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 		}
 	}
 
-	proc, err := l.startProc(podName, port, matchID, mapID, gameMode, dsToken)
+	proc, err := l.startProc(podName, port, matchID, mapID, mapURL, gameMode, dsToken)
 	if err != nil {
 		return "", "", "", errcode.New(errcode.ErrDSAllocationFailed,
 			"local_ds: launch match %d on port %d: %v", matchID, port, err)
@@ -381,8 +410,8 @@ func defaultPortProbe(port int) bool {
 }
 
 // defaultStart 是 startProc 的真实现:exec UE Windows DS 并把 stdout/stderr 落盘。
-func (l *LocalGameServerAllocator) defaultStart(podName string, port int, matchID uint64, mapID uint32, gameMode, token string) (dsProcess, error) {
-	cmd := exec.Command(l.cfg.ExecutablePath, l.buildArgs(port, mapID)...) //nolint:gosec // 路径来自受信本机配置
+func (l *LocalGameServerAllocator) defaultStart(podName string, port int, matchID uint64, mapID uint32, mapURL, gameMode, token string) (dsProcess, error) {
+	cmd := exec.Command(l.cfg.ExecutablePath, l.buildArgs(port, mapURL)...) //nolint:gosec // 路径来自受信本机配置
 	if l.cfg.WorkingDir != "" {
 		cmd.Dir = l.cfg.WorkingDir
 	}
@@ -408,21 +437,47 @@ func (l *LocalGameServerAllocator) defaultStart(podName string, port int, matchI
 	return &execProcess{cmd: cmd, logF: logF}, nil
 }
 
+// resolveStartupMap 返回 DS 进程「首个加载」的关卡 URL(命令行位置参数),两条权威路径:
+//   - LoaderMap 非空 → 统一启到加载 / 分发关卡;目标副本由 UE 侧 Loader GameMode 读 PANDORA_MAP_ID
+//     查 g_关卡.xlsx 后 ServerTravel 决定(生产 Agones 走的就是这条)。
+//   - 否则 → 由注入的 mapURLResolver 现查关卡表拼出目标图 URL(本机 local 默认路径)。
+//
+// 两条都以 g_关卡.xlsx 为唯一事实源,区别只是"谁来查表"。没有第三条:解析器缺失或查表失败一律报错,
+// 不存在"未命中回退默认图"——那正是 2026-08-04 事故的直接成因(见 Allocate 处注释)。
+//
+// 无论走哪条,PANDORA_MAP_ID env 都已注入(见 buildEnv),故切换只影响「首个加载哪张图」。
+func (l *LocalGameServerAllocator) resolveStartupMap(mapID uint32) (string, error) {
+	if l.cfg.LoaderMap != "" {
+		return l.cfg.LoaderMap, nil
+	}
+	if l.mapURLResolver == nil {
+		return "", fmt.Errorf("未接入关卡表:请配 config_table.dir(现查 g_关卡.xlsx)或 local_ds.loader_map")
+	}
+	mapURL, err := l.mapURLResolver(mapID)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(mapURL) == "" {
+		return "", fmt.Errorf("map_id=%d 解析出的关卡 URL 为空", mapID)
+	}
+	return mapURL, nil
+}
+
 // buildArgs 拼 UE DS 命令行:[.uproject] + 关卡 + -server -log -port=<port> + 额外参数。
-// 首个加载关卡由 cfg.ResolveStartupMap(mapID) 决定:配了 LoaderMap 则统一启到加载/分发关卡(UE 侧
-// 读 PANDORA_MAP_ID → 查表 → ServerTravel);否则按 map_id 从 Maps 直接选副本图(未命中回退 MapName)。
+// mapURL 由 Allocate 经 resolveStartupMap 解析定型后传入(同一次分配只解析一次,
+// 避免"校验用 A、启动用 B"在配置表热更瞬间劈叉)。
 //
 // launcher=editor 时在最前面插 .uproject:UE 的 LaunchSetGameName 只把命令行里**第一个**不以 '-'
 // 开头的 token 当工程/关卡,所以 .uproject 必须排在关卡 URL 之前,否则引擎会把关卡路径当工程名解析失败。
 // -server 两种形态都带 —— NetMode 恒为 NM_DedicatedServer,IsRunningDedicatedServer() 为 true,
 // DS 子系统/心跳/在线准入全链路与打包 DS 完全一致,后端对此无感。
-func (l *LocalGameServerAllocator) buildArgs(port int, mapID uint32) []string {
+func (l *LocalGameServerAllocator) buildArgs(port int, mapURL string) []string {
 	args := make([]string, 0, 5+len(l.cfg.ExtraArgs))
 	if l.cfg.Launcher == conf.LauncherEditor && l.cfg.ProjectPath != "" {
 		args = append(args, l.cfg.ProjectPath)
 	}
-	if mapName := l.cfg.ResolveStartupMap(mapID); mapName != "" {
-		args = append(args, mapName)
+	if mapURL != "" {
+		args = append(args, mapURL)
 	}
 	args = append(args, "-server", "-log", fmt.Sprintf("-port=%d", port))
 	args = append(args, l.cfg.ExtraArgs...)

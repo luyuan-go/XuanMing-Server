@@ -6,6 +6,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/grpcserver"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
+	configv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 	gmv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/gm/v1"
 
@@ -22,9 +23,14 @@ import (
 //
 // GmService 与 DSAllocatorService 同进程复用同一 gRPC 端口:ds_allocator 已持有
 // match_id→战斗 DS 的注册表,战斗 DS 也已与之心跳直连,GM 指令下发天然与之同域。
-func NewGRPCServer(cfg *conf.Config, svc *service.AllocatorService, gmSvc *gm.Service) *kgrpc.Server {
+// ctAdmin 为配置表热更入口(§9.15),仅 config_table.dir 配置时非 nil;nil 则不注册该服务。
+func NewGRPCServer(cfg *conf.Config, svc *service.AllocatorService, gmSvc *gm.Service,
+	ctAdmin configv1.ConfigTableAdminServiceServer) *kgrpc.Server {
 	srv := grpcserver.MustNewServer(cfg.Server, pmw.AuthOptional())
 	dsv1.RegisterDSAllocatorServiceServer(srv, svc)
 	gmv1.RegisterGmServiceServer(srv, gmSvc)
+	if ctAdmin != nil {
+		configv1.RegisterConfigTableAdminServiceServer(srv, ctAdmin)
+	}
 	return srv
 }
