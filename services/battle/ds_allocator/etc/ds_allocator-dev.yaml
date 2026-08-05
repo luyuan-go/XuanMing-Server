@@ -211,12 +211,30 @@ local_ds:
   # loader_map: "/Game/Entry/Level/Lvl_Server_Entry?game=/Script/Pandora.PandoraDSLoaderGameMode"
   # 选副本表:客户端选择的 map_id 经 matchmaker 透传到 AllocateBattle,命中则起对应关卡,
   # 未命中回退上面的 map_name。同一个 ds_allocator 进程凭 map_id 起不同副本(PVP / PVE 共存)。
-  # map_id 对齐策划 g_关卡.xlsx 的关卡 id(权威:6=MobaLevel MOBA战斗,7=SonglinTown 松林镇副本)。
+  # map_id 对齐策划 g_关卡.xlsx 的关卡 id(= configtable/dist/level.json 里 category=4 的全部行)。
+  #
+  # ⚠️ **漏配的后果不是「回退到默认图」而是「这张图永远进不去」**(2026-08-04 实测 map_id=11):
+  # 未命中 → 起默认 map_name(MobaLevel)→ DS 侧关卡门发现「已加载世界 ≠ 注入 map_id 期望资源」
+  # → 判 Mismatch → fail-closed 自杀退出 → 战斗 DS 进程消失 → 分配卡在 warming 直到超时。
+  # 那道门是对的(防玩家进错图),所以**关卡表新增一行战斗关卡,这里必须同步加一行**。
+  # 校验方法:`category=4` 的 id 集合必须与下方 map_id 集合完全一致。
   maps:
+    - map_id: 4                                # 战斗测试(Lvl_Test_Fight)
+      map_name: "/Game/Test/Level/Fight/Lvl_Test_Fight?game=/Script/Pandora.PandoraBattleGameMode"
+    - map_id: 5                                # 测试场景(TopDown_Test02;关卡表未指定 GameMode,沿用战斗默认)
+      map_name: "/Game/Test/Level/_Test/Level_TopDown_Test02?game=/Script/Pandora.PandoraBattleGameMode"
     - map_id: 6                                # PVP 5v5(MobaLevel,对齐 g_关卡.xlsx Id=6)
       map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode"
     - map_id: 7                                # PVE 副本(松林镇 SonglinTown,对齐 g_关卡.xlsx Id=7)
       map_name: "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode"
+    - map_id: 8                                # PVE 副本(Artic01)
+      map_name: "/Game/ScifiArctic/Maps/ExampleLevel_Artic01?game=/Script/Pandora.PandoraPveGameMode"
+    - map_id: 9                                # PVP 战斗(Fantastic Dungeon)
+      map_name: "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon?game=/Script/Pandora.PandoraBattleGameMode"
+    - map_id: 10                               # PVE 战斗(Fantastic Dungeon PVE)
+      map_name: "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon_Pve?game=/Script/Pandora.PandoraPveGameMode"
+    - map_id: 11                               # PVE 战斗(StylizedCyberpunk)
+      map_name: "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk?game=/Script/Pandora.PandoraPveGameMode"
 
   # advertise_host:返回给客户端 NetDriver 连接的 host。本机自测用 127.0.0.1;
   # 内网测试服(play.ps1 -Battle -Intranet)会自动探测本机内网 IPv4 并经环境变量

@@ -31,8 +31,8 @@
 
 | ID | 项目 | 验证步骤 | 通过判据 | 验证结果 |
 |---|---|---|---|---|
-| V-1 | ⑦ legacy 正常结算释放 owner | 进副本 → 打一会 → 点「退出副本」 | ①`ds_allocator.err.log` 出现 `owner_release_abandoned_weak released=1`；②`QueryOwner` 变无归属；③客户端**无需人工干预**出现 `confirmed HUB admission`；④全程无 `incomplete owner identity`、无 `30s deadline` | **未验证** |
-| V-2 | ⑥ 花名册 env 投递（复验） | 同上一轮 | 战斗 DS 日志 `本地 battle 准入元数据已从 env 装载：roster_count=N` | 已验证（2026-08-05 01:14 UTC，`roster_count=1`）；退出受理已验证，**回大厅链未验证** |
+| V-1 | ⑦ legacy 正常结算释放 owner | 进副本 → 打一会 → 点「退出副本」 | ①`ds_allocator.err.log` 出现 `owner_release_abandoned_weak released=1`；②`QueryOwner` 变无归属；③客户端**无需人工干预**出现 `confirmed HUB admission`；④全程无 `incomplete owner identity`、无 `30s deadline` | **✅ 已验证（2026-08-05 02:44–02:45 UTC / 本地 22:44–22:45）**<br>match_id=20343585043972096<br>①`released=1 skipped_not_self=0`（trace `030cd0f0`）；第二跳终态心跳 `released=0 skipped_not_self=1` 幂等跳过，未重复删<br>②`QueryOwner` 释放后为空，随后经首次进场链重新落到 HUB<br>③`confirmed HUB admission: generation=19`（02:45:26），全程零人工干预<br>④退出时刻之后 `incomplete owner identity` + `30s deadline` 计数 **0** |
+| V-2 | ⑥ 花名册 env 投递（复验） | 同上一轮 | 战斗 DS 日志 `本地 battle 准入元数据已从 env 装载：roster_count=N` | **✅ 已验证**（2026-08-05 01:14 UTC，`roster_count=1`）；退出受理与回大厅链均已随 V-1 验证通过 |
 | V-3 | 掉落入包 | 结算后查背包 | 无 `progress_item_grant_failed` | **未验证，且已知失败**：`err=errcode=4 (ErrInvalidArg) items=2`，属独立缺陷，不在本事故修复范围 |
 
 ### 2.2 Model B / 线上 k8s 面（本机无法验，需真集群）
