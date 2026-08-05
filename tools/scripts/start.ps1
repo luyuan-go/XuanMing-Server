@@ -33,6 +33,11 @@
   pwsh tools/scripts/start.ps1 -Install            # 缺工具时才尝试 winget 安装
 
 .EXAMPLE
+  # 只更新了客户端仓(改资源 / 重编编辑器 DLL),go 服务没动 —— 只重启本机 DS,秒级:
+  pwsh tools/scripts/start.ps1 -Mode local -DsOnly
+  # 基础设施、数据库迁移、21 个 go 服务全部原样不动;后端没在跑时自动回落到完整启动。
+
+.EXAMPLE
   # 电脑重启后『快速恢复』上次的环境(不重建镜像,把停掉的集群/容器拉回来):
   pwsh tools/scripts/start.ps1 -Mode k8s    -Resume   # minikube start + 等 Pod + 自动重建宿主桥接/UDP 中继
   pwsh tools/scripts/start.ps1 -Mode docker -Resume   # docker compose up -d(不 --build)
@@ -79,6 +84,11 @@ param(
     # editor:UnrealEditor.exe 路径。留空则按 .uproject 里的 EngineAssociation 查注册表定位引擎,
     # 所以策划机引擎装在哪个盘/哪个目录都行(源码版走 HKCU Builds GUID,发行版走 HKLM 版本号)。
     [string]$DsEditorExe = '',
+    # -DsOnly(仅 -Mode local):**只重启本机 DS**,不动 docker 基础设施、不动其余 go 服务。
+    # 给「只更新了客户端仓(改资源 / 重编编辑器 DLL),go 服务一行没改」的日常循环用:
+    # 完整启动要走基础设施健康等待 → TiDB → 数据库迁移 → 21 个 go 服务逐个 build/起/探活,
+    # 这个场景下全是白跑。后端没在跑时自动回落到完整启动(见 Invoke-LocalDsOnly)。
+    [switch]$DsOnly,
 
     [switch]$Down,        # 停止该模式
     [switch]$Resume,      # 电脑重启后快速恢复:不重建镜像,把上次停掉的集群/容器拉回来
@@ -4131,6 +4141,99 @@ function Invoke-Local {
     & "$ScriptDir/dev_all.ps1"
 }
 
+# ===== local 快速通道:只重启本机 DS(-DsOnly)=====
+#
+# 场景:策划只更新了客户端仓(改资源 / 重编编辑器 DLL),后端 go 服务与基础设施一行没变。
+# 这条路只做真正相关的三件事:
+#   1) 重新解析 DS 形态(顺带做血统校验 —— 刚重编过编辑器 DLL 最容易在这里翻车);
+#   2) 杀掉正在跑的本机 DS。editor 形态的 DS 是在**进程启动时**读未 cook 的 Content/,
+#      已经跑着的那个进程内存里还是旧资源,不重启就看不到改动;
+#   3) 重启两个 allocator。必须重启而不是只杀 DS:hub_allocator 的常驻 Hub DS 由
+#      `sync.Once` 懒拉起(local_fleet.go ensureStarted),一个进程内只拉一次 —— 光杀 DS
+#      不会有人再把它拉起来,表现成"登录后永远进不了大厅"。
+#
+# 前提是后端已经在跑。没在跑就不是「重启」而是「启动」:此时返回 $false,主流程照常走完整
+# 启动 —— 双击的人不需要分清今天该点哪个图标。
+function Test-LocalTcpPort([int]$Port) {
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $conn = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
+        $ok = $conn.AsyncWaitHandle.WaitOne(400, $false)
+        if ($ok) { $client.EndConnect($conn) }
+        return $ok
+    } catch {
+        return $false
+    } finally {
+        $client.Close()
+    }
+}
+
+function Invoke-LocalDsOnly {
+    if ($Mode -ne 'local') { throw "-DsOnly 只支持 -Mode local(本机 DS 由宿主 allocator exec 拉起);当前 -Mode $Mode。" }
+    if ($Down -or $Resume -or $Reset -or $BuildOnly) { throw "-DsOnly 不能与 -Down / -Resume / -Reset / -BuildOnly 同用。" }
+
+    Write-Step "只重启本机 DS(基础设施与其余 go 服务原样不动)"
+
+    # 端口即判据(与 run_services.ps1 的探活口径一致)。login 是启动顺序里最后一个,
+    # 它在听就说明 21 个 go 服务这一批已经起完了。
+    $dsSpawners = @(
+        @{ Name = 'hub_allocator'; Port = 50021 }
+        @{ Name = 'ds_allocator';  Port = 50020 }
+    )
+    $required = @(
+        @{ Name = 'Redis'; Port = 6380 }
+        @{ Name = 'MySQL'; Port = 3307 }
+        @{ Name = 'Kafka'; Port = 9093 }
+        @{ Name = 'etcd';  Port = 2380 }
+    ) + $dsSpawners + @(
+        @{ Name = 'login'; Port = 50001 }
+    )
+
+    $missing = @($required | Where-Object { -not (Test-LocalTcpPort $_.Port) })
+    if ($missing.Count -gt 0) {
+        Write-Info "后端还没跑起来(缺:$(($missing | ForEach-Object { "$($_.Name):$($_.Port)" }) -join ', '))。"
+        Write-Info "那这次不是「重启 DS」而是「启动整套后端」,自动改走完整启动流程(会慢一些,属正常)。"
+        return $false
+    }
+    Write-Ok "后端在跑(基础设施 + 21 个 go 服务),本次只重启 DS。"
+
+    # DS advertise 地址必须与完整启动同源:hub_allocator / ds_allocator 重启后会重新读
+    # PANDORA_DS_ADVERTISE_HOST,不重设的话它们回落到 *-dev.yaml 里的写死值,
+    # 局域网客户端就会拿到回环地址去连自己。本函数只设环境变量,无任何启停副作用。
+    Initialize-LocalEdgeBinding
+
+    # 本入口天生服务于「改完资源立刻验证」,不显式传时按 editor 形态解析。
+    # 重新出过服务器包、想跑打包 exe 的人显式传 -DsLauncher packaged 即可。
+    if ([string]::IsNullOrWhiteSpace($DsLauncher)) {
+        $script:DsLauncher = 'editor'
+        Write-Info "未指定 -DsLauncher,本入口按 editor 形态解析(免出包,直接读工程里未 cook 的资源)。"
+    }
+    Set-LocalDsLauncherEnv
+
+    # restart = Stop-Service(先杀该 allocator 拉起的 DS 子进程,再杀服务)
+    #         + Start-Service(先清无主 DS,再起服务),所以"杀 DS"不必在这里另写一份扫描逻辑。
+    # -NoBuild:go 代码没改是本入口的前提,跳过 go build 正是它比完整启动快的地方;
+    #          二进制不存在时 run_services.ps1 仍会自己补编,不会静默起不来。
+    Write-Warn "两个 allocator 会重启:本机正在进行的战斗 DS 会被一并终止(本地联调可接受)。"
+    foreach ($svc in $dsSpawners) {
+        & "$ScriptDir/run_services.ps1" -Action restart -Service $svc.Name -NoBuild
+    }
+
+    # 复核端口:run_services.ps1 的 restart 起不来时只打印一行告警、不返回非零码,
+    # 淹在滚动输出里就成了"脚本说成功、客户端进不去"。这里按端口给出最终判据。
+    $failed = @($dsSpawners | Where-Object { -not (Test-LocalTcpPort $_.Port) })
+    if ($failed.Count -gt 0) {
+        $names = ($failed | ForEach-Object { "$($_.Name):$($_.Port)" }) -join ', '
+        throw "重启后端口没起来:$names。看日志:pwsh tools/scripts/run_services.ps1 -Action logs -Service <服务名>"
+    }
+
+    Write-Host ""
+    Write-Ok "本机 DS 已重启。客户端重新登录(或等它自己恢复)进大厅,看到的就是最新资源。"
+    Write-Info "Hub DS 是首次进大厅时才懒拉起的;editor 形态启动慢,首次进图等一两分钟属正常。"
+    Write-Info "改了 go 服务代码 / 换了 run/artifacts 里的二进制 → 请改走完整启动(策划一键启动-改资源即时生效.cmd)。"
+    return $true
+}
+
 # ===== docker 模式(全容器)=====
 function Invoke-Docker {
     if ($Down) {
@@ -7021,6 +7124,12 @@ Write-Host " Pandora 后端一键启动器  ( $Mode )" -ForegroundColor Magenta
 Write-Host "============================================" -ForegroundColor Magenta
 
 if ($Status) { Show-Status; exit 0 }
+
+# -DsOnly:只重启本机 DS 的快速通道。刻意排在 Resolve-Prerequisites 之前 —— 后端正跑着时
+# 那一整套前置(docker 探活 / k8s 互斥停机 / 8443-8444 端口空闲断言)要么白跑要么语义不对
+# (端口正被自己的 Envoy 占着)。后端没在跑时 Invoke-LocalDsOnly 返回 $false,直接落回下面
+# 的完整启动流程,前置检查一步都不少。
+if ($DsOnly -and (Invoke-LocalDsOnly)) { exit 0 }
 
 $prereqOk = Resolve-Prerequisites $Mode
 

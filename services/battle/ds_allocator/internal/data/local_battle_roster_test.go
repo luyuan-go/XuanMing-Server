@@ -11,6 +11,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -29,8 +30,10 @@ func TestAllocate_WithPendingRosterDoesNotDeadlock(t *testing.T) {
 	l.cfg.PortBase = 7800
 	l.cfg.PortRange = 10
 	l.cfg.AdvertiseHost = "127.0.0.1"
+	// 关卡解析器:本用例只验 roster/env 时序,给个恒成功的桩(否则 Allocate 会因关卡无源 fail-closed)。
+	l.mapURLResolver = func(mapID uint32) (string, error) { return fmt.Sprintf("/Game/Test/Map%d", mapID), nil }
 	// 假进程:不真 exec,但仍走 defaultStart 之外的同一 startProc 契约。
-	l.startProc = func(podName string, port int, matchID uint64, mapID uint32, gameMode, token string) (dsProcess, error) {
+	l.startProc = func(podName string, port int, matchID uint64, mapID uint32, mapURL, gameMode, token string) (dsProcess, error) {
 		// 模拟 defaultStart 在持锁状态下调用 buildEnv 的真实时序。
 		_ = l.buildEnv(podName, matchID, mapID, gameMode, token)
 		return fakeDSProcess{}, nil

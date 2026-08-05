@@ -39,6 +39,7 @@
 | 操作 | 怎么做 |
 |---|---|
 | 启动 | 双击 `策划一键启动-改资源即时生效.cmd` |
+| **改完资源后重来一次(日常最常用)** | 双击 `策划一键重启DS-改资源即时生效.cmd` |
 | 停止 | 双击 `策划一键停止-改资源即时生效.cmd` |
 
 等价的命令行:
@@ -47,9 +48,36 @@
 # 起后端 + 本机 DS(DS 用引擎跑,免出包)
 pwsh tools/scripts/start.ps1 -Mode local -DsLauncher editor
 
+# 只重启本机 DS(后端原样不动,快)
+pwsh tools/scripts/start.ps1 -Mode local -DsLauncher editor -DsOnly
+
 # 停止
 pwsh tools/scripts/start.ps1 -Mode local -Down
 ```
+
+### 为什么日常该用「重启 DS」而不是再启动一次
+
+一天里绝大多数改动都只在**客户端仓**(改资源,或重编了编辑器 DLL),后端 go 服务一行没动。
+但完整启动每次都要走:等基础设施容器 healthy → 起 TiDB → 跑数据库迁移 → 21 个 go 服务
+逐个 build / 启动 / 端口探活。这些步骤没有一步和你改的资源有关,纯属白等。
+
+`策划一键重启DS-改资源即时生效.cmd` 只做真正相关的事:
+
+- **不碰** docker 基础设施、TiDB、数据库迁移、21 个 go 服务(它们继续跑,连重启都没有);
+- 杀掉正在跑的本机 DS —— editor 形态是在**进程启动时**读未 cook 的 `Content/`,
+  已经跑着的那个进程内存里还是旧资源,不重启就是看不到你的改动;
+- 重启 `hub_allocator` / `ds_allocator` 两个进程,下次进大厅就会拉起一个读到最新资源的新 DS。
+  (为什么必须连 allocator 一起重启:常驻 Hub DS 在一个 allocator 进程里**只懒拉起一次**,
+  光杀 DS 没人再把它拉起来,表现成"登录后永远进不了大厅"。)
+
+注意两点:
+
+- **本机正在进行的战斗会被中断**(战斗 DS 是 `ds_allocator` 的子进程),重进即可;
+- **改了 go 服务代码、或后端同学给了新的 `run/artifacts` 二进制** → 那就得走完整启动,
+  双击 `策划一键启动-改资源即时生效.cmd`。
+
+后端还没起来时双击「重启」也没关系:脚本发现后端没在跑,会自己改走完整启动流程并说明原因,
+不需要你分辨今天该点哪个图标。
 
 - **引擎/工程路径不用填**:脚本按 `Pandora.uproject` 里的 `EngineAssociation` 查注册表定位引擎
   (源码版走 `HKCU\...\Unreal Engine\Builds` 的 GUID,Epic 发行版走 `HKLM\...\EpicGames\Unreal Engine\<版本>`),

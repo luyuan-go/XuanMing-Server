@@ -6,6 +6,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -323,7 +324,6 @@ func TestResolveStartupMap_LoaderMapWins(t *testing.T) {
 // 这是「加 editor 模式不影响原有 packaged 路径」的回归护栏。
 func TestBuildArgs_PackagedLauncherUnchanged(t *testing.T) {
 	base := conf.LocalDSConf{
-		MapName:   "/Game/Maps/Default",
 		PortBase:  7777,
 		PortRange: 10,
 	}
@@ -351,7 +351,7 @@ func TestBuildArgs_PackagedLauncherUnchanged(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			l, _ := newLocalTestAllocator(t, tc.cfg)
-			got := l.buildArgs(7788, 0)
+			got := l.buildArgs(7788, "/Game/Maps/Default")
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("packaged args changed:\n got=%v\nwant=%v", got, want)
 			}
@@ -366,13 +366,11 @@ func TestBuildArgs_EditorLauncherPutsProjectFirst(t *testing.T) {
 	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{
 		Launcher:    conf.LauncherEditor,
 		ProjectPath: `F:\work\Pandora-Client-SVN\Pandora\Pandora.uproject`,
-		MapName:     "/Game/Maps/Default",
 		PortBase:    7777,
 		PortRange:   10,
-		Maps:        []conf.MapEntry{{MapID: 2, MapName: "/Game/Maps/PVE"}},
 	})
 
-	got := l.buildArgs(7788, 2)
+	got := l.buildArgs(7788, "/Game/Maps/PVE")
 	want := []string{
 		`F:\work\Pandora-Client-SVN\Pandora\Pandora.uproject`,
 		"/Game/Maps/PVE",
@@ -394,7 +392,7 @@ func TestBuildArgs_EditorKeepsServerFlag(t *testing.T) {
 		PortRange:   10,
 	})
 	var hasServer bool
-	for _, a := range l.buildArgs(7788, 0) {
+	for _, a := range l.buildArgs(7788, "/Game/Maps/Default") {
 		if a == "-server" {
 			hasServer = true
 		}

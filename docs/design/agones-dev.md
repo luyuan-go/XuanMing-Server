@@ -278,7 +278,11 @@ Stable/Canary 是四个物理 Fleet，而不是同池随机挑 Pod。Battle 对 
   `PANDORA_DS_LOCAL_PROFILE=local-off-v1`。UE 还会机械核验 Windows、非 Agones、本地 pod 前缀、scope
   与完整凭据；任一不符都保持在线 admission，不能用 profile 字符串单独伪造离线放行。
 - **Allocate**:`exec` `local_ds.executable_path`,在 `[port_base, port_base+port_range)` 取空闲端口,
-  命令行 `<map_name> -server -log -port=<port>` + `extra_args`;注入 env `AGONES_GAMESERVER_NAME`/
+  命令行 `<关卡 URL> -server -log -port=<port>` + `extra_args`。关卡 URL 按 `map_id` **现查关卡表**
+  (`config_table.dir` → `g_关卡.xlsx` 的 `asset_path` + `game_mode_class`,规则与 UE 侧
+  `PandoraDSLoaderGameMode::BuildTravelURL` 一致);查不到即分配失败,**不回退兜底图**
+  (2026-08-04 删除了 `local_ds.maps` / `map_name` 影子配置,§9.22)。配了 `local_ds.loader_map`
+  则统一启到加载/分发关卡,改由 DS 侧 Loader 查同一张表。注入 env `AGONES_GAMESERVER_NAME`/
   `PANDORA_MATCH_ID`/`PANDORA_MAP_ID`/`PANDORA_GAME_MODE`(对齐 UE DS 侧 `PandoraAgonesProvider` 读取),
   返回 `advertise_host:port`(默认 `127.0.0.1`)。同 `match_id` 幂等(已在台账直接回原地址)。
 - **Release / abandoned**:`Kill` 对应进程;台账无此 pod 视作已释放(幂等)。`ds_allocator` 进程退出

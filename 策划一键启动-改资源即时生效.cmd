@@ -29,6 +29,11 @@ rem  material shader compilation (AllowGlobalShaderLoad / FApp::CanEverRender
 rem  both test !IsRunningDedicatedServer). Shader compiling is what a listen
 rem  server or PIE would do, because those actually render.
 rem
+rem  Daily loop: once the backend is up, you do NOT need this script again for
+rem  an asset-only change. Double-click 策划一键重启DS-改资源即时生效.cmd - it
+rem  restarts just the DS and leaves infra + the 21 Go services untouched, which
+rem  is much faster. Come back here when the Go backend itself changed.
+rem
 rem  Stop: 策划一键停止.cmd  (or: pwsh tools\scripts\start.ps1 -Mode local -Down)
 rem ============================================================
 setlocal

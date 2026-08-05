@@ -115,3 +115,69 @@ func TestValidateTeamSizeUpperBound(t *testing.T) {
 		t.Fatalf("team_size>%d 应被拦下(防预分配爆内存)", MaxLevelTeamSize)
 	}
 }
+
+// TestLevelPackagePath 关卡资源列 → UE 长包名:必须与 UE 侧
+// APandoraDSLoaderGameMode::BuildTravelURL 同规则(点号后的对象名不能进地图路径)。
+func TestLevelPackagePath(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"/Game/A/B.B", "/Game/A/B"},     // ObjectPath → 剥对象名
+		{"/Game/A/B", "/Game/A/B"},       // 已是长包名,原样
+		{"  /Game/A/B.B  ", "/Game/A/B"}, // 两端空白容错
+		{"/Game/A.x/B", "/Game/A.x/B"},   // 点在斜杠之前:目录名带点,不得误剥
+		{"/Game/StylizedCyberpunk/Levels/Sc.Sc", "/Game/StylizedCyberpunk/Levels/Sc"},
+		{"", ""},
+	} {
+		if got := LevelPackagePath(tc.in); got != tc.want {
+			t.Fatalf("LevelPackagePath(%q)=%q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestBattleLaunchURL 关卡表 → DS 启动 URL 的全部分支。
+func TestBattleLaunchURL(t *testing.T) {
+	withGameMode := battleRow(7, "松林镇")
+	withGameMode.AssetPath = "/Game/Test/Level/SonglinTown.SonglinTown"
+	withGameMode.GameModeClass = "/Script/Pandora.PandoraPveGameMode"
+
+	noGameMode := battleRow(5, "测试场景") // GameMode类 列留空(真实表 id=5 就是这样)
+	noGameMode.AssetPath = "/Game/Test/Level/_Test/Level_TopDown_Test02.Level_TopDown_Test02"
+
+	login := &configpb.LevelRow{Id: 1, Name: "登录", AssetPath: "/Game/Level/Login/Lvl_Login.Lvl_Login",
+		Category: configpb.LevelCategory_LEVEL_CATEGORY_LOGIN}
+
+	tbl := mustLevelTable(t, withGameMode, noGameMode, login)
+
+	got, err := tbl.BattleLaunchURL(7)
+	if err != nil || got != "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode" {
+		t.Fatalf("BattleLaunchURL(7)=(%q,%v)", got, err)
+	}
+	// game_mode_class 为空 → 不拼 ?game=,沿用关卡自带 GameMode(不塞猜的默认值)
+	got, err = tbl.BattleLaunchURL(5)
+	if err != nil || got != "/Game/Test/Level/_Test/Level_TopDown_Test02" {
+		t.Fatalf("BattleLaunchURL(5)=(%q,%v)", got, err)
+	}
+	// 表里没有的 map_id → 报错(调用方据此让分配失败,绝不回退兜底图)
+	if _, err := tbl.BattleLaunchURL(999); err == nil {
+		t.Fatal("表里没有的 map_id 必须报错")
+	}
+	// 非战斗类关卡(登录/选角/主城)不能开局
+	if _, err := tbl.BattleLaunchURL(1); err == nil {
+		t.Fatal("非战斗类关卡必须拒绝")
+	}
+}
+
+// TestValidateBattleLaunchURLs 批次级校验器:任一战斗关卡拼不出 URL 即整批拒绝;
+// 非战斗类关卡不受本校验约束。
+func TestValidateBattleLaunchURLs(t *testing.T) {
+	ok := battleRow(6, "MOBA战斗")
+	ok.AssetPath = "/Game/Test/Level/MobaLevel.MobaLevel"
+	if err := mustLevelTable(t, ok).ValidateBattleLaunchURLs(); err != nil {
+		t.Fatalf("合法批次不应报错: %v", err)
+	}
+	// asset_path 只有一个对象名(剥完为空)→ 该战斗关卡永远起不来,必须在加载边界拒绝。
+	bad := battleRow(9, "坏行")
+	bad.AssetPath = ".x"
+	if err := mustLevelTable(t, ok, bad).ValidateBattleLaunchURLs(); err == nil {
+		t.Fatal("战斗关卡拼不出 URL 必须整批拒绝")
+	}
+}

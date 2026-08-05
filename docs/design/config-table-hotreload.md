@@ -207,9 +207,9 @@ F:\work\XuanMing-Server\configtable\dist\
        注意生成器只拒空白 / `unknown` 占位,不会替你发现"源表没提交",这道门靠人。
 3. [x] 服务端加载器:`pkg/configtable`(manifest 校验 + checksum + 行数断言 + 运行时 `DiscardUnknown` +
        version 单调防回退 + 全批成功才 `atomic.Pointer` 切换 + 未知新表跳过告警/脏文件告警)。
-4. [~] reload 入口:gRPC `ConfigTableAdminService.ReloadConfigTable` 已落(matchmaker/player 内部
-       gRPC 端口,幂等/expect_version/失败保留旧表);**etcd 版本键 watch + fleet 确认(多机)
-       待排期**,单机/dev 用 RPC 已够。
+4. [~] reload 入口:gRPC `ConfigTableAdminService.ReloadConfigTable` 已落(matchmaker/player/
+       **ds_allocator**(2026-08-04,:50020)内部 gRPC 端口,幂等/expect_version/失败保留旧表);
+       **etcd 版本键 watch + fleet 确认(多机)待排期**,单机/dev 用 RPC 已够。
 5. [x] staging → active 切换 + history 留档:`tools/scripts/configtable_publish.ps1`(文件面;回滚 =
        重新生成更高版本发布,脚本拒绝**低版本**覆盖;**同版本**是文件面 no-op 但仍触发
        幂等 reload——崩溃续跑 / 服务重启后内存落后磁盘靠它收敛,不算拒绝)。

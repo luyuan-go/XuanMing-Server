@@ -255,7 +255,8 @@ AllocateBattle ─► allocating ─► warming ─► ready/running ─► ende
 | `kafka.brokers` | — | `pandora.ds.lifecycle` producer(Redis authority / Agones+enforce 下强依赖) |
 | `ds_auth.mode` / `ds_auth.authority_mode` | `off` / `legacy` | DS 回调令牌校验挡位(off→permissive→enforce);`authority_mode=redis` = Model B(须 agones+enforce+签名密钥) |
 | `agones.fleet_name` / `map_fleets` / `canary_*` / `capacity_watch_interval` / `capacity_warn_ratio` | — / `30s` / `0.8` | Agones 通用池 + 按 map 专属预热池 + canary 轨 + Fleet 容量巡检 |
-| `local_ds.executable_path` / `map_name` / `loader_map` / `maps` / `port_base` | — / — / — / — / `7777` | 本机 UE DS 可执行文件 + 按 `map_id` 选副本 + 端口池 |
+| `local_ds.executable_path` / `loader_map` / `port_base` | — / — / `7777` | 本机 UE DS 可执行文件 + 端口池;`loader_map` 非空则 DS 统一启到加载/分发关卡,由 UE Loader 查表决定目标图 |
+| `config_table.dir` | `""` | 策划配置表 active 目录(§9.15)。**`mode=local` 必配**(除非配了 `loader_map`):allocator 按 `map_id` 现查关卡表(`g_关卡.xlsx` 的 `asset_path` + `game_mode_class`)拼 DS 关卡 URL。查不到即分配失败,不回退兜底图。热更走 `ConfigTableAdminService.ReloadConfigTable`(:50020),新增副本无需重启 |
 
 > **Model B 激活门(`main.go`)**:`authority_mode=redis` 要求 `mode=agones` + `ds_auth.mode=enforce` + 签名密钥,
 > 缺一即 fail-closed 拒启动,不存在「配置说 redis authority、实际悄悄回退 legacy」的半开状态。

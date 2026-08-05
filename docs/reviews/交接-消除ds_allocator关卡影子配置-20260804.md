@@ -1,9 +1,12 @@
 # 交接单：消除 ds_allocator 的关卡影子配置（2026-08-04）
 
+> **状态：§2 方案 A 已落地（2026-08-04 夜）**，改动清单与验证证据见文末 [§9](#9-落地记录2026-08-04)。
+> 本文其余部分保留为决策背景；**§2.4「收尾」与 §5「机械校验」的建议已按 §9 的方式实现或作废**，
+> 不要照着 §2 再做一遍。
+>
 > **给新会话的话**：本文自包含，不需要读上一轮对话。
 >
-> **要做的是 §2「方案 A：ds_allocator 读关卡表」**（用户 2026-08-04 明确选定）。
-> §3 记的是另一条已存在的设计路径（`loader_map`），**只作为背景与备选**，不要去做。
+> §3 记的是另一条已存在的设计路径（`loader_map`），**只作为背景与备选**，本次没做。
 >
 > **为什么读表是正当的**：`configtable`（源头 `g_关卡.xlsx`）是关卡数据的**唯一权威源**；
 > 读它不构成「第二个源」。真正的影子副本是 `ds_allocator-dev.yaml` 里那张 `local_ds.maps`
@@ -331,3 +334,60 @@ pwsh tools/scripts/run_services.ps1 -Action restart -Service ds_allocator
   Loader 关卡与蓝图的存在性都已逐一核实；但 **`loader_map` 这条路本机一次都没实际跑过**。
 - 「Agones 不用 `maps`」是 grep 得出的（`agones_allocator.go` 里搜不到相关符号），**未在真集群验证**。
 - §4 的机械校验是**建议**，没实现。
+
+---
+
+## 9. 落地记录（2026-08-04）
+
+方案 A 已实现：`ds_allocator` 起本机战斗 DS 时按 `map_id` **现查关卡表**拼关卡 URL，
+`local_ds.maps` / `local_ds.map_name` 两处影子配置整块删除。
+
+### 9.1 改了什么
+
+| 文件 | 改动 |
+|---|---|
+| `pkg/configtable/level.go` | 新增 `LevelPackagePath`（ObjectPath → 长包名）、`(*LevelTable).BattleLaunchURL`（查不到 / 非战斗类 / 资源为空一律 error）、`ValidateBattleLaunchURLs`（批次级校验） |
+| `services/battle/ds_allocator/internal/conf/conf.go` | 删 `MapName` / `Maps` / `MapEntry` / `ResolveMapName` / `ResolveStartupMap`；新增 `ValidateLocalMapSourceConfig`（`mode=local` 必须有 `config_table.dir` 或 `loader_map`，否则拒启动） |
+| `services/battle/ds_allocator/internal/data/local_allocator.go` | 新增可选 `mapURLResolver` + `SetMapURLResolver`（照 `SetDSTokenIssuer` 范式）；`resolveStartupMap` 在 `Allocate` 内**取端口前**解析并 fail-closed；`startProc` / `buildArgs` 改传已定型的 `mapURL`（同一次分配只解析一次，避免热更瞬间"校验用 A、启动用 B"） |
+| `services/battle/ds_allocator/cmd/ds_allocator/main.go` | 装配 `configtable.Store`（照 matchmaker 范式，含批次级校验器）；`mode=local` 注入解析器（**每局现查**，非启动快照）；注册通用 `configtable.AdminService` 支持热更 |
+| `services/battle/ds_allocator/internal/server/grpc.go` | `NewGRPCServer` 增可选 `ctAdmin` 参数 |
+| `etc/ds_allocator-dev.yaml` | 加 `config_table.dir: "../../../configtable/dist"`；删 `maps`（含当天止血补的 8 行）与 `map_name` |
+| `run/cluster/etc/ds-allocator.yaml`、`run/docker-build/prebuilt/ds-allocator/etc/*.yaml` | 删同款死配置（`mode=agones` 下本就从未被读过） |
+| `README.md` | 配置表更新：`map_name` / `maps` 退场，`config_table.dir` 登记为 `mode=local` 必配 |
+
+### 9.2 关键取舍
+
+- **失败即失败**：查不到 `map_id` → `Allocate` 返回 `ErrInvalidArg` 且**不占端口、不拉进程**，
+  matchmaker 立刻拿到写明 `map_id` 的错误，不再有"起兜底图 → DS 判 Mismatch 自杀 → 卡到超时"这条路。
+- **`map_name` 一并删**（按 §2.4 建议）：留着就等于留着静默起错图的可能。代价是 `mode=local`
+  必须配 `config_table.dir` 或 `loader_map`，两者皆空**启动即拒**（有单测钉死，错误信息写明两条出路）。
+- **agones 一字未动**：那条路的关卡本就由 DS 侧 Loader GameMode 查同一张表决定，allocator 只透传
+  `map_id`。刻意**不**在 agones 加"后端预校验 `map_id`"——后端 dist 与 DS 镜像内烤死的表可能漂移，
+  用后端表否决 DS 能跑的图会制造新的误杀。
+- **§5 的机械校验作废**：两份清单已合成一份，不存在漂移对象。等价保障改由批次级校验器承担
+  （`category=BATTLE` 的每一行都必须能拼出 URL，坏批次整批不切换、保留旧表）。
+
+### 9.3 验证证据
+
+| 验证 | 结果 |
+|---|---|
+| `go build` / `go vet` / `go test ./...`（ds_allocator 全模块 + `pkg/configtable`） | 全绿 |
+| 单测：ObjectPath 剥离、`game_mode_class` 为空不拼 `?game=`、表缺 `map_id` → `Allocate` 失败且不占端口、非战斗类关卡拒绝、`loader_map` 优先、无关卡源 fail-closed、`ValidateLocalMapSourceConfig` 七种组合 | 全绿 |
+| 真实 dist 逐张比对 8 张战斗图 URL（`pkg/configtable/realdist_test.go`） | 全绿；7 张与旧 yaml 手抄值**逐字一致** |
+| dev yaml ↔ 关卡表接线（`cmd/ds_allocator/configtable_wiring_test.go`） | 全绿，4/5/6/7/8/9/10/11 全部拼得出 URL |
+| 实机重启 ds_allocator（`launcher=editor`） | `configtable_loaded version=20260804002 levels=11`、`map_source=config_table(allocator 现查 g_关卡.xlsx)`、`service_ready` |
+| 热更入口 | `grpcurl -plaintext -d '{}' 127.0.0.1:50020 pandora.config.v1.ConfigTableAdminService/ReloadConfigTable` → `activeVersion=20260804002, detail="version unchanged, no-op"` |
+
+### 9.4 唯一行为差异：`map_id=5`
+
+关卡表 id=5「测试场景」的 **GameMode类 列为空**，所以现在起的是关卡自带 GameMode，
+而当天止血的 yaml 里我给它手填了 `?game=/Script/Pandora.PandoraBattleGameMode`（那是猜的）。
+按"表是唯一权威源"，这里不塞猜测值。**若 5 需要战斗 GameMode，去 `g_关卡.xlsx` 填那一列**——
+填完两条路（本机 allocator 与线上 Loader）同时生效。其余 7 张与改动前逐字一致。
+
+### 9.5 仍未验证（留给下一次真人联调）
+
+- **§2.6 的验收标准本身**：「加一行 → 重导表 → 不改 yaml、不重启 → 玩家能进」的**玩家侧那一半**
+  需要真机开客户端打一局，本轮没跑。已验证的是它的两个前提：解析器每局现查表（非启动快照）、
+  热更 RPC 在 :50020 可用且能原子换表。
+- `loader_map` 那条路本机依旧一次都没跑过（与 §8 的诚实边界一致）。

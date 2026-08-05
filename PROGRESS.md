@@ -2224,3 +2224,48 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
 - go build / go vet / go test 七个模块全绿。gofmt 另报 6 个**本次未改**的文件不规范
   (guild data/cache*.go、login data/match_client*.go + service/login.go),疑为并发编辑者
   在改,未动。
+
+## 2026-08-04(续):ds_allocator 关卡影子配置消除 —— 改读策划关卡表
+
+- **起因**:`map_id=11` 玩家侧恒"排队中"。链条 = `ds_allocator-dev.yaml` 的 `local_ds.maps`
+  只手抄了 6/7 两行 → 未命中回退默认图 MobaLevel → DS 侧关卡门判「已加载世界 ≠ 注入 map_id」
+  → fail-closed 自杀 → 分配卡到 `ready_wait` 超时。关卡表里 `category=4` 实有 8 张(4/5/6/7/8/9/10/11)。
+- **治标**(当天早些时候):8 张全补进 `maps` 并逐个校验 `.umap` 存在。
+- **治本**(本次):`maps` / `map_name` 整块删除,`ds_allocator` 接 `pkg/configtable`,起本机战斗 DS 时
+  按 `map_id` 现查 `g_关卡.xlsx`(`asset_path` + `game_mode_class`)拼关卡 URL,换算规则与 UE 侧
+  `PandoraDSLoaderGameMode::BuildTravelURL` 逐字一致(剥 ObjectPath 对象名;`game_mode_class`
+  为空则不拼 `?game=`)。**查不到 map_id → `Allocate` 直接失败且不占端口不拉进程,绝不回退兜底图。**
+- `mode=local` 现在必须配 `config_table.dir` 或 `local_ds.loader_map`,两者皆空启动即拒
+  (`conf.ValidateLocalMapSourceConfig`)。`mode=agones` 一字未动(那条路本就由 DS 侧 Loader 查表)。
+- 批次级校验器:`category=BATTLE` 每一行都必须能拼出合法 URL,坏批次整批不切换保留旧表(§9.15);
+  同时注册通用 `configtable.AdminService`,**新增副本改表重导后 reload 即可,无需重启 ds_allocator**。
+- 验证:ds_allocator 全模块 + `pkg/configtable` build/vet/test 全绿;真实 dist 逐张比对 8 张战斗图
+  URL(7 张与旧 yaml 手抄值逐字一致,`map_id=5` 因表里 GameMode类 留空而不再拼 `?game=`);
+  实机重启后 `configtable_loaded version=20260804002 levels=11`、`map_source=config_table`;
+  热更 RPC `ReloadConfigTable` 在 :50020 实测可用。
+- 仍未验证:§2.6 验收标准的玩家侧那一半(加一行 → 重导 → 不重启 → 真人进图)。
+  详见 `docs/reviews/交接-消除ds_allocator关卡影子配置-20260804.md` §9。
+
+## 2026-08-04(续):策划日常循环加「只重启 DS」快速通道(-DsOnly)
+
+- **起因**:策划一天里绝大多数改动只在客户端仓(改资源 / 重编编辑器 DLL),go 服务一行没动;
+  但唯一的入口 `策划一键启动-改资源即时生效.cmd` 每次都要走「等基础设施 healthy → TiDB →
+  数据库迁移 → 21 个 go 服务逐个 build/起/端口探活」,这些步骤与改的资源全无关系,纯白等。
+- **落地**:`start.ps1` 新增 `-DsOnly`(仅 `-Mode local`)+ 根目录 `策划一键重启DS-改资源即时生效.cmd`。
+  只做三件事:①重新解析 DS 形态(顺带 `Assert-PandoraEditorModulesMatch` 血统校验,刚重编过
+  编辑器 DLL 最容易在这里翻车);②杀掉在跑的本机 DS(editor 形态在**进程启动时**读未 cook 的
+  `Content/`,老进程内存里还是旧资源);③重启 `hub_allocator` / `ds_allocator`。
+  **必须连 allocator 一起重启**:常驻 Hub DS 是 `local_fleet.go ensureStarted` 的 `sync.Once`
+  懒拉起,一个进程内只拉一次,光杀 DS 没人再拉起来,表现成"登录后永远进不了大厅"。
+- **刻意的取舍**:①排在 `Resolve-Prerequisites` 之前 —— 后端正跑着时那套前置要么白跑要么语义
+  不对(8443 正被自己的 Envoy 占着);②后端没在跑时返回 `$false` **自动回落完整启动**,双击的人
+  不需要分辨今天该点哪个图标;③`-Mode` 非 local 或与 `-Down/-Resume/-Reset/-BuildOnly` 同用直接
+  throw,k8s/online 路径零改动(主流程只加一行且 `-and` 短路);④走 `-NoBuild`(go 没改是本入口
+  前提),二进制缺失时 `run_services.ps1` 仍会自己补编;⑤`Initialize-LocalEdgeBinding` 必须重跑,
+  否则重启后的 allocator 回落 yaml 写死值,局域网客户端拿到回环地址。
+- **验证**:AST 解析通过;两条 guard 实测 throw+exit 1(`-Mode k8s -DsOnly`、`-DsOnly -Down`);
+  真机跑通,~15s 完成,日志 `local_hub_fleet_provider_ready launcher=editor
+  project=...Pandora.uproject executable=...UnrealEditor.exe advertise_host=192.168.2.28`
+  → editor 形态与局域网 advertise 均正确继承,随后 `local_hub_ds_started` 拉起新 Hub DS。
+- **已知代价**(文档已写明):本机正在进行的战斗会被中断(战斗 DS 是 `ds_allocator` 子进程);
+  改了 go 代码 / 换了 `run/artifacts` 二进制必须回到完整启动。

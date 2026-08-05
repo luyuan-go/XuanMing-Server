@@ -165,3 +165,53 @@ func TestRealDistMonsterKillExp(t *testing.T) {
 		t.Errorf("等级 0 应按 1 级处理,实得 exp=%d ok=%v(期望 %d)", lv0, ok, lv1)
 	}
 }
+
+// TestRealDistBattleLaunchURLs 用真实 dist 钉死「关卡表 → DS 启动 URL」的换算结果。
+//
+// 这条替代了 ds_allocator-dev.yaml 里那张已删除的 local_ds.maps 手抄映射(§9.22 影子配置):
+// 现在 allocator 起战斗 DS 时现查本表,所以本用例既是换算回归,也是"表里 8 张战斗图都能开局"
+// 的机械核对——新增副本只需改 g_关卡.xlsx,这里跟着表走即可,不必再同步第二份清单。
+func TestRealDistBattleLaunchURLs(t *testing.T) {
+	dist := filepath.Join("..", "..", "configtable", "dist")
+	if _, err := os.Stat(filepath.Join(dist, ManifestFileName)); err != nil {
+		t.Skipf("真实 dist 不存在,跳过: %v", err)
+	}
+	s := NewStore()
+	if _, err := s.Load(dist, 0); err != nil {
+		t.Fatalf("加载真实 dist 失败: %v", err)
+	}
+	lv := s.Tables().Level
+
+	// 战斗类关卡整表可开局(与服务启动期批次校验器同一断言)。
+	if err := lv.ValidateBattleLaunchURLs(); err != nil {
+		t.Fatalf("真实关卡表存在开不了局的战斗关卡: %v", err)
+	}
+
+	// 逐张比对(值取自 g_关卡.xlsx;7/8 等历史图的 URL 与旧 yaml 手抄值逐字一致)。
+	// id=5「测试场景」的 GameMode类 列为空 → 不拼 ?game=,沿用关卡自带 GameMode。
+	want := map[uint32]string{
+		4:  "/Game/Test/Level/Fight/Lvl_Test_Fight?game=/Script/Pandora.PandoraBattleGameMode",
+		5:  "/Game/Test/Level/_Test/Level_TopDown_Test02",
+		6:  "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode",
+		7:  "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode",
+		8:  "/Game/ScifiArctic/Maps/ExampleLevel_Artic01?game=/Script/Pandora.PandoraPveGameMode",
+		9:  "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon?game=/Script/Pandora.PandoraBattleGameMode",
+		10: "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon_Pve?game=/Script/Pandora.PandoraPveGameMode",
+		11: "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk?game=/Script/Pandora.PandoraPveGameMode",
+	}
+	for id, wantURL := range want {
+		got, err := lv.BattleLaunchURL(id)
+		if err != nil {
+			t.Fatalf("map_id=%d 拼不出启动 URL: %v", id, err)
+		}
+		if got != wantURL {
+			t.Fatalf("map_id=%d URL=%q, want %q", id, got, wantURL)
+		}
+	}
+	// 登录 / 选角 / 主城不可开局(map_id 走错也进不去战斗)。
+	for _, id := range []uint32{1, 2, 3} {
+		if _, err := lv.BattleLaunchURL(id); err == nil {
+			t.Fatalf("非战斗类关卡 %d 不应能拼出启动 URL", id)
+		}
+	}
+}
