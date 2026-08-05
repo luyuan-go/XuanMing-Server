@@ -1,8 +1,9 @@
 # Pandora 协议顺序规则
 
-> **状态**:已决策(2026-06-03)
-> **问题来源**:用户在 D3 末尾发现 RPC response 与 kafka push 乱序问题
-> **作用**:固化 4 个协议设计原则,所有业务 proto + 客户端代码必须遵守
+> **状态**:已决策(2026-06-03 立;2026-08-05 补入原则 5)
+> **问题来源**:用户在 D3 末尾发现 RPC response 与 kafka push 乱序问题;2026-08-05 用户追问"状态刷新该不该客户端主动拉"
+> **作用**:固化 5 个协议设计原则,所有业务 proto + 客户端代码必须遵守
+> **两类失效模式别混**:原则 1~4 治**乱序**(response 与 push 谁先到),原则 5 治**丢失**(push 整段不来)。做完原则 1~4 不代表推送可靠。
 
 ## 1. 乱序问题(必须先理解)
 
@@ -309,6 +310,40 @@ rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
 - "立即完成" → 客户端 OnResponse 里直接切 UI 状态
 - "已受理" → 客户端 OnResponse 里只显示 loading,等 push 切状态
 
+### 原则 5:**推送不承担正确性;每个客户端状态必须有权威查询接口**
+
+> 补入 2026-08-05。原则 1~4 解决的是**顺序**(response 与 push 谁先到),原则 5 解决的是**丢失**(push 整段不来)。两者是不同的失效模式,不能互相替代。
+
+⭐ 适用范围:**所有走 push 下发的状态**(匹配进度、队伍、好友、公会、经验、hub 迁移……)
+
+分工必须是这样,不能二选一:
+
+- **push = 变更提示 + 低延迟**,它**不是**真相源;
+- **pull(权威查询 RPC)= 真相源 + 兜底**,任何有生命周期的状态必须有一个**幂等的「查当前权威态」接口**(`GetMatchProgress` / `GetTeam` / `ListFriends` / `GetGuild` / `GetProfile` …);
+- 客户端不允许存在「只能靠 push 才能知道结果」的状态。
+
+**评审新 push 通道先问一句:「接收方错过这条推送,还有没有别的途径得知结果?」** 答案是"没有" → 缺 pull 接口,先补;补不了就必须上"启动强依赖 + 服务端可重放补推 + 客户端有界轮询"三层(见 §12.1 的真实事故)。
+
+#### 5.1 两种合法的 apply 模型(二选一,不准混用)
+
+| | **A:push 只当信号**(默认选它) | **B:push 带态 + 单调序** |
+|---|---|---|
+| push 到达时 | **不写状态**,只触发一次 pull | 直接 apply,但帧必须带单调序(stage / revision / 版本号) |
+| 谁写状态 | 只有 pull 的返回 | pull 与 push **走同一个 apply 函数**,只接受更新的版本 |
+| 代价 | 多一个 RTT | 服务端必须保证该状态的版本单调 |
+| 适用 | 低频、状态小、正确性敏感(匹配、队伍、公会) | 高频、payload 即全部、天然以最新为准(经验条、聊天) |
+
+⚠️ **模型 B 里"同一个 apply 函数"是硬要求,不是建议**。两条通道各写一份状态、再用 revision / 世代守卫去弥合顺序,是 `CLAUDE.md §9.22`(唯一权威,不重复影子状态)与 `§11.7`(客户端单一事实通道)明令禁止的形态——2026-07-28 宝箱读条就是踩了这个坑后整块删掉守卫改单通道的。
+
+#### 5.2 push 是 at-least-once,判重不能只看 ts_ms
+
+`PushFrame.ts_ms` 是**服务端每玩家严格递增的投递游标**,不是事件时间。同一业务事件被 kafka 重投时会拿到**新的更大游标**再投一次,所以"ts_ms 比上次大就当新事件"挡不住重复(§5.3 的旧写法只挡乱序,不挡重投)。契约以 `proto/pandora/push/v1/push.proto` 为准:
+
+- **游标保证不漏 + 每玩家有序,不保证不重**;
+- 判重按**业务 ID**(chat 用 `message_id`;状态类推送以最新为准天然幂等);
+- **不得把 `ts_ms` 当事件时间显示**;
+- 游标必须按 player_id 隔离存储,切账号 / 切角色要换游标,不能用进程级单值。
+
 ## 4. Pandora 现有 RPC 的语义分类
 
 ### 4.1 立即完成型(原则 1)
@@ -399,7 +434,9 @@ OnPushMatchProgress(push) {
 
 ### 5.3 客户端去重(应对 at-least-once)
 
-kafka 是 at-least-once 推送,push 可能重复。客户端按 envelope 时间戳 + ID 去重:
+⚠️ **2026-08-05 修正**:下面这段只挡「旧帧 / 乱序帧」,**挡不住重投**——同一业务事件被重投会拿到更大的新游标(见 §3 原则 5.2)。真正的判重必须按**业务 ID**;`ts_ms` 只是投递游标,用途是断线重连时回传 `last_seen_ms` 做断点续传,且必须按 player_id 隔离存储。
+
+kafka 是 at-least-once 推送,push 可能重复。客户端按 envelope 时间戳挡旧帧:
 
 ```cpp
 OnPushReceived(envelope) {
@@ -413,6 +450,24 @@ OnPushReceived(envelope) {
     Dispatch(envelope);
 }
 ```
+
+### 5.4 客户端什么时候主动拉(原则 5 的落地)
+
+**拉的时机不是"定时轮询",是「入口点 + 有界 watchdog」。** 五个必接触发点:
+
+| # | 触发点 | 为什么必须拉 |
+|---|---|---|
+| 1 | 进入 / 返回该界面 | 界面不在时的推送可能已被忽略或从未消费 |
+| 2 | push 流(重)连成功后 | 断点续传只覆盖缓冲窗口(默认 5min / 512 帧),窗口外的帧已被修剪 |
+| 3 | 切回前台 | 后台期可能断流、可能超窗 |
+| 4 | 收到 `pandora.push.resync` | 服务端**已确证**你的增量有缺口,这是最精确的回源信号 |
+| 5 | watchdog 到期 | 处于"必须等 push 才能推进"的等待态且超时无进展 |
+
+三条硬约束:
+
+1. **常驻轮询只允许存在于有界等待态**。匹配中可以按固定间隔轮 `GetMatchProgress`,但状态一旦落地(拿到 `battle_ds_addr` / 无活跃 match)**必须停表**。常驻短周期轮询代替 push 违反 `CLAUDE.md §16.10`(禁止用定时器掩盖时序问题),而且会把服务端打成筛子。
+2. **watchdog 到期后只能"重查权威并重试",不准"假设已成功往下走"**。判别口诀见 `§16.10`:到期后假设成功 = 掩盖时序;到期后重查权威 = 合法兜底。
+3. **拉取必须发生在 subscribe 之后**。push 的首连契约(`push.proto`)明确要求:登录成功后**先订阅 push、再发起任何业务域快照拉取**;先拉快照再订阅会在两者之间开一个永久丢失窗口,且服务端的"首连不做缺口终检"跳过将不再安全。UE 侧唯一订阅点是 `MyAccountModel` 登录完成回调。
 
 ## 6. 服务端代码强制约定
 
@@ -462,6 +517,11 @@ func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []ui
 - ❌ **不要**用 stream RPC 解决推送问题(go-zero 不支持,改 kafka push)
 - ❌ **不要**指望 TCP 单连接能解决 RPC response 和 kafka push 的乱序(它们是两个 goroutine 写 ws,Go 调度不保证顺序)
 - ❌ **不要**写"等 response 和 push 都到了再处理 UI"的复杂同步逻辑(直接选对一种语义即可)
+- ❌ **不要**设计"只能靠 push 才能得知结果"的状态 — 必须同时有权威查询 RPC(原则 5)
+- ❌ **不要**让 push 和 pull 各写一份状态再用 revision / 世代守卫弥合 — 选模型 A 或 B,只能有一个写入路径(原则 5.1)
+- ❌ **不要**用常驻短周期轮询代替 push — 轮询只能是**有界等待态**里的兜底,状态落地即停表(§5.4)
+- ❌ **不要**只按 `ts_ms` 判重就声称幂等 — 重投会拿到更大的新游标,判重必须按业务 ID(原则 5.2)
+- ❌ **不要**先拉业务快照再订阅 push — 顺序反了会开一个永久丢失窗口(§5.4 第 3 条)
 
 ## 8. 工程检查清单
 
@@ -481,7 +541,11 @@ func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []ui
 
 - [ ] 立即完成型 RPC:OnResponse 直接更新 UI
 - [ ] 已受理型 RPC:OnResponse 只显示 loading,UI 状态机由 push 驱动
-- [ ] OnPushReceived 有时间戳去重(应对 at-least-once)
+- [ ] OnPushReceived 有时间戳去重(挡旧帧)**且**有业务 ID 判重(挡重投,原则 5.2)
+- [ ] 该状态有权威查询 RPC,且 §5.4 五个触发点(界面进入 / push 重连 / 切前台 / resync / watchdog)都接了刷新
+- [ ] push 与 pull 只有一个写入路径:push 只触发 pull(模型 A),或两者共用同一 apply 函数(模型 B)
+- [ ] 消费 push 的 Model **显式处理 `pandora.push.resync`**(不能落到"其余 topic 原样忽略"分支)
+- [ ] 有界等待态里的轮询在状态落地后确实停表(无常驻定时器泄漏)
 
 ### 8.4 测试
 
@@ -506,6 +570,7 @@ func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []ui
 | 2026-06-03 傍晚 | 用户提出"WebSocket 双工合并",改 B1 单 WebSocket(`gateway-decision.md`)|
 | 2026-06-03 晚上 | 用户提出**乱序问题** | 发现这是协议设计问题不是架构问题 |
 | 2026-06-03 晚上 | **本文档落地**,固化 4 个原则 |
+| 2026-08-05 | 用户提出"刷新状态(如匹配状态)该不该客户端主动拉";补入**原则 5**(推送不承担正确性)+ §5.4 五个刷新触发点 + §12 落地现状与缺口 |
 
 ## 11. 决策行(写入 pandora-arch.md §11)
 
@@ -513,3 +578,51 @@ func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []ui
 - 2026-06-03:固化 4 个协议原则 — Response 完整 / 不发 push 给 caller / 已受理显式 / proto 注释标注
 - 2026-06-03:服务端 `PushToPlayers` / `PushToAllIncludingCaller` helper 必须强制使用(W2 时实现)
 - 2026-06-03:客户端 UI 状态机原则 — 立即完成型按 response,已受理型按 push
+- 2026-08-05:补入**原则 5** — push 不承担正确性,每个客户端状态必须有权威查询 RPC;push 与 pull 只能有一个写入路径(模型 A / B 二选一)
+- 2026-08-05:客户端刷新触发点固化为「界面进入 / push 重连 / 切前台 / resync / watchdog」五点;常驻轮询只允许存在于有界等待态,状态落地即停表
+- 2026-08-05:修正 §5.3 —— `ts_ms` 是投递游标不是事件时间,只挡旧帧不挡重投;判重必须按业务 ID
+
+## 12. 权威态刷新的落地现状与缺口(2026-08-05 核查)
+
+### 12.1 为什么有原则 5:2026-07-20 的真实事故
+
+matchmaker-pve 启动时 Kafka 未就绪,producer 一次性初始化失败后 pusher **永久 nil**,`pandora.match.progress` 全程静默丢弃。组队里的**非队长成员**没有 match_id、只能靠推送获知 READY,于是永远停在 Hub。
+
+三层修复(同日完成):
+
+1. **启动门禁** — brokers 配置时 producer 是启动强依赖,失败在 Ready 前 exit(`services/matchmaking/matchmaker/cmd/matchmaker/main.go` `initializeMatchPublication`),与 team 同口径。
+2. **READY at-least-once 补推** — 机械不变量「READY ∈ active ZSET ⟺ 推送交付未确认」,全员推送成功才 RemoveActive;崩溃窗口 / Kafka 中断由撮合循环幂等补推(重签新 jti),`expireOnce` / reconcile 不清该表项。回归测试 `ready_push_saga_test.go`。
+3. **客户端 watchdog + 幂等 no-op 守卫** — 见 §12.3。
+
+一句话教训:**推送是部分玩家获知权威状态的唯一通道时,任何一环(启动、运行中、客户端)都不允许静默丢失。** 弱依赖 warn-继续只适用于有独立兜底的通道。
+
+### 12.2 push 通道自身已提供的兜底能力(别重复造)
+
+以 `proto/pandora/push/v1/push.proto` 为准:
+
+- 每玩家**严格递增投递游标** + 投递缓冲(默认 5min / 512 帧),重连回传 `last_seen_ms` 做断点续传;
+- 服务端确证客户端游标之后的帧已被修剪 / 滑出保留窗(补推无法闭合)时,下发合成帧 `pandora.push.resync`(payload 空、`ts_ms=0`、不推进游标);两层检测 = 每页发送前预检(主防线,信号先于任何越过缺口的幸存帧)+ 拉空后终检(fail-closed 兜底);同一段丢失只信号一次;
+- 首连(`last_seen_ms=0` 且缓冲拉空)**不做**缺口终检 —— 其正确性依赖客户端"先订阅后拉快照"(§5.4 第 3 条)。
+
+所以客户端**不需要自己猜有没有漏**:resync 就是服务端在说"你该回源了",比裸 watchdog 精确得多,是性价比最高的兜底。
+
+### 12.3 参考实现 = 匹配域(新域照抄这三件)
+
+`Pandora-Client-SVN/Pandora/Source/Pandora/Private/Module/Match/Model/MyMatchModel.cpp`:
+
+1. **resync 回源** — `HandlePushFrame` 精确匹配 `pandora.push.resync`,有活跃 match 时立即 `RequestMatchProgress(CurrentMatchId)`;
+2. **有界轮询** — `MatchProgressPollTimer` 在活跃匹配期周期拉 `GetMatchProgress`,**拿到 `battle_ds_addr` 或已无 match 即停表**(间隔配 `<=0` 表示不自动轮询,交蓝图自行拉)。它同时是 resync 单次回源失败的自然补偿,所以匹配域没另做重试脏标记;Team / Friend 没有这条常驻轮询,才各自加了有限重试;
+3. **watchdog** — `TeamMatchStandbyTimer`:本队 `TEAM_STATE_MATCHING` 且本地无匹配归属时周期检查,Coordinator 空闲(Idle)才触发权威恢复;首次检查等满一个完整间隔,给推送主驱动留窗口。
+
+配套:`UMyDsRecoveryCoordinator::TryDriveTravel` 的**幂等 no-op 守卫**(目标为 Battle 且当前 live connection 端点精确一致时不重复 `ClientTravel`)是 at-least-once 补推的前提 —— 否则战斗内重复收到 READY 会把玩家拽回去重载地图。这个缺口先于补推存在,补推使之常态化后才被发现。
+
+### 12.4 缺口清单(待办)
+
+| # | 缺口 | 位置 | 修法 |
+|---|---|---|---|
+| 1 | **经验域没接 resync** | `MyPlayerProgressionModel::HandlePushFrame` 只认 `pandora.player.experience`,其余 topic 原样忽略 | 收到 resync 时回源拉一次经验快照(`GetProfile` 的经验字段与推送共用同一形态),走与推送**同一个** apply 路径。漏帧现症:等级 / 经验条停在旧值,直到下次登录拉快照 |
+| 2 | **五个触发点未逐域核对** | 目前只确证匹配域有(有界)常驻轮询兜底;Team / Friend / Guild 是 resync + 有限重试 | 按 §5.4 表格逐域过「界面进入 / push 重连 / 切前台」三点是否真的接了刷新,缺哪个补哪个 |
+| 3 | **聊天域尚无客户端 push 消费者** | 本次核查未在客户端发现 `pandora.chat.*` 的消费者(仅注释提及) | 接入时必须同时接 resync + `PullHistory` 回源,并按 `message_id` 判重(chat 是最典型的"重投即重复"域) |
+| 4 | **presence / system.notify 未接** | `pandora.presence.update` 客户端无消费者;`pandora.system.notify` 后端无 proto、无 producer(push.proto 注释已写明) | 接入前不算缺口;接入时照 §8.3 客户端清单全过一遍 |
+
+⚠️ 本节是 2026-08-05 对 HEAD 的**静态核查**结论,未经编译与真机验证(UE 编译归用户,见 `CLAUDE.md §11.6`)。动手前先复核对应文件的当前状态。

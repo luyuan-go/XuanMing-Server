@@ -310,6 +310,7 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | 0 | 2026-06-03 | 推送方案选定 P3:**专用 push 服务** | 业务 → kafka → push(go,新增第 14 个服务)→ 客户端;Hub DS 不兼任推送中转 |
 | 0 | 2026-06-03 | **RPC response 与 kafka push 乱序问题确认 = 协议设计问题**(非架构问题) | 见 `protocol-ordering-rules.md`,固化 4 个原则 |
 | 0 | 2026-06-03 | 4 协议原则 | Response 同步完整 / push 不发给 caller / 已受理型显式标注 / proto 注释强制 |
+| 协议 | 2026-08-05 | **补入协议原则 5:push 不承担正确性,每个客户端状态必须有权威查询 RPC** | 原则 1~4 治乱序、原则 5 治丢失(2026-07-20 matchmaker producer 永久 nil → `match.progress` 全程静默丢弃);push 与 pull 只能有一个写入路径(push 只触发 pull,或两者共用同一 apply);客户端刷新触发点固化为「界面进入 / push 重连 / 切前台 / `pandora.push.resync` / watchdog」五点,常驻轮询只允许存在于有界等待态。详见 `protocol-ordering-rules.md` §3 原则 5 / §5.4 / §12 |
 | 0 | **2026-06-04** | **切换后端框架:go-zero → Kratos**(推翻 D2.1)| go-zero 不支持 gRPC stream,推送架构受限;Kratos 基于原生 grpc-go,完整支持 unary + stream |
 | 0 | 2026-06-04 | 引入 **Envoy 作为 Edge Gateway** | 标准 gRPC-Web ↔ gRPC 协议转换,替代 go-zero/gateway |
 | 0 | 2026-06-04 | 客户端协议:**gRPC-Web over HTTP/2 TLS** | UE 5.8 FHttpModule 已暴露(`SetOption("HttpVersion","2TLS")`),源码挖掘验证 |
