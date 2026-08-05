@@ -54,7 +54,11 @@ spec:
               # Agones 自动注入 SDK sidecar；DS 内 UPandoraAgonesSubsystem 走 sidecar HTTP 调 Ready/Health/Shutdown。
               # 镜像一律钉**不可变 tag**,与 20-fleet-battle.yaml 同改同收(P1-4,§9.21;
               # 推导与换版流程见该文件注释)。canary 轨换新版本时改本行为新的不可变 tag。
-              image: pandora/battle-ds:r1642-dirty-20260801-110738
+              # 2026-08-04 与 stable 同步换到 r1707(旧 r1642 的包里没有 map_id=11 的关卡资产;
+              # 依据、制品库缺口与「r1707 非最新源码」的告诫全部记在 20-fleet-battle.yaml 该行注释)。
+              # 注:canary 与 stable 钉同一 tag = 灰度轨当前无差异版本,只作容量/轨道演练;
+              # 真正灰度时本行必须换成与 stable **不同** digest 的新镜像。
+              image: pandora/battle-ds:r1707-dirty-dbcbba84-20260804-100500z
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

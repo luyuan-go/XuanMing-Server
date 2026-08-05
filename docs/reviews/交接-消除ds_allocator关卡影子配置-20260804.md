@@ -391,3 +391,63 @@ pwsh tools/scripts/run_services.ps1 -Action restart -Service ds_allocator
   需要真机开客户端打一局，本轮没跑。已验证的是它的两个前提：解析器每局现查表（非启动快照）、
   热更 RPC 在 :50020 可用且能原子换表。
 - `loader_map` 那条路本机依旧一次都没跑过（与 §8 的诚实边界一致）。
+
+### 9.6 下一轮:agones 侧待办(2026-08-04 夜勘查,**尚未测**)
+
+本机 local 测完之后再走这轮。勘查结论如下,**不用重新做一遍镜像取证**:
+
+- **集群当时没跑**:`kubectl config current-context` 未设置(报 `invalid character '<'` 就是它),
+  kubelet / containerd / minikube / kind 进程全无;Docker 里只有本机 dev 边缘栈
+  (mysql/redis/kafka/envoy/prom/loki/grafana/alloy)。要测得先把集群本体拉起来。
+- **Fleet 钉的 DS 镜像缺 map 11 的资产**(实证,非推断:`docker cp` 取出 pak 索引扫描):
+
+  | 镜像 | utoc | 含 `StylizedCyberpunk`(map_id=11) |
+  |---|---|---|
+  | `r1642-dirty-20260801-110738`(`20-fleet-battle.yaml` 现钉) | 614 KB | ❌ 无 |
+  | `r1707-dirty-dbcbba84-20260804-100500z`(本机已有最新) | 707 KB | ✅ 有 |
+
+  两者都含 SonglinTown / Artic01 / dungeon / `Lvl_Server_Entry`,差的是 08-03 之后新进来的那批。
+  时间线对得上:客户端 `CfgLevel.uasset` 最后修改 08-03 03:30,而钉的镜像是 08-01 打的。
+  资产不在包里 → 表里有没有那行都到不了,Loader 会 fail-closed 主动退出(症状 = Pod 自己死)。
+- **与本次改动无关**:agones 的关卡由 DS 读 `pandora.dev/map-id` label 查**自己包里**的 `FCfgLevel`
+  决定,后端只传 label;`local_ds.maps` 在这条路上从未被读过。
+- **集群 ds-allocator 不受新启动校验影响**(已核对):Deployment 把 Secret 的 `ds-allocator.yaml`
+  挂成 `/app/etc/cluster.yaml`,镜像 `CMD` 也写死 `-conf etc/cluster.yaml`,烙进镜像的 dev yaml
+  永远不是默认;而 cluster.yaml 是 `mode=agones` 且不配 `config_table` → `ValidateLocalMapSourceConfig` 放行。
+
+### 9.7 agones 准备工作:已做完的 / 还差的(2026-08-04 夜)
+
+**已做完(不需要集群,全部落在文件与本机镜像上)**:
+
+1. **四份 Fleet 全部换到 `r1707-dirty-dbcbba84-20260804-100500z`** —— stable/canary × battle/hub
+   (`20-/21-/30-/31-fleet-*.yaml`)。hub 必须跟着换:hub 与 battle 分属两台 DS,版本劈叉会让玩家
+   在两者之间 travel 时撞上不同的 `PandoraNetProtocolVersion`。**只改了文件,没有 apply**(集群没起)。
+2. **`pandora/ds-allocator:dev` 已用新代码重建**(`start.ps1 -BuildOnly -Only ds-allocator
+   -BuildMode host -Rebuild`,2026-08-04 23:58)。核对过镜像内 `etc/ds_allocator-dev.yaml`:
+   `maps` / `map_name` 已消失、`config_table` 在。顺带确认 `GOOS=linux CGO_ENABLED=0` 交叉编译通过。
+3. **`40-gameserverallocation-example.yaml` 的 map-id 从 2 改成 11** —— 2 是**选角**关卡,而 DS 侧
+   Loader 拿到 label 后直接查表 travel、**不校验类别**,照原样手测会把 DS 过图到一张非副本关卡。
+   换成 11 顺带能验「新图能不能进」+「Fleet 是否已换到 r1707」。
+4. 六份被改的 yaml 全部过了 YAML 解析器(非肉眼检查)。
+
+**r1707 的核准依据(不是凭 tag 名信的)**:
+
+| 核对项 | 结果 |
+|---|---|
+| 镜像内 `PandoraServer` vs 仓库 `deploy/ds/stage/LinuxServer` | SHA256 **完全一致**(`DBCBBA84…C301`,293,415,096 字节) |
+| 镜像内 `Pandora-LinuxServer.utoc` vs 同上 | SHA256 **完全一致**(`945FD7B2…E829`) |
+| tag 里的 `dirty-dbcbba84` 是什么 | 就是上面 DS 二进制 SHA256 的前 8 位 |
+| `pandora/hub-ds:r1707` vs `pandora/battle-ds:r1707` | RootFS **7 层全部重合** = 同一份 DS 包,只有 env 不同 |
+
+**还差的(需要人或集群)**:
+
+1. **集群本身**:kubeconfig(`~/.kube/config`,833 B)里只有一个 **minikube** context 且
+   `current-context` 未设置,API 不可达;本机也没有 kubelet / containerd / minikube / kind 进程。
+   得先确认集群本体还在不在、要不要重建。
+2. **`minikube image load`**:r1707 **尚未发布到制品库**(最新快照仍是 r1642-dirty-20260801-110738),
+   所以它现在只存在于本机 docker。apply 前必须把 battle-ds / hub-ds 两个 r1707 镜像灌进集群节点,
+   否则 `imagePullPolicy: IfNotPresent` 会直接 ImagePullBackOff。换机器前还要补发布快照。
+3. **要不要就用 r1707**:它是**当前已构建的最新 Linux DS,但不是最新源码** —— 客户端 SVN 工作副本
+   已到 **r1752**,r1707 之后的客户端改动(对局时限、宝箱链等)不在这个包里。要带上就得重出一版
+   Linux DS,而 UE 编译按 `CLAUDE.md §11.6` 由用户本人执行。**这是唯一需要你拍板的一项。**
+4. 真正的 agones 端到端验证(apply → 滚 fleet → 分配 → 进图),集群起来之前做不了。

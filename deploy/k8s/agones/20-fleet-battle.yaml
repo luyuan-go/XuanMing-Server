@@ -64,19 +64,35 @@ spec:
               # desired state,钉 :dev 滚动 tag 会让任意一次 kubectl apply 把 live 降回本机
               # IfNotPresent 缓存里的旧 :dev 构建。换版流程 = 打新不可变 tag → minikube image
               # load → 改本行 → apply;严禁回填 :dev。
-              # 当前本地开发镜像:r1642-dirty-20260801-110738(UE 工作副本 svnversion
-              # 1487:1642M;PandoraServer sha256 3982342EAA68…83A0,
-              # 293,089,208 字节,2026-08-01 11:03 构建)。已发布到制品库:
-              # <PANDORA_ARTIFACT_ROOT>\snapshots\client\trunk_Client\
-              # Server_Linux_Development\r1642-dirty-20260801-110738\LinuxServer
-              # (默认根 F:\work\artifacts 是指向 E:\artifacts 的 junction),
-              # 因此本 tag 可在任意可达制品库的机器上按 start.ps1 的重建链复现。
+              # 当前本地开发镜像:r1707-dirty-dbcbba84-20260804-100500z
+              # (PandoraServer sha256 DBCBBA846CD1…C301 —— tag 的 dirty 段就是它的前 8 位,
+              # 293,415,096 字节,二进制 2026-08-04 05:54 编译 / 镜像 06:06 打包)。
+              # 已核对:该镜像内容与仓库 deploy/ds/stage/LinuxServer **逐字节一致**
+              # (PandoraServer 与 Pandora-LinuxServer.utoc 双 SHA256 比对,2026-08-04)。
+              #
+              # 2026-08-04 由 r1642-dirty-20260801-110738 换到本 tag,原因是**旧镜像少图**:
+              # 从两个镜像里 docker cp 出 utoc 扫描,r1642(614 KB)不含 StylizedCyberpunk,
+              # 而 r1707(707 KB)含 —— 即 map_id=11 的关卡资产压根不在旧包里,该图在 agones
+              # 下必然进不去(Loader 查表/过图失败 → fail-closed 主动退出 → Pod 自己死)。
+              # 两者都含 SonglinTown / Artic01 / dungeon / Lvl_Server_Entry,差的是 08-03
+              # 之后新进来的那批(客户端 CfgLevel.uasset 最后修改 08-03 03:30,晚于 08-01 镜像)。
+              #
+              # ⚠️ **本 tag 尚未发布到制品库**(最新快照仍停在 r1642-dirty-20260801-110738):
+              # <PANDORA_ARTIFACT_ROOT>\snapshots\client\trunk_Client\Server_Linux_Development\
+              # (默认根 F:\work\artifacts 是指向 E:\artifacts 的 junction)。
+              # 因此 apply 前**必须**先把镜像灌进集群节点(`minikube image load --daemon=true
+              # --overwrite=true pandora/battle-ds:r1707-dirty-dbcbba84-20260804-100500z`),
+              # 换机器 / 重装集群前还要补发布快照,否则 ImagePullBackOff。
+              #
+              # ⚠️ 本 tag 是**当前已构建的最新 Linux DS,但不是最新源码**:客户端 SVN 工作副本
+              # 2026-08-04 已到 r1752,r1707 之后的客户端改动(对局时限、宝箱链等)不在这个包里。
+              # 要带上它们必须重出一版 Linux DS(UE 编译按 CLAUDE.md §11.6 由用户本人执行)。
               #
               # ⚠️ 换版必须改本行再 apply。历史教训:2026-07-31 曾有人绕过本文件直接改集群,
               # 结果 live 跑着 r1642-dirty-9ab0ee7f-20260731-130850 而本文件还写着 r1604,
               # 且那个 tag 在制品库里查无快照 —— 任何一次 apply 都会把 live 打回旧版,
               # 换机器更是直接 ImagePullBackOff。
-              image: pandora/battle-ds:r1642-dirty-20260801-110738
+              image: pandora/battle-ds:r1707-dirty-dbcbba84-20260804-100500z
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT
