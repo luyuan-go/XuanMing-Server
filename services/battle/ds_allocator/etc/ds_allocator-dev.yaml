@@ -10,10 +10,10 @@ server:
   grpc:
     network: tcp
     addr: ":50020"
-    timeout: "150s"             # Artic01 冷加载实测超过 45s；覆盖 allocate + ready_wait(120s) + 回收余量
+    timeout: "330s"             # 必须盖过 allocator.ready_wait_timeout(300s,editor 冷启动)+ 回收余量
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
-    max_conn_age_grace: "180s"  # 必须盖过 150s 的 AllocateBattle 在途调用，避免 GOAWAY 提前砍断
+    max_conn_age_grace: "360s"  # 必须盖过 330s 的 AllocateBattle 在途调用，避免 GOAWAY 提前砍断
   http:
     network: tcp
     addr: ":51020"
@@ -79,11 +79,20 @@ allocator:
   # 加载目标地图(松林镇等大图可远超 10s)→ BattleGameMode BeginPlay 才发 ready 心跳,
   # 10s 必超时；Artic01 在本地 minikube 冷加载实测超过 45s，因此开发环境放宽到 120s
   # (取值待 Linux cooked 实测复核,INC-20260727-001 A3)。
-  # 配套三处一起改:上方 server.grpc.timeout=150s、matchmaker ds_allocate_timeout=150s。
+  # 配套三处一起改:上方 server.grpc.timeout=330s、matchmaker ds_allocate_timeout=330s。
   # matchmaker 自身的 server.grpc.timeout **不在本链上**(分配是后台 worker 出站调用),不必动。
-  ready_wait_timeout: "120s"
-  # heartbeat_timeout: DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → abandoned
-  heartbeat_timeout: "15s"
+  #
+  # 2026-08-04 调到 300s:本文件同时服务 packaged 与 editor 两种 launcher(由
+  # PANDORA_DS_LAUNCHER 切换),而代码里 editor 的自动放宽(300s/120s)**只在本项留空时**
+  # 生效(conf.go「显式配置永远优先」,有测试钉死)。原先写死的 120s/15s 是按 packaged 定的,
+  # 一切到 editor 就把放宽顶掉:editor DS 要加载编辑器模块 + 读未 cook 散装资产,本机三个
+  # UE 进程并存时启动超过 120s,AllocateBattle 判 ready 超时 → PVE 对局恒 FAILED(实测)。
+  # 放宽只影响「失败检测有多快」,不拖慢成功路径 —— DS 若 5s 就绪,分配 5s 即返回。
+  ready_wait_timeout: "300s"
+  # heartbeat_timeout: DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → abandoned。
+  # 同上调到 120s(= 代码给 editor 的默认值):editor DS 首心跳可能被资产加载阻塞十几秒,
+  # 15s 会把还在加载的健康 DS 判弃(参见 DS 首心跳被加载阻塞撞判弃线的历史事故)。
+  heartbeat_timeout: "120s"
   # orphan_gs_reclaim_after: 孤儿 Allocated GameServer(无任何权威分配记录引用)连续
   # 观察超过该时长后由 sweep 对账清扫按 UID+resourceVersion precondition 回收
   # (代码默认 10m,下限 5m;留空即默认)。根治「Allocated 泄漏占位 → 只能人肉删 →

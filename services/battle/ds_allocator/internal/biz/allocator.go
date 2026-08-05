@@ -489,6 +489,13 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 			podName, addr = authoritative.PodName, authoritative.Addr
 		}
 	} else {
+		// legacy 本地面:DS 进程在 Allocate 内 exec、env 那一刻定型,所以权威准入元数据
+		// (roster/allocation-id/release-track)必须**先**登记。生产走 Agones annotation,
+		// 这里是它在 mode=local 的等价投递通道(见 localBattleRosterSink 注释)。
+		// 双重隔离:!u.modelB + 类型断言(Agones/Mock 不实现),生产恒不进。
+		if sink, ok := u.alloc.(localBattleRosterSink); ok {
+			sink.SetPendingBattleRoster(matchID, playerIDs, allocationID, desiredReleaseTrack)
+		}
 		podName, addr, actualReleaseTrack, err = u.alloc.Allocate(ctx, matchID, mapID, gameMode, desiredReleaseTrack)
 	}
 	if err != nil {
@@ -1502,6 +1509,24 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 	if err := u.alloc.Release(ctx, battle.DsPodName); err != nil {
 		plog.With(ctx).Warnw("msg", "gameserver_release_failed", "match_id", matchID, "pod", battle.DsPodName, "err", err)
 	}
+	// owner 精确释放(legacy 正常结算路径,2026-08-04 补;INC-20260804-001 缺口⑦)。
+	//
+	// 与 abort / abandon 两条路完全同因:READY 交付前的强 Begin 已把这批玩家的归属写成
+	// BATTLE/本实例,而本函数此前只做「杀 DS + 删对局记录」,**从不动 owner**。
+	// 后果:对局正常结算(含 PVE 主动退出)后,owner 仍是 BATTLE/ADMITTED 指向一台刚被
+	// 销毁的 DS,login 的 §9.23 query-first 一直把玩家指回去;而 match 记录已删,
+	// 客户端拿到的 TARGET 缺 match_id,判「incomplete owner identity」反复重试到 30s
+	// deadline —— 玩家打完副本回不了大厅(2026-08-04 实测)。
+	// 释放后恢复查询才会落到「无归属 → 首次进场链 → Hub」。
+	//
+	// 复用与 abort/abandon 同一把释放:三条安全边界(时序在 GameServer 回收之后、
+	// exact 身份门只动仍指向本实例的记录、compare-delete 按 epoch 拒陈旧释放)由
+	// ownerReleaseAbandonedPlayersWeak 自身保证;玩家已被分到别处时双重跳过,不误伤。
+	// 实例身份取自战斗记录的 gameserver_uid(缺口③修复后 legacy 面才有值;为空则
+	// 该函数自身的守卫会整体跳过,退化为改动前行为)。
+	// 必须在 DeleteBattle **之前**取名单与身份 —— 删完就取不到了。
+	ownerReleaseAbandonedPlayersWeak(ctx, u.ownerAuth, battle.GetPlayerIds(),
+		battle.GetDsPodName(), battle.GetGameserverUid(), 2*time.Second)
 	if err := u.repo.DeleteBattle(ctx, matchID); err != nil {
 		return err
 	}
@@ -2161,9 +2186,33 @@ func (u *AllocatorUsecase) HeartbeatWithCensus(ctx context.Context, matchID uint
 			podName, ownerUID, ownerEpoch, ownerTrack); lerr != nil {
 			return nil, lerr
 		}
-		// 弱依赖:失败/屏障未开都不影响心跳(下一跳重试)。只用真实上报的在场名单。
-		if snapshotPresent && len(activePlayerIDs) > 0 {
-			ownerAdmitCensusWeak(ctx, u.ownerAuth, &u.ownerAdmitted, activePlayerIDs,
+		// 弱依赖:失败/屏障未开都不影响心跳(下一跳重试)。
+		// 优先用 DS 真实上报的在场名单(exact);拿不到时按下面的 local-off-v1 兜底。
+		admitPlayers := activePlayerIDs
+		if !snapshotPresent || len(admitPlayers) == 0 {
+			// local-off-v1 兜底:该档位下 census **结构上不可能成立** —— UE 的
+			// BuildCompleteBattlePlayerCensus 要求每个 owner 的 claims 满足
+			// IsCompleteBattleOwnerClaims(dst_ver==2 且带 ds_pod/ds_uid/ds_epoch/allocation_id),
+			// 而本档位刻意只签 HS256 legacy 战斗票(GrpcDSAllocator.SignBattleTicket 注释:
+			// UE DS 硬锁 HS256LocalOff、不交叉接受 v2),legacy 战斗票又**带不了**实例绑定
+			// (pkg/auth.signDSTicket 明令 binding 只许 hub 票用)。三者叠加 = census 永远缺席
+			// = owner 永远停在 PENDING = 客户端进图后永远等不到 STABLE,30s 后弹"重连时间较长"
+			// (2026-08-04 实测:副本内其实能正常战斗,只是入场确认不了)。
+			//
+			// 兜底用「本对局花名册」代替在场名单,并要求 playerCount>0(DS 确认确有人连入)。
+			// 这是**近似**,与 Model B 的 census(exact)有别:名册里可能有还在 travel 的玩家,
+			// 会被提前判 ADMITTED。可接受的理由:①owner 侧 Admit 仍做 exact 身份 CAS
+			// (pod/uid/epoch/operation_id 全等)+ admit_not_before 屏障,归属指向别处的玩家
+			// 一律被拒,不会凭空造出第二个 owner;②Begin 早已把归属搬到本实例,旧 DS 此刻
+			// 已无归属,提前 ADMITTED 不产生双 DS;③本路径只在 legacy(非 Model B)心跳上,
+			// 生产恒走 HeartbeatAuthorizedWithPlayers 的 exact census,一字不受影响。
+			// 一旦 local 档位将来能签带绑定的战斗票,census 自然非空,兜底自动让位。
+			if playerCount > 0 {
+				admitPlayers = refreshPlayers
+			}
+		}
+		if len(admitPlayers) > 0 {
+			ownerAdmitCensusWeak(ctx, u.ownerAuth, &u.ownerAdmitted, admitPlayers,
 				ownerTypeBattle, podName, ownerUID, 2*time.Second)
 		}
 	}

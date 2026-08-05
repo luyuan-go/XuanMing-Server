@@ -62,9 +62,10 @@ match:
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(成局后拉战斗 DS);留空用 StubDSAllocator
   ds_allocator_addr: "127.0.0.1:50020"
   # ds_allocate_timeout: 调 ds_allocator.AllocateBattle 的客户端超时(默认 60s)。
-  # 该 RPC 服务端阻塞等 DS ready 心跳(agones allocate + ready_wait 120s + 余量)，
-  # 必须 ≥ ds_allocator 侧 server.grpc.timeout(150s)，否则客户端先超时白等。
-  ds_allocate_timeout: "150s"
+  # 该 RPC 服务端阻塞等 DS ready 心跳(allocate + ready_wait 300s + 余量)，
+  # 必须 ≥ ds_allocator 侧 server.grpc.timeout(330s)，否则客户端先超时白等。
+  # 2026-08-04 与 ds_allocator 的 editor 冷启动放宽同步上调(见该文件 ready_wait_timeout 注释)。
+  ds_allocate_timeout: "330s"
   # locator_addr: player_locator 服务 gRPC 直连地址(位置上报 + StartMatch 前置查战斗态)
   locator_addr: "127.0.0.1:50006"
   match_resume_auth_secret: "pandora-dev-match-resume-auth-key-v1!"

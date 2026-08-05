@@ -31,6 +31,17 @@ type localInstanceIdentitySource interface {
 	LocalInstanceIdentity(podName string) (instanceUID string, instanceEpoch uint32, ok bool)
 }
 
+// localBattleRosterSink 由 mode=local 的分配器实现,接收本局的权威准入元数据。
+//
+// 生产走 Agones GameServer annotation 下发 roster/allocation-id/release-track;local 没有
+// annotation 通道,改用 DS 进程 env 投递同一份事实。不投递的后果不是"少个字段",而是
+// UE 的 ExpectedPlayers 恒空 → 玩家能进副本能打怪,但点「退出副本」永远被判 AuthorityNotReady。
+//
+// 只有 data.LocalGameServerAllocator 实现它;Agones/Mock 都不实现,故本路径在生产是机械死代码。
+type localBattleRosterSink interface {
+	SetPendingBattleRoster(matchID uint64, playerIDs []uint64, allocationID, releaseTrack string)
+}
+
 // AuthoritativeGameServerAllocator 是 Agones Model B 的额外能力：分配时先取得实例 UID/RV，
 // Redis stage 成功后再用 UID+RV 条件 PATCH 投递 annotation。K8s 仅是投递镜像，不是授权权威。
 type AuthoritativeGameServerAllocator interface {

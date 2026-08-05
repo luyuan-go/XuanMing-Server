@@ -71,9 +71,13 @@ func TestLegacyBattleHeartbeat_RenewsOwnerInstanceLease(t *testing.T) {
 	}
 }
 
-// 未上报在场名单时不得代提交 Admit(不能拿 roster 替未到场玩家宣称已准入),
-// 但租约仍须续写(实例确实在服务)。
-func TestLegacyBattleHeartbeat_NoCensusStillRenewsLeaseOnly(t *testing.T) {
+// census 缺席 + 确有人连入(playerCount>0)时,按花名册兜底代提交 Admit。
+//
+// 为什么必须兜底(而不是"没 census 就不 Admit"):local-off-v1 下 census **结构上
+// 不可能成立**(UE 要求 dst_ver==2 且带实例绑定的战斗票,而本档位刻意只签 HS256
+// legacy 票、legacy 票又带不了绑定)。不兜底 = owner 永远 PENDING = 玩家进了副本却
+// 永远等不到 STABLE、30s 后弹兜底面板(2026-08-04 实测)。
+func TestLegacyBattleHeartbeat_NoCensusFallsBackToRoster(t *testing.T) {
 	const matchID uint64 = 91002
 	uc, lease, pod := legacyOwnerFixture(t, matchID, []uint64{2002})
 	admits := &countingOwnerAuthority{}
@@ -87,27 +91,28 @@ func TestLegacyBattleHeartbeat_NoCensusStillRenewsLeaseOnly(t *testing.T) {
 	if lease.calls <= before {
 		t.Fatal("无 census 时仍必须续写实例租约")
 	}
-	if admits.queries != 0 {
-		t.Fatalf("无 census 时不得代提交 Admit, queries=%d", admits.queries)
+	if admits.queries == 0 {
+		t.Fatal("census 缺席且确有人连入时必须按花名册兜底代提交 Admit")
 	}
 }
 
-// 旧签名 Heartbeat 保持零 census 语义(既有调用方行为不变)。
-func TestLegacyBattleHeartbeat_PlainSignatureKeepsNoCensus(t *testing.T) {
+// 空场(playerCount==0)不得兜底 Admit:没人连进来就没有可准入的对象,
+// 只续租(实例确实在服务)。这条守住"不替一个不存在的在场者宣称已准入"。
+func TestLegacyBattleHeartbeat_EmptyBattleNeverAdmits(t *testing.T) {
 	const matchID uint64 = 91003
 	uc, lease, pod := legacyOwnerFixture(t, matchID, []uint64{2003})
 	admits := &countingOwnerAuthority{}
 	uc.SetOwnerAuthority(admits)
 	before := lease.calls
 
-	if _, err := uc.Heartbeat(context.Background(), matchID, pod, 1, "running", time.Now().UnixMilli()); err != nil {
+	if _, err := uc.Heartbeat(context.Background(), matchID, pod, 0, "running", time.Now().UnixMilli()); err != nil {
 		t.Fatalf("Heartbeat err: %v", err)
 	}
 	if lease.calls <= before {
-		t.Fatal("旧签名心跳同样必须续写实例租约")
+		t.Fatal("空场心跳同样必须续写实例租约")
 	}
 	if admits.queries != 0 {
-		t.Fatalf("旧签名不带 census,不得 Admit, queries=%d", admits.queries)
+		t.Fatalf("空场不得兜底 Admit, queries=%d", admits.queries)
 	}
 }
 
@@ -135,4 +140,66 @@ func (c *countingOwnerAuthority) Admit(context.Context, uint64, uint64, string,
 
 func (c *countingOwnerAuthority) ReleaseOwner(context.Context, uint64, uint64, string) error {
 	return nil
+}
+
+// releaseRecordingOwnerAuthority 记录 owner 释放调用(QueryOwner 返回指向本实例的
+// BATTLE/ADMITTED 记录,使 exact 身份门成立)。
+type releaseRecordingOwnerAuthority struct {
+	pod      string
+	uid      string
+	released []uint64
+}
+
+func (r *releaseRecordingOwnerAuthority) QueryOwner(_ context.Context, _ uint64) (data.OwnerRecordView, error) {
+	return data.OwnerRecordView{
+		OwnerType: ownerTypeBattle, Phase: ownerPhaseAdmitted, OwnerEpoch: 7,
+		OperationID: "op-1", PodName: r.pod, InstanceUID: r.uid,
+	}, nil
+}
+
+func (r *releaseRecordingOwnerAuthority) BeginTransition(context.Context, uint64, uint64, string, int8,
+	data.OwnerTargetView) (data.OwnerRecordView, error) {
+	return data.OwnerRecordView{}, nil
+}
+
+func (r *releaseRecordingOwnerAuthority) Admit(context.Context, uint64, uint64, string,
+	data.OwnerTargetView) (int64, error) {
+	return 0, nil
+}
+
+func (r *releaseRecordingOwnerAuthority) ReleaseOwner(_ context.Context, playerID, _ uint64, _ string) error {
+	r.released = append(r.released, playerID)
+	return nil
+}
+
+// legacy 正常结算回收必须释放 owner,否则玩家打完副本回不了大厅
+// (owner 恒指向已销毁 DS,客户端判 incomplete owner identity 直到 30s 超时)。
+func TestLegacyReleaseBattle_ReleasesOwner(t *testing.T) {
+	const matchID uint64 = 92001
+	uc, _, pod := legacyOwnerFixture(t, matchID, []uint64{3001})
+	auth := &releaseRecordingOwnerAuthority{pod: pod, uid: "uid-legacy-battle"}
+	uc.SetOwnerAuthority(auth)
+
+	if err := uc.ReleaseBattle(context.Background(), matchID, "settled"); err != nil {
+		t.Fatalf("ReleaseBattle err: %v", err)
+	}
+	if len(auth.released) != 1 || auth.released[0] != 3001 {
+		t.Fatalf("正常结算必须释放本局玩家的 owner 归属, got %v", auth.released)
+	}
+}
+
+// 归属已指向别的实例时不得误删(exact 身份门)。
+func TestLegacyReleaseBattle_SkipsOwnerPointingElsewhere(t *testing.T) {
+	const matchID uint64 = 92002
+	uc, _, pod := legacyOwnerFixture(t, matchID, []uint64{3002})
+	// owner 记录指向另一台实例:本局回收不得动它。
+	auth := &releaseRecordingOwnerAuthority{pod: pod + "-other", uid: "uid-somewhere-else"}
+	uc.SetOwnerAuthority(auth)
+
+	if err := uc.ReleaseBattle(context.Background(), matchID, "settled"); err != nil {
+		t.Fatalf("ReleaseBattle err: %v", err)
+	}
+	if len(auth.released) != 0 {
+		t.Fatalf("归属指向别处时不得释放, got %v", auth.released)
+	}
 }

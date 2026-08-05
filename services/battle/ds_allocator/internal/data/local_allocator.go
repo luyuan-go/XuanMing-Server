@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -90,6 +91,9 @@ type LocalGameServerAllocator struct {
 	mu        sync.Mutex
 	procs     map[string]*launchedProc // podName → 进程记录
 	usedPorts map[int]struct{}
+	// pendingRosters:matchID → 待随 DS env 下发的权威准入元数据(见 SetPendingBattleRoster)。
+	// 由 Allocate 在 buildEnv 时消费并删除;受 mu 保护。
+	pendingRosters map[uint64]localBattleRoster
 
 	// startProc 拉起一个 DS 进程;单测注入假实现绕过真 exec。
 	// token 是本对局的 DS 回调令牌(Allocate 处一次性签发,避免二次签发失败只告警的空窗)。
@@ -208,6 +212,69 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 	go l.reap(podName, lp)
 
 	return podName, addr, releaseTrack, nil
+}
+
+// localBattleRoster 是一局待拉起 DS 的权威准入元数据(mode=local 版的 Agones annotation)。
+type localBattleRoster struct {
+	playerIDs    []uint64
+	allocationID string
+	releaseTrack string
+}
+
+// SetPendingBattleRoster 在拉起 DS **之前**登记本局的权威准入元数据。
+//
+// 为什么必须有:UE 的 APandoraBattleGameMode::ApplyAgonesAdmissionMetadata 只从 Agones
+// GameServer annotation 装载 ExpectedPlayers;mode=local 没有 Agones,花名册恒空,
+// APandoraPveGameMode::EvaluateSoloDungeonLeaveRequest 因 roster_count==0 返回
+// AuthorityNotReady —— 玩家在副本里能正常战斗,但点「退出副本/失败结算」永远被拒
+// (2026-08-04 实测,DS 日志:result=4 canonical_pve=1 roster_count=0)。
+// 本地没有 annotation 通道,故改用 env 投递同一份事实(与 PANDORA_DS_TOKEN 同机制)。
+//
+// 必须在 Allocate 之前调用:DS 进程在 Allocate 内 exec,env 那一刻就已定型。
+// 幂等:同 matchID 重复登记以最后一次为准;Allocate 消费后即删除,避免台账无界增长。
+func (l *LocalGameServerAllocator) SetPendingBattleRoster(matchID uint64, playerIDs []uint64,
+	allocationID, releaseTrack string) {
+	if matchID == 0 {
+		return
+	}
+	ids := append([]uint64(nil), playerIDs...)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.pendingRosters == nil {
+		l.pendingRosters = make(map[uint64]localBattleRoster)
+	}
+	l.pendingRosters[matchID] = localBattleRoster{
+		playerIDs: ids, allocationID: allocationID, releaseTrack: releaseTrack,
+	}
+}
+
+// canonicalRosterText 把玩家 ID 编成 UE 侧 ParseCanonicalBattleRoster 认的 canonical 文本:
+// 十进制、逗号分隔、**严格升序去重**、非零、上限 128 人。
+// 任一条不满足 UE 会整份判非法并保持空名单(fail-closed),所以这里宁可返回空串不投递,
+// 也不投一份会被对面拒掉的半成品 —— 那只会把「没投」伪装成「投了但格式错」,更难查。
+func canonicalRosterText(playerIDs []uint64) string {
+	const maxBattleRosterPlayers = 128
+	uniq := make([]uint64, 0, len(playerIDs))
+	seen := make(map[uint64]struct{}, len(playerIDs))
+	for _, id := range playerIDs {
+		if id == 0 {
+			return ""
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniq = append(uniq, id)
+	}
+	if len(uniq) == 0 || len(uniq) > maxBattleRosterPlayers {
+		return ""
+	}
+	slices.Sort(uniq)
+	parts := make([]string, 0, len(uniq))
+	for _, id := range uniq {
+		parts = append(parts, strconv.FormatUint(id, 10))
+	}
+	return strings.Join(parts, ",")
 }
 
 // LocalInstanceIdentity 返回本机 DS 进程的 exact 实例身份(供 legacy 面回填战斗记录)。
@@ -364,6 +431,9 @@ func (l *LocalGameServerAllocator) buildArgs(port int, mapID uint32) []string {
 
 // buildEnv 在当前进程环境基础上注入 DS 身份变量(对齐 UE DS 侧 PandoraAgonesProvider 读取的 env)。
 // token 是 Allocate 一次性签好的 DS 回调令牌(空=未启用/off 下签发失败,DS 无令牌运行)。
+//
+// **调用约定:调用方必须已持有 l.mu**(唯一链路 Allocate → startProc → defaultStart → buildEnv,
+// Allocate 全程持锁)。本函数内部因此直接读写 pendingRosters,绝不可再取锁(不可重入 → 死锁)。
 func (l *LocalGameServerAllocator) buildEnv(podName string, matchID uint64, mapID uint32, gameMode, token string) []string {
 	env := os.Environ()
 	env = append(env,
@@ -377,6 +447,33 @@ func (l *LocalGameServerAllocator) buildEnv(podName string, matchID uint64, mapI
 	// DS 回调服务令牌(审核 P1 #1):local 模式经 env 下发(agones 模式走 annotation)。
 	if token != "" {
 		env = append(env, "PANDORA_DS_TOKEN="+token)
+	}
+	// 权威准入元数据(mode=local 版的 battle admission annotation 三件套)。
+	// UE 侧要求 roster / allocation-id / release-track **同时**齐备才认(缺一即整份判非法),
+	// 故这里也三者同投同不投,绝不投半份。roster 编码见 canonicalRosterText。
+	// ⚠️ 这里**不能**再取 l.mu:唯一生产调用链是 Allocate → startProc → defaultStart → buildEnv,
+	// 而 Allocate 全程持有 l.mu(defer Unlock),Go 互斥锁不可重入,再取即自锁死
+	// —— 表现为 DS 进程永远不被拉起、AllocateBattle 无限挂起、对局最终按空 pod 判弃
+	// (2026-08-04 实测,pod="" 的 battle_abandoned_heartbeat_timeout 就是它)。
+	// 故本函数按「调用方已持 l.mu」的前提直接读写 pendingRosters。
+	roster, hasRoster := l.pendingRosters[matchID]
+	if hasRoster {
+		delete(l.pendingRosters, matchID) // 消费即删,台账不随对局数无界增长
+	}
+	if hasRoster {
+		if text := canonicalRosterText(roster.playerIDs); text != "" &&
+			roster.allocationID != "" && roster.releaseTrack != "" {
+			env = append(env,
+				"PANDORA_BATTLE_ROSTER="+text,
+				"PANDORA_ALLOCATION_ID="+roster.allocationID,
+				"PANDORA_RELEASE_TRACK="+roster.releaseTrack,
+			)
+		} else {
+			plog.With(context.Background()).Warnw("msg", "local_battle_roster_not_canonical",
+				"match_id", matchID, "players", len(roster.playerIDs),
+				"allocation_id", roster.allocationID, "release_track", roster.releaseTrack,
+				"hint", "三件套不全或 roster 非 canonical,不投递;UE 侧将保持空名单、主动退出会被判 AuthorityNotReady")
+		}
 	}
 	// extra_env 追加,但严禁覆盖内置身份/令牌变量(审核 P1:extra_env 覆盖 PANDORA_DS_TOKEN
 	// 会用静态/伪造令牌替换真签发令牌,绕过范围绑定)。保留字命中即跳过并告警。
