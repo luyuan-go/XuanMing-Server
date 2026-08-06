@@ -62,9 +62,9 @@ try {
     # P0#5 收口(2026-07-25):-Prod 的 login 必须指向 hub-allocator headless FQDN,
     # 否则 round_robin 拿不到多后端,AssignHub 重试会被钉在同一个(可能非-writer)Pod。
     $loginProd = Get-Content -LiteralPath (Join-Path $OutDirProd 'login.yaml') -Raw
-    Assert-True (([regex]::Matches($loginProd, '(?m)^[ \t]{4}addr:[ \t]*"dns:///hub-allocator-headless\.pandora\.svc\.cluster\.local:50021"[ \t]*$')).Count -eq 1) `
-        '-Prod login 必须恰好一处 hub.addr = dns:///hub-allocator-headless...:50021(单写者 round_robin 前提)'
-    Assert-True (-not [regex]::IsMatch($loginProd, '(?m)^[ \t]{4}addr:[ \t]*"hub-allocator:50021"')) `
+    Assert-True (([regex]::Matches($loginProd, '(?m)^[ \t]{4}addr:[ \t]*"dns:///hub-allocator-headless\.pandora\.svc\.cluster\.local:20021"[ \t]*$')).Count -eq 1) `
+        '-Prod login 必须恰好一处 hub.addr = dns:///hub-allocator-headless...:20021(单写者 round_robin 前提)'
+    Assert-True (-not [regex]::IsMatch($loginProd, '(?m)^[ \t]{4}addr:[ \t]*"hub-allocator:20021"')) `
         '-Prod login 不得残留被 L4 钉住的 ClusterIP 短名 hub 地址'
 
     $pushProd = Get-Content -LiteralPath (Join-Path $OutDirProd 'push.yaml') -Raw
@@ -101,7 +101,7 @@ try {
     }
     # 非 -Prod 产物同时服务 docker-compose(headless FQDN 在 compose 内不可解析),必须保持短名。
     $loginDev = Get-Content -LiteralPath (Join-Path $OutDirDev 'login.yaml') -Raw
-    Assert-True (([regex]::Matches($loginDev, '(?m)^[ \t]{4}addr:[ \t]*"hub-allocator:50021"[ \t]*$')).Count -eq 1) `
+    Assert-True (([regex]::Matches($loginDev, '(?m)^[ \t]{4}addr:[ \t]*"hub-allocator:20021"[ \t]*$')).Count -eq 1) `
         'dev/compose 共用产物必须保持 hub-allocator 短名(headless FQDN 在 compose 内不可解析)'
 
     $pushDev = Get-Content -LiteralPath (Join-Path $OutDirDev 'push.yaml') -Raw

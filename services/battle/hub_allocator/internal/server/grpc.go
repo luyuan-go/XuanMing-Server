@@ -15,7 +15,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并注册 HubAllocatorService。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50021)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20021)。
 // 调用方为后端内部(login / 大厅 DS),pmw.AuthOptional() 保持与其它服一致;
 // 本服多数 RPC 不依赖 player_id 授权(player_id 由 login 显式传入)。
 //

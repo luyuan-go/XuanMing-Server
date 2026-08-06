@@ -31,7 +31,7 @@ services:
       - "${SVN_HOST:-infinity-svn}:${SVN_HOST_IP:-192.168.2.254}"
     ports:
       - "${JENKINS_HTTP_PORT:-8080}:8080"
-      - "${JENKINS_AGENT_PORT:-50000}:50000"
+      - "${JENKINS_AGENT_PORT:-20000}:20000"
     volumes:
       - jenkins_home:/var/jenkins_home
       - ./jenkins/casc.yaml:/var/jenkins_home/casc.yaml:ro

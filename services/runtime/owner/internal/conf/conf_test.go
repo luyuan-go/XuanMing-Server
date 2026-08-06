@@ -11,7 +11,7 @@ func TestDefaultsProvideBoundedOwnerMaintenancePolicy(t *testing.T) {
 	var cfg Config
 	cfg.Defaults()
 
-	if cfg.Server.Grpc.Addr != ":50017" || cfg.Server.Http.Addr != ":51017" {
+	if cfg.Server.Grpc.Addr != ":20017" || cfg.Server.Http.Addr != ":21017" {
 		t.Fatalf("默认监听地址错误: grpc=%q http=%q", cfg.Server.Grpc.Addr, cfg.Server.Http.Addr)
 	}
 	if got := cfg.Owner.SweepInterval.Std(); got != 5*time.Minute {

@@ -3,7 +3,7 @@
 > 平行宇宙「SODWLK」PvE 战役(东瘟疫之地守城 → 推进主线 → 击杀巫妖王)的存档归属、
 > 数据模型、上报链路设计。本文档定 **任务进度 / 关卡进度 / 声望 / 可带出产出** 的存储边界。
 >
-> ⚠️ 状态:**设计草案(2026-06-19)**,未拍板。涉及新服务 `campaign`(50017)、新库 `pandora_campaign`、
+> ⚠️ 状态:**设计草案(2026-06-19)**,未拍板。涉及新服务 `campaign`(20017)、新库 `pandora_campaign`、
 > 新 topic `pandora.pve.*`,评审通过后再登记进 `infra.md` / `go-services.md` 主表。
 
 ## 0. 玩法概述(背景)
@@ -47,7 +47,7 @@
 
 ### 3.1 新增服务:`campaign`(PvE 战役进度权威)
 
-- **端口**:gRPC 50017 / metrics 51017(`auction` 50016 之后的下一个空位)。
+- **端口**:gRPC 20017 / metrics 21017(`auction` 20016 之后的下一个空位)。
 - **存储**:MySQL 强依赖(新库 `pandora_campaign`)+ Redis(活跃 run 缓存,弱)。
 - **消费 kafka**:`pandora.pve.result`(PvE DS 结算上报,幂等落库)。
 - **生产 kafka**:`pandora.pve.progress`(进度推送给 `push`,key=player_id)。
@@ -71,11 +71,11 @@
 
 | 服务 | 在本玩法的用途 |
 |---|---|
-| `inventory`(50015) | **可带出局外的产出真源**。campaign 兑换 / 发奖时调 `inventory` 授予货币 / 道具(ledger 幂等键防重复发) |
-| `player`(50002) | 玩家档案 / 等级。PvE 不写 MMR;若 PvE 给经验 / 等级,走 player |
-| `ds_allocator`(50020) | 拉 PvE DS(见 §3.3) |
-| `push`(50014) | 任务进度 / 兑换结果 / 援军到达提示推送(消费 `pandora.pve.progress`) |
-| `dialogue`(50013) | NPC 对白树(团长交令牌、剧情触发);对白是配置驱动,进度落点在 campaign |
+| `inventory`(20015) | **可带出局外的产出真源**。campaign 兑换 / 发奖时调 `inventory` 授予货币 / 道具(ledger 幂等键防重复发) |
+| `player`(20002) | 玩家档案 / 等级。PvE 不写 MMR;若 PvE 给经验 / 等级,走 player |
+| `ds_allocator`(20020) | 拉 PvE DS(见 §3.3) |
+| `push`(20014) | 任务进度 / 兑换结果 / 援军到达提示推送(消费 `pandora.pve.progress`) |
+| `dialogue`(20013) | NPC 对白树(团长交令牌、剧情触发);对白是配置驱动,进度落点在 campaign |
 
 > **声望归属决策**:声望本质是「按阵营计数的软货币」,但它绑定 PvE 战役语义(交令牌涨声望、
 > 声望解锁章节奖励),内聚在 `campaign` 比塞进 `inventory` 货币体系更清晰。
@@ -136,7 +136,7 @@
 
 | 服务 | gRPC | metrics |
 |---|---|---|
-| campaign | 50017 | 51017 |
+| campaign | 20017 | 21017 |
 
 ## 5. 关键链路
 

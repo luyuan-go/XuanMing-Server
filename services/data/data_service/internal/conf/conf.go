@@ -27,9 +27,9 @@ func (c *Config) Defaults() {
 		c.Data.CacheTTL = config.Duration(5 * time.Minute)
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50003"
+		c.Server.Grpc.Addr = ":20003"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51003"
+		c.Server.Http.Addr = ":21003"
 	}
 }

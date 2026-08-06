@@ -28,8 +28,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50013` | 客户端 RPC(经 Envoy)|
-| HTTP | `:51013` | 仅 `/metrics`(`dialogue.proto` 无 `google.api.http` 注解,无 RESTful RPC)|
+| gRPC | `:20013` | 客户端 RPC(经 Envoy)|
+| HTTP | `:21013` | 仅 `/metrics`(`dialogue.proto` 无 `google.api.http` 注解,无 RESTful RPC)|
 
 ## 对外接口
 
@@ -147,8 +147,8 @@ StartDialogue ──► [会话存活: 当前 NodeID] ──ChooseOption(有后�
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `server.grpc.addr` | `:50013` | gRPC 监听(`Defaults()` 填)|
-| `server.http.addr` | `:51013` | HTTP 监听,仅 `/metrics`(`Defaults()` 填)|
+| `server.grpc.addr` | `:20013` | gRPC 监听(`Defaults()` 填)|
+| `server.http.addr` | `:21013` | HTTP 监听,仅 `/metrics`(`Defaults()` 填)|
 | `dialogue.session_ttl` | `5m` | 单次对话会话空闲存活时间;超时被惰性 / 主动清理 |
 | `dialogue.trees[]` | 无 | 内联对话树:`npc_id` / `speaker` / `start_node` / `nodes[]`;`node` 含 `node_id` / `text` / `options[]`;`option` 含 `option_id` / `text` / `visible`(省略=可见)/ `next_node`(空或指向不存在节点=结束对话)。启动期 `buildTrees`(`main.go:139`)做去重 + 起始节点存在性校验,不合法直接 fatal |
 | `node.node_id` | `1` | snowflake 发号器 node 段(`dialogue_id` 生成);多副本须各自唯一 |
@@ -166,14 +166,14 @@ StartDialogue ──► [会话存活: 当前 NodeID] ──ChooseOption(有后�
 go run ./services/social/dialogue/cmd/dialogue -conf services/social/dialogue/etc/dialogue-dev.yaml
 ```
 
-`dialogue-dev.yaml` 开了 `enable_reflection: true`,可用 grpcurl 直连 `:50013` 联调:
+`dialogue-dev.yaml` 开了 `enable_reflection: true`,可用 grpcurl 直连 `:20013` 联调:
 
 ```powershell
 # 开启对话(npc_id=1001「商店老板」;需带 JWT,player_id 从 ctx 取)
-grpcurl -plaintext -d '{\"npc_id\":1001}' 127.0.0.1:50013 pandora.dialogue.v1.DialogueService/StartDialogue
+grpcurl -plaintext -d '{\"npc_id\":1001}' 127.0.0.1:20013 pandora.dialogue.v1.DialogueService/StartDialogue
 
 # Prometheus 抓 metrics
-curl http://127.0.0.1:51013/metrics | Select-String pandora
+curl http://127.0.0.1:21013/metrics | Select-String pandora
 ```
 
 > 直连无 Envoy 时不会注入 `x-pandora-player-id`,`callerID==0` → 返回 `ERR_UNAUTHORIZED`;
@@ -183,4 +183,4 @@ curl http://127.0.0.1:51013/metrics | Select-String pandora
 
 - [`go-services.md §2.10`](../../../docs/design/go-services.md) — dialogue 服务要约(RPC / 对话树存储 / 会话状态机 / MOBA 早期范围)
 - [`scale-cellular-20m.md §4.2`](../../../docs/design/scale-cellular-20m.md) — owner cell 不变量与会话分片键口径(`SessionShardKey=player_id`)
-- [`infra.md`](../../../docs/design/infra.md) — 服务端口规划(dialogue = 50013 / 51013)与 topic 规范
+- [`infra.md`](../../../docs/design/infra.md) — 服务端口规划(dialogue = 20013 / 21013)与 topic 规范

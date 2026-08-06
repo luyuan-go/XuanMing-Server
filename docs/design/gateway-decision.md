@@ -351,7 +351,7 @@ func main() {
 
     // 2. 创建 gRPC server
     grpcSrv := grpc.NewServer(
-        grpc.Address(":50010"),
+        grpc.Address(":20010"),
         grpc.Middleware(
             recovery.Recovery(),
             tracing.Server(),
@@ -363,7 +363,7 @@ func main() {
 
     // 3. (可选)HTTP server,由 proto google.api.http 注解驱动
     httpSrv := http.NewServer(
-        http.Address(":51010"),
+        http.Address(":21010"),
         http.Middleware(...),
     )
 
@@ -472,7 +472,7 @@ static_resources:
       - lb_endpoints:
         - endpoint:
             address:
-              socket_address: { address: login-svc.pandora.svc.cluster.local, port_value: 50001 }
+              socket_address: { address: login-svc.pandora.svc.cluster.local, port_value: 20001 }
   # ... 其它 cluster
 ```
 
@@ -640,7 +640,7 @@ Client:UI 增量刷新(去重靠 ts_ms,见 protocol-ordering-rules.md §5.3)
   │───────────────────────────────────────▶│                          │
   │                                        │ Envoy: 解 TLS / 鉴权     │
   │                                        │ Envoy: grpc-web→grpc     │
-  │                                        │ → team:50010 unary       │
+  │                                        │ → team:20010 unary       │
   │                                        │   写 redis 记录邀请       │
   │                                        │   produce kafka:         │
   │                                        │     topic=team.update    │
@@ -1147,7 +1147,7 @@ pwsh E:\work\Pandora\tools\scripts\import_dev_ca.ps1
 | `allow-mysql-ingress` / `allow-redis-ingress` / `allow-kafka-ingress` | 各存储仅接受业务层入站,只开各自端口(3306 / 6379 / 9092) |
 | `allow-etcd-ingress` | 业务层连 client :2379;peer :2380 仅 etcd 自身 |
 | `allow-zookeeper-ingress` | 仅 kafka 可连 :2181(唯一 infra→infra 边) |
-| `allow-ingress-gateway` | 若 Envoy 在独立命名空间,给其命名空间打标签 `pandora.dev/role=ingress-gateway` 即放行网关→业务 gRPC `50001-50022`;未打标签则天然 inert |
+| `allow-ingress-gateway` | 若 Envoy 在独立命名空间,给其命名空间打标签 `pandora.dev/role=ingress-gateway` 即放行网关→业务 gRPC `20001-20022`;未打标签则天然 inert |
 | `allow-ds-to-envoy` | default 命名空间里**带 `agones.dev/role=gameserver` 标签的 GameServer Pod** → pandora-envoy `:8444`(DS 回调面;2026-07-10 由「整个 default ns」收紧为「仅 GameServer Pod」) |
 
 **当前真实收益(不夸大):** 阻断其它命名空间→本命名空间(除标签网关);把存储层入站收敛到「仅业务层 + 必要 infra 对等边」,封住「基础设施互连」与「跨 ns」两类横向。**业务服之间仍全通**,那一层的横向最小化待 mesh(见 §16.2)。

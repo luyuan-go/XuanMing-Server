@@ -16,7 +16,7 @@ player_locator 继续只作 presence 投影;匹配阶段状态仍归 matchmaker;
 
 ## 1. 宿主与存储选型
 
-- **宿主:新独立服务 `owner`**(runtime 域,端口 50017/51017)。§9.22 要求"只有唯一 owner
+- **宿主:新独立服务 `owner`**(runtime 域,端口 20017/21017)。§9.22 要求"只有唯一 owner
   authority 能通过受控 transition API 原子修改;Login/matchmaker/allocator/DS 只能查询或
   提交绑定 operation_id 的命令,不得各自 raw CAS"——库形态会让每个调用方都变成写者,
   服务形态才是"唯一权威"。服务本身无状态可水平扩展(原子性在存储 CAS,副本只是通道)。

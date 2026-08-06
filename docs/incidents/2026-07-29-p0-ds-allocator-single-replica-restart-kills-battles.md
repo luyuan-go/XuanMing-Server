@@ -176,7 +176,7 @@
 | **P0-1a** 心跳超时扫描由 `writerlease` 选举串行化（`election=ds_allocator/sweep`），非 leader 转热备继续服务 RPC | 已落码 | `internal/biz/allocator.go` `SweepWriterLease`/`sweepIsLeader`；`cmd/ds_allocator/main.go` | `internal/biz` 3 项新单测 PASS |
 | **P0-1b** 档位开关 `allocator.writer_lease_mode`（enforce/warmup/off，空=enforce），非法值 fail-fast | 已落码 | `internal/conf/conf.go` | `TestResolveWriterLeaseMode` PASS |
 | **P0-1c** 机械门禁：`RollingUpdate × mode!=enforce` 启动即退出；受管 k8s 内缺 `PANDORA_DEPLOY_STRATEGY` 亦 fail-closed | 已落码 | `cmd/ds_allocator/main.go` | 清单契约测试钉住 annotation↔strategy↔env 三者一致 |
-| **P0-1d** 运维面：`containerPort 51020` 声明 + Service 暴露 + `/healthz/writer` + 6 个 `pandora_ds_allocator_writer_*` 指标 + Grafana critical 告警 | 已落码 | `internal/server/http.go`、`services.yaml`、`deploy/grafana/.../rules.yaml` | YAML 解析校验通过，无重复 uid |
+| **P0-1d** 运维面：`containerPort 21020` 声明 + Service 暴露 + `/healthz/writer` + 6 个 `pandora_ds_allocator_writer_*` 指标 + Grafana critical 告警 | 已落码 | `internal/server/http.go`、`services.yaml`、`deploy/grafana/.../rules.yaml` | YAML 解析校验通过，无重复 uid |
 | **P1-1** `ds_auth_fence_lost` 带 `reason`（6 个分支常量），5 个调用点全部打印 | 已落码 | `pkg/dsauthfence/fence.go` + 5 处 main.go | `TestHolderLostReasonIdentifiesBranch` 6 子用例 PASS |
 | **P1-2** UE 恢复协调器等待窗口与 `Operation` 严格配对归零 | 已落码，**待用户编译** | `MyDsRecoveryCoordinator.cpp` 两处终态 + `.h` 不变量注释 | UE 编译与实机未跑 |
 | **ENV-1** 360 实时监控对 Docker/WSL2/minikube 数据目录加白名单；vhdx 迁至空闲 NVMe | **未做（需用户在宿主机操作）** | — | — |

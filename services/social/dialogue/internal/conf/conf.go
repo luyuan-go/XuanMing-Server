@@ -61,9 +61,9 @@ func (c *Config) Defaults() {
 		c.Dialogue.SessionTTL = config.Duration(DefaultSessionTTL)
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50013"
+		c.Server.Grpc.Addr = ":20013"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51013"
+		c.Server.Http.Addr = ":21013"
 	}
 }

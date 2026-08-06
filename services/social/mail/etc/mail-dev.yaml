@@ -1,6 +1,6 @@
 # Pandora mail 服务开发期配置(2026-06-29)。
 #
-# - gRPC :50009 / HTTP :51009(仅 /metrics)
+# - gRPC :20009 / HTTP :21009(仅 /metrics)
 # - MailService:系统/公会邮件拉取式(channel+watermark),个人邮件写扩散(离线可达)
 # - MySQL 强依赖(pandora_social 库:sys_mail/guild_mail/player_mail/player_mail_cursor/player_mail_claim;读 guild_members 判玩家所属公会)
 # - 不依赖 kafka(系统/公会拉取,个人落库即达)
@@ -9,13 +9,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50009"
+    addr: ":20009"
     timeout: "15s"
     enable_reflection: true
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51009"
+    addr: ":21009"
 
 node:
   # node_id 必须与 inventory 不同(inventory=1,mail=2)。
@@ -59,7 +59,7 @@ mail:
   max_body_len: 2048
   max_attachments: 16
   # inventory 服务 gRPC 地址,领取附件入库;留空且 allow_noop_grant=true 时仅标记不发奖
-  inventory_addr: "127.0.0.1:50015"
+  inventory_addr: "127.0.0.1:20015"
   allow_noop_grant: false
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威

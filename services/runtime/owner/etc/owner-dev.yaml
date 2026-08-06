@@ -1,6 +1,6 @@
 # Pandora owner 服务开发期配置(owner-authority.md,2026-07-21)。
 #
-# - gRPC :50017 / HTTP :51017(仅 /metrics)
+# - gRPC :20017 / HTTP :21017(仅 /metrics)
 # - 权威存储强依赖:dev 连本机 docker mysql 的 pandora_owner 库(单机无复制,线性一致);
 #   ⚠️ 生产必须连 TiDB(deploy/tidb-init/02-owner-tidb.sql;MySQL 异步复制切换会回滚已确认写,
 #   违反 §9.22"确认写不回滚",生产禁用)。
@@ -9,13 +9,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50017"
+    addr: ":20017"
     timeout: "5s"               # owner CAS 都是单行事务,快;卡顿宁可让调用方按 UNKNOWN 重试
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"
   http:
     network: tcp
-    addr: ":51017"
+    addr: ":21017"
 
 node:
   node_id: 1

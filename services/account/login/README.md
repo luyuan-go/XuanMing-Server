@@ -28,8 +28,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50001` | 主流量(客户端 → Envoy `:8443` gRPC-Web → 本服)+ 内部 RPC |
-| HTTP | `:51001` | `/metrics` Prometheus + Kratos RESTful(`/v1/login` 等,运营 / 联调低 QPS) |
+| gRPC | `:20001` | 主流量(客户端 → Envoy `:8443` gRPC-Web → 本服)+ 内部 RPC |
+| HTTP | `:21001` | `/metrics` Prometheus + Kratos RESTful(`/v1/login` 等,运营 / 联调低 QPS) |
 
 > **VerifyDSTicket 网关例外**:Redis authority 下 UE DS 的在线 `VerifyDSTicket` 只走独立 Envoy `:8444` exact route
 > (`:8443` 对该 path 精确 403);网络位置本身不构成身份,仍须过 DS Bearer + Redis active 门(见「Hub / Battle 票据签发与验证」)。
@@ -261,9 +261,9 @@ JWT 验签只证明"曾登录过",**顶号后旧 token 在 exp 前仍验得过**
 | `login.jwt.additional_secrets` | 空 | 仅校验用的额外密钥,支持玩家 JWT 不停服三段式轮换 |
 | `login.jwt.session_ttl` / `ds_ticket_ttl` | 同上两 TTL | JWT 侧 TTL(默认跟随 `session_token_ttl` / `ds_ticket_ttl`) |
 | `login.ds_ticket` | 空=legacy HS256 | DSTicket v2(RS256,方案 B)签发 / 验证配置;`private_key_file` 非空即启用 v2 profile |
-| `login.locator.addr` | `127.0.0.1:50006` | player_locator;空仅允许 local/off;binding=true 时为 Hub 分配前权威门 |
-| `login.hub.addr` / `region` | `127.0.0.1:50021` / — | hub_allocator(round_robin LB,生产用 `dns:///` headless);空=回退自签 |
-| `login.matchmaker.addr` / `auth_secret` / `auth_audience` | `127.0.0.1:50011` / — / — | matchmaker 只读权威兜底;`auth_*` 须与 matchmaker `match_resume_auth_*` 一致(独立随机密钥,≥32 字节,不复用玩家 JWT) |
+| `login.locator.addr` | `127.0.0.1:20006` | player_locator;空仅允许 local/off;binding=true 时为 Hub 分配前权威门 |
+| `login.hub.addr` / `region` | `127.0.0.1:20021` / — | hub_allocator(round_robin LB,生产用 `dns:///` headless);空=回退自签 |
+| `login.matchmaker.addr` / `auth_secret` / `auth_audience` | `127.0.0.1:20011` / — / — | matchmaker 只读权威兜底;`auth_*` 须与 matchmaker `match_resume_auth_*` 一致(独立随机密钥,≥32 字节,不复用玩家 JWT) |
 | `ds_auth.*`(顶层) | `mode=off` / `authority_mode=legacy` | UE DS 在线 VerifyDSTicket 入场鉴权;`redis` 模式须 binding=true + fence 一致(`CapabilityFence`) |
 
 > **`Validate` 强校验**:`ds_ticket` signer/verifier 必须显式 `active_kid`(+ verifier 的 `keyset_revision`);`authority_mode=redis`
@@ -285,15 +285,15 @@ go run ./services/account/login/cmd/login -conf services/account/login/etc/login
 ```powershell
 # 直连 gRPC(dev 免密:随便填账号名即进)
 grpcurl -plaintext -d '{\"account\":\"test\",\"password_hash\":\"abc\",\"device_id\":\"d1\"}' `
-  127.0.0.1:50001 pandora.login.v1.LoginService/Login
+  127.0.0.1:20001 pandora.login.v1.LoginService/Login
 
 # 走 HTTP RESTful
-curl -X POST http://127.0.0.1:51001/v1/login `
+curl -X POST http://127.0.0.1:21001/v1/login `
   -H "Content-Type: application/json" `
   -d '{"account":"test","password_hash":"abc","device_id":"d1"}'
 
 # Prometheus 抓 metrics
-curl http://127.0.0.1:51001/metrics | Select-String pandora
+curl http://127.0.0.1:21001/metrics | Select-String pandora
 ```
 
 > `dev_skip_password` / `dev_auto_register` / `dev_allow_any_role` 是**纯 dev / 联调开关,默认 `false`,绝不能上生产**

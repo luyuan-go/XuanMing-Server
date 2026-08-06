@@ -19,13 +19,13 @@ Inventory 当前同时承载玩家自助 RPC 与高权限系统写 RPC。玩家�
 ```
 
 也就是说，`callerID == 0` 表示的只是“请求没有玩家身份”，并不能证明请求来自 auction、trade、mail、
-leaderboard 或 battle-result。任何能连到 Inventory `:50015` 的匿名内部调用者，只要不携带
+leaderboard 或 battle-result。任何能连到 Inventory `:20015` 的匿名内部调用者，只要不携带
 `x-pandora-player-id`，就会被当成系统服务。当前 online NetworkPolicy 的 `allow-app-mesh` 又允许业务 Pod
 之间全通，因此单个低权限业务 Pod 被攻破后，可以直接伪造受害玩家和订单参数调用资产写接口。
 
 最小复现序列：
 
-1. 攻击者取得任一可访问 `inventory.pandora.svc:50015` 的业务 Pod 执行权限；
+1. 攻击者取得任一可访问 `inventory.pandora.svc:20015` 的业务 Pod 执行权限；
 2. 直接建立明文 gRPC 连接，不携带玩家身份；
 3. 调用 `EnsureAuctionEscrow` / `FreezeForOrder`，在请求体填入受害玩家、订单、物品和数量；
 4. Inventory 看到 `callerID == 0` 后放行，在业务校验满足时冻结受害玩家资产。
@@ -131,19 +131,19 @@ spiffe://cluster.local/ns/pandora/sa/pandora-battle-result
 
 ### 4.2 K8s / Envoy 硬约束
 
-- Inventory Service `50015` 端口必须显式标记 `name: grpc` 和 `appProtocol: grpc`，避免 L7 方法规则因
+- Inventory Service `20015` 端口必须显式标记 `name: grpc` 和 `appProtocol: grpc`，避免 L7 方法规则因
   协议识别失败退化成 TCP 规则；
 - gRPC 的 HTTP method 固定为 `POST`，path 必须是完整
   `/pandora.inventory.v1.InventoryService/<Method>`，禁止 service 前缀和通配符；
 - namespace / workload 必须绑定明确 Istio revision，injection webhook 必须 `failurePolicy: Fail`；
-- 禁止目标 workload 使用 `sidecar.istio.io/inject: "false"`，禁止排除 Inventory `50015` 入站或五个
+- 禁止目标 workload 使用 `sidecar.istio.io/inject: "false"`，禁止排除 Inventory `20015` 入站或五个
   调用方到 Inventory 的出站；
 - 发布门必须检查目标 Pod 的 ServiceAccount、`istio-proxy`、revision、STRICT 和完整白名单；仅检查
   YAML 中有 annotation 不够；
 - custom 边缘 Envoy 可排除其公网 `8443`、DS `8444` 和 admin `9901` 的 sidecar 入站劫持，但其访问
   Inventory 的出站必须进入 mesh；需在测试环境反证不会产生双 Envoy 循环；
 - 当前原生 gRPC readinessProbe 必须经过所选 Istio revision 的 probe rewrite 实测，不能为绕过探针
-  问题而排除 `50015`；
+  问题而排除 `20015`；
 - 能创建/更新 Pod 或 Deployment 的主体等价于能选择高权限 ServiceAccount，CD/RBAC 必须禁止普通
   workload 冒用 `pandora-auction` 等身份；
 - mesh 注入不可只靠约定：admission 与 online 发布门都必须 fail-closed，缺 sidecar 的 Inventory Pod
@@ -270,7 +270,7 @@ RPC message 不变，service-auth 仅增加 metadata，因此新旧应用可在�
 - Inventory 只有一个 STRICT PeerAuthentication，selector 精确命中 `app=inventory`；
 - AuthorizationPolicy 与 §3 矩阵逐单元格完全相等，不多不少；
 - Inventory gRPC Service 端口名和 `appProtocol` 正确；
-- 禁止 wildcard principal、service 前缀、`*` path、匿名系统方法和 `50015` mesh bypass；
+- 禁止 wildcard principal、service 前缀、`*` path、匿名系统方法和 `20015` mesh bypass；
 - 客户端 Envoy 七个系统方法全部 direct 403，包含 `EnsureAuctionEscrow`；
 - online 发布门位于第一次远端写之前，失败必须 fail-closed；
 - 生产边缘 Envoy 的 principal、namespace、SA 与 live Endpoint 可机械核对。
@@ -296,13 +296,13 @@ RPC message 不变，service-auth 仅增加 metadata，因此新旧应用可在�
 1. auction / trade / mail / leaderboard / battle-result 任一改回 `default` SA；
 2. 删除 Inventory STRICT 或改成 PERMISSIVE；
 3. 删除 Inventory / 调用方 sidecar 注入，或设置 `inject=false`；
-4. 排除 Inventory `50015` 入站，或排除调用方到 Inventory 的出站；
+4. 排除 Inventory `20015` 入站，或排除调用方到 Inventory 的出站；
 5. 把某条完整 gRPC path 改成 service 前缀 / 通配符；
 6. 给 auction 增加 `GrantItems`、给 mail 增加 `SettleAuctionMatch` 等越权单元格；
 7. 漏掉 §3 某条合法边，证明 dry-run/真实链路能发现而不是静默丢业务；
 8. 生产边缘 Envoy 使用 `default` SA、无 sidecar或不在同一 trust domain；
 9. 删除 `EnsureAuctionEscrow` 的客户端 Envoy direct 403；
-10. readiness probe rewrite 失效；禁止通过排除 `50015` 让 mutant 变绿；
+10. readiness probe rewrite 失效；禁止通过排除 `20015` 让 mutant 变绿；
 11. injection webhook 不可用时仍创建出无 sidecar Inventory Pod；
 12. online preflight 失败后脚本仍发生第一次远端写。
 

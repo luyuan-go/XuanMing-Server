@@ -231,7 +231,7 @@ ReleaseAssignmentSeatExact、RecordInstanceTeardownProof。
   自己那一届,继任者下次 CAS 因水位更高必然覆盖成功,且票据未交付,无玩家可凭其进场。
 - 滚动重叠期间打到非写者副本的写请求收到可重试 `ErrUnavailable`,
   不是零感知——是「重试即成功」而非「必然成功」。生产 login 必须经
-  `dns:///hub-allocator-headless...:50021` + round_robin 拨号,否则重试会被 L4
+  `dns:///hub-allocator-headless...:20021` + round_robin 拨号,否则重试会被 L4
   钉在同一个非写者副本(标准生成链已机械收口,见 `gen_cluster_config.ps1`
   `Set-ProdLoginHubHeadlessAddr`)。
 - readiness 探针**故意**不与租约挂钩:失主副本是有意的热备(拒写但可秒级接管),
@@ -283,7 +283,7 @@ ReleaseAssignmentSeatExact、RecordInstanceTeardownProof。
    既不引入双写也不引入新的失败模式。观测期内确认:
    - 日志恰好一个 Pod 打 `writerlease elected token=…`,重启后 token **严格变大**;
    - `SIGTERM` 时打 `resigned … (shutdown)`,新 Pod 亚秒接任;
-   - `curl <pod>:51021/healthz/writer` → `enabled:true, mode:"warmup", held:true, degraded:false`;
+   - `curl <pod>:21021/healthz/writer` → `enabled:true, mode:"warmup", held:true, degraded:false`;
      临时封锁 etcd 应看到 `consecutive_campaign_errs` 增长且 `degraded` 转 true,恢复后自愈。
    观测多久由运维定(建议至少跨一次正常发布 + 一次 Pod 重启)。**这一跳可随时回滚镜像,零数据影响**
    ——warmup 没有写下任何 fence 键。

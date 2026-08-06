@@ -1,4 +1,4 @@
-﻿package conf
+package conf
 
 import "testing"
 
@@ -12,7 +12,7 @@ t.Fatal("production without locator must fail closed")
 })
 
 t.Run("locator configured passes", func(t *testing.T) {
-cfg := Config{Mode: ModeAgones, LocatorAddr: "player-locator:50006"}
+cfg := Config{Mode: ModeAgones, LocatorAddr: "player-locator:20006"}
 cfg.DSAuth.AuthorityMode = "redis"
 if err := cfg.ValidateBattleDepartureConfig(); err != nil {
 t.Fatalf("locator configured rejected: %v", err)

@@ -13,7 +13,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并注册 DataService。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50003)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20003)。
 //
 // 不挂 AuthRequired:本服务是内网数据网关,由 player / 其它内网服务调用,不直接暴露给玩家;
 // 由 Envoy / 内网 RPC 黑白名单限制本路径只允许内网访问。

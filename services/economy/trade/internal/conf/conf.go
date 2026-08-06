@@ -66,9 +66,9 @@ func (c *Config) Defaults() {
 		c.Trade.MaxOrdersPerPlayer = 200
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50012"
+		c.Server.Grpc.Addr = ":20012"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51012"
+		c.Server.Http.Addr = ":21012"
 	}
 }

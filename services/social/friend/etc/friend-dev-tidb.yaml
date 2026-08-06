@@ -14,12 +14,12 @@
 server:
   grpc:
     network: tcp
-    addr: ":50004"
+    addr: ":20004"
     timeout: "15s"
     enable_reflection: true
   http:
     network: tcp
-    addr: ":51004"
+    addr: ":21004"
 
 node:
   node_id: 1
@@ -44,7 +44,7 @@ kafka:
 
 friend:
   max_friends: 200
-  locator_addr: "127.0.0.1:50006"
+  locator_addr: "127.0.0.1:20006"
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威
 # (pandora:sess,node.redis_client 指向的共享 Redis)当前一代,顶号后旧 JWT 立即失效。

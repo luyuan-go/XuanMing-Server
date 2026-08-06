@@ -40,7 +40,7 @@ docker driver 下拉起容器版 UDP 回程中继 → 打印端到端验收清�
 
 > **DS 回调为什么能通**：k8s 模式下 DS(Pod)走**集群内 Envoy「DS 面」网关**
 > `pandora-envoy.pandora.svc.cluster.local:8444`(由 `16-ds-envoy.yaml` 部署,线上同款拓扑),
-> 它把 grpc-web 转成 gRPC 后直连 `ds-allocator.pandora.svc:50020` 等集群内 Service。
+> 它把 grpc-web 转成 gRPC 后直连 `ds-allocator.pandora.svc:20020` 等集群内 Service。
 > Pod 内不再写 `host.docker.internal`(minikube 的 Pod 解析不了该域名,DNS 层就失败)。
 > 宿主 Envoy `:8443` 服务 UE 玩家客户端，宿主 `:8444` 仅保留回环调试面；`k8s_envoy_bridge.ps1`
 > 的 port-forward 是给宿主 Envoy upstream 用的，与 GameServer DS 回调无关。
@@ -53,6 +53,7 @@ docker driver 下拉起容器版 UDP 回程中继 → 打印端到端验收清�
 > `deploy/ds/build-image-minikube.ps1` 直接构建到 minikube 内置 Docker daemon（然后跑
 > `e2e_k8s.ps1 -SkipImageLoad`），也可用 `deploy/ds/build-image.sh` 在宿主构建
 > `pandora/battle-ds:dev` / `pandora/hub-ds:dev` 后让 `e2e_k8s.ps1` 执行 `minikube image load`。
+> 注意 `:dev` 只是本地构建链的中间 tag;**Fleet yaml 引用的是不可变 tag**,不要把 `:dev` 写回 Fleet。
 
 详细环境准备 / 手测分配 / 心跳 stub 见下文各节。
 
@@ -135,7 +136,7 @@ pwsh tools/scripts/start.ps1 -Mode k8s -Reset    # minikube delete 后全新部�
 ## ☁️ 线上真集群部署(online:测试服 / 生产 kbs)
 
 线上 Fleet 跟本地有一处**必须换掉**、一处**默认已对齐**:
-  1. DS 镜像:本地是 `pandora/battle-ds:dev` / `pandora/hub-ds:dev`(只在你机器上),远端要换成 registry 可拉取的完整镜像名
+  1. DS 镜像:本地钉的是**不可变 tag**(制品库快照版本号,如 `pandora/battle-ds:r1833-dirty-20260805-222737`,镜像只在你机器上/制品库里),远端要换成 registry 可拉取的完整镜像名 —— 但两端都**不准用 `:dev` 滚动 tag**(§9.21 / INC-20260727-001 P1-4)
   2. DS 回调地址:Fleet 默认已是线上同款 `pandora-envoy.pandora.svc.cluster.local:8444`(本地由 `16-ds-envoy.yaml` 提供同名 Service,线上由边缘网关提供);若线上网关 DNS 不同,用 `-DsGatewayAddr` 覆盖
 
 ### 玩家 → GameServer 公网 UDP 硬门

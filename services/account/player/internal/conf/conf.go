@@ -108,10 +108,10 @@ func (c *Config) Defaults() {
 		c.Player.ConsumeTopics = []string{kafkax.TopicPlayerUpdate}
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50002"
+		c.Server.Grpc.Addr = ":20002"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51002"
+		c.Server.Http.Addr = ":21002"
 	}
 }
 

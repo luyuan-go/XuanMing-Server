@@ -1,6 +1,6 @@
 # Pandora hub_allocator 服务开发期配置(W4 ⑤,2026-06-06)。
 #
-# - gRPC :50021 / HTTP :51021(仅 /metrics)
+# - gRPC :20021 / HTTP :21021(仅 /metrics)
 # - Redis 强依赖(大厅 DS 分片镜像 + 玩家归属 + 心跳超时 ZSET 扫描)
 # - JWT 强依赖(AssignHub / TransferHub 签 hub DSTicket,不变量 §3)
 # - W4 ⑤ 用 MockHubFleetProvider(种确定性假分片),真 Agones Fleet 接入留后续
@@ -10,13 +10,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50021"
+    addr: ":20021"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51021"
+    addr: ":21021"
 
 node:
   node_id: 1
@@ -84,9 +84,9 @@ hub:
   heartbeat_timeout: "30s"
 
   # owner 迁移双写(owner-authority.md migrate ①③④⑥):签票点 Begin(HUB) + 实例租约 +
-  # census 代提交 Admit。dev 一键启动已含 owner 服务(:50017);弱依赖,owner 掉线仅告警。
+  # census 代提交 Admit。dev 一键启动已含 owner 服务(:20017);弱依赖,owner 掉线仅告警。
   # contract 阶段全链验证后才置 owner_lease_required: true。
-  owner_addr: "127.0.0.1:50017"
+  owner_addr: "127.0.0.1:20017"
   # sweep_interval: 后台心跳超时扫描间隔
   sweep_interval: "5s"
   # shard_ttl: 分片镜像 Redis key TTL(每次 Assign/Heartbeat 刷新)
@@ -123,8 +123,8 @@ hub:
   # transfer_cooldown: 玩家主动切线冷却(防刷);窗口内再切返回 ERR_HUB_TRANSFER_COOLDOWN。<=0 不限流
   transfer_cooldown: "10s"
   # locator_addr: player_locator gRPC 地址(玩家切线护栏:战斗/匹配中禁切)。
-  # 弱依赖:留空则跳过位置检查。dev 直连 player_locator 服务 gRPC :50006。
-  locator_addr: "127.0.0.1:50006"
+  # 弱依赖:留空则跳过位置检查。dev 直连 player_locator 服务 gRPC :20006。
+  locator_addr: "127.0.0.1:20006"
   # writer_lease_mode: 写者继任租约档位(enforce|warmup|off;留空=enforce,行为不变)。
   # 只在"从不含 writerlease 的旧镜像首次升级"时才需要临时改成 warmup 走两跳,
   # 完整发布合约见 docs/design/session-generation-rollout.md §5.4。

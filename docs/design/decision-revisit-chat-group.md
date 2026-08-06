@@ -1,7 +1,7 @@
 # decision-revisit:聊天系统补全公会聊天 + 临时群聊
 
 > 状态:**已落地,实现完成**(2026-06-27 拍板通过并实现)。提出人:Claude(Opus)/ 2026-06-27
-> 落地说明:guild 服务(GuildService + GroupService 同进程,50008/51008)已实现并接入运行/部署/边缘入口
+> 落地说明:guild 服务(GuildService + GroupService 同进程,20008/21008)已实现并接入运行/部署/边缘入口
 > (run_services.ps1 / gen_cluster_config.ps1 / docker-compose.services.yml / k8s / prometheus / envoy)。
 > 后续如需调整以本文档为设计依据,代码改动同步更新本节状态。
 > 触发:用户确认「聊天系统除世界 / 局内(队伍)/ 好友(私聊)外,**还要公会聊天 + 临时群聊,两个都全量实现**」。
@@ -226,9 +226,9 @@ CREATE TABLE chat_group_members (
 ### 7.2 端口(已落地)
 | 服务 | gRPC | metrics |
 |---|---|---|
-| guild(含 group) | 50008 | 51008 |
+| guild(含 group) | 20008 | 21008 |
 
-> chat 现有端口 50005 不变;push 现有端口 50014 不变。50015/51015 已被 inventory 占用,不得复用。
+> chat 现有端口 20005 不变;push 现有端口 20014 不变。20015/21015 已被 inventory 占用,不得复用。
 
 ### 7.3 错误码(`pkg/errcode`,沿 9000-9999 社交段)
 ```
@@ -263,7 +263,7 @@ ErrGroup: 9501-9505 — NotFound / Full / NotOwner / NotMember / AlreadyIn
 
 ## 10. 已决问题
 
-1. **端口**:使用 `50008/51008`,因为 `50015/51015` 已被 inventory 占用。
+1. **端口**:使用 `20008/21008`,因为 `20015/21015` 已被 inventory 占用。
 2. **服务形态**:guild + group 同进程,proto package 独立。
 3. **公会 / 群聊历史**:本轮不落库,即时频道;只有 PRIVATE 保留离线历史。
 4. **成员上限**:guild 100 / group 50,配置可调。

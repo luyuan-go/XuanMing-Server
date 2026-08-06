@@ -1,6 +1,6 @@
 # Pandora chat 服务开发期配置(2026-06-16)。
 #
-# - gRPC :50005 / HTTP :51005(仅 /metrics)
+# - gRPC :20005 / HTTP :21005(仅 /metrics)
 # - MySQL 强依赖(pandora_social 库:chat_private_messages,私聊离线历史)
 # - Kafka 弱依赖(生产 pandora.chat.{world,team,private,guild,group} → push 推送)
 # - team 弱依赖(队伍频道解析成员;addr 空则队伍频道降级)
@@ -10,13 +10,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50005"
+    addr: ":20005"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51005"
+    addr: ":21005"
 
 node:
   node_id: 1
@@ -44,9 +44,9 @@ chat:
   # history_limit: PullHistory 单次返回上限(默认 50)
   history_limit: 50
   # team_addr: team 服务 gRPC 地址;空 → 队伍频道降级(弱依赖)
-  team_addr: "127.0.0.1:50010"
+  team_addr: "127.0.0.1:20010"
   # guild_addr: guild 服务 gRPC 地址(GuildService + GroupService 同进程);空 → 公会 / 群频道降级
-  guild_addr: "127.0.0.1:50008"
+  guild_addr: "127.0.0.1:20008"
   # sensitive_words: 敏感词列表(命中整词替换为等长 *);空 → 不过滤
   sensitive_words: []
 

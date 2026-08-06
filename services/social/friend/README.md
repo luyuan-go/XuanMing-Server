@@ -27,8 +27,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50004` | 客户端 RPC(经 Envoy jwt_authn)|
-| HTTP | `:51004` | 仅 `/metrics`(`friend.proto` 无 `google.api.http` 注解,无 RESTful RPC)|
+| gRPC | `:20004` | 客户端 RPC(经 Envoy jwt_authn)|
+| HTTP | `:21004` | 仅 `/metrics`(`friend.proto` 无 `google.api.http` 注解,无 RESTful RPC)|
 
 端口从 `internal/conf/conf.go` 的 `Defaults()` 取(`Server.Grpc.Addr` / `Server.Http.Addr`);登记见
 [`infra.md §6`](../../../docs/design/infra.md)。
@@ -228,7 +228,7 @@ P1-2/3/4,R9 复审 P1):
 | `sweep_batch` | `500` | 每轮清理行数上限(`DELETE ... LIMIT`)|
 | `pair_guard_retention_days` | `30` | 关系对守卫行保留天数(R9 复审 P1,守卫行随社交图 O(n²) 累积须有界)|
 
-通用 `config.Base` 键(见各 dev yaml):`server.grpc.addr`(默认 `:50004`)/ `server.http.addr`(默认 `:51004`)、
+通用 `config.Base` 键(见各 dev yaml):`server.grpc.addr`(默认 `:20004`)/ `server.http.addr`(默认 `:21004`)、
 `node.node_id`、`node.mysql_client.dsn`(强依赖,必填)、`node.redis_client`(会话门只读)、
 `kafka.brokers` / `group_id`、`session_gate.require`、`snowflake.node_id_source`(`static` 默认 / `etcd` 多副本抢占)。
 

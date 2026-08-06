@@ -21,7 +21,7 @@ func TestValidateRedisAuthorityIngressRejectsLegacyBattleResultTopic(t *testing.
 	}
 
 	cfg.Battle.ConsumeTopics = []string{kafkax.TopicDSLifecycle}
-	cfg.Battle.DSAllocatorAddr = "ds-allocator:50020"
+	cfg.Battle.DSAllocatorAddr = "ds-allocator:20020"
 	if err := cfg.ValidateRedisAuthorityIngress(); err != nil {
 		t.Fatalf("lifecycle-only config: %v", err)
 	}

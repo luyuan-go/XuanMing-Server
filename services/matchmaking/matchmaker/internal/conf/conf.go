@@ -251,10 +251,10 @@ func (c *Config) Defaults() {
 		c.Match.GameMode = "5v5_ranked"
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50011"
+		c.Server.Grpc.Addr = ":20011"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51011"
+		c.Server.Http.Addr = ":21011"
 	}
 }
 

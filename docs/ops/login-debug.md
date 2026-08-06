@@ -38,8 +38,8 @@ go run ./services/battle/hub_allocator/cmd/hub_allocator -conf services/battle/h
 
 端口:
 
-- `player_locator`:gRPC `50006`,HTTP `51006`
-- `hub_allocator`:gRPC `50021`,HTTP `51021`
+- `player_locator`:gRPC `20006`,HTTP `21006`
+- `hub_allocator`:gRPC `20021`,HTTP `21021`
 
 ### 1.3 VS Code 启 login
 
@@ -66,8 +66,8 @@ VS Code 使用 [.vscode/launch.json](../../.vscode/launch.json) 里的 `Debug lo
 account_seed_done account=test ... created=false
 account_repo_mysql ...
 redis_connected addr=127.0.0.1:6380
-locator_dial_ok addr=127.0.0.1:50006
-hub_allocator_dial_ok addr=127.0.0.1:50021
+locator_dial_ok addr=127.0.0.1:20006
+hub_allocator_dial_ok addr=127.0.0.1:20021
 service_ready ... account_repo=mysql session_repo=redis hub_assigner=grpc
 ```
 
@@ -84,7 +84,7 @@ $body = @{
 
 Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:51001/v1/login" `
+  -Uri "http://127.0.0.1:21001/v1/login" `
   -ContentType "application/json" `
   -Body $body
 ```
@@ -101,7 +101,7 @@ Invoke-RestMethod `
 
 ```powershell
 $body = '{"account":"test1","password_hash":"abc","device_id":"login-debug"}'
-curl.exe -X POST "http://127.0.0.1:51001/v1/login" `
+curl.exe -X POST "http://127.0.0.1:21001/v1/login" `
   -H "Content-Type: application/json" `
   --data-raw $body
 ```
@@ -158,7 +158,7 @@ mysql check banned: context deadline exceeded
 ```powershell
 grpcurl -plaintext -max-time 300 `
   -d '{"account":"test1","password_hash":"abc","device_id":"login-debug"}' `
-  127.0.0.1:50001 pandora.login.v1.LoginService/Login
+  127.0.0.1:20001 pandora.login.v1.LoginService/Login
 ```
 
 ## 5. 常见问题
@@ -250,7 +250,7 @@ maintnotifications disabled due to handshake error
 当前命令直连:
 
 ```text
-http://127.0.0.1:51001/v1/login
+http://127.0.0.1:21001/v1/login
 ```
 
 这是本地 HTTP 短请求,不是 HTTPS,也不是长连接。

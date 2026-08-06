@@ -240,10 +240,10 @@ func (c *Config) Defaults() {
 		c.Battle.RetentionSweepBatch = 200
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50022"
+		c.Server.Grpc.Addr = ":20022"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51022"
+		c.Server.Http.Addr = ":21022"
 	}
 	c.DSAuth.Defaults()
 }

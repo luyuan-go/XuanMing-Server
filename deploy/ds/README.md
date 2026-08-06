@@ -40,7 +40,7 @@ ds_allocator 收到该心跳才下发 address:port ──► matchmaker push mat
 - `deploy/ds/build-image.sh` — docker build + 可选本地 retag（`docker push` 由人手动执行）。
 - `deploy/ds/install-agones.sh` — helm 安装/升级 Agones（基线 v1.58.0）。
 - `deploy/ds/stage/LinuxServer/` — UE 打包产物落点（**不入库**，由客户端脚本拷入）。
-- `deploy/k8s/agones/*.yaml` — Fleet / RBAC / Allocation（已把镜像换成 `pandora/battle-ds:dev` / `pandora/hub-ds:dev`）。
+- `deploy/k8s/agones/*.yaml` — Fleet / RBAC / Allocation。四份 Fleet 的 `image:` 一律钉**不可变 tag**（tag = 制品库快照版本号，如 `pandora/battle-ds:r1833-dirty-20260805-222737`），**严禁回填 `:dev`**——理由与换版流程见 `20-fleet-battle.yaml` 该行注释。
 
 客户端仓库 `Pandora-Client`（编进 DS 二进制，**不可挪**）：
 
@@ -167,7 +167,7 @@ kubectl create -f deploy/k8s/agones/40-gameserverallocation-example.yaml -o yaml
   客户端/编辑器不实例化，不会把 DS 逻辑带进客户端包。
 - 不引 `agones-cpp-sdk`/`grpc-cpp`：DS 用 sidecar **HTTP REST**（`/ready` `/health` `/allocate` `/shutdown` `/gameserver`）。
 - `entrypoint.sh` 用 `exec` 让 DS 成为 PID 1，正确收 `SIGTERM`（Agones 回收 Pod 优雅退出）。
-- Fleet 里 `image:` 现为 `pandora/battle-ds:dev` 占位 tag，**人手动推到私有 registry 后务必改成可拉取地址**。
+- Fleet 里 `image:` 钉的是**不可变 tag**（制品库快照版本号），不是 `:dev` 占位。本地 `:dev` 只是构建链的中间产物，Fleet 不引用它；推到私有 registry 时把镜像名换成可拉取地址，但**仍须保持不可变 tag**。
 - `deploy/ds/stage/` 是 UE 打包大产物，**不要入库**（用 `.gitignore` 排除）。
 
 ---
@@ -229,8 +229,8 @@ Agones 有**第一方 UE 插件**（v1.54 已重构成 subsystem，v1.51 起支�
    备注：`Lvl_Server_Entry` 是 dev 占位入口图；正式战斗图就绪后改 `PANDORA_DS_MAP` 指向它即可，
    `?game=` 机制与具体地图解耦。
 
-2. **`DSAllocatorEndpoint` 默认 `127.0.0.1:50020` 在集群里是错的（裸 gRPC 端口 + 同 Pod 假设）。**
-   关键：DS 走 **grpc-web**（FHttpModule），**不能直连裸 gRPC `:50020`**，必须打到 **Envoy 的「DS 面」
+2. **`DSAllocatorEndpoint` 默认 `127.0.0.1:20020` 在集群里是错的（裸 gRPC 端口 + 同 Pod 假设）。**
+   关键：DS 走 **grpc-web**（FHttpModule），**不能直连裸 gRPC `:20020`**，必须打到 **Envoy 的「DS 面」
    grpc-web 监听器 `:8444`**（集群内明文 grpc-web→gRPC 转换，并按精确 method 白名单
    路由到内部服务，见 `deploy/k8s/agones/16-ds-envoy.yaml`）。grpc-web 模型下 DS 的
    4 个 endpoint（hub/ds/locator/battle_result）其实都指向**同一个 Envoy `:8444`**，由 Envoy 按 gRPC 路径分发。

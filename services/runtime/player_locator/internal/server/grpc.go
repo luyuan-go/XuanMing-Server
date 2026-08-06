@@ -13,7 +13,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并把 PlayerLocatorService 注册上去。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50006)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20006)。
 //
 // 不挂 AuthRequired:本服务的 RPC 由内网 DS / login 服务调用,不直接暴露给玩家;
 // W3+ Envoy 路由层用 ext_authz / route 黑白名单限制本路径只允许内网。

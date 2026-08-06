@@ -566,15 +566,15 @@ UE 客户端能否连上 DS,核心看 `FNetworkVersion` 的输入。**本机实�
   `min((GameSession.MaxPlayers>0 ? MaxPlayers : fallback_players=256) × entries_per_player_window=16,
   configured_absolute_max=4096, safety_ceiling=65536)`；无效配置或满载均 fail-closed，绝不驱逐仍未
   过期条目（否则会重新允许重放）。这些默认值可配，但写入侧上限和读取/清理规则不可移除。
-- **真 DS 验证**：`deploy/k8s/agones` Fleet 已使用 `pandora/battle-ds:dev` / `pandora/hub-ds:dev`；
+- **真 DS 验证**：`deploy/k8s/agones` 四份 Fleet 已使用真 UE DS 镜像，`image:` 一律钉**不可变 tag**（tag = 制品库快照版本号；`:dev` 只是本地构建链中间产物，Fleet 不引用，严禁回填）；
   心跳 / locator 闭环、战斗结算 → 段位补偿链由真 UE DS（Pandora-Client 仓库）端到端验证
   （Heartbeat + SetLocation、同步 ReportResult + GetMatchResult →
   事务出箱 → player.update → 段位回写）。
 
 ### 5.1 DS gRPC-Web 入口 wiring（方案 A 已落地 2026-06-16，本仓库 envoy.yaml）
 
-UE DS 客户端走 gRPC-Web，但内部服务（hub_allocator :50021 / ds_allocator :50020 /
-player_locator :50006 / battle_result :50022）裸端口是**原生 gRPC**（HTTP/2 framing），
+UE DS 客户端走 gRPC-Web，但内部服务（hub_allocator :20021 / ds_allocator :20020 /
+player_locator :20006 / battle_result :20022）裸端口是**原生 gRPC**（HTTP/2 framing），
 gRPC-Web 报文打不通。要让 UE DS 端到端跑通，需在内部服务前补一层 grpc_web 转换。
 
 **✅ 方案 A（已采纳并落地）**：给 Envoy 新增一个**独立的 DS 面监听器 `:8444`**
@@ -680,8 +680,8 @@ UE DS `UPandoraDSBackendSubsystem` 的 4 个 Endpoint 默认填裸 gRPC 端口�
 **Envoy wiring（已落地，本仓库 `deploy/envoy/envoy.yaml`）**：客户端组队/匹配路由与 §5.1 DS
 独立入口均已补齐：
 
-- `team_cluster`（→ :50010）+ `/pandora.team.v1.TeamService/` route，jwt_authn 要 `pandora_session`（W3 已有）。
-- 本轮新增 `match_cluster`（→ :50011）+ `/pandora.match.v1.MatchService/` route + jwt_authn `pandora_session` 规则。
+- `team_cluster`（→ :20010）+ `/pandora.team.v1.TeamService/` route，jwt_authn 要 `pandora_session`（W3 已有）。
+- 本轮新增 `match_cluster`（→ :20011）+ `/pandora.match.v1.MatchService/` route + jwt_authn `pandora_session` 规则。
 - 故玩家 `UPandoraBackendSubsystem` 经 Envoy:8443 调组队/匹配端到端可通（需 login 拿到 SessionToken 在先）。
 
 **阶段限制**：UE 编辑器编译验证 + 端到端联调留 Codex/人（独立仓库，需 UE 5.8 编辑器）。

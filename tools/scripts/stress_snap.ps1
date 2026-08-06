@@ -32,7 +32,7 @@ param(
     [object[]]$Stages = @(2, 5, 10, 15, 18),
 
     # 服务端口表:后缀 => metrics 端口(对齐 stress-discipline.md §3 + infra.md §6.2)。
-    [hashtable]$Ports = @{ login = 51001; match = 51011; ds = 51020; battle = 51022 }
+    [hashtable]$Ports = @{ login = 21001; match = 21011; ds = 21020; battle = 21022 }
 )
 
 $ErrorActionPreference = "Stop"

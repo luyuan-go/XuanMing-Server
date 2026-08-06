@@ -1,6 +1,6 @@
 # Pandora dialogue 服务开发期配置(2026-06-16)。
 #
-# - gRPC :50013 / HTTP :51013(仅 /metrics)
+# - gRPC :20013 / HTTP :21013(仅 /metrics)
 # - 无 MySQL / 无 Redis / 无 Kafka:对话树内联在本 yaml(配置驱动),会话为单实例内存
 # - dev: enable_reflection=true 便于 grpcurl 联调
 #
@@ -10,13 +10,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50013"
+    addr: ":20013"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51013"
+    addr: ":21013"
 
 node:
   node_id: 1

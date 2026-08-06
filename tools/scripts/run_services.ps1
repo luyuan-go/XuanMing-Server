@@ -1,4 +1,4 @@
-﻿# Pandora 业务服务一键启停 / 单服务调试
+# Pandora 业务服务一键启停 / 单服务调试
 #
 # 大厂本地多服务开发的"进程编排"层(等价 Procfile / goreman / tilt,但零额外依赖)。
 # 基础设施(MySQL/Redis/Kafka/etcd/Envoy)由 dev_up.ps1 负责,本脚本只管 Go 业务服务。
@@ -81,29 +81,29 @@ $script:HasGo = [bool](Get-Command go -ErrorAction SilentlyContinue)
 # data/data_service、economy/trade、economy/inventory、economy/auction、runtime/leaderboard 等)。
 # 启动策略:要么全起(默认),要么用 -Service 单起某一个,不做分档启动。
 $Services = @(
-    @{ Name = 'player_locator'; Dir = 'services/runtime/player_locator';   Cmd = 'locator';        Conf = 'etc/locator-dev.yaml';        Port = 50006 }
-    @{ Name = 'hub_allocator';  Dir = 'services/battle/hub_allocator';      Cmd = 'hub_allocator';  Conf = 'etc/hub_allocator-dev.yaml';  Port = 50021 }
-    @{ Name = 'player';         Dir = 'services/account/player';            Cmd = 'player';         Conf = 'etc/player-dev.yaml';         Port = 50002 }
-    @{ Name = 'ds_allocator';   Dir = 'services/battle/ds_allocator';       Cmd = 'ds_allocator';   Conf = 'etc/ds_allocator-dev.yaml';   Port = 50020 }
-    @{ Name = 'push';           Dir = 'services/runtime/push';              Cmd = 'push';           Conf = 'etc/push-dev.yaml';           Port = 50014 }
-    @{ Name = 'team';           Dir = 'services/matchmaking/team';          Cmd = 'team';           Conf = 'etc/team-dev.yaml';           Port = 50010 }
-    @{ Name = 'friend';         Dir = 'services/social/friend';             Cmd = 'friend';         Conf = 'etc/friend-dev-tidb.yaml';    Port = 50004 }
-    @{ Name = 'chat';           Dir = 'services/social/chat';               Cmd = 'chat';           Conf = 'etc/chat-dev-tidb.yaml';      Port = 50005 }
-    @{ Name = 'guild';          Dir = 'services/social/guild';              Cmd = 'guild';          Conf = 'etc/guild-dev-tidb.yaml';     Port = 50008 }
-    @{ Name = 'mail';           Dir = 'services/social/mail';               Cmd = 'mail';           Conf = 'etc/mail-dev-tidb.yaml';      Port = 50009 }
-    @{ Name = 'dialogue';       Dir = 'services/social/dialogue';           Cmd = 'dialogue';       Conf = 'etc/dialogue-dev.yaml';       Port = 50013 }
-    @{ Name = 'data_service';   Dir = 'services/data/data_service';         Cmd = 'data_service';   Conf = 'etc/data_service-dev.yaml';   Port = 50003 }
-    @{ Name = 'trade';          Dir = 'services/economy/trade';             Cmd = 'trade';          Conf = 'etc/trade-dev.yaml';          Port = 50012 }
-    @{ Name = 'inventory';      Dir = 'services/economy/inventory';         Cmd = 'inventory';      Conf = 'etc/inventory-dev.yaml';      Port = 50015 }
-    @{ Name = 'leaderboard';    Dir = 'services/runtime/leaderboard';       Cmd = 'leaderboard';    Conf = 'etc/leaderboard-dev.yaml';    Port = 50007 }
-    @{ Name = 'owner';          Dir = 'services/runtime/owner';             Cmd = 'owner';          Conf = 'etc/owner-dev.yaml';          Port = 50017 }
-    @{ Name = 'auction';        Dir = 'services/economy/auction';           Cmd = 'auction';        Conf = 'etc/auction-dev.yaml';        Port = 50016 }
-    @{ Name = 'battle_result';  Dir = 'services/battle/battle_result';      Cmd = 'battle_result';  Conf = 'etc/battle_result-dev.yaml';  Port = 50022 }
-    @{ Name = 'matchmaker';     Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-dev.yaml';     Port = 50011 }
+    @{ Name = 'player_locator'; Dir = 'services/runtime/player_locator';   Cmd = 'locator';        Conf = 'etc/locator-dev.yaml';        Port = 20006 }
+    @{ Name = 'hub_allocator';  Dir = 'services/battle/hub_allocator';      Cmd = 'hub_allocator';  Conf = 'etc/hub_allocator-dev.yaml';  Port = 20021 }
+    @{ Name = 'player';         Dir = 'services/account/player';            Cmd = 'player';         Conf = 'etc/player-dev.yaml';         Port = 20002 }
+    @{ Name = 'ds_allocator';   Dir = 'services/battle/ds_allocator';       Cmd = 'ds_allocator';   Conf = 'etc/ds_allocator-dev.yaml';   Port = 20020 }
+    @{ Name = 'push';           Dir = 'services/runtime/push';              Cmd = 'push';           Conf = 'etc/push-dev.yaml';           Port = 20014 }
+    @{ Name = 'team';           Dir = 'services/matchmaking/team';          Cmd = 'team';           Conf = 'etc/team-dev.yaml';           Port = 20010 }
+    @{ Name = 'friend';         Dir = 'services/social/friend';             Cmd = 'friend';         Conf = 'etc/friend-dev-tidb.yaml';    Port = 20004 }
+    @{ Name = 'chat';           Dir = 'services/social/chat';               Cmd = 'chat';           Conf = 'etc/chat-dev-tidb.yaml';      Port = 20005 }
+    @{ Name = 'guild';          Dir = 'services/social/guild';              Cmd = 'guild';          Conf = 'etc/guild-dev-tidb.yaml';     Port = 20008 }
+    @{ Name = 'mail';           Dir = 'services/social/mail';               Cmd = 'mail';           Conf = 'etc/mail-dev-tidb.yaml';      Port = 20009 }
+    @{ Name = 'dialogue';       Dir = 'services/social/dialogue';           Cmd = 'dialogue';       Conf = 'etc/dialogue-dev.yaml';       Port = 20013 }
+    @{ Name = 'data_service';   Dir = 'services/data/data_service';         Cmd = 'data_service';   Conf = 'etc/data_service-dev.yaml';   Port = 20003 }
+    @{ Name = 'trade';          Dir = 'services/economy/trade';             Cmd = 'trade';          Conf = 'etc/trade-dev.yaml';          Port = 20012 }
+    @{ Name = 'inventory';      Dir = 'services/economy/inventory';         Cmd = 'inventory';      Conf = 'etc/inventory-dev.yaml';      Port = 20015 }
+    @{ Name = 'leaderboard';    Dir = 'services/runtime/leaderboard';       Cmd = 'leaderboard';    Conf = 'etc/leaderboard-dev.yaml';    Port = 20007 }
+    @{ Name = 'owner';          Dir = 'services/runtime/owner';             Cmd = 'owner';          Conf = 'etc/owner-dev.yaml';          Port = 20017 }
+    @{ Name = 'auction';        Dir = 'services/economy/auction';           Cmd = 'auction';        Conf = 'etc/auction-dev.yaml';        Port = 20016 }
+    @{ Name = 'battle_result';  Dir = 'services/battle/battle_result';      Cmd = 'battle_result';  Conf = 'etc/battle_result-dev.yaml';  Port = 20022 }
+    @{ Name = 'matchmaker';     Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-dev.yaml';     Port = 20011 }
     # PVE 匹配实例:同一 matchmaker 二进制、不同配置(game_mode=pve_coop + walk_in=true,
     # 单人/整队直进副本,副本由 StartMatchRequest.map_id 选)。Envoy 按 header x-pandora-game-mode: pve 分流。
-    @{ Name = 'matchmaker_pve'; Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-pve.yaml';     Port = 50018 }
-    @{ Name = 'login';          Dir = 'services/account/login';             Cmd = 'login';          Conf = 'etc/login-dev.yaml';          Port = 50001 }
+    @{ Name = 'matchmaker_pve'; Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-pve.yaml';     Port = 20018 }
+    @{ Name = 'login';          Dir = 'services/account/login';             Cmd = 'login';          Conf = 'etc/login-dev.yaml';          Port = 20001 }
 )
 
 function Get-Service([string]$name) {
@@ -257,7 +257,7 @@ function Clear-PortSquatter($svc) {
             }
         } else {
             # 端口被非本服务进程占。最常见是 docker 业务容器(经 wslrelay/com.docker.backend 代理端口):
-            # 上一轮跑过 docker/intranet 模式,容器还占着 50001-50022,宿主 go 进程会 bind 失败。
+            # 上一轮跑过 docker/intranet 模式,容器还占着 20001-20022,宿主 go 进程会 bind 失败。
             $isDockerProxy = $proc.ProcessName -match 'wslrelay|com\.docker'
             if ($isDockerProxy) {
                 Write-Host "  [WARN] $($svc.Name) 端口 :$($svc.Port) 被 docker 容器占用($($proc.ProcessName));宿主进程起不来。" -ForegroundColor Yellow

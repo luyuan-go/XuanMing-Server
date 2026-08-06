@@ -1,6 +1,6 @@
 # Pandora auction 服务开发期配置(2026-06-19)。
 #
-# - gRPC :50016 / HTTP :51016(仅 /metrics)
+# - gRPC :20016 / HTTP :21016(仅 /metrics)
 # - MySQL 强依赖(撮合权威库 pandora_auction:auction_orders + auction_matches)
 #   单库模式用 node.mysql_client.dsn;分库模式填 node.mysql_client.shards(按 market_id 路由)
 # - Redis 强依赖(跨实例 market 锁 + 旧版兼容 ZSET；新版本不从 ZSET 选单)
@@ -10,13 +10,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50016"
+    addr: ":20016"
     timeout: "15s"
     enable_reflection: true     # dev 开;prod 关
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51016"
+    addr: ":21016"
 
 node:
   node_id: 1
@@ -52,9 +52,9 @@ auction:
   max_active_orders_per_player: 200  # 单玩家 PENDING+活跃挂单硬上限,Redis Lua 原子预留
   default_list_limit: 50
   max_list_limit: 200
-  # inventory 内网 gRPC 地址(:50015)。配上 → 成交走真实结算(SettleAuctionMatch:
+  # inventory 内网 gRPC 地址(:20015)。配上 → 成交走真实结算(SettleAuctionMatch:
   # 卖↔买资产原子对转 + match_id 幂等);仅无交易联调/单测可留空并显式设 allow_noop_settlement=true。
-  inventory_addr: "127.0.0.1:50015"
+  inventory_addr: "127.0.0.1:20015"
   # 挂单存活时长(秒)。> 0 启用过期清扫:超 TTL 仍未成交的挂单自动 EXPIRED、移出簿、退还 escrow。
   # dev 设 7 天;0 = 永不过期。
   order_ttl_seconds: 604800

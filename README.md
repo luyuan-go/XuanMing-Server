@@ -172,7 +172,7 @@ go run ./services/account/login/cmd/login -conf services/account/login/etc/login
 ```powershell
 # 直连 login(绕过 Envoy)
 grpcurl -plaintext -d '{"account":"test","password_hash":"abc","device_id":"d1"}' `
-  127.0.0.1:50001 pandora.login.v1.LoginService/Login
+  127.0.0.1:20001 pandora.login.v1.LoginService/Login
 
 # 经 Envoy(模拟客户端 gRPC-Web 路径)
 grpcurl -insecure -d '{"account":"test","password_hash":"abc","device_id":"d1"}' `

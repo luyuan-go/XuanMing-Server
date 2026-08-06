@@ -106,12 +106,12 @@ spec:
                 # 并在 ds_allocator agones.map_fleets 配 map_id→该 Fleet。分配时 Agones 有序 selectors
                 # 先选专属池(Pod 已预载目标图,分配即可玩),无空闲自动回落本通用 Loader 池。
                 # 长尾/新副本不建专属 Fleet,走本池填表即用。
-                # ds_allocator 的 grpc-web 入口。DS 走 grpc-web（FHttpModule），不能直连裸 gRPC :50020，
+                # ds_allocator 的 grpc-web 入口。DS 走 grpc-web（FHttpModule），不能直连裸 gRPC :20020，
                 # 必须打到 Envoy 的「DS 面」grpc-web 监听器 :8444（grpc-web→gRPC 转换，按方法白名单
                 # 路由到 ds_allocator，见 deploy/k8s/agones/16-ds-envoy.yaml）。
                 # ⚠️ :8444 DS 面是**明文无 TLS**(权威口径见 docs/design/gateway-decision.md §「DS 面」),
                 #    故 PANDORA_DS_ALLOCATOR_TLS=0;此处不做 TLS 终止,别被旧注释误导。
-                # 默认代码值 127.0.0.1:50020 是裸端口，集群里打不通——务必用下面 env 覆盖。
+                # 默认代码值 127.0.0.1:20020 是裸端口，集群里打不通——务必用下面 env 覆盖。
                 #
                 # 线上同款:DS 走集群内 Envoy「DS 面」Service DNS 回连,pod 内绝不写宿主 IP / host.docker.internal
                 # (minikube 的 Pod 解析不了 host.docker.internal,DNS 失败 → 心跳发不出 → 匹配 4001)。

@@ -1004,10 +1004,10 @@ Assert-True (@($forwardNames | Sort-Object -Unique).Count -eq 21) 'bridge 服务
 Assert-True (@($forwardPorts | Sort-Object -Unique).Count -eq 21) 'bridge 服务端口必须 21 个且唯一'
 $ownerForward = @($forwardEntries | Where-Object {
     $_.Groups['name'].Value -ceq 'owner' -and
-    [int]$_.Groups['port'].Value -eq 50017 -and
+    [int]$_.Groups['port'].Value -eq 20017 -and
     $_.Groups['essential'].Value -ceq 'true'
 })
-Assert-True ($ownerForward.Count -eq 1) 'owner 必须唯一映射 50017 且作为必需权威服务'
+Assert-True ($ownerForward.Count -eq 1) 'owner 必须唯一映射 20017 且作为必需权威服务'
 $bridgeFunctions = @($bridgeAst.FindAll({
     param($node)
     $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and

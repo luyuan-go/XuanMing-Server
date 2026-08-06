@@ -155,7 +155,7 @@ normTs = ts_ms - EPOCH_MS                 // 自纪元的毫秒(>=0)
 |---|---|---|
 | 服务名 | `leaderboard`(runtime 域) | 全局运行时基础设施,不属社交 / 经济单一域 |
 | 目录 | `services/runtime/leaderboard` | 对齐 push / player_locator |
-| gRPC / metrics 端口 | **50007 / 51007** | `infra.md` §6.2 runtime 段空档(locator 50006 之后) |
+| gRPC / metrics 端口 | **20007 / 21007** | `infra.md` §6.2 runtime 段空档(locator 20006 之后) |
 | proto 包 | `pandora/leaderboard/v1/leaderboard.proto` | `proto-design.md` §1 |
 | errcode 段 | **13000-13999** | `errcode.go` 段规划(12000 auction 之后,11000 预留段不动) |
 | MySQL 库 | `pandora_leaderboard` | 结算归档专用(`leaderboard_settlement / _snapshot / _reward_log`) |

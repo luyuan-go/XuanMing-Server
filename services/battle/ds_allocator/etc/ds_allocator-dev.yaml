@@ -1,6 +1,6 @@
 # Pandora ds_allocator 服务开发期配置(W4 ②,2026-06-06)。
 #
-# - gRPC :50020 / HTTP :51020(仅 /metrics)
+# - gRPC :20020 / HTTP :21020(仅 /metrics)
 # - Redis 强依赖(DS 战斗实例镜像 + 心跳超时 ZSET 扫描)
 # - W4 ② 用 MockGameServerAllocator(返回假 pod/addr);W4 ⑫ 接真 Agones(agones.enabled=true 启用)
 # - duration 字段用 pkg/config.Duration,yaml 可直接写 "15s"
@@ -9,14 +9,14 @@
 server:
   grpc:
     network: tcp
-    addr: ":50020"
+    addr: ":20020"
     timeout: "330s"             # 必须盖过 allocator.ready_wait_timeout(300s,editor 冷启动)+ 回收余量
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
     max_conn_age_grace: "360s"  # 必须盖过 330s 的 AllocateBattle 在途调用，避免 GOAWAY 提前砍断
   http:
     network: tcp
-    addr: ":51020"
+    addr: ":21020"
 
 node:
   node_id: 1
@@ -57,7 +57,7 @@ kafka:
 #   本服只用其中的**关卡表**:mode=local 起战斗 DS 时按 map_id 现查 g_关卡.xlsx 得到关卡资源
 #   与 GameMode 类,拼成 DS 命令行地图参数 —— 关卡数据的唯一权威源就是这张表(§9.22)。
 #   dir 非空 = 启动强依赖:加载/校验失败直接退出(fail-closed),坏批次不会带着上线。
-#   热更:重导表后 `grpcurl -plaintext -d '{}' 127.0.0.1:50020
+#   热更:重导表后 `grpcurl -plaintext -d '{}' 127.0.0.1:20020
 #         pandora.config.v1.ConfigTableAdminService/ReloadConfigTable`,**无需重启本服务**,
 #         下一局即可进新加的副本(加载失败保留旧表)。
 #   mode=agones 可留空:那条路的关卡由 DS 侧 Loader GameMode 查同一张表决定,allocator 只传 map_id。
@@ -67,7 +67,7 @@ config_table:
 
 # player_locator gRPC 地址(短 TTL presence/监控续期,docs/design/battle-reconnect.md §2.2)。
 # 留空 → 不续期 presence(弱依赖,不影响权威 placement；不得据此把玩家降级路由到 Hub)。
-locator_addr: "127.0.0.1:50006"
+locator_addr: "127.0.0.1:20006"
 
 # ── DS 回调服务令牌(审核 P1 #1:DS→后端回调认证)─────────────────────────────
 # ds_allocator 双角色:①签发——AllocateBattle 时给战斗 DS 签 battle 令牌(绑 match_id),
@@ -120,9 +120,9 @@ allocator:
   # orphan_gs_reclaim_after: "10m"
 
   # owner 迁移双写(owner-authority.md migrate ②③⑥):实例租约 + READY Begin(BATTLE) +
-  # census 代提交 Admit。dev 一键启动已含 owner 服务(:50017);弱依赖,owner 掉线仅告警。
+  # census 代提交 Admit。dev 一键启动已含 owner 服务(:20017);弱依赖,owner 掉线仅告警。
   # contract 阶段全链验证后才置 owner_lease_required: true(强依赖,续租失败心跳即失败)。
-  owner_addr: "127.0.0.1:50017"
+  owner_addr: "127.0.0.1:20017"
   # sweep_interval: 后台心跳超时扫描间隔
   sweep_interval: "5s"
   # writer_lease_mode: 心跳超时扫描的写者继任租约档位(enforce|warmup|off;留空=enforce)。

@@ -37,10 +37,10 @@ type OwnerConf struct {
 // Defaults 填默认值。
 func (c *Config) Defaults() {
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50017"
+		c.Server.Grpc.Addr = ":20017"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51017"
+		c.Server.Http.Addr = ":21017"
 	}
 	if c.Owner.SweepInterval <= 0 {
 		c.Owner.SweepInterval = config.Duration(5 * time.Minute)

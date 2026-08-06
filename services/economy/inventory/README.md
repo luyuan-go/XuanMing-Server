@@ -34,8 +34,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50015` | 客户端 RPC(经 Envoy)+ 后端内部系统 RPC(内网直连) |
-| HTTP | `:51015` | 仅 `/metrics`(`inventory.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
+| gRPC | `:20015` | 客户端 RPC(经 Envoy)+ 后端内部系统 RPC(内网直连) |
+| HTTP | `:21015` | 仅 `/metrics`(`inventory.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
 
 ## 对外接口
 

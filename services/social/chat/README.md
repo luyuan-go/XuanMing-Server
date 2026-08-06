@@ -27,8 +27,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50005` | 客户端 RPC(经 Envoy)|
-| HTTP | `:51005` | 仅 `/metrics`(`chat.proto` 无 `google.api.http` 注解,无 RESTful RPC)|
+| gRPC | `:20005` | 客户端 RPC(经 Envoy)|
+| HTTP | `:21005` | 仅 `/metrics`(`chat.proto` 无 `google.api.http` 注解,无 RESTful RPC)|
 
 端口来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr` / `Server.Http.Addr` 缺省时兜底)。
 
@@ -198,7 +198,7 @@ PullHistory(playerID, channel, peerID, limit, beforeMs)
 | `sweep_interval` | `5m` | 保留期清理轮询间隔(多副本各自跑,无锁)|
 | `sweep_batch` | `500` | 每轮清理行数上限(小批量防长事务锁表)|
 
-共享 `config.Base` 关键项(main.go 依赖):`server.grpc.addr`(默认 `:50005`)/ `server.http.addr`(默认 `:51005`)、
+共享 `config.Base` 关键项(main.go 依赖):`server.grpc.addr`(默认 `:20005`)/ `server.http.addr`(默认 `:21005`)、
 `node.mysql_client.dsn`(**强依赖,必填,空则启动失败**,指向 `pandora_social`)、`node.node_id`(snowflake node)、
 `node.redis_client`(会话门只读)、`kafka.brokers`(空则推送整体降级)、`snowflake.node_id_source`
 (`static` / `etcd`)、`cellroute`(区域总线路由,可空)、`session_gate.require`(dev `false` / prod 机械置 `true`)。

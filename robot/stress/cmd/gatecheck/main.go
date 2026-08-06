@@ -35,10 +35,10 @@ import (
 
 func main() {
 	var (
-		loginAddr   = flag.String("login", "127.0.0.1:50001", "login gRPC 地址(port-forward)")
-		teamAddr    = flag.String("team", "127.0.0.1:50010", "team gRPC 地址")
-		matchAddr   = flag.String("match", "127.0.0.1:50018", "matchmaker gRPC 地址(默认 PVE walk-in 实例)")
-		locatorAddr = flag.String("locator", "127.0.0.1:50006", "player_locator gRPC 地址")
+		loginAddr   = flag.String("login", "127.0.0.1:20001", "login gRPC 地址(port-forward)")
+		teamAddr    = flag.String("team", "127.0.0.1:20010", "team gRPC 地址")
+		matchAddr   = flag.String("match", "127.0.0.1:20018", "matchmaker gRPC 地址(默认 PVE walk-in 实例)")
+		locatorAddr = flag.String("locator", "127.0.0.1:20006", "player_locator gRPC 地址")
 		account     = flag.String("account", "", "登录账号(空=gatecheck-<时间戳>,dev devAutoRegister 自动建号)")
 		mapID       = flag.Uint("map", 8, "StartMatch map_id(8=Artic01)")
 		pollTimeout = flag.Duration("poll-timeout", 240*time.Second, "等 READY 的上限(含 warming 冷加载)")

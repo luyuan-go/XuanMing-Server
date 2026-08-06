@@ -1,6 +1,6 @@
 # Pandora leaderboard 服务开发期配置(通用排行榜,2026-06-27)。
 #
-# - gRPC :50007 / HTTP :51007(仅 /metrics)
+# - gRPC :20007 / HTTP :21007(仅 /metrics)
 # - Redis 强依赖(排行榜 ZSET pandora:lb:{<board>}:z + tie-break/meta 辅助 key)
 # - MySQL 强依赖(结算归档库 pandora_leaderboard:leaderboard_settlement/_snapshot/_reward_log)
 # - Kafka 弱依赖(结算事件 pandora.leaderboard.settle)
@@ -10,13 +10,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50007"
+    addr: ":20007"
     timeout: "15s"
     enable_reflection: true     # dev 开;prod 关
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51007"
+    addr: ":21007"
 
 node:
   node_id: 1
@@ -45,9 +45,9 @@ leaderboard:
   max_list_limit: 200            # GetRange / GetAround 单次返回上限
   default_around_radius: 10      # GetAround 默认上下名数
   default_settle_top_n: 100      # SettleBoard 未指定 top_n 时默认结算前 N 名
-  # inventory 内网 gRPC 地址(:50015)。配上 → 结算按 RewardTable 走真实发奖(GrantItems,
+  # inventory 内网 gRPC 地址(:20015)。配上 → 结算按 RewardTable 走真实发奖(GrantItems,
   # 幂等键 lb:<settlement_id>:<entity_id>);仅无背包联调/单测可留空并显式设 allow_noop_reward=true。
-  inventory_addr: "127.0.0.1:50015"
+  inventory_addr: "127.0.0.1:20015"
   allow_noop_reward: false       # 留空 inventory_addr 时是否允许占位发奖(不真实入账)
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威

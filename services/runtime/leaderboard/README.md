@@ -29,10 +29,10 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50007` | 读 RPC(客户端经 Envoy)+ 系统写 RPC(仅内网直连) |
-| HTTP | `:51007` | 仅 `/metrics`(`leaderboard.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
+| gRPC | `:20007` | 读 RPC(客户端经 Envoy)+ 系统写 RPC(仅内网直连) |
+| HTTP | `:21007` | 仅 `/metrics`(`leaderboard.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
 
-端口默认值来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr=:50007` / `Server.Http.Addr=:51007`)。
+端口默认值来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr=:20007` / `Server.Http.Addr=:21007`)。
 
 ## 对外接口
 
@@ -60,7 +60,7 @@ RPC 定义:`proto/pandora/leaderboard/v1/leaderboard.proto`(共 7 个 unary RPC,
 
 ```
 cmd/leaderboard/main.go        启动入口(mysql + redis + snowflake + kafka + inventory client 装配 + 补扫/清理 goroutine)
-etc/leaderboard-dev.yaml       开发期配置(:50007 / redis 6380 / mysql 3307 / kafka 9093 / inventory 50015)
+etc/leaderboard-dev.yaml       开发期配置(:20007 / redis 6380 / mysql 3307 / kafka 9093 / inventory 20015)
 internal/
   conf/conf.go                 配置结构(嵌入 config.Base + LeaderboardConf)+ Defaults()
   service/
@@ -208,7 +208,7 @@ topN 兜底(DefaultSettleTopN=100);settle_idempotency_key 空 → "lb:" + board 
 | `default_around_radius` | `10` | `GetAround` 未指定 `radius` 时的默认上下名数 |
 | `default_settle_top_n` | `100` | `SettleBoard` 未指定 `top_n` 时默认结算前 N 名 |
 | `default_estimate_bucket_width` | `25` | 建榜未指定 `estimate_bucket_width` 时的直方图桶宽(MMR 量纲,建榜后不可变) |
-| `inventory_addr` | 空 | inventory 内网 gRPC 地址(如 `127.0.0.1:50015`);配了走真实 `GrantItems`,留空退 Noop |
+| `inventory_addr` | 空 | inventory 内网 gRPC 地址(如 `127.0.0.1:20015`);配了走真实 `GrantItems`,留空退 Noop |
 | `allow_noop_reward` | `false` | `inventory_addr` 为空时是否允许退回 `NoopRewardGranter`(不真实发奖);默认 false → 漏配即 **fail-fast** |
 | `retention_days` | `90` | 名次快照 + 已发放发奖记录保留天数(§9.24;`settlement` 不清) |
 | `retention_sweep_batch` | `500` | 每轮每表清理行数上限(`DELETE ... LIMIT`) |
@@ -220,7 +220,7 @@ topN 兜底(DefaultSettleTopN=100);settle_idempotency_key 空 → "lb:" + board 
 ## 本地启动
 
 ```powershell
-# 1. 基础设施(mysql 3307 + redis 6380 + kafka 9093;发真实奖励还需起 inventory :50015,留空走 Noop)
+# 1. 基础设施(mysql 3307 + redis 6380 + kafka 9093;发真实奖励还需起 inventory :20015,留空走 Noop)
 pwsh tools/scripts/dev_up.ps1
 
 # 2. 启 leaderboard
@@ -235,5 +235,5 @@ go run ./services/runtime/leaderboard/cmd/leaderboard -conf services/runtime/lea
 
 - [`decision-revisit-leaderboard.md`](../../../docs/design/decision-revisit-leaderboard.md) — 通用排行榜设计:复合 key / 临时 vs 非临时 / 分数打包 §3.3 / 榜外估算 / 结算发奖双写 / 调用方矩阵
 - [`go-services.md`](../../../docs/design/go-services.md) — 后端服务目录(leaderboard 服务清单项)
-- [`infra.md`](../../../docs/design/infra.md) — 端口 `50007/51007`、库表 `pandora_leaderboard`、topic `pandora.leaderboard.settle`
+- [`infra.md`](../../../docs/design/infra.md) — 端口 `20007/21007`、库表 `pandora_leaderboard`、topic `pandora.leaderboard.settle`
 - [`zero-downtime-update.md`](../../../docs/design/zero-downtime-update.md) §6.2 — `max_conn_age` GOAWAY 重拨,滚动更新流量滚到新副本

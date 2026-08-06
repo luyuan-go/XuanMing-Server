@@ -1,6 +1,6 @@
 # Pandora guild 服务开发期配置(2026-06-27)。
 #
-# - gRPC :50008 / HTTP :51008(仅 /metrics)
+# - gRPC :20008 / HTTP :21008(仅 /metrics)
 # - 公会(GuildService)+ 临时群(GroupService)同进程
 # - MySQL 强依赖(pandora_social 库:guilds + guild_members + guild_join_requests + chat_groups + chat_group_members)
 # - Redis 弱依赖(公会资料读缓存 cache-aside;Ping 失败降级直连 MySQL,不阻塞启动)
@@ -10,13 +10,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50008"
+    addr: ":20008"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51008"
+    addr: ":21008"
 
 node:
   node_id: 1

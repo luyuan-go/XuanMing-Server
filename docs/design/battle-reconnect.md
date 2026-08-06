@@ -640,7 +640,7 @@ V3 audit 对五类 writer 都精确要求该身份，因此旧 login/locator/ds_
    immutable record 二次验证后，从固定五个 canonical Deployment/selector 重新派生当前 live Pod UID，要求
    每个 Pod 的唯一 controller ReplicaSet→Deployment 链和目标 writer container Running/imageID，然后审计
    `acquired_policy_generation=3`。在解释 Endpoint 数量前，prepare/activate 都必须回读
-   Service/hub-allocator，验证 exact green 三标签 selector（无额外 selector）、ClusterIP/50021 和
+   Service/hub-allocator，验证 exact green 三标签 selector（无额外 selector）、ClusterIP/20021 和
    `publishNotReady=false`；Hub ready Endpoint 在 CAS 前必须精确为 0，CAS 后必须精确为 1 且 UID等于当前
    唯一 Hub。最终再做一次 acquired-V3 audit，才创建 immutable completion marker。崩溃重跑若已是 V3，
    直接从 record-only proof 和 post-CAS finalize 继续，绝不重跑 V2-only NotReady 门或重复 CAS；只读 Audit
@@ -831,7 +831,7 @@ CLAUDE.md §9.19/20/23(「脑裂时安全优先但不能永久卡流程」)。�
 
 1. 准备:本地 K8s 集群跑起全链路,两个真实账号进入同一场 Battle;记录 Battle DS Pod 名。
 2. 注入:对该 DS Pod 应用仅封锁「DS→后端」出站的 NetworkPolicy(保留 DS↔客户端 UDP):
-   `podSelector` 精确匹配该 GameServer Pod,`egress` 只放行客户端网段,封 50006/50020/50021/50022。
+   `podSelector` 精确匹配该 GameServer Pod,`egress` 只放行客户端网段,封 20006/20020/20021/20022。
 3. 预期时序(全部以注入时刻 T0 起算,DS 日志 + login 日志双侧对时):
    - T0+15s 内:ds_allocator sweep 标记该局 `abandoned`(15s 心跳超时不变);
    - ≤ T0+21s:DS 日志出现「授权租约超窗…自我 fencing」,两个客户端被 Kick,Pawn 销毁;

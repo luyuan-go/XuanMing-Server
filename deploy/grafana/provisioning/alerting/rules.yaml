@@ -114,7 +114,7 @@ groups:
           service: ds_allocator
         annotations:
           summary: 'ds_allocator 实例不可达或 metrics 抓取中断,容量告警已失效'
-          description: '容量规则依赖 ds_allocator 暴露的 fleet 指标;实例挂掉时这些规则会被 NoData 静默。请立即检查 ds_allocator 进程与 51020 端口。'
+          description: '容量规则依赖 ds_allocator 暴露的 fleet 指标;实例挂掉时这些规则会被 NoData 静默。请立即检查 ds_allocator 进程与 21020 端口。'
         data:
           - refId: A
             relativeTimeRange: { from: 300, to: 0 }

@@ -15,7 +15,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并把 PushService 注册上去。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50014,见 conf.Defaults)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20014,见 conf.Defaults)。
 //
 // ⚠️ Subscribe 是 server stream RPC,Kratos transport/grpc 会自动处理 stream 生命周期,
 // 业务侧 PushService.Subscribe 收到的 stream.Context() 在 client 断开时自动 cancel。

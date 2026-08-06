@@ -29,8 +29,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50002` | 客户端 RPC(经 Envoy)+ 内部直连 RPC |
-| HTTP | `:51002` | 仅 `/metrics`(`player.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
+| gRPC | `:20002` | 客户端 RPC(经 Envoy)+ 内部直连 RPC |
+| HTTP | `:21002` | 仅 `/metrics`(`player.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
 
 端口来自 `internal/conf/conf.go` 的 `Defaults()`。
 
@@ -94,7 +94,7 @@
 
 ```
 cmd/player/main.go            启动入口(configtable + MySQL + schema gate + 出箱发布器 + kafka consumer 装配)
-etc/player-dev.yaml           开发期配置(gRPC :50002 / MySQL / kafka / 等级经验表目录)
+etc/player-dev.yaml           开发期配置(gRPC :20002 / MySQL / kafka / 等级经验表目录)
 etc/player-prod.yaml.example  生产配置样例
 internal/
   conf/conf.go                配置结构(嵌入 pkg/config.Base + PlayerConf + Defaults)
@@ -269,7 +269,7 @@ progress 出箱 / kafka 重放 / 授予补扫)重放期限尚未小于留存期�
 # 1. 基础设施(MySQL pandora_player 库 + Redis pandora:sess + kafka)
 pwsh tools/scripts/dev_up.ps1
 
-# 2. 启 player(dev 配置:gRPC :50002 / HTTP :51002)
+# 2. 启 player(dev 配置:gRPC :20002 / HTTP :21002)
 go run ./services/account/player/cmd/player -conf services/account/player/etc/player-dev.yaml
 ```
 

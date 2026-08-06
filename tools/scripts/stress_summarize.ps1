@@ -179,9 +179,9 @@ Emit ""
 
 # ---------- 段 2-4:prom 快照各阶段 ----------
 $sections = @(
-    @{ Title = "段 2. matchmaker 关键阶段 (:51011)"; Svc = "match" },
-    @{ Title = "段 3. ds_allocator 子阶段 (:51020)"; Svc = "ds" },
-    @{ Title = "段 4. battle_result 子阶段 (:51022)"; Svc = "battle" }
+    @{ Title = "段 2. matchmaker 关键阶段 (:21011)"; Svc = "match" },
+    @{ Title = "段 3. ds_allocator 子阶段 (:21020)"; Svc = "ds" },
+    @{ Title = "段 4. battle_result 子阶段 (:21022)"; Svc = "battle" }
 )
 
 foreach ($sec in $sections) {

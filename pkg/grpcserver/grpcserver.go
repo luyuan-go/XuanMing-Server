@@ -90,7 +90,7 @@ func MustNewServer(c config.Server, customMW ...middleware.Middleware) *kgrpc.Se
 	// gRPC reflection 开关化(W3 ③,2026-06-05):
 	//   - Kratos transport/grpc.NewServer 默认开 reflection(v1 + v1alpha)。
 	//   - dev:cfg.Server.Grpc.EnableReflection = true,保留默认行为,
-	//     `grpcurl :50001 list` / `describe pandora.login.v1.LoginService` 可用。
+	//     `grpcurl :20001 list` / `describe pandora.login.v1.LoginService` 可用。
 	//   - prod(默认 false):调 kgrpc.DisableReflection() 关闭,
 	//     避免 schema 泄露 / 攻击面扩大。
 	if !c.Grpc.EnableReflection {

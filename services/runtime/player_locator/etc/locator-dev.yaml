@@ -1,6 +1,6 @@
 # Pandora player_locator 服务开发期配置(W3 ⑤,W3 ⑥ 2026-06-05 重写)。
 #
-# - gRPC :50006 / HTTP :51006(仅 /metrics)
+# - gRPC :20006 / HTTP :21006(仅 /metrics)
 # - 强 Redis 依赖(redis 连不上 → 启动失败,本服务是 Pandora "玩家在哪" 唯一真源)
 # - 不接 MySQL / Kafka(W3 ⑤ 范围)
 # - W3 ⑥ 起 duration 字段用 pkg/config.Duration 包装,yaml 可直接写 "30s"
@@ -9,13 +9,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50006"
+    addr: ":20006"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev:开 reflection 便于 grpcurl 联调
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51006"
+    addr: ":21006"
 
 node:
   node_id: 1

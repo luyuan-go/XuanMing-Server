@@ -15,7 +15,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并注册 LeaderboardService。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50007)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20007)。
 // pmw.AuthOptional() 从 Envoy 注入的 x-pandora-player-id header 读 player_id 注入 ctx:
 //   - 读 RPC 允许带 / 不带 JWT;
 //   - 写 / 系统 RPC 在 service 层判 callerID!=0 即拒(杜绝玩家自助写榜 / 发奖)。

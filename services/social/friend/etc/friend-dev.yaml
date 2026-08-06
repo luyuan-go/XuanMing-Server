@@ -1,6 +1,6 @@
 # Pandora friend 服务开发期配置(2026-06-15)。
 #
-# - gRPC :50004 / HTTP :51004(仅 /metrics)
+# - gRPC :20004 / HTTP :21004(仅 /metrics)
 # - MySQL 强依赖(pandora_social 库:friendships + friend_requests + blocks)
 # - Kafka 弱依赖(生产 pandora.friend.event → push 推送好友请求 / 接受通知)
 # - locator 弱依赖(ListFriends 填在线状态;addr 空则全部离线)
@@ -9,13 +9,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50004"
+    addr: ":20004"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51004"
+    addr: ":21004"
 
 node:
   node_id: 1
@@ -41,7 +41,7 @@ friend:
   # max_friends: 单玩家好友数量上限(默认 200)
   max_friends: 200
   # locator_addr: player_locator gRPC 地址;空 → ListFriends 不查在线状态(弱依赖)
-  locator_addr: "127.0.0.1:50006"
+  locator_addr: "127.0.0.1:20006"
   # recommend_limit: 单次推荐好友数量(默认 10,硬上限 20,超界收敛到 20)
   recommend_limit: 10
   # recommend_strategies: 推荐策略链,按序召回直到凑够数量;空 → ["mutual","random"]

@@ -96,10 +96,10 @@ func (c *Config) Defaults() {
 		c.Friend.PairGuardRetentionDays = 30
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50004"
+		c.Server.Grpc.Addr = ":20004"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51004"
+		c.Server.Http.Addr = ":21004"
 	}
 }
 

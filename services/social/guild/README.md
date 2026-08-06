@@ -31,8 +31,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50008` | 客户端 RPC(经 Envoy)—— GuildService + GroupService 同端口 |
-| HTTP | `:51008` | 仅 `/metrics`(`guild.proto` / `group.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
+| gRPC | `:20008` | 客户端 RPC(经 Envoy)—— GuildService + GroupService 同端口 |
+| HTTP | `:21008` | 仅 `/metrics`(`guild.proto` / `group.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
 
 ## 对外接口
 
@@ -266,8 +266,8 @@ NULL / default / 主键物理契约,缺失或不符则退出(`RequiredSchemaVers
 | `request_retention_days` | `90` | 终态入会申请保留天数(§9.24;pending 永不清) |
 | `sweep_interval` | `5m` | 保留期清理轮询间隔(多副本各自跑,DELETE 幂等) |
 | `sweep_batch` | `500` | 每轮清理行数上限(`DELETE ... LIMIT`) |
-| `server.grpc.addr` | `:50008` | gRPC 端口 |
-| `server.http.addr` | `:51008` | HTTP `/metrics` 端口 |
+| `server.grpc.addr` | `:20008` | gRPC 端口 |
+| `server.http.addr` | `:21008` | HTTP `/metrics` 端口 |
 
 依赖端点在 `node.*`:`mysql_client.dsn`(**强依赖,必填**,指向 `pandora_social`)、`redis_client`
 (弱依赖,`host` 与 `addrs` 皆空则禁用缓存)、`kafka.brokers`(弱依赖,空则禁用推送);`session_gate.require`
@@ -295,4 +295,4 @@ go run ./services/social/guild/cmd/guild -conf services/social/guild/etc/guild-d
 - [`decision-revisit-list-pagination.md`](../../../docs/design/decision-revisit-list-pagination.md) — 列表类 RPC 统一游标分页(含 `ListMembers` / `ListJoinRequests`)
 - [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md) — 推送协议原则 2(不回发操作者本人)
 - [`session-generation-rollout.md`](../../../docs/design/session-generation-rollout.md) — 会话现行性门(顶号 / 登出旧 JWT 失效)
-- [`infra.md`](../../../docs/design/infra.md) — 端口规划(guild 50008/51008)与 kafka topic `pandora.guild.event`
+- [`infra.md`](../../../docs/design/infra.md) — 端口规划(guild 20008/21008)与 kafka topic `pandora.guild.event`

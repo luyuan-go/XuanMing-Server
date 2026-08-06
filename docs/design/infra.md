@@ -313,32 +313,51 @@ prefix 默认 `/pandora/leader/`,可经 `match.leader.prefix` 按环境配成 `/
 
 ### 6.2 Go 服务 gRPC 端口
 
+> **端口段必须留在 49152 以下 —— 这是硬约束,不是口味(2026-08-05 事故后定)。**
+>
+> Windows 的动态端口范围默认是 **49152-65535**(`netsh int ipv4 show dynamicport tcp`:
+> Start 49152 / 16384 ports)。落在这个范围里的端口,Hyper-V / WSL / winnat **每次开机都可能
+> 动态占走一整段**,而且每次占的位置还不一样。占走之后进程 `bind` 直接拿到
+> `AccessDenied`,服务全数启动即退。
+>
+> 真实事故:本段原为 gRPC `50001-50022` / HTTP `51001-51022`,2026-08-05 开机后 Hyper-V
+> 抢走 `50949-51048`,把 HTTP 段整个吞掉,**21 个 go 服务全部起不来**;而 gRPC 段当时没事,
+> 纯粹是因为早先有人给 `50000-50059` 做过一条 `netsh add excludedportrange ... store=persistent`
+> 的管理员保留 —— 也就是说 gRPC 段一直站在同一个雷区里,只是提前垫了块沙袋。
+>
+> **为什么不用 netsh 保留了事**:那是每台机器都要做一次、做了还会被系统更新 / 重置网络冲掉、
+> 新策划机上线必忘的补丁;而且"保留了哪些段"变成一条不在版本库里的隐性环境依赖,
+> 违反 §15「简单直达」。搬到动态段以下之后,**任何机器开箱即用,不需要任何 netsh 操作**。
+>
+> 因此:新增服务端口一律从本段(20001-20022 / 21001-21022)顺延,**严禁**为了"看起来整齐"
+> 或"和某文档对齐"把服务端口挪回 49152 以上。基础设施端口(§6.1)同理,现有值均已在安全区。
+
 | 服务 | gRPC 端口 | metrics 端口(+1000) |
 |---|---|---|
-| login | 50001 | 51001 |
-| player | 50002 | 51002 |
-| data_service | 50003 | 51003 |
-| friend | 50004 | 51004 |
-| chat | 50005 | 51005 |
-| player_locator | 50006 | 51006 |
-| leaderboard | 50007 | 51007 |
-| guild | 50008 | 51008 |
-| mail | 50009 | 51009 |
-| team | 50010 | 51010 |
-| matchmaker | 50011 | 51011 |
-| trade | 50012 | 51012 |
-| dialogue | 50013 | 51013 |
-| **push** ⭐ | **50014**(gRPC server stream)| **51014** |
-| inventory | 50015 | 51015 |
-| auction | 50016 | 51016 |
-| owner | 50017 | 51017 |
-| ds_allocator | 50020 | 51020 |
-| hub_allocator | 50021 | 51021 |
-| battle_result | 50022 | 51022 |
+| login | 20001 | 21001 |
+| player | 20002 | 21002 |
+| data_service | 20003 | 21003 |
+| friend | 20004 | 21004 |
+| chat | 20005 | 21005 |
+| player_locator | 20006 | 21006 |
+| leaderboard | 20007 | 21007 |
+| guild | 20008 | 21008 |
+| mail | 20009 | 21009 |
+| team | 20010 | 21010 |
+| matchmaker | 20011 | 21011 |
+| trade | 20012 | 21012 |
+| dialogue | 20013 | 21013 |
+| **push** ⭐ | **20014**(gRPC server stream)| **21014** |
+| inventory | 20015 | 21015 |
+| auction | 20016 | 21016 |
+| owner | 20017 | 21017 |
+| ds_allocator | 20020 | 21020 |
+| hub_allocator | 20021 | 21021 |
+| battle_result | 20022 | 21022 |
 
 ⭐ = 2026-06-04 终版新增。push 服务用 Kratos transport/grpc 暴露 server stream,客户端经 Envoy 连过来(gRPC-Web → gRPC 转换)。
 
-**所有 go 服务全部用 gRPC 端口**(50001-50022 段),协议统一。inventory(W5 ③ 新增,economy 域,50015/51015)落在 push(50014)与 battle 块(50020+)之间的空档。auction(2026-06-19 新增,全服拍卖行 / 撮合,economy 域,50016/51016)紧随 inventory。leaderboard(2026-06-27 新增,通用排行榜,runtime 域,50007/51007)落在 player_locator(50006)与 team 块(50010)之间的空档。guild(2026-06-27 新增,公会 + 临时群同进程,social 域,50008/51008)落在 leaderboard(50007)与 team 块(50010)之间的空档。mail(2026-06-29 新增,邮件系统,social 域,50009/51009)紧随 guild。
+**所有 go 服务全部用 gRPC 端口**(20001-20022 段),协议统一。inventory(W5 ③ 新增,economy 域,20015/21015)落在 push(20014)与 battle 块(20020+)之间的空档。auction(2026-06-19 新增,全服拍卖行 / 撮合,economy 域,20016/21016)紧随 inventory。leaderboard(2026-06-27 新增,通用排行榜,runtime 域,20007/21007)落在 player_locator(20006)与 team 块(20010)之间的空档。guild(2026-06-27 新增,公会 + 临时群同进程,social 域,20008/21008)落在 leaderboard(20007)与 team 块(20010)之间的空档。mail(2026-06-29 新增,邮件系统,social 域,20009/21009)紧随 guild。
 
 ### 6.3 Edge Gateway(Envoy)
 

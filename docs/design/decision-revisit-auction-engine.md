@@ -53,7 +53,7 @@
 | 资源 | 取值 | 依据 |
 |---|---|---|
 | 服务名 | `auction`(economy 域) | 与 `trade` / `inventory` 平级 |
-| gRPC / metrics 端口 | **50016 / 51016** | `infra.md` §6.2 economy 段空档(trade 50012、inventory 50015 之后) |
+| gRPC / metrics 端口 | **20016 / 21016** | `infra.md` §6.2 economy 段空档(trade 20012、inventory 20015 之后) |
 | proto 包 | `pandora/auction/v1/auction.proto` | `proto-design.md` §1 目录规范 |
 | 错误码段 | **12000-12999** | `proto-design.md` §4(7000-7999=trade,11000+ 预留,取新段) |
 | MySQL 库 | **`pandora_auction`** | `infra.md` §2.1 "按职能分库",撮合表与 trade 解耦 |
@@ -130,7 +130,7 @@
 2. `services/economy/auction/`:cmd + internal(biz / data / service / server / conf),Kratos,
    骨架对齐 trade 目录结构。data 层 `redis.UniversalClient` + `mysqlx.ShardSet`。
 3. `deploy/mysql-init/NN-auction-tables.sql`:`pandora_auction`.{`auction_orders`,`auction_matches`}。
-4. 文档登记:`infra.md`(§2.1 库、§4 topic、§6.2 端口 50016/51016)、`proto-design.md`(§4 错误码 12000、§5 topic)、
+4. 文档登记:`infra.md`(§2.1 库、§4 topic、§6.2 端口 20016/21016)、`proto-design.md`(§4 错误码 12000、§5 topic)、
    `pandora-arch.md` §3 服务清单加一行 + §11 决策表追加 + `PROGRESS.md` 追加。
 5. 结算复用 trade `ResourceLedger` / saga;若该原语在 trade 内部,需抽到 `pkg/` 或 economy 公共层供两服务共用(实现窗口评估,避免复制)。
 

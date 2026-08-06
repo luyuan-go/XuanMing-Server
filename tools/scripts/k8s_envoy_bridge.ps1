@@ -59,30 +59,30 @@ function Test-KubeContextIsLocalMinikube([string]$Context, [string]$Profile) {
 # Essential = 登录→Hub→匹配→Battle→结算 闭环必需的服务;非必需(社交/拍卖/交易等)
 # 即便 Pod 没起来,也不该让整个 bridge / e2e 直接失败(只 WARN 跳过该 port-forward)。
 $Forwards = @(
-    @{ Name = 'login';          Port = 50001; Essential = $true  }
-    @{ Name = 'player';         Port = 50002; Essential = $true  }
-    @{ Name = 'data-service';   Port = 50003; Essential = $true  }
-    @{ Name = 'friend';         Port = 50004; Essential = $false }
-    @{ Name = 'chat';           Port = 50005; Essential = $false }
-    @{ Name = 'player-locator'; Port = 50006; Essential = $true  }
-    @{ Name = 'leaderboard';    Port = 50007; Essential = $false }
-    @{ Name = 'guild';          Port = 50008; Essential = $false }
-    @{ Name = 'mail';           Port = 50009; Essential = $false }
-    @{ Name = 'team';           Port = 50010; Essential = $true  }
-    @{ Name = 'matchmaker';     Port = 50011; Essential = $true  }
-    # PVE 直进匹配实例(Envoy 按 x-pandora-game-mode: pve 分流到 host 50018);
+    @{ Name = 'login';          Port = 20001; Essential = $true  }
+    @{ Name = 'player';         Port = 20002; Essential = $true  }
+    @{ Name = 'data-service';   Port = 20003; Essential = $true  }
+    @{ Name = 'friend';         Port = 20004; Essential = $false }
+    @{ Name = 'chat';           Port = 20005; Essential = $false }
+    @{ Name = 'player-locator'; Port = 20006; Essential = $true  }
+    @{ Name = 'leaderboard';    Port = 20007; Essential = $false }
+    @{ Name = 'guild';          Port = 20008; Essential = $false }
+    @{ Name = 'mail';           Port = 20009; Essential = $false }
+    @{ Name = 'team';           Port = 20010; Essential = $true  }
+    @{ Name = 'matchmaker';     Port = 20011; Essential = $true  }
+    # PVE 直进匹配实例(Envoy 按 x-pandora-game-mode: pve 分流到 host 20018);
     # 副本测试主链路依赖它,必须 fail-fast,避免客户端点击开局后才报 Envoy 503。
-    @{ Name = 'matchmaker-pve'; Port = 50018; Essential = $true  }
-    @{ Name = 'trade';          Port = 50012; Essential = $false }
-    @{ Name = 'dialogue';       Port = 50013; Essential = $false }
-    @{ Name = 'push';           Port = 50014; Essential = $true  }
-    @{ Name = 'inventory';      Port = 50015; Essential = $false }
-    @{ Name = 'auction';        Port = 50016; Essential = $false }
+    @{ Name = 'matchmaker-pve'; Port = 20018; Essential = $true  }
+    @{ Name = 'trade';          Port = 20012; Essential = $false }
+    @{ Name = 'dialogue';       Port = 20013; Essential = $false }
+    @{ Name = 'push';           Port = 20014; Essential = $true  }
+    @{ Name = 'inventory';      Port = 20015; Essential = $false }
+    @{ Name = 'auction';        Port = 20016; Essential = $false }
     # Owner 是登录/分配/DS 归属权威；即使 Envoy 不直接路由它，也必须映射并通过健康门禁。
-    @{ Name = 'owner';          Port = 50017; Essential = $true  }
-    @{ Name = 'ds-allocator';   Port = 50020; Essential = $true  }
-    @{ Name = 'hub-allocator';  Port = 50021; Essential = $true  }
-    @{ Name = 'battle-result';  Port = 50022; Essential = $true  }
+    @{ Name = 'owner';          Port = 20017; Essential = $true  }
+    @{ Name = 'ds-allocator';   Port = 20020; Essential = $true  }
+    @{ Name = 'hub-allocator';  Port = 20021; Essential = $true  }
+    @{ Name = 'battle-result';  Port = 20022; Essential = $true  }
 )
 
 function Ensure-File([string]$path) {

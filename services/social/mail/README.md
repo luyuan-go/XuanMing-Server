@@ -27,8 +27,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50009` | 客户端 RPC(经 Envoy)+ 内网运营 / DS RPC |
-| HTTP | `:51009` | 仅 `/metrics`(`mail.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
+| gRPC | `:20009` | 客户端 RPC(经 Envoy)+ 内网运营 / DS RPC |
+| HTTP | `:21009` | 仅 `/metrics`(`mail.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
 
 端口默认值在 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr` / `Server.Http.Addr`)。
 

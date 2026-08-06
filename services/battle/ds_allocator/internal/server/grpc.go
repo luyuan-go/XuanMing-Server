@@ -17,7 +17,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并注册 DSAllocatorService + GmService。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50020)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20020)。
 // 调用方为后端内部(matchmaker / 战斗 DS / 运维 GM 工具),pmw.AuthOptional() 保持与其它服一致;
 // 本服 RPC 不依赖 player_id 授权,GmService 属内部接口不经 Envoy 暴露给玩家客户端。
 //

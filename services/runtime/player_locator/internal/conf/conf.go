@@ -75,10 +75,10 @@ func (c *Config) Defaults() {
 		c.Presence.KillSwitchKey = "presence/fanout"
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50006"
+		c.Server.Grpc.Addr = ":20006"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51006"
+		c.Server.Http.Addr = ":21006"
 	}
 	c.DSAuth.Defaults()
 	if c.DSAuth.AuthorityMode == "" {

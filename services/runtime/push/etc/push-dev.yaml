@@ -1,7 +1,7 @@
 # Pandora push 服务开发期配置(W2 ⑤ → W3 ④ 2026-06-05 真实化)。
 #
-# - gRPC 端口 50014(server stream,客户端经 Envoy gRPC-Web 连过来)
-# - HTTP 端口 51014(目前只暴露 /metrics;push 服务无 RESTful RPC)
+# - gRPC 端口 20014(server stream,客户端经 Envoy gRPC-Web 连过来)
+# - HTTP 端口 21014(目前只暴露 /metrics;push 服务无 RESTful RPC)
 # - W3 ④ 起接 kafka(订阅 push topic) + redis ZSET 离线消息缓存
 # - W3 ⑥ 起 duration 字段用 pkg/config.Duration 包装,yaml 可直接写 "5s" / "5m"
 # - W3 ③ 起 server.grpc.enable_reflection 可控,dev: true / prod: false(零值)
@@ -9,12 +9,12 @@
 server:
   grpc:
     network: tcp
-    addr: ":50014"
+    addr: ":20014"
     enable_reflection: true     # dev:开 reflection 便于 grpcurl 联调
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51014"
+    addr: ":21014"
 
 node:
   node_id: 1

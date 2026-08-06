@@ -1,6 +1,6 @@
 # Pandora player 服务开发期配置(W4 ④,2026-06-06)。
 #
-# - gRPC :50002 / HTTP :51002(仅 /metrics)
+# - gRPC :20002 / HTTP :21002(仅 /metrics)
 # - MySQL 强依赖(pandora_player 库:players + player_heroes + mmr_history,幂等 UpdateMMR 不变量 §2)
 # - Kafka 强依赖(消费 pandora.player.update,battle_result 结算后发)
 # - duration 字段用 pkg/config.Duration,yaml 可直接写 "3s"
@@ -9,13 +9,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50002"
+    addr: ":20002"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51002"
+    addr: ":21002"
 
 node:
   node_id: 1
@@ -61,7 +61,7 @@ player:
   loadout_customize_enabled: true
   # inventory_addr: inventory 服务 gRPC 直连(内网无 JWT);SetEquipment 拥有权校验依赖它。
   # 留空 → SetEquipment 一律返回内部错误(不会静默跳过校验)。
-  inventory_addr: "inventory:50015"
+  inventory_addr: "inventory:20015"
   # consume_topics: 订阅 topic(留空走默认 [pandora.player.update])
   consume_topics:
     - "pandora.player.update"

@@ -564,9 +564,9 @@ func (c *Config) Defaults() {
 		c.LocalDS.LogDir = "run/dev/logs/ds"
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50020"
+		c.Server.Grpc.Addr = ":20020"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51020"
+		c.Server.Http.Addr = ":21020"
 	}
 }

@@ -27,10 +27,10 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50010` | 客户端 RPC(经 Envoy)+ 内部 `GetTeam`(matchmaker 直连) |
-| HTTP | `:51010` | 仅 `/metrics`(`team.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
+| gRPC | `:20010` | 客户端 RPC(经 Envoy)+ 内部 `GetTeam`(matchmaker 直连) |
+| HTTP | `:21010` | 仅 `/metrics`(`team.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
 
-端口来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr=:50010` / `Server.Http.Addr=:51010`)。
+端口来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr=:20010` / `Server.Http.Addr=:21010`)。
 
 ## 对外接口
 
@@ -63,7 +63,7 @@
 
 ```
 cmd/team/main.go               启动入口(redis + snowflake + kafka producer + matchmaker client + sessiongate 装配)
-etc/team-dev.yaml              开发期配置(:50010 / redis 6380 / kafka 9093 / matchmaker 50011)
+etc/team-dev.yaml              开发期配置(:20010 / redis 6380 / kafka 9093 / matchmaker 20011)
 etc/team-prod.yaml.example     生产配置样例
 internal/
   conf/conf.go                 配置结构(TeamConf)+ Defaults()(端口 / TTL / 上限 / 推送模式默认值)

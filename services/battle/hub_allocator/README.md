@@ -33,8 +33,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50021` | 内部 RPC(login / Hub DS 回调)+ 玩家 RPC(经 Envoy) |
-| HTTP | `:51021` | 仅 `/metrics` |
+| gRPC | `:20021` | 内部 RPC(login / Hub DS 回调)+ 玩家 RPC(经 Envoy) |
+| HTTP | `:21021` | 仅 `/metrics` |
 
 端口取自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr` / `Server.Http.Addr`)。
 
@@ -274,7 +274,7 @@ RunHeartbeatSweep (每 5s)
 ## 本地启动
 
 ```powershell
-# 1. 基础设施(Redis 强依赖;起 player_locator :50006 / owner :50017 后可跑全链,留空走弱依赖降级)
+# 1. 基础设施(Redis 强依赖;起 player_locator :20006 / owner :20017 后可跑全链,留空走弱依赖降级)
 pwsh tools/scripts/dev_up.ps1
 
 # 2. 启 hub_allocator(mode=local dev 配置,首次 AssignHub 懒拉起一个常驻 Windows Hub DS)
@@ -288,7 +288,7 @@ go run ./services/battle/hub_allocator/cmd/hub_allocator -conf services/battle/h
 ## 关联文档
 
 - [`go-services.md §2.12`](../../../docs/design/go-services.md) — hub_allocator 要约(RPC / 职责 / 拓扑)
-- [`infra.md`](../../../docs/design/infra.md) — 服务端口(`:50021` / `:51021`)/ leader 选举 key / kafka topic
+- [`infra.md`](../../../docs/design/infra.md) — 服务端口(`:20021` / `:21021`)/ leader 选举 key / kafka topic
 - [`decision-revisit-ds-callback-auth.md`](../../../docs/design/decision-revisit-ds-callback-auth.md) — DS 回调认证 + Model B「Redis 唯一授权权威」§7
 - [`decision-revisit-hub-crossslot.md`](../../../docs/design/decision-revisit-hub-crossslot.md) — 大厅归属跨 slot 与 `{pod}` hashtag 布局
 - [`owner-authority.md`](../../../docs/design/owner-authority.md) — 每玩家 owner_epoch / 实例租约 fencing / census Admit(migrate ①③④⑥)

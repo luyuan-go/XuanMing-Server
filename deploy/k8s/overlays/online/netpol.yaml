@@ -28,7 +28,7 @@
 #     dev 的 Envoy 在宿主 docker-compose,强制 default-deny 会挡宿主→集群联调。
 #
 # 拓扑依据(2026-07-03 核实):
-#   业务层 20 服务端口 50001~50022(metrics 51001~51022);
+#   业务层 20 服务端口 20001~20022(metrics 21001~21022);
 #   基础设施 mysql:3306 / redis:6379 / kafka:9092 / etcd:2379(peer 2380) / zookeeper:2181;
 #   infra→infra 仅 kafka→zookeeper:2181;客户端(:8443)与 DS(:8444)统一经 Envoy 进,不直连业务端口。
 ---
@@ -158,7 +158,7 @@ spec:
 ---
 # 8) 外部网关命名空间 → 业务层 gRPC 端口(仅当 Envoy 部署在独立命名空间时才需要)。
 #    给 Envoy 所在命名空间打标签 `pandora.dev/role=ingress-gateway` 即生效;未打标签则天然
-#    inert。目标限业务层(不含基础设施),端口段 50001~50022。Envoy 同命名空间时靠规则 2。
+#    inert。目标限业务层(不含基础设施),端口段 20001~20022。Envoy 同命名空间时靠规则 2。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -175,12 +175,12 @@ spec:
             matchLabels:
               pandora.dev/role: ingress-gateway
       ports:
-        - { protocol: TCP, port: 50001, endPort: 50022 }
+        - { protocol: TCP, port: 20001, endPort: 20022 }
 ---
 # 9) DS(UE Linux Pod,跑在 default 命名空间)→ pandora-envoy「DS 面」:8444。
 #    Fleet(20-fleet-battle / 30-fleet-hub)在 default namespace 起 GameServer,DS 用 grpc-web
 #    回连 pandora-envoy.pandora.svc:8444(心跳 / locator / battle_result)。default-deny 默认会
-#    把这条【跨命名空间】入站丢弃(规则 2 mesh 只覆盖本命名空间;规则 8 网关只放 50001~50022),
+#    把这条【跨命名空间】入站丢弃(规则 2 mesh 只覆盖本命名空间;规则 8 网关只放 20001~20022),
 #    导致 DS 心跳打不通 → ds-allocator ready 超时 → 撮合失败。此规则精准放行:仅 default 命名空间
 #    里【Agones GameServer Pod】来源、仅 pandora-envoy pod、仅 :8444(2026-07-10 收紧,回应审核
 #    P1「放行整个 default namespace」:namespaceSelector 与 podSelector 写在同一 from 元素 = AND,

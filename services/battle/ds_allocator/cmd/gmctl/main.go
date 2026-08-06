@@ -11,10 +11,10 @@
 //
 // 用法:
 //
-//	gmctl additem --addr 127.0.0.1:50020 --match <matchID> --player <playerID> \
+//	gmctl additem --addr 127.0.0.1:20020 --match <matchID> --player <playerID> \
 //	              --config <configID> [--count 1] [--bag 0]
 //
-// 地址默认取环境变量 PANDORA_DS_ALLOCATOR_ADDR,再回退 127.0.0.1:50020(与 UE DS 侧一致)。
+// 地址默认取环境变量 PANDORA_DS_ALLOCATOR_ADDR,再回退 127.0.0.1:20020(与 UE DS 侧一致)。
 // 内部接口,直连 ds_allocator gRPC 端口,不经 Envoy。
 package main
 
@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	defaultAddr = "127.0.0.1:50020"
+	defaultAddr = "127.0.0.1:20020"
 	dialTimeout = 10 * time.Second
 	// maxUint32Config 道具 config_id 上限(proto uint32),--config 是 uint 防截断越界转。
 	maxUint32Config = uint(^uint32(0))
@@ -71,13 +71,13 @@ func usage() {
 子命令:
   additem   给对局内指定玩家发道具(远程触发 DS 本地命令 My.DS.GM.AddItem)
 
-地址解析优先级:--addr > 环境变量 PANDORA_DS_ALLOCATOR_ADDR > 127.0.0.1:50020
+地址解析优先级:--addr > 环境变量 PANDORA_DS_ALLOCATOR_ADDR > 127.0.0.1:20020
 `)
 }
 
 func runAddItem(args []string) int {
 	fs := flag.NewFlagSet("additem", flag.ExitOnError)
-	addr := fs.String("addr", "", "ds_allocator gRPC 地址(默认 env PANDORA_DS_ALLOCATOR_ADDR / 127.0.0.1:50020)")
+	addr := fs.String("addr", "", "ds_allocator gRPC 地址(默认 env PANDORA_DS_ALLOCATOR_ADDR / 127.0.0.1:20020)")
 	match := fs.Uint64("match", 0, "目标对局 match_id(必填,>0)")
 	player := fs.Uint64("player", 0, "目标玩家 player_id(必填,Snowflake uint64)")
 	config := fs.Uint("config", 0, "道具配置 id(必填,>0)")

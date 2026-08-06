@@ -506,7 +506,7 @@ func mustBuildLocatorNotifier(cfg *conf.Config, h kratosHelper) (data.LocationNo
 	addr := cfg.Login.Locator.Addr
 	if addr == "" {
 		h.Warnw("msg", "locator_disabled_in_config",
-			"hint", "set login.locator.addr to 127.0.0.1:50006 to enable LOGIN_PENDING upsert")
+			"hint", "set login.locator.addr to 127.0.0.1:20006 to enable LOGIN_PENDING upsert")
 		return nil, nil, "disabled"
 	}
 	conn := grpcclient.MustDialInsecure(addr)
@@ -521,7 +521,7 @@ func mustBuildHubAssigner(cfg *conf.Config, h kratosHelper) (data.HubAssigner, l
 	addr := cfg.Login.Hub.Addr
 	if addr == "" {
 		h.Warnw("msg", "hub_allocator_disabled_in_config",
-			"hint", "set login.hub.addr to 127.0.0.1:50021 to assign real hub shard + ticket")
+			"hint", "set login.hub.addr to 127.0.0.1:20021 to assign real hub shard + ticket")
 		return nil, nil, "disabled"
 	}
 	// P0#5:hub_allocator 是单写者,普通 ClusterIP 直连被 L4 钉在某一 Pod,落到非-writer 副本

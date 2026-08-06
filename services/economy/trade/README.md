@@ -27,10 +27,10 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50012` | 客户端 RPC(经 Envoy)+ 内部 RPC |
-| HTTP | `:51012` | 仅 `/metrics` |
+| gRPC | `:20012` | 客户端 RPC(经 Envoy)+ 内部 RPC |
+| HTTP | `:21012` | 仅 `/metrics` |
 
-端口默认值来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr` / `Server.Http.Addr`);全局登记见 `infra.md` 端口规划表(trade = 50012 / 51012)。
+端口默认值来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr` / `Server.Http.Addr`);全局登记见 `infra.md` 端口规划表(trade = 20012 / 21012)。
 
 ## 对外接口
 
@@ -59,7 +59,7 @@
 
 ```
 cmd/trade/main.go              启动入口(redis Ping + snowflake + kafka audit + ResourceLedger 选路 + session gate 装配)
-etc/trade-dev.yaml             开发配置(50012 / redis 6380 / kafka 9093 / allow_noop_ledger=true)
+etc/trade-dev.yaml             开发配置(20012 / redis 6380 / kafka 9093 / allow_noop_ledger=true)
 etc/trade-prod.yaml.example    生产配置样例
 internal/
   conf/conf.go                 配置结构(TradeConf + Defaults;端口 / TTL / 上限 / inventory_addr)
@@ -203,7 +203,7 @@ driveSettlement(order)
 | `inventory_addr` | `""` | inventory 服务 gRPC 直连地址;配上 → 结算走真实 P2P 原子对转 |
 | `allow_noop_ledger` | `false` | 显式允许退回 `NoopResourceLedger`(占位,结算总成功不真实扣转);生产必须 false |
 
-端口默认值(非 `trade.*` 键,由 `Defaults()` 兜底):`server.grpc.addr = :50012`、`server.http.addr = :51012`。
+端口默认值(非 `trade.*` 键,由 `Defaults()` 兜底):`server.grpc.addr = :20012`、`server.http.addr = :21012`。
 
 > **账本选路**(`cmd/trade/main.go:128`):`inventory_addr` 非空 → `GrpcResourceLedger`(真实结算);否则 `allow_noop_ledger=true` → `NoopResourceLedger`(仅联调 / 单测);两者皆无 → **fail-fast 拒启**,防止漏配后以"成交不扣减"静默上线。
 
@@ -218,7 +218,7 @@ go run ./services/economy/trade/cmd/trade -conf services/economy/trade/etc/trade
 ```
 
 > dev 配置 `allow_noop_ledger: true` 让结算走占位实现(成交不真实扣转背包 / 货币),便于无 inventory 时联调;
-> 要跑真实结算,取消 `etc/trade-dev.yaml` 里 `inventory_addr` 注释(指向 inventory `:50015`)并起 inventory 服务。
+> 要跑真实结算,取消 `etc/trade-dev.yaml` 里 `inventory_addr` 注释(指向 inventory `:20015`)并起 inventory 服务。
 > 生产必须接真实账本并置 `allow_noop_ledger=false`(否则 `main` fail-fast)。
 
 ## 关联文档
@@ -230,4 +230,4 @@ go run ./services/economy/trade/cmd/trade -conf services/economy/trade/etc/trade
 - [`decision-revisit-list-pagination.md`](../../../docs/design/decision-revisit-list-pagination.md) — `ListMyOrders` 游标分页上限
 - [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md) — 协议排序 / 审计事实口径
 - [`scale-cellular-20m.md`](../../../docs/design/scale-cellular-20m.md) §4.2/§4.4 — 确定性 region/cell 路由与跨分片 / 跨 region 结算落点
-- [`infra.md`](../../../docs/design/infra.md) — 端口(50012 / 51012)/ topic / MySQL 表登记
+- [`infra.md`](../../../docs/design/infra.md) — 端口(20012 / 21012)/ topic / MySQL 表登记

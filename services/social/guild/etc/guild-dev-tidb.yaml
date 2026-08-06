@@ -17,13 +17,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50008"
+    addr: ":20008"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51008"
+    addr: ":21008"
 
 node:
   node_id: 1

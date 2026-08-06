@@ -296,10 +296,10 @@ type IdentifyRule struct {
 // Defaults 填默认值。
 func (c *Config) Defaults() {
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50015"
+		c.Server.Grpc.Addr = ":20015"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51015"
+		c.Server.Http.Addr = ":21015"
 	}
 	if c.Inventory.SweepInterval <= 0 {
 		c.Inventory.SweepInterval = config.Duration(5 * time.Minute)

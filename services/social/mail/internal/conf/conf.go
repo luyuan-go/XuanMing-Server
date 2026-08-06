@@ -141,9 +141,9 @@ func (c *Config) Defaults() {
 		c.Mail.MaxStackCountPerAttachment = DefaultMaxStackCountPerAttachment
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50009"
+		c.Server.Grpc.Addr = ":20009"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51009"
+		c.Server.Http.Addr = ":21009"
 	}
 }

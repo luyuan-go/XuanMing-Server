@@ -102,9 +102,9 @@ func (c *Config) Defaults() {
 		c.Chat.SweepBatch = 500
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50005"
+		c.Server.Grpc.Addr = ":20005"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51005"
+		c.Server.Http.Addr = ":21005"
 	}
 }

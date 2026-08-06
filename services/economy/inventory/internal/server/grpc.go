@@ -16,7 +16,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并注册 InventoryService(+ 可选 BagService)。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50015)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20015)。
 // pmw.AuthOptional() 从 Envoy 注入的 x-pandora-player-id header 读 player_id 注入 ctx。
 // 用 AuthOptional 而非 AuthRequired:GrantItems 是后端内部直连(无 JWT,callerID==0)需放行;
 // 客户端 RPC(GetInventory/UseItem/SellItem)在 service 层用 callerPlayerID 强制鉴权 +

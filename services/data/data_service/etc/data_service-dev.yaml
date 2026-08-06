@@ -1,6 +1,6 @@
 # Pandora data_service 服务开发期配置(2026-06-16)。
 #
-# - gRPC :50003 / HTTP :51003(仅 /metrics)
+# - gRPC :20003 / HTTP :21003(仅 /metrics)
 # - 内网数据网关(不经 Envoy,不直接暴露给玩家)
 # - MySQL 强依赖(pandora_player 库 player_data 强 schema 列,事实源;
 #   表由服务启动时按 PlayerData proto 经 proto2mysql CreateOrUpdateTable 自动建/同步)
@@ -11,13 +11,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50003"
+    addr: ":20003"
     timeout: "15s"
     enable_reflection: true
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51003"
+    addr: ":21003"
 
 node:
   node_id: 1

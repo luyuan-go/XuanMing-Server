@@ -407,8 +407,8 @@ spec:
           c.env.filter(e, e.name == 'ISTIO_KUBE_APP_PROBERS').size() == 1 &&
           c.env.exists(e, e.name == 'ISTIO_KUBE_APP_PROBERS' &&
             e.value.contains('"grpc":{"port":' +
-              string({'inventory':50015, 'auction':50016, 'trade':50012, 'mail':50009,
-                      'leaderboard':50007, 'battle-result':50022}[object.metadata.labels['app']]))))
+              string({'inventory':20015, 'auction':20016, 'trade':20012, 'mail':20009,
+                      'leaderboard':20007, 'battle-result':20022}[object.metadata.labels['app']]))))
       message: "Inventory mesh Pod proxy 必须保留原始 gRPC readiness 端口"
     - expression: >-
         object.spec.volumes.exists(v, v.name == 'istio-token' && has(v.projected) &&

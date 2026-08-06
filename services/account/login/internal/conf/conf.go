@@ -163,14 +163,14 @@ type LoginConf struct {
 
 // LocatorClientConf 是 login 调 player_locator 的客户端参数。
 type LocatorClientConf struct {
-	// Addr player_locator gRPC 端口(默认 127.0.0.1:50006)。
+	// Addr player_locator gRPC 端口(默认 127.0.0.1:20006)。
 	// 留空仅允许 local/off；Hub assignment binding 激活时 Validate 会拒绝启动。
 	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
 }
 
 // MatchClientConf 是 login 调 matchmaker 的客户端参数(P0 修复 2026-07-15)。
 type MatchClientConf struct {
-	// Addr matchmaker gRPC 端口(默认 127.0.0.1:50011)。
+	// Addr matchmaker gRPC 端口(默认 127.0.0.1:20011)。
 	// 留空 → 不查 matchmaker 耐久权威,仅凭 locator presence 判断在局(dev/local)。
 	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
 
@@ -188,7 +188,7 @@ type MatchClientConf struct {
 
 // HubClientConf 是 login 调 hub_allocator 的客户端参数(W4 ⑥)。
 type HubClientConf struct {
-	// Addr hub_allocator gRPC 端口(默认 127.0.0.1:50021)。
+	// Addr hub_allocator gRPC 端口(默认 127.0.0.1:20021)。
 	// 留空 → 不调 hub_allocator,Login 回退自签 hub 票据 + MockHubDSAddr。
 	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
 
@@ -246,10 +246,10 @@ func (c *Config) Defaults() {
 		c.Login.JWT.DSTicketTTL = c.Login.DSTicketTTL
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50001"
+		c.Server.Grpc.Addr = ":20001"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51001"
+		c.Server.Http.Addr = ":21001"
 	}
 	c.DSAuth.Defaults()
 }

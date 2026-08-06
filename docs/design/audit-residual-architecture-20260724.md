@@ -53,7 +53,7 @@
   - `pkg/grpcclient` 新增 `MustDialInsecureRoundRobin`,经 `kgrpc.WithOptions(grpc.WithDefaultServiceConfig)`
     注入 gRPC 官方 `round_robin` LB;
   - login `mustBuildHubAssigner` 改用它;`login-prod.yaml.example` 的 `hub.addr` 改为
-    `dns:///hub-allocator-headless.pandora.svc.cluster.local:50021`;
+    `dns:///hub-allocator-headless.pandora.svc.cluster.local:20021`;
   - `deploy/k8s/services/services.yaml` 新增 `hub-allocator-headless`(clusterIP:None,DNS 返全部
     Ready Pod IP),保留原 ClusterIP Service 供单发调用方。
   - 效果:`AssignHub` 现有就地重试每次 RPC 经 round_robin 轮到不同副本,滚动重叠(maxSurge 双 Pod)
@@ -72,7 +72,7 @@
 ---
 
 ### A2 集群冒烟验收(P0#5 关闭条件,本机无法代跑)
-前置:apply 新 `hub-allocator-headless` Service + login 用 `dns:///hub-allocator-headless...:50021` 配置。
+前置:apply 新 `hub-allocator-headless` Service + login 用 `dns:///hub-allocator-headless...:20021` 配置。
 1. **多后端解析**:`kubectl -n pandora scale deploy/hub-allocator --replicas=3`(或在滚动升级窗口),
    `kubectl -n pandora get endpoints hub-allocator-headless -o wide` 确认返回多个 Pod IP。
 2. **确认 writer 唯一**:`kubectl -n pandora logs -l app=hub-allocator --prefix | grep 'writerlease.*elected'`

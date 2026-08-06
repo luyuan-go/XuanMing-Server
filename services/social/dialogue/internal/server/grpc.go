@@ -14,7 +14,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并注册 DialogueService。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50013)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20013)。
 // pmw.AuthOptional() 从 Envoy 注入的 x-pandora-player-id header 读 player_id 注入 ctx。
 // Envoy jwt_authn 已在路由层 require JWT;service 层再做一次 callerID==0 拦截兜底。
 func NewGRPCServer(cfg *conf.Config, svc *service.DialogueService) *kgrpc.Server {

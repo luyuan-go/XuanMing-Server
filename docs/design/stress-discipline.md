@@ -42,10 +42,10 @@ F:/work/Pandora/
 
 | 端口 | 服务组 | 主要看的指标 |
 |---|---|---|
-| `:51001` | login metrics | 登录 QPS、票据签发耗时 |
-| `:51011` | matchmaker metrics | 队列长度、匹配等待、撮合耗时 |
-| `:51020` | ds_allocator metrics | DS 拉起耗时、pod 数、Agones 调度 RTT |
-| `:51022` | battle_result metrics | kafka lag、幂等命中率、写库耗时 |
+| `:21001` | login metrics | 登录 QPS、票据签发耗时 |
+| `:21011` | matchmaker metrics | 队列长度、匹配等待、撮合耗时 |
+| `:21020` | ds_allocator metrics | DS 拉起耗时、pod 数、Agones 调度 RTT |
+| `:21022` | battle_result metrics | kafka lag、幂等命中率、写库耗时 |
 
 `stress_snap.ps1` 默认并行拉这 4 端口,文件命名 `t<N>m_<svc>.txt`,`stress_summarize.ps1` 按后缀分流。
 
@@ -107,7 +107,7 @@ outbox 无堆积**。FAIL → 不许开压(新表未登记 = 无界增长风险,
     -StartTime '<yyyy-MM-dd HH:mm:ss>' `
     -Stages 2,5,10,15,18
   ```
-- **不许手拉单端口**(`curl :51001/metrics > t2m.txt` 这种临时抓取不再用)
+- **不许手拉单端口**(`curl :21001/metrics > t2m.txt` 这种临时抓取不再用)
 
 ### 4.3 跑测后
 
@@ -168,9 +168,9 @@ outbox 无堆积**。FAIL → 不许开压(新表未登记 = 无界增长风险,
 | 段 | 内容 | 数据源 |
 |---|---|---|
 | 1. robot 每分钟 stats | 在线、登录、匹配、进 DS、断开 | robot-stats.jsonl |
-| 2. matchmaker 关键阶段 | enqueue / matched / confirmed / dispatched 各阶段平均耗时 + p99 | `:51011` 指标 |
-| 3. ds_allocator 子阶段 | k8s api / agones allocate / pod ready / first-conn 各阶段耗时 | `:51020` 指标 |
-| 4. battle_result 子阶段 | kafka lag / decode / db write / ack 各阶段耗时 | `:51022` 指标 |
+| 2. matchmaker 关键阶段 | enqueue / matched / confirmed / dispatched 各阶段平均耗时 + p99 | `:21011` 指标 |
+| 3. ds_allocator 子阶段 | k8s api / agones allocate / pod ready / first-conn 各阶段耗时 | `:21020` 指标 |
+| 4. battle_result 子阶段 | kafka lag / decode / db write / ack 各阶段耗时 | `:21022` 指标 |
 | 5. 大厅 DS Replication | hub 在线人数 / 包大小 / NetCullDistance 实际触发 / Iris stat | DS prom 端口 |
 
 ## 6. 反模式禁令

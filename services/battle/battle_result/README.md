@@ -30,8 +30,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50022` | DS 回调 RPC(`ReportResult` / `ReportProgress`,经 Envoy `:8444`)+ 内部查询 RPC |
-| HTTP | `:51022` | 仅 `/metrics`(`battle.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
+| gRPC | `:20022` | DS 回调 RPC(`ReportResult` / `ReportProgress`,经 Envoy `:8444`)+ 内部查询 RPC |
+| HTTP | `:21022` | 仅 `/metrics`(`battle.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
 
 端口来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr` / `Server.Http.Addr`),
 与 [`infra.md`](../../../docs/design/infra.md) §6 登记一致。

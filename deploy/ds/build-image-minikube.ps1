@@ -234,6 +234,30 @@ if ($srcPkg) {
     # robocopy 退出码 < 8 视为成功（0=无变化,1=有复制,3=复制+额外等）
     if ($LASTEXITCODE -ge 8) { throw "robocopy 同步 Linux DS 包失败（exit=$LASTEXITCODE）：$srcPkg" }
     $global:LASTEXITCODE = 0
+
+    # 写准确溯源。/MIR 只镜像 LinuxServer 子树，而制品的 BUILD_INFO.txt 在它的**父目录**，
+    # 于是 stage 根下会留着上一套流程（build-linux-ds.ps1）写的 BUILD_INFO.txt 长期不更新——
+    # 出现过「stage 内容是当天新包、BUILD_INFO 却写着一个月前」的组合，任何据此判断 stage 版本
+    # 的人都会得出反的结论。这里在每次同步后重写溯源，让「stage 里到底是哪一版」自证。
+    $stageRoot = Split-Path $StageDir -Parent
+    $srcParent = Split-Path $srcPkg -Parent
+    $srcBuildInfo = Join-Path $srcParent 'BUILD_INFO.txt'
+    if (Test-Path -LiteralPath $srcBuildInfo) {
+        Copy-Item -LiteralPath $srcBuildInfo -Destination (Join-Path $stageRoot 'BUILD_INFO.txt') -Force
+    }
+    $stagedBin = Join-Path $StageDir 'Pandora\Binaries\Linux\PandoraServer'
+    $binLine = if (Test-Path -LiteralPath $stagedBin) {
+        $sb = Get-Item -LiteralPath $stagedBin
+        "PandoraServer: {0} bytes, mtime {1:yyyy-MM-dd HH:mm:ss}" -f $sb.Length, $sb.LastWriteTime
+    } else { 'PandoraServer: 缺失（stage 不完整）' }
+    @(
+        "# 由 deploy/ds/build-image-minikube.ps1 在同步 DS 包后自动写入，勿手改。",
+        "SyncedAt: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+        "SourcePkg: $srcPkg",
+        $binLine,
+        "说明: 同目录 BUILD_INFO.txt 由上述来源包原样拷入（来源包若无该文件则可能是旧内容）。"
+    ) | Set-Content -LiteralPath (Join-Path $stageRoot 'STAGE_SOURCE.txt') -Encoding UTF8
+    Write-Host "[build-image-minikube] 已更新 stage 溯源：$(Join-Path $stageRoot 'STAGE_SOURCE.txt')" -ForegroundColor DarkGray
 } else {
     # 主来源已改为制品库，这里的回退措辞要跟着改，否则会把人往"找同级客户端仓库"的旧思路上带。
     Write-Host "[build-image-minikube] !! 未解析到任何 DS 包来源，沿用已暂存的 stage\LinuxServer（来源未知，可能是陈旧包）" -ForegroundColor Yellow

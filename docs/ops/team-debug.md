@@ -1,7 +1,7 @@
 # 组队调试手册
 
 > 用途:本机用 VS Code / grpcurl 调试 Pandora team 服务。
-> 当前 team 服务没有 RESTful HTTP 路由,`51010` 只提供 `/metrics`;组队 RPC 直连 gRPC `50010`。
+> 当前 team 服务没有 RESTful HTTP 路由,`21010` 只提供 `/metrics`;组队 RPC 直连 gRPC `20010`。
 
 ## 1. 启动顺序
 
@@ -49,7 +49,7 @@ VS Code 使用 [.vscode/launch.json](../../.vscode/launch.json) 里的 `Debug te
 ```text
 redis_connected addr=127.0.0.1:6380
 kafka_producer_ready topic=pandora.team.update required=true
-service_ready grpc=:50010 http=:51010 ...
+service_ready grpc=:20010 http=:21010 ...
 ```
 
 如果 Kafka 没起，会看到下面日志并退出；先恢复 Kafka，再重启 team：
@@ -92,7 +92,7 @@ $body = @{} | ConvertTo-Json -Compress
 $body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428737" `
   -d '@' `
-  127.0.0.1:50010 pandora.team.v1.TeamService/CreateTeam
+  127.0.0.1:20010 pandora.team.v1.TeamService/CreateTeam
 ```
 
 返回里记录:
@@ -115,7 +115,7 @@ $body = @{
 $body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428737" `
   -d '@' `
-  127.0.0.1:50010 pandora.team.v1.TeamService/Invite
+  127.0.0.1:20010 pandora.team.v1.TeamService/Invite
 ```
 
 返回里记录:
@@ -136,7 +136,7 @@ $body = @{
 $body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428738" `
   -d '@' `
-  127.0.0.1:50010 pandora.team.v1.TeamService/AcceptInvite
+  127.0.0.1:20010 pandora.team.v1.TeamService/AcceptInvite
 ```
 
 成功后 `team.members` 应包含 test1 / test2 两个 player_id。
@@ -153,7 +153,7 @@ $body = @{
 
 $body | grpcurl -plaintext `
   -d '@' `
-  127.0.0.1:50010 pandora.team.v1.TeamService/GetTeam
+  127.0.0.1:20010 pandora.team.v1.TeamService/GetTeam
 ```
 
 ### 3.5 设置准备
@@ -171,7 +171,7 @@ $body = @{
 $body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428737" `
   -d '@' `
-  127.0.0.1:50010 pandora.team.v1.TeamService/SetReady
+  127.0.0.1:20010 pandora.team.v1.TeamService/SetReady
 ```
 
 test2 准备:
@@ -187,7 +187,7 @@ $body = @{
 $body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428738" `
   -d '@' `
-  127.0.0.1:50010 pandora.team.v1.TeamService/SetReady
+  127.0.0.1:20010 pandora.team.v1.TeamService/SetReady
 ```
 
 当前队伍未满 5 人时,state 通常仍是 `TEAM_STATE_FORMING`;满 5 人且全 ready 后才会自动进入 `TEAM_STATE_READY`。
@@ -202,7 +202,7 @@ $p2 = "30907585389428738"
 
 $body = @{} | ConvertTo-Json -Compress
 $create = $body | grpcurl -plaintext -H "x-pandora-player-id: $p1" -d '@' `
-  127.0.0.1:50010 pandora.team.v1.TeamService/CreateTeam | ConvertFrom-Json
+  127.0.0.1:20010 pandora.team.v1.TeamService/CreateTeam | ConvertFrom-Json
 
 $teamId = $create.teamId
 
@@ -213,7 +213,7 @@ $body = @{
 
 $invite = $body | grpcurl -plaintext -H "x-pandora-player-id: $p1" `
   -d '@' `
-  127.0.0.1:50010 pandora.team.v1.TeamService/Invite | ConvertFrom-Json
+  127.0.0.1:20010 pandora.team.v1.TeamService/Invite | ConvertFrom-Json
 
 $inviteId = $invite.inviteId
 
@@ -224,7 +224,7 @@ $body = @{
 
 $body | grpcurl -plaintext -H "x-pandora-player-id: $p2" `
   -d '@' `
-  127.0.0.1:50010 pandora.team.v1.TeamService/AcceptInvite
+  127.0.0.1:20010 pandora.team.v1.TeamService/AcceptInvite
 ```
 
 ## 5. 清理 Redis 组队状态
@@ -279,16 +279,16 @@ data 层:
 -H "x-pandora-player-id: <player_id>"
 ```
 
-直连 `50010` 时,业务服务不会自己验 JWT,只读取这个 header / metadata。
+直连 `20010` 时,业务服务不会自己验 JWT,只读取这个 header / metadata。
 
-### 7.2 端口 51010 不能调 RPC
+### 7.2 端口 21010 不能调 RPC
 
 正常。team 的 HTTP server 只挂 `/metrics`,没有 RESTful RPC。
 
 组队 RPC 用:
 
 ```text
-127.0.0.1:50010
+127.0.0.1:20010
 ```
 
 ### 7.3 Kafka 没起

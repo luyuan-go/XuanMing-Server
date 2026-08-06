@@ -15,7 +15,7 @@ spec:
         sidecar.istio.io/rewriteAppHTTPProbers: "true"
         prometheus.io/scrape: "true"
         prometheus.io/path: /metrics
-        prometheus.io/port: "51015"
+        prometheus.io/port: "21015"
     spec:
       serviceAccountName: pandora-inventory
       automountServiceAccountToken: false

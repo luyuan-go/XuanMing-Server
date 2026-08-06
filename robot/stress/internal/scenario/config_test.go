@@ -18,7 +18,7 @@ func TestDefault_AutoConfirmMatchOn(t *testing.T) {
 func TestLoad_AutoConfirmMatchOverride(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cfg.json")
 	const body = `{
-	  "targets": {"login": "127.0.0.1:50001"},
+	  "targets": {"login": "127.0.0.1:20001"},
 	  "vu_count": 10,
 	  "ramp_seconds": 1,
 	  "steady_seconds": 1,

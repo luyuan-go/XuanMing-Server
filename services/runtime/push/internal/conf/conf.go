@@ -75,10 +75,10 @@ func (c *Config) Defaults() {
 		c.Push.OfflineCacheMaxFrames = 512
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50014"
+		c.Server.Grpc.Addr = ":20014"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51014"
+		c.Server.Http.Addr = ":21014"
 	}
 	if c.Kafka.GroupID == "" {
 		c.Kafka.GroupID = "pandora-push"

@@ -376,7 +376,7 @@ pwsh tools/scripts/run_services.ps1 -Action restart -Service ds_allocator
 | 真实 dist 逐张比对 8 张战斗图 URL（`pkg/configtable/realdist_test.go`） | 全绿；7 张与旧 yaml 手抄值**逐字一致** |
 | dev yaml ↔ 关卡表接线（`cmd/ds_allocator/configtable_wiring_test.go`） | 全绿，4/5/6/7/8/9/10/11 全部拼得出 URL |
 | 实机重启 ds_allocator（`launcher=editor`） | `configtable_loaded version=20260804002 levels=11`、`map_source=config_table(allocator 现查 g_关卡.xlsx)`、`service_ready` |
-| 热更入口 | `grpcurl -plaintext -d '{}' 127.0.0.1:50020 pandora.config.v1.ConfigTableAdminService/ReloadConfigTable` → `activeVersion=20260804002, detail="version unchanged, no-op"` |
+| 热更入口 | `grpcurl -plaintext -d '{}' 127.0.0.1:20020 pandora.config.v1.ConfigTableAdminService/ReloadConfigTable` → `activeVersion=20260804002, detail="version unchanged, no-op"` |
 
 ### 9.4 唯一行为差异：`map_id=5`
 
@@ -389,7 +389,7 @@ pwsh tools/scripts/run_services.ps1 -Action restart -Service ds_allocator
 
 - **§2.6 的验收标准本身**：「加一行 → 重导表 → 不改 yaml、不重启 → 玩家能进」的**玩家侧那一半**
   需要真机开客户端打一局，本轮没跑。已验证的是它的两个前提：解析器每局现查表（非启动快照）、
-  热更 RPC 在 :50020 可用且能原子换表。
+  热更 RPC 在 :20020 可用且能原子换表。
 - `loader_map` 那条路本机依旧一次都没跑过（与 §8 的诚实边界一致）。
 
 ### 9.6 下一轮:agones 侧待办(2026-08-04 夜勘查,**尚未测**)

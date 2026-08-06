@@ -1,6 +1,6 @@
 # Pandora matchmaker 服务开发期配置(W4 ①,2026-06-06)。
 #
-# - gRPC :50011 / HTTP :51011(仅 /metrics)
+# - gRPC :20011 / HTTP :21011(仅 /metrics)
 # - Redis 强依赖(排队 ZSET + match 状态 WATCH/MULTI/EXEC 乐观锁)
 # - Kafka 用于发布 pandora.match.progress 事件(push 服务订阅)
 # - team_addr 直连 team 服务拉队伍快照(留空则跳过 team 校验)
@@ -10,13 +10,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50011"
+    addr: ":20011"
     timeout: "22s"              # 普通 RPC 上限；ConfirmMatch 只持久 CAS ALLOCATING，不同步等待 DS
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51011"
+    addr: ":21011"
 
 node:
   node_id: 1
@@ -51,11 +51,11 @@ match:
   # 与 ds_ticket.private_key_file 互斥,同时配置会拒启。
   ds_local_profile: "local-off-v1"
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
-  team_addr: "127.0.0.1:50010"
+  team_addr: "127.0.0.1:20010"
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS);留空用 StubDSAllocator
-  ds_allocator_addr: "127.0.0.1:50020"
+  ds_allocator_addr: "127.0.0.1:20020"
   # locator_addr: player_locator 服务 gRPC 直连地址（成局→MATCHING / 就绪→BATTLE 位置上报 + StartMatch 前置查战斗态）;留空不上报也不拦截
-  locator_addr: "127.0.0.1:50006"
+  locator_addr: "127.0.0.1:20006"
   # Login→Matchmaker internal resume RPC only. Shared Redis consumes each
   # signed nonce once across replicas.
   match_resume_auth_secret: "pandora-dev-match-resume-auth-key-v1!"

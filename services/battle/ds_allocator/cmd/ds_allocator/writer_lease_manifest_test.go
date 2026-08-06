@@ -71,8 +71,8 @@ func TestDsAllocatorSurvivesRestartWithoutKillingLiveBattles(t *testing.T) {
 	}
 	// 运维面端口必须真的声明,否则 sum(pandora_ds_allocator_writer_held)==0 这条
 	// 「长期无人扫描」告警在集群内没有抓取路径(同 hub_allocator R11 P0-2)。
-	if !strings.Contains(section, "containerPort: 51020") {
-		t.Fatal("运维面 HTTP 51020 必须声明,否则集群内抓不到写者指标")
+	if !strings.Contains(section, "containerPort: 21020") {
+		t.Fatal("运维面 HTTP 21020 必须声明,否则集群内抓不到写者指标")
 	}
 
 	mainSrc, err := os.ReadFile("main.go")

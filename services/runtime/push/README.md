@@ -20,7 +20,7 @@
   所有帧先入缓冲、后唤醒拉取)。
 - **架构边界**(`gateway-decision.md §6`):
   - **不是 WebSocket 服务**(2026-06-03 自研 WebSocket 已被否决);
-  - **不是 HTTP 网关**(那是 Envoy 的职责,HTTP :51014 仅 `/metrics`);
+  - **不是 HTTP 网关**(那是 Envoy 的职责,HTTP :21014 仅 `/metrics`);
   - 客户端走 gRPC-Web over HTTP/2 TLS 连 Envoy,Envoy 转标准 gRPC 给本服务;
   - 业务服推送事件**全部走 kafka**,push 消费转 stream,**不接**业务服直接 gRPC 调用。
 - **不做的事**:不产生业务事件(只转发)、不算派生数值、不持久化业务态(缓冲只是有界投递窗口,§9.24 外的
@@ -30,8 +30,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50014` | `Subscribe` server stream(客户端 → Envoy gRPC-Web → 本服) + 将来 unary RPC 预留 |
-| HTTP | `:51014` | 仅 `/metrics`(`push.proto` 无 `google.api.http` 注解,buf 不生成 HTTP handler,无 RESTful RPC) |
+| gRPC | `:20014` | `Subscribe` server stream(客户端 → Envoy gRPC-Web → 本服) + 将来 unary RPC 预留 |
+| HTTP | `:21014` | 仅 `/metrics`(`push.proto` 无 `google.api.http` 注解,buf 不生成 HTTP handler,无 RESTful RPC) |
 
 取值来自 `conf.Defaults()`(`internal/conf/conf.go`:`Server.Grpc.Addr` / `Server.Http.Addr`)。
 
@@ -247,8 +247,8 @@ JWT 验签只证明「曾经登录过」,旧 / 被顶号 token 在 `exp` 前仍�
 | `push.offline_cache_max_frames` | `512` | 单玩家缓冲条数硬上限(§9.18);写侧保留最新 N + 读侧同值兜底 LIMIT |
 | `push.require_session_gate` | `false`(dev)/ `true`(prod 机械置) | 会话现行性门强制档:true = 建流必须带当前一代 jti,权威不可达 fail-closed;false = 有 jti 仍校验、无 jti 放行(dev 内网直连联调) |
 | `push.allow_unverified_eviction_policy` | `false` | 托管 Redis 禁用 `CONFIG` 时,是否放行「无法核验 maxmemory-policy」的启动;缺省 fail-closed 拒启动,仅人工确认全拓扑 noeviction 后显式置 true |
-| `server.grpc.addr` | `:50014` | gRPC server stream 端口 |
-| `server.http.addr` | `:51014` | HTTP `/metrics` 端口 |
+| `server.grpc.addr` | `:20014` | gRPC server stream 端口 |
+| `server.http.addr` | `:21014` | HTTP `/metrics` 端口 |
 | `kafka.group_id` | `pandora-push` | 定向 topic 共享消费组(广播 topic 另派生 `-bcast-<hostname>` 独立组) |
 | `kafka.brokers` / `partition_cnt` | — | broker 列表(dev `9093`)/ 分区数(需与业务 producer 一致,保证同 player_id 同 partition) |
 
@@ -271,7 +271,7 @@ go run ./services/runtime/push/cmd/push -conf services/runtime/push/etc/push-dev
 ```powershell
 # 1) 客户端 subscribe(dev 直连,无 token;require_session_gate=false 放行匿名/无 jti)
 grpcurl -plaintext -d '{\"session_token\":\"\",\"last_seen_ms\":0}' `
-  127.0.0.1:50014 pandora.push.v1.PushService/Subscribe
+  127.0.0.1:20014 pandora.push.v1.PushService/Subscribe
 
 # 2) 另起 terminal,往 kafka 写一条 key=42 的定向消息(进 kafka 容器)
 docker exec -it pandora-kafka kafka-console-producer.sh `
@@ -285,7 +285,7 @@ docker exec -it pandora-kafka kafka-console-producer.sh `
 redis-cli -p 6380 ZRANGE pandora:push:offline:42 0 -1 WITHSCORES
 
 # 4) Prometheus 抓 metrics(pandora_push_offline_append_failed_total 应恒为 0)
-curl http://127.0.0.1:51014/metrics | Select-String pandora
+curl http://127.0.0.1:21014/metrics | Select-String pandora
 ```
 
 > 生产用 `etc/push-prod.yaml.example` 为模板(`cp` 后填真值):删 `enable_reflection`、redis 加密码、kafka 真实
@@ -296,7 +296,7 @@ curl http://127.0.0.1:51014/metrics | Select-String pandora
 - [`go-services.md §5`](../../../docs/design/go-services.md) — push 服务详细契约(server stream / PushFrame / 域内多事件类型路由)
 - [`gateway-decision.md §6`](../../../docs/design/gateway-decision.md) — 为何 server stream 而非自研 WebSocket;Envoy gRPC-Web 转发
 - [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md) — 推送协议原则 2(排除发起方)/ 原则 3(已受理型例外)
-- [`infra.md`](../../../docs/design/infra.md) — 端口(50014 / 51014)/ redis key / kafka topic / metrics 命名登记
+- [`infra.md`](../../../docs/design/infra.md) — 端口(20014 / 21014)/ redis key / kafka topic / metrics 命名登记
 - [`session-generation-rollout.md`](../../../docs/design/session-generation-rollout.md) — 会话代际门 / 顶号 fencing(INC-20260722-004)
 - [`scale-cellular-20m.md`](../../../docs/design/scale-cellular-20m.md) §4.2 — 蜂窝 cell 归属与跨 cell 弱实时事件桥
 - [`zero-downtime-update.md`](../../../docs/design/zero-downtime-update.md) §6.2 — max_conn_age GOAWAY 与滚动更新

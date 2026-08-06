@@ -11,7 +11,7 @@
 
 | 服务 | 端口(默认) | 作用 | 大厂对标 |
 |---|---|---|---|
-| **Jenkins** controller | 8080 / 50000 | CI 编排（调度流水线，不亲自编译） | Jenkins |
+| **Jenkins** controller | 8080 / 20000 | CI 编排（调度流水线，不亲自编译） | Jenkins |
 | **registry:2** | 5000 | 镜像库，`pandora-images.tar` 的正确归宿 | Harbor 的轻量替代 |
 | registry-ui | 8082 | 镜像库 Web 界面 | Harbor UI |
 | **MinIO** | 9000(API) / 9001(控制台) | UE 打包大 zip 的对象存储，带 30 天保留 | MinIO / S3 |
@@ -173,7 +173,7 @@ mc cp --recursive ..\..\..\artifacts\releases\ pandora/pandora-artifacts/release
 
 ### 4. 构建 agent（关键）
 Jenkins controller 在容器里，`numExecutors=0`，**不亲自编译**。真正的 UE cook / Go 编译要挂一个**宿主机 agent**——就是那台装了 UE 源码引擎 / Go 1.26.5 / svn / Docker 的构建机：
-Jenkins → Manage Nodes → New Node → 用 50000 端口的 inbound agent 接入。
+Jenkins → Manage Nodes → New Node → 用 20000 端口的 inbound agent 接入。
 （UE 无法在 Linux 容器里 cook，这是为什么构建必须落到宿主机 agent，而非 controller 容器内。）
 
 ---

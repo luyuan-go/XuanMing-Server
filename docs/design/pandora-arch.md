@@ -246,20 +246,20 @@ Client A          Hub DS                Client B (在 A 50 米内)
 │   └── grafana     :3001
 │
 ├── go services(各自一个进程,monorepo go.work):
-│   ├── login           :50001
-│   ├── player          :50002
-│   ├── data_service    :50003
-│   ├── friend          :50004
-│   ├── chat            :50005
-│   ├── player_locator  :50006
-│   ├── team            :50010
-│   ├── matchmaker      :50011
-│   ├── trade           :50012
-│   ├── auction         :50016 (全服拍卖行 / 撮合)
-│   ├── dialogue        :50013
-│   ├── ds_allocator    :50020
-│   ├── hub_allocator   :50021
-│   └── battle_result   :50022 (kafka consumer)
+│   ├── login           :20001
+│   ├── player          :20002
+│   ├── data_service    :20003
+│   ├── friend          :20004
+│   ├── chat            :20005
+│   ├── player_locator  :20006
+│   ├── team            :20010
+│   ├── matchmaker      :20011
+│   ├── trade           :20012
+│   ├── auction         :20016 (全服拍卖行 / 撮合)
+│   ├── dialogue        :20013
+│   ├── ds_allocator    :20020
+│   ├── hub_allocator   :20021
+│   └── battle_result   :20022 (kafka consumer)
 │
 ├── minikube(本地 k8s):
 │   ├── agones-system
@@ -320,7 +320,7 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | 0 | 2026-06-04 | 客户端实现:**自研 grpc-web 客户端基于 FHttpModule** | 不引入第三方 UE gRPC 插件(80MB+ / SSL 冲突 / UE 5.x 兼容性差);大厂(米哈游/腾讯/网易/Riot/Epic)客户端都不直连 gRPC |
 | 0 | 2026-06-04 | 服务清单 13 → **14**(新增 push)| Envoy 作为基础设施不计 go 服务 |
 | 0 | 2026-06-04 | 客户端连接最终值 = **2 条**(NetDriver + FHttpModule)| 用户铁律确认 |
-| 排期 | 2026-06-06 | **friend / chat 暂缓到最后** | 社交好友(:50004)和聊天(:50005)当前只保留协议/端口/topic规划;实现等 UE 与核心链路全部完成后再做 |
+| 排期 | 2026-06-06 | **friend / chat 暂缓到最后** | 社交好友(:20004)和聊天(:20005)当前只保留协议/端口/topic规划;实现等 UE 与核心链路全部完成后再做 |
 | TLS/发布 | 2026-06-10 | **生产连接 ② TLS 使用公网 CA + 真实域名;dev mkcert 自签只通过 DebuggingCertificatePath 叠加公开 dev CA** | 玩家设备默认信任公网 CA,零配置握手;dev 的 mkcert 信任问题不带到生产。详见 `gateway-decision.md` §14 |
 | ID 生成 | 2026-06-11 | **拒绝 Redis INCR 发号;当前继续静态 `node.node_id` + 本地 snowflake,未来动态多副本用 etcd Lease 分配 nodeID** | Redis INCR 慢 4~5 个数量级且有持久化/主从切换计数回退发重号风险;Redis `SETNX+TTL+看门狗` 不能可靠 fencing。etcd 方案仍需 KeepAlive/session monitor,失租必须停发并退出。详见 `infra.md` §8.1 |
 | UE push | 2026-06-15 | **push stream 当前保持 AsyncTask 回传成品帧;解析器锁只保护 StreamParser 生命周期** | push 是低频事件流,双缓冲队列不能替代解析器生命周期同步;若未来追求零锁,改为每条 HTTP stream 闭包独占解析器 + 队列回传帧。详见 `gateway-decision.md` §15 |
@@ -328,7 +328,7 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | 存储扩容 | 2026-06-18 | **好友图扩容存储路线选 (A) TiDB 过渡;否决 (B) 分片 MySQL + dtm、(C) 其他分布式 ACID 库** | 阶段 2(千万级早期)TiDB 代码改动最小、保跨人强一致与硬上限;现阶段仍单 MySQL 不提前引入;阶段 3 极限体量再把热路径拆 §5 CAS + Kafka 异步建边卸 2PC。雪花主键热点须 `AUTO_RANDOM` 打散。详见 `friend-distributed-scaling.md` §8 / §14 |
 | 存储扩容 | 2026-06-18 | **人工拍板推翻“不提前引入”:现就把 friend(及同库 chat)切 TiDB** | 项目内已落地:TiDB 版 `pandora_social` DDL(§8.2 热点调优)+ friend TiDB 连接配置;Go 业务零改动(TiDB 兼容 MySQL 协议)。起集群 / 装载 DDL / 数据迁移 = Codex / 人(§11.1)。详见 `friend-distributed-scaling.md` §14 “落地修订” + `deploy/tidb-init/README.md` |
 | 全服扩容 | 2026-06-19 | **DAU 200万全区全服:node_id 是 snowflake 机器号非选区(不删);单 Redis→Cluster、单 MySQL→分库、nodeID etcd 自动分配、push 横扩、Agones 池化** | 抗压取决于 CCU(~30万)非注册量(1000万)。已落地能力:`pkg/snowflake/etcdnode`(etcd Lease 抢 nodeID)、`redisx.NewUniversalClient`(Cluster)、`mysqlx.ShardSet`(分库),均非破坏式。push 横扩走定向路由(注册表+分区),Agones 走 Ready 池化。社交库仍走 TiDB 不套 ShardSet。后续被 `scale-cellular-20m.md` 继承为单 Cell 扩容口径。 |
-| 拍卖行 | 2026-06-19；2026-07-12 收束 | **独立 `auction` 服务；MySQL 精确物品撮合与持久 saga，Redis 仅兼容缓存** | `pandora_auction` 按 market_id 分片；PENDING 冻结、事务 ReserveMatch、match_pending/settlement_status/release_pending 崩溃续跑，两层幂等(order_id/match_id)。Redis market 锁只做串行降冲突，最终并发安全由 MySQL 行锁/条件更新/唯一键保证。端口 50016/51016，errcode 12000-12999，topic pandora.auction.match/audit。详见 `decision-revisit-auction-match-authority.md`。 |
+| 拍卖行 | 2026-06-19；2026-07-12 收束 | **独立 `auction` 服务；MySQL 精确物品撮合与持久 saga，Redis 仅兼容缓存** | `pandora_auction` 按 market_id 分片；PENDING 冻结、事务 ReserveMatch、match_pending/settlement_status/release_pending 崩溃续跑，两层幂等(order_id/match_id)。Redis market 锁只做串行降冲突，最终并发安全由 MySQL 行锁/条件更新/唯一键保证。端口 20016/21016，errcode 12000-12999，topic pandora.auction.match/audit。详见 `decision-revisit-auction-match-authority.md`。 |
 | 全服扩容 | 2026-06-26 | **【已拍板·落地起步】DAU 目标上调 200万→2000万(10×,峰值 ~600万 CCU/~15×):Region→Cell→Cell 内分片 三层** | 两道墙:单逻辑集群 ~40万 CCU + 单一全局协调层(~20 Cell 时)。**人拍板 6 项**:单 Cell 锚 40万 CCU / 3 个 Region / 逻辑分片 cell 4096+region 64 / 允许跨 region 匹配(两级撮合,结算回 owner cell)/ auction 跨 region 全局市场(按 market_id 分片)/ 一步到位。玩家路由三层 `region_route→cell_route→Cell 内 CRC16·player_id%N`,全程算不查;**region 由 cell 派生**结构性保证「同一 player owner 落同一 region+cell」。已落地 `pkg/cellroute`(确定性路由地基 + 静态映射表 + 校验,build/vet/test=0)+ `pkg/cellroute` 热更新(AtomicTable 原子整表替换 + 纯解码)+ 隔离子 module `pkg/cellroute/etcdtable`(etcd watch,镜像 etcdnode,待 Codex tidy)+ login 接线(LoginUsecase nil-safe Router,登录算 region/cell;login.proto 加 region_id/cell_id 待 Codex proto_gen)。跨 region 撮合边界已细化 `decision-revisit-global-matchmaker.md`(两级撮合:region 内 MMR 池 + 跨 region 段位桶溢出池,结算回 owner cell)。基础设施(多 k8s/Agones 池化/push 横扩/TiDB·Kafka 集群)按 §11.1 由 Codex/人接。详见 `scale-cellular-20m.md` |
 | 内网安全 | 2026-07-03 | **玩家链路(连接 ②)确认全程 TLS 无明文;内网东西向保持明文 h2c,加密下沉基础设施层;生产 online overlay 加分层 NetworkPolicy(default-deny-ingress + 业务层 mesh + 存储层按端口收敛)** | 内网明文由基础设施兜底是主流实践(应用零改动、无证书运维);本次落地分层 NetworkPolicy 作 K8s 生产最低门槛,收敛「跨 ns」与「存储层」横向(业务服之间暂全通待 mesh),只做 Ingress default-deny(Egress 暂全通),只挂 online 不挂 dev(避免挡宿主 Envoy 联调),需 CNI 强制(Calico/Cilium)。未来内网加密走 mesh sidecar mTLS 而非应用层手写。详见 `gateway-decision.md` §16 |
 | 架构建模 | 2026-06-27 | **采用轻量 DDD 思想,不把“微服务 + 事件”误认为 DDD** | DDD 是业务建模方法,不是部署架构;微服务是部署形态,事件是通信方式。Pandora 保持模块化边界优先,交易/背包/资产等强一致模块严肃建模,匹配/队伍/房间用状态机和事件,战斗 tick/网关连接层不重 DDD 化。详见 §3.1 |
@@ -341,5 +341,5 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | 内网安全 | 2026-07-13 | **已批准 Inventory 采用 revision 化 Istio STRICT mTLS + SPIFFE + exact method AuthorizationPolicy；本轮仅交付独立静态候选** | 默认 online kustomization、`start.ps1` 与普通 NetworkPolicy 未接线、未激活；完成真实 Istio/外部 edge、observeEvidence + activeAllowEvidence v2、PERMISSIVE→identity→gate→observe→active ALLOW→STRICT 分阶段验证并重新审核前不得接入普通发布。详见 `decision-revisit-internal-service-auth.md` §9。 |
 | 实时成长 | 2026-07-20 | **拍板:经验/掉落即时入账走「局中异步事实上报」第三通道(ds-arch §0.5 ③),§0.6 红线保留** | 需求:击杀怪物/完成任务即时加经验(Lv15 封顶/MAX)、金品质+掉落同队广播,且 DS 崩溃已入账部分保住(PvE「打到即所得」,MOBA 局内金币随局清零语义不适用)。方案:DS 异步批量 ReportProgress(事实事件,`(match_id,seq)` 幂等,单飞行批)→ battle_result 水位去重 + 换算(怪物经验表/掉落白名单,DS 不可信)+ 进度出箱同事务 → player.AddExperience(等级曲线唯一权威,连升多级/满级 no-op)/inventory.GrantInstances;推送走 pandora.player.update event_type=1(kafka header 路由,0 保留旧 MMR 事件);结算事务打终局标记 + 按水位抑制结算路径掉落发放(单一权威路径防双发,不信 DS 声明);ABANDONED 不回滚已入账经验/掉落(段位补偿照旧)。掉落广播 = DS 侧同队 ClientRPC 组播,Go 零参与。残余风险(明示):DS 崩溃尾窗(≤1 批间隔)未上报事件丢失,final_progress_seq 对账只告警不自动补。2026-07-21 服务端全链落地(proto/player/battle_result/SQL/Envoy 403,build+test 绿);UE 侧同步跟进。详见 `realtime-progression.md` |
 | 背包域 | 2026-07-21 | **拍板:新建独立背包域(pandora.bag.v1),驻留分层:随身组权威随 owner DS,仓库/活动背包后端驻留;三域定界(battle 事实/背包 journal/经济 escrow);活动背包代际化** | MMO 化需求:随身组(身上/装备栏/临时格)在线时 checkout 进 owner DS 内存权威(五要件受信写,§9.6),离线为存储静止态;仓库/临时活动背包**后端驻留**(存储侧权威,DS 只发起操作+只读视图,低频 UI 无 flush/交接负担;仓库⇄身上转移=一条 journal 存储侧同事务改两侧+随身侧预留)。写分同步 journal(拾取/领邮件/交易/跨组转移等被外界观察的事件,零丢失)与异步 checkpoint(格子/耐久/个人消耗,崩溃回档自洽,仅随身组),恢复=checkpoint+journal 尾部重放。邮件升级为唯一离线→在线资产中转层(领取由 owner DS 执行+预留制判容量);拍卖成交走邮件到账;货币留经济域。临时活动背包按 (player,bag_type,generation) 代际化:切代即逻辑清空+旧代写 fail-closed 拒,类型可安全重用,物理删除走后台 sweep。phase 1 硬前置 = owner authority(§9.22);拾取 ACK 门控/预留制为 phase 0 已落地。详见 `bag-domain.md` |
-| owner 权威 | 2026-07-21 | **拍板+权威本体落码:新独立 owner 服务(runtime 域,50017/51017)承载每玩家 owner_epoch 线性一致权威(§9.22);存储生产 TiDB、dev 单机 MySQL** | 记录 = 单调 owner_epoch + owner 类型 + exact 实例四元组 + operation_id(UUIDv4)+ admit_not_before 屏障 + PENDING/ADMITTED 两阶段,永不 TTL 消失;租约分层 = 实例级 ds_instance_lease(allocator 心跳代写,秒数硬钳 ≤ placement.DSFenceLeaseMaxSeconds,deadline 只前进),玩家 owner lease 由此派生,续租 QPS 钉在实例粒度;三表同库单事务(owner_record 行锁 = 每玩家串行化锚点),admit_not_before 取 CAS 线性化点观察的旧实例租约最晚截止 + skew margin(常量单一来源 pkg/placement);Begin/Admit/Release 全幂等(响应丢失安全,迟到只 compare-delete 自己)。API:Query/BeginTransition/Admit/RenewInstanceLease/ReleaseOwner(pandora.owner.v1,errcode 15000 段,Envoy 前缀 403)。MySQL 集成测试覆盖并发双迁移/屏障早到拒/换实例拒/续租单调;biz 测试绿。**集成(login/allocator/DS/battle_result)属 migrate 阶段未接线;旧 last_heartbeat_ms 再入门保留到 contract 阶段**。它是背包域 phase 2 与 §9.23 幂等进场链的硬前置。详见 `owner-authority.md` |
+| owner 权威 | 2026-07-21 | **拍板+权威本体落码:新独立 owner 服务(runtime 域,20017/21017)承载每玩家 owner_epoch 线性一致权威(§9.22);存储生产 TiDB、dev 单机 MySQL** | 记录 = 单调 owner_epoch + owner 类型 + exact 实例四元组 + operation_id(UUIDv4)+ admit_not_before 屏障 + PENDING/ADMITTED 两阶段,永不 TTL 消失;租约分层 = 实例级 ds_instance_lease(allocator 心跳代写,秒数硬钳 ≤ placement.DSFenceLeaseMaxSeconds,deadline 只前进),玩家 owner lease 由此派生,续租 QPS 钉在实例粒度;三表同库单事务(owner_record 行锁 = 每玩家串行化锚点),admit_not_before 取 CAS 线性化点观察的旧实例租约最晚截止 + skew margin(常量单一来源 pkg/placement);Begin/Admit/Release 全幂等(响应丢失安全,迟到只 compare-delete 自己)。API:Query/BeginTransition/Admit/RenewInstanceLease/ReleaseOwner(pandora.owner.v1,errcode 15000 段,Envoy 前缀 403)。MySQL 集成测试覆盖并发双迁移/屏障早到拒/换实例拒/续租单调;biz 测试绿。**集成(login/allocator/DS/battle_result)属 migrate 阶段未接线;旧 last_heartbeat_ms 再入门保留到 contract 阶段**。它是背包域 phase 2 与 §9.23 幂等进场链的硬前置。详见 `owner-authority.md` |
 | 镜像分发 | 2026-07-23 | **构建产物退出版本库:落地四层发布线(版本库→CI→制品目录→release manifest),旧「离线镜像包随仓库同步」过渡方案退役** | 客户端 Packages 解除 SVN 纳管+svn:ignore+服务端 pre-commit 钩子拒收;git 移除 pandora-images.tar 跟踪并拒收 *.tar/50MB+;制品目录 `PANDORA_ARTIFACT_ROOT`(默认 F:\work\artifacts,版本目录不可变+原子发布+sha256sums,将来可平移 FTP/MinIO/Harbor);发布脚本 publish_offline_images(git sha 版本戳)/PublishPackages(svn rev 版本戳)/fetch/make_release/retention;客户端 Jenkins 的 Commit Packages 改为 Publish Packages,后端新增 Jenkinsfile(全模块 build+test 绿才发布)。详见 `release-pipeline.md` |

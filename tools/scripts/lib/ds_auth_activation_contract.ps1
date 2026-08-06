@@ -537,9 +537,9 @@ function Assert-PandoraHubAllocatorGreenServiceContract($Service, [string]$Names
         [string]$selector.'pandora.dev/ds-auth-writer-set' -cne 'green' -or
         [string]$selector.'pandora.dev/ds-auth-writer-epoch' -cne '2' -or
         @($selector.PSObject.Properties).Count -ne 3 -or
-        $ports.Count -ne 1 -or [int]$ports[0].port -ne 50021 -or
-        [string]$ports[0].targetPort -cne '50021' -or [string]$ports[0].protocol -cne 'TCP') {
-        throw 'Service/hub-allocator must be the exact canonical green ClusterIP/50021 selector contract.'
+        $ports.Count -ne 1 -or [int]$ports[0].port -ne 20021 -or
+        [string]$ports[0].targetPort -cne '20021' -or [string]$ports[0].protocol -cne 'TCP') {
+        throw 'Service/hub-allocator must be the exact canonical green ClusterIP/20021 selector contract.'
     }
 }
 
@@ -1236,10 +1236,10 @@ function Assert-PandoraDsTerminalMeshPolicyContract($PeerAuthentication, $Author
         if (-not $seen.Contains($principal)) { throw "terminal ReleaseBattle 缺 DENY principal=$principal。" }
     }
     $ports = @($Service.spec.ports | Where-Object {
-        [string]$_.name -ceq 'grpc' -and [string]$_.appProtocol -ceq 'grpc' -and [int]$_.port -eq 50020
+        [string]$_.name -ceq 'grpc' -and [string]$_.appProtocol -ceq 'grpc' -and [int]$_.port -eq 20020
     })
     if ([string]$Service.metadata.name -cne 'ds-allocator' -or [string]$Service.metadata.namespace -cne 'pandora' -or $ports.Count -ne 1) {
-        throw 'ds-allocator Service 未暴露 exact grpc/appProtocol=grpc/50020。'
+        throw 'ds-allocator Service 未暴露 exact grpc/appProtocol=grpc/20020。'
     }
 }
 

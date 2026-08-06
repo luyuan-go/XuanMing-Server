@@ -8,7 +8,7 @@
 #
 # 本文件在集群内起一个等价的 Envoy「DS 面」网关:
 #   DS(Pod) → pandora-envoy.pandora.svc.cluster.local:8444(标准 k8s Service DNS,必然可解析)
-#           → 本 Envoy(grpc-web→gRPC) → ds-allocator.pandora.svc:50020 等集群内后端
+#           → 本 Envoy(grpc-web→gRPC) → ds-allocator.pandora.svc:20020 等集群内后端
 # Fleet(20-fleet-battle / 30-fleet-hub)的 PANDORA_*_ADDR 与线上一字不差,切真集群时
 # 删掉本文件即可(线上用边缘网关自带的 pandora-envoy Service)。
 #
@@ -189,7 +189,7 @@ data:
           - lb_endpoints:
             - endpoint:
                 address:
-                  socket_address: { address: login.pandora.svc.cluster.local, port_value: 50001 }
+                  socket_address: { address: login.pandora.svc.cluster.local, port_value: 20001 }
       - name: ds_allocator_cluster
         type: STRICT_DNS
         dns_lookup_family: V4_ONLY
@@ -205,7 +205,7 @@ data:
           - lb_endpoints:
             - endpoint:
                 address:
-                  socket_address: { address: ds-allocator.pandora.svc.cluster.local, port_value: 50020 }
+                  socket_address: { address: ds-allocator.pandora.svc.cluster.local, port_value: 20020 }
       - name: hub_allocator_cluster
         type: STRICT_DNS
         dns_lookup_family: V4_ONLY
@@ -221,7 +221,7 @@ data:
           - lb_endpoints:
             - endpoint:
                 address:
-                  socket_address: { address: hub-allocator.pandora.svc.cluster.local, port_value: 50021 }
+                  socket_address: { address: hub-allocator.pandora.svc.cluster.local, port_value: 20021 }
       - name: locator_cluster
         type: STRICT_DNS
         dns_lookup_family: V4_ONLY
@@ -237,7 +237,7 @@ data:
           - lb_endpoints:
             - endpoint:
                 address:
-                  socket_address: { address: player-locator.pandora.svc.cluster.local, port_value: 50006 }
+                  socket_address: { address: player-locator.pandora.svc.cluster.local, port_value: 20006 }
       - name: battle_result_cluster
         type: STRICT_DNS
         dns_lookup_family: V4_ONLY
@@ -253,7 +253,7 @@ data:
           - lb_endpoints:
             - endpoint:
                 address:
-                  socket_address: { address: battle-result.pandora.svc.cluster.local, port_value: 50022 }
+                  socket_address: { address: battle-result.pandora.svc.cluster.local, port_value: 20022 }
       # 背包域(BagService 由 inventory 进程承载;bag phase 2 journal 直写)
       - name: inventory_cluster
         type: STRICT_DNS
@@ -270,7 +270,7 @@ data:
           - lb_endpoints:
             - endpoint:
                 address:
-                  socket_address: { address: inventory.pandora.svc.cluster.local, port_value: 50015 }
+                  socket_address: { address: inventory.pandora.svc.cluster.local, port_value: 20015 }
       # 邮件(Hub DS 三段式领取;bag phase 2)
       - name: mail_cluster
         type: STRICT_DNS
@@ -287,7 +287,7 @@ data:
           - lb_endpoints:
             - endpoint:
                 address:
-                  socket_address: { address: mail.pandora.svc.cluster.local, port_value: 50009 }
+                  socket_address: { address: mail.pandora.svc.cluster.local, port_value: 20009 }
 ---
 apiVersion: apps/v1
 kind: Deployment

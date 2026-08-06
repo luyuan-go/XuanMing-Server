@@ -29,10 +29,10 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50003` | 内网服务-to-服务 RPC(**不经 Envoy,不直接暴露给玩家**) |
-| HTTP | `:51003` | 仅 `/metrics`(`data_service.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
+| gRPC | `:20003` | 内网服务-to-服务 RPC(**不经 Envoy,不直接暴露给玩家**) |
+| HTTP | `:21003` | 仅 `/metrics`(`data_service.proto` 无 `google.api.http` 注解,无 RESTful RPC) |
 
-端口默认值来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr=:50003` / `Server.Http.Addr=:51003`);
+端口默认值来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr=:20003` / `Server.Http.Addr=:21003`);
 登记见 [`infra.md`](../../../docs/design/infra.md) 端口表。
 
 ## 对外接口
@@ -192,8 +192,8 @@ main
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `data.cache_ttl` | `5m` | Redis 缓存条目 TTL(读 miss 回填按此 TTL);来自 `conf.go:DataConf.CacheTTL` |
-| `server.grpc.addr` | `:50003` | gRPC 监听(`conf.go:Defaults()` 兜底) |
-| `server.http.addr` | `:51003` | HTTP `/metrics` 监听(`conf.go:Defaults()` 兜底) |
+| `server.grpc.addr` | `:20003` | gRPC 监听(`conf.go:Defaults()` 兜底) |
+| `server.http.addr` | `:21003` | HTTP `/metrics` 监听(`conf.go:Defaults()` 兜底) |
 | `server.grpc.enable_reflection` | `false`(dev yaml 开 `true`) | gRPC reflection,便于 grpcurl 联调,生产不开 |
 | `server.grpc.max_conn_age` | 见 yaml(dev `15m`) | 达龄 GOAWAY 重拨,滚动更新流量滚到新副本 |
 | `node.mysql_client.dsn` | 无(**必填**) | `pandora_player` 库 DSN;为空启动失败(`main.go:85`) |
@@ -220,7 +220,7 @@ go run ./services/data/data_service/cmd/data_service -conf services/data/data_se
 ## 关联文档
 
 - [`go-services.md §2.3`](../../../docs/design/go-services.md) — data_service 要约(职责 / RPC / 为什么单独抽)
-- [`infra.md`](../../../docs/design/infra.md) — 服务端口登记(50003 / 51003)与 `pandora.player.update` topic
+- [`infra.md`](../../../docs/design/infra.md) — 服务端口登记(20003 / 21003)与 `pandora.player.update` topic
 - [`decision-revisit-data-service-schema.md`](../../../docs/design/decision-revisit-data-service-schema.md) — PlayerData 从 blob 升级为 pb 驱动强 schema 列的拍板与实施记录
 - [`read-cache-strategy.md`](../../../docs/design/read-cache-strategy.md) — MySQL 服务何时该挂 Redis 旁路缓存(cache-aside + 写后删)
 - [`scale-cellular-20m.md`](../../../docs/design/scale-cellular-20m.md) §4.2 — 玩家 owner 数据必落同一 cell(分片落点口径)

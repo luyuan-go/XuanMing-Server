@@ -4107,13 +4107,13 @@ function Stop-K8sStackForLocal {
 }
 
 function Stop-LocalStackForK8s {
-    # local 模式 = docker 基础设施(含 pandora-envoy 占 8443)+ 宿主 go 进程(占 50001-50022)。
+    # local 模式 = docker 基础设施(含 pandora-envoy 占 8443)+ 宿主 go 进程(占 20001-20022)。
     # 用 local 自己的关闭流程停干净;没起过时这步是空跑。
     $envoyRunning = @(docker ps --filter 'name=pandora-envoy' --format '{{.Names}}' 2>$null | Where-Object { $_ })
     $hostSvc = @(Get-Process -Name 'gateway', 'login', 'player' -ErrorAction SilentlyContinue)
     if ($envoyRunning.Count -eq 0 -and $hostSvc.Count -eq 0) { return }
 
-    Write-Info "检测到 local 模式的服务在跑(占着宿主 8443 / 50001-50022),k8s 模式与它互斥,先停掉..."
+    Write-Info "检测到 local 模式的服务在跑(占着宿主 8443 / 20001-20022),k8s 模式与它互斥,先停掉..."
     & "$ScriptDir/dev_all.ps1" -Down
     Write-Ok "local 模式已停止。"
 }
@@ -4131,14 +4131,14 @@ function Invoke-Local {
     # 本机 DS 用打包 exe 还是引擎编辑器(不传 -DsLauncher 则完全沿用 yaml,行为不变)。
     Set-LocalDsLauncherEnv
 
-    # docker 业务容器会占用同一批端口(50001-50022),与宿主 go 进程互斥。
+    # docker 业务容器会占用同一批端口(20001-20022),与宿主 go 进程互斥。
     # 若上一轮跑过 docker / intranet(非战斗)模式,业务容器还在跑 → 宿主 hub_allocator 起来即
-    # `listen tcp :50021: bind: 已被占用` 崩溃,进而拉不起本机 Hub DS(PandoraServer.exe),
+    # `listen tcp :20021: bind: 已被占用` 崩溃,进而拉不起本机 Hub DS(PandoraServer.exe),
     # 客户端登录后卡在连大厅。这里在起宿主进程前,先把 docker 业务容器停掉(与 Invoke-Docker 反向对称)。
     if (Test-Path $ComposeServices) {
         $svcContainers = @(docker compose -f $ComposeServices ps --quiet 2>$null | Where-Object { $_ })
         if ($svcContainers.Count -gt 0) {
-            Write-Info "检测到 docker 业务容器在跑(会抢 50001-50022 端口),先停掉它们..."
+            Write-Info "检测到 docker 业务容器在跑(会抢 20001-20022 端口),先停掉它们..."
             docker compose -f $ComposeServices down 2>$null | Out-Null
         }
     }
@@ -4324,8 +4324,8 @@ function Invoke-LocalDsOnly {
     # 端口即判据(与 run_services.ps1 的探活口径一致)。login 是启动顺序里最后一个,
     # 它在听就说明 21 个 go 服务这一批已经起完了。
     $dsSpawners = @(
-        @{ Name = 'hub_allocator'; Port = 50021 }
-        @{ Name = 'ds_allocator';  Port = 50020 }
+        @{ Name = 'hub_allocator'; Port = 20021 }
+        @{ Name = 'ds_allocator';  Port = 20020 }
     )
     $required = @(
         @{ Name = 'Redis'; Port = 6380 }
@@ -4333,7 +4333,7 @@ function Invoke-LocalDsOnly {
         @{ Name = 'Kafka'; Port = 9093 }
         @{ Name = 'etcd';  Port = 2380 }
     ) + $dsSpawners + @(
-        @{ Name = 'login'; Port = 50001 }
+        @{ Name = 'login'; Port = 20001 }
     )
 
     $missing = @($required | Where-Object { -not (Test-LocalTcpPort $_.Port) })
@@ -4381,10 +4381,10 @@ function Invoke-LocalDsOnly {
     # 顺序上刻意排在 Wait-LocalHubDsReady 之前 —— Hub DS 这时正在后台加载,这几个重启白捡了重叠。
     if ($script:ConfigTableChanged) {
         $tableReaders = @(
-            @{ Name = 'player';         Port = 50002 }
-            @{ Name = 'battle_result';  Port = 50022 }
-            @{ Name = 'matchmaker';     Port = 50011 }
-            @{ Name = 'matchmaker_pve'; Port = 50018 }
+            @{ Name = 'player';         Port = 20002 }
+            @{ Name = 'battle_result';  Port = 20022 }
+            @{ Name = 'matchmaker';     Port = 20011 }
+            @{ Name = 'matchmaker_pve'; Port = 20018 }
         )
         Write-Host ""
         Write-Info "配置表这批有改动,顺带重启读表的 go 服务(它们只在启动时加载 dist)..."
@@ -4598,10 +4598,13 @@ function Apply-AgonesManifests {
         [ValidateRange(1, 2147483647)][int]$DSTicketKeysetRevision = 1,
         [string]$DsGatewayAddr = '',
         [string]$DsGatewayTls = '',
-        # 本地 minikube dev 专用:Fleet 用固定 :dev tag,kubectl apply 报 unchanged,
-        # Agones 不会滚动替换已在跑的 GameServer,导致重 build 新 DS 镜像后旧 Pod 仍跑旧镜像。
-        # 开启后:apply 完 Fleet 再删掉现存 GameServer,让 Agones 按 :dev(已指向新镜像)重建。
-        # 线上(online)每次是不同 tag,滚动更新自动生效,禁开此开关(强删会中断线上战斗)。
+        # 本地 minikube dev 专用。⚠️ 注意本开关的历史前提**已失效**:当年 Fleet 钉的是滚动 :dev tag,
+        # 换了 DS 镜像 spec 也不变 → apply 报 unchanged → Agones 不滚动 → 旧 Pod 继续跑旧镜像,
+        # 才需要靠强删 GameServer 逼它按 :dev 重建。现在四份 Fleet 已改钉**不可变 tag**
+        # (INC-20260727-001 P1-4,见 deploy/k8s/agones/20-fleet-battle.yaml),换版必改 image 行 →
+        # apply 即 spec 变更 → Agones 自动滚动,本开关对"换版生效"不再必要。
+        # 它现在只剩一个用途:同 tag 下想强制重建 GameServer(如重灌了同名镜像内容)。
+        # 线上(online)禁开(强删会中断线上战斗);本地开也要注意会把 hub 在线玩家踢去重连。
         [switch]$ForceRecreateGameServers,
         # 本地 minikube kube-context 名。ForceRecreateGameServers 删 GameServer 时,kubectl 必须
         # 显式 --context 钉在本机 minikube 上,绝不能落到用户 current-context 可能指向的远端集群。
@@ -4644,7 +4647,7 @@ function Apply-AgonesManifests {
         $raw = $baseRaw
         if (-not [string]::IsNullOrWhiteSpace($image)) {
             # online 只接受 registry digest pin；同时把 digest 写进 GameServer/Pod 两层 annotation。
-            # 本地 minikube 不传 image，继续使用 base 的 :dev，不触发本分支。
+            # 本地 minikube 不传 image，原文 apply yaml 里钉定的不可变 tag（不是 :dev），不触发本分支。
             $raw = Set-PandoraFleetImagePin -Manifest $raw -PinnedImage $image
         }
         if (-not [string]::IsNullOrWhiteSpace($DsGatewayAddr)) {
@@ -4783,10 +4786,11 @@ function Apply-AgonesManifests {
     Write-Warn "  这些镜像由 UE 侧 Tool/Server/Agones 构建;minikube 需先 minikube image load,线上需 push 到 -Registry。"
 
     if ($ForceRecreateGameServers) {
-        # 固定 :dev tag 场景(本地 minikube dev):Fleet spec 未变 -> kubectl apply 报 unchanged,
-        # Agones 不会滚动替换已在跑的 GameServer,旧 DS Pod 会继续跑旧镜像。删掉这两个 Fleet
-        # 现存的 GameServer,Agones GameServerSet 会按当前 spec(:dev 已指向刚 build 的新镜像)
-        # 自动补齐 replicas,新 Pod 以 imagePullPolicy=IfNotPresent 现场解析 = 最新 DS 二进制。
+        # ⚠️ 本分支的原始动机是「固定 :dev tag」场景:spec 未变 -> apply 报 unchanged -> Agones
+        # 不滚动 -> 旧 DS Pod 继续跑旧镜像。Fleet 改钉不可变 tag 后,换版必改 image 行,apply 即
+        # spec 变更,Agones 自行滚动,**换版不再需要本开关**。现在它只覆盖一种残留情形:tag 没变
+        # 但同名镜像内容被重灌(如按制品重建覆盖了同 tag),此时 spec 相同、节点镜像已换,只能靠
+        # 删 GameServer 让 GameServerSet 按 imagePullPolicy=IfNotPresent 现场重新解析。
         # Fleet/GameServer 都在 default namespace(见 20/30-fleet yaml metadata.namespace)。
         # 安全:删 GameServer 是不可逆动作,必须显式 --context 钉在本机 minikube,绝不落远端集群。
         if ([string]::IsNullOrWhiteSpace($KubeContext)) {
@@ -5120,11 +5124,11 @@ function Get-MinikubeImageIds([string[]]$MinikubeArgs = @()) {
 #      块里的 port_value 映射(端口=服务一一对应,见 infra.md §6);任何未映射端口 fail-fast。
 function Convert-EdgeEnvoyConfigForCluster([string]$Text) {
     $portSvc = @{
-        50001 = 'login'; 50002 = 'player'; 50003 = 'data-service'; 50004 = 'friend'; 50005 = 'chat'
-        50006 = 'player-locator'; 50007 = 'leaderboard'; 50008 = 'guild'; 50009 = 'mail'; 50010 = 'team'
-        50011 = 'matchmaker'; 50012 = 'trade'; 50013 = 'dialogue'; 50014 = 'push'; 50015 = 'inventory'
-        50016 = 'auction'; 50017 = 'owner'; 50018 = 'matchmaker-pve'; 50020 = 'ds-allocator'
-        50021 = 'hub-allocator'; 50022 = 'battle-result'
+        20001 = 'login'; 20002 = 'player'; 20003 = 'data-service'; 20004 = 'friend'; 20005 = 'chat'
+        20006 = 'player-locator'; 20007 = 'leaderboard'; 20008 = 'guild'; 20009 = 'mail'; 20010 = 'team'
+        20011 = 'matchmaker'; 20012 = 'trade'; 20013 = 'dialogue'; 20014 = 'push'; 20015 = 'inventory'
+        20016 = 'auction'; 20017 = 'owner'; 20018 = 'matchmaker-pve'; 20020 = 'ds-allocator'
+        20021 = 'hub-allocator'; 20022 = 'battle-result'
     }
     $lines = $Text -split "`r?`n"
     $out = New-Object 'System.Collections.Generic.List[string]'
@@ -5430,14 +5434,35 @@ function Build-DsImagesForMinikube {
         $artifactRoot = if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_ARTIFACT_ROOT)) { $env:PANDORA_ARTIFACT_ROOT.Trim() } else { 'F:\work\artifacts' }
         foreach ($verGroup in ($pinnedMissing | Group-Object { ($_ -split ':', 2)[1] })) {
             $ver = $verGroup.Name
+            # 制品库布局:<root>\{releases,snapshots}\client\<分支>\Server_Linux_Development\<版本>\LinuxServer。
+            # **轨道与分支都不能写死**:PublishPackages.ps1 传 -Version 就落 releases 轨(否则 snapshots),
+            # 分支名由 `svn info --show-item relative-url` 推导(^/trunk/Client → trunk_Client,换分支
+            # 会变成 branches_xxx_Client)。曾写死 snapshots+trunk_Client,导致换分支 / 走 release 轨的
+            # 机器在制品明明存在时也 fail-fast,与本函数"任何可达制品库的机器都能复现钉定镜像"的契约相悖。
+            # 口径与 deploy/ds/build-image-minikube.ps1 的 Resolve-LinuxPkg 一致:两轨全扫 + 遍历全部分支。
             # 用 [IO.Path]::Combine 而非 Join-Path:制品根可能指向本机不存在的盘符(默认 F:\),
             # Join-Path 会先解析盘符并抛 "Cannot find drive",把下面那条可操作的 fail-fast 提示吞掉。
-            $pkg = [System.IO.Path]::Combine($artifactRoot, 'snapshots', 'client', 'trunk_Client', 'Server_Linux_Development', $ver, 'LinuxServer')
-            if (-not (Test-Path -LiteralPath $pkg)) {
-                throw ("Fleet 钉定镜像 $($verGroup.Group -join ', ') 宿主缺失,且制品库找不到同版本 DS 包:$pkg`n" +
+            $pkg = $null
+            $probed = @()
+            foreach ($track in @('releases', 'snapshots')) {
+                $flavorRoot = [System.IO.Path]::Combine($artifactRoot, $track, 'client')
+                if (-not (Test-Path -LiteralPath $flavorRoot -ErrorAction SilentlyContinue)) { continue }
+                foreach ($branchDir in @(Get-ChildItem -LiteralPath $flavorRoot -Directory -ErrorAction SilentlyContinue)) {
+                    $cand = [System.IO.Path]::Combine($branchDir.FullName, 'Server_Linux_Development', $ver, 'LinuxServer')
+                    $probed += $cand
+                    if (Test-Path -LiteralPath $cand -ErrorAction SilentlyContinue) { $pkg = $cand; break }
+                }
+                if ($pkg) { break }
+            }
+            if (-not $pkg) {
+                $probedText = if ($probed.Count -gt 0) { "已探测的路径:`n  " + ($probed -join "`n  ") }
+                              else { "制品根下没有 releases\client 或 snapshots\client 目录(制品根本身可能不存在或未挂载)。" }
+                throw ("Fleet 钉定镜像 $($verGroup.Group -join ', ') 宿主缺失,且制品库找不到同版本 DS 包。`n" +
+                    "$probedText`n" +
                     "处理方式:①确认 PANDORA_ARTIFACT_ROOT 指向共享制品根(当前=$artifactRoot);" +
                     "②在客户端仓库发布该版本(pwsh Tool\Build\PublishPackages.ps1);③改 fleet yaml 钉定为制品库里存在的版本。")
             }
+            Write-Info "钉定制品命中:$pkg"
             Write-Info "钉定镜像宿主缺失,按制品 $ver 重建($($verGroup.Group -join ', '))..."
             & pwsh -NoProfile -ExecutionPolicy Bypass -File $dsBuild -BuildOnHost -Tag $ver -SourcePkg $pkg
             Assert-LastExit "按制品版本重建 Fleet 钉定 DS 镜像($ver)"
@@ -7152,7 +7177,8 @@ function Resume-K8s {
     # -Resume 靠 minikube start 拉回的是「停机前」集群内对象;若期间改过 16-ds-envoy.yaml(如 :8444
     # 路由白名单)或 Fleet 清单,光恢复只会拿回旧版本。这里幂等重 apply 补齐(回应审核 P#4:
     # -Resume 不补 Envoy/Fleet)。Envoy 只在启动读一次静态配置,故 rollout restart 强制重读;
-    # Fleet 用 :dev 固定 tag,spec 不变则 apply=unchanged,不会打断在跑的 GameServer。
+    # Fleet 钉不可变 tag:磁盘 yaml 的 image 行没改过则 apply=unchanged,不会打断在跑的
+    # GameServer;若停机期间有人换了钉定 tag,这次 apply 就会(按预期)触发 Agones 滚动换版。
     $resumeAgonesDir = Join-Path $ProjectRoot 'deploy/k8s/agones'
     # 旧集群(部署于 16-ds-envoy 引入前)节点内可能还没有 Envoy 镜像;断网下 Pod pull 必失败。
     # 先走三级来源(节点已有→宿主 load→联网 pull)把镜像备齐,再 apply(回应审核 P1:Resume 断网失败)。

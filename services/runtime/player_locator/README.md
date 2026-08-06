@@ -27,8 +27,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50006` | 内部 RPC(login / matchmaker / friend / hub_allocator / Hub DS 经 Envoy) |
-| HTTP | `:51006` | 仅 `/metrics`(Prometheus 抓,无 RESTful handler) |
+| gRPC | `:20006` | 内部 RPC(login / matchmaker / friend / hub_allocator / Hub DS 经 Envoy) |
+| HTTP | `:21006` | 仅 `/metrics`(Prometheus 抓,无 RESTful handler) |
 
 取值来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr` / `Server.Http.Addr` 零值兜底)。
 
@@ -59,7 +59,7 @@ login 等调用,不直接暴露给玩家客户端,Envoy 路由层限制本路径
 
 ```
 cmd/locator/main.go              启动入口(Redis 强依赖 Ping + 三层装配 + DS 守卫 / capability fence / presence worker)
-etc/locator-dev.yaml             开发配置(:50006,ds_auth off,presence 纯拉)
+etc/locator-dev.yaml             开发配置(:20006,ds_auth off,presence 纯拉)
 etc/locator-prod.yaml.example    生产配置样例
 internal/
   conf/conf.go                   配置结构(LocatorConf + PresenceConf + config.DSAuthConf)+ Defaults() + 校验
@@ -195,8 +195,8 @@ player_locator **只读不写**该记录(`data/hub_auth.go`),不参与 stage / p
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `server.grpc.addr` | `:50006` | gRPC 监听(`Defaults()` 兜底) |
-| `server.http.addr` | `:51006` | HTTP 监听,仅 `/metrics` |
+| `server.grpc.addr` | `:20006` | gRPC 监听(`Defaults()` 兜底) |
+| `server.http.addr` | `:21006` | HTTP 监听,仅 `/metrics` |
 | `locator.location_ttl` | `30s` | 位置 hash TTL(有效值经代码钳到 `≥ 27s` DS 再入屏障下限) |
 | `presence.enabled` | `false` | 是否开好友在线态订阅扇出;false = 纯拉(Subscribe/Unsubscribe no-op) |
 | `presence.debounce_window` | `8s` | 上线去抖窗口(§13.4.2) |
@@ -222,15 +222,15 @@ docker compose -f deploy/docker-compose.dev.yml up -d redis
 # 2. 起 locator(dev 配置:ds_auth off / presence 纯拉 / reflection 开)
 go run ./services/runtime/player_locator/cmd/locator -conf services/runtime/player_locator/etc/locator-dev.yaml
 
-# 3. grpcurl 直连 :50006 联调(dev mode=off,HUB 写无需令牌;enforce 下 HUB/Refresh/Report 需 hub 回调令牌)
+# 3. grpcurl 直连 :20006 联调(dev mode=off,HUB 写无需令牌;enforce 下 HUB/Refresh/Report 需 hub 回调令牌)
 grpcurl -plaintext -d '{\"player_id\":10086,\"location\":{\"state\":3,\"hub_pod\":\"hub-0\",\"shard_id\":1}}' `
-  127.0.0.1:50006 pandora.locator.v1.PlayerLocatorService/SetLocation
+  127.0.0.1:20006 pandora.locator.v1.PlayerLocatorService/SetLocation
 
-grpcurl -plaintext -d '{\"player_id\":10086}' 127.0.0.1:50006 pandora.locator.v1.PlayerLocatorService/GetLocation
+grpcurl -plaintext -d '{\"player_id\":10086}' 127.0.0.1:20006 pandora.locator.v1.PlayerLocatorService/GetLocation
 
-grpcurl -plaintext -d '{\"player_ids\":[10086,10087]}' 127.0.0.1:50006 pandora.locator.v1.PlayerLocatorService/BatchGetLocation
+grpcurl -plaintext -d '{\"player_ids\":[10086,10087]}' 127.0.0.1:20006 pandora.locator.v1.PlayerLocatorService/BatchGetLocation
 
-grpcurl -plaintext -d '{\"player_id\":10086}' 127.0.0.1:50006 pandora.locator.v1.PlayerLocatorService/ClearLocation
+grpcurl -plaintext -d '{\"player_id\":10086}' 127.0.0.1:20006 pandora.locator.v1.PlayerLocatorService/ClearLocation
 ```
 
 > `state` 数值:`1=OFFLINE / 2=LOGIN_PENDING / 3=HUB / 4=MATCHING / 5=BATTLE`。写 MATCHING/BATTLE 需带 `match_id`
@@ -239,7 +239,7 @@ grpcurl -plaintext -d '{\"player_id\":10086}' 127.0.0.1:50006 pandora.locator.v1
 ## 关联文档
 
 - [`go-services.md §2.6`](../../../docs/design/go-services.md) — player_locator 要约:唯一查询入口 + presence 投影(非归属权威)语义
-- [`infra.md`](../../../docs/design/infra.md) — 端口(50006/51006)与 `pandora.locator.update` topic 登记
+- [`infra.md`](../../../docs/design/infra.md) — 端口(20006/21006)与 `pandora.locator.update` topic 登记
 - [`friend-distributed-scaling.md §13`](../../../docs/design/friend-distributed-scaling.md) — BatchGetPresence(§13.3)+ presence 订阅扇出 / 去抖 / 合并 / killswitch(§13.4/§13.5/§13.7)
 - [`battle-reconnect.md §5`](../../../docs/design/battle-reconnect.md) — BATTLE fence 加固(拒裸登录顶掉 active 战斗)
 - [`scale-cellular-20m.md §4.2`](../../../docs/design/scale-cellular-20m.md) — 位置 owner cell 锚定 / 分片键口径(`LocationShardKey = player_id`)

@@ -33,8 +33,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50017` | 内部系统 RPC(login / allocator / DS 回调链直连) |
-| HTTP | `:51017` | 仅 `/metrics`(`owner.proto` 无 `google.api.http` 注解,不对外挂业务路由) |
+| gRPC | `:20017` | 内部系统 RPC(login / allocator / DS 回调链直连) |
+| HTTP | `:21017` | 仅 `/metrics`(`owner.proto` 无 `google.api.http` 注解,不对外挂业务路由) |
 
 ## 对外接口
 
@@ -184,8 +184,8 @@ DDL:`deploy/mysql-init/15-owner-tables.sql`(dev)/ `deploy/tidb-init/02-owner-tid
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `server.grpc.addr` | `:50017` | gRPC 监听(内部 RPC) |
-| `server.http.addr` | `:51017` | HTTP 监听(仅 `/metrics`) |
+| `server.grpc.addr` | `:20017` | gRPC 监听(内部 RPC) |
+| `server.http.addr` | `:21017` | HTTP 监听(仅 `/metrics`) |
 | `owner.require_tidb` | `false` | 启动强校验权威库确为 TiDB(§9.22)。dev 保持 false(单机 MySQL 天然线性一致);`-Prod` 产物由 `gen_cluster_config.ps1` 机械注入 `true`,不允许线上产物继承 dev 宽松档 |
 | `owner.sweep_interval` | `5m` | 审计流水清理轮询间隔(多副本各自跑,DELETE 幂等无需锁) |
 | `owner.sweep_batch` | `500` | 每轮清理行数上限(有界批量,防长事务锁表) |
@@ -210,7 +210,7 @@ go run ./services/runtime/owner/cmd/owner -conf services/runtime/owner/etc/owner
 
 - [`owner-authority.md`](../../../docs/design/owner-authority.md) — 权威本体 / 数据模型 / transition
   状态机 / expand→migrate→contract 演进 / 失败模式验证矩阵(本服务设计权威)
-- [`infra.md`](../../../docs/design/infra.md) — 服务端口 / key 命名规范(50017/51017)
+- [`infra.md`](../../../docs/design/infra.md) — 服务端口 / key 命名规范(20017/21017)
 - [`battle-reconnect.md`](../../../docs/design/battle-reconnect.md) §8 — DS 授权租约 fencing / 再入
   屏障契约(admit_not_before 时序的下游语义)
 - [`zero-downtime-update.md`](../../../docs/design/zero-downtime-update.md) — 不停服滚动 / 金丝雀下的

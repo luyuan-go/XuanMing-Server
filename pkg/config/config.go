@@ -118,7 +118,7 @@ type Server struct {
 //     dev yaml 显式写 enable_reflection: true 打开。
 type Grpc struct {
 	Network          string   `yaml:"network,omitempty" json:"network,omitempty"`                     // 默认 "tcp"
-	Addr             string   `yaml:"addr" json:"addr"`                                               // 例 ":50001"
+	Addr             string   `yaml:"addr" json:"addr"`                                               // 例 ":20001"
 	Timeout          Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`                     // 默认 1s
 	EnableReflection bool     `yaml:"enable_reflection,omitempty" json:"enable_reflection,omitempty"` // dev:true; prod:false(默认)
 	EnableRateLimit  bool     `yaml:"enable_rate_limit,omitempty" json:"enable_rate_limit,omitempty"` // 第4层 BBR 自适应限流;dev:false; prod:true
@@ -132,7 +132,7 @@ type Grpc struct {
 // Http HTTP server 监听(给 protoc-gen-go-http 生成的 handler 用)。
 type Http struct {
 	Network string   `yaml:"network,omitempty" json:"network,omitempty"`
-	Addr    string   `yaml:"addr" json:"addr"` // 例 ":51001"
+	Addr    string   `yaml:"addr" json:"addr"` // 例 ":21001"
 	Timeout Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 

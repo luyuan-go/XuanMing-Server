@@ -463,13 +463,13 @@ function Assert-PandoraInventoryPeerAuthentication {
 function Assert-PandoraInventoryServiceContract {
     param([Parameter(Mandatory = $true)]$Service)
     $ports = @($Service.spec.ports)
-    $grpc = @($ports | Where-Object { [int]$_.port -eq 50015 -or [int]$_.targetPort -eq 50015 })
+    $grpc = @($ports | Where-Object { [int]$_.port -eq 20015 -or [int]$_.targetPort -eq 20015 })
     if ([string]$Service.apiVersion -cne 'v1' -or [string]$Service.kind -cne 'Service' -or
         [string]$Service.metadata.namespace -cne 'pandora' -or [string]$Service.metadata.name -cne 'inventory' -or
         [string]$Service.spec.selector.app -cne 'inventory' -or $grpc.Count -ne 1 -or
         [string]$grpc[0].name -cne 'grpc' -or [string]$grpc[0].appProtocol -cne 'grpc' -or
-        [int]$grpc[0].port -ne 50015 -or [int]$grpc[0].targetPort -ne 50015) {
-        throw 'Inventory Service 50015 必须唯一且 name=grpc/appProtocol=grpc/selector app=inventory。'
+        [int]$grpc[0].port -ne 20015 -or [int]$grpc[0].targetPort -ne 20015) {
+        throw 'Inventory Service 20015 必须唯一且 name=grpc/appProtocol=grpc/selector app=inventory。'
     }
 }
 
@@ -499,7 +499,7 @@ function Assert-PandoraInventoryMeshWorkload {
     if ([string](Get-PandoraInventoryObjectProperty $metadata.labels 'app') -cne $name) {
         throw "$name workload template/live app label 漂移。"
     }
-    $ports = [ordered]@{ inventory = 50015; auction = 50016; trade = 50012; mail = 50009; leaderboard = 50007; 'battle-result' = 50022 }
+    $ports = [ordered]@{ inventory = 20015; auction = 20016; trade = 20012; mail = 20009; leaderboard = 20007; 'battle-result' = 20022 }
     $injectAnnotation = [string](Get-PandoraInventoryObjectProperty $metadata.annotations 'sidecar.istio.io/inject')
     $dataplaneMode = [string](Get-PandoraInventoryObjectProperty $metadata.labels 'istio.io/dataplane-mode')
     if ([string]$spec.serviceAccountName -cne $expectedSA -or
@@ -608,9 +608,9 @@ function Assert-PandoraInventoryMeshWorkload {
         if ($null -eq $grpc -or [int]$grpc.port -ne [int]$ports[$name]) { throw "$name 原生 gRPC readiness 端口漂移。" }
         if ($name -ceq 'inventory' -and
             ([string](Get-PandoraInventoryObjectProperty $metadata.annotations 'prometheus.io/scrape') -cne 'true' -or
-             [string](Get-PandoraInventoryObjectProperty $metadata.annotations 'prometheus.io/port') -cne '51015' -or
+             [string](Get-PandoraInventoryObjectProperty $metadata.annotations 'prometheus.io/port') -cne '21015' -or
              [string](Get-PandoraInventoryObjectProperty $metadata.annotations 'prometheus.io/path') -cne '/metrics')) {
-            throw 'Inventory template 必须保留原始 metrics 51015/metrics 注解供 injector merge。'
+            throw 'Inventory template 必须保留原始 metrics 21015/metrics 注解供 injector merge。'
         }
     }
 }

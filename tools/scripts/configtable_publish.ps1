@@ -9,7 +9,7 @@
 #
 # 用法:
 #   pwsh tools/scripts/configtable_publish.ps1 -DeployRoot D:\pandora-deploy
-#   pwsh tools/scripts/configtable_publish.ps1 -DeployRoot D:\pandora-deploy -ReloadAddr 127.0.0.1:50011
+#   pwsh tools/scripts/configtable_publish.ps1 -DeployRoot D:\pandora-deploy -ReloadAddr 127.0.0.1:20011
 #
 # 幂等 / 容错:
 #   - dist 版本 == active 版本 → 文件面 no-op,但 -ReloadAddr 仍会触发 reload

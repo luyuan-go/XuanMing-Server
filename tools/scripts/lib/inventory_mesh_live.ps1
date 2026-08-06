@@ -627,8 +627,8 @@ function Assert-PandoraInventoryNetworkPolicyState {
         @($policy.spec.podSelector.matchLabels.PSObject.Properties).Count -ne 1 -or
         @($policy.spec.ingress).Count -ne 1) { throw 'Inventory 专用 NetPol selector/ingress 漂移。' }
     $ports = @($policy.spec.ingress[0].ports)
-    if ($ports.Count -ne 1 -or [string]$ports[0].protocol -cne 'TCP' -or [int]$ports[0].port -ne 50015 -or
-        $null -ne (Get-PandoraInventoryObjectProperty $ports[0] 'endPort')) { throw 'Inventory 专用 NetPol 只允许 TCP/50015。' }
+    if ($ports.Count -ne 1 -or [string]$ports[0].protocol -cne 'TCP' -or [int]$ports[0].port -ne 20015 -or
+        $null -ne (Get-PandoraInventoryObjectProperty $ports[0] 'endPort')) { throw 'Inventory 专用 NetPol 只允许 TCP/20015。' }
     $from = @($policy.spec.ingress[0].from)
     if ($from.Count -ne 2) { throw 'Inventory 专用 NetPol 必须恰好两个来源 peer。' }
     $sameNamespace = @($from | Where-Object {

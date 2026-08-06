@@ -8,14 +8,14 @@
 ## §1 核心结论
 
 - **服务间 / 中间件寻址一律写稳定的 DNS 名,绝不写裸 IP。** k8s Service 把名字解析到当前 Pod IP;Pod 重启 IP 变,名字不变。
-- **dev 和 cluster 是两套配置**:`*-dev.yaml` 写 `127.0.0.1` 仅本机自测;线上走 `run/cluster/etc/*.yaml`,全是 DNS 名(`redis:6379` / `kafka:9092` / `mysql:3306` / `player:50002`)。线上**不碰** dev 那套。
+- **dev 和 cluster 是两套配置**:`*-dev.yaml` 写 `127.0.0.1` 仅本机自测;线上走 `run/cluster/etc/*.yaml`,全是 DNS 名(`redis:6379` / `kafka:9092` / `mysql:3306` / `player:20002`)。线上**不碰** dev 那套。
 - **真实外部地址只在一处注入**(ExternalName Service / Secret),20 个 Deployment 配置不动。改 1 处,不是改 20 处 —— 这是防手抖的关键。
 
 ## §2 两类目标,机制不同
 
 ### §2.1 无状态 go 服务(login / player / friend …)→ 完全透明
 
-- k8s Service = 负载均衡入口。配置写 `player:50002`,请求自动轮询到 player 任一健康 Pod。
+- k8s Service = 负载均衡入口。配置写 `player:20002`,请求自动轮询到 player 任一健康 Pod。
 - 副本 1 → N **配置一字不改**,扩缩容随便加(副本数在 `deploy/k8s/overlays/online/kustomization.yaml` 的 `replicas` 调)。
 - 前提:服务无状态(状态在 Redis/MySQL,不在 Pod 内存)。本项目 go 服务均为 headless gRPC,符合。
 

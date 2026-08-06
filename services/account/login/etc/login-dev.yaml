@@ -1,6 +1,6 @@
 # Pandora login 服务开发期配置(W2 ③,W3 ⑥ 2026-06-05 重写)。
 #
-# - gRPC 端口 50001 / HTTP 端口 51001(同时暴露 /metrics 和 RESTful)
+# - gRPC 端口 20001 / HTTP 端口 21001(同时暴露 /metrics 和 RESTful)
 # - W3 ② 起接 MySQL(pandora_account)+ Redis 真实化(session / ticket jti)
 # - W3 ⑤ 起接 player_locator(登录成功后 SetLocation(LOGIN_PENDING))
 # - W3 ⑥ 起 duration 字段用 pkg/config.Duration 包装,yaml 可直接写 "5s" / "24h"
@@ -10,13 +10,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50001"
+    addr: ":20001"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev:开 reflection 便于 grpcurl 联调;prod 留空 = false 关闭
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51001"
+    addr: ":21001"
 
 node:
   node_id: 1
@@ -53,8 +53,8 @@ login:
   ds_ticket_ttl: "5m"           # 不变量 §3:DS 票据短时效
 
   # owner 迁移登出释放(owner-authority.md migrate ⑤):登出成功后弱 Query+Release。
-  # dev 一键启动已含 owner 服务(:50017);弱依赖,owner 掉线仅告警不影响登出。
-  owner_addr: "127.0.0.1:50017"
+  # dev 一键启动已含 owner 服务(:20017);弱依赖,owner 掉线仅告警不影响登出。
+  owner_addr: "127.0.0.1:20017"
   # §9.23 query-first(R11 复审 架构 P0):owner 作为恢复路由的**第一权威**。
   #   false(默认)= 旧的 locator-first 路由,行为与历史一致;
   #   true       = 先查 owner:有归属记录即由它定 Route 与 exact target,locator/matchmaker
@@ -125,13 +125,13 @@ login:
   # W3 ⑤(2026-06-05):登录成功后调 PlayerLocatorService.SetLocation(state=LOGIN_PENDING)。
   # addr 留空 → 不调 locator(login 仍可独立跑;hub DS 接入后由 hub 上报 HUB 状态)。
   locator:
-    addr: "127.0.0.1:50006"
+    addr: "127.0.0.1:20006"
 
   # W4 ⑥(2026-06-06):登录成功后调 HubAllocatorService.AssignHub 拿真实 hub_ds_addr + hub_ticket。
   # addr 留空 → 不调 hub_allocator(login 回退自签 hub 票据 + mock_hub_ds_addr,可独立联调)。
   # region 空 → 让 hub_allocator 选最空分片。
   hub:
-    addr: "127.0.0.1:50021"
+    addr: "127.0.0.1:20021"
     region: "cn"
 
   # matchmaker 只读权威兜底(P0 修复 2026-07-15):locator presence 未命中 BATTLE 时,
@@ -141,7 +141,7 @@ login:
   # 必须与 matchmaker-dev.yaml 的 match_resume_auth_secret/audience 一致;
   # 读路径 canonical,PVE(pve_coop)记录同样可经此实例解析(共享 Redis)。
   matchmaker:
-    addr: "127.0.0.1:50011"
+    addr: "127.0.0.1:20011"
     auth_secret: "pandora-dev-match-resume-auth-key-v1!"
     auth_audience: "matchmaker:5v5_ranked"
 

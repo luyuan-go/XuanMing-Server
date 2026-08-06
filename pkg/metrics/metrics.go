@@ -32,7 +32,7 @@ var LongRunningBuckets = prometheus.ExponentialBuckets(0.005, 2, 12)
 // MustHandler 返回标准 promhttp.Handler。
 //
 //	http.Handle("/metrics", metrics.MustHandler())
-//	http.ListenAndServe(":51001", nil)
+//	http.ListenAndServe(":21001", nil)
 func MustHandler() http.Handler {
 	return promhttp.Handler()
 }

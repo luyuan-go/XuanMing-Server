@@ -31,7 +31,7 @@ type AuctionConf struct {
 	// MaxListLimit ListMarket 单次返回上限(默认 200)。
 	MaxListLimit int `yaml:"max_list_limit,omitempty" json:"max_list_limit,omitempty"`
 
-	// InventoryAddr 是 inventory 服务的内网 gRPC 地址(host:port,如 127.0.0.1:50015)。
+	// InventoryAddr 是 inventory 服务的内网 gRPC 地址(host:port,如 127.0.0.1:20015)。
 	// 配了 → 成交走真实结算(SettleAuctionMatch:卖↔买资产原子对转 + match_id 幂等);
 	// 留空 → 退回 NoopSettlementLedger(占位,总成功),仅供无交易联调 / 单测环境用。
 	InventoryAddr string `yaml:"inventory_addr,omitempty" json:"inventory_addr,omitempty"`
@@ -158,10 +158,10 @@ func (c *Config) Defaults() {
 		c.Auction.RetentionSweepBatch = 500
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50016"
+		c.Server.Grpc.Addr = ":20016"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51016"
+		c.Server.Http.Addr = ":21016"
 	}
 }
 

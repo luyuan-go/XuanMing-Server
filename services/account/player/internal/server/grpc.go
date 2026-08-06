@@ -16,7 +16,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并注册 PlayerService。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50002)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20002)。
 // 调用方为后端内部(battle_result)/ 经 Envoy 的客户端,pmw.AuthOptional() 与其它服一致。
 // pmw.SessionCurrent 校验客户端面请求 jti == login 会话权威当前一代(R5 复审 P0-1:
 // 顶号后旧 JWT 在 exp 前不得继续按 player_id 定向操作,INC-20260722-004;

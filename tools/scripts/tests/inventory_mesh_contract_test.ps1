@@ -95,7 +95,7 @@ Assert-Throws {
 } '额外 applicable AuthorizationPolicy 未拒绝'
 
 # live Pod contract：exact app+proxy、drop ALL、app 不挂 token、无旁加载体。
-$probeJson = '{"/app-health/inventory/readyz":{"grpc":{"port":50015}}}'
+$probeJson = '{"/app-health/inventory/readyz":{"grpc":{"port":20015}}}'
 $livePod = ([ordered]@{
         metadata = [ordered]@{
             name = 'inventory-test'; namespace = 'pandora'; labels = [ordered]@{ app = 'inventory'; 'istio.io/rev' = $revision }

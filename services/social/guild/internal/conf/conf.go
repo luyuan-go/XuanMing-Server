@@ -89,10 +89,10 @@ func (c *Config) Defaults() {
 		c.Guild.SweepBatch = 500
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50008"
+		c.Server.Grpc.Addr = ":20008"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51008"
+		c.Server.Http.Addr = ":21008"
 	}
 }
 

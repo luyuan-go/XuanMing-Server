@@ -20,4 +20,4 @@ spec:
             matchLabels:
               app.kubernetes.io/name: pandora-edge-envoy
       ports:
-        - { protocol: TCP, port: 50015 }
+        - { protocol: TCP, port: 20015 }

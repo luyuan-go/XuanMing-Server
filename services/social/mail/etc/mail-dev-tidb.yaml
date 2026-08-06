@@ -16,13 +16,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50009"
+    addr: ":20009"
     timeout: "15s"
     enable_reflection: true
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51009"
+    addr: ":21009"
 
 node:
   # node_id 必须与 inventory 不同(inventory=1,mail=2)。理由见 mail-dev.yaml 同处注释:
@@ -48,7 +48,7 @@ mail:
   max_body_len: 2048
   max_attachments: 16
   # inventory 服务 gRPC 地址,领取附件入库;留空且 allow_noop_grant=true 时仅标记不发奖
-  inventory_addr: "127.0.0.1:50015"
+  inventory_addr: "127.0.0.1:20015"
   allow_noop_grant: false
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威

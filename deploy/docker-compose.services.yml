@@ -41,8 +41,8 @@ services:
     image: pandora/login:dev
     container_name: pandora-login
     volumes: [ "../run/cluster/etc/login.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50001:50001" ]
-    # 含战斗混合模式:hub_allocator 跑宿主,login 经 host.docker.internal:50021 回连(Linux/WSL 需显式映射)。
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20001:20001" ]
+    # 含战斗混合模式:hub_allocator 跑宿主,login 经 host.docker.internal:20021 回连(Linux/WSL 需显式映射)。
     # 纯 docker 模式下 login 配置用 docker 服务名解析 hub-allocator,不触发此映射,无害。
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -57,7 +57,7 @@ services:
     volumes:
       - "../run/cluster/etc/player.yaml:/app/etc/cluster.yaml:ro"
       - "../configtable/dist:/app/configtable/active:ro"
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50002:50002" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20002:20002" ]
 
   data-service:
     <<: *svc-base
@@ -67,7 +67,7 @@ services:
     image: pandora/data-service:dev
     container_name: pandora-data-service
     volumes: [ "../run/cluster/etc/data-service.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50003:50003" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20003:20003" ]
 
   friend:
     <<: *svc-base
@@ -77,7 +77,7 @@ services:
     image: pandora/friend:dev
     container_name: pandora-friend
     volumes: [ "../run/cluster/etc/friend.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50004:50004" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20004:20004" ]
 
   chat:
     <<: *svc-base
@@ -87,7 +87,7 @@ services:
     image: pandora/chat:dev
     container_name: pandora-chat
     volumes: [ "../run/cluster/etc/chat.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50005:50005" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20005:20005" ]
 
   guild:
     <<: *svc-base
@@ -97,7 +97,7 @@ services:
     image: pandora/guild:dev
     container_name: pandora-guild
     volumes: [ "../run/cluster/etc/guild.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50008:50008" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20008:20008" ]
 
   mail:
     <<: *svc-base
@@ -107,7 +107,7 @@ services:
     image: pandora/mail:dev
     container_name: pandora-mail
     volumes: [ "../run/cluster/etc/mail.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50009:50009" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20009:20009" ]
 
   player-locator:
     <<: *svc-base
@@ -117,7 +117,7 @@ services:
     image: pandora/player-locator:dev
     container_name: pandora-player-locator
     volumes: [ "../run/cluster/etc/player-locator.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50006:50006" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20006:20006" ]
 
   team:
     <<: *svc-base
@@ -127,7 +127,7 @@ services:
     image: pandora/team:dev
     container_name: pandora-team
     volumes: [ "../run/cluster/etc/team.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50010:50010" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20010:20010" ]
 
   matchmaker:
     <<: *svc-base
@@ -139,14 +139,14 @@ services:
     volumes:
       - "../run/cluster/etc/matchmaker.yaml:/app/etc/cluster.yaml:ro"
       - "../configtable/dist:/app/configtable/active:ro"
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50011:50011" ]
-    # 含战斗混合模式:ds_allocator 跑宿主,matchmaker 经 host.docker.internal:50020 回连(Linux/WSL 需显式映射)。
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20011:20011" ]
+    # 含战斗混合模式:ds_allocator 跑宿主,matchmaker 经 host.docker.internal:20020 回连(Linux/WSL 需显式映射)。
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   # PVE 直进匹配实例:与 matchmaker 同一份源码/同构建参数(镜像层全缓存),仅配置不同——
   # game_mode=pve_coop + walk_in=true(单人/整队直进副本,不排队)。
-  # Envoy 按 header `x-pandora-game-mode: pve` 分流到本实例(host.docker.internal:50018)。
+  # Envoy 按 header `x-pandora-game-mode: pve` 分流到本实例(host.docker.internal:20018)。
   matchmaker-pve:
     <<: *svc-base
     build:
@@ -157,8 +157,8 @@ services:
     volumes:
       - "../run/cluster/etc/matchmaker-pve.yaml:/app/etc/cluster.yaml:ro"
       - "../configtable/dist:/app/configtable/active:ro"
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50018:50018" ]
-    # 含战斗混合模式:同 matchmaker,经 host.docker.internal:50020 回连宿主 ds_allocator。
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20018:20018" ]
+    # 含战斗混合模式:同 matchmaker,经 host.docker.internal:20020 回连宿主 ds_allocator。
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -170,7 +170,7 @@ services:
     image: pandora/trade:dev
     container_name: pandora-trade
     volumes: [ "../run/cluster/etc/trade.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50012:50012" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20012:20012" ]
 
   dialogue:
     <<: *svc-base
@@ -180,7 +180,7 @@ services:
     image: pandora/dialogue:dev
     container_name: pandora-dialogue
     volumes: [ "../run/cluster/etc/dialogue.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50013:50013" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20013:20013" ]
 
   push:
     <<: *svc-base
@@ -190,7 +190,7 @@ services:
     image: pandora/push:dev
     container_name: pandora-push
     volumes: [ "../run/cluster/etc/push.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50014:50014" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20014:20014" ]
 
   leaderboard:
     <<: *svc-base
@@ -200,7 +200,7 @@ services:
     image: pandora/leaderboard:dev
     container_name: pandora-leaderboard
     volumes: [ "../run/cluster/etc/leaderboard.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50007:50007" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20007:20007" ]
 
   # owner:每玩家 owner 权威(§9.22,owner-authority.md;dev 连单机 MySQL pandora_owner,
   # 生产必须 TiDB)。调用方 = login / allocator(owner_addr 指向本服务)。
@@ -212,7 +212,7 @@ services:
     image: pandora/owner:dev
     container_name: pandora-owner
     volumes: [ "../run/cluster/etc/owner.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50017:50017" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20017:20017" ]
 
   inventory:
     <<: *svc-base
@@ -222,7 +222,7 @@ services:
     image: pandora/inventory:dev
     container_name: pandora-inventory
     volumes: [ "../run/cluster/etc/inventory.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50015:50015" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20015:20015" ]
 
   auction:
     <<: *svc-base
@@ -232,7 +232,7 @@ services:
     image: pandora/auction:dev
     container_name: pandora-auction
     volumes: [ "../run/cluster/etc/auction.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50016:50016" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20016:20016" ]
 
   ds-allocator:
     <<: *svc-base
@@ -242,7 +242,7 @@ services:
     image: pandora/ds-allocator:dev
     container_name: pandora-ds-allocator
     volumes: [ "../run/cluster/etc/ds-allocator.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50020:50020" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20020:20020" ]
 
   hub-allocator:
     <<: *svc-base
@@ -252,7 +252,7 @@ services:
     image: pandora/hub-allocator:dev
     container_name: pandora-hub-allocator
     volumes: [ "../run/cluster/etc/hub-allocator.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50021:50021" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20021:20021" ]
 
   battle-result:
     <<: *svc-base
@@ -262,8 +262,8 @@ services:
     image: pandora/battle-result:dev
     container_name: pandora-battle-result
     volumes: [ "../run/cluster/etc/battle-result.yaml:/app/etc/cluster.yaml:ro" ]
-    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50022:50022" ]
-    # 含战斗混合模式:ds_allocator 跑宿主,battle_result 经 host.docker.internal:50020 回连(Linux/WSL 需显式映射)。
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20022:20022" ]
+    # 含战斗混合模式:ds_allocator 跑宿主,battle_result 经 host.docker.internal:20020 回连(Linux/WSL 需显式映射)。
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

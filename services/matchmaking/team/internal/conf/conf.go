@@ -153,9 +153,9 @@ func (c *Config) Defaults() {
 		c.Team.ApplyTTL = config.Duration(120 * time.Second)
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50010"
+		c.Server.Grpc.Addr = ":20010"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51010"
+		c.Server.Http.Addr = ":21010"
 	}
 }

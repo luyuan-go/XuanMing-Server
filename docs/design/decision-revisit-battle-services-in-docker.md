@@ -43,7 +43,7 @@
 ## 3. 关键事实:混合模式的跨边界通道已存在
 
 - 容器版服务间发现:靠生成的 `run/cluster/etc/*.yaml`(`gen_cluster_config.ps1`),
-  地址用 docker DNS 名(`ds-allocator:50020` / `hub-allocator:50021`)。
+  地址用 docker DNS 名(`ds-allocator:20020` / `hub-allocator:20021`)。
 - 「容器 → 宿主」通道**仓库里已在用**:`docker-compose.dev.yml` 的 envoy 用
   `extra_hosts: "host.docker.internal:host-gateway"` + `host.docker.internal` 访问宿主服务
   (见 dev.yml line 179-199,注释明写「上游业务服跑在宿主,通过 host.docker.internal 访问」)。
@@ -62,13 +62,13 @@
    改由宿主进程启动这两个 allocator。`run_services.ps1` 已补 `-Only` 多服务筛选,
    `battle` 模式用 `-Only ds_allocator,hub_allocator` 只起宿主 allocator。
 2. **容器服务指向宿主 allocator**:生成 cluster 配置时,把 matchmaker→ds_allocator 的地址、
-   login→hub_allocator 的地址(`login.hub.addr`)改成 `host.docker.internal:50020/50021`;
+   login→hub_allocator 的地址(`login.hub.addr`)改成 `host.docker.internal:20020/20021`;
    `docker-compose.services.yml` 相关容器补 `extra_hosts: host.docker.internal:host-gateway`
    (Windows/Mac 自带,Linux/WSL 需显式,同 envoy 现有写法)。
 3. **宿主 allocator 的两类地址必须分开**:
    - allocator 自己连 redis/mysql/etcd 仍用宿主 `localhost:<published>`。
    - 容器里的 login/matchmaker 拨 allocator 时,配置 endpoint 必须是
-     `host.docker.internal:50020/50021`(而非 `127.0.0.1`),避免容器拨到自己。
+     `host.docker.internal:20020/20021`(而非 `127.0.0.1`),避免容器拨到自己。
    - allocator 返回给 UE 客户端的 **Hub/Battle DS 地址**继续走
      `PANDORA_DS_ADVERTISE_HOST` / `local_hub.advertise_host` / `local_ds.advertise_host`,
      本机用 `127.0.0.1`,内网多人用服务器局域网 IP,不能误写成 `host.docker.internal`。
@@ -135,11 +135,11 @@
 |---|---|
 | `tools/scripts/start.ps1` | `ValidateSet` 加 `battle`;新增 `Invoke-Battle`(先清残留→dev_up→`gen_cluster_config.ps1 -HostAllocators`→`Build-AllImages -Only $containerSvcs` 只构 17 个→`docker compose up -d` 17 容器→`run_services.ps1 -Only ds_allocator,hub_allocator` 起 2 宿主);`Build-AllImages` 加 `-Only` 过滤;Resolve-Prerequisites / 主 switch / Invoke-Resume / Invoke-Reset / Show-Status 均补 `battle` 分支 |
 | `tools/scripts/run_services.ps1` | 新增 `-Only <names>` 参数,`Get-TargetServices` 支持只起指定服务(用于只拉 2 个 allocator) |
-| `tools/scripts/gen_cluster_config.ps1` | 新增 `-HostAllocators` 开关:把 50020/50021 的容器地址改成 `host.docker.internal`,令容器内 matchmaker/login/battle_result 回连宿主 allocator |
+| `tools/scripts/gen_cluster_config.ps1` | 新增 `-HostAllocators` 开关:把 20020/20021 的容器地址改成 `host.docker.internal`,令容器内 matchmaker/login/battle_result 回连宿主 allocator |
 | `deploy/docker-compose.services.yml` | login / matchmaker / battle-result 补 `extra_hosts: host.docker.internal:host-gateway`(Linux/WSL 需要,Windows/纯 docker 无害) |
 | `tools/scripts/play.ps1` | 含战斗入口 3 处 `-Mode local` → `-Mode battle`;提示文案更新为「17 容器 + 2 宿主 allocator」 |
 
-**地址语义(§4.3)落实**:allocator 自己连 redis/mysql/etcd 用宿主 `localhost:<published>`;容器拨 allocator RPC 走 `host.docker.internal:50020/50021`;allocator 返回给 UE 客户端的 DS 地址仍走 `PANDORA_DS_ADVERTISE_HOST`(本机 127.0.0.1 / 内网局域网 IP),由 `play.ps1` 注入、宿主 allocator 子进程继承。
+**地址语义(§4.3)落实**:allocator 自己连 redis/mysql/etcd 用宿主 `localhost:<published>`;容器拨 allocator RPC 走 `host.docker.internal:20020/20021`;allocator 返回给 UE 客户端的 DS 地址仍走 `PANDORA_DS_ADVERTISE_HOST`(本机 127.0.0.1 / 内网局域网 IP),由 `play.ps1` 注入、宿主 allocator 子进程继承。
 
 **选型**:采用「宿主 `go build` 这 2 个 allocator」而非预编译 exe 分发(用户选「要最好的」= 方案 1),故 `battle` 的 Resolve-Prerequisites 仍需 Go(仅为这 2 个服务)。
 

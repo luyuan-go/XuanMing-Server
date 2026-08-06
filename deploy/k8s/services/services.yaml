@@ -28,7 +28,7 @@ spec:
       labels: { app: login, pandora.dev/ds-auth-writer-epoch: "2" }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51001"
+        prometheus.io/port: "21001"
         prometheus.io/path: /metrics
     spec:
       # 四个 DSTicket 签发方以固定非 root 身份运行；fsGroup 只为 Secret 投影提供组读权限。
@@ -42,8 +42,8 @@ spec:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
             - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50001 } ]
-          readinessProbe: { grpc: { port: 50001 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20001 } ]
+          readinessProbe: { grpc: { port: 20001 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts:
             - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: login.yaml, readOnly: true }
             # DSTicket v2(方案 B)RSA 签发私钥(仅 login/matchmaker/matchmaker-pve/hub-allocator 四个签发方挂载,
@@ -61,7 +61,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: login, namespace: pandora }
-spec: { selector: { app: login }, ports: [ { port: 50001, targetPort: 50001 } ] }
+spec: { selector: { app: login }, ports: [ { port: 20001, targetPort: 20001 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -74,7 +74,7 @@ spec:
       labels: { app: player }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51002"
+        prometheus.io/port: "21002"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -82,8 +82,8 @@ spec:
           image: pandora/player:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50002 } ]
-          readinessProbe: { grpc: { port: 50002 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20002 } ]
+          readinessProbe: { grpc: { port: 20002 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts:
             - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player.yaml, readOnly: true }
             - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
@@ -95,7 +95,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: player, namespace: pandora }
-spec: { selector: { app: player }, ports: [ { port: 50002, targetPort: 50002 } ] }
+spec: { selector: { app: player }, ports: [ { port: 20002, targetPort: 20002 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -108,7 +108,7 @@ spec:
       labels: { app: data-service }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51003"
+        prometheus.io/port: "21003"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -116,8 +116,8 @@ spec:
           image: pandora/data-service:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50003 } ]
-          readinessProbe: { grpc: { port: 50003 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20003 } ]
+          readinessProbe: { grpc: { port: 20003 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: data-service.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -125,7 +125,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: data-service, namespace: pandora }
-spec: { selector: { app: data-service }, ports: [ { port: 50003, targetPort: 50003 } ] }
+spec: { selector: { app: data-service }, ports: [ { port: 20003, targetPort: 20003 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -138,7 +138,7 @@ spec:
       labels: { app: friend }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51004"
+        prometheus.io/port: "21004"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -146,8 +146,8 @@ spec:
           image: pandora/friend:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50004 } ]
-          readinessProbe: { grpc: { port: 50004 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20004 } ]
+          readinessProbe: { grpc: { port: 20004 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: friend.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -155,7 +155,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: friend, namespace: pandora }
-spec: { selector: { app: friend }, ports: [ { port: 50004, targetPort: 50004 } ] }
+spec: { selector: { app: friend }, ports: [ { port: 20004, targetPort: 20004 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -168,7 +168,7 @@ spec:
       labels: { app: chat }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51005"
+        prometheus.io/port: "21005"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -176,8 +176,8 @@ spec:
           image: pandora/chat:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50005 } ]
-          readinessProbe: { grpc: { port: 50005 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20005 } ]
+          readinessProbe: { grpc: { port: 20005 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: chat.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -185,7 +185,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: chat, namespace: pandora }
-spec: { selector: { app: chat }, ports: [ { port: 50005, targetPort: 50005 } ] }
+spec: { selector: { app: chat }, ports: [ { port: 20005, targetPort: 20005 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -198,7 +198,7 @@ spec:
       labels: { app: guild }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51008"
+        prometheus.io/port: "21008"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -206,8 +206,8 @@ spec:
           image: pandora/guild:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50008 } ]
-          readinessProbe: { grpc: { port: 50008 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20008 } ]
+          readinessProbe: { grpc: { port: 20008 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: guild.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -215,7 +215,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: guild, namespace: pandora }
-spec: { selector: { app: guild }, ports: [ { port: 50008, targetPort: 50008 } ] }
+spec: { selector: { app: guild }, ports: [ { port: 20008, targetPort: 20008 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -228,7 +228,7 @@ spec:
       labels: { app: mail }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51009"
+        prometheus.io/port: "21009"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -236,8 +236,8 @@ spec:
           image: pandora/mail:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50009 } ]
-          readinessProbe: { grpc: { port: 50009 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20009 } ]
+          readinessProbe: { grpc: { port: 20009 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: mail.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -245,7 +245,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: mail, namespace: pandora }
-spec: { selector: { app: mail }, ports: [ { port: 50009, targetPort: 50009 } ] }
+spec: { selector: { app: mail }, ports: [ { port: 20009, targetPort: 20009 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -258,7 +258,7 @@ spec:
       labels: { app: player-locator, pandora.dev/ds-auth-writer-epoch: "2" }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51006"
+        prometheus.io/port: "21006"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -269,8 +269,8 @@ spec:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
             - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50006 } ]
-          readinessProbe: { grpc: { port: 50006 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20006 } ]
+          readinessProbe: { grpc: { port: 20006 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player-locator.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -278,7 +278,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: player-locator, namespace: pandora }
-spec: { selector: { app: player-locator }, ports: [ { port: 50006, targetPort: 50006 } ] }
+spec: { selector: { app: player-locator }, ports: [ { port: 20006, targetPort: 20006 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -293,7 +293,7 @@ spec:
       labels: { app: team }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51010"
+        prometheus.io/port: "21010"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -301,8 +301,8 @@ spec:
           image: pandora/team:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50010 } ]
-          readinessProbe: { grpc: { port: 50010 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20010 } ]
+          readinessProbe: { grpc: { port: 20010 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: team.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -310,7 +310,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: team, namespace: pandora }
-spec: { selector: { app: team }, ports: [ { port: 50010, targetPort: 50010 } ] }
+spec: { selector: { app: team }, ports: [ { port: 20010, targetPort: 20010 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -325,7 +325,7 @@ spec:
       labels: { app: matchmaker }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51011"
+        prometheus.io/port: "21011"
         prometheus.io/path: /metrics
     spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
@@ -339,8 +339,8 @@ spec:
           image: pandora/matchmaker:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50011 } ]
-          readinessProbe: { grpc: { port: 50011 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20011 } ]
+          readinessProbe: { grpc: { port: 20011 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts:
             - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker.yaml, readOnly: true }
             - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
@@ -355,7 +355,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: matchmaker, namespace: pandora }
-spec: { selector: { app: matchmaker }, ports: [ { port: 50011, targetPort: 50011 } ] }
+spec: { selector: { app: matchmaker }, ports: [ { port: 20011, targetPort: 20011 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -370,7 +370,7 @@ spec:
       labels: { app: matchmaker-pve }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51018"
+        prometheus.io/port: "21018"
         prometheus.io/path: /metrics
     spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
@@ -379,8 +379,8 @@ spec:
           image: pandora/matchmaker-pve:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50018 } ]
-          readinessProbe: { grpc: { port: 50018 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20018 } ]
+          readinessProbe: { grpc: { port: 20018 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts:
             - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker-pve.yaml, readOnly: true }
             - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
@@ -395,7 +395,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: matchmaker-pve, namespace: pandora }
-spec: { selector: { app: matchmaker-pve }, ports: [ { port: 50018, targetPort: 50018 } ] }
+spec: { selector: { app: matchmaker-pve }, ports: [ { port: 20018, targetPort: 20018 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -408,7 +408,7 @@ spec:
       labels: { app: trade }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51012"
+        prometheus.io/port: "21012"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -416,8 +416,8 @@ spec:
           image: pandora/trade:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50012 } ]
-          readinessProbe: { grpc: { port: 50012 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20012 } ]
+          readinessProbe: { grpc: { port: 20012 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: trade.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -425,7 +425,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: trade, namespace: pandora }
-spec: { selector: { app: trade }, ports: [ { port: 50012, targetPort: 50012 } ] }
+spec: { selector: { app: trade }, ports: [ { port: 20012, targetPort: 20012 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -438,7 +438,7 @@ spec:
       labels: { app: dialogue }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51013"
+        prometheus.io/port: "21013"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -446,8 +446,8 @@ spec:
           image: pandora/dialogue:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50013 } ]
-          readinessProbe: { grpc: { port: 50013 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20013 } ]
+          readinessProbe: { grpc: { port: 20013 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: dialogue.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -455,7 +455,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: dialogue, namespace: pandora }
-spec: { selector: { app: dialogue }, ports: [ { port: 50013, targetPort: 50013 } ] }
+spec: { selector: { app: dialogue }, ports: [ { port: 20013, targetPort: 20013 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -473,7 +473,7 @@ spec:
       labels: { app: push }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51014"
+        prometheus.io/port: "21014"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -481,8 +481,8 @@ spec:
           image: pandora/push:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50014 } ]
-          readinessProbe: { grpc: { port: 50014 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20014 } ]
+          readinessProbe: { grpc: { port: 20014 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: push.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -490,7 +490,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: push, namespace: pandora }
-spec: { selector: { app: push }, ports: [ { port: 50014, targetPort: 50014 } ] }
+spec: { selector: { app: push }, ports: [ { port: 20014, targetPort: 20014 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -503,7 +503,7 @@ spec:
       labels: { app: leaderboard }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51007"
+        prometheus.io/port: "21007"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -511,8 +511,8 @@ spec:
           image: pandora/leaderboard:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50007 } ]
-          readinessProbe: { grpc: { port: 50007 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20007 } ]
+          readinessProbe: { grpc: { port: 20007 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: leaderboard.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -520,7 +520,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: leaderboard, namespace: pandora }
-spec: { selector: { app: leaderboard }, ports: [ { port: 50007, targetPort: 50007 } ] }
+spec: { selector: { app: leaderboard }, ports: [ { port: 20007, targetPort: 20007 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -533,7 +533,7 @@ spec:
       labels: { app: inventory }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51015"
+        prometheus.io/port: "21015"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -541,8 +541,8 @@ spec:
           image: pandora/inventory:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50015 } ]
-          readinessProbe: { grpc: { port: 50015 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20015 } ]
+          readinessProbe: { grpc: { port: 20015 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: inventory.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -553,7 +553,7 @@ metadata: { name: inventory, namespace: pandora }
 spec:
   selector: { app: inventory }
   ports:
-    - { name: grpc, appProtocol: grpc, port: 50015, targetPort: 50015 }
+    - { name: grpc, appProtocol: grpc, port: 20015, targetPort: 20015 }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -566,7 +566,7 @@ spec:
       labels: { app: auction }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51016"
+        prometheus.io/port: "21016"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -574,8 +574,8 @@ spec:
           image: pandora/auction:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50016 } ]
-          readinessProbe: { grpc: { port: 50016 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20016 } ]
+          readinessProbe: { grpc: { port: 20016 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: auction.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -583,12 +583,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: auction, namespace: pandora }
-spec: { selector: { app: auction }, ports: [ { port: 50016, targetPort: 50016 } ] }
+spec: { selector: { app: auction }, ports: [ { port: 20016, targetPort: 20016 } ] }
 ---
 # owner:每玩家 owner 权威(§9.22,owner-authority.md)。服务本身无状态(原子性在存储 CAS,
 # 副本只是通道),标准滚动更新即可。dev/minikube 连集群单机 MySQL pandora_owner;
 # 生产必须连 TiDB(deploy/tidb-init/02-owner-tidb.sql,MySQL 异步复制切换会回滚已确认写,生产禁用)。
-# 调用方 = login / ds-allocator / hub-allocator,集群内直连 owner:50017,不经 Envoy。
+# 调用方 = login / ds-allocator / hub-allocator,集群内直连 owner:20017,不经 Envoy。
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: owner, namespace: pandora, labels: { app: owner } }
@@ -600,7 +600,7 @@ spec:
       labels: { app: owner }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51017"
+        prometheus.io/port: "21017"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -608,8 +608,8 @@ spec:
           image: pandora/owner:dev
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50017 } ]
-          readinessProbe: { grpc: { port: 50017 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20017 } ]
+          readinessProbe: { grpc: { port: 20017 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: owner.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
@@ -617,7 +617,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: owner, namespace: pandora }
-spec: { selector: { app: owner }, ports: [ { port: 50017, targetPort: 50017 } ] }
+spec: { selector: { app: owner }, ports: [ { port: 20017, targetPort: 20017 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -651,7 +651,7 @@ spec:
       labels: { app: ds-allocator, pandora.dev/ds-auth-writer-epoch: "2" }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51020"
+        prometheus.io/port: "21020"
         prometheus.io/path: /metrics
         # 机械门禁:必须与本 Deployment 的 spec.strategy.type 逐字一致(cmd/ds_allocator/
         # main_test.go 的清单契约测试钉住)。进程读它做 fail-closed 校验:
@@ -678,17 +678,24 @@ spec:
             - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
             - { name: PANDORA_DEPLOY_STRATEGY, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/deploy-strategy']" } } }
           args: ["-conf", "etc/cluster.yaml"]
-          # 51020 是运维面 HTTP(/metrics + /healthz/writer)。此前只声明 50020,而
-          # prometheus.io/port 指向 51020 —— 集群内根本没有到写者指标的路径(同 hub_allocator
+          # 21020 是运维面 HTTP(/metrics + /healthz/writer)。此前只声明 20020,而
+          # prometheus.io/port 指向 21020 —— 集群内根本没有到写者指标的路径(同 hub_allocator
           # R11 P0-2)。sum(pandora_ds_allocator_writer_held)==0 是「长期无人扫描」的告警信号。
-          ports: [ { name: grpc, containerPort: 50020 }, { name: ops-http, containerPort: 51020 } ]
+          ports: [ { name: grpc, containerPort: 20020 }, { name: ops-http, containerPort: 21020 } ]
           # readiness 只看 gRPC:热备副本(未当选扫描者)照常服务 Heartbeat/AllocateBattle,
           # 绝不能把 readiness 门成"必须是写者"——那会在滚动升级时死锁,并把"扫描降级"
           # 放大成"整服零 allocator 端点",正是本次要消除的东西。
-          readinessProbe: { grpc: { port: 50020 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
-          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: ds-allocator.yaml, readOnly: true } ]
+          readinessProbe: { grpc: { port: 20020 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: ds-allocator.yaml, readOnly: true }
+            # 关卡表:本服按 map_id 查 g_关卡.xlsx 得关卡资源与 GameMode 类(§9.22 唯一权威源)。
+            # config_table.dir 非空 = 启动强依赖,加载失败即退出;挂载缺失会 CrashLoopBackOff。
+            # 与 player / matchmaker / matchmaker-pve / battle-result 同一 ConfigMap、同一挂载点。
+            - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: configtable, configMap: { name: pandora-configtable } }
 ---
 # PDB:滚动升级/节点排空时至少保留 1 个可服务副本。没有它,kubectl drain 会把两个
 # 副本一起赶走,Heartbeat 断流 >20s,全部在场对局被 Battle DS 自我 fencing 踢掉。
@@ -705,8 +712,8 @@ metadata: { name: ds-allocator, namespace: pandora }
 spec:
   selector: { app: ds-allocator }
   ports:
-    - { name: grpc, appProtocol: grpc, port: 50020, targetPort: 50020 }
-    - { name: ops-http, appProtocol: http, port: 51020, targetPort: 51020 }
+    - { name: grpc, appProtocol: grpc, port: 20020, targetPort: 20020 }
+    - { name: ops-http, appProtocol: http, port: 21020, targetPort: 21020 }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -727,14 +734,14 @@ spec:
   selector: { matchLabels: { app: hub-allocator } }
   template:
     # R11 复审 P0-2:写者状态必须可被抓取端自动采集,不能只靠人工逐 Pod 直连。运维面
-    # HTTP 51021 同时提供 /metrics 与写者健康页;此前 containerPort 只声明 50021,
-    # Service 也只暴露 50021,集群内根本没有到写者指标的路径。
+    # HTTP 21021 同时提供 /metrics 与写者健康页;此前 containerPort 只声明 20021,
+    # Service 也只暴露 20021,集群内根本没有到写者指标的路径。
     # prometheus.io/* 注解供 pod service-discovery 抓取(写者指标见 internal/server/http.go)。
     metadata:
       labels: { app: hub-allocator, pandora.dev/ds-auth-writer-epoch: "2" }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51021"
+        prometheus.io/port: "21021"
         prometheus.io/path: /metrics
         # R11 复审 P0-5 机械门禁:必须与本 Deployment 的 spec.strategy.type 逐字一致
         # (main_test.go 的清单契约测试钉住)。进程读它做 fail-closed 校验:
@@ -753,9 +760,9 @@ spec:
             - { name: PANDORA_DEPLOY_STRATEGY, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/deploy-strategy']" } } }
           args: ["-conf", "etc/cluster.yaml"]
           ports:
-            - { name: grpc, containerPort: 50021 }
-            - { name: http-metrics, containerPort: 51021 }
-          readinessProbe: { grpc: { port: 50021 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+            - { name: grpc, containerPort: 20021 }
+            - { name: http-metrics, containerPort: 21021 }
+          readinessProbe: { grpc: { port: 20021 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts:
             - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: hub-allocator.yaml, readOnly: true }
             # DSTicket v2(方案 B)RSA 签发私钥(签发方专属,见 login 注释)。
@@ -771,12 +778,12 @@ metadata: { name: hub-allocator, namespace: pandora }
 spec:
   selector: { app: hub-allocator }
   ports:
-    - { name: grpc, port: 50021, targetPort: 50021 }
+    - { name: grpc, port: 20021, targetPort: 20021 }
     # 运维面(/metrics + /healthz/writer)。仅集群内可达,不经 Envoy 对外暴露。
-    - { name: http-metrics, port: 51021, targetPort: 51021 }
+    - { name: http-metrics, port: 21021, targetPort: 21021 }
 ---
 # P0#5:hub-allocator round_robin 客户端 LB 用的 headless Service(clusterIP:None → DNS 返回
-# 全部 **Ready** Pod IP)。login 经 dns:///hub-allocator-headless.pandora.svc.cluster.local:50021
+# 全部 **Ready** Pod IP)。login 经 dns:///hub-allocator-headless.pandora.svc.cluster.local:20021
 # + round_robin 拨号(见 login main.go / grpcclient.MustDialInsecureRoundRobin):滚动重叠
 # (maxSurge=1 双 Pod)期间对「非-writer 可重试错误」重发时每次 RPC 轮到不同副本,数次内命中
 # 当前 writer,消除「连接被 L4 钉在非-writer Pod」。上面的 ClusterIP Service 保留给单发调用方 /
@@ -787,7 +794,7 @@ metadata: { name: hub-allocator-headless, namespace: pandora }
 spec:
   clusterIP: None
   selector: { app: hub-allocator }
-  ports: [ { name: grpc, appProtocol: grpc, port: 50021, targetPort: 50021 } ]
+  ports: [ { name: grpc, appProtocol: grpc, port: 20021, targetPort: 20021 } ]
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -800,7 +807,7 @@ spec:
       labels: { app: battle-result, pandora.dev/ds-auth-writer-epoch: "2" }
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "51022"
+        prometheus.io/port: "21022"
         prometheus.io/path: /metrics
     spec:
       containers:
@@ -811,8 +818,8 @@ spec:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
             - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50022 } ]
-          readinessProbe: { grpc: { port: 50022 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          ports: [ { containerPort: 20022 } ]
+          readinessProbe: { grpc: { port: 20022 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts:
             - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: battle-result.yaml, readOnly: true }
             # 怪物击杀经验的唯一数值权威(role_level 表)。本服**启动强依赖**:
@@ -827,4 +834,4 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: battle-result, namespace: pandora }
-spec: { selector: { app: battle-result }, ports: [ { port: 50022, targetPort: 50022 } ] }
+spec: { selector: { app: battle-result }, ports: [ { port: 20022, targetPort: 20022 } ] }

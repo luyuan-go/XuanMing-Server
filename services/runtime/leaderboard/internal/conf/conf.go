@@ -31,7 +31,7 @@ type LeaderboardConf struct {
 	// (默认 25,MMR 量纲;榜外名次区间估算用,建榜后不可变)。
 	DefaultEstimateBucketWidth int64 `yaml:"default_estimate_bucket_width,omitempty" json:"default_estimate_bucket_width,omitempty"`
 
-	// InventoryAddr 是 inventory 服务的内网 gRPC 地址(host:port,如 127.0.0.1:50015)。
+	// InventoryAddr 是 inventory 服务的内网 gRPC 地址(host:port,如 127.0.0.1:20015)。
 	// 配了 → 结算发奖走真实 GrantItems(幂等键 lb:<settlement_id>:<entity_id>);
 	// 留空 → 退回 NoopRewardGranter(占位,不真实发奖),仅供无背包联调 / 单测环境用。
 	InventoryAddr string `yaml:"inventory_addr,omitempty" json:"inventory_addr,omitempty"`
@@ -78,10 +78,10 @@ func (c *Config) Defaults() {
 		c.Leaderboard.RetentionSweepBatch = 500
 	}
 	if c.Server.Grpc.Addr == "" {
-		c.Server.Grpc.Addr = ":50007"
+		c.Server.Grpc.Addr = ":20007"
 	}
 	if c.Server.Http.Addr == "" {
-		c.Server.Http.Addr = ":51007"
+		c.Server.Http.Addr = ":21007"
 	}
 }
 

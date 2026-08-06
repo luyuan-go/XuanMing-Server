@@ -88,7 +88,7 @@
 
 ### 4.1 直连 gRPC(主链路,阶段 1 默认)
 
-robot 直连各 go 服务 gRPC 端口(`50001`-`50022`,见 infra.md §6.2),在每次 RPC 的 metadata 注入:
+robot 直连各 go 服务 gRPC 端口(`20001`-`20022`,见 infra.md §6.2),在每次 RPC 的 metadata 注入:
 
 - `x-pandora-player-id: <player_id>` —— pkg/middleware/auth.go 直接认这个头(Envoy/gateway 鉴权后注入语义)。
   阶段 1 robot 自己造,**绕过 Envoy**,把后端 API 压满,不被 TLS/grpc-web 转换稀释。
@@ -202,7 +202,7 @@ P0/P1 由 Codex 跑(ops);P2 满载需人确认机器后跑,结论由 Claude 审�
 
 本客户端产出 `robot-stats.jsonl`,其余仍按 stress-discipline.md 既有口径,**不重复造**:
 
-- snapshot:`stress_snap.ps1`(待补)拉 `:51001/:51011/:51020/:51022` prom(§3 端口分工)。
+- snapshot:`stress_snap.ps1`(待补)拉 `:21001/:21011/:21020/:21022` prom(§3 端口分工)。
 - 汇总:`stress_summarize.ps1`(待补)读 prom snapshot + `robot-stats.jsonl` 出五段表。
 - 清库:`dev_tools.ps1`(待补)db-reset / kafka-offset-reset / etcd-clear;**停服复用现有
   `run_services.ps1 -Action stop`,不新建 `go_svc_stop.ps1`**(避免与文档示例双份,文档口径待统一)。

@@ -23,8 +23,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50011` | 客户端 RPC(经 Envoy)+ 内部 RPC |
-| HTTP | `:51011` | 仅 `/metrics` |
+| gRPC | `:20011` | 客户端 RPC(经 Envoy)+ 内部 RPC |
+| HTTP | `:21011` | 仅 `/metrics` |
 
 ## 对外接口
 
@@ -223,7 +223,7 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
 | | PVP 实例(`matchmaker-dev.yaml`) | PVE 实例(`matchmaker-pve.yaml`) |
 |---|---|---|
 | `walk_in` | `false`(走撮合) | **`true`(walk-in 直进)** |
-| `game_mode` / 端口 | `5v5_ranked` / `:50011` | `pve_coop` / `:50018` |
+| `game_mode` / 端口 | `5v5_ranked` / `:20011` | `pve_coop` / `:20018` |
 | 成局方式 | 凑齐 `2×team_size` + 确认期 | 每张票(单人/整队)立即成局(`formSoloMatch`) |
 | 等对手 / 确认期 / MMR | 有 | **无**(直接建 `confirmAccepted`,跳过) |
 
@@ -329,7 +329,7 @@ go run ./services/matchmaking/matchmaker/cmd/matchmaker -conf services/matchmaki
 ```
 
 > 起 **PVE 实例**改用 `-conf services/matchmaking/matchmaker/etc/matchmaker-pve.yaml`
->(`walk_in: true`,walk-in 直进,端口 :50018)。`auto_confirm_match` 仅用于撮合路径的
+>(`walk_in: true`,walk-in 直进,端口 :20018)。`auto_confirm_match` 仅用于撮合路径的
 > dev/压测省人工确认,PVP 正式对局保持 false。
 
 ## 关联文档

@@ -26,8 +26,8 @@
 
 | 协议 | 端口 | 用途 |
 |---|---|---|
-| gRPC | `:50016` | 客户端 RPC(经 Envoy jwt_authn)|
-| HTTP | `:51016` | 仅 `/metrics` |
+| gRPC | `:20016` | 客户端 RPC(经 Envoy jwt_authn)|
+| HTTP | `:21016` | 仅 `/metrics` |
 
 端口默认值来自 `internal/conf/conf.go` 的 `Defaults()`(`Server.Grpc.Addr` / `Server.Http.Addr`)。
 
@@ -58,7 +58,7 @@
 
 ```
 cmd/auction/main.go            启动入口(MySQL/Redis/Snowflake/Kafka/inventory 装配 + 后台补偿/清扫 goroutine)
-etc/auction-dev.yaml           单库 dev 配置(gRPC :50016 / HTTP :51016)
+etc/auction-dev.yaml           单库 dev 配置(gRPC :20016 / HTTP :21016)
 internal/
   conf/conf.go                 AuctionConf + Defaults(端口 / 上限 / TTL / 保留期 / 锁参数默认值)
   service/
@@ -246,7 +246,7 @@ escrow 未释放前成交事件不可见。订单流转 `audit` 事件(`pandora.
 | `max_price` | `1_000_000_000` | 单价上限,防溢出 / 异常价(入口另拒 `quantity*price` 溢出 int64)|
 | `max_active_orders_per_player` | `200` | 单玩家 PENDING+OPEN+PARTIAL 硬上限(§18 受管列表)|
 | `default_list_limit` / `max_list_limit` | `50` / `200` | `ListMarket` 返回条数默认 / 上限(`ListMyOrders` 另为 50 / 100)|
-| `inventory_addr` | `""`(dev `127.0.0.1:50015`)| inventory 内网 gRPC 地址;配了走真实结算,留空须显式 `allow_noop_settlement` |
+| `inventory_addr` | `""`(dev `127.0.0.1:20015`)| inventory 内网 gRPC 地址;配了走真实结算,留空须显式 `allow_noop_settlement` |
 | `allow_noop_settlement` | `false` | 仅联调 / 单测:`inventory_addr` 空时退回 Noop 结算,否则 fail-fast |
 | `allow_noop_match_events` | `false` | 仅本地无 Kafka 联调:`brokers` 空时允许禁用成交事件,否则 fail-fast |
 | `passive_warmup` | `false` | 蓝绿 R3 只读预热门禁:拒写 + 停 legacy 验证 / 补偿 / 清扫;旧实例全下线后才改回 |
@@ -268,8 +268,8 @@ escrow 未释放前成交事件不可见。订单流转 `audit` 事件(`pandora.
 ## 本地启动
 
 ```powershell
-# 前置基础设施:MySQL(pandora_auction)+ Redis + Kafka;真实结算还需 inventory 服务(:50015)。
-# dev yaml 已配 inventory_addr=127.0.0.1:50015、单库 dsn、redis :6380、kafka :9093。
+# 前置基础设施:MySQL(pandora_auction)+ Redis + Kafka;真实结算还需 inventory 服务(:20015)。
+# dev yaml 已配 inventory_addr=127.0.0.1:20015、单库 dsn、redis :6380、kafka :9093。
 
 go run ./services/economy/auction/cmd/auction -conf services/economy/auction/etc/auction-dev.yaml
 ```

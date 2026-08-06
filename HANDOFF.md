@@ -118,7 +118,7 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 
 ### 明确暂缓
 
-`friend`(:50004) 和 `chat`(:50005) 现在不做;保留 proto / 端口 / topic 规划,等 UE 与核心链路全部完成后,再作为社交尾部功能实现。
+`friend`(:20004) 和 `chat`(:20005) 现在不做;保留 proto / 端口 / topic 规划,等 UE 与核心链路全部完成后,再作为社交尾部功能实现。
 
 ---
 
@@ -370,7 +370,7 @@ go run ./cmd/gmctl additem --match <matchID> --player <playerID> --config <真�
 
 - GM 指令送达语义是 at-most-once:Redis `RPOP` 取出即出队,DS 拉取后宕机会丢,不自动重投。
 - gmctl 是内网运维 CLI,直连 ds_allocator,不经 Envoy,不能暴露给玩家客户端。
-- gmctl 默认地址是 `127.0.0.1:50020`;远程使用 `--addr host:50020` 或环境变量 `PANDORA_DS_ALLOCATOR_ADDR`。
+- gmctl 默认地址是 `127.0.0.1:20020`;远程使用 `--addr host:20020` 或环境变量 `PANDORA_DS_ALLOCATOR_ADDR`。
 - `PandoraProto` module 仍需保持 RTTI/异常/无 unity/NoPCHs 约束;protobuf 头只应在 codec `.cpp` 中出现,不要外泄到普通 UE 业务头。
 
 ---

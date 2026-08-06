@@ -1,6 +1,6 @@
 # Pandora battle_result 服务开发期配置(W4 ③,2026-06-06)。
 #
-# - gRPC :50022 / HTTP :51022(仅 /metrics)
+# - gRPC :20022 / HTTP :21022(仅 /metrics)
 # - MySQL 强依赖(pandora_battle 库:battles + battle_player_stats,幂等落库 不变量 §2)
 # - Kafka 强依赖(消费 pandora.battle.result / pandora.ds.lifecycle)
 # - player.update 事务出箱发布(W4 ⑨ at-least-once 可靠补偿,不变量 §4;player 服务幂等 UpdateMMR)
@@ -11,13 +11,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50022"
+    addr: ":20022"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51022"
+    addr: ":21022"
 
 node:
   node_id: 1
@@ -63,16 +63,16 @@ battle:
   # 不携带可核验 Model-B 凭据，服务会在连接 MySQL/Kafka 前启动失败，禁止绕过同步 ReportResult。
   # player_addr: player 服务 gRPC 地址(W4 ④ player 已上线 → 接真实当前 MMR;
   # 弱依赖:gRPC 懒连接,player 未起时调用失败由 biz 回退 base_mmr,不阻断落库)
-  player_addr: "127.0.0.1:50002"
+  player_addr: "127.0.0.1:20002"
   # matchmaker_addr: matchmaker 服务 gRPC 地址。结算/废弃落库后调 matchmaker.ReleaseMatch
   # 释放残留撮合状态(player→ticket claim + 票据 + match 镜像),修复"结算返回 Hub 后
   # 玩家无法再次匹配(StartMatch 4002)"。弱依赖:懒连接,matchmaker 未起时仅 Warn 不阻断落库。
-  matchmaker_addr: "127.0.0.1:50011"
+  matchmaker_addr: "127.0.0.1:20011"
   # Model-B 正常结算终态回收：ReportResult 鉴权快照与 battles/stats 同事务写
   # terminal_release_outbox；宽限 15s 给 DS 通知客户端，随后 worker 经 ds_allocator 做
   # Redis terminal/receipt CAS + UID precondition 回收。它不在同步响应路径杀 DS。
   # legacy/off 下不写 terminal outbox，本地址不会产生回收副作用。
-  ds_allocator_addr: "127.0.0.1:50020"
+  ds_allocator_addr: "127.0.0.1:20020"
   terminal_release_interval: "2s"
   terminal_release_batch_size: 128
   terminal_release_grace: "15s"
@@ -109,7 +109,7 @@ battle:
   # 掉落发放(实时通道与结算路径共用白名单):
   # inventory_addr 未配 → 掉落出箱积压不丢;drop_whitelist 空 → 一律过滤不发放。
   # 弱依赖:gRPC 懒连接,inventory 未起时出箱行保留重试,不阻断结算/进度落库。
-  inventory_addr: "127.0.0.1:50015"
+  inventory_addr: "127.0.0.1:20015"
   # 白名单与 UE 侧掉落表(Pandora-Client Table/道具/d_掉落.xlsx)同源维护:
   # 表里新增掉落物品必须同步加进这里,否则 DS 上报的拾取会被过滤不发放(只告警)。
   drop_whitelist: [10001, 10002, 10003, 10004, 10005, 10006]

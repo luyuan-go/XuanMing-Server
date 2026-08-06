@@ -7,7 +7,7 @@
 //
 // 用法(直连):
 //
-//	conn := grpcclient.MustDial("127.0.0.1:50001")
+//	conn := grpcclient.MustDial("127.0.0.1:20001")
 //	defer conn.Close()
 //	cli := loginpb.NewLoginServiceClient(conn)
 //
@@ -64,7 +64,7 @@ func MustDialInsecure(endpoint string, customMW ...middleware.Middleware) *grpc.
 }
 
 // MustDialInsecureRoundRobin 同 MustDialInsecure,但启用 gRPC round_robin 客户端负载均衡。
-// endpoint 应指向 headless Service 的 DNS(形如 "dns:///hub-allocator-headless.pandora.svc.cluster.local:50018",
+// endpoint 应指向 headless Service 的 DNS(形如 "dns:///hub-allocator-headless.pandora.svc.cluster.local:20018",
 // headless = clusterIP:None,DNS 返回全部 Pod IP);gRPC dns 解析 + round_robin 每-RPC 轮询后端。
 //
 // 用途(P0#5):hub_allocator 是单写者,普通 ClusterIP 直连被 L4 钉在某一 Pod,落到非-writer

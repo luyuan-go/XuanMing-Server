@@ -1,7 +1,7 @@
 # Pandora Prometheus 配置
 #
 # 抓取目标:21 个业务实例的 metrics 端口(20 个 Go 服务类型，matchmaker 含 PVP/PVE 双实例;
-# 51001~51022,见 docs/design/infra.md §6.3)+
+# 21001~21022,见 docs/design/infra.md §6.3)+
 # Pandora 自身(promehteus 自监控)。
 #
 # host.docker.internal 让容器内的 prometheus 能访问 host 上跑的 go 服务进程。
@@ -23,51 +23,51 @@ scrape_configs:
   - job_name: pandora-go-services
     static_configs:
       # 基础玩家服务
-      - targets: ['host.docker.internal:51001']
+      - targets: ['host.docker.internal:21001']
         labels: { service: login }
-      - targets: ['host.docker.internal:51002']
+      - targets: ['host.docker.internal:21002']
         labels: { service: player }
-      - targets: ['host.docker.internal:51003']
+      - targets: ['host.docker.internal:21003']
         labels: { service: data_service }
-      - targets: ['host.docker.internal:51004']
+      - targets: ['host.docker.internal:21004']
         labels: { service: friend }
-      - targets: ['host.docker.internal:51005']
+      - targets: ['host.docker.internal:21005']
         labels: { service: chat }
-      - targets: ['host.docker.internal:51006']
+      - targets: ['host.docker.internal:21006']
         labels: { service: player_locator }
-      - targets: ['host.docker.internal:51007']
+      - targets: ['host.docker.internal:21007']
         labels: { service: leaderboard }
       # 玩家 owner 权威（内部服务，仍需纳入 metrics 监控）
-      - targets: ['host.docker.internal:51017']
+      - targets: ['host.docker.internal:21017']
         labels: { service: owner }
       # 公会 + 临时群（GuildService + GroupService 同进程）
-      - targets: ['host.docker.internal:51008']
+      - targets: ['host.docker.internal:21008']
         labels: { service: guild }
       # 邮件（MailService,系统/公会 channel+watermark + 个人写扩散）
-      - targets: ['host.docker.internal:51009']
+      - targets: ['host.docker.internal:21009']
         labels: { service: mail }
       # 推送（W2 ⑤ 新增，server stream + /metrics）
-      - targets: ['host.docker.internal:51014']
+      - targets: ['host.docker.internal:21014']
         labels: { service: push }
       # 队伍 / 匹配 / 交易 / 背包 / 拍卖 / 对话
-      - targets: ['host.docker.internal:51010']
+      - targets: ['host.docker.internal:21010']
         labels: { service: team }
-      - targets: ['host.docker.internal:51011']
+      - targets: ['host.docker.internal:21011']
         labels: { service: matchmaker }
-      - targets: ['host.docker.internal:51018']
+      - targets: ['host.docker.internal:21018']
         labels: { service: matchmaker-pve }
-      - targets: ['host.docker.internal:51012']
+      - targets: ['host.docker.internal:21012']
         labels: { service: trade }
-      - targets: ['host.docker.internal:51015']
+      - targets: ['host.docker.internal:21015']
         labels: { service: inventory }
-      - targets: ['host.docker.internal:51016']
+      - targets: ['host.docker.internal:21016']
         labels: { service: auction }
-      - targets: ['host.docker.internal:51013']
+      - targets: ['host.docker.internal:21013']
         labels: { service: dialogue }
       # DS 调度 / Hub 调度 / 战斗结算
-      - targets: ['host.docker.internal:51020']
+      - targets: ['host.docker.internal:21020']
         labels: { service: ds_allocator }
-      - targets: ['host.docker.internal:51021']
+      - targets: ['host.docker.internal:21021']
         labels: { service: hub_allocator }
-      - targets: ['host.docker.internal:51022']
+      - targets: ['host.docker.internal:21022']
         labels: { service: battle_result }

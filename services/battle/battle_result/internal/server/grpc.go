@@ -14,7 +14,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并注册 BattleResultService。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50022)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20022)。
 // 调用方为后端内部 / 运维,pmw.AuthOptional() 与其它服保持一致。
 func NewGRPCServer(cfg *conf.Config, svc *service.BattleResultService) *kgrpc.Server {
 	srv := grpcserver.MustNewServer(cfg.Server, pmw.AuthOptional())

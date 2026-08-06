@@ -1,6 +1,6 @@
 # Pandora team 服务开发期配置(W3 ⑦,2026-06-05)。
 #
-# - gRPC :50010 / HTTP :51010(仅 /metrics)
+# - gRPC :20010 / HTTP :21010(仅 /metrics)
 # - Redis 强依赖(队伍状态 WATCH/MULTI/EXEC 乐观锁)
 # - Kafka 用于发布 pandora.team.update 事件(push 服务订阅)
 # - W3 ⑦ 起 duration 字段用 pkg/config.Duration,yaml 可直接写 "60s"
@@ -9,13 +9,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50010"
+    addr: ":20010"
     timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
-    addr: ":51010"
+    addr: ":21010"
 
 node:
   node_id: 1
@@ -47,7 +47,7 @@ team:
   optimistic_retry: 3
   # matchmaker_addr: matchmaker gRPC 直连地址——成员离队/被踢时联动撤销其匹配票据
   # (弱依赖,留空则不联动)
-  matchmaker_addr: "127.0.0.1:50011"
+  matchmaker_addr: "127.0.0.1:20011"
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威
 # (pandora:sess,node.redis_client 指向的共享 Redis)当前一代,顶号后旧 JWT 立即失效。

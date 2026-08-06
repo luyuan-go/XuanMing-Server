@@ -199,7 +199,7 @@ $policy = [pscustomobject]@{
 }
 $service = [pscustomobject]@{
     metadata = [pscustomobject]@{ name = 'ds-allocator'; namespace = 'pandora' }
-    spec = [pscustomobject]@{ ports = @([pscustomobject]@{ name = 'grpc'; appProtocol = 'grpc'; port = 50020 }) }
+    spec = [pscustomobject]@{ ports = @([pscustomobject]@{ name = 'grpc'; appProtocol = 'grpc'; port = 20020 }) }
 }
 Assert-PandoraDsTerminalMeshPolicyContract $peer $policy $service
 $badPolicy = Copy-Object $policy
@@ -357,7 +357,7 @@ Assert-PandoraDsAuthSyntheticContract $omitemptyJob $omitemptyPod 'pandora' $run
 
 $endpointService = [pscustomobject]@{
     metadata = [pscustomobject]@{ name = 'login'; namespace = 'pandora'; uid = 'service-uid' }
-    spec = [pscustomobject]@{ ports = @([pscustomobject]@{ port = 50001; protocol = 'TCP'; targetPort = 50001 }) }
+    spec = [pscustomobject]@{ ports = @([pscustomobject]@{ port = 20001; protocol = 'TCP'; targetPort = 20001 }) }
 }
 $endpointPod = [pscustomobject]@{
     metadata = [pscustomobject]@{ name = 'login-green-abc'; namespace = 'pandora'; uid = 'pod-uid' }
@@ -373,7 +373,7 @@ $endpointSlice = [pscustomobject]@{
         ownerReferences = @([pscustomobject]@{ kind = 'Service'; name = 'login'; uid = 'service-uid'; controller = $true })
     }
     addressType = 'IPv4'
-    ports = @([pscustomobject]@{ name = ''; protocol = 'TCP'; port = 50001 })
+    ports = @([pscustomobject]@{ name = ''; protocol = 'TCP'; port = 20001 })
     endpoints = @([pscustomobject]@{
         addresses = @('10.0.0.8')
         conditions = [pscustomobject]@{ ready = $true; serving = $true; terminating = $false }
@@ -405,7 +405,7 @@ $hubGreenService = [pscustomobject]@{
             app = 'hub-allocator'; 'pandora.dev/ds-auth-writer-set' = 'green';
             'pandora.dev/ds-auth-writer-epoch' = '2'
         }
-        ports = @([pscustomobject]@{ port = 50021; targetPort = 50021; protocol = 'TCP' })
+        ports = @([pscustomobject]@{ port = 20021; targetPort = 20021; protocol = 'TCP' })
     }
 }
 Assert-PandoraHubAllocatorGreenServiceContract $hubGreenService 'pandora'
@@ -436,8 +436,8 @@ Assert-Throws { New-PandoraDsAuthEtcdIdentityPatch 'login' 'r7' 'bad:2379' '/pan
 $greenTemplateSpec = Copy-Object $pod.spec
 $greenTemplateSpec.containers[0] | Add-Member -NotePropertyName image -NotePropertyValue ('registry/pandora/ds-allocator@' + $digest)
 $greenTemplateSpec.containers[0] | Add-Member -NotePropertyName args -NotePropertyValue @('-conf', 'etc/cluster.yaml')
-$greenTemplateSpec.containers[0] | Add-Member -NotePropertyName ports -NotePropertyValue @([pscustomobject]@{ name = 'grpc'; containerPort = 50020 })
-$greenTemplateSpec.containers[0] | Add-Member -NotePropertyName readinessProbe -NotePropertyValue ([pscustomobject]@{ grpc = [pscustomobject]@{ port = 50020 } })
+$greenTemplateSpec.containers[0] | Add-Member -NotePropertyName ports -NotePropertyValue @([pscustomobject]@{ name = 'grpc'; containerPort = 20020 })
+$greenTemplateSpec.containers[0] | Add-Member -NotePropertyName readinessProbe -NotePropertyValue ([pscustomobject]@{ grpc = [pscustomobject]@{ port = 20020 } })
 $greenTemplateSpec.containers[0] | Add-Member -NotePropertyName resources -NotePropertyValue ([pscustomobject]@{ requests = [pscustomobject]@{ cpu = '25m' } })
 $greenTemplateSpec.volumes += [pscustomobject]@{ name = 'conf'; secret = [pscustomobject]@{ secretName = 'pandora-config' } }
 $greenTemplateSpec.containers[0].volumeMounts += [pscustomobject]@{
@@ -484,8 +484,8 @@ Assert-True ($opaqueRVObject.metadata.resourceVersion -ceq 'rv:opaque-1') `
     'Kubernetes resourceVersion is opaque and must not be interpreted as decimal'
 Assert-True ($greenObject.spec.replicas -eq 2 -and $greenObject.spec.selector.matchLabels.'pandora.dev/ds-auth-writer-set' -ceq 'green') 'canonical green keeps desired/immutable selector'
 $greenContainer = @($greenObject.spec.template.spec.containers | Where-Object name -ceq 'ds-allocator')[0]
-Assert-True ($greenContainer.args[0] -ceq '-conf' -and $greenContainer.ports[0].containerPort -eq 50020 -and
-    $greenContainer.readinessProbe.grpc.port -eq 50020 -and $greenContainer.resources.requests.cpu -ceq '25m') `
+Assert-True ($greenContainer.args[0] -ceq '-conf' -and $greenContainer.ports[0].containerPort -eq 20020 -and
+    $greenContainer.readinessProbe.grpc.port -eq 20020 -and $greenContainer.resources.requests.cpu -ceq '25m') `
     'canonical green full object keeps args/ports/probes/resources'
 Assert-True ($greenObject.spec.template.spec.serviceAccountName -ceq 'pandora-allocator' -and
     $greenObject.spec.template.metadata.labels.'istio.io/rev' -ceq 'asm-1-22' -and

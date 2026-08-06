@@ -1,4 +1,4 @@
-﻿# Pandora 集群版配置生成器
+# Pandora 集群版配置生成器
 #
 # 把各服务的 etc/<svc>-dev.yaml(地址都是 127.0.0.1)转换成「集群版」配置:
 # mysql/redis/kafka/etcd 与同伴服务的地址改成容器/Service 短名,allocator 的
@@ -1190,28 +1190,28 @@ function Sync-EnvoyJwks([string]$TargetDir) {
 # Name 用「连字符」形式:同时满足 docker-compose 服务名与 k8s Service 名(k8s 禁止下划线),
 # docker / k8s 两边据此短名解析,所以同一份产物通用。
 $Services = @(
-    @{ Name = 'login';          Conf = 'services/account/login/etc/login-dev.yaml';                Port = 50001 }
-    @{ Name = 'player';         Conf = 'services/account/player/etc/player-dev.yaml';              Port = 50002 }
-    @{ Name = 'data-service';   Conf = 'services/data/data_service/etc/data_service-dev.yaml';     Port = 50003 }
-    @{ Name = 'friend';         Conf = 'services/social/friend/etc/friend-dev.yaml';               Port = 50004 }
-    @{ Name = 'chat';           Conf = 'services/social/chat/etc/chat-dev.yaml';                   Port = 50005 }
-    @{ Name = 'player-locator'; Conf = 'services/runtime/player_locator/etc/locator-dev.yaml';     Port = 50006 }
-    @{ Name = 'leaderboard';    Conf = 'services/runtime/leaderboard/etc/leaderboard-dev.yaml';    Port = 50007 }
-    @{ Name = 'owner';          Conf = 'services/runtime/owner/etc/owner-dev.yaml';                Port = 50017 }
-    @{ Name = 'guild';          Conf = 'services/social/guild/etc/guild-dev.yaml';                 Port = 50008 }
-    @{ Name = 'mail';           Conf = 'services/social/mail/etc/mail-dev.yaml';                   Port = 50009 }
-    @{ Name = 'team';           Conf = 'services/matchmaking/team/etc/team-dev.yaml';              Port = 50010 }
-    @{ Name = 'matchmaker';     Conf = 'services/matchmaking/matchmaker/etc/matchmaker-dev.yaml';  Port = 50011 }
+    @{ Name = 'login';          Conf = 'services/account/login/etc/login-dev.yaml';                Port = 20001 }
+    @{ Name = 'player';         Conf = 'services/account/player/etc/player-dev.yaml';              Port = 20002 }
+    @{ Name = 'data-service';   Conf = 'services/data/data_service/etc/data_service-dev.yaml';     Port = 20003 }
+    @{ Name = 'friend';         Conf = 'services/social/friend/etc/friend-dev.yaml';               Port = 20004 }
+    @{ Name = 'chat';           Conf = 'services/social/chat/etc/chat-dev.yaml';                   Port = 20005 }
+    @{ Name = 'player-locator'; Conf = 'services/runtime/player_locator/etc/locator-dev.yaml';     Port = 20006 }
+    @{ Name = 'leaderboard';    Conf = 'services/runtime/leaderboard/etc/leaderboard-dev.yaml';    Port = 20007 }
+    @{ Name = 'owner';          Conf = 'services/runtime/owner/etc/owner-dev.yaml';                Port = 20017 }
+    @{ Name = 'guild';          Conf = 'services/social/guild/etc/guild-dev.yaml';                 Port = 20008 }
+    @{ Name = 'mail';           Conf = 'services/social/mail/etc/mail-dev.yaml';                   Port = 20009 }
+    @{ Name = 'team';           Conf = 'services/matchmaking/team/etc/team-dev.yaml';              Port = 20010 }
+    @{ Name = 'matchmaker';     Conf = 'services/matchmaking/matchmaker/etc/matchmaker-dev.yaml';  Port = 20011 }
     # PVE 直进匹配实例:同 matchmaker 二进制、不同配置(game_mode=pve_coop + walk_in)。
-    @{ Name = 'matchmaker-pve'; Conf = 'services/matchmaking/matchmaker/etc/matchmaker-pve.yaml';  Port = 50018 }
-    @{ Name = 'trade';          Conf = 'services/economy/trade/etc/trade-dev.yaml';                Port = 50012 }
-    @{ Name = 'dialogue';       Conf = 'services/social/dialogue/etc/dialogue-dev.yaml';           Port = 50013 }
-    @{ Name = 'push';           Conf = 'services/runtime/push/etc/push-dev.yaml';                  Port = 50014 }
-    @{ Name = 'inventory';      Conf = 'services/economy/inventory/etc/inventory-dev.yaml';        Port = 50015 }
-    @{ Name = 'auction';        Conf = 'services/economy/auction/etc/auction-dev.yaml';            Port = 50016 }
-    @{ Name = 'ds-allocator';   Conf = 'services/battle/ds_allocator/etc/ds_allocator-dev.yaml';   Port = 50020 }
-    @{ Name = 'hub-allocator';  Conf = 'services/battle/hub_allocator/etc/hub_allocator-dev.yaml'; Port = 50021 }
-    @{ Name = 'battle-result';  Conf = 'services/battle/battle_result/etc/battle_result-dev.yaml'; Port = 50022 }
+    @{ Name = 'matchmaker-pve'; Conf = 'services/matchmaking/matchmaker/etc/matchmaker-pve.yaml';  Port = 20018 }
+    @{ Name = 'trade';          Conf = 'services/economy/trade/etc/trade-dev.yaml';                Port = 20012 }
+    @{ Name = 'dialogue';       Conf = 'services/social/dialogue/etc/dialogue-dev.yaml';           Port = 20013 }
+    @{ Name = 'push';           Conf = 'services/runtime/push/etc/push-dev.yaml';                  Port = 20014 }
+    @{ Name = 'inventory';      Conf = 'services/economy/inventory/etc/inventory-dev.yaml';        Port = 20015 }
+    @{ Name = 'auction';        Conf = 'services/economy/auction/etc/auction-dev.yaml';            Port = 20016 }
+    @{ Name = 'ds-allocator';   Conf = 'services/battle/ds_allocator/etc/ds_allocator-dev.yaml';   Port = 20020 }
+    @{ Name = 'hub-allocator';  Conf = 'services/battle/hub_allocator/etc/hub_allocator-dev.yaml'; Port = 20021 }
+    @{ Name = 'battle-result';  Conf = 'services/battle/battle_result/etc/battle_result-dev.yaml'; Port = 20022 }
 )
 
 # 同伴服务 host 映射:127.0.0.1:<port> -> <svc>:<port>
@@ -1220,10 +1220,10 @@ foreach ($s in $Services) { $PortToHost[[string]$s.Port] = $s.Name }
 
 # 混合(含战斗)模式:ds/hub allocator 跑宿主而非容器,把它们的同伴地址从 docker 服务名
 # (ds-allocator/hub-allocator)改指 host.docker.internal —— 容器内经该名回连宿主发布端口。
-# 只影响调用方(matchmaker/battle_result→50020、login→50021)的地址改写,不改 allocator 自身。
+# 只影响调用方(matchmaker/battle_result→20020、login→20021)的地址改写,不改 allocator 自身。
 if ($HostAllocators) {
-    $PortToHost['50020'] = 'host.docker.internal'
-    $PortToHost['50021'] = 'host.docker.internal'
+    $PortToHost['20020'] = 'host.docker.internal'
+    $PortToHost['20021'] = 'host.docker.internal'
 }
 
 function Convert-DevToCluster([string]$text) {
@@ -1343,7 +1343,7 @@ function Set-ServiceClusterConfigTableDir([string]$serviceName, [string]$text) {
 
 # -Prod 机械把 login 的 hub_allocator 地址改成 headless + dns:/// 方案(P0#5 收口,2026-07-25)。
 # hub_allocator 是单写者:同一时刻只有当选副本能写,其余副本对写请求返回可重试 UNAVAILABLE。
-# 走 ClusterIP(`hub-allocator:50021`)时 gRPC 用 passthrough 解析 + L4 长连接,会被**钉在**某一
+# 走 ClusterIP(`hub-allocator:20021`)时 gRPC 用 passthrough 解析 + L4 长连接,会被**钉在**某一
 # 个 Pod;钉到热备副本时 AssignHub 的就地重试全落同一 Pod = 白重试(audit-residual A2)。
 # login 侧已改用 grpcclient.MustDialInsecureRoundRobin,但只有目标是 `dns:///<headless FQDN>`
 # 时 round_robin 才拿得到全部 Ready Pod IP。此前只有 login-prod.yaml.example 手写了该地址,
@@ -1353,13 +1353,13 @@ function Set-ServiceClusterConfigTableDir([string]$serviceName, [string]$text) {
 # compose 里无法解析;-Prod 的部署目标固定是 deploy/k8s(namespace=pandora,与
 # services.yaml 的 hub-allocator-headless Service 一致)。
 function Set-ProdLoginHubHeadlessAddr([string]$text) {
-    $pattern = '(?m)^([ \t]{4})addr:[ \t]*"hub-allocator:50021"[ \t]*(?:#.*)?$'
+    $pattern = '(?m)^([ \t]{4})addr:[ \t]*"hub-allocator:20021"[ \t]*(?:#.*)?$'
     $anchorCount = [regex]::Matches($text, $pattern).Count
     if ($anchorCount -ne 1) {
         throw "[FATAL] login 模板 hub.addr 锚点异常(count=$anchorCount;-HostAllocators 与 -Prod 不可同用),拒绝生成 -Prod 产物。"
     }
     return [regex]::Replace($text, $pattern,
-        '${1}addr: "dns:///hub-allocator-headless.pandora.svc.cluster.local:50021"', 1)
+        '${1}addr: "dns:///hub-allocator-headless.pandora.svc.cluster.local:20021"', 1)
 }
 
 function Set-ProdPlayerExperienceOff([string]$text) {
@@ -1946,7 +1946,10 @@ try {
         $src = Join-Path $ProjectRoot $s.Conf
         $raw = Get-Content -LiteralPath $src -Raw
         $out = Convert-DevToCluster $raw
-        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result')) {
+        # 凡 dev 模板里配了 config_table 的服务都必须在此列出:容器内没有 ../../../configtable/dist,
+        # 漏掉一个 = 该服务带着宿主相对路径进集群 → 启动 fail-closed 退出 → CrashLoopBackOff。
+        # (2026-08-05:ds-allocator 因 08-04 新增 config_table 时未同步登记,正是这样炸的。)
+        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result', 'ds-allocator')) {
             $out = Set-ServiceClusterConfigTableDir $s.Name $out
         }
         if ($s.Name -in $script:MultiReplicaSnowflakeServices) {
@@ -1985,6 +1988,15 @@ try {
             $out = Set-BattleResultRedisAuthorityIngress $out
         }
         if ($s.Name -in @('ds-allocator', 'hub-allocator')) { $out = Rewrite-Allocator $s.Name $out }
+        # 机械闸:集群产物里绝不允许残留宿主相对路径。上面那份白名单是手工登记,漏登记时
+        # 产物会带着 ../../../configtable/dist 进 Pod,而容器里根本没有这个目录 ——
+        # 服务 fail-closed 退出、CrashLoopBackOff,但**生成这一步照样报成功**,故障要到
+        # rollout 超时才暴露(2026-08-05 ds-allocator 实例)。这里在写盘前就把它变成生成期错误。
+        if ($out -match '\.\./\.\./\.\./configtable/dist') {
+            throw "[FATAL] $($s.Name).yaml 集群产物仍含宿主相对路径 ../../../configtable/dist。" +
+                  "该服务的 dev 模板配了 config_table,但未登记进 Set-ServiceClusterConfigTableDir 的服务白名单;" +
+                  "请把 '$($s.Name)' 加进该白名单,并确认 deploy/k8s/services/services.yaml 里它的 Deployment 已挂载 pandora-configtable。"
+        }
         $dst = Join-Path $stageDir "$($s.Name).yaml"
         [System.IO.File]::WriteAllText($dst, $out, (New-Object System.Text.UTF8Encoding($false)))
     }

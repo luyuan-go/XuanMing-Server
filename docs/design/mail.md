@@ -1,6 +1,6 @@
 # Pandora 邮件系统设计(mail 服务)
 
-> 状态:设计待拍板(2026-06-29)。社交域(social),gRPC 50009 / metrics 51009。
+> 状态:设计待拍板(2026-06-29)。社交域(social),gRPC 20009 / metrics 21009。
 >
 > 依赖前置:`go-services.md`(服务清单)、`infra.md`(端口 / topic)、`CLAUDE.md §5/§9`(proto / 不变量)。
 > 复用:inventory 的附件幂等发奖(W5 ③)、push 的红点推送、`pandora.system.notify` topic。
@@ -115,7 +115,7 @@ SendPersonalMail(player_id, Mail) → mail_id
 
 ## 8. 待人拍板
 
-- 端口 50009 占用确认。
+- 端口 20009 占用确认。
 - 是否本期做"定向系统邮件"(段位/区服)还是只全服。
 - 过期未领是否自动补发到个人邮件。**2026-07-21 部分落地**:清理侧已用归档兜底
   (`player_mail_archive` 保留 90 天,不静默丢失,§2.4);"自动补发"仍待拍板——若做,

@@ -27,15 +27,15 @@
 
 | cluster | 后端业务服 | 端口 | 协议 | timeout |
 |---|---|---|---|---|
-| `login_cluster`  | login | host.docker.internal:50001 | h2c | route 5s |
-| `push_cluster`   | push  | host.docker.internal:50014 | h2c | route 0s(server stream) |
-| `team_cluster`   | team  | host.docker.internal:50010 | h2c | route 15s |
-| `match_cluster`  | matchmaker | host.docker.internal:50011 | h2c | route 15s |
-| `friend_cluster` | friend | host.docker.internal:50004 | h2c | route 15s |
-| `chat_cluster`   | chat | host.docker.internal:50005 | h2c | route 15s |
-| `trade_cluster`  | trade | host.docker.internal:50012 | h2c | route 15s |
-| `leaderboard_cluster` | leaderboard | host.docker.internal:50007 | h2c | route 15s |
-| `dialogue_cluster` | dialogue | host.docker.internal:50013 | h2c | route 15s |
+| `login_cluster`  | login | host.docker.internal:20001 | h2c | route 5s |
+| `push_cluster`   | push  | host.docker.internal:20014 | h2c | route 0s(server stream) |
+| `team_cluster`   | team  | host.docker.internal:20010 | h2c | route 15s |
+| `match_cluster`  | matchmaker | host.docker.internal:20011 | h2c | route 15s |
+| `friend_cluster` | friend | host.docker.internal:20004 | h2c | route 15s |
+| `chat_cluster`   | chat | host.docker.internal:20005 | h2c | route 15s |
+| `trade_cluster`  | trade | host.docker.internal:20012 | h2c | route 15s |
+| `leaderboard_cluster` | leaderboard | host.docker.internal:20007 | h2c | route 15s |
+| `dialogue_cluster` | dialogue | host.docker.internal:20013 | h2c | route 15s |
 
 DS 面(`:8444` `pandora_ds_listener`,**不挂玩家面 jwt_authn**):DSTicket 只认证玩家→DS；
 DS→后端由 exact method 白名单、服务层 DS Bearer Guard 与 Redis active/projection 共同授权。
@@ -51,11 +51,11 @@ NetworkPolicy 只是可达性收敛，生产仍须补 mTLS/ACL 信任根（见 a
 
 | cluster | 内部服务 | 端口 | 协议 | timeout | DS 用途 |
 |---|---|---|---|---|---|
-| `hub_allocator_cluster`  | hub_allocator | host.docker.internal:50021 | h2c | route 15s | Hub DS 心跳 |
-| `ds_allocator_cluster`   | ds_allocator  | host.docker.internal:50020 | h2c | route 15s | Battle DS 心跳 |
-| `locator_cluster`        | player_locator | host.docker.internal:50006 | h2c | route 15s | Hub DS SetLocation(HUB) |
-| `battle_result_cluster`  | battle_result | host.docker.internal:50022 | h2c | route 15s | Battle DS 同步结算上报 |
-| `login_cluster` | login | host.docker.internal:50001 | h2c | route 15s | DS 在线 `VerifyDSTicket`；`:8443` 对同 path 精确 403 |
+| `hub_allocator_cluster`  | hub_allocator | host.docker.internal:20021 | h2c | route 15s | Hub DS 心跳 |
+| `ds_allocator_cluster`   | ds_allocator  | host.docker.internal:20020 | h2c | route 15s | Battle DS 心跳 |
+| `locator_cluster`        | player_locator | host.docker.internal:20006 | h2c | route 15s | Hub DS SetLocation(HUB) |
+| `battle_result_cluster`  | battle_result | host.docker.internal:20022 | h2c | route 15s | Battle DS 同步结算上报 |
+| `login_cluster` | login | host.docker.internal:20001 | h2c | route 15s | DS 在线 `VerifyDSTicket`；`:8443` 对同 path 精确 403 |
 
 后续客户端业务服上线时可复制 cluster 块并按鉴权契约增加 route；DS 面新增方法必须逐个增加
 **精确 `path`**，禁止用 service `prefix` 扩大未鉴权攻击面。
@@ -129,7 +129,7 @@ docker logs pandora-envoy --tail 50
 
 ```powershell
 grpcurl -plaintext -d '{\"account\":\"test\",\"password_hash\":\"abc\",\"device_id\":\"d1\"}' `
-  127.0.0.1:50001 pandora.login.v1.LoginService/Login
+  127.0.0.1:20001 pandora.login.v1.LoginService/Login
 ```
 
 期望:`{"code":"OK","playerId":"...","sessionToken":"<uuid>","hubDsAddr":"127.0.0.1:7777", ...}`
@@ -164,10 +164,10 @@ grpcurl -insecure 127.0.0.1:8443 list
 #   pandora.login.v1.LoginService
 # (注意:list 只反映 envoy 路由命中的 cluster 上 reflection 注册的 services,
 #  reflection 路由打到 login_cluster,所以会列出 login 服务 + reflection 本身;
-#  push 的 service list 要直接连 :50014 或单独打 reflection 路由)
+#  push 的 service list 要直接连 :20014 或单独打 reflection 路由)
 
-grpcurl -plaintext 127.0.0.1:50001 describe pandora.login.v1.LoginService
-grpcurl -plaintext 127.0.0.1:50014 describe pandora.push.v1.PushService
+grpcurl -plaintext 127.0.0.1:20001 describe pandora.login.v1.LoginService
+grpcurl -plaintext 127.0.0.1:20014 describe pandora.push.v1.PushService
 ```
 
 ---

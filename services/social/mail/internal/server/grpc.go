@@ -15,7 +15,7 @@ import (
 
 // NewGRPCServer 构造 gRPC server 并注册 MailService。
 //
-// 端口由 cfg.Server.Grpc.Addr 决定(默认 :50009)。
+// 端口由 cfg.Server.Grpc.Addr 决定(默认 :20009)。
 // pmw.AuthOptional() 从 Envoy 注入的 player_id 注入 ctx;玩家 RPC 在 service 层兜底 callerID==0。
 // SendSystemMail/SendGuildMail/SendPersonalMail 为内网运营 RPC,不经 Envoy 对客户端开放
 // (内网调用不带 x-pandora-jwt-payload,SessionCurrent 对其天然放行)。

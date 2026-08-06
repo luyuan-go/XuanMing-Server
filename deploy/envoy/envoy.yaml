@@ -296,7 +296,7 @@ static_resources:
                   status: 403
                   body:
                     inline_string: "internal rpc"
-              # PVE 匹配实例路由:客户端带 header `x-pandora-game-mode: pve` → PVE matchmaker(:50018,
+              # PVE 匹配实例路由:客户端带 header `x-pandora-game-mode: pve` → PVE matchmaker(:20018,
               # game_mode=pve_coop + walk_in=true,单人/整队直进副本);不带 = 默认 PVP 撮合实例。
               # 设计既定「一个 game_mode 一个 matchmaker 部署」;同一 gRPC 服务名靠 header 分流是 Envoy 标准做法。
               # 安全:此头只选择实例,player_id 仍以 JWT sub 为准(两实例同一 jwt_authn 规则),伪造头最多进错池。
@@ -534,8 +534,8 @@ static_resources:
   #   battle_result.ReportResult / locator.SetLocation 伪造战绩/定位。故 DS 面单独开
   #   :8444,与客户端面物理隔离,便于后续单独加 mTLS / 网络策略锁死「只允许 DS pod 访问」。
   #
-  # UE DS 走 gRPC-Web(FHttpModule),内部服务(login :50001 / hub :50021 / ds :50020 / locator :50006 /
-  # battle_result :50022)裸端口是原生 gRPC(h2c),这里用 grpc_web filter 做协议转换。
+  # UE DS 走 gRPC-Web(FHttpModule),内部服务(login :20001 / hub :20021 / ds :20020 / locator :20006 /
+  # battle_result :20022)裸端口是原生 gRPC(h2c),这里用 grpc_web filter 做协议转换。
   # UE DS `UPandoraDSBackendSubsystem` 的各 Endpoint 经 SetEndpoints / Game.ini 指向
   # 本地 dev 监听器用 http://host:8444（bUseTls=false），避免 Linux DS 容器无法信任宿主 mkcert 根证书。
   # 同集群生产环境仍保持应用层明文，由 NetworkPolicy 收敛；未来 mesh mTLS 对业务透明。
@@ -645,7 +645,7 @@ static_resources:
               # ----- Battle DS → gm.GmService(GM 指令拉取/回执,复用 ds_allocator 同进程)-----
               # ⚠️ 只放 DS 侧发起的两个精确 method:PollCommands(拉队列) + AckCommand(回执)。
               #    SendCommand(运维下发)**绝不**经任一 Envoy 监听器暴露,只内网直连 ds_allocator
-              #    :50020(gmctl / 运维跳板机),防 DS 或玩家侧越权下发道具(§14 闭环 + 最小暴露)。
+              #    :20020(gmctl / 运维跳板机),防 DS 或玩家侧越权下发道具(§14 闭环 + 最小暴露)。
               - match:
                   path: "/pandora.gm.v1.GmService/PollCommands"
                 route:
@@ -752,7 +752,7 @@ static_resources:
                 # ⭐ host.docker.internal:Windows / macOS Docker Desktop 默认解析到宿主
                 #   Linux:docker-compose 用 extra_hosts: host-gateway 补,见 docker-compose.dev.yml
                 address: host.docker.internal
-                port_value: 50001
+                port_value: 20001
 
   # ===== push_cluster(server stream,idle 0)=====
   - name: push_cluster
@@ -776,7 +776,7 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50014
+                port_value: 20014
 
   # ===== team_cluster(unary,demo 15s 超时)=====
   - name: team_cluster
@@ -797,7 +797,7 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50010
+                port_value: 20010
 
   # ===== match_cluster(matchmaker unary,demo 15s 超时)=====
   - name: match_cluster
@@ -818,7 +818,7 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50011
+                port_value: 20011
 
   # ===== match_pve_cluster(PVE matchmaker 实例,header x-pandora-game-mode: pve 分流)=====
   # 同一个 matchmaker 二进制,配置 matchmaker-pve.yaml(game_mode=pve_coop + walk_in=true,
@@ -842,7 +842,7 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50018
+                port_value: 20018
 
   # ===== friend_cluster(unary,demo 15s 超时)=====
   - name: friend_cluster
@@ -863,7 +863,7 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50004
+                port_value: 20004
 
   # ===== chat_cluster(unary,demo 15s 超时)=====
   - name: chat_cluster
@@ -884,7 +884,7 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50005
+                port_value: 20005
 
   # ===== trade_cluster(unary,demo 15s 超时)=====
   - name: trade_cluster
@@ -905,7 +905,7 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50012
+                port_value: 20012
 
   # ===== leaderboard_cluster(unary,demo 15s 超时)=====
   - name: leaderboard_cluster
@@ -926,7 +926,7 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50007
+                port_value: 20007
 
   # ===== guild_cluster（公会 + 临时群 GuildService/GroupService 同进程，unary，demo 15s 超时）=====
   - name: guild_cluster
@@ -947,7 +947,7 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50008
+                port_value: 20008
 
   # ===== mail_cluster（邮件 MailService，unary，demo 15s 超时）=====
   - name: mail_cluster
@@ -968,14 +968,14 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50009
+                port_value: 20009
 
   # ===========================================================================
   # DS 面内部服务 cluster(供 :8444 pandora_ds_listener 使用,agones-dev.md §5.1)
   # 全部 h2c 上游(业务服明文 HTTP/2),host.docker.internal 解析到宿主机进程。
   # ===========================================================================
 
-  # ===== hub_allocator_cluster(Hub DS 心跳,:50021)=====
+  # ===== hub_allocator_cluster(Hub DS 心跳,:20021)=====
   - name: hub_allocator_cluster
     type: STRICT_DNS
     dns_lookup_family: V4_ONLY
@@ -994,9 +994,9 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50021
+                port_value: 20021
 
-  # ===== ds_allocator_cluster(Battle DS 心跳,:50020)=====
+  # ===== ds_allocator_cluster(Battle DS 心跳,:20020)=====
   - name: ds_allocator_cluster
     type: STRICT_DNS
     dns_lookup_family: V4_ONLY
@@ -1015,9 +1015,9 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50020
+                port_value: 20020
 
-  # ===== locator_cluster(Hub DS SetLocation(HUB),:50006)=====
+  # ===== locator_cluster(Hub DS SetLocation(HUB),:20006)=====
   - name: locator_cluster
     type: STRICT_DNS
     dns_lookup_family: V4_ONLY
@@ -1036,9 +1036,9 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50006
+                port_value: 20006
 
-  # ===== battle_result_cluster(Battle DS 同步结算上报,:50022)=====
+  # ===== battle_result_cluster(Battle DS 同步结算上报,:20022)=====
   - name: battle_result_cluster
     type: STRICT_DNS
     dns_lookup_family: V4_ONLY
@@ -1057,9 +1057,9 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50022
+                port_value: 20022
 
-  # ===== player_cluster(角色养成:档案/属性/装备/天赋/领奖,:50002)=====
+  # ===== player_cluster(角色养成:档案/属性/装备/天赋/领奖,:20002)=====
   - name: player_cluster
     type: STRICT_DNS
     dns_lookup_family: V4_ONLY
@@ -1078,9 +1078,9 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50002
+                port_value: 20002
 
-  # ===== inventory_cluster(大厅背包:货币/道具/装备实例,:50015)=====
+  # ===== inventory_cluster(大厅背包:货币/道具/装备实例,:20015)=====
   - name: inventory_cluster
     type: STRICT_DNS
     dns_lookup_family: V4_ONLY
@@ -1099,4 +1099,4 @@ static_resources:
             address:
               socket_address:
                 address: host.docker.internal
-                port_value: 50015
+                port_value: 20015

@@ -88,7 +88,7 @@ func TestKubernetesDeploymentRollingUpdateRequiresWriterLease(t *testing.T) {
 		t.Fatal("main must fail-closed on RollingUpdate × writer_lease_mode!=enforce (R11 P0-5)")
 	}
 	// R11 复审 P0-2:长期无主必须能被抓取端自动采集,不能只有 JSON 健康页。
-	if !strings.Contains(section, "containerPort: 51021") {
+	if !strings.Contains(section, "containerPort: 21021") {
 		t.Fatal("the ops HTTP port must be declared so in-cluster scraping can reach the writer metrics (R11 P0-2)")
 	}
 }

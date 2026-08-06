@@ -32,7 +32,7 @@
   17 个业务服务容器 + 宿主 `ds_allocator`/`hub_allocator` 的形态,用于本机/内网真实 Windows DS
   联调;`local` 保留 19 个宿主 Go 进程断点调试口径。
 - 已做项目内轻量验证:默认 cluster 配置仍指向容器服务名,`-HostAllocators` 才把 allocator RPC
-  改为 `host.docker.internal:50020/50021`。真 Docker + Windows DS + UE 客户端端到端跑一局仍待人工验收。
+  改为 `host.docker.internal:20020/20021`。真 Docker + Windows DS + UE 客户端端到端跑一局仍待人工验收。
 
 ## 重要决策索引
 
@@ -53,7 +53,7 @@
 - 2026-07-06:matchmaker 两道 locator 离线判定门(成局最终门 findOfflineMembers + 队列在线扫除 livenessSweep)收进开关 `match.liveness_gate_enabled`,**默认关闭**:离线判定依赖 Hub DS 心跳捎带 `player_ids`(hub/v1 HeartbeatRequest)续期 locator HUB 位置,UE Hub DS 生产端尚未实现;先上线服务端会把在线玩家 30s 后误判离线、扫掉排队票据。**待 UE Hub DS 上报 player_ids 联发后才可开启**(开启路径已完整实现并有测试)。同批:hub_allocator `RefreshHubPresence` 改 goroutine + 独立 3s 超时(同 ds_allocator.refreshBattleLocations),locator 抖动不再拖慢 Hub DS 心跳响应。→ **2026-07-08 已开启**:两真实打包客户端实机联调验证保活链(UE Hub DS→hub_allocator→locator→Redis),K8s Redis 采样在线玩家 locator TTL 稳定 25~30s 回升不衰减;`matchmaker-dev.yaml`/`matchmaker-pve.yaml` 置 `liveness_gate_enabled: true`(cluster 配置由 gen_cluster_config.ps1 从此生成)。回归失败(在线玩家 TTL 单调掉 0)先关此开关再排查。**同日端到端验收通过**:①配置生效(configmap 重建 + matchmaker/matchmaker-pve 滚动重启,两 pod Ready);②离线扫死票——无 HUB 位置玩家入队,一轮 sweep 内 `liveness_sweep_reaped_ticket` 删票,Redis ticket/claim/queue 全清;③在线不误删——synthetic HUB 位置每 5s 续期挂队列 45s,9 次采样票据完好、无 reap 日志。液门(liveness gate)正式生效。残余(非阻塞):真机 UE 登录后挂队列的纯真机复验。
 - 2026-07-07:根治「重启电脑/换模式后 500xx 端口被旧 compose 业务容器劫持」:`docker-compose.services.yml` 业务容器 `restart` 由 `unless-stopped` 改 `"no"`(dev 业务容器生命周期一律由一键脚本显式管理,不随 Docker Desktop 开机自启;dev.yml 基础设施保留 unless-stopped);`k8s_envoy_bridge.ps1` 三处加固——预检 `Stop-StaleComposeContainers` 自动 stop 发布 bridge 端口的 pandora-* 容器、端口检测扩到 0.0.0.0/::(docker 发布端口监听在 0.0.0.0,旧检测只查 127.0.0.1 看不到 → 双监听并存导致 Envoy 流量去向不确定)、占用者为 com.docker.backend 等 Docker 转发进程时拒绝 Stop-Process(会杀整个 Docker)。**与不停服滚动更新(不变量 16/17)无关**:灰度升级的载体是 k8s Deployment RollingUpdate,compose 只是本地 dev 环境且本身无滚动更新能力。流量切换时序、gRPC 长连接 L7 均衡、金丝雀灰度四阶段已补进 `zero-downtime-update.md` §6。终局方向(未做):envoy 部署进 k8s,消灭宿主 500xx 桥接层。
 - 2026-07-08:滚动更新流量切换两项基础能力落地(zero-downtime-update.md §6.5 前两项):① `deploy/k8s/services/services.yaml` 20 个 Deployment 全部加原生 gRPC readinessProbe(打 grpc_health_v1,Kratos 默认注册、Stop 自动 NOT_SERVING;新 Pod 必须 SERVING 才进 Endpoints 接流量);② gRPC 连接轮换:`pkg/config.Grpc` 新增 `max_conn_age`/`max_conn_age_grace`,`pkg/grpcserver` 按配置挂 keepalive MaxConnectionAge(零值=关,行为不变),20 个服务 dev yaml 全量开 15m,ds_allocator 显式 grace 90s(盖过 AllocateBattle 同步等 DS ready 的 ~60s,防 GOAWAY 砍断在途分配)。验证:pkg + 18 个服务 module 全部 go build 通过、pkg/config 测试绿、kustomize 渲染 20 个 readinessProbe。剩余待补(扩多副本前):服务间 headless/L7 均衡、RollingUpdate 策略显式化,见 §6.5。
-- 2026-07-08:**角色养成五件套(角色界面/装备更换/属性加点/天赋树/背包道具使用·出售)对客户端放行 + IDOR 加固**。核心结论:这五个都是**局外(meta)系统**,与 MOBA 战斗延迟零耦合(客户端走 Envoy→player/inventory 独立 gRPC 通道,DS 战斗内绝不同步回调 Go),后端 proto/表/biz/data/service 早已实现,真正缺口只是「安全地暴露给客户端」。改动:①`player`(:50002)/`inventory`(:50015)两 cluster 接进 Envoy edge(`deploy/envoy/envoy.yaml`,STRICT_DNS/V4_ONLY/http2,host.docker.internal,k8s 复用同文件经 bridge 转发);②两服务全 RPC 加 `jwt_authn` 需 `pandora_session`(R5 player_id 以 JWT sub 为准);③系统/内部方法双保险 403——Envoy 精确 path `direct_response 403`(player:UpdateMMR/GetMMR/UnlockHero/GrantAttributePoints/GrantTalentPoints;inventory:GrantItems/GrantInstances/FreezeForOrder/SettleAuctionMatch/SettlePlayerTrade/ReleaseEscrow)+ 服务层兜底。**player 服务 IDOR(OWASP A01)修复**:原先信任请求体 `player_id`,任意登录客户端可读写他人数据;仿 inventory 的 `callerPlayerID` 模式加三个纯鉴权辅助——`selfPlayerID`(客户端自助写:身份缺失→UNAUTHORIZED,body≠caller→PERMISSION_DENY,回落 caller)、`resolvePlayerID`(读,双模式:内网直连 callerID==0 信任 body,客户端强制自身)、`systemOnly`(callerID≠0→PERMISSION_DENY)。读/写/系统三类分流已套全 handler,`s.uc.*` 一律传解析后 `playerID` 不再用 `req.GetPlayerId()`。`GetProfile` 默认自查(安全默认;跨玩家看板将来另开 `ViewProfile`)。当前无 PlayerService 内网 gRPC 调用方(grep 无 NewPlayerServiceClient),改动不破坏既有链路(battle_result 的 GetMMR reader / matchmaker·DS 的 GetLoadout 快照注入均 callerID==0 走信任分支)。验证:`go build`/`go vet`/`go test ./...` 全绿(新增 `internal/service/auth_test.go` 覆盖三辅助分流),envoy.yaml yaml.v3 解析通过。**残余(UE/人工领域)**:UMG 面板调这些 RPC(需带 player SessionToken JWT,个人数据自查)属客户端侧,按 AGENTS.md §11 交 UE/Codex。**待确认**:「技能卡」若为独立于天赋(player_talents/SetTalents/GetTalents)的系统,可能是真实未来缺口。
+- 2026-07-08:**角色养成五件套(角色界面/装备更换/属性加点/天赋树/背包道具使用·出售)对客户端放行 + IDOR 加固**。核心结论:这五个都是**局外(meta)系统**,与 MOBA 战斗延迟零耦合(客户端走 Envoy→player/inventory 独立 gRPC 通道,DS 战斗内绝不同步回调 Go),后端 proto/表/biz/data/service 早已实现,真正缺口只是「安全地暴露给客户端」。改动:①`player`(:20002)/`inventory`(:20015)两 cluster 接进 Envoy edge(`deploy/envoy/envoy.yaml`,STRICT_DNS/V4_ONLY/http2,host.docker.internal,k8s 复用同文件经 bridge 转发);②两服务全 RPC 加 `jwt_authn` 需 `pandora_session`(R5 player_id 以 JWT sub 为准);③系统/内部方法双保险 403——Envoy 精确 path `direct_response 403`(player:UpdateMMR/GetMMR/UnlockHero/GrantAttributePoints/GrantTalentPoints;inventory:GrantItems/GrantInstances/FreezeForOrder/SettleAuctionMatch/SettlePlayerTrade/ReleaseEscrow)+ 服务层兜底。**player 服务 IDOR(OWASP A01)修复**:原先信任请求体 `player_id`,任意登录客户端可读写他人数据;仿 inventory 的 `callerPlayerID` 模式加三个纯鉴权辅助——`selfPlayerID`(客户端自助写:身份缺失→UNAUTHORIZED,body≠caller→PERMISSION_DENY,回落 caller)、`resolvePlayerID`(读,双模式:内网直连 callerID==0 信任 body,客户端强制自身)、`systemOnly`(callerID≠0→PERMISSION_DENY)。读/写/系统三类分流已套全 handler,`s.uc.*` 一律传解析后 `playerID` 不再用 `req.GetPlayerId()`。`GetProfile` 默认自查(安全默认;跨玩家看板将来另开 `ViewProfile`)。当前无 PlayerService 内网 gRPC 调用方(grep 无 NewPlayerServiceClient),改动不破坏既有链路(battle_result 的 GetMMR reader / matchmaker·DS 的 GetLoadout 快照注入均 callerID==0 走信任分支)。验证:`go build`/`go vet`/`go test ./...` 全绿(新增 `internal/service/auth_test.go` 覆盖三辅助分流),envoy.yaml yaml.v3 解析通过。**残余(UE/人工领域)**:UMG 面板调这些 RPC(需带 player SessionToken JWT,个人数据自查)属客户端侧,按 AGENTS.md §11 交 UE/Codex。**待确认**:「技能卡」若为独立于天赋(player_talents/SetTalents/GetTalents)的系统,可能是真实未来缺口。
 - 2026-07-08:**延迟不变量固化**——局外系统放 Go 零战斗延迟,是架构决定不是调优结果:①客户端→Go 大厅连接(gRPC-Web/HTTP2)与客户端→DS 战斗连接(NetDriver/UDP)物理独立、不共享带宽与故障域;②DS 帧循环里没有对 Go 的同步调用(tick 全走 GAS/Replication,DS→Go 只剩 Heartbeat 5s/GetLoadout 开局一次/battle_result 局后一次,全独立 goroutine+5s 超时不阻塞主 tick);③唯一会真拖慢延迟的错误做法 = 让 DS 战斗中同步 RPC 大厅服务,守住「开局快照 + 局后上报」边界即永不发生。红线:任何"战斗内实时读写 player/inventory/economy"需求必须改造成开局快照或局后异步上报,否则推翻。落文档 `docs/design/ds-arch.md` §0.6(配套 §0.3/§0.5)。
 - 2026-07-10:**Agones DS 回调拓扑本地/线上同构**——Fleet 的 5 处回调统一指向集群内
   `pandora-envoy.pandora.svc:8444` 且默认明文 `TLS=0`;minikube 自动部署/重载 in-cluster Envoy，
@@ -491,7 +491,7 @@
   server-side dry-run 并逐个验证五个合并后 Deployment 的 identity/template/image/selector/count，强制
   locator preflight 与 Hub `replicas=1 + Recreate`，再 create-only 写 exact immutable
   `pandora-ds-auth-policy-v3-evidence`。prepare/activate 都会在 Endpoint 0/1 门前验证 Hub Service 的 exact
-  green selector/ClusterIP/50021，避免 selector 漂移伪造零 Endpoint；既有 marker 只能精确回读，不能覆盖。
+  green selector/ClusterIP/20021，避免 selector 漂移伪造零 Endpoint；既有 marker 只能精确回读，不能覆盖。
 - `activate_hub_successor_policy.ps1` 已支持崩溃续跑：required=V2 才执行 pre-CAS 门/CAS；required=V3
   从 record-only proof 继续。post-CAS 从固定五个 canonical Deployment/selector/owner chain 重新派生当前
   live UID（不把历史 marker UID 当永久 allowlist），要求唯一业务 container Running+imageID、所有 capability
@@ -575,7 +575,7 @@
   `6aff5dd-dirty`，两 Pod imageID 与 minikube 新镜像一致，其余 18 个业务 Pod UID 未变化。
 - 真链路验收：被邀请方先建立 Push Subscribe，随后 CreateTeam/Invite 经 team → Kafka → push 实际
   收到同一 topic 的 `eventType=1` 专属帧和 `eventType=0` legacy 帧；AcceptInvite 与 GetTeam 均确认
-  双成员，测试队伍随后解散且两玩家 `GetMyTeam.hasTeamMsg=false`。滚动导致失效的宿主 50010/50014
+  双成员，测试队伍随后解散且两玩家 `GetMyTeam.hasTeamMsg=false`。滚动导致失效的宿主 20010/20014
   port-forward 已替换并分别反射到新 `TeamInviteEvent` / `PushFrame.event_type`。
 - 已知边界如实保留：本次根治的是“启动时 producer 失败后永久 nil”和协议版本错配；运行期间
   Kafka send 重试耗尽仍只有错误日志。若要把邀请承诺为端到端 durable delivery，仍需 outbox 或
@@ -1034,7 +1034,7 @@
 ## 2026-07-22(续):owner authority 权威本体落码(Claude)
 
 - 设计:docs/design/owner-authority.md(§9.22 落地蓝图):宿主=新独立 owner 服务(runtime 域,
-  50017/51017,infra.md 已登记);存储=生产 TiDB(线性一致+确认写不回滚)/dev 单机 MySQL,
+  20017/21017,infra.md 已登记);存储=生产 TiDB(线性一致+确认写不回滚)/dev 单机 MySQL,
   三表同库单事务域;租约分层=实例级租约(allocator 心跳代写)派生玩家 owner lease,
   续租 QPS 钉在实例粒度;fence 常量单一来源 pkg/placement(20/7/27s 不动)。
 - 契约:proto/pandora/owner/v1/owner.proto(Query/BeginTransition/Admit/RenewInstanceLease/
@@ -1144,10 +1144,10 @@
 
 ## 2026-07-22(续5):owner 服务部署编排 + dev 全链闭环(Claude)
 
-- 五处登记:docker-compose.services.yml(owner 块,50017)、start.ps1 镜像构建清单、
+- 五处登记:docker-compose.services.yml(owner 块,20017)、start.ps1 镜像构建清单、
   run_services.ps1 宿主运行清单、gen_cluster_config.ps1 服务清单、export_images.ps1
   业务镜像清单(20→21)。gen_cluster prod progress / B1 两个合约测试 PASS。
-- dev 闭环:ds_allocator/hub_allocator/login 三处 owner_addr 置 127.0.0.1:50017
+- dev 闭环:ds_allocator/hub_allocator/login 三处 owner_addr 置 127.0.0.1:20017
   (dev 一键启动含 owner;弱依赖,owner 掉线仅告警);owner_lease_required 保持缺省 false,
   contract 阶段才转强。
 - ⚠️ 事故与修复(自查自纠):清理 yaml 尾部过时注释时误用 powershell 5(违反本仓
@@ -1357,7 +1357,7 @@ no-op**——清理索引属权威表定义(fresh-init 自带),回滚删索引�
 ## 2026-07-22(续11):owner K8s manifests 补齐 + buf breaking 规则对齐(Claude)
 
 - **owner K8s 编排缺口关闭**(续5 五处登记后唯一遗漏):deploy/k8s/services/services.yaml
-  新增 owner Deployment+Service(50017,标准段:conf secret subPath owner.yaml + gRPC
+  新增 owner Deployment+Service(20017,标准段:conf secret subPath owner.yaml + gRPC
   readiness probe;无状态 CAS 通道,标准滚更,不需 Recreate/POD_UID);文件头计数 20→21。
   overlays/online/kustomization.yaml images 补 pandora/owner 占位(20→21 条);
   netpol.yaml 注释计数 19/20→20/21(label 分层策略本身自动覆盖 owner,无需逐条加白)。
@@ -1750,7 +1750,7 @@ R6 只读复审推翻上一条"P0 5/5 完成"的结论(上一条中"旧流零轮
 - **P0-3 标准生成链 hub 地址(工具,已落码契约测试绿)**:此前只有 login-prod.yaml.example
   手写 headless 地址,**标准生成链仍产出 ClusterIP 短名**,生产实际配置绕过整条 round_robin
   修复。新增 `Set-ProdLoginHubHeadlessAddr`(仅 -Prod 机械改写为
-  `dns:///hub-allocator-headless.pandora.svc.cluster.local:50021`);非 -Prod 保持短名
+  `dns:///hub-allocator-headless.pandora.svc.cluster.local:20021`);非 -Prod 保持短名
   (同一产物 compose 共用,FQDN 在 compose 内不可解析)。契约测试双向断言。
 - **P0-4 继任 sweep 接流前硬门 + assignment 持久 fencing(Go,已落码测试绿)**:
   ① `writerlease.Config.OnElected` 激活钩子——当选后、**宣告持有领导权之前**必须跑成功
@@ -1976,7 +1976,7 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
   ds-allocator=geed8ce2-p03-…-062100,注释含 imageID)——re-apply 不再回滚
   INC-20260727-001 修复镜像(与 162bafc1 的 fleet yaml 钉定同一目的收口)。
 - **P1 六项 live 问题**:①loki 1174 次 CrashLoop 终结(删 Pod 换新 emptyDir 清坏 WAL,
-  1/1 Ready);②50001 断链=bridge 未跑,重启后重建 21 条 port-forward 全 LISTEN(含 login);
+  1/1 Ready);②20001 断链=bridge 未跑,重启后重建 21 条 port-forward 全 LISTEN(含 login);
   ③redis-master allkeys-lru→noeviction 运行时止血(**容器 args 仍旧,重启回漂;根治=用
   F: 的 docker-compose.redis-sentinel.yml 收养重建,命名卷保数据,按 AGENTS §11.1 由
   用户/Codex 执行**);④孤儿 redis-cluster 栈(rc-node-1..6+rc-init)已按拍板拆除;
@@ -2067,7 +2067,7 @@ mail 已经在 TiDB 上跑(`run_services.ps1` 用 `mail-dev-tidb.yaml`),而 `mai
   各持异 key,多副本本就合法;唯一需串行的是心跳超时扫描。
   - `deploy/k8s/services/services.yaml`:ds-allocator → `replicas:2` +
     `RollingUpdate(maxSurge 1/maxUnavailable 0)` + `PodDisruptionBudget minAvailable:1` +
-    跨节点 preferred 反亲和 + 补声明 `containerPort 51020`(此前 prometheus 注解指向它却无端口)。
+    跨节点 preferred 反亲和 + 补声明 `containerPort 21020`(此前 prometheus 注解指向它却无端口)。
   - `internal/biz/allocator.go`:新增 `SweepWriterLease` + `sweepIsLeader`,`RunHeartbeatSweep`
     与首扫都过领导权门;**明确写清为什么 sweep 不需要存储级 fencing token**(它不携带跨轮次
     权威意图,每轮从 Redis 重算,写是同事务 CAS;`sweepDeferUntil`/`ownerAdmitted` 已是非权威
@@ -2242,7 +2242,7 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
 - 验证:ds_allocator 全模块 + `pkg/configtable` build/vet/test 全绿;真实 dist 逐张比对 8 张战斗图
   URL(7 张与旧 yaml 手抄值逐字一致,`map_id=5` 因表里 GameMode类 留空而不再拼 `?game=`);
   实机重启后 `configtable_loaded version=20260804002 levels=11`、`map_source=config_table`;
-  热更 RPC `ReloadConfigTable` 在 :50020 实测可用。
+  热更 RPC `ReloadConfigTable` 在 :20020 实测可用。
 - 仍未验证:§2.6 验收标准的玩家侧那一半(加一行 → 重导 → 不重启 → 真人进图)。
   详见 `docs/reviews/交接-消除ds_allocator关卡影子配置-20260804.md` §9。
 
@@ -2363,3 +2363,28 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   能不能跳掉**待实测**;②滚动预热双 DS(新 DS 后台加载完再切分片)可把等待压到 ~0,需改
   `local_fleet.go` 的单实例 `sync.Once`;③先量策划改动构成——若多数是数值,正解是搬进
   configtable 热更(`ReloadConfigTable` 已可用,不需重启任何东西),而不是继续优化重启速度。
+
+## 2026-08-05:服务端口整段搬到 49152 以下(gRPC 20001-20022 / HTTP 21001-21022)
+
+- **起因(真实事故)**:开机后 21 个 go 服务全部启动即退,日志 `app_run_failed ... bind: AccessDenied`。
+  实测判据:`50001` 可绑、`51001`/`51022` 绑不上、`51100` 又可绑 —— 不是"端口被别的进程占",
+  是**被系统整段保留了**。`netsh int ipv4 show excludedportrange protocol=tcp` 显示
+  Hyper-V 本次开机动态占了 `50949-51048`,把 HTTP 段整个吞掉。
+- **根因**:Windows 动态端口范围默认 **49152-65535**(本机实测 Start 49152 / 16384 ports)。
+  原来的 `50001-50022` / `51001-51022` **全在这个范围里**,每次开机都可能被 Hyper-V/WSL 抢走一段,
+  位置还每次不同。gRPC 段当时之所以没事,只是因为早先有人给 `50000-50059` 做过一条
+  `netsh add excludedportrange ... store=persistent` 的管理员保留 —— 一直站在雷区里垫了块沙袋。
+- **为什么不选"再加一条 netsh 保留"**:每台机器都要做一次、会被系统更新/重置网络冲掉、
+  新策划机上线必忘,而且"保留了哪些段"是不在版本库里的隐性环境依赖(违反 §15)。
+  搬到动态段以下之后**任何机器开箱即用,不需要任何 netsh 操作**。
+- **落地**:`\b50(0[0-2]\d)\b→20$1`、`\b51(0[0-2]\d)\b→21$1`,**215 个文件 / 1081 处**。
+  行级豁免 8 处假阳性(道具 ID `stackItem(50001,1)`、队伍 ID `uint64(51001)`、
+  proto 扩展号值域注释 `[50000, 99999]`);`robot/logs/` 历史压测日志刻意不改(§8 既成记录不可篡改)。
+  端口权威 `docs/design/infra.md §6.2` 已补写**为什么必须留在 49152 以下**,并明令
+  「严禁为了看起来整齐把服务端口挪回 49152 以上」。
+- **验证**:①`go.work` 全部 **31 个模块 build 通过**(先用错正则只跑了 3 个,已重跑);
+  ②完整启动 rc=0 / 266s,**21/21 gRPC + 6/6 HTTP 端口全部监听**,28 个 `[ OK ]`、0 个 FAIL;
+  ③**Envoy 17 个 endpoint 全部指向 200xx 段、旧 500xx 段 0 个、不健康 0 个**(bind-mount 配置
+  已被容器吃到,无需手工重建);④导表 23 张表全过(源表 svn-r1774);⑤Hub DS 起来,UDP 7777 已绑。
+- **遗留**:`dist/` 里的预编译 linux 二进制和 `deploy/ds/stage` 的 pak 仍含旧端口字面量,
+  属构建产物,下次出包自然覆盖;本机那条 `50000-50059` 的 netsh 保留现在已无用,可留可删。
