@@ -42,18 +42,36 @@
 | **改完资源后重来一次(日常最常用)** | 双击 `策划一键重启DS-读最新资源.cmd` |
 | 停止 | 双击 `策划一键停止-改资源即时生效.cmd` |
 
+**两个入口都会自己先导表**(策划 xlsx → `configtable/dist`),不用另外双击导表脚本。
+**也都不需要先双击停止** —— 后端在跑就就地重启该重启的,没在跑就自动转成完整启动。
+
 等价的命令行:
 
 ```powershell
-# 起后端 + 本机 DS(DS 用引擎跑,免出包)
-pwsh tools/scripts/start.ps1 -Mode local -DsLauncher editor
+# 导表 + 起后端 + 本机 DS(DS 用引擎跑,免出包)
+pwsh tools/scripts/start.ps1 -Mode local -DsLauncher editor -GenTables
 
-# 只重启本机 DS(后端原样不动,快)
-pwsh tools/scripts/start.ps1 -Mode local -DsLauncher editor -DsOnly
+# 导表 + 只重启本机 DS 和读表的服务(其余原样不动,快)
+pwsh tools/scripts/start.ps1 -Mode local -DsLauncher editor -GenTables -DsOnly
 
 # 停止
 pwsh tools/scripts/start.ps1 -Mode local -Down
 ```
+
+### 改了策划表怎么生效
+
+直接双击上面那两个入口之一就行,**导表已经内建在里面**了。理由很简单:改表就是为了测这一改动,
+把导表做成一个"要记得先点"的独立步骤,迟早会漏一次,而漏掉的表现是「我明明改了表却没生效」,
+最难自查。
+
+- **导表不过 → 直接中止,不会带着旧表把服务起起来**。配置表是**全批原子**的:任一张表校验不过
+  就整批不产出,`configtable/dist` 一个字节不动,原来的表还能用。窗口里会写明原因和该找谁
+  (未登记新列要找程序加字段;外键对不上、xlsx 被 Excel 占着这类自己就能改)。
+- **表真的变了,才会重启读表的服务**(`player` / `battle_result` / `matchmaker` / `matchmaker_pve`
+  / `ds_allocator`)—— 它们是在**进程启动时**加载 `configtable/dist` 的,不重启就还是旧表。
+  内容没变就一个都不碰,少一次无谓的断线。
+- `策划一键导表.cmd` 仍然留着,但日常用不到了;它给「只想验证表能不能导过 / 要把产物提交给别人」
+  这种不起服务的场景用。
 
 ### 为什么日常该用「重启 DS」而不是再启动一次
 
