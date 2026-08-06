@@ -18,7 +18,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonBoris/GA/GA_Boris_Attack01.GA_Boris_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 0.5
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100102,
@@ -31,7 +33,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonBoris/GA/GA_Boris_Attack02.GA_Boris_Attack02_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 0.5
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100111,
@@ -45,7 +49,9 @@
       "target_select_mode": 2,
       "orient_target_type": 1,
       "orient_target_id": 101,
-      "damage_rate": 1
+      "damage_rate": 1.7066667,
+      "correction_rate": 0.8,
+      "effect_count": 1
     },
     {
       "id": 100121,
@@ -56,7 +62,9 @@
       "cd_timing": 1,
       "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/ParagonBoris/GA/GA_Boris_Skill02.GA_Boris_Skill02_C",
-      "damage_rate": 0.7
+      "damage_rate": 2.6666667,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100131,
@@ -67,8 +75,10 @@
       "cd_timing": 1,
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/ParagonBoris/GA/GA_Boris_Skill03.GA_Boris_Skill03_C",
-      "damage_rate": 2,
-      "damage_value": 20
+      "damage_rate": 6.4,
+      "damage_value": 20,
+      "correction_rate": 0.8,
+      "effect_count": 1
     },
     {
       "id": 100201,
@@ -81,7 +91,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Attack01.GA_Kallari_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 0.65
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100202,
@@ -94,7 +106,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Attack02.GA_Kallari_Attack02_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 0.65
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100211,
@@ -104,7 +118,8 @@
       "segment": 1,
       "cd_timing": 1,
       "cd_duration": 10,
-      "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Skill01.GA_Kallari_Skill01_C"
+      "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Skill01.GA_Kallari_Skill01_C",
+      "effect_count": 1
     },
     {
       "id": 100221,
@@ -117,7 +132,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Skill02.GA_Kallari_Skill02_C",
       "target_select_mode": 1,
       "use_distance": 1300,
-      "damage_rate": 1.5
+      "damage_rate": 5.3333335,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100231,
@@ -130,8 +147,10 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Skill03.GA_Kallari_Skill03_C",
       "target_select_mode": 1,
       "use_distance": 500,
-      "damage_rate": 1.2,
-      "damage_value": 25
+      "damage_rate": 6.6666665,
+      "damage_value": 25,
+      "correction_rate": 0.33333334,
+      "effect_count": 3
     },
     {
       "id": 100301,
@@ -144,7 +163,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonDekker/GA/GA_Dekker_Attack01.GA_Dekker_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 800,
-      "damage_rate": 0.4
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100302,
@@ -157,7 +178,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonDekker/GA/GA_Dekker_Attack02.GA_Dekker_Attack02_C",
       "target_select_mode": 1,
       "use_distance": 800,
-      "damage_rate": 0.4
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100311,
@@ -172,7 +195,9 @@
       "orient_target_type": 2,
       "orient_target_id": 100311,
       "use_distance": 600,
-      "damage_rate": 0.8
+      "damage_rate": 1.6,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100321,
@@ -187,8 +212,10 @@
       "orient_target_type": 2,
       "orient_target_id": 100321,
       "use_distance": 600,
-      "damage_rate": 0.5,
-      "damage_value": 10
+      "damage_rate": 2.6666667,
+      "damage_value": 10,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100331,
@@ -198,7 +225,8 @@
       "segment": 1,
       "cd_timing": 1,
       "cd_duration": 30,
-      "ability_path": "/Game/Test/Role/Hero/ParagonDekker/GA/GA_Dekker_Skill03.GA_Dekker_Skill03_C"
+      "ability_path": "/Game/Test/Role/Hero/ParagonDekker/GA/GA_Dekker_Skill03.GA_Dekker_Skill03_C",
+      "effect_count": 1
     },
     {
       "id": 100401,
@@ -211,7 +239,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Attack01.GA_Murdock_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 0.35
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100402,
@@ -224,7 +254,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Attack02.GA_Murdock_Attack02_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 0.35
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100411,
@@ -233,9 +265,11 @@
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-31-21.Game_skill_icon_for_MMORPG__da_2026-07-07T08-31-21",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 13,
+      "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Skill01.GA_Murdock_Skill01_C",
-      "damage_rate": 0.2
+      "damage_rate": 0.6666667,
+      "correction_rate": 0.1,
+      "effect_count": 10
     },
     {
       "id": 100421,
@@ -249,7 +283,10 @@
       "target_select_mode": 3,
       "orient_target_type": 2,
       "orient_target_id": 100421,
-      "use_distance": 2000
+      "use_distance": 2000,
+      "damage_rate": 0.42666668,
+      "correction_rate": 0.16,
+      "effect_count": 5
     },
     {
       "id": 100431,
@@ -262,8 +299,10 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Skill03.GA_Murdock_Skill03_C",
       "target_select_mode": 1,
       "use_distance": 2000,
-      "damage_rate": 2,
-      "damage_value": 80
+      "damage_rate": 20,
+      "damage_value": 80,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100501,
@@ -274,7 +313,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonPhase/GA/GA_Phase_Attack01.GA_Phase_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 500,
-      "damage_rate": 0.65
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100502,
@@ -285,26 +326,32 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonPhase/GA/GA_Phase_Attack02.GA_Phase_Attack02_C",
       "target_select_mode": 1,
       "use_distance": 500,
-      "damage_rate": 0.65
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100511,
       "remark": "钩锁",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 3,
+      "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/ParagonPhase/GA/GA_Phase_Skill01.GA_Phase_Skill01_C",
       "target_select_mode": 2,
-      "damage_rate": 0.7
+      "damage_rate": 6.6666665,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100521,
       "remark": "链接",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 20,
+      "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/ParagonPhase/GA/GA_Phase_Skill02.GA_Phase_Skill02_C",
-      "damage_rate": 0.8
+      "damage_rate": 2.6666667,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100531,
@@ -315,8 +362,10 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonPhase/GA/GA_Phase_Skill03.GA_Phase_Skill03_C",
       "target_select_mode": 1,
       "use_distance": 800,
-      "damage_rate": 0.3,
-      "damage_value": 5
+      "damage_rate": 10,
+      "damage_value": 5,
+      "correction_rate": 0.5,
+      "effect_count": 1
     },
     {
       "id": 100601,
@@ -329,7 +378,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonCrunch/GA/GA_Crunch_Attack01.GA_Crunch_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 200,
-      "damage_rate": 0.65
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100602,
@@ -342,7 +393,9 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonCrunch/GA/GA_Crunch_Attack02.GA_Crunch_Attack02_C",
       "target_select_mode": 1,
       "use_distance": 200,
-      "damage_rate": 0.65
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100611,
@@ -356,7 +409,9 @@
       "target_select_mode": 2,
       "orient_target_type": 1,
       "orient_target_id": 106,
-      "damage_rate": 0.7
+      "damage_rate": 0.8,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100621,
@@ -367,7 +422,9 @@
       "cd_timing": 1,
       "cd_duration": 20,
       "ability_path": "/Game/Test/Role/Hero/ParagonCrunch/GA/GA_Crunch_Skill02.GA_Crunch_Skill02_C",
-      "damage_rate": 0.8
+      "damage_rate": 0.53333336,
+      "correction_rate": 0.1,
+      "effect_count": 1
     },
     {
       "id": 100631,
@@ -380,8 +437,10 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonCrunch/GA/GA_Crunch_Skill03.GA_Crunch_Skill03_C",
       "target_select_mode": 1,
       "use_distance": 800,
-      "damage_rate": 0.3,
-      "damage_value": 5
+      "damage_rate": 10,
+      "damage_value": 5,
+      "correction_rate": 0.5,
+      "effect_count": 1
     },
     {
       "id": 100701,
@@ -394,7 +453,9 @@
       "ability_path": "/Game/Test/Role/Hero/P_A_Durgad_01/GA/GA_Durgad_Attack01.GA_Durgad_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 0.5
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100711,
@@ -408,7 +469,9 @@
       "target_select_mode": 2,
       "orient_target_type": 1,
       "orient_target_id": 101,
-      "damage_rate": 1
+      "damage_rate": 1.7066667,
+      "correction_rate": 0.8,
+      "effect_count": 1
     },
     {
       "id": 100721,
@@ -419,7 +482,9 @@
       "cd_timing": 1,
       "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/P_A_Durgad_01/GA/GA_Durgad_Skill02.GA_Durgad_Skill02_C",
-      "damage_rate": 0.7
+      "damage_rate": 2.6666667,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100731,
@@ -430,8 +495,10 @@
       "cd_timing": 1,
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/P_A_Durgad_01/GA/GA_Durgad_Skill03.GA_Durgad_Skill03_C",
-      "damage_rate": 2,
-      "damage_value": 20
+      "damage_rate": 6.4,
+      "damage_value": 20,
+      "correction_rate": 0.8,
+      "effect_count": 1
     },
     {
       "id": 100801,
@@ -444,7 +511,9 @@
       "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Attack.GA_Sister_Attack_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 0.4
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100811,
@@ -453,13 +522,15 @@
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-58.Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-58",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 6,
+      "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Skill01.GA_Sister_Skill01_C",
       "target_select_mode": 3,
       "orient_target_type": 2,
       "orient_target_id": 100311,
       "use_distance": 600,
-      "damage_rate": 0.8
+      "damage_rate": 0.26666668,
+      "correction_rate": 0.1,
+      "effect_count": 5
     },
     {
       "id": 100821,
@@ -474,8 +545,10 @@
       "orient_target_type": 2,
       "orient_target_id": 100321,
       "use_distance": 600,
-      "damage_rate": 0.5,
-      "damage_value": 10
+      "damage_rate": 2.1333334,
+      "damage_value": 10,
+      "correction_rate": 0.8,
+      "effect_count": 1
     },
     {
       "id": 100831,
@@ -485,7 +558,8 @@
       "segment": 1,
       "cd_timing": 1,
       "cd_duration": 30,
-      "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Skill03.GA_Sister_Skill03_C"
+      "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Skill03.GA_Sister_Skill03_C",
+      "effect_count": 1
     },
     {
       "id": 100901,
@@ -498,7 +572,9 @@
       "ability_path": "/Game/Test/Role/Hero/P_M_Princess_01/GA/GA_Princess_Attack01.GA_Princess_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 0.65
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100911,
@@ -513,7 +589,9 @@
       "orient_target_type": 2,
       "orient_target_id": 5,
       "use_distance": 800,
-      "damage_rate": 0.7
+      "damage_rate": 2.1333334,
+      "correction_rate": 0.8,
+      "effect_count": 1
     },
     {
       "id": 100921,
@@ -522,12 +600,14 @@
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-16.Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-16",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 20,
+      "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/P_M_Princess_01/GA/GA_Princess_Skill02.GA_Princess_Skill02_C",
       "target_select_mode": 2,
       "orient_target_type": 4,
       "orient_target_id": 100921,
-      "damage_rate": 0.8
+      "damage_rate": 2.6666667,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 100931,
@@ -542,8 +622,10 @@
       "orient_target_type": 2,
       "orient_target_id": 8,
       "use_distance": 1500,
-      "damage_rate": 0.3,
-      "damage_value": 5
+      "damage_rate": 0.8,
+      "damage_value": 5,
+      "correction_rate": 0.1,
+      "effect_count": 10
     },
     {
       "id": 101001,
@@ -556,7 +638,9 @@
       "ability_path": "/Game/Test/Role/Hero/P_W_Sally_01/GA/GA_Sally_Attack.GA_Sally_Attack_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 0.65
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 101011,
@@ -571,7 +655,9 @@
       "orient_target_type": 2,
       "orient_target_id": 6,
       "use_distance": 800,
-      "damage_rate": 0.7
+      "damage_rate": 2.6666667,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 101021,
@@ -585,7 +671,8 @@
       "target_select_mode": 3,
       "orient_target_type": 2,
       "orient_target_id": 1,
-      "use_distance": 800
+      "use_distance": 800,
+      "effect_count": 1
     },
     {
       "id": 101031,
@@ -596,8 +683,10 @@
       "cd_timing": 1,
       "cd_duration": 20,
       "ability_path": "/Game/Test/Role/Hero/P_W_Sally_01/GA/GA_Sally_Skill01.GA_Sally_Skill01_C",
-      "damage_rate": 1,
-      "damage_value": 5
+      "damage_rate": 4.266667,
+      "damage_value": 5,
+      "correction_rate": 0.8,
+      "effect_count": 1
     },
     {
       "id": 200101,
@@ -607,7 +696,9 @@
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Minions/Melee/GA/GA_Melee_Attack01.GA_Melee_Attack01_C",
       "target_select_mode": 1,
-      "use_distance": 100
+      "use_distance": 100,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200201,
@@ -617,7 +708,9 @@
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Minions/Ranged/GA/GA_Monster_Ranged_Attack01.GA_Monster_Ranged_Attack01_C",
       "target_select_mode": 1,
-      "use_distance": 400
+      "use_distance": 400,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200401,
@@ -627,7 +720,9 @@
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Minions/M_Orthrus_01/GA/GA_Orthrus_Attack01.GA_Orthrus_Attack01_C",
       "target_select_mode": 1,
-      "use_distance": 300
+      "use_distance": 300,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200501,
@@ -636,7 +731,9 @@
       "icon": "/Game/Test/UI/Skill/Boris_attack.Boris_attack",
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Minions/M_AbyssRock_01/GA/GA_AbyssRock_Attack01.GA_AbyssRock_Attack01_C",
-      "use_distance": 500
+      "use_distance": 500,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200511,
@@ -647,9 +744,11 @@
       "cd_timing": 3,
       "cd_duration": 8,
       "ability_path": "/Game/Test/Role/Monster/Minions/M_AbyssRock_01/GA/GA_AbyssRock_Skill01.GA_AbyssRock_Skill01_C",
-      "use_distance": 600,
+      "use_distance": 1000,
       "rot_mode": 1,
-      "damage_rate": 0.2
+      "damage_rate": 3,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200701,
@@ -659,7 +758,9 @@
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken02_Attack01.GA_Kraken02_Attack01_C",
       "target_select_mode": 1,
-      "use_distance": 99999
+      "use_distance": 99999,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200711,
@@ -671,7 +772,9 @@
       "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken02_Skill01.GA_Kraken02_Skill01_C",
       "target_select_mode": 1,
-      "use_distance": 99999
+      "use_distance": 99999,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200801,
@@ -681,7 +784,9 @@
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken03_Attack01.GA_Kraken03_Attack01_C",
       "target_select_mode": 1,
-      "use_distance": 99999
+      "use_distance": 99999,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200811,
@@ -693,7 +798,9 @@
       "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken03_Skill01.GA_Kraken03_Skill01_C",
       "target_select_mode": 1,
-      "use_distance": 99999
+      "use_distance": 99999,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200821,
@@ -703,7 +810,9 @@
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken03_Skill02.GA_Kraken03_Skill02_C",
       "target_select_mode": 1,
-      "use_distance": 99999
+      "use_distance": 99999,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200831,
@@ -713,7 +822,9 @@
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken03_Skill03.GA_Kraken03_Skill03_C",
       "target_select_mode": 1,
-      "use_distance": 99999
+      "use_distance": 99999,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 200841,
@@ -726,7 +837,9 @@
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken03_Skill04.GA_Kraken03_Skill04_C",
       "target_select_mode": 1,
       "use_distance": 99999,
-      "damage_rate": 0.1
+      "damage_rate": 1,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 210101,
@@ -736,7 +849,10 @@
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken_Attack01.GA_Kraken_Attack01_C",
       "target_select_mode": 1,
-      "use_distance": 99999
+      "use_distance": 99999,
+      "damage_rate": 1.67,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 210111,
@@ -747,7 +863,9 @@
       "cd_timing": 3,
       "cd_duration": 20,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken_Skill01.GA_Kraken_Skill01_C",
-      "use_distance": 99999
+      "use_distance": 99999,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 210121,
@@ -759,7 +877,9 @@
       "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken_Skill02.GA_Kraken_Skill02_C",
       "target_select_mode": 1,
-      "use_distance": 99999
+      "use_distance": 99999,
+      "correction_rate": 1,
+      "effect_count": 1
     },
     {
       "id": 210131,
@@ -770,7 +890,9 @@
       "cd_timing": 3,
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken_Skill03.GA_Kraken_Skill03_C",
-      "use_distance": 99999
+      "use_distance": 99999,
+      "correction_rate": 1,
+      "effect_count": 1
     }
   ]
 }
