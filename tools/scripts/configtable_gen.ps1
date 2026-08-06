@@ -12,6 +12,16 @@
   产物是**整批**的:configtable/dist 下全部 json + manifest.json 必须一起提交,
   只提交其中一个会让服务端 Store.Load 校验失败、服务起不来。
 
+  什么时候需要单独跑(2026-08-05 起多数情况下用不着):
+    两个策划一键入口(启动 / 重启DS)已经会自己先导表,日常改完表直接双击那两个就行。
+    本脚本(以及包装它的 策划一键导表.cmd)留给「只想导表、暂时不起服务」的场景:
+    比如验证自己的表能不能导过,或者要把 configtable/dist 这批产物交给别人。
+
+  导完之后:
+    后端已经在跑 → 双击 策划一键重启DS-读最新资源.cmd(重启读表的服务让新表生效);
+    后端没在跑   → 双击 策划一键启动-改资源即时生效.cmd。
+    两者都会再导一次表(内容没变就是空跑),所以先跑本脚本也不冲突。
+
 .PARAMETER TableRoot
   客户端策划表根目录。留空按顺序自动探测:
     -TableRoot 参数 → $env:PANDORA_CLIENT_TABLE_ROOT → <服务端仓库>/../Pandora-Client-SVN/Table
@@ -167,16 +177,61 @@ $outText = ($out -join "`n")
 # ---------------------------------------------------------------------------
 # 6. 失败:把面向程序的报错翻译成"找谁、改什么"
 # ---------------------------------------------------------------------------
+
+# 本脚本只导「磁盘上当前是什么」,不碰 SVN(不 update / 不 revert):启动流程中途改动工作副本
+# 会把别人的表和资源无声拉进来,故障更难查。代价是:同一句报错在两台机器上可能指向不同的表。
+# 所以报「表结构对不上」这类必须找程序的错时,顺带说清楚这一列到底在不在 SVN 里 ——
+# 差别是决定性的:未提交 = 程序 svn update 也复现不了,必须先提交或连文件一起发过去。
+function Get-TableWorkingCopyChanges([string]$Root) {
+    if ($null -eq (Get-Command svn -ErrorAction SilentlyContinue)) { return $null }
+    try {
+        # --xml 的输出显式是 UTF-8,中文表名不会被控制台代码页糟蹋(纯文本 svn status 会)。
+        # 仍然只把 ASCII 的 Table 根目录传给 svn.exe,不往下传中文子目录(会 E155010)。
+        $xmlText = (& svn status --xml $Root 2>$null | Out-String)
+        if ([string]::IsNullOrWhiteSpace($xmlText)) { return $null }
+        $doc = [xml]$xmlText
+    } catch { return $null }
+    $changed = New-Object System.Collections.Generic.List[pscustomobject]
+    foreach ($entry in $doc.SelectNodes('//entry')) {
+        $st = $entry.SelectSingleNode('wc-status')
+        if ($null -eq $st) { continue }
+        $item = $st.GetAttribute('item')
+        if ($item -eq 'normal' -or $item -eq 'external' -or $item -eq 'ignored') { continue }
+        $changed.Add([pscustomobject]@{ Path = $entry.GetAttribute('path'); Item = $item })
+    }
+    # 逗号包一层:PowerShell 会在 return 时展开集合,空 List 直接变成 $null,
+    # 那样「工作副本干净」就会和「本机没有 svn」撞成同一个返回值,提示语会指错方向。
+    return , $changed
+}
+
 if ($genExit -ne 0) {
     Write-Host ''
     Write-Err "导表失败(退出码 $genExit),服务端配置表**没有任何改动**,原来的表还能用。"
     Write-Host ''
-    if ($outText -match '未登记的第\s*(\S+)\s*列\s*"([^"]*)"') {
-        $col = $Matches[1]; $name = $Matches[2]
-        Write-Warn2 "原因:策划在表里新增了第 $col 列「$name」,但服务端还不认识这一列。"
+    if ($outText -match '(\S+\.xlsx)\s*表头出现未登记的第\s*(\S+)\s*列\s*"([^"]*)"') {
+        $table = $Matches[1]; $col = $Matches[2]; $name = $Matches[3]
+        $leaf = ($table -split '[\\/]')[-1]
+        Write-Warn2 "原因:$table 里多了第 $col 列「$name」,服务端 proto 还没登记这一列。"
         Write-Host '      这**不是策划能修的**:需要程序在 proto/pandora/config/v1/<表>.proto 里'
         Write-Host '      加对应字段 + (excel_col) 注解,重生 pb 后才能导。'
-        Write-Host '      做法:把上面那行报错原文发给程序。临时想继续导表,可先把该列从 xlsx 撤掉。'
+
+        # 未提交 / 已提交,给程序的做法完全不同,这里替策划把话说清楚。
+        $wc = Get-TableWorkingCopyChanges $TableRoot
+        $dirty = @()
+        if ($null -ne $wc) { $dirty = @($wc | Where-Object { $_.Path -like "*$leaf" }) }
+        if ($null -eq $wc) {
+            Write-Host '      做法:把上面那行报错原文发给程序(本机没有 svn 命令,没法判断这张表是否已提交)。'
+        } elseif ($dirty.Count -gt 0) {
+            Write-Host ''
+            Write-Warn2 "  注意:$leaf 在你本机是**未提交**的改动(svn status: $($dirty[0].Item))。"
+            Write-Host '      程序在自己机器上 svn update 也拿不到这一列,复现不了、也没法照着加字段。'
+            Write-Host '      做法:先把这张 xlsx 提交进 SVN(或连文件一起发给程序),再把上面报错原文发过去。'
+        } else {
+            Write-Host ''
+            Write-Host "      这张表在你本机与 SVN 一致($SourceRev),程序 svn update 后就能看到这一列。"
+            Write-Host '      做法:把上面那行报错原文发给程序即可。'
+        }
+        Write-Host '      临时想继续导表:把该列从 xlsx 撤掉(或对这张表 svn revert)。'
     } elseif ($outText -match '外键校验失败') {
         Write-Warn2 '原因:有表引用了另一张表里不存在的 id(比如掉落表引用了已删除的道具 id)。'
         Write-Host '      看上面报错里点名的「表名 / 主键 / 字段」,把那一行的引用改成存在的 id,或把被引用的行加回来。'
