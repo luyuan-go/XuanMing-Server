@@ -8,15 +8,28 @@ rem  Use this for the daily loop: you updated ONLY the client repo (assets, or
 rem  a rebuilt editor DLL) and the Go backend did not change.
 rem
 rem  Wraps:
-rem    start.ps1 -Mode local -DsLauncher editor -DsOnly
+rem    start.ps1 -Mode local -DsLauncher editor -GenTables -DsOnly
 rem
-rem  What it does NOT touch: Docker infra, TiDB, DB migrations and the 21 Go
-rem  services keep running exactly as they are. None of them is affected by an
-rem  asset change, and they are the slow part of a full start.
+rem  You do NOT need to stop anything first, and you do NOT need to run the
+rem  table-export script by hand - both are handled here.
 rem
-rem  What it does: kills the running local DS and restarts the two allocators
-rem  (hub_allocator / ds_allocator), then WAITS until the new Hub DS has loaded
-rem  the level and is listening - so when this window says OK, you can log in.
+rem  What it does NOT touch: Docker infra, TiDB and DB migrations are left alone,
+rem  and so are the Go services that have nothing to do with your change. Those
+rem  are the slow part of a full start.
+rem
+rem  What it does, in order:
+rem    1. Regenerates the server config tables from the planner xlsx
+rem       (configtable/dist). Planners tweak tables precisely to test them, so
+rem       this must not be a separate step someone can forget. The batch is
+rem       all-or-nothing: if any table fails validation nothing is written, the
+rem       old tables stay usable, and the script stops instead of starting up
+rem       with stale tables and letting you think your edit did not work.
+rem    2. Kills the running local DS and restarts hub_allocator / ds_allocator.
+rem    3. If (and only if) the table batch actually changed, also restarts the
+rem       Go services that read tables - player / battle_result / matchmaker /
+rem       matchmaker_pve - because they load configtable/dist at PROCESS START.
+rem    4. WAITS until the new Hub DS has loaded the level and is listening, so
+rem       when this window says OK you can log in right away.
 rem
 rem  Why the DS has to restart at all: the editor-form DS reads the uncooked
 rem  Content/ at PROCESS START. The already-running one still holds the old
@@ -55,7 +68,7 @@ if errorlevel 1 (
 )
 set "PS=pwsh"
 
-%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -DsLauncher editor -DsOnly
+%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -DsLauncher editor -GenTables -DsOnly
 set "RC=%ERRORLEVEL%"
 
 rem Keep the window open only for interactive (double-click) runs. The web admin

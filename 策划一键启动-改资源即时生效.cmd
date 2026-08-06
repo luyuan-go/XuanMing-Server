@@ -5,7 +5,14 @@ rem  Pandora backend - planner one-click start with LIVE ASSET DS
 rem  (double-click to run)
 rem ------------------------------------------------------------
 rem  What this does:
-rem    start.ps1 -Mode local -DsLauncher editor
+rem    start.ps1 -Mode local -DsLauncher editor -GenTables
+rem
+rem    * Tables: the planner xlsx are regenerated into the server config tables
+rem      (configtable/dist) FIRST, because the Go services that read tables load
+rem      that directory at process start. No need to run the table-export script
+rem      by hand. The batch is all-or-nothing - if a table fails validation
+rem      nothing is written, the old tables stay usable, and startup stops rather
+rem      than coming up with stale tables behind your back.
 rem
 rem    * Backend: infra in Docker + 21 Go services as host processes.
 rem      If Go is NOT installed on this machine, the prebuilt binaries under
@@ -52,7 +59,7 @@ if errorlevel 1 (
 )
 set "PS=pwsh"
 
-%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -DsLauncher editor
+%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -DsLauncher editor -GenTables
 set "RC=%ERRORLEVEL%"
 
 rem Keep the window open only for interactive (double-click) runs. The web admin

@@ -84,6 +84,11 @@ param(
     # editor:UnrealEditor.exe 路径。留空则按 .uproject 里的 EngineAssociation 查注册表定位引擎,
     # 所以策划机引擎装在哪个盘/哪个目录都行(源码版走 HKCU Builds GUID,发行版走 HKLM 版本号)。
     [string]$DsEditorExe = '',
+    # -GenTables(仅 -Mode local):起服务/重启服务之前,先把策划 xlsx 导成服务端配置表
+    # (configtable/dist)。策划改完表就是为了测这一改动,让他们再记一个"先双击导表"的步骤
+    # 迟早会漏。**只对策划那两个一键入口开**,不传时行为逐字节不变。
+    # docker/k8s/online 不适用:那几条路的表随镜像走,不读本机 dist。
+    [switch]$GenTables,
     # -DsOnly(仅 -Mode local):**只重启本机 DS**,不动 docker 基础设施、不动其余 go 服务。
     # 给「只更新了客户端仓(改资源 / 重编编辑器 DLL),go 服务一行没改」的日常循环用:
     # 完整启动要走基础设施健康等待 → TiDB → 数据库迁移 → 21 个 go 服务逐个 build/起/探活,
@@ -4141,6 +4146,55 @@ function Invoke-Local {
     & "$ScriptDir/dev_all.ps1"
 }
 
+# ===== 导表(-GenTables):策划 xlsx → 服务端配置表 =====
+#
+# 为什么要塞进一键入口:策划改表就是为了测这一改动,而 4 个读表的 go 服务是在**进程启动时**
+# 从 configtable/dist 加载的。让策划自己记着"先双击导表、再双击启动"迟早会漏一次,
+# 而漏掉的表现是"我明明改了表却没生效",最难自查。
+#
+# 真正的生成逻辑一行都不重写,直接调既有的 configtable_gen.ps1(它已经会自动定位客户端
+# Table 目录、自动取 SVN 版本号、没装 Go 就用预编译 exe,并把生成器的报错翻译成人话)。
+function Get-ConfigTableDistVersion {
+    $p = Join-Path $ProjectRoot 'configtable/dist/manifest.json'
+    if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { return $null }
+    try {
+        $json = [System.Text.UTF8Encoding]::new($false).GetString([System.IO.File]::ReadAllBytes($p)) | ConvertFrom-Json
+        return [string]$json.version
+    } catch { return $null }
+}
+
+function Invoke-ConfigTableGen {
+    if ($Mode -ne 'local') {
+        throw "-GenTables 只支持 -Mode local(本机 go 服务直接读 configtable/dist;docker/k8s 的表随镜像走)。当前 -Mode $Mode。"
+    }
+
+    Write-Step "导表:策划 xlsx → 服务端配置表(configtable/dist)"
+    $before = Get-ConfigTableDistVersion
+
+    & "$ScriptDir/configtable_gen.ps1"
+    $rc = $LASTEXITCODE
+    if ($rc -ne 0) {
+        Write-Host ""
+        Write-Err "导表没过,已中止(上面有具体原因和该找谁)。"
+        Write-Info "为什么不带着旧表继续起:你改表就是为了测它,用旧表起来只会让你以为改动没生效 —— 那比起不来更难查。"
+        Write-Info "配置表是全批原子的,现在 dist 一个字节没动,原来的表还能用。"
+        Write-Info "确实想先不导表、把后端起起来:pwsh tools\scripts\start.ps1 -Mode local -DsLauncher editor"
+        exit $rc
+    }
+
+    $after = Get-ConfigTableDistVersion
+    if ($null -eq $after) {
+        Write-Warn "导表报成功但读不到 configtable/dist/manifest.json,按「表有改动」处理(宁可多重启一次)。"
+        return $true
+    }
+    if ($before -eq $after) {
+        Write-Info "配置表内容与上一批相同(v$after),读表的服务不用动。"
+        return $false
+    }
+    Write-Ok ("配置表批次 {0} -> v{1}。" -f $(if ($before) { "v$before" } else { '(无)' }), $after)
+    return $true
+}
+
 # ===== local 快速通道:只重启本机 DS(-DsOnly)=====
 #
 # 场景:策划只更新了客户端仓(改资源 / 重编编辑器 DLL),后端 go 服务与基础设施一行没变。
@@ -4318,6 +4372,30 @@ function Invoke-LocalDsOnly {
     if ($failed.Count -gt 0) {
         $names = ($failed | ForEach-Object { "$($_.Name):$($_.Port)" }) -join ', '
         throw "重启后端口没起来:$names。看日志:pwsh tools/scripts/run_services.ps1 -Action logs -Service <服务名>"
+    }
+
+    # 表变了才动读表的服务:它们在**进程启动时**从 configtable/dist 加载,不重启就还是旧表 ——
+    # 只重启 DS 的话,策划改的关卡/道具/掉落数值在 matchmaker、player 这些服务里根本没生效。
+    # (ds_allocator 也读表,但上面已经重启过,不重复。)
+    # 表没变就一个都不碰:少一次无谓的断线。
+    # 顺序上刻意排在 Wait-LocalHubDsReady 之前 —— Hub DS 这时正在后台加载,这几个重启白捡了重叠。
+    if ($script:ConfigTableChanged) {
+        $tableReaders = @(
+            @{ Name = 'player';         Port = 50002 }
+            @{ Name = 'battle_result';  Port = 50022 }
+            @{ Name = 'matchmaker';     Port = 50011 }
+            @{ Name = 'matchmaker_pve'; Port = 50018 }
+        )
+        Write-Host ""
+        Write-Info "配置表这批有改动,顺带重启读表的 go 服务(它们只在启动时加载 dist)..."
+        foreach ($svc in $tableReaders) {
+            & "$ScriptDir/run_services.ps1" -Action restart -Service $svc.Name -NoBuild
+        }
+        $failedTables = @($tableReaders | Where-Object { -not (Test-LocalTcpPort $_.Port) })
+        if ($failedTables.Count -gt 0) {
+            $names = ($failedTables | ForEach-Object { "$($_.Name):$($_.Port)" }) -join ', '
+            throw "读表服务重启后端口没起来:$names。多半是新表加载不过,看日志:pwsh tools/scripts/run_services.ps1 -Action logs -Service <服务名>"
+        }
     }
 
     Write-Host ""
@@ -7227,6 +7305,15 @@ Write-Host " Pandora 后端一键启动器  ( $Mode )" -ForegroundColor Magenta
 Write-Host "============================================" -ForegroundColor Magenta
 
 if ($Status) { Show-Status; exit 0 }
+
+# -GenTables:先把策划 xlsx 导成服务端配置表。必须排在起服务 / 重启服务之前 —— 读表的
+# go 服务是在进程启动时从 configtable/dist 加载的,表还没生成就把服务起起来,读到的是上一批。
+# 导表失败会直接 exit(见 Invoke-ConfigTableGen:改表就是为了测它,用旧表跑更难查)。
+# -Down / -Check 是停机和干跑,导表对它们没有意义。
+$script:ConfigTableChanged = $false
+if ($GenTables -and -not $Down -and -not $Check) {
+    $script:ConfigTableChanged = Invoke-ConfigTableGen
+}
 
 # -DsOnly:只重启本机 DS 的快速通道。刻意排在 Resolve-Prerequisites 之前 —— 后端正跑着时
 # 那一整套前置(docker 探活 / k8s 互斥停机 / 8443-8444 端口空闲断言)要么白跑要么语义不对
