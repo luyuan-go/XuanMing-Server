@@ -1,18 +1,18 @@
 # Pandora friend 服务生产配置模板(2026-06-15)。
 #
 # 真实部署时复制为 friend-prod.yaml 并按集群实际地址 / 密码填写,**不要提交真实密码到 git**。
-# - gRPC :50004 / HTTP :51004(仅 /metrics)
+# - gRPC :20004 / HTTP :21004(仅 /metrics)
 # - prod: enable_reflection 不写(零值 false,关 reflection 减少攻击面)
 
 server:
   grpc:
     network: tcp
-    addr: ":50004"
+    addr: ":20004"
     enable_rate_limit: true   # 压测前审核门禁-A:BBR 自适应限流(客户端面服务 prod 必开,过载按 CPU/inflight/RT 丢负载)
     timeout: "3s"
   http:
     network: tcp
-    addr: ":51004"
+    addr: ":21004"
 
 node:
   node_id: 1
@@ -35,7 +35,7 @@ kafka:
 
 friend:
   max_friends: 200
-  locator_addr: "player-locator:50006"
+  locator_addr: "player-locator:20006"
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):生产强制档,顶号后旧 JWT 立即失效;
 # 权威端点漏配拒启,权威不可达 fail-closed。与 gen_cluster_config.ps1 -Prod 产物一致。

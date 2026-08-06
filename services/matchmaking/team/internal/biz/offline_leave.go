@@ -20,6 +20,10 @@
 //     第 1 道闸本就拦得住;这道是冗余的第二保险,防的是 locator 与 matchmaker 之间的
 //     短暂不一致(位置已掉、票据还在)。
 //
+// ⚠️ 上述读取闸门只能 fail-closed，不能与 StartMatch 形成共同线性化点。当前启动
+// 配置因此禁止开启本功能（见 conf.ValidateOfflineLeave）；这里保留实现与防御分支，供后续
+// roster fence 接入及回归测试使用。不得把这些前置读取解释成并发安全证明。
+//
 // # 刻意不做的事
 //
 //   - **不联动 cancelMatchmaking**。LeaveTeam / Kick 会撤票是因为那是玩家的主动操作;
@@ -43,12 +47,10 @@ import (
 // PresenceInspector 是 team 对离线复查骨架的最小依赖面(*offlinewatch.Watcher 满足)。
 //
 // 只用于**读路径兜底**:kafka 事件会丢、Hub DS 整台挂掉时压根不发事件,
-// 光靠事件会留下永远清不掉的残留成员。玩家一打开组队面板就顺手复查一次,把漏网的排进队列。
+// 光靠事件会留下永远清不掉的残留成员。玩家一打开组队面板就顺手观察一次;
+// ONLINE / OFFLINE / UNKNOWN 的分类与排期全部由 offlinewatch 封装。
 type PresenceInspector interface {
-	// Inspect 同步判定这批玩家此刻的离线态(查不通返回 error,调用方按 best-effort 忽略)。
-	Inspect(ctx context.Context, playerIDs []uint64) (map[uint64]offlinewatch.Verdict, error)
-	// EnqueueDue 把玩家排成「立刻到期」,交给后台复查循环去做实际摘人动作。
-	EnqueueDue(ctx context.Context, playerIDs []uint64) error
+	Observe(ctx context.Context, playerIDs []uint64) error
 }
 
 // SetPresenceInspector 注入读路径兜底所需的复查入口。
@@ -66,10 +68,11 @@ func (u *TeamUsecase) offlineLeaveEnabled() bool {
 // OnPlayerOffline 实现 offlinewatch.Handler:某玩家已确认离线满阈值。
 //
 // 幂等:同一玩家被重复调用(事件重投、多副本各扫一遍、读路径兜底)是常态。
-// 玩家不在任何队伍、队伍已解散、成员已被摘掉等情形一律返回 nil(处理完成,出队),
-// **不返回 error** —— 那些不是失败,返回 error 会让它一直重试到保留期结束。
+// 玩家不在任何队伍可直接完成；队伍已不存在 / 已解散 / 已不含该玩家时，仍须用
+// compare-delete 收敛旧 player→team 索引，成功后才算处理完成。
 //
-// 返回 error 只留给「这次没判成,下轮再来」:Redis 读失败、matchmaker 读不确定、写冲突。
+// 返回 error 只留给「这次没判成,下轮再来」:Redis 读失败、matchmaker 读不确定、
+// 写冲突或旧索引尚未清理成功。
 func (u *TeamUsecase) OnPlayerOffline(ctx context.Context, playerID uint64, offlineSinceMs int64) error {
 	if !u.offlineLeaveEnabled() || playerID == 0 {
 		return nil
@@ -88,9 +91,9 @@ func (u *TeamUsecase) OnPlayerOffline(ctx context.Context, playerID uint64, offl
 		return err
 	}
 	if !found || team.State == stateDisbanded || !hasMember(team, playerID) {
-		// 队伍没了 / 已解散 / 索引指向的队伍里已经没有他(并发离队 + 索引尚未收敛)。
-		// 都是终态,没什么可做的。
-		return nil
+		// 队伍主体已是终态，但 player→team 索引可能来自上一次「主体写成功、索引删除
+		// 失败」的部分成功。必须精确删除仍指向旧 teamID 的索引；失败继续重试。
+		return u.deleteOfflinePlayerIndex(ctx, playerID, teamID)
 	}
 	if len(team.Members) <= 1 {
 		return nil // 单人队不动(见文件头「刻意不做的事」)
@@ -107,7 +110,9 @@ func (u *TeamUsecase) OnPlayerOffline(ctx context.Context, playerID uint64, offl
 	if committed {
 		plog.With(ctx).Debugw("msg", "team_offline_leave_skipped_match_committed",
 			"team_id", teamID, "player_id", playerID)
-		return nil // 这局打完票据释放后,若他仍离线会由下一次事件 / 兜底复查重新排上
+		// 对局占用是暂态，不是处理终态。返回 ErrDeferred 让 offlinewatch 保留到期项，
+		// 票据释放后自动重查；返回 nil 会永久删任务，只能碰运气等下一次事件。
+		return offlinewatch.ErrDeferred
 	}
 
 	// 闸 ③:该玩家自己被对局占住(冗余保险,见文件头)。
@@ -118,7 +123,7 @@ func (u *TeamUsecase) OnPlayerOffline(ctx context.Context, playerID uint64, offl
 		return err
 	}
 	if playerCommitted {
-		return nil
+		return offlinewatch.ErrDeferred
 	}
 
 	return u.removeOfflineMember(ctx, teamID, playerID, offlineSinceMs)
@@ -130,13 +135,16 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 	ttl := u.activeTTL()
 	disbandedTTL := u.cfg.DisbandedRetention.Std()
 	var result *teamv1.TeamStorageRecord
+	var terminalNeedsIndexCleanup bool
 
 	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
 		// 锁内重查一遍:从上面的读到这里之间,他可能已经自己离队 / 被踢 / 队伍已解散。
 		if team.State == stateDisbanded {
+			terminalNeedsIndexCleanup = true
 			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 		}
 		if !hasMember(team, playerID) {
+			terminalNeedsIndexCleanup = true
 			return errcode.New(errcode.ErrTeamNotFound, "player %d not in team %d", playerID, teamID)
 		}
 		// 锁内再确认一次人数:并发摘人时不能把最后一个成员也摘掉(那等于自动解散队伍,
@@ -159,10 +167,15 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 		result = cloneTeam(team)
 		return nil
 	}, ttl); err != nil {
-		// 上面那三个业务错误都表示「已经不需要处理了」,视为完成(幂等),不再重试。
-		// 其余(乐观锁耗尽 / Redis 不可用)返回 error,由骨架退避后重排。
+		// 主体不存在 / 已解散 / 已不含玩家时，仍须收敛此前读到的旧归属索引。
+		// 单人队则保留其正常归属；其余错误由骨架退避后重排。
 		switch errcode.As(err) {
-		case errcode.ErrTeamWrongState, errcode.ErrTeamNotFound:
+		case errcode.ErrTeamNotFound:
+			return u.deleteOfflinePlayerIndex(ctx, playerID, teamID)
+		case errcode.ErrTeamWrongState:
+			if terminalNeedsIndexCleanup {
+				return u.deleteOfflinePlayerIndex(ctx, playerID, teamID)
+			}
 			return nil
 		default:
 			return err
@@ -170,10 +183,9 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 	}
 
 	// CAS 删索引:仅当索引仍指向本队才删,防误删他并发加入新队的归属。
-	if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); err != nil {
-		plog.With(ctx).Warnw("msg", "team_offline_leave_delete_player_index_failed",
-			"player_id", playerID, "team_id", teamID, "err", err)
-	}
+	// 失败时仍完成下面的开放索引 / 推送等主体写后动作，但最终返回 error 保留复查任务；
+	// 下轮会命中 OnPlayerOffline 的终态分支，继续精确清理这条旧索引。
+	indexErr := u.deleteOfflinePlayerIndex(ctx, playerID, teamID)
 
 	// 人数变了 → 同步开放招募索引(满员队摘掉一人后重新开放)。
 	u.syncOpenIndex(ctx, result, result.MapId)
@@ -193,15 +205,30 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 		"offline_since_ms", offlineSinceMs,
 		"threshold", u.cfg.OfflineLeave.Threshold.String(),
 		"new_state", result.State, "remaining", len(result.Members))
+	if indexErr != nil {
+		return indexErr
+	}
 	return nil
 }
 
-// inspectTeamPresence 是读路径兜底:把「已经超阈值但没被事件排上」的成员补进复查队列。
+// deleteOfflinePlayerIndex 精确清理本次处理看到的旧 player→team 归属。
+// compare-delete 在玩家已并发加入新队时是安全 no-op；存储失败必须向上传播，确保
+// offlinewatch 不会把仍有残留索引的任务误判为完成。
+func (u *TeamUsecase) deleteOfflinePlayerIndex(ctx context.Context, playerID, teamID uint64) error {
+	if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); err != nil {
+		plog.With(ctx).Warnw("msg", "team_offline_leave_delete_player_index_failed",
+			"player_id", playerID, "team_id", teamID, "err", err)
+		return err
+	}
+	return nil
+}
+
+// inspectTeamPresence 是读路径兜底:把完整成员列表交给 offlinewatch 的统一观察入口。
 //
-// 刻意只排队、不在读路径上直接摘人:读请求要快、要能在依赖抖动时照常返回快照。
-// 排上之后由后台复查循环在一个 check_interval 内完成实际动作(默认 ≤15s)。
+// ONLINE / OFFLINE / UNKNOWN 的分类和排期都留在 offlinewatch 内；Team 不复制判定规则，
+// 也不在读路径上直接摘人。实际动作仍由后台复查循环执行。
 //
-// 全程 best-effort:任何一步失败都只记日志,绝不影响本次读返回 —— 组队面板打不开
+// 全程 best-effort:观察失败只记日志,绝不影响本次读返回 —— 组队面板打不开
 // 比多留一个离线成员严重得多。
 func (u *TeamUsecase) inspectTeamPresence(ctx context.Context, team *teamv1.TeamStorageRecord) {
 	if !u.offlineLeaveEnabled() || u.presence == nil || team == nil {
@@ -211,26 +238,8 @@ func (u *TeamUsecase) inspectTeamPresence(ctx context.Context, team *teamv1.Team
 		return
 	}
 	ids := memberIDs(team)
-	verdicts, err := u.presence.Inspect(ctx, ids)
-	if err != nil {
-		plog.With(ctx).Warnw("msg", "team_presence_inspect_failed",
+	if err := u.presence.Observe(ctx, ids); err != nil {
+		plog.With(ctx).Warnw("msg", "team_presence_observe_failed",
 			"team_id", team.GetTeamId(), "members", len(ids), "err", err)
-		return
 	}
-	var due []uint64
-	for _, pid := range ids {
-		if verdicts[pid] == offlinewatch.VerdictOffline {
-			due = append(due, pid)
-		}
-	}
-	if len(due) == 0 {
-		return
-	}
-	if err := u.presence.EnqueueDue(ctx, due); err != nil {
-		plog.With(ctx).Warnw("msg", "team_presence_enqueue_failed",
-			"team_id", team.GetTeamId(), "count", len(due), "err", err)
-		return
-	}
-	plog.With(ctx).Debugw("msg", "team_presence_offline_enqueued",
-		"team_id", team.GetTeamId(), "count", len(due))
 }

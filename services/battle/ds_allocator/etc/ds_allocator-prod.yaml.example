@@ -6,7 +6,7 @@
 server:
   grpc:
     network: tcp
-    addr: ":50020"
+    addr: ":20020"
     # 必须 > agones.allocate_timeout(5s) + allocator.ready_wait_timeout(10s) + 余量:
     # AllocateBattle 先同步 Allocate 一个 pod(≤5s),再阻塞轮询等 DS ready 心跳(≤10s);
     # server timeout 小于该预算会把 handler ctx 提前砍断,导致等待失败、回收清理路径走不全。
@@ -14,7 +14,7 @@ server:
     # enable_reflection 不写 = false
   http:
     network: tcp
-    addr: ":51020"
+    addr: ":21020"
 
 node:
   node_id: 1
@@ -40,7 +40,7 @@ kafka:
 # 位置续期,使玩家整局期间重登都能被 login 检测到"在战斗中"并直连回原 battle DS)。
 # ⚠️ 留空 = 不续期 → BATTLE 位置 30s TTL 过期,玩家切后台/杀进程 >30s 重登会被路由回大厅,
 #    进行中的对局回不去。生产必配。
-locator_addr: "player-locator:50006"
+locator_addr: "player-locator:20006"
 
 allocator:
   allocation_abort_auth_secret: "__ALLOCATION_ABORT_AUTH_SECRET_32B__"

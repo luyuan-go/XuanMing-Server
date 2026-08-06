@@ -694,9 +694,9 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 	// 只在 GetMyTeam(本人+索引校验过)续,GetTeam(任意 teamID)绝不续,
 	// 防旁人反复读把已抛弃队伍永久续命;disbanded 分支已在上方 return,不续。
 	u.maybeTouchTeam(ctx, team, playerID)
-	// 离线成员兜底复查(功能关闭时为 no-op):kafka 事件会丢、Hub DS 整台挂掉时压根不发
-	// 事件,只靠事件会留下永远清不掉的残留成员。玩家打开组队面板这一下顺手补一次,
-	// best-effort、只排队不写队伍,失败不影响本次读返回(见 offline_leave.go)。
+	// 离线成员兜底观察(功能关闭时为 no-op):kafka 事件会丢、Hub DS 整台挂掉时压根不发
+	// 事件,只靠事件会留下永远清不掉的残留成员。玩家打开组队面板时把完整成员列表
+	// 一次交给 offlinewatch；分类与排期均在其内部完成，失败不影响本次读返回。
 	u.inspectTeamPresence(ctx, team)
 	return team, true, nil
 }

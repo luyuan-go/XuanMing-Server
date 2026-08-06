@@ -35,6 +35,11 @@ func (c *Config) ValidateDSAuthAuthorityMode() error {
 
 // LocatorConf 是 player_locator 私有配置。
 type LocatorConf struct {
+	// OwnerAddr 唯一 owner authority 的内部 gRPC 地址。带 HubPresenceFence 的新协议
+	// SetLocation 必须查询 owner 并 fail-closed；空值只保留旧 DS 的 legacy Set 兼容，
+	// 不允许 fenced Set 退化为仅按 assignment/admission 猜顺序。
+	OwnerAddr string `yaml:"owner_addr,omitempty" json:"owner_addr,omitempty"`
+
 	// LocationTTL Redis hash 的 TTL。默认 30s,对齐 infra.md §3.2 表中的 30s heartbeat。
 	// W3 ⑥(2026-06-05):字段改用 config.Duration,etc yaml 可写 "30s" 字符串。
 	LocationTTL config.Duration `yaml:"location_ttl,omitempty" json:"location_ttl,omitempty"`

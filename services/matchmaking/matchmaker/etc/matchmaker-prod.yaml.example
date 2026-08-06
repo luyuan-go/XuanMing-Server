@@ -6,7 +6,7 @@
 server:
   grpc:
     network: tcp
-    addr: ":50011"
+    addr: ":20011"
     enable_rate_limit: true   # 压测前审核门禁-A:BBR 自适应限流(客户端面服务 prod 必开,过载按 CPU/inflight/RT 丢负载)
     # 普通玩家 RPC 上限。ConfirmMatch 只持久 CAS ALLOCATING；AllocateBattle 由服务生命周期
     # durable worker 使用独立有界 ctx 推进，不能继承玩家断线/请求取消。
@@ -14,7 +14,7 @@ server:
     # enable_reflection 不写 = false
   http:
     network: tcp
-    addr: ":51011"
+    addr: ":21011"
 
 node:
   node_id: 1
@@ -43,9 +43,9 @@ config_table:
   dir: "/data/pandora/configtable/active"
 
 match:
-  team_addr: "team.pandora.svc.cluster.local:50010"
-  ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:50020"
-  locator_addr: "player-locator.pandora.svc.cluster.local:50006"
+  team_addr: "team.pandora.svc.cluster.local:20010"
+  ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:20020"
+  locator_addr: "player-locator.pandora.svc.cluster.local:20006"
   # 独立 Login→Matchmaker 服务身份 key；不得复用 JWT / DS callback key。
   match_resume_auth_secret: "__MATCH_RESUME_AUTH_SECRET_32B__"
   match_resume_auth_audience: "matchmaker:5v5_ranked"

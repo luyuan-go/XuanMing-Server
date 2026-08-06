@@ -99,9 +99,28 @@ message Location {
   reserved 7 to 9;
 }
 
+// HubPresenceFence 是 Hub 物理连接写 locator 投影时的精确身份。
+//
+// 三项来自 Hub DS 已完成的 Admission，必须全有或全无：
+//   - 全有：新协议，locator 用它拒绝同 Pod 旧连接迟到的 SetLocation/Disconnect；
+//   - 全无：滚动升级中的旧 Hub DS，只允许 SetLocation 走安全降级，Disconnect 不缩 TTL；
+//   - 部分缺失：非法，拒绝，禁止把残缺身份冒充 legacy。
+//
+// admission_seq 只在同 assignment 内排序。跨 assignment 时 locator 必须实时查询唯一
+// owner authority，始终核对 ADMITTED、有效 lease、完整 target 及 pod+全局唯一 assignment；
+// Model B callback credential 可用时再额外精确核对实例 UID/epoch。locator 把查询返回的
+// owner_epoch+operation_id 仅作为内部投影 fence；客户端/Hub DS 不传也不能自铸 owner 代际。
+message HubPresenceFence {
+  string assignment_id = 1;
+  string admission_id  = 2;
+  uint64 admission_seq = 3;
+}
+
 message SetLocationRequest {
   uint64   player_id = 1;
   Location location  = 2;
+  // 仅 location.state=HUB 时使用；其它状态必须为空。
+  HubPresenceFence hub_presence_fence = 3;
 }
 
 message SetLocationResponse {
@@ -154,6 +173,8 @@ message ReportDisconnectRequest {
   // 防跨分片切线后旧 pod 的迟到断线报文误缩新分片记录。
   string hub_pod   = 1;
   uint64 player_id = 2;
+  // 与建立当前 HUB 投影时完全相同的连接 identity。旧 identity 按正常冲突零副作用。
+  HubPresenceFence hub_presence_fence = 3;
 }
 
 message ReportDisconnectResponse {

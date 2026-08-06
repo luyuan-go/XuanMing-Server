@@ -69,12 +69,19 @@ func (s *LocatorService) SetLocation(ctx context.Context, req *locatorv1.SetLoca
 		}
 	}
 	in := biz.LocationInput{
-		PlayerID:  req.GetPlayerId(),
-		State:     int32(loc.GetState()),
-		HubPod:    loc.GetHubPod(),
-		ShardID:   loc.GetShardId(),
-		MatchID:   loc.GetMatchId(),
-		BattlePod: loc.GetBattlePod(),
+		PlayerID:         req.GetPlayerId(),
+		State:            int32(loc.GetState()),
+		HubPod:           loc.GetHubPod(),
+		ShardID:          loc.GetShardId(),
+		MatchID:          loc.GetMatchId(),
+		BattlePod:        loc.GetBattlePod(),
+		HubPresenceFence: hubPresenceFenceFromProto(req.GetHubPresenceFence()),
+	}
+	if cred != nil {
+		// Hub owner authority 的实例 epoch 与 hub_allocator 签票/Admission 路径一致，
+		// 使用 callback credential 的 ProtocolEpoch（该服务没有另一个可猜的 epoch）。
+		in.HubInstanceUID = cred.InstanceUID
+		in.HubInstanceEpoch = cred.ProtocolEpoch
 	}
 	if err := s.uc.SetLocation(ctx, in); err != nil {
 		return &locatorv1.SetLocationResponse{Code: toProtoCode(err)}, nil
@@ -193,7 +200,8 @@ func (s *LocatorService) ReportDisconnect(ctx context.Context, req *locatorv1.Re
 			return &locatorv1.ReportDisconnectResponse{Code: toProtoCode(err)}, nil
 		}
 	}
-	shrunk, err := s.uc.ReportDisconnect(ctx, req.GetHubPod(), req.GetPlayerId())
+	shrunk, err := s.uc.ReportDisconnect(ctx, req.GetHubPod(), req.GetPlayerId(),
+		hubPresenceFenceFromProto(req.GetHubPresenceFence()))
 	if err != nil {
 		return &locatorv1.ReportDisconnectResponse{Code: toProtoCode(err)}, nil
 	}
@@ -201,6 +209,17 @@ func (s *LocatorService) ReportDisconnect(ctx context.Context, req *locatorv1.Re
 		Code:   commonv1.ErrCode_OK,
 		Shrunk: shrunk,
 	}, nil
+}
+
+func hubPresenceFenceFromProto(f *locatorv1.HubPresenceFence) biz.HubPresenceFence {
+	if f == nil {
+		return biz.HubPresenceFence{}
+	}
+	return biz.HubPresenceFence{
+		AssignmentID: f.GetAssignmentId(),
+		AdmissionID:  f.GetAdmissionId(),
+		AdmissionSeq: f.GetAdmissionSeq(),
+	}
 }
 
 func (s *LocatorService) ClearLocation(ctx context.Context, req *locatorv1.ClearLocationRequest) (*locatorv1.ClearLocationResponse, error) {

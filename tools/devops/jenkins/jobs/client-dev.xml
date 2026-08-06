@@ -46,10 +46,10 @@ lightweight=true：controller 只取 Tool/Build/Jenkinsfile，不做整仓检出
           <name>PACKAGE_KIND</name>
           <description>What Jenkins should package.</description>
           <choices>
+            <string>All_Dev</string>
             <string>Client_Dev</string>
             <string>Client_Shipping</string>
             <string>Server_Linux_Dev</string>
-            <string>All_Dev</string>
           </choices>
         </hudson.model.ChoiceParameterDefinition>
         <hudson.model.BooleanParameterDefinition>

@@ -8,12 +8,12 @@
 server:
   grpc:
     network: tcp
-    addr: ":50022"
+    addr: ":20022"
     timeout: "5s"
     # enable_reflection 不写 = false
   http:
     network: tcp
-    addr: ":51022"
+    addr: ":21022"
 
 node:
   node_id: 1
@@ -54,9 +54,9 @@ battle:
   base_mmr: 1500
   consume_topics:
     - "pandora.ds.lifecycle"
-  player_addr: "player.pandora.svc.cluster.local:50002"
-  matchmaker_addr: "matchmaker.pandora.svc.cluster.local:50011"
-  ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:50020"
+  player_addr: "player.pandora.svc.cluster.local:20002"
+  matchmaker_addr: "matchmaker.pandora.svc.cluster.local:20011"
+  ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:20020"
   terminal_release_interval: "2s"
   terminal_release_batch_size: 128
   terminal_release_grace: "15s"

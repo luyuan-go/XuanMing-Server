@@ -23,19 +23,24 @@ func (r failingLocationRepo) BatchGet(context.Context, []uint64) (map[uint64]dat
 	return nil, r.err
 }
 
-func (r failingLocationRepo) RefreshHubLocations(context.Context, string, []uint64, time.Duration) (int, error) {
+func (r failingLocationRepo) RefreshHubLocations(context.Context, string, []uint64, time.Duration, time.Duration) (int, error) {
 	return 0, r.err
 }
 
-func (r failingLocationRepo) ShrinkHubTTL(context.Context, string, uint64, time.Duration) (bool, error) {
+func (r failingLocationRepo) ActivateHubPresence(context.Context, uint64, data.HubPresenceFence, time.Duration) (bool, error) {
+	return false, r.err
+}
+func (r failingLocationRepo) ValidateHubPresence(context.Context, uint64, data.HubPresenceFence) (bool, error) {
 	return false, r.err
 }
 
-func (r failingLocationRepo) SetLastSeen(context.Context, uint64, int64, time.Duration) error {
-	return r.err
+func (r failingLocationRepo) ShrinkHubTTL(context.Context, string, uint64, data.HubPresenceFence, time.Duration) (bool, bool, error) {
+	return false, false, r.err
 }
 
-func (r failingLocationRepo) ClearLastSeen(context.Context, uint64) error { return r.err }
+func (r failingLocationRepo) RecordLastSeen(context.Context, uint64, data.HubPresenceFence, int64, time.Duration) (bool, int64, error) {
+	return false, 0, r.err
+}
 
 func (r failingLocationRepo) BatchGetLastSeen(context.Context, []uint64) (map[uint64]int64, error) {
 	return nil, r.err

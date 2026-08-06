@@ -258,7 +258,11 @@ owner/member 两级;InviteToGroup 幂等;owner 不能 LeaveGroup(须先 Transfer
 ```
 SetLocation(player_id, location)
 GetLocation(player_id) → Location
+BatchGetLocation(player_ids) → locations
 ClearLocation(player_id)
+RefreshHubLocations(hub_pod, player_ids) → refreshed
+ReportDisconnect(hub_pod, player_id, hub_presence_fence) → shrunk
+BatchGetLastSeen(player_ids) → last_seen_ms
 ```
 
 **Location 状态枚举**:
@@ -273,6 +277,22 @@ LOCATION_BATTLE { match_id, battle_pod }
 **状态查询与存储边界（全局不变量 §9.22 的 locator 落地）**:
 
 - `LOCATION_STATE_HUB` / `BATTLE` 是**短期 presence / 最近活跃投影**（CLAUDE.md §9.22），不是持久归属权威，也不是永久玩家业务数据。玩家真正进入 Hub 后，只允许该 Hub DS 上报 `HUB + hub_pod + shard_id`；从 Battle 回流时额外携带 `match_id` 作为 fence，只参与原子迁移校验，通过后不持久化。player_locator 在 Redis 单键保存该投影并用 TTL 续期。Hub 心跳持续续期，玩家离开 / 断线后停止续期，key 到期才按契约推导为 `OFFLINE`。key miss 只说明 presence 不可见，**不能**单独证明玩家已离开旧 DS，也不授权进入另一台 DS；归属判定还须叠加 matchmaker 耐久 claim 与 `InspectBattleRoute` 三态门。
+- Hub 物理连接写 `HUB` 与上报断线时必须携带同一次 Admission 的
+  `assignment_id + admission_id + admission_seq`。locator 只允许 exact 当前代缩 TTL、写离开时刻或幂等重放；
+  同 Pod 旧 Controller 的迟到 `SetLocation` / `ReportDisconnect` 必须零副作用。三字段全空只用于滚动升级：
+  legacy `SetLocation` 可安全写投影，legacy `ReportDisconnect` 必须退化为不缩 TTL；部分缺失一律拒绝。
+- 调用方只能提供连接 identity，不能提供或自铸 owner 代际。每个带 fence 的 HUB `SetLocation` 都必须
+  实时查询唯一 owner authority，并同时满足 `owner_type=HUB`、`phase=ADMITTED`、lease 未过期、target
+  完整、pod 与全局唯一 assignment 精确匹配；Model B callback credential 存在时再精确核对实例 UID/epoch。
+  查询失败或任一字段不一致均返回 UNKNOWN/UNAVAILABLE 或 identity mismatch，禁止退化为 locator 自行猜序。
+  locator 只把查询所得 `owner_epoch + operation_id` 用作可重建投影 fence，仍不成为 owner 权威写者。
+- HUB 当前连接代与可选离开时刻保存在同一个 per-player presence-meta key 内，由单键 Lua 原子完成
+  “推进 owner/连接代并清旧离开时刻”或“exact 当前代首次写离开时刻”。位置 hash 与 meta 不同 key，禁止伪装成
+  跨 key 原子事务；写入顺序必须选择失败后只会**延后**离线动作的方向。`BatchGetLastSeen` 在 meta 存在时
+  不得回退读取旧 `lastseen` string，避免把上一轮连接的陈旧时刻重新解释为当前离线证据。
+- 滚动升级顺序固定为：先全量升级 locator 并配置可用的 `locator.owner_addr`，确认旧协议仍可写且 legacy
+  Disconnect 已安全 no-op，再让 Hub/UE 开始发送 fence；新协议不得先打到不认识该字段且仍执行旧断线语义的
+  旧 locator。旧 Hub 过渡期失去快速缩 TTL，只退化到正常 presence TTL，不得以恢复速度为由放宽 fence。
 - **脑裂再入屏障下限（2026-07-17，`pkg/placement` 契约）**：locator TTL 是 login / matchmaker 再入门的第一道信号，`NewLocatorUsecase` 把 TTL 机械抬到 ≥ `placement.DSFenceReentryBarrier`(27s；2026-07-18 偏差余量 5→7,新增 ≥2s 服务间时钟漂移专属预留)。低于该值时，分区旧 DS（20s 授权租约 + 余量内自我 fencing）还没踢完存量玩家，presence 蒸发就会放行再入 → 一人两 DS。详见 `battle-reconnect.md` §8。
 - player_locator 是 Location 的唯一查询入口。login、team、matchmaker、friend 等其他服务需要当前位置时调用 `GetLocation` / `BatchGetLocation`，不得把 `HUB` 再写入自己的 MySQL、Redis 或长期内存状态并据此做决定。允许短 TTL 展示缓存，但必须标记非权威、可失效、可重建，不能参与准入或归属迁移。
 - “优先查询”指业务消费者查询 player_locator 这一统一权威索引，不是每次扫描 / 扇出查询所有 Hub DS。完全不保存位置索引会导致无法确定查询目标、Hub 故障与玩家不在无法区分，并破坏单一 Location 判定。
@@ -303,6 +323,13 @@ GetTeam(team_id) → Team 完整快照(只读)
 GetMyTeam() → has_team_msg + Team 完整快照(只读;登录后进大厅时调一次,队伍主界面直接渲染;player_id 以 JWT 为准,查 pandora:team:player:<id> 索引;没队伍返 OK+has_team_msg=false;索引命中但队伍已过期/解散时按无队伍处理并清脏索引。带宽:一次性 unary,5 人队 ~200 字节,比拆两次 RPC 更省)
 ```
 队伍状态变更推送走 kafka `pandora.team.update` → push 服务 server stream,**不提供** StreamTeamUpdates RPC。
+
+**离线成员自动退队启用门（2026-08-06）**：当前 `offline_leave.enabled` 必须保持 `false`，配置为
+`true` 时服务启动直接 fail-fast。原因不是 locator 或离线观察能力缺失，而是 Team 成员 CAS 与
+matchmaker `StartMatch` 的 durable start operation 不在同一事务域：合法时序可以是 StartMatch 先读旧 roster、
+离线摘人提交、StartMatch 再提交旧 roster。多读一次 commitment 仍不能提供共同线性化点。完整启用前必须让
+两条写路径共享 exact `match_operation_id + roster_version/fencing_token` 的 Team 权威预留/CAS；在用户明确要求
+不改 matchmaker 的本轮中只保留通用观察能力，不开放破坏性业务写。
 
 **依赖约束**：Redis 是队伍权威状态强依赖；配置了 `kafka.brokers` 时，Kafka producer 也是
 玩家可见邀请的启动强依赖。producer 初始化失败时 team 必须在 gRPC Ready 前退出，不能用

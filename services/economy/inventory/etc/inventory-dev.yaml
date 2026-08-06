@@ -43,6 +43,19 @@ inventory:
   ledger_retention_days: 90   # 幂等流水保留天数(≫ 一切重试窗口;≥ mail 可领窗口闭环见 conf.go)
   escrow_retention_days: 90   # closed 托管行保留天数(active 行永不清理)
 
+  # capacity: 装备实例背包格子容量(W5 ④)。**<=0 就是"实例背包未启用"**——main.go 不装配
+  # snowflake,GrantInstances 一律返回 ErrInvalidArg("instance inventory not enabled"),
+  # 表现为调用方拿到 code=4 而 gRPC 本身 rpc_ok。2026-08-06 排查「战斗掉落进不了背包」时
+  # 定谳:本键从来没配过(不是漂移),导致 bag-domain.md phase 0「权威在 inventory、掉落经
+  # battle_result 翻译」这条链的落地端一直是断的,player_item_instance 与 inventory_ledger
+  # 都是 0 行(= 一次都没成功发放过)。
+  # 取值 200 的依据:internal/data/budgets.go 把 player_item_instance 的行数预算写成
+  # planPlayers * 200 * 3(注释「行数 ≈ 玩家数 × 背包容量」),这份容量预算就是按 200 定的;
+  # 配别的值会让 dbguard 预算与实际口径对不上。
+  # 注意 InventoryConf.Validate() **不校验本键**,写成 0 / 负数 / 拼错键名都不报错、服务照常
+  # 启动、行为与没配一模一样。唯一判据是启动日志出现 `instance_bag_enabled capacity=200`。
+  capacity: 200
+
   # item_rules: 道具大厅经济规则表(留空 = 任何道具都不可大厅使用 / 出售,安全默认)。
   # 正式项目应来自配置表服务;W5 ③ demo 给两条样例(经验书可用,材料可卖)。
   item_rules:

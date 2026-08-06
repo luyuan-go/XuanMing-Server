@@ -1,6 +1,6 @@
 # Pandora dialogue 服务生产配置样例(2026-06-16)。复制为 dialogue-prod.yaml 后按环境填值。
 #
-# - gRPC :50013 / HTTP :51013(仅 /metrics)
+# - gRPC :20013 / HTTP :21013(仅 /metrics)
 # - prod: enable_reflection 不写(零值 false)= 关闭 grpc reflection
 #
 # 阶段限制:当前对话树内联在配置、会话为单实例内存。生产若多实例:
@@ -11,12 +11,12 @@
 server:
   grpc:
     network: tcp
-    addr: ":50013"
+    addr: ":20013"
     timeout: "5s"
     # enable_reflection 省略 = 关闭(prod 默认)
   http:
     network: tcp
-    addr: ":51013"
+    addr: ":21013"
 
 node:
   node_id: 1

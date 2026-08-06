@@ -27,12 +27,61 @@ import (
 // state 用 int32 保存(直接对应 pandora.locator.v1.LocationState 枚举值),
 // service 层负责跟 proto enum 互转。
 type LocationRecord struct {
-	State       int32
-	HubPod      string
-	ShardID     uint32
-	MatchID     uint64
-	BattlePod   string
-	UpdatedAtMs int64
+	State            int32
+	HubPod           string
+	ShardID          uint32
+	MatchID          uint64
+	BattlePod        string
+	UpdatedAtMs      int64
+	HubPresenceFence HubPresenceFence
+}
+
+// HubPresenceFence 是一次 Hub 物理连接的精确 identity。
+// admission_seq 只在同 assignment 内有序；admission_id 负责同序号 ABA 校验。
+type HubPresenceFence struct {
+	AssignmentID     string
+	AdmissionID      string
+	AdmissionSeq     uint64
+	OwnerEpoch       uint64
+	OwnerOperationID string
+}
+
+// IsZero 表示滚动升级中的旧 Hub DS 没有携带任何连接级 fence。
+func (f HubPresenceFence) IsZero() bool {
+	return f.AssignmentID == "" && f.AdmissionID == "" && f.AdmissionSeq == 0 &&
+		f.OwnerEpoch == 0 && f.OwnerOperationID == ""
+}
+
+// IsComplete 表示三个 fence 字段全部存在。
+func (f HubPresenceFence) IsComplete() bool {
+	return f.AssignmentID != "" && f.AdmissionID != "" && f.AdmissionSeq > 0
+}
+
+// IsAuthoritative 表示 locator 已把本次连接绑定到 owner authority 的全局代际。
+// owner_epoch 提供跨 assignment 的单调顺序，operation_id 防同 epoch 身份 ABA。
+func (f HubPresenceFence) IsAuthoritative() bool {
+	return f.OwnerEpoch > 0 && f.OwnerOperationID != ""
+}
+
+// IsFullyFenced 表示连接级与 owner 级身份都完整。
+func (f HubPresenceFence) IsFullyFenced() bool {
+	return f.IsComplete() && f.IsAuthoritative()
+}
+
+// Equal 做 exact identity 比较。
+func (f HubPresenceFence) Equal(other HubPresenceFence) bool {
+	return f.AssignmentID == other.AssignmentID &&
+		f.AdmissionID == other.AdmissionID &&
+		f.AdmissionSeq == other.AdmissionSeq &&
+		f.OwnerEpoch == other.OwnerEpoch &&
+		f.OwnerOperationID == other.OwnerOperationID
+}
+
+// SameConnection 只比较 Hub DS 在 Set/Disconnect 协议中共同携带的连接三元组。
+func (f HubPresenceFence) SameConnection(other HubPresenceFence) bool {
+	return f.AssignmentID == other.AssignmentID &&
+		f.AdmissionID == other.AdmissionID &&
+		f.AdmissionSeq == other.AdmissionSeq
 }
 
 // LocationRepo 玩家位置仓储接口。
@@ -53,31 +102,24 @@ type LocationRepo interface {
 	// 的记录不动(不变量 §1)。返实际续期成功条数。
 	// 非事务(校验→EXPIRE 两次 pipeline 往返):竞争窗口内状态若切到 MATCHING/BATTLE,
 	// 多续一次 30s TTL 无害(对局态由战斗链路自己刷 TTL,且后续写会重置)。
-	RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64, ttl time.Duration) (int, error)
+	RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64, ttl, metaTTL time.Duration) (int, error)
+	// ValidateHubPresence 只读校验长 TTL meta：false 表示旧 owner epoch、operation ABA、
+	// 同 assignment 的旧 admission 或 legacy 降级写。它不改变 meta，业务状态守卫拒绝时
+	// 不得留下半步副作用。
+	ValidateHubPresence(ctx context.Context, playerID uint64, fence HubPresenceFence) (bool, error)
+	// ActivateHubPresence 必须在 location CAS 写成功后调用。它重复同一套单 key 校验并
+	// commit 当前 fence、清除旧 last-seen；并发更新若已推进到更新代则返回 false。
+	// legacy(全零 fence)只在尚无 fenced 当前代时接受，用于滚动升级安全降级。
+	ActivateHubPresence(ctx context.Context, playerID uint64, fence HubPresenceFence, retention time.Duration) (bool, error)
 	// ShrinkHubTTL 快速断线上报:把玩家 HUB 位置的剩余 TTL 缩短到 grace(只缩不涨,
-	// PEXPIRE LT)。守卫同 RefreshHubLocations:仅「state==HUB 且 hub_pod 匹配」才缩;
-	// MATCHING/BATTLE/其它 pod/剩余 TTL 已更短 → 不动,返 false(均属正常路径)。
+	// PEXPIRE LT)。守卫要求「state==HUB、hub_pod 与 exact fence 全匹配」；
+	// accepted 区分身份匹配但 TTL 已更短的幂等重试，shrunk 只表示本次实际缩短。
 	// Lua 原子(单 key):校验与缩 TTL 同脚本执行,不存在「读到旧 HUB → 并发写成
 	// MATCHING/BATTLE → 误缩新状态 TTL」的窗口(Codex 复审 2026-07-06)。
-	ShrinkHubTTL(ctx context.Context, hubPod string, playerID uint64, grace time.Duration) (bool, error)
-	// SetLastSeen 记录「Hub DS 观测到该玩家离开的时刻」,写在**独立 key**
-	// `pandora:locator:lastseen:<player_id>` 上,retention 远长于位置 TTL。
-	//
-	// 为什么必须独立 key:位置记录是整 key 带 TTL 的 hash,key 一过期 updated_at_ms
-	// 跟着消失,于是「已经离线多久」在权威侧无处可查。把时间戳放进同一个 hash 解决不了
-	// 问题(一起被删),延长位置 TTL 更不行(会破坏 key miss = 离线这个全链依赖的判据,
-	// 以及 §9.22 的 27s 再入屏障推导)。
-	//
-	// 只在 ShrinkHubTTL 守卫通过后调用(见 biz.ReportDisconnect 的顺序说明),
-	// 因此语义严格是「确实离开了 Hub」,而不是「某台 DS 声称他走了」。
-	SetLastSeen(ctx context.Context, playerID uint64, atMs int64, retention time.Duration) error
-	// ClearLastSeen 删掉 last-seen 时刻(玩家回到 Hub 时调用)。
-	//
-	// 维持不变量:**last-seen 存在 ⟺ 该玩家离开 Hub 后还没回来过**。
-	// 不清的话,一次「断线→秒重连」会在权威侧留下一个陈旧时刻;等到下一次掉线
-	// 恰好没能写新时刻时(Hub DS 整台挂掉 → 压根不会调 ReportDisconnect),
-	// 消费方就会拿那个旧时刻算出「已离线几十分钟」,把刚掉线 10 秒的玩家立刻踢掉。
-	ClearLastSeen(ctx context.Context, playerID uint64) error
+	ShrinkHubTTL(ctx context.Context, hubPod string, playerID uint64, fence HubPresenceFence, grace time.Duration) (accepted, shrunk bool, err error)
+	// RecordLastSeen 仅在 meta 当前 fence exact 匹配时记录首次离开时刻；重复请求返回
+	// 原时刻而不后移。meta 若尚不存在，可由已经通过 location exact 守卫的调用重建。
+	RecordLastSeen(ctx context.Context, playerID uint64, fence HubPresenceFence, atMs int64, retention time.Duration) (recorded bool, effectiveAtMs int64, err error)
 	// BatchGetLastSeen 批量读 last-seen 时刻。用 pipeline 一次往返。
 	// 返回 map 只含有记录的玩家;缺席 = UNKNOWN(从未记录 / 已超 retention),
 	// 调用方不得当成 0 或「刚离开」(§9.22 不确定不得冒充默认值)。
@@ -99,14 +141,126 @@ func locKey(playerID uint64) string {
 	return fmt.Sprintf("pandora:locator:%d", playerID)
 }
 
-// lastSeenKey returns "pandora:locator:lastseen:<playerID>" —— 与位置 key 分开,
-// 好让它在位置 key 过期之后依然存在(见 LocationRepo.SetLastSeen 注释)。
-//
-// ⚠️ 刻意**不**与 locKey 做同 slot 的 hash tag:两者永远不在同一条 Lua / 事务里写
-// (biz 按「先守卫缩 TTL、成功后再记时刻」的顺序分两步做,见 ReportDisconnect),
-// 因此不存在 CROSSSLOT 问题;而给 locKey 补 hash tag 会改动全链已在用的 key 形态。
+// lastSeenKey 是旧协议留下的 string key。新协议只在 hubMetaKey 完全不存在时
+// 兼容读取；一旦新 locator 见过一次 HUB Set，meta marker 就会屏蔽这份旧时刻。
 func lastSeenKey(playerID uint64) string {
 	return fmt.Sprintf("pandora:locator:lastseen:%d", playerID)
+}
+
+// hubMetaKey 保存当前 Hub 连接 fence 与可选 left_at_ms。它必须独立于带 presence TTL
+// 的 location key，才能在 location 过期后继续回答离线时长；同时所有代际推进 / 清理 /
+// 记录离开都只在本单 key Lua 内完成，避免 Redis Cluster 的 CROSSSLOT。
+func hubMetaKey(playerID uint64) string {
+	return fmt.Sprintf("pandora:locator:hubmeta:%d", playerID)
+}
+
+// hubPresenceScript 以同一套全序规则完成 validate/commit：
+//   - owner_epoch 跨 assignment 单调排序；同 epoch 必须 operation+assignment 全等；
+//   - 同 assignment 内再按 admission_seq 排序，admission_id 防同序 ABA；
+//   - 已记录 left_at 的 exact admission 不得被迟到 Set 复活。
+//
+// action=validate 只读，action=commit 才推进 meta 并清理旧 left_at_ms。调用方严格按
+// validate → location CAS → commit 排序，既能用长 TTL meta 挡 location 过期后的旧写，
+// 又不会在 MATCHING/BATTLE guard 拒绝时污染 meta。
+var hubPresenceScript = redis.NewScript(`
+local function compare_uint_decimal(left, right)
+  left = string.gsub(left or '0', '^0+', '')
+  right = string.gsub(right or '0', '^0+', '')
+  if left == '' then left = '0' end
+  if right == '' then right = '0' end
+  if string.len(left) < string.len(right) then return -1 end
+  if string.len(left) > string.len(right) then return 1 end
+  if left < right then return -1 end
+  if left > right then return 1 end
+  return 0
+end
+
+local action = ARGV[1]
+local incoming_mode = ARGV[2]
+local current_mode = redis.call('HGET', KEYS[1], 'mode')
+if action ~= 'validate' and action ~= 'commit' then return 0 end
+if not current_mode and redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
+if current_mode and current_mode ~= 'legacy' and current_mode ~= 'fenced' then return 0 end
+
+if incoming_mode == 'legacy' then
+  if current_mode == 'fenced' then return 0 end
+  if action == 'validate' then return 1 end
+  redis.call('HSET', KEYS[1], 'mode', 'legacy')
+  redis.call('HDEL', KEYS[1],
+    'owner_epoch', 'owner_operation_id',
+    'assignment_id', 'admission_id', 'admission_seq', 'left_at_ms')
+  redis.call('PEXPIRE', KEYS[1], ARGV[8])
+  return 1
+end
+
+if current_mode == 'fenced' then
+  local owner_cmp = compare_uint_decimal(redis.call('HGET', KEYS[1], 'owner_epoch'), ARGV[3])
+  if owner_cmp > 0 then return 0 end
+  if owner_cmp == 0 then
+    if (redis.call('HGET', KEYS[1], 'owner_operation_id') or '') ~= ARGV[4] then return 0 end
+    if (redis.call('HGET', KEYS[1], 'assignment_id') or '') ~= ARGV[5] then return 0 end
+    local seq_cmp = compare_uint_decimal(redis.call('HGET', KEYS[1], 'admission_seq'), ARGV[7])
+    if seq_cmp > 0 then return 0 end
+    if seq_cmp == 0 and (redis.call('HGET', KEYS[1], 'admission_id') or '') ~= ARGV[6] then return 0 end
+    -- 同一 admission 已经离开后，迟到/重放的 SetLocation 不能清掉 left_at 复活。
+    if seq_cmp == 0 and redis.call('HEXISTS', KEYS[1], 'left_at_ms') == 1 then return 0 end
+  end
+end
+
+if action == 'validate' then return 1 end
+redis.call('HSET', KEYS[1],
+  'mode', 'fenced',
+  'owner_epoch', ARGV[3],
+  'owner_operation_id', ARGV[4],
+  'assignment_id', ARGV[5],
+  'admission_id', ARGV[6],
+  'admission_seq', ARGV[7])
+redis.call('HDEL', KEYS[1], 'left_at_ms')
+redis.call('PEXPIRE', KEYS[1], ARGV[8])
+return 1`)
+
+// ValidateHubPresence 只读校验，不改变 meta。
+func (r *RedisLocationRepo) ValidateHubPresence(ctx context.Context, playerID uint64, fence HubPresenceFence) (bool, error) {
+	if playerID == 0 {
+		return false, errcode.New(errcode.ErrInvalidArg, "playerID must be valid")
+	}
+	if !fence.IsZero() && !fence.IsFullyFenced() {
+		return false, errcode.New(errcode.ErrInvalidArg, "hub presence fence must be authoritative or empty")
+	}
+	mode := "fenced"
+	if fence.IsZero() {
+		mode = "legacy"
+	}
+	accepted, err := hubPresenceScript.Run(ctx, r.rdb,
+		[]string{hubMetaKey(playerID)},
+		"validate", mode, fence.OwnerEpoch, fence.OwnerOperationID,
+		fence.AssignmentID, fence.AdmissionID, fence.AdmissionSeq, 0).Int()
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "redis validate hub presence: %v", err)
+	}
+	return accepted == 1, nil
+}
+
+// ActivateHubPresence 在 location CAS 写成功后 commit meta。
+func (r *RedisLocationRepo) ActivateHubPresence(ctx context.Context, playerID uint64, fence HubPresenceFence, retention time.Duration) (bool, error) {
+	if playerID == 0 || retention <= 0 {
+		return false, errcode.New(errcode.ErrInvalidArg, "playerID and retention must be valid")
+	}
+	if !fence.IsZero() && !fence.IsFullyFenced() {
+		return false, errcode.New(errcode.ErrInvalidArg, "hub presence fence must be authoritative or empty")
+	}
+	mode := "fenced"
+	if fence.IsZero() {
+		mode = "legacy"
+	}
+	accepted, err := hubPresenceScript.Run(ctx, r.rdb,
+		[]string{hubMetaKey(playerID)},
+		"commit", mode, fence.OwnerEpoch, fence.OwnerOperationID,
+		fence.AssignmentID, fence.AdmissionID, fence.AdmissionSeq, retention.Milliseconds()).Int()
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "redis activate hub presence: %v", err)
+	}
+	return accepted == 1, nil
 }
 
 // SetGuarded WATCH/MULTI/EXEC 原子读-判-写。
@@ -155,6 +309,11 @@ func (r *RedisLocationRepo) SetGuarded(
 					"match_id", rec.MatchID,
 					"battle_pod", rec.BattlePod,
 					"updated_at_ms", rec.UpdatedAtMs,
+					"hub_assignment_id", rec.HubPresenceFence.AssignmentID,
+					"hub_admission_id", rec.HubPresenceFence.AdmissionID,
+					"hub_admission_seq", rec.HubPresenceFence.AdmissionSeq,
+					"hub_owner_epoch", rec.HubPresenceFence.OwnerEpoch,
+					"hub_owner_operation_id", rec.HubPresenceFence.OwnerOperationID,
 				)
 				pipe.Expire(ctx, key, ttl)
 				return nil
@@ -235,7 +394,7 @@ func (r *RedisLocationRepo) BatchGet(ctx context.Context, playerIDs []uint64) (m
 // 非事务:步骤 1→2 之间状态若被并发写成 MATCHING/BATTLE,EXPIRE 只多续一次
 // 30s TTL(无害:对局态由战斗链路持续刷新,且下次写会重置 TTL),不值得上 WATCH。
 // 单 key miss / 解析失败直接跳过(玩家刚离线属正常路径),不让整批失败。
-func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64, ttl time.Duration) (int, error) {
+func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64, ttl, metaTTL time.Duration) (int, error) {
 	if hubPod == "" || len(playerIDs) == 0 {
 		return 0, nil
 	}
@@ -274,6 +433,11 @@ func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod stri
 			continue // 非 HUB 态 / 别的 pod 的记录不动(不变量 §1)
 		}
 		expirePipe.Expire(ctx, locKey(pid), ttl)
+		// Hub meta 承载连接 fence；在线数小时也不能让它先于 location 丢失，否则
+		// 后续 exact Disconnect 只能退化为普通 TTL。key 不存在时 EXPIRE 是安全 no-op。
+		if metaTTL > 0 {
+			expirePipe.Expire(ctx, hubMetaKey(pid), metaTTL)
+		}
 		refreshed++
 	}
 	if refreshed == 0 {
@@ -286,94 +450,125 @@ func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod stri
 }
 
 // shrinkHubTTLScript 原子完成「守卫校验 + 缩 TTL」(单 key,Lua 内无并发写插入的窗口):
-// state==HUB('3') 且 hub_pod 匹配才 PEXPIRE LT;否则返 0 不动。
+// state==HUB('3')、hub_pod 与 exact connection fence 全匹配才 PEXPIRE LT。
+// 返回 0=身份不匹配，1=实际缩短，2=身份匹配但 TTL 已经更短（幂等接受）。
 // 若非原子(先 HMGET 再 EXPIRE),窗口内状态被并发写成 MATCHING/BATTLE 会误缩新状态
 // 的 TTL 到 grace,与「不误伤对局态」的设计目标冲突(Codex 复审 2026-07-06)。
 var shrinkHubTTLScript = redis.NewScript(`
 if redis.call('HGET', KEYS[1], 'state') ~= '3' then return 0 end
 if redis.call('HGET', KEYS[1], 'hub_pod') ~= ARGV[1] then return 0 end
-return redis.call('PEXPIRE', KEYS[1], ARGV[2], 'LT')`)
+if redis.call('HGET', KEYS[1], 'hub_assignment_id') ~= ARGV[2] then return 0 end
+if redis.call('HGET', KEYS[1], 'hub_admission_id') ~= ARGV[3] then return 0 end
+if redis.call('HGET', KEYS[1], 'hub_admission_seq') ~= ARGV[4] then return 0 end
+local changed = redis.call('PEXPIRE', KEYS[1], ARGV[5], 'LT')
+if changed == 1 then return 1 end
+return 2`)
 
 // ShrinkHubTTL 快速断线上报:守卫通过后把剩余 TTL 缩到 grace。
 //
 // PEXPIRE LT 语义(Redis 7):仅当新 TTL 小于当前剩余 TTL 才生效——只缩不涨,
-// 重复上报/迟到报文天然幂等。守卫失败(非 HUB / pod 不匹配 / key 已过期)返
-// (false, nil):玩家 travel 去战斗、切线后旧 pod 迟到报文等均属正常路径,不是错误。
-func (r *RedisLocationRepo) ShrinkHubTTL(ctx context.Context, hubPod string, playerID uint64, grace time.Duration) (bool, error) {
-	if hubPod == "" || playerID == 0 {
-		return false, errcode.New(errcode.ErrInvalidArg, "hub_pod and player_id required")
+// 重复上报天然幂等。守卫失败(非 HUB / pod 或连接 fence 不匹配 / key 已过期)返
+// accepted=false；身份匹配但 TTL 已更短返 accepted=true、shrunk=false，仍允许补写 meta。
+func (r *RedisLocationRepo) ShrinkHubTTL(ctx context.Context, hubPod string, playerID uint64, fence HubPresenceFence, grace time.Duration) (bool, bool, error) {
+	if hubPod == "" || playerID == 0 || !fence.IsComplete() {
+		return false, false, errcode.New(errcode.ErrInvalidArg, "hub_pod, player_id and complete fence required")
 	}
-	shrunk, err := shrinkHubTTLScript.Run(ctx, r.rdb,
+	result, err := shrinkHubTTLScript.Run(ctx, r.rdb,
 		[]string{locKey(playerID)},
-		hubPod, grace.Milliseconds()).Int()
+		hubPod, fence.AssignmentID, fence.AdmissionID, fence.AdmissionSeq, grace.Milliseconds()).Int()
 	if err != nil {
-		return false, errcode.New(errcode.ErrInternal, "redis shrink hub ttl: %v", err)
+		return false, false, errcode.New(errcode.ErrInternal, "redis shrink hub ttl: %v", err)
 	}
-	return shrunk == 1, nil
+	return result == 1 || result == 2, result == 1, nil
 }
 
-// SetLastSeen 写 last-seen 时刻(SET + PX,覆盖式)。
-//
-// 覆盖而非「只增不减」:同一玩家的多次离开,最后一次才是有效的「离开多久」基线。
-// 重复 / 迟到的 ReportDisconnect 只会把时刻刷新到更晚,后果是**晚一点**才判定超时,
-// 偏保守的方向(宁可多留他一会儿,也不要把在线的人误算成离线很久)。
-func (r *RedisLocationRepo) SetLastSeen(ctx context.Context, playerID uint64, atMs int64, retention time.Duration) error {
-	if playerID == 0 {
-		return errcode.New(errcode.ErrInvalidArg, "playerID must > 0")
+// recordLastSeenScript 只给当前 exact fence 写首次离开时刻。location 守卫已经通过而
+// meta 恰好丢失时允许重建；若重连已推进 meta，则旧请求严格返回 0。
+var recordLastSeenScript = redis.NewScript(`
+local current_mode = redis.call('HGET', KEYS[1], 'mode')
+if not current_mode and redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
+if current_mode then
+  if current_mode ~= 'fenced' then return 0 end
+  if redis.call('HGET', KEYS[1], 'assignment_id') ~= ARGV[1] then return 0 end
+  if redis.call('HGET', KEYS[1], 'admission_id') ~= ARGV[2] then return 0 end
+  if redis.call('HGET', KEYS[1], 'admission_seq') ~= ARGV[3] then return 0 end
+else
+  redis.call('HSET', KEYS[1],
+    'mode', 'fenced',
+    'assignment_id', ARGV[1],
+    'admission_id', ARGV[2],
+    'admission_seq', ARGV[3])
+end
+local existing = redis.call('HGET', KEYS[1], 'left_at_ms')
+if existing then
+  redis.call('PEXPIRE', KEYS[1], ARGV[5])
+  return tonumber(existing) or 0
+end
+redis.call('HSET', KEYS[1], 'left_at_ms', ARGV[4])
+redis.call('PEXPIRE', KEYS[1], ARGV[5])
+return tonumber(ARGV[4])`)
+
+// RecordLastSeen 精确记录该连接首次离开时刻；重复调用返回第一次的时刻。
+func (r *RedisLocationRepo) RecordLastSeen(ctx context.Context, playerID uint64, fence HubPresenceFence, atMs int64, retention time.Duration) (bool, int64, error) {
+	if playerID == 0 || !fence.IsComplete() || atMs <= 0 || retention <= 0 {
+		return false, 0, errcode.New(errcode.ErrInvalidArg, "valid player, fence, timestamp and retention required")
 	}
-	if retention <= 0 {
-		return errcode.New(errcode.ErrInvalidArg, "retention must > 0")
+	effectiveAtMs, err := recordLastSeenScript.Run(ctx, r.rdb,
+		[]string{hubMetaKey(playerID)},
+		fence.AssignmentID, fence.AdmissionID, fence.AdmissionSeq, atMs, retention.Milliseconds()).Int64()
+	if err != nil {
+		return false, 0, errcode.New(errcode.ErrInternal, "redis record last seen: %v", err)
 	}
-	if err := r.rdb.Set(ctx, lastSeenKey(playerID), strconv.FormatInt(atMs, 10), retention).Err(); err != nil {
-		return errcode.New(errcode.ErrInternal, "redis set last seen: %v", err)
-	}
-	return nil
+	return effectiveAtMs > 0, effectiveAtMs, nil
 }
 
-// ClearLastSeen UNLINK(异步删)。key 不存在不是错误(玩家本来就没离开过)。
-func (r *RedisLocationRepo) ClearLastSeen(ctx context.Context, playerID uint64) error {
-	if playerID == 0 {
-		return errcode.New(errcode.ErrInvalidArg, "playerID must > 0")
-	}
-	if err := r.rdb.Unlink(ctx, lastSeenKey(playerID)).Err(); err != nil && !errors.Is(err, redis.Nil) {
-		return errcode.New(errcode.ErrInternal, "redis clear last seen: %v", err)
-	}
-	return nil
-}
-
-// BatchGetLastSeen 用 pipeline 一次往返批量读。
-//
-// 单 key miss / 解析失败一律跳过(缺席 = UNKNOWN),不让整批失败:调用方对 UNKNOWN
-// 的处理必须是「不动作」,所以把坏值当缺席比返回一个可能被误用的 0 更安全。
+// BatchGetLastSeen 用 pipeline 同时读新 meta 与旧 string key。meta 只要存在就拥有优先级：
+// 没有 left_at_ms 明确表示当前连接未离开，绝不能再回退到重连前的旧 string 时刻。
+// 只有 meta 完全不存在时才读旧 key，供滚动升级窗口兼容。
 func (r *RedisLocationRepo) BatchGetLastSeen(ctx context.Context, playerIDs []uint64) (map[uint64]int64, error) {
 	out := make(map[uint64]int64, len(playerIDs))
 	if len(playerIDs) == 0 {
 		return out, nil
 	}
 	pipe := r.rdb.Pipeline()
-	cmds := make(map[uint64]*redis.StringCmd, len(playerIDs))
+	metaCmds := make(map[uint64]*redis.MapStringStringCmd, len(playerIDs))
+	legacyCmds := make(map[uint64]*redis.StringCmd, len(playerIDs))
 	for _, pid := range playerIDs {
 		if pid == 0 {
 			continue
 		}
-		if _, dup := cmds[pid]; dup {
+		if _, dup := metaCmds[pid]; dup {
 			continue
 		}
-		cmds[pid] = pipe.Get(ctx, lastSeenKey(pid))
+		metaCmds[pid] = pipe.HGetAll(ctx, hubMetaKey(pid))
+		legacyCmds[pid] = pipe.Get(ctx, lastSeenKey(pid))
 	}
-	if len(cmds) == 0 {
+	if len(metaCmds) == 0 {
 		return out, nil
 	}
 	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
 		return nil, errcode.New(errcode.ErrInternal, "redis batch get last seen: %v", err)
 	}
-	for pid, cmd := range cmds {
-		v, err := cmd.Result()
+	for pid, metaCmd := range metaCmds {
+		meta, metaErr := metaCmd.Result()
+		if metaErr == nil && len(meta) > 0 {
+			if meta["mode"] == "fenced" {
+				v, ok := meta["left_at_ms"]
+				if !ok {
+					continue
+				}
+				if ms, perr := strconv.ParseInt(v, 10, 64); perr == nil && ms > 0 {
+					out[pid] = ms
+				}
+			}
+			continue // meta marker 存在即禁止读旧 key
+		}
+		v, err := legacyCmds[pid].Result()
 		if err != nil {
 			continue // redis.Nil(无记录)/ 单命令失败 → 缺席判 UNKNOWN
 		}
 		ms, perr := strconv.ParseInt(v, 10, 64)
-		if perr != nil {
+		if perr != nil || ms <= 0 {
 			continue // 坏值当缺席,不喂给调用方
 		}
 		out[pid] = ms
@@ -398,6 +593,11 @@ func parseLocationMap(m map[string]string) LocationRecord {
 	rec := LocationRecord{
 		HubPod:    m["hub_pod"],
 		BattlePod: m["battle_pod"],
+		HubPresenceFence: HubPresenceFence{
+			AssignmentID:     m["hub_assignment_id"],
+			AdmissionID:      m["hub_admission_id"],
+			OwnerOperationID: m["hub_owner_operation_id"],
+		},
 	}
 	if v, ok := m["state"]; ok {
 		if x, e := strconv.ParseInt(v, 10, 32); e == nil {
@@ -417,6 +617,16 @@ func parseLocationMap(m map[string]string) LocationRecord {
 	if v, ok := m["updated_at_ms"]; ok {
 		if x, e := strconv.ParseInt(v, 10, 64); e == nil {
 			rec.UpdatedAtMs = x
+		}
+	}
+	if v, ok := m["hub_admission_seq"]; ok {
+		if x, e := strconv.ParseUint(v, 10, 64); e == nil {
+			rec.HubPresenceFence.AdmissionSeq = x
+		}
+	}
+	if v, ok := m["hub_owner_epoch"]; ok {
+		if x, e := strconv.ParseUint(v, 10, 64); e == nil {
+			rec.HubPresenceFence.OwnerEpoch = x
 		}
 	}
 	return rec

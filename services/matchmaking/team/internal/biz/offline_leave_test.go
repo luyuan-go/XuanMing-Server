@@ -62,6 +62,24 @@ func teamMemberIDs(t *testing.T, uc *TeamUsecase, teamID uint64) []uint64 {
 	return memberIDs(team)
 }
 
+// failDeleteIndexRepo 注入 player→team compare-delete 的瞬时失败，复现
+// 「队伍主体 CAS 已成功、归属索引清理失败」的部分成功窗口。
+type failDeleteIndexRepo struct {
+	data.TeamRepo
+	failures int
+	calls    int
+	err      error
+}
+
+func (r *failDeleteIndexRepo) DeletePlayerIndexIfMatches(ctx context.Context, playerID, teamID uint64) error {
+	r.calls++
+	if r.failures > 0 {
+		r.failures--
+		return r.err
+	}
+	return r.TeamRepo.DeletePlayerIndexIfMatches(ctx, playerID, teamID)
+}
+
 // ── 摘人成功路径 ────────────────────────────────────────────────────────────
 
 func TestOnPlayerOffline_摘掉离线队员并清归属(t *testing.T) {
@@ -99,6 +117,68 @@ func TestOnPlayerOffline_摘掉离线队员并清归属(t *testing.T) {
 	}
 	if !sawRemoved {
 		t.Fatal("被摘的人本人也要收到:他若刚好重连回来,得立刻知道自己已不在队里")
+	}
+}
+
+func TestOnPlayerOffline_索引删除失败会保留任务并在重试时修复(t *testing.T) {
+	uc, pusher := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9614, 7741, 7742)
+	uc.SetMatchCommitmentReader(&mockCommitment{})
+
+	deleteErr := errors.New("delete player index unavailable")
+	faultRepo := &failDeleteIndexRepo{
+		TeamRepo: uc.repo,
+		failures: 2,
+		err:      deleteErr,
+	}
+	uc.repo = faultRepo
+
+	beforePushes := len(pusher.calls)
+	err := uc.OnPlayerOffline(ctx, 7742, 1_000)
+	if !errors.Is(err, deleteErr) {
+		t.Fatalf("主体已写但索引未清时必须返回 error 保留复查任务, got=%v", err)
+	}
+	if got := teamMemberIDs(t, uc, 9614); len(got) != 1 || got[0] != 7741 {
+		t.Fatalf("故障窗口应已完成队伍主体 CAS, 剩余成员=%v", got)
+	}
+	if got, found, getErr := uc.repo.GetPlayerTeamID(ctx, 7742); getErr != nil {
+		t.Fatalf("GetPlayerTeamID: %v", getErr)
+	} else if !found || got != 9614 {
+		t.Fatalf("首次 compare-delete 失败后旧索引应仍可供重试定位, got=%d found=%v", got, found)
+	}
+	if len(pusher.calls) == beforePushes {
+		t.Fatal("索引瞬时失败不得跳过主体写后的队伍更新推送")
+	}
+	afterFirstPushes := len(pusher.calls)
+
+	// 第二轮会看到「旧索引仍在，但队伍已不含该玩家」。它必须继续 compare-delete；
+	// 清理仍失败时继续返回 error，而不是把业务终态误当成整个任务已完成。
+	if err := uc.OnPlayerOffline(ctx, 7742, 1_000); !errors.Is(err, deleteErr) {
+		t.Fatalf("终态分支清索引失败时仍须保留复查任务, got=%v", err)
+	}
+	if got, found, getErr := uc.repo.GetPlayerTeamID(ctx, 7742); getErr != nil {
+		t.Fatalf("GetPlayerTeamID after failed retry: %v", getErr)
+	} else if !found || got != 9614 {
+		t.Fatalf("终态清理失败后旧索引必须仍在, got=%d found=%v", got, found)
+	}
+	if len(pusher.calls) != afterFirstPushes {
+		t.Fatalf("终态重试只修索引，不应重复推送队伍变更, pushes=%d want=%d", len(pusher.calls), afterFirstPushes)
+	}
+
+	if err := uc.OnPlayerOffline(ctx, 7742, 1_000); err != nil {
+		t.Fatalf("索引恢复后重试应完成精确清理: %v", err)
+	}
+	if _, found, getErr := uc.repo.GetPlayerTeamID(ctx, 7742); getErr != nil {
+		t.Fatalf("GetPlayerTeamID after retry: %v", getErr)
+	} else if found {
+		t.Fatal("重试必须清掉仍指向旧 teamID 的残留索引")
+	}
+	if faultRepo.calls != 3 {
+		t.Fatalf("首次摘人及每轮终态重试都必须执行 compare-delete, calls=%d", faultRepo.calls)
+	}
+	if len(pusher.calls) != afterFirstPushes {
+		t.Fatalf("终态重试只修索引，不应重复推送队伍变更, pushes=%d want=%d", len(pusher.calls), afterFirstPushes)
 	}
 }
 
@@ -169,8 +249,8 @@ func TestOnPlayerOffline_整队被对局占住时不动(t *testing.T) {
 	// 队长被对局占住 = 这支队伍正在排队 / 确认 / 拉 DS / 打整场。
 	uc.SetMatchCommitmentReader(&mockCommitment{committed: map[uint64]bool{7641: true}})
 
-	if err := uc.OnPlayerOffline(ctx, 7642, 1_000); err != nil {
-		t.Fatalf("跳过属正常路径,不该报错: %v", err)
+	if err := uc.OnPlayerOffline(ctx, 7642, 1_000); !errors.Is(err, offlinewatch.ErrDeferred) {
+		t.Fatalf("整队被对局占住时必须延后并保留复查任务, got=%v", err)
 	}
 	if got := teamMemberIDs(t, uc, 9605); len(got) != 2 {
 		t.Fatalf("绝不能拆一支正在打的队伍(会波及还在正常游戏的队友), 剩余=%v", got)
@@ -184,8 +264,8 @@ func TestOnPlayerOffline_玩家自己被对局占住时不动(t *testing.T) {
 	// 队长没被占住、但这名成员自己还持有票据:locator 与 matchmaker 的短暂不一致。
 	uc.SetMatchCommitmentReader(&mockCommitment{committed: map[uint64]bool{7652: true}})
 
-	if err := uc.OnPlayerOffline(ctx, 7652, 1_000); err != nil {
-		t.Fatalf("跳过属正常路径,不该报错: %v", err)
+	if err := uc.OnPlayerOffline(ctx, 7652, 1_000); !errors.Is(err, offlinewatch.ErrDeferred) {
+		t.Fatalf("玩家仍被对局占住时必须延后并保留复查任务, got=%v", err)
 	}
 	if got := teamMemberIDs(t, uc, 9606); len(got) != 2 {
 		t.Fatalf("玩家自己还在对局里就不能摘, 剩余=%v", got)
@@ -267,52 +347,37 @@ func TestOnPlayerOffline_没接matchmaker时按关闭处理(t *testing.T) {
 // ── 读路径兜底 ──────────────────────────────────────────────────────────────
 
 type fakeInspector struct {
-	verdicts map[uint64]offlinewatch.Verdict
-	err      error
-	enqueued []uint64
-	enqErr   error
+	calls [][]uint64
+	err   error
 }
 
-func (f *fakeInspector) Inspect(_ context.Context, ids []uint64) (map[uint64]offlinewatch.Verdict, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	out := make(map[uint64]offlinewatch.Verdict, len(ids))
-	for _, id := range ids {
-		out[id] = f.verdicts[id]
-	}
-	return out, nil
+func (f *fakeInspector) Observe(_ context.Context, ids []uint64) error {
+	f.calls = append(f.calls, append([]uint64(nil), ids...))
+	return f.err
 }
 
-func (f *fakeInspector) EnqueueDue(_ context.Context, ids []uint64) error {
-	if f.enqErr != nil {
-		return f.enqErr
-	}
-	f.enqueued = append(f.enqueued, ids...)
-	return nil
-}
-
-func TestGetMyTeam_兜底把超时成员排进复查队列(t *testing.T) {
+func TestGetMyTeam_兜底把完整成员一次交给统一观察入口(t *testing.T) {
 	uc, _ := newOfflineLeaveUsecase(t)
 	ctx := context.Background()
 	setupTwoMemberTeam(t, uc, 9611, 7711, 7712)
 	uc.SetMatchCommitmentReader(&mockCommitment{})
 
-	insp := &fakeInspector{verdicts: map[uint64]offlinewatch.Verdict{
-		7711: offlinewatch.VerdictOnline,
-		7712: offlinewatch.VerdictOffline,
-	}}
+	insp := &fakeInspector{}
 	uc.SetPresenceInspector(insp)
 
 	if _, has, err := uc.GetMyTeam(ctx, 7711); err != nil || !has {
 		t.Fatalf("GetMyTeam: err=%v has=%v", err, has)
 	}
-	if len(insp.enqueued) != 1 || insp.enqueued[0] != 7712 {
-		t.Fatalf("只有判定为已超时的成员该被排进队列, got=%v", insp.enqueued)
+	if len(insp.calls) != 1 {
+		t.Fatalf("每次读 Team 只能调用一次 Observe, calls=%v", insp.calls)
 	}
-	// 读路径只排队、不动队伍:读请求要快,也要能在依赖抖动时照常返回快照。
-	if got := teamMemberIDs(t, uc, 9611); len(got) != 2 {
-		t.Fatalf("读路径不得直接摘人, 剩余=%v", got)
+	got := insp.calls[0]
+	if len(got) != 2 || got[0] != 7711 || got[1] != 7712 {
+		t.Fatalf("Team 必须把完整成员列表交给 offlinewatch, got=%v", got)
+	}
+	// 分类与排期由 offlinewatch 完成，Team 读路径本身不动队伍。
+	if members := teamMemberIDs(t, uc, 9611); len(members) != 2 {
+		t.Fatalf("读路径不得直接摘人, 剩余=%v", members)
 	}
 }
 

@@ -1,17 +1,17 @@
 # Pandora data_service 服务生产配置模板(2026-06-16)。
 #
 # 真实部署时复制为 data_service-prod.yaml 并按集群实际地址 / 密码填写,**不要提交真实密码到 git**。
-# - gRPC :50003 / HTTP :51003(仅 /metrics)
+# - gRPC :20003 / HTTP :21003(仅 /metrics)
 # - prod: enable_reflection 不写(零值 false)
 
 server:
   grpc:
     network: tcp
-    addr: ":50003"
+    addr: ":20003"
     timeout: "3s"
   http:
     network: tcp
-    addr: ":51003"
+    addr: ":21003"
 
 node:
   node_id: 1

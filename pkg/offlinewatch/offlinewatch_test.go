@@ -10,24 +10,32 @@ package offlinewatch
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/luyuancpp/pandora/pkg/config"
 )
 
 // ── 测试替身 ────────────────────────────────────────────────────────────────
 
 type fakeReader struct {
-	online   map[uint64]bool
-	lastSeen map[uint64]int64
-	err      error
-	calls    int
+	online       map[uint64]bool
+	lastSeen     map[uint64]int64
+	err          error
+	calls        int
+	onlineHook   func()
+	lastSeenHook func()
 }
 
 func (f *fakeReader) BatchOnline(_ context.Context, ids []uint64) (map[uint64]bool, error) {
 	f.calls++
+	if f.onlineHook != nil {
+		f.onlineHook()
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -41,6 +49,9 @@ func (f *fakeReader) BatchOnline(_ context.Context, ids []uint64) (map[uint64]bo
 }
 
 func (f *fakeReader) BatchLastSeen(_ context.Context, ids []uint64) (map[uint64]int64, error) {
+	if f.lastSeenHook != nil {
+		f.lastSeenHook()
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -56,10 +67,14 @@ func (f *fakeReader) BatchLastSeen(_ context.Context, ids []uint64) (map[uint64]
 type recordingHandler struct {
 	seen []uint64
 	err  error
+	fn   func(context.Context, uint64) error
 }
 
-func (h *recordingHandler) OnPlayerOffline(_ context.Context, playerID uint64, _ int64) error {
+func (h *recordingHandler) OnPlayerOffline(ctx context.Context, playerID uint64, _ int64) error {
 	h.seen = append(h.seen, playerID)
+	if h.fn != nil {
+		return h.fn(ctx, playerID)
+	}
 	return h.err
 }
 
@@ -96,6 +111,23 @@ func dueMembers(t *testing.T, w *Watcher) map[string]float64 {
 	return m
 }
 
+func evidenceMembers(t *testing.T, w *Watcher) map[string]int64 {
+	t.Helper()
+	raw, err := w.rdb.HGetAll(context.Background(), w.evidenceKey).Result()
+	if err != nil {
+		t.Fatalf("读 evidence 失败: %v", err)
+	}
+	out := make(map[string]int64, len(raw))
+	for member, value := range raw {
+		ms, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			t.Fatalf("evidence 坏值 member=%s value=%q: %v", member, value, err)
+		}
+		out[member] = ms
+	}
+	return out
+}
+
 // ── classify:全部判定逻辑的穷举 ─────────────────────────────────────────────
 
 func TestClassify(t *testing.T) {
@@ -107,50 +139,50 @@ func TestClassify(t *testing.T) {
 		online   map[uint64]bool
 		lastSeen map[uint64]int64
 		hint     int64
-		want     Verdict
+		want     verdict
 	}{
 		{
 			name:   "在线(位置查得到)→ 不动作",
 			online: map[uint64]bool{42: true},
 			// 即使 last-seen 是很久以前的旧记录也不能判离线:人已经回来了。
 			lastSeen: map[uint64]int64{42: now - 999_999},
-			want:     VerdictOnline,
+			want:     verdictOnline,
 		},
 		{
 			name:     "离线且已满阈值 → 可动作",
 			lastSeen: map[uint64]int64{42: now - threshold.Milliseconds()},
-			want:     VerdictOffline,
+			want:     verdictOffline,
 		},
 		{
 			name:     "离线但差 1ms 没满 → 继续等",
 			lastSeen: map[uint64]int64{42: now - threshold.Milliseconds() + 1},
-			want:     VerdictWaiting,
+			want:     verdictWaiting,
 		},
 		{
 			name: "查不到位置也拿不到离开时刻 → UNKNOWN,绝不当离线",
-			want: VerdictUnknown,
+			want: verdictUnknown,
 		},
 		{
 			name: "只有事件旁证(last-seen 缺席)→ 用旁证判",
 			hint: now - threshold.Milliseconds(),
-			want: VerdictOffline,
+			want: verdictOffline,
 		},
 		{
 			name:     "last-seen 比旁证更晚 → 取更晚的,偏保守",
 			lastSeen: map[uint64]int64{42: now - 1000},
 			hint:     now - threshold.Milliseconds(),
-			want:     VerdictWaiting,
+			want:     verdictWaiting,
 		},
 		{
 			name:     "旁证比 last-seen 更晚 → 同样取更晚的",
 			lastSeen: map[uint64]int64{42: now - threshold.Milliseconds()},
 			hint:     now - 1000,
-			want:     VerdictWaiting,
+			want:     verdictWaiting,
 		},
 		{
 			name:     "时钟回拨导致离开时刻在未来 → 按刚离开处理,不提前触发",
 			lastSeen: map[uint64]int64{42: now + 60_000},
-			want:     VerdictWaiting,
+			want:     verdictWaiting,
 		},
 	}
 
@@ -166,9 +198,9 @@ func TestClassify(t *testing.T) {
 
 func TestClassify_零值必须是不动作那一档(t *testing.T) {
 	// 防呆:任何忘记赋值 / map 取不到的路径落到的都必须是 Unknown。
-	var v Verdict
-	if v != VerdictUnknown {
-		t.Fatalf("Verdict 零值必须是 UNKNOWN,否则漏赋值会变成「直接踢人」: got=%s", v)
+	var v verdict
+	if v != verdictUnknown {
+		t.Fatalf("verdict 零值必须是 UNKNOWN,否则漏赋值会变成「直接踢人」: got=%s", v)
 	}
 }
 
@@ -274,21 +306,83 @@ func TestSweep_Handler失败则留队重试(t *testing.T) {
 	}
 }
 
-func TestSweep_拿不到离开时刻则出队不猜(t *testing.T) {
-	const now = 10_000_000
-	// locator 答得好好的,只是这个玩家没有 last-seen 记录(时刻已超保留期等)。
-	reader := &fakeReader{lastSeen: map[uint64]int64{}}
-	h := &recordingHandler{}
+func TestSweep_Handler暂缓不会永久丢任务(t *testing.T) {
+	now := int64(10_000_000)
+	reader := &fakeReader{lastSeen: map[uint64]int64{42: now - 200_000}}
+	attempts := 0
+	h := &recordingHandler{fn: func(_ context.Context, _ uint64) error {
+		attempts++
+		if attempts == 1 {
+			return ErrDeferred
+		}
+		return nil
+	}}
 	w, _ := newTestWatcher(t, reader, h, now)
+	w.now = func() time.Time { return time.UnixMilli(now) }
 
 	_ = w.Enqueue(context.Background(), 42, now-200_000)
 	w.Sweep(context.Background())
+	if attempts != 1 || len(dueMembers(t, w)) != 1 || len(evidenceMembers(t, w)) != 1 {
+		t.Fatalf("暂缓后必须保留 due+evidence: attempts=%d due=%v evidence=%v",
+			attempts, dueMembers(t, w), evidenceMembers(t, w))
+	}
+
+	now += w.opts.RetryBackoff.Milliseconds()
+	w.Sweep(context.Background())
+	if attempts != 2 {
+		t.Fatalf("暂缓条件释放后必须自动重试: attempts=%d", attempts)
+	}
+	if len(dueMembers(t, w)) != 0 || len(evidenceMembers(t, w)) != 0 {
+		t.Fatal("第二次处理成功后应原子清理 due+evidence")
+	}
+}
+
+func TestSweep_Handler遵守ctx时单次尝试有界(t *testing.T) {
+	const now = 10_000_000
+	reader := &fakeReader{lastSeen: map[uint64]int64{42: now - 200_000}}
+	h := &recordingHandler{fn: func(ctx context.Context, _ uint64) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}}
+	w, _ := newTestWatcher(t, reader, h, now)
+	w.opts.AttemptTimeout = 20 * time.Millisecond
+
+	_ = w.Enqueue(context.Background(), 42, now-200_000)
+	started := time.Now()
+	w.Sweep(context.Background())
+	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+		t.Fatalf("Handler 遵守 ctx 时 Sweep 必须有界返回: elapsed=%s", elapsed)
+	}
+	if len(dueMembers(t, w)) != 1 || len(evidenceMembers(t, w)) != 1 {
+		t.Fatal("Handler 超时后任务必须保留重试")
+	}
+}
+
+func TestSweep_升级前只有Due没有Evidence必须FailClosed丢弃(t *testing.T) {
+	now := int64(10_000_000)
+	reader := &fakeReader{lastSeen: map[uint64]int64{}}
+	h := &recordingHandler{}
+	w, _ := newTestWatcher(t, reader, h, now)
+	w.now = func() time.Time { return time.UnixMilli(now) }
+
+	// 模拟旧版本残留:只有已到期 due,没有可证明离线起点的 evidence。
+	if err := w.rdb.ZAdd(context.Background(), w.dueKey,
+		redis.Z{Score: float64(now - 1), Member: "42"}).Err(); err != nil {
+		t.Fatalf("写旧 due: %v", err)
+	}
+	w.Sweep(context.Background())
 
 	if len(h.seen) != 0 {
-		t.Fatalf("没有离开时刻依据就动手 = 猜,绝不允许, got=%v", h.seen)
+		t.Fatalf("没有 evidence 就动手 = 猜,绝不允许, got=%v", h.seen)
 	}
-	if len(dueMembers(t, w)) != 0 {
-		t.Fatal("这是持久条件不是抖动,必须出队;留着只会每轮白查一次、永不收敛")
+	if len(evidenceMembers(t, w)) != 0 || len(dueMembers(t, w)) != 0 {
+		t.Fatal("无权威 evidence 的旧 due 必须条件清掉,不能用本地 now 补基线")
+	}
+
+	now += 10 * w.opts.Threshold.Milliseconds()
+	w.Sweep(context.Background())
+	if len(h.seen) != 0 {
+		t.Fatalf("无 evidence 时经过多久都不得处理: got=%v", h.seen)
 	}
 }
 
@@ -348,11 +442,140 @@ func TestEnqueue_只往后推不往前拉(t *testing.T) {
 	if got := dueMembers(t, w)["42"]; got != want {
 		t.Fatalf("新事件应把到期时刻推后: got=%v want=%v", got, want)
 	}
+	if got := evidenceMembers(t, w)["42"]; got != newest {
+		t.Fatalf("evidence 必须保留最新离场代次: got=%d want=%d", got, newest)
+	}
 }
 
-// ── Inspect:业务读路径的兜底复查 ────────────────────────────────────────────
+func TestEnqueue_同毫秒事件按幂等重投处理(t *testing.T) {
+	const now = 10_000_000
+	w, _ := newTestWatcher(t, &fakeReader{}, &recordingHandler{}, now)
+	ctx := context.Background()
+	leftAt := int64(now - 1_000)
+	if err := w.Enqueue(ctx, 42, leftAt); err != nil {
+		t.Fatalf("first enqueue: %v", err)
+	}
+	wantDue := dueMembers(t, w)["42"]
+	if err := w.Enqueue(ctx, 42, leftAt); err != nil {
+		t.Fatalf("duplicate enqueue: %v", err)
+	}
+	if got := evidenceMembers(t, w)["42"]; got != leftAt {
+		t.Fatalf("相同毫秒重投不得制造新 evidence: got=%d want=%d", got, leftAt)
+	}
+	if got := dueMembers(t, w)["42"]; got != wantDue {
+		t.Fatalf("相同毫秒重投不得改写排期: got=%v want=%v", got, wantDue)
+	}
+}
 
-func TestInspect_兜底复查不依赖事件(t *testing.T) {
+func TestEnqueue_真实Unix毫秒必须保存为十进制整数(t *testing.T) {
+	const unixMs = int64(1_775_000_000_123)
+	w, mr := newTestWatcher(t, &fakeReader{}, &recordingHandler{}, unixMs)
+	if err := w.Enqueue(context.Background(), 42, unixMs); err != nil {
+		t.Fatalf("enqueue real unix ms: %v", err)
+	}
+	raw := mr.HGet(w.evidenceKey, "42")
+	if raw != "1775000000123" {
+		t.Fatalf("evidence 必须保留十进制整数，不能写成科学计数法: got=%q", raw)
+	}
+	if got := evidenceMembers(t, w)["42"]; got != unixMs {
+		t.Fatalf("真实 Unix 毫秒必须可按 int64 回读: got=%d want=%d", got, unixMs)
+	}
+}
+
+func TestEnqueue_没有权威离场时刻不得用本地Now代填(t *testing.T) {
+	w, _ := newTestWatcher(t, &fakeReader{}, &recordingHandler{}, 10_000_000)
+	if err := w.Enqueue(context.Background(), 42, 0); err == nil {
+		t.Fatal("left_at_ms 缺失必须拒绝,不能用消费端 now 猜离线基线")
+	}
+	if len(dueMembers(t, w)) != 0 || len(evidenceMembers(t, w)) != 0 {
+		t.Fatal("拒绝坏事件后不得留下任何调度状态")
+	}
+}
+
+func TestClaim_旧扫描不得覆盖更新离场事件(t *testing.T) {
+	const now = 10_000_000
+	w, _ := newTestWatcher(t, &fakeReader{}, &recordingHandler{}, now)
+	ctx := context.Background()
+	oldSince := int64(now - 200_000)
+	newSince := int64(now + 1_000)
+
+	if err := w.Enqueue(ctx, 42, oldSince); err != nil {
+		t.Fatalf("Enqueue old: %v", err)
+	}
+	oldDue := int64(dueMembers(t, w)["42"])
+	if err := w.Enqueue(ctx, 42, newSince); err != nil {
+		t.Fatalf("Enqueue new: %v", err)
+	}
+
+	status, _, err := w.claim(ctx, 42, oldDue, now, now+30_000)
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if status != 0 {
+		t.Fatalf("旧 expected_due 必须 CAS 失败, got status=%d", status)
+	}
+	if got := evidenceMembers(t, w)["42"]; got != newSince {
+		t.Fatalf("旧 claim 不得覆盖新 evidence: got=%d want=%d", got, newSince)
+	}
+}
+
+func TestClaim_旧Attempt不得完成或重排新副本同Evidence的Claim(t *testing.T) {
+	const now = 10_000_000
+	w, _ := newTestWatcher(t, &fakeReader{}, &recordingHandler{}, now)
+	ctx := context.Background()
+	since := int64(now - 200_000)
+	_ = w.Enqueue(ctx, 42, since)
+	firstDue := int64(dueMembers(t, w)["42"])
+	firstClaimUntil := int64(now + 10_000)
+	status, evidence, err := w.claim(ctx, 42, firstDue, now, firstClaimUntil)
+	if err != nil || status != 1 {
+		t.Fatalf("first claim: status=%d evidence=%d err=%v", status, evidence, err)
+	}
+
+	secondClaimUntil := int64(now + 30_000)
+	status, evidence2, err := w.claim(ctx, 42, firstClaimUntil, firstClaimUntil, secondClaimUntil)
+	if err != nil || status != 1 || evidence2 != evidence {
+		t.Fatalf("second claim: status=%d evidence=%d err=%v", status, evidence2, err)
+	}
+
+	if err := w.finishClaim(ctx, 42, evidence, firstClaimUntil); err != nil {
+		t.Fatalf("old finish: %v", err)
+	}
+	w.retry(ctx, 42, evidence, firstClaimUntil, now+5_000)
+	if got := dueMembers(t, w)["42"]; got != float64(secondClaimUntil) {
+		t.Fatalf("旧 attempt 不能删/覆盖新 claim: got due=%v want=%v", got, float64(secondClaimUntil))
+	}
+	if got := evidenceMembers(t, w)["42"]; got != evidence {
+		t.Fatalf("旧 attempt 不能删 evidence: got=%d want=%d", got, evidence)
+	}
+}
+
+func TestSweep_旧Handler成功不得删除并发新离场代次(t *testing.T) {
+	const now = 10_000_000
+	oldSince := int64(now - 200_000)
+	newSince := int64(now + 1_000)
+	reader := &fakeReader{lastSeen: map[uint64]int64{42: oldSince}}
+	var w *Watcher
+	h := &recordingHandler{fn: func(ctx context.Context, _ uint64) error {
+		return w.Enqueue(ctx, 42, newSince)
+	}}
+	w, _ = newTestWatcher(t, reader, h, now)
+
+	_ = w.Enqueue(context.Background(), 42, oldSince)
+	w.Sweep(context.Background())
+
+	if got := evidenceMembers(t, w)["42"]; got != newSince {
+		t.Fatalf("旧 finish 不能删新 evidence: got=%d want=%d", got, newSince)
+	}
+	wantDue := float64(newSince + w.opts.Threshold.Milliseconds())
+	if got := dueMembers(t, w)["42"]; got != wantDue {
+		t.Fatalf("旧 finish 不能删新 due: got=%v want=%v", got, wantDue)
+	}
+}
+
+// ── Observe:业务读路径的统一观测 + 排期 ─────────────────────────────────────
+
+func TestObserve_兜底复查不依赖事件且不暴露两阶段接口(t *testing.T) {
 	const now = 10_000_000
 	reader := &fakeReader{
 		online: map[uint64]bool{7: true},
@@ -363,33 +586,103 @@ func TestInspect_兜底复查不依赖事件(t *testing.T) {
 	}
 	w, _ := newTestWatcher(t, reader, &recordingHandler{}, now)
 
-	got, err := w.Inspect(context.Background(), []uint64{7, 42, 43, 44, 0, 42})
-	if err != nil {
-		t.Fatalf("Inspect 失败: %v", err)
+	if err := w.Observe(context.Background(), []uint64{7, 42, 43, 44, 0, 42}); err != nil {
+		t.Fatalf("Observe 失败: %v", err)
 	}
-	want := map[uint64]Verdict{
-		7:  VerdictOnline,
-		42: VerdictOffline,
-		43: VerdictWaiting,
-		44: VerdictUnknown, // 从没有过记录
+	due := dueMembers(t, w)
+	if got := len(due); got != 2 {
+		t.Fatalf("只有具备权威 last-seen 的两个玩家应排期, got=%d", got)
 	}
-	for pid, wv := range want {
-		if got[pid] != wv {
-			t.Fatalf("player=%d 判定错误: got=%s want=%s", pid, got[pid], wv)
-		}
+	if got := due["42"]; got != float64(reader.lastSeen[42]+w.opts.Threshold.Milliseconds()) {
+		t.Fatalf("超阈值玩家也只由 Observe 排期、交给 Sweep: due=%v", got)
 	}
-	if _, ok := got[0]; ok {
-		t.Fatal("player_id=0 必须被剔除")
+	if got := due["43"]; got != float64(reader.lastSeen[43]+w.opts.Threshold.Milliseconds()) {
+		t.Fatalf("未满阈值玩家应排到真实到期时刻: due=%v", got)
 	}
-	// 队列没被 Inspect 污染:兜底路径是纯查询,不该产生调度副作用。
-	if len(dueMembers(t, w)) != 0 {
-		t.Fatal("Inspect 不应写调度队列")
+	evidence := evidenceMembers(t, w)
+	if _, ok := evidence["7"]; ok {
+		t.Fatal("在线玩家不得留下调度 evidence")
+	}
+	if _, ok := evidence["44"]; ok {
+		t.Fatal("无 last-seen 时不得用本地 now 创建可触发 Handler 的 evidence")
 	}
 }
 
-func TestInspect_查不通必须整体报错(t *testing.T) {
+func TestObserve_无权威LastSeen时永不触发_出现后才按阈值判断(t *testing.T) {
+	now := int64(10_000_000)
+	reader := &fakeReader{lastSeen: map[uint64]int64{}}
+	h := &recordingHandler{}
+	w, _ := newTestWatcher(t, reader, h, now)
+	w.now = func() time.Time { return time.UnixMilli(now) }
+
+	if err := w.Observe(context.Background(), []uint64{42}); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if len(dueMembers(t, w)) != 0 || len(evidenceMembers(t, w)) != 0 {
+		t.Fatal("key miss + 无 last-seen 必须保持 UNKNOWN,不得用本地 now 排破坏性任务")
+	}
+
+	// 即使本地时间跨过多个阈值、反复 Observe,也不能把持续 key miss 猜成持续离线。
+	now += 10 * w.opts.Threshold.Milliseconds()
+	if err := w.Observe(context.Background(), []uint64{42}); err != nil {
+		t.Fatalf("second Observe: %v", err)
+	}
+	w.Sweep(context.Background())
+	if len(h.seen) != 0 {
+		t.Fatal("没有权威 last-seen 时无论经过多久都不得触发 Handler")
+	}
+
+	// locator 后来给出权威离场时刻,此刻才开始按完整阈值判断。
+	leftAt := now
+	reader.lastSeen[42] = leftAt
+	if err := w.Observe(context.Background(), []uint64{42}); err != nil {
+		t.Fatalf("Observe with last-seen: %v", err)
+	}
+	if got := evidenceMembers(t, w)["42"]; got != leftAt {
+		t.Fatalf("应保存权威 last-seen: got=%d want=%d", got, leftAt)
+	}
+
+	now += w.opts.Threshold.Milliseconds() - 1
+	w.Sweep(context.Background())
+	if len(h.seen) != 0 {
+		t.Fatal("权威 last-seen 差 1ms 未满阈值不得动作")
+	}
+	now++
+	w.Sweep(context.Background())
+	if len(h.seen) != 1 || h.seen[0] != 42 {
+		t.Fatalf("权威 last-seen 满阈值后应处理: got=%v", h.seen)
+	}
+}
+
+func TestObserve_在线清理不得删除读取期间到达的新离场事件(t *testing.T) {
+	const now = 10_000_000
+	oldSince := int64(now - 200_000)
+	newSince := int64(now + 1_000)
+	reader := &fakeReader{online: map[uint64]bool{42: true}}
+	w, _ := newTestWatcher(t, reader, &recordingHandler{}, now)
+	_ = w.Enqueue(context.Background(), 42, oldSince)
+
+	fired := false
+	reader.onlineHook = func() {
+		if fired {
+			return
+		}
+		fired = true
+		if err := w.Enqueue(context.Background(), 42, newSince); err != nil {
+			t.Fatalf("并发 Enqueue: %v", err)
+		}
+	}
+	if err := w.Observe(context.Background(), []uint64{42}); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := evidenceMembers(t, w)["42"]; got != newSince {
+		t.Fatalf("旧在线观测不得清掉读取期间的新代次: got=%d want=%d", got, newSince)
+	}
+}
+
+func TestObserve_查不通必须整体报错(t *testing.T) {
 	w, _ := newTestWatcher(t, &fakeReader{err: errors.New("boom")}, &recordingHandler{}, 10_000_000)
-	if _, err := w.Inspect(context.Background(), []uint64{42}); err == nil {
+	if err := w.Observe(context.Background(), []uint64{42}); err == nil {
 		t.Fatal("locator 查不通必须报错,让调用方 fail-closed;返回半份结果会被误当成判定成立")
 	}
 }
@@ -411,9 +704,18 @@ func TestNew_阈值必填(t *testing.T) {
 
 func TestDueKey_单slot(t *testing.T) {
 	w, _ := newTestWatcher(t, &fakeReader{}, &recordingHandler{}, 0)
-	want := "pandora:offlinewatch:{test}:due"
-	if w.dueKey != want {
-		t.Fatalf("调度队列 key 必须带 hash tag 固定单 slot(否则 Cluster 下 ZRANGEBYSCORE 取不到全量): got=%s want=%s", w.dueKey, want)
+	wantDue := "pandora:offlinewatch:{test}:due"
+	wantEvidence := "pandora:offlinewatch:{test}:evidence"
+	if w.dueKey != wantDue || w.evidenceKey != wantEvidence {
+		t.Fatalf("due+evidence 必须共用 hash tag 固定单 slot: due=%s evidence=%s", w.dueKey, w.evidenceKey)
+	}
+}
+
+func TestPresenceConsumer_Enqueue瞬时失败有有限重试(t *testing.T) {
+	w, _ := newTestWatcher(t, &fakeReader{}, &recordingHandler{}, 0)
+	cfg := w.consumerConfig(config.KafkaConfig{Brokers: []string{"127.0.0.1:9092"}}, 3)
+	if cfg.RetryPolicy.MaxRetries != 3 || cfg.RetryPolicy.Backoff != 200*time.Millisecond {
+		t.Fatalf("Redis Enqueue 失败不能沿用 0 次重试: got=%+v", cfg.RetryPolicy)
 	}
 }
 

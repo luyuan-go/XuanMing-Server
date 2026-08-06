@@ -14,14 +14,14 @@
 server:
   grpc:
     network: tcp
-    addr: ":50001"
+    addr: ":20001"
     timeout: "5s"                 # prod 收紧(dev 15s)
     enable_rate_limit: true       # 压测前审核门禁-A:BBR 自适应限流(dev 默认关,prod 必开),
                                   # 过载时按 CPU/inflight/RT 丢负载,防登录洪峰把副本压垮/OOM
     # enable_reflection 不写 = false:prod 关闭 reflection
   http:
     network: tcp
-    addr: ":51001"
+    addr: ":21001"
 
 node:
   node_id: 1
@@ -94,14 +94,14 @@ login:
     ds_ticket_ttl: "5m"
   # 生产服务间地址走 k8s service DNS(按实际命名空间/service 名调整)
   locator:
-    addr: "player-locator.pandora.svc.cluster.local:50006"
+    addr: "player-locator.pandora.svc.cluster.local:20006"
   hub:
     # P0#5:用 headless Service 的 dns:/// 端点(clusterIP:None,DNS 返回全部 Ready Pod IP)+
     # 客户端 round_robin(见 login main.go)。hub-allocator 是单写者,普通 ClusterIP 直连会被 L4
     # 钉在某一 Pod,落到非-writer 就永远拿可重试 UNAVAILABLE;dns:/// + round_robin 让 AssignHub
     # 就地重试每次轮到不同副本,滚动重叠(maxSurge 双 Pod)内数次命中当前 writer。
     # 前缀 dns:/// 不可省(缺则 gRPC 按 passthrough 单后端,LB 退化无效)。
-    addr: "dns:///hub-allocator-headless.pandora.svc.cluster.local:50021"
+    addr: "dns:///hub-allocator-headless.pandora.svc.cluster.local:20021"
   # matchmaker 只读权威兜底(P0 修复 2026-07-15,生产必配):locator presence 未命中 BATTLE
   # 时再查 ResolvePlayerMatchContext,防 READY↔投影窗口/租约蒸发把在局玩家误路由回 Hub。
   # auth_secret/auth_audience:login→matchmaker 内部服务鉴权(internalrpcauth)。
@@ -109,7 +109,7 @@ login:
   # ≥32 字节独立强随机密钥,不得复用玩家 JWT secret。缺失则被 matchmaker 拒绝,
   # B1 下等于战斗恢复链 fail-closed。
   matchmaker:
-    addr: "matchmaker.pandora.svc.cluster.local:50011"
+    addr: "matchmaker.pandora.svc.cluster.local:20011"
     auth_secret: "__MATCH_RESUME_AUTH_SECRET_32B_CHANGE_ME__"
     auth_audience: "matchmaker:5v5_ranked"
     region: ""

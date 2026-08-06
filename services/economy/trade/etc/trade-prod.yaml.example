@@ -1,18 +1,18 @@
 # Pandora trade 服务生产配置模板(2026-06-16)。
 #
 # 真实部署时复制为 trade-prod.yaml 并按集群实际地址 / 密码填写,**不要提交真实密码到 git**。
-# - gRPC :50012 / HTTP :51012(仅 /metrics)
+# - gRPC :20012 / HTTP :21012(仅 /metrics)
 # - prod: enable_reflection 不写(零值 false,关 reflection 减少攻击面)
 
 server:
   grpc:
     network: tcp
-    addr: ":50012"
+    addr: ":20012"
     enable_rate_limit: true   # 压测前审核门禁-A:BBR 自适应限流(客户端面服务 prod 必开,过载按 CPU/inflight/RT 丢负载)
     timeout: "3s"
   http:
     network: tcp
-    addr: ":51012"
+    addr: ":21012"
 
 node:
   node_id: 1

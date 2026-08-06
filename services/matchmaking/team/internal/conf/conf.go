@@ -92,7 +92,8 @@ type TeamConf struct {
 	MaxApplicationsPerTeam int `yaml:"max_applications_per_team,omitempty" json:"max_applications_per_team,omitempty"`
 
 	// LocatorAddr player_locator 服务 gRPC 直连地址(host:port,内网 insecure)。
-	// 留空 → 离线自动退队整块关闭(offline_leave.enabled 也会被强制视为关)。
+	// 当前仅保留配置结构；离线自动退队在获得与 StartMatch 共用的 roster fence 前禁止开启，
+	// 见 ValidateOfflineLeave。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
 
 	// OfflineLeave 离线成员自动退队。
@@ -108,10 +109,12 @@ type TeamConf struct {
 
 // OfflineLeaveConf 是「队员离线超时自动移出队伍」的配置。
 //
-// **默认关闭**(§14.2):这是玩家可见的行为改变,打开必须是显式动作。
-// 关闭时 team 不查 locator、不起消费者与复查循环,行为与历史完全一致。
+// **当前禁止开启**:team 的成员 WATCH 与 matchmaker 的 StartMatch durable operation
+// 不在同一个事务域，也没有共用 roster fence。仅靠先后读取 commitment 存在 TOCTOU：
+// StartMatch 可以先读旧成员快照、再在摘人提交后受理旧名单。ValidateOfflineLeave 因此
+// 对 enabled=true 无条件 fail-fast；关闭时 team 不查 locator、不起消费者与复查循环。
 type OfflineLeaveConf struct {
-	// Enabled 是否启用。需同时满足 locator_addr 已配;否则启动 fail-fast。
+	// Enabled 是否启用。当前只能为 false；true 会在启动时 fail-fast。
 	Enabled bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 
 	// Threshold 离线多久才移出队伍。默认 180s。
@@ -142,22 +145,15 @@ type OfflineLeaveConf struct {
 
 // ValidateOfflineLeave 供 main 启动时 fail-fast。
 //
-// 开了自动退队却没配 locator 地址 = 判定依据缺失。此时若静默降级,团队会以为功能在跑,
-// 实际一个人也踢不掉(或更糟:如果实现里把「查不到」当离线,会把全服人踢光)。
-// 这类"配了却不生效"的失败模式必须启动就暴露(同 join_policy / retention_mode 的口径)。
+// 当前即使 locator / matchmaker 都已配置也不允许开启：两次跨服务 commitment 读取无法
+// 与 Team 的 WATCH/MULTI/EXEC、StartMatch 的 durable operation 构成共同线性化点。
+// 必须先让两条写路径共享按 team_id + operation_id fencing 的 roster 预留/CAS；在此之前
+// 静默运行会把“可能拆掉刚开始匹配的队伍”伪装成已受保护，故启动时明确拒绝。
 func (c *Config) ValidateOfflineLeave() error {
 	if !c.Team.OfflineLeave.Enabled {
 		return nil
 	}
-	if c.Team.LocatorAddr == "" {
-		return fmt.Errorf("team: offline_leave.enabled=true requires team.locator_addr")
-	}
-	if c.Team.MatchmakerAddr == "" {
-		// 没有 matchmaker 就没法判「这支队伍是不是正被一场对局占住」,
-		// 自动退队会有把在打的队伍拆掉的风险,宁可不启动。
-		return fmt.Errorf("team: offline_leave.enabled=true requires team.matchmaker_addr (match commitment gate)")
-	}
-	return nil
+	return fmt.Errorf("team: offline_leave.enabled=true 当前不安全：缺少与 StartMatch 共享的原子 roster fence，请保持关闭")
 }
 
 // 入队策略取值(JoinPolicy)。

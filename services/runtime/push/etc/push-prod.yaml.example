@@ -5,12 +5,12 @@
 server:
   grpc:
     network: tcp
-    addr: ":50014"
+    addr: ":20014"
     enable_rate_limit: true   # 压测前审核门禁-A:BBR 自适应限流(客户端面服务 prod 必开,过载按 CPU/inflight/RT 丢负载)
     # enable_reflection 不写 = false
   http:
     network: tcp
-    addr: ":51014"
+    addr: ":21014"
 
 node:
   node_id: 1

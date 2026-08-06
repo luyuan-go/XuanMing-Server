@@ -143,6 +143,15 @@ func main() {
 	}
 	uc := biz.NewLocatorUsecase(repo, cfg.Locator.LocationTTL.Std(), presence)
 	uc.SetLastSeenRetention(cfg.Locator.LastSeenRetention.Std())
+	if cfg.Locator.OwnerAddr != "" {
+		ownerAuthority := data.NewGrpcHubOwnerAuthority(cfg.Locator.OwnerAddr)
+		defer func() { _ = ownerAuthority.Close() }()
+		uc.SetHubOwnerAuthority(ownerAuthority)
+		helper.Infow("msg", "hub_presence_owner_authority_enabled", "owner_addr", cfg.Locator.OwnerAddr)
+	} else {
+		helper.Warnw("msg", "hub_presence_owner_authority_missing",
+			"hint", "legacy Set remains compatible; fenced Hub Set fails closed until locator.owner_addr is configured")
+	}
 
 	// 4.2 离场事件出口(topic pandora.player.presence):默认关,开启后 kafka 是强依赖。
 	//

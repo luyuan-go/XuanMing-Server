@@ -1,19 +1,19 @@
 # Pandora guild 服务生产配置模板(2026-06-27)。
 #
 # 真实部署时复制为 guild-prod.yaml 并按集群实际地址 / 密码填写,**不要提交真实密码到 git**。
-# - gRPC :50008 / HTTP :51008(仅 /metrics)
+# - gRPC :20008 / HTTP :21008(仅 /metrics)
 # - 公会(GuildService)+ 临时群(GroupService)同进程
 # - prod: enable_reflection 不写(零值 false,关 reflection 减少攻击面)
 
 server:
   grpc:
     network: tcp
-    addr: ":50008"
+    addr: ":20008"
     enable_rate_limit: true   # 压测前审核门禁-A:BBR 自适应限流(客户端面服务 prod 必开,过载按 CPU/inflight/RT 丢负载)
     timeout: "3s"
   http:
     network: tcp
-    addr: ":51008"
+    addr: ":21008"
 
 node:
   node_id: 1

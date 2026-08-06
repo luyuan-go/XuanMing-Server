@@ -6,6 +6,7 @@ package conf_test
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	kconfig "github.com/go-kratos/kratos/v2/config"
@@ -14,6 +15,32 @@ import (
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/services/matchmaking/team/internal/conf"
 )
+
+func TestValidateOfflineLeaveDisabled(t *testing.T) {
+	var cfg conf.Config
+	cfg.Defaults()
+	if err := cfg.ValidateOfflineLeave(); err != nil {
+		t.Fatalf("offline_leave 默认关闭时不应拒绝启动: %v", err)
+	}
+}
+
+func TestValidateOfflineLeaveEnabledFailsWithoutSharedRosterFence(t *testing.T) {
+	var cfg conf.Config
+	cfg.Defaults()
+	cfg.Team.OfflineLeave.Enabled = true
+	// 两个读取依赖都配齐也不能弥合跨服务 TOCTOU；该用例防止以后误把“能查到状态”
+	// 当成“摘人与 StartMatch 已经共享线性化点”。
+	cfg.Team.LocatorAddr = "player-locator:20006"
+	cfg.Team.MatchmakerAddr = "matchmaker:20011"
+
+	err := cfg.ValidateOfflineLeave()
+	if err == nil {
+		t.Fatal("缺少与 StartMatch 共用的 roster fence 时，offline_leave.enabled=true 必须拒绝启动")
+	}
+	if !strings.Contains(err.Error(), "roster fence") {
+		t.Fatalf("拒启原因必须明确指出缺少 roster fence，实际错误: %v", err)
+	}
+}
 
 func loadConfig(t *testing.T, rel string) conf.Config {
 	t.Helper()

@@ -25,6 +25,14 @@ type recordingNotifier struct {
 	err error
 }
 
+func testHubFence(seq uint64) HubPresenceFence {
+	return HubPresenceFence{
+		AssignmentID: "assignment-42",
+		AdmissionID:  "admission-" + string(rune('a'+seq-1)),
+		AdmissionSeq: seq,
+	}
+}
+
 func (n *recordingNotifier) NotifyLeftHub(_ context.Context, playerID uint64, leftAtMs int64, hubPod string) error {
 	n.calls = append(n.calls, struct {
 		playerID uint64
@@ -39,10 +47,13 @@ func newHubUsecase(t *testing.T) (*LocatorUsecase, *stubRepo, *recordingNotifier
 	t.Helper()
 	repo := newStubRepo()
 	uc := NewLocatorUsecase(repo, 30*time.Second)
+	setTestOwner(uc, "assignment-42", 7)
 	notifier := &recordingNotifier{}
 	uc.SetDepartureNotifier(notifier)
 	if err := uc.SetLocation(context.Background(), LocationInput{
 		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1",
+		HubInstanceUID: "uid-1", HubInstanceEpoch: 2,
+		HubPresenceFence: testHubFence(1),
 	}); err != nil {
 		t.Fatalf("准备 HUB 记录失败: %v", err)
 	}
@@ -53,7 +64,7 @@ func TestReportDisconnect_守卫通过才记时刻并发事件(t *testing.T) {
 	uc, repo, notifier := newHubUsecase(t)
 
 	before := time.Now().UnixMilli()
-	shrunk, err := uc.ReportDisconnect(context.Background(), "hub-1", 42)
+	shrunk, err := uc.ReportDisconnect(context.Background(), "hub-1", 42, testHubFence(1))
 	if err != nil {
 		t.Fatalf("ReportDisconnect 失败: %v", err)
 	}
@@ -120,7 +131,7 @@ func TestReportDisconnect_守卫没过一律不留痕(t *testing.T) {
 			uc, repo, notifier := newHubUsecase(t)
 			tc.setup(t, uc)
 
-			shrunk, err := uc.ReportDisconnect(context.Background(), tc.hubPod, tc.playerID)
+			shrunk, err := uc.ReportDisconnect(context.Background(), tc.hubPod, tc.playerID, testHubFence(1))
 			if err != nil {
 				t.Fatalf("ReportDisconnect 不应报错(守卫拒属正常路径): %v", err)
 			}
@@ -137,13 +148,198 @@ func TestReportDisconnect_守卫没过一律不留痕(t *testing.T) {
 	}
 }
 
+func TestReportDisconnect_同Pod秒重连后旧连接迟到不得污染新位置(t *testing.T) {
+	// 修复前复现：A、B 两条物理连接落在同一个 Hub Pod。B 已经重新写入 HUB，
+	// 但 A 的 Logout RPC 随后才到。当前协议只有 player_id + hub_pod，服务端无法
+	// 区分 A/B，旧请求会错误缩短 B 的位置 TTL并重写 last-seen。
+	uc, repo, notifier := newHubUsecase(t)
+	ctx := context.Background()
+
+	oldFence := testHubFence(1)
+	newFence := testHubFence(2)
+	// 新连接 B 在同一 Pod 完成重连并重写位置。
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1",
+		HubInstanceUID: "uid-1", HubInstanceEpoch: 2,
+		HubPresenceFence: newFence,
+	}); err != nil {
+		t.Fatalf("同 Pod 重连写 HUB 失败: %v", err)
+	}
+
+	// 这是旧连接 A 的迟到断线上报。修复后必须由连接级 admission fence 拒绝。
+	shrunk, err := uc.ReportDisconnect(ctx, "hub-1", 42, oldFence)
+	if err != nil {
+		t.Fatalf("迟到旧连接应按正常冲突静默拒绝: %v", err)
+	}
+	if shrunk {
+		t.Fatal("同 Pod 旧连接的迟到断线不得缩短新连接位置 TTL")
+	}
+	if _, ok := repo.lastSeen[42]; ok {
+		t.Fatal("同 Pod 旧连接的迟到断线不得重写 last-seen")
+	}
+	if len(notifier.calls) != 0 {
+		t.Fatalf("同 Pod 旧连接的迟到断线不得发离场事件, got=%d", len(notifier.calls))
+	}
+}
+
+func TestSetLocation_同Pod旧连接迟到不得反向夺回新位置(t *testing.T) {
+	uc, repo, _ := newHubUsecase(t)
+	ctx := context.Background()
+	newFence := testHubFence(2)
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: newFence,
+	}); err != nil {
+		t.Fatalf("新连接写入失败: %v", err)
+	}
+
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: testHubFence(1),
+	}); err == nil {
+		t.Fatal("旧连接迟到 SetLocation 必须被 admission_seq fence 拒绝")
+	}
+	if got := repo.store[42].HubPresenceFence; !got.SameConnection(newFence.toData()) || !got.IsAuthoritative() {
+		t.Fatalf("旧连接反向覆盖了新位置 fence: got=%+v want=%+v", got, newFence)
+	}
+	if got := repo.meta[42]; !got.SameConnection(newFence.toData()) || !got.IsAuthoritative() {
+		t.Fatalf("旧连接反向覆盖了 meta fence: got=%+v want=%+v", got, newFence)
+	}
+}
+
+func TestSetLocation_同Admission已离开后迟到重放不得复活(t *testing.T) {
+	uc, repo, _ := newHubUsecase(t)
+	ctx := context.Background()
+	fence := testHubFence(1)
+	if _, err := uc.ReportDisconnect(ctx, "hub-1", 42, fence); err != nil {
+		t.Fatalf("前置 Disconnect 失败: %v", err)
+	}
+	leftAt := repo.lastSeen[42]
+	if leftAt <= 0 {
+		t.Fatal("前置条件不成立:当前 admission 应已有 left_at")
+	}
+
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: fence,
+	}); err == nil {
+		t.Fatal("同 admission 已离开后，迟到 SetLocation 不得清掉 left_at 复活")
+	}
+	if got := repo.lastSeen[42]; got != leftAt {
+		t.Fatalf("迟到 SetLocation 改写/清除了离开时刻: got=%d want=%d", got, leftAt)
+	}
+}
+
+func TestSetLocation_AdmissionSeq超过2的53次方仍按相邻整数排序(t *testing.T) {
+	repo := newStubRepo()
+	uc := NewLocatorUsecase(repo, 30*time.Second)
+	setTestOwner(uc, "assignment-large-seq", 7)
+	ctx := context.Background()
+	oldFence := HubPresenceFence{
+		AssignmentID: "assignment-large-seq", AdmissionID: "admission-old",
+		AdmissionSeq: 9_007_199_254_740_992,
+	}
+	newFence := HubPresenceFence{
+		AssignmentID: "assignment-large-seq", AdmissionID: "admission-new",
+		AdmissionSeq: 9_007_199_254_740_993,
+	}
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: oldFence,
+	}); err != nil {
+		t.Fatalf("写旧代失败: %v", err)
+	}
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: newFence,
+	}); err != nil {
+		t.Fatalf("2^53 以上相邻新序号必须能接管: %v", err)
+	}
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: oldFence,
+	}); err == nil {
+		t.Fatal("2^53 以上相邻旧序号不得因浮点精度折叠而被接受")
+	}
+	if got := repo.store[42].HubPresenceFence; !got.SameConnection(newFence.toData()) || !got.IsAuthoritative() {
+		t.Fatalf("大序号排序后当前 fence 错误: got=%+v want=%+v", got, newFence)
+	}
+}
+
+func TestReportDisconnect_重连夹在两步之间旧Meta写仍被拒(t *testing.T) {
+	uc, repo, _ := newHubUsecase(t)
+	ctx := context.Background()
+	oldFence := testHubFence(1)
+	newFence := testHubFence(2)
+
+	accepted, _, err := repo.ShrinkHubTTL(ctx, "hub-1", 42, oldFence.toData(), disconnectGrace)
+	if err != nil || !accepted {
+		t.Fatalf("前置 location exact 守卫应通过: accepted=%v err=%v", accepted, err)
+	}
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: newFence,
+	}); err != nil {
+		t.Fatalf("两步之间的新连接 SetLocation 失败: %v", err)
+	}
+	recorded, _, err := repo.RecordLastSeen(ctx, 42, oldFence.toData(), time.Now().UnixMilli(), time.Hour)
+	if err != nil {
+		t.Fatalf("旧 meta 写应按正常冲突返回: %v", err)
+	}
+	if recorded {
+		t.Fatal("新连接已经推进 meta 后，旧 Disconnect 不得再写 last-seen")
+	}
+	if _, ok := repo.lastSeen[42]; ok {
+		t.Fatal("两步竞态留下了旧连接 last-seen")
+	}
+}
+
+func TestHubPresenceFence_Legacy安全降级且不能覆盖Fenced当前代(t *testing.T) {
+	repo := newStubRepo()
+	uc := NewLocatorUsecase(repo, 30*time.Second)
+	ctx := context.Background()
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1",
+	}); err != nil {
+		t.Fatalf("legacy SetLocation 应继续兼容: %v", err)
+	}
+	if shrunk, err := uc.ReportDisconnect(ctx, "hub-1", 42, HubPresenceFence{}); err != nil || shrunk {
+		t.Fatalf("legacy Disconnect 应安全 no-op: shrunk=%v err=%v", shrunk, err)
+	}
+	if _, ok := repo.lastSeen[42]; ok {
+		t.Fatal("legacy Disconnect 没有连接证明，不得留下 last-seen")
+	}
+
+	currentFence := testHubFence(2)
+	setTestOwner(uc, "assignment-42", 7)
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: currentFence,
+	}); err != nil {
+		t.Fatalf("fenced 新连接接管 legacy 失败: %v", err)
+	}
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1",
+	}); err == nil {
+		t.Fatal("legacy SetLocation 不得降级覆盖 fenced 当前代")
+	}
+	if got := repo.store[42].HubPresenceFence; !got.SameConnection(currentFence.toData()) || !got.IsAuthoritative() {
+		t.Fatalf("legacy 写污染 fenced 位置: got=%+v want=%+v", got, currentFence)
+	}
+}
+
+func TestHubPresenceFence_残缺字段必须拒绝(t *testing.T) {
+	uc := NewLocatorUsecase(newStubRepo(), 30*time.Second)
+	partial := HubPresenceFence{AssignmentID: "assignment-42"}
+	if err := uc.SetLocation(context.Background(), LocationInput{
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubPresenceFence: partial,
+	}); err == nil {
+		t.Fatal("部分 fence 不得冒充 legacy SetLocation")
+	}
+	if _, err := uc.ReportDisconnect(context.Background(), "hub-1", 42, partial); err == nil {
+		t.Fatal("部分 fence 不得冒充 legacy Disconnect")
+	}
+}
+
 func TestReportDisconnect_事件与时刻失败都不阻断上报(t *testing.T) {
 	// 断线上报本身是尽力而为的在线态优化:kafka 抖动不能把它变成失败,
 	// 否则 Hub DS 会反复重试真正重要的 TTL 收缩。
 	uc, _, notifier := newHubUsecase(t)
 	notifier.err = errors.New("kafka unavailable")
 
-	shrunk, err := uc.ReportDisconnect(context.Background(), "hub-1", 42)
+	shrunk, err := uc.ReportDisconnect(context.Background(), "hub-1", 42, testHubFence(1))
 	if err != nil {
 		t.Fatalf("事件投递失败不应让 ReportDisconnect 失败: %v", err)
 	}
@@ -160,7 +356,7 @@ func TestSetLocation_回到Hub必须清掉上一次的离开时刻(t *testing.T)
 	uc, repo, _ := newHubUsecase(t)
 	ctx := context.Background()
 
-	if _, err := uc.ReportDisconnect(ctx, "hub-1", 42); err != nil {
+	if _, err := uc.ReportDisconnect(ctx, "hub-1", 42, testHubFence(1)); err != nil {
 		t.Fatalf("ReportDisconnect 失败: %v", err)
 	}
 	if _, ok := repo.lastSeen[42]; !ok {
@@ -170,6 +366,8 @@ func TestSetLocation_回到Hub必须清掉上一次的离开时刻(t *testing.T)
 	// 秒重连:PostLogin 重新写 HUB 位置。
 	if err := uc.SetLocation(ctx, LocationInput{
 		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1",
+		HubInstanceUID: "uid-1", HubInstanceEpoch: 2,
+		HubPresenceFence: testHubFence(2),
 	}); err != nil {
 		t.Fatalf("重连写 HUB 失败: %v", err)
 	}
@@ -185,7 +383,7 @@ func TestSetLocation_非Hub状态不动离开时刻(t *testing.T) {
 	uc, repo, _ := newHubUsecase(t)
 	ctx := context.Background()
 
-	if _, err := uc.ReportDisconnect(ctx, "hub-1", 42); err != nil {
+	if _, err := uc.ReportDisconnect(ctx, "hub-1", 42, testHubFence(1)); err != nil {
 		t.Fatalf("ReportDisconnect 失败: %v", err)
 	}
 	if err := uc.SetLocation(ctx, LocationInput{
@@ -200,7 +398,7 @@ func TestSetLocation_非Hub状态不动离开时刻(t *testing.T) {
 
 func TestBatchGetLastSeen_缺席即UNKNOWN不回填零值(t *testing.T) {
 	uc, _, _ := newHubUsecase(t)
-	if _, err := uc.ReportDisconnect(context.Background(), "hub-1", 42); err != nil {
+	if _, err := uc.ReportDisconnect(context.Background(), "hub-1", 42, testHubFence(1)); err != nil {
 		t.Fatalf("ReportDisconnect 失败: %v", err)
 	}
 

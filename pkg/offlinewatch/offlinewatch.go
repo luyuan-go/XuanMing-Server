@@ -9,34 +9,41 @@
 //
 // # 唯一权威在 locator,本包只有可重建的调度状态
 //
-// 「玩家什么时候离开的」这个事实**只有 locator 一份**(§9.22 不重复影子状态)。
-// 本包在 Redis 里存的 ZSET 只是「下次该复查谁」的调度提示:
-//   - 独立 key(`pandora:offlinewatch:{ns}:due`),不寄生在任何有业务语义的索引上
+// 「玩家什么时候离开的」这个权威事实仍只有 locator 一份(§9.22 不重复影子状态)。
+// 本包只存可重建的复查状态:
+//   - due ZSET 是「下次该复查谁」;evidence HASH 只保存事件 / locator last-seen;
+//     locator key miss 不能证明持续离线,不得用本地时钟补 evidence;
+//   - 独立 key(`pandora:offlinewatch:{ns}:due|evidence`),不寄生在业务索引上
 //     (反例见 §16.10:ds_allocator 曾把退避写进 active ZSET 的 last_heartbeat_ms);
-//   - 丢了 / 清空了不影响正确性,只是那一次掉线少一个加速信号,由业务自己的兜底
-//     复查路径(Inspect)补上;
+//   - 丢了 / 清空了只会 fail-closed 延迟动作;若 locator 仍有 last-seen,业务兜底
+//     路径 Observe 可重建排期,没有权威依据时则保持 UNKNOWN;
 //   - 因此重启、扩缩容、Redis 清库都不需要迁移它。
 //
 // # 三段链路
 //
 //	locator.ReportDisconnect ──kafka: pandora.player.presence──▶ Watcher.Enqueue
-//	                                                                  │ ZADD GT(离开时刻+阈值)
+//	                                                                  │ evidence + due 原子排期
 //	                                                                  ▼
 //	                                            Watcher.Sweep(ticker,只取到期项,有预算封顶)
 //	                                                                  │ 回查 locator 权威
 //	                                                                  ▼
-//	                                     online→丢弃 / waiting→推迟 / offline→Handler / unknown→退避重试
+//	                              online→条件清理 / waiting→推迟 / offline→Handler / error→退避重试
 //
 // # 事件是加速器,不是唯一触发源
 //
-// kafka 会丢;Hub DS 整台挂掉时压根不会调 ReportDisconnect,永远不会有事件。
-// 所以业务**必须**另有一条兜底:在自己本来就要读该实体的路径上调 Inspect 顺手复查
-// (与 ListMyPendingInvites / ListTeamApplications 同一条原则:推送是加速器,拉取才是权威)。
-// 只接 Enqueue 不接 Inspect 的用法会留下永远清不掉的残留。
+// kafka 会丢,所以业务**必须**另有一条兜底:在自己本来就要读该实体的路径上调 Observe,
+// 用 locator 保留的权威 last-seen 补排(推送是加速器,拉取才是权威)。Hub DS 整台挂掉时
+// 可能既没有事件也没有 last-seen;单纯 key miss 无法排除期间发生过未观测重连,本包会
+// 保持 UNKNOWN。若产品要求该场景自动清理,必须另接 owner fencing / Hub 死亡 roster 等
+// 权威信号,不能让 Observe 用本地时钟猜。
+//
+// 本包只是触发 / 观察深模块,不拥有业务写权威。最终 locator 复核与随后 Handler 之间
+// 仍是跨服务窗口;破坏性业务必须另有版本、CAS 或 operation fence 闭环。
 package offlinewatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -58,14 +65,24 @@ import (
 //   - **必须幂等**。事件 at-least-once、多副本各自扫、兜底复查也会重复触发,
 //     同一玩家被调多次是常态而不是异常。
 //   - 返回 nil = 处理完成(该玩家出调度队列)。
-//   - 返回非 nil = 本次没处理成(依赖不可用等),骨架按退避重排,下轮再来。
+//   - 返回非 nil = 本次没处理成(依赖不可用等),骨架按退避重排,下轮再来;
+//     已知的业务暂缓条件用 ErrDeferred(或包装它),避免打成故障告警。
 //     **业务判定「不需要处理」时应返回 nil 而不是 error**(例:这个玩家根本不在任何队伍里),
 //     否则会一直重试到保留期结束。
-//   - 不要在 Handler 里再判一次「他是不是真离线」——骨架已经用 locator 权威判过了;
-//     业务只需判自己那边的前置条件(比如这支队伍是不是正被一场对局占住)。
+//   - 必须遵守 ctx deadline。不要在 Handler 里再判一次「他是不是真离线」——骨架已在
+//     调用前做最终 locator 复核;但这次读取**不能**与另一服务的业务写组成线性化点,
+//     只能缩小竞态窗口。破坏性 Handler 仍必须在自己的权威写路径用版本 / CAS /
+//     operation fence,与重连、开局等竞争操作原子互斥;做不到就必须保持功能关闭。
 type Handler interface {
 	OnPlayerOffline(ctx context.Context, playerID uint64, offlineSinceMs int64) error
 }
+
+// ErrDeferred 表示业务前置条件当前不满足,但任务不能视为完成。
+//
+// 例如玩家所在队伍正被一场对局占住:本轮不能摘人,对局结束后仍要继续复查。
+// Handler 可直接返回本值或包装本值;Watcher 会按 RetryBackoff 保留任务,但不会把它
+// 当作依赖故障打 WARN。
+var ErrDeferred = errors.New("offlinewatch: deferred")
 
 // PresenceReader 是骨架对 locator 的只读依赖(抽成接口便于单测注入)。
 //
@@ -103,8 +120,13 @@ type Options struct {
 	// BatchSize 单次向 locator 查询的玩家数。默认 500。
 	BatchSize int
 
-	// RetryBackoff 判定为 UNKNOWN 或 Handler 失败时,推迟多久再试。默认 = Interval。
+	// RetryBackoff presence 查询 / Handler 失败或业务暂缓时,推迟多久再试。默认 = Interval。
 	RetryBackoff time.Duration
+
+	// AttemptTimeout 限制单个玩家「最终 presence 复核 + Handler」一次尝试的总时长。
+	// 默认 5s。PresenceReader 与 Handler 都必须遵守 ctx;本包不会在超时后遗弃仍在写的
+	// goroutine,否则会制造后台僵尸写与下一轮重试并发执行。
+	AttemptTimeout time.Duration
 }
 
 func (o *Options) normalize() error {
@@ -126,6 +148,9 @@ func (o *Options) normalize() error {
 	if o.RetryBackoff <= 0 {
 		o.RetryBackoff = o.Interval
 	}
+	if o.AttemptTimeout <= 0 {
+		o.AttemptTimeout = 5 * time.Second
+	}
 	return nil
 }
 
@@ -136,7 +161,8 @@ type Watcher struct {
 	h      Handler
 	opts   Options
 
-	dueKey string
+	dueKey      string
+	evidenceKey string
 
 	// now 可注入,单测用受控时钟驱动 Sweep(不 sleep 真实时间)。
 	now func() time.Time
@@ -162,11 +188,95 @@ func New(rdb redis.UniversalClient, reader PresenceReader, h Handler, opts Optio
 		h:      h,
 		opts:   opts,
 		// hash tag 括住 namespace:整个队列固定落一个 slot,ZRANGEBYSCORE 才能在
-		// Redis Cluster 下正常工作(单 key 操作,无 CROSSSLOT)。
-		dueKey: fmt.Sprintf("pandora:offlinewatch:{%s}:due", opts.Namespace),
-		now:    time.Now,
+		// Redis Cluster 下正常工作。due + evidence 共用同一 hash tag,Lua 才能原子
+		// claim / finish / retry,旧 Sweep 也不会覆盖或删除新一轮离线任务。
+		dueKey:      fmt.Sprintf("pandora:offlinewatch:{%s}:due", opts.Namespace),
+		evidenceKey: fmt.Sprintf("pandora:offlinewatch:{%s}:evidence", opts.Namespace),
+		now:         time.Now,
 	}, nil
 }
+
+// due 只表示「下一次何时尝试」,会因 claim / retry 改动;不能拿它冒充离线时刻。
+// evidence 保存本轮由 locator last-seen / 离场事件给出的离线时刻。单纯 key miss 不能
+// 证明玩家持续离线,不得拿本地 now 补 evidence。两键必须由 Lua 同步维护。
+var (
+	upsertEvidenceScript = redis.NewScript(`
+local member = ARGV[1]
+local candidate = tonumber(ARGV[2])
+local threshold = tonumber(ARGV[3])
+local current = tonumber(redis.call('HGET', KEYS[2], member))
+if (not current) or candidate > current then
+  -- 时间戳仍在 Lua number 的精确整数范围内，但 tostring(大数)可能输出科学计数法；
+  -- evidence 是跨 Go/Lua 的十进制整数协议，必须原样保存调用方的 ARGV 字符串。
+  redis.call('HSET', KEYS[2], member, ARGV[2])
+  redis.call('ZADD', KEYS[1], candidate + threshold, member)
+  return candidate
+end
+if not redis.call('ZSCORE', KEYS[1], member) then
+  redis.call('ZADD', KEYS[1], current + threshold, member)
+end
+return current
+`)
+
+	claimScript = redis.NewScript(`
+local member = ARGV[1]
+local expected_due = tonumber(ARGV[2])
+local now = tonumber(ARGV[3])
+local claim_until = tonumber(ARGV[4])
+local current_due = tonumber(redis.call('ZSCORE', KEYS[1], member))
+if (not current_due) or current_due ~= expected_due or current_due > now then
+  return {0, 0}
+end
+local evidence = tonumber(redis.call('HGET', KEYS[2], member))
+if not evidence then
+  -- 兼容升级前只有 due、没有 evidence 的旧调度项。单纯 key miss 不能证明玩家
+  -- 持续离线,也不能从本地 now 猜起点;条件摘掉无依据的调度提示,等待 Observe
+  -- 将来拿到权威 last-seen 后重新排期。
+  redis.call('ZREM', KEYS[1], member)
+  return {2, 0}
+end
+redis.call('ZADD', KEYS[1], claim_until, member)
+return {1, evidence}
+`)
+
+	finishIfEvidenceScript = redis.NewScript(`
+local member = ARGV[1]
+local expected = ARGV[2]
+local expected_due = ARGV[3]
+local current = redis.call('HGET', KEYS[2], member)
+if expected == '' then
+  if current then return 0 end
+else
+  if (not current) or tonumber(current) ~= tonumber(expected) then return 0 end
+end
+if expected_due ~= '' then
+  local current_due = tonumber(redis.call('ZSCORE', KEYS[1], member))
+  if (not current_due) or current_due ~= tonumber(expected_due) then return 0 end
+end
+if current then redis.call('HDEL', KEYS[2], member) end
+redis.call('ZREM', KEYS[1], member)
+return 1
+`)
+
+	retryIfEvidenceScript = redis.NewScript(`
+local member = ARGV[1]
+local expected = tonumber(ARGV[2])
+local expected_due = tonumber(ARGV[3])
+local retry_at = tonumber(ARGV[4])
+local current = tonumber(redis.call('HGET', KEYS[2], member))
+if (not current) or current ~= expected then return 0 end
+local current_due = tonumber(redis.call('ZSCORE', KEYS[1], member))
+if (not current_due) or current_due ~= expected_due then return 0 end
+redis.call('ZADD', KEYS[1], retry_at, member)
+return 1
+`)
+
+	removeAllScript = redis.NewScript(`
+redis.call('ZREM', KEYS[1], ARGV[1])
+redis.call('HDEL', KEYS[2], ARGV[1])
+return 1
+`)
+)
 
 // Start 挂上周期复查循环(复用 safego.Loop,不新建 timer 状态机,§15.2 / §16.10)。
 // ctx 取消即停。
@@ -179,77 +289,78 @@ func (w *Watcher) Start(ctx context.Context) {
 	safego.Loop(ctx, "offlinewatch_"+w.opts.Namespace, w.opts.Interval, w.Sweep)
 }
 
-// Enqueue 把一个玩家排进调度队列,到期时间 = 离开时刻 + 阈值。
+// Enqueue 记录离场事件并排期。较旧 / 重复事件不得倒退 evidence,也不得覆盖正在处理的
+// 新一轮任务;这两个条件由同 slot Lua 一次完成。
 //
-// ZADD GT:只把到期时间**往后推**。重复 / 迟到的事件(kafka at-least-once、
-// 同一玩家短时间内多次离开)只会让复查更晚发生,不会把已经排好的项拉早 ——
-// 拉早意味着还没到阈值就去查,白查一轮。
+// leftAtMs 同时是当前协议能提供的代次标识:相同毫秒的事件按 at-least-once 重投幂等
+// 处理。若上游将来需要区分同一毫秒内两次真实会话切换,协议必须提供 operation_id;
+// 本包不能在消费者侧凭空消除这种 ABA。
 func (w *Watcher) Enqueue(ctx context.Context, playerID uint64, leftAtMs int64) error {
 	if playerID == 0 {
 		return fmt.Errorf("offlinewatch: playerID must > 0")
 	}
 	if leftAtMs <= 0 {
-		leftAtMs = w.now().UnixMilli()
+		return fmt.Errorf("offlinewatch: leftAtMs must > 0 (player=%d)", playerID)
 	}
-	dueMs := leftAtMs + w.opts.Threshold.Milliseconds()
-	return w.rdb.ZAddArgs(ctx, w.dueKey, redis.ZAddArgs{
-		GT:      true,
-		Members: []redis.Z{{Score: float64(dueMs), Member: strconv.FormatUint(playerID, 10)}},
-	}).Err()
+	_, err := w.upsertEvidence(ctx, playerID, leftAtMs)
+	return err
 }
 
-// EnqueueDue 把一批玩家排成「立刻到期」,下一轮 Sweep 就会复查并动作。
+// Observe 观测并排期一批玩家(**兜底路径**,不依赖 kafka 事件)。
 //
-// 给兜底路径用:业务在自己的读路径上用 Inspect 发现某些玩家已经超阈值了,但**不该在
-// 读路径上同步做写动作**(读请求要快、要能在依赖抖动时照常返回快照)。于是把它们排进
-// 队列,由 Sweep 在一个 Interval 内完成实际处理 —— 读路径保持只读。
+// 「判定 + 排期」完全封装在本方法内,调用方拿不到中间判定或第二阶段排期入口,
+// 因此以后新增业务只能走同一条安全路径。实际业务动作仍只在 Sweep。
 //
-// 用 ZADD(不带 GT):这里的意图恰恰是「尽快查」,不能被队列里某个更晚的旧到期时间压住。
-func (w *Watcher) EnqueueDue(ctx context.Context, playerIDs []uint64) error {
+// Hub DS 整机挂掉时没有 ReportDisconnect,locator 也可能没有 last-seen。此时 key miss
+// 不能证明期间没有发生一次未被本 Watcher 观测到的重连,必须按 UNKNOWN fail-closed,
+// 不排破坏性任务;只有权威 last-seen / 离场事件出现后才开始按 Threshold 判断。
+func (w *Watcher) Observe(ctx context.Context, playerIDs []uint64) error {
 	ids := dedupeIDs(playerIDs)
 	if len(ids) == 0 {
 		return nil
 	}
-	nowMs := w.now().UnixMilli()
-	members := make([]redis.Z, 0, len(ids))
-	for _, pid := range ids {
-		members = append(members, redis.Z{Score: float64(nowMs), Member: strconv.FormatUint(pid, 10)})
-	}
-	return w.rdb.ZAddArgs(ctx, w.dueKey, redis.ZAddArgs{Members: members}).Err()
-}
-
-// Inspect 同步复查一批玩家(**兜底路径**,不依赖 kafka 事件)。
-//
-// 业务在自己本来就要读该实体的地方顺手调它:玩家一打开面板,残留的离线成员当场被
-// 判出来,不用等事件也不用等 ticker。这条路径是事件丢失 / Hub DS 整台挂掉时的唯一补救。
-//
-// 返回 map 对每个入参玩家都有一项(查不通则整体返回 error,不返回半份结果 —— 半份
-// 结果会让调用方把「没查到的」误当成 UNKNOWN 之外的什么)。
-func (w *Watcher) Inspect(ctx context.Context, playerIDs []uint64) (map[uint64]Verdict, error) {
-	out := make(map[uint64]Verdict, len(playerIDs))
-	if len(playerIDs) == 0 {
-		return out, nil
-	}
-	nowMs := w.now().UnixMilli()
-	for _, chunk := range chunkIDs(dedupeIDs(playerIDs), w.opts.BatchSize) {
+	for _, chunk := range chunkIDs(ids, w.opts.BatchSize) {
+		// 必须在 locator 读取前抓 evidence 版本。若读取期间发生新离场事件,在线分支只能
+		// 条件清旧版本,不能无条件删掉刚排上的新任务。
+		snapshot, err := w.readEvidence(ctx, chunk)
+		if err != nil {
+			return err
+		}
 		online, lastSeen, err := w.readPresence(ctx, chunk)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, pid := range chunk {
-			v, _ := classify(nowMs, pid, online, lastSeen, 0, w.opts.Threshold)
-			out[pid] = v
+			if online[pid] {
+				expected, ok := snapshot[pid]
+				if err := w.finishObservedEvidence(ctx, pid, expected, ok); err != nil {
+					return err
+				}
+				continue
+			}
+
+			if ms := lastSeen[pid]; ms > 0 {
+				_, err = w.upsertEvidence(ctx, pid, ms)
+			} else if observed, ok := snapshot[pid]; ok {
+				// 已有 evidence 只能来自先前的权威 last-seen / 离场事件。复用 upsert
+				// 同时修复极端情况下 evidence 存在但 due 缺失的调度索引漂移。
+				_, err = w.upsertEvidence(ctx, pid, observed)
+			} else {
+				continue
+			}
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return out, nil
+	return nil
 }
 
 // Sweep 跑一轮到期复查。导出是为了单测能用受控时钟直接驱动,不必等真实 ticker。
 func (w *Watcher) Sweep(ctx context.Context) {
-	now := w.now()
-	nowMs := now.UnixMilli()
+	nowMs := w.now().UnixMilli()
 
-	due, err := w.rdb.ZRangeArgs(ctx, redis.ZRangeArgs{
+	due, err := w.rdb.ZRangeArgsWithScores(ctx, redis.ZRangeArgs{
 		Key:     w.dueKey,
 		Start:   "-inf",
 		Stop:    strconv.FormatInt(nowMs, 10),
@@ -266,74 +377,108 @@ func (w *Watcher) Sweep(ctx context.Context) {
 		return
 	}
 
-	ids := make([]uint64, 0, len(due))
-	for _, m := range due {
-		pid, perr := strconv.ParseUint(m, 10, 64)
+	var acted, online0, waiting, deferred, failed, claimed int
+	for _, item := range due {
+		member, ok := item.Member.(string)
+		if !ok {
+			member = fmt.Sprint(item.Member)
+		}
+		pid, perr := strconv.ParseUint(member, 10, 64)
 		if perr != nil || pid == 0 {
-			// 坏成员:直接摘掉,不让它每轮占一个预算名额。
-			w.remove(ctx, m)
+			w.removeAll(ctx, member)
 			continue
 		}
-		ids = append(ids, pid)
-	}
-	if len(ids) == 0 {
-		return
-	}
 
-	// 先把这批的到期时间推到 now+RetryBackoff 再处理:多副本同时扫到同一批时,
-	// 后来者看到的到期时间已被推走,少一次重复 Handler 调用。
-	// 这只是**调度提示,不是锁**——推失败、进程半路挂掉都只会导致重复处理,
-	// 而 Handler 本来就要求幂等,不影响正确性。
-	w.reschedule(ctx, ids, nowMs+w.opts.RetryBackoff.Milliseconds())
+		expectedDue := int64(item.Score)
+		claimNow := w.now().UnixMilli()
+		claimUntil := claimNow + w.opts.AttemptTimeout.Milliseconds() + w.opts.RetryBackoff.Milliseconds()
+		status, evidence, cerr := w.claim(ctx, pid, expectedDue, claimNow, claimUntil)
+		if cerr != nil {
+			plog.With(ctx).Warnw("msg", "offlinewatch_claim_failed",
+				"namespace", w.opts.Namespace, "player_id", pid, "err", cerr)
+			continue
+		}
+		if status != 1 {
+			// status=0:旧扫描结果,已被新事件 / 其他副本推进。
+			// status=2:升级前旧 due 无 evidence,已 fail-closed 摘掉无依据提示;
+			//           将来 Observe 拿到权威 last-seen 才会重新排期。
+			continue
+		}
+		claimed++
 
-	online, lastSeen, err := w.readPresence(ctx, ids)
-	if err != nil {
-		// 查不通 = UNKNOWN,fail-closed:一个都不处理,等下轮(已推到 RetryBackoff 之后)。
-		// 绝不能因为 locator 抖动就把这一整批当成离线。
-		plog.With(ctx).Warnw("msg", "offlinewatch_presence_unavailable",
-			"namespace", w.opts.Namespace, "count", len(ids), "err", err)
-		return
-	}
+		attemptCtx, cancel := context.WithTimeout(ctx, w.opts.AttemptTimeout)
+		online, lastSeen, rerr := w.readPresence(attemptCtx, []uint64{pid})
+		if rerr != nil {
+			cancel()
+			failed++
+			w.retry(ctx, pid, evidence, claimUntil, w.now().UnixMilli()+w.opts.RetryBackoff.Milliseconds())
+			plog.With(ctx).Warnw("msg", "offlinewatch_presence_unavailable",
+				"namespace", w.opts.Namespace, "player_id", pid, "err", rerr)
+			continue
+		}
 
-	var acted, online0, waiting, unknown, failed int
-	for _, pid := range ids {
-		verdict, sinceMs := classify(nowMs, pid, online, lastSeen, 0, w.opts.Threshold)
-		switch verdict {
-		case VerdictOnline:
+		// Handler 前再读一次 locator,只负责挡住已经完成的重连并缩小窗口。它不是
+		// 跨服务事务或线性化点;破坏性 Handler 仍须在业务权威写路径自行做版本/CAS/fence。
+		if online[pid] {
+			cancel()
 			online0++
-			w.remove(ctx, strconv.FormatUint(pid, 10))
-		case VerdictWaiting:
+			if err := w.finishClaim(ctx, pid, evidence, claimUntil); err != nil {
+				plog.With(ctx).Warnw("msg", "offlinewatch_finish_online_failed",
+					"namespace", w.opts.Namespace, "player_id", pid, "err", err)
+			}
+			continue
+		}
+
+		if latest := lastSeen[pid]; latest > evidence {
+			// locator 看到了更晚一轮离场。推进 evidence 后交给下一轮,旧任务不能沿旧阈值动作。
+			cancel()
+			if _, err := w.upsertEvidence(ctx, pid, latest); err != nil {
+				failed++
+				plog.With(ctx).Warnw("msg", "offlinewatch_evidence_advance_failed",
+					"namespace", w.opts.Namespace, "player_id", pid, "err", err)
+			}
+			continue
+		}
+
+		verdict, sinceMs := classify(w.now().UnixMilli(), pid, online, lastSeen, evidence, w.opts.Threshold)
+		switch verdict {
+		case verdictWaiting:
+			cancel()
 			waiting++
-			w.reschedule(ctx, []uint64{pid}, sinceMs+w.opts.Threshold.Milliseconds())
-		case VerdictOffline:
-			if herr := w.h.OnPlayerOffline(ctx, pid, sinceMs); herr != nil {
+			w.retry(ctx, pid, evidence, claimUntil, sinceMs+w.opts.Threshold.Milliseconds())
+		case verdictOffline:
+			herr := w.h.OnPlayerOffline(attemptCtx, pid, sinceMs)
+			cancel()
+			if herr != nil {
+				w.retry(ctx, pid, evidence, claimUntil, w.now().UnixMilli()+w.opts.RetryBackoff.Milliseconds())
+				if errors.Is(herr, ErrDeferred) {
+					deferred++
+					plog.With(ctx).Debugw("msg", "offlinewatch_handler_deferred",
+						"namespace", w.opts.Namespace, "player_id", pid, "err", herr)
+					continue
+				}
 				failed++
 				plog.With(ctx).Warnw("msg", "offlinewatch_handler_failed",
 					"namespace", w.opts.Namespace, "player_id", pid, "err", herr)
-				continue // 已推到 RetryBackoff 之后,下轮重试
+				continue
 			}
 			acted++
-			w.remove(ctx, strconv.FormatUint(pid, 10))
+			if err := w.finishClaim(ctx, pid, evidence, claimUntil); err != nil {
+				plog.With(ctx).Warnw("msg", "offlinewatch_finish_failed",
+					"namespace", w.opts.Namespace, "player_id", pid, "err", err)
+			}
 		default:
-			// UNKNOWN:locator 答了(整批不可用会在上面就 return),只是这个玩家没有离开时刻。
-			//
-			// 出队而不是留着重试 —— 这是个**持久**条件不是抖动:离场事件与 last-seen 是
-			// 同一次守卫通过时一起写的,所以能进队列却查不到时刻,只可能是时刻已超
-			// last_seen_retention(例:本服务停了比保留期还久,重启后队列里全是陈年条目)。
-			// 留着只会每轮白查一次、永不收敛,把队列变成一个只增不减的坑。
-			//
-			// 不动作是对的:不知道离开多久就动手等于猜。真有残留成员时,业务读路径的
-			// Inspect 兜底会重新发现(那时若仍拿不到时刻,同样判 UNKNOWN 不动作 ——
-			// 本就不该在没有依据的情况下踢人)。
-			unknown++
-			w.remove(ctx, strconv.FormatUint(pid, 10))
+			cancel()
+			failed++
+			// claim 保证 evidence>0,正常不应到这里。保留任务而不是把不确定压成完成。
+			w.retry(ctx, pid, evidence, claimUntil, w.now().UnixMilli()+w.opts.RetryBackoff.Milliseconds())
 		}
 	}
 
 	plog.With(ctx).Infow("msg", "offlinewatch_swept",
-		"namespace", w.opts.Namespace, "scanned", len(ids),
+		"namespace", w.opts.Namespace, "scanned", len(due), "claimed", claimed,
 		"acted", acted, "online", online0, "waiting", waiting,
-		"unknown", unknown, "handler_failed", failed,
+		"deferred", deferred, "failed", failed,
 		// 扫到预算上限说明还有积压,下轮继续;持续打满要么调大 Budget 要么查下游慢在哪。
 		"budget_saturated", len(due) >= w.opts.Budget)
 }
@@ -361,26 +506,115 @@ func (w *Watcher) readPresence(ctx context.Context, ids []uint64) (map[uint64]bo
 	return online, lastSeen, nil
 }
 
-// reschedule 把一批成员的到期时间改成 dueMs(调度提示,非权威;失败只记日志)。
-func (w *Watcher) reschedule(ctx context.Context, ids []uint64, dueMs int64) {
-	if len(ids) == 0 {
-		return
+func (w *Watcher) upsertEvidence(ctx context.Context, playerID uint64, candidateMs int64) (int64, error) {
+	if playerID == 0 || candidateMs <= 0 {
+		return 0, fmt.Errorf("offlinewatch: invalid evidence player=%d since=%d", playerID, candidateMs)
 	}
-	members := make([]redis.Z, 0, len(ids))
-	for _, pid := range ids {
-		members = append(members, redis.Z{Score: float64(dueMs), Member: strconv.FormatUint(pid, 10)})
+	result, err := upsertEvidenceScript.Run(ctx, w.rdb, []string{w.dueKey, w.evidenceKey},
+		strconv.FormatUint(playerID, 10), candidateMs, w.opts.Threshold.Milliseconds()).Result()
+	if err != nil {
+		return 0, err
 	}
-	// XX:只改已存在的成员。并发的 remove 之后不该被这里重新塞回队列。
-	if err := w.rdb.ZAddArgs(ctx, w.dueKey, redis.ZAddArgs{XX: true, Members: members}).Err(); err != nil {
-		plog.With(ctx).Warnw("msg", "offlinewatch_reschedule_failed",
-			"namespace", w.opts.Namespace, "count", len(ids), "err", err)
+	return redisResultInt64(result)
+}
+
+// readEvidence 返回读取时存在且合法的 evidence。坏值按错误返回,不能把损坏静默压成
+// 「没有基线」;claim 路径另有保守迁移,读路径则应把异常暴露给运维。
+func (w *Watcher) readEvidence(ctx context.Context, playerIDs []uint64) (map[uint64]int64, error) {
+	out := make(map[uint64]int64, len(playerIDs))
+	if len(playerIDs) == 0 {
+		return out, nil
+	}
+	fields := make([]string, 0, len(playerIDs))
+	for _, pid := range playerIDs {
+		fields = append(fields, strconv.FormatUint(pid, 10))
+	}
+	values, err := w.rdb.HMGet(ctx, w.evidenceKey, fields...).Result()
+	if err != nil {
+		return nil, err
+	}
+	for i, raw := range values {
+		if raw == nil {
+			continue
+		}
+		ms, err := redisResultInt64(raw)
+		if err != nil || ms <= 0 {
+			return nil, fmt.Errorf("offlinewatch: bad evidence player=%d value=%v", playerIDs[i], raw)
+		}
+		out[playerIDs[i]] = ms
+	}
+	return out, nil
+}
+
+// claim 按扫描到的 expectedDue 做 CAS。status:0=已变化/被别的副本拿走;
+// 1=本副本拿到;2=升级前旧 due 没有权威 evidence,已 fail-closed 摘掉提示。
+func (w *Watcher) claim(ctx context.Context, playerID uint64, expectedDue, nowMs, claimUntilMs int64) (int64, int64, error) {
+	result, err := claimScript.Run(ctx, w.rdb, []string{w.dueKey, w.evidenceKey},
+		strconv.FormatUint(playerID, 10), expectedDue, nowMs, claimUntilMs).Result()
+	if err != nil {
+		return 0, 0, err
+	}
+	items, ok := result.([]interface{})
+	if !ok || len(items) != 2 {
+		return 0, 0, fmt.Errorf("offlinewatch: bad claim result %T %v", result, result)
+	}
+	status, err := redisResultInt64(items[0])
+	if err != nil {
+		return 0, 0, err
+	}
+	evidence, err := redisResultInt64(items[1])
+	if err != nil {
+		return 0, 0, err
+	}
+	return status, evidence, nil
+}
+
+func (w *Watcher) finishObservedEvidence(ctx context.Context, playerID uint64, expected int64, exists bool) error {
+	expectedArg := ""
+	if exists {
+		expectedArg = strconv.FormatInt(expected, 10)
+	}
+	_, err := finishIfEvidenceScript.Run(ctx, w.rdb, []string{w.dueKey, w.evidenceKey},
+		strconv.FormatUint(playerID, 10), expectedArg, "").Result()
+	return err
+}
+
+func (w *Watcher) finishClaim(ctx context.Context, playerID uint64, expectedEvidence, expectedClaimUntil int64) error {
+	_, err := finishIfEvidenceScript.Run(ctx, w.rdb, []string{w.dueKey, w.evidenceKey},
+		strconv.FormatUint(playerID, 10), expectedEvidence, expectedClaimUntil).Result()
+	return err
+}
+
+func (w *Watcher) retry(ctx context.Context, playerID uint64, expectedEvidence, expectedClaimUntil, retryAtMs int64) {
+	if _, err := retryIfEvidenceScript.Run(ctx, w.rdb, []string{w.dueKey, w.evidenceKey},
+		strconv.FormatUint(playerID, 10), expectedEvidence, expectedClaimUntil, retryAtMs).Result(); err != nil {
+		plog.With(ctx).Warnw("msg", "offlinewatch_retry_schedule_failed",
+			"namespace", w.opts.Namespace, "player_id", playerID, "err", err)
 	}
 }
 
-func (w *Watcher) remove(ctx context.Context, member string) {
-	if err := w.rdb.ZRem(ctx, w.dueKey, member).Err(); err != nil {
+func (w *Watcher) removeAll(ctx context.Context, member string) {
+	if _, err := removeAllScript.Run(ctx, w.rdb, []string{w.dueKey, w.evidenceKey}, member).Result(); err != nil {
 		plog.With(ctx).Warnw("msg", "offlinewatch_remove_failed",
 			"namespace", w.opts.Namespace, "member", member, "err", err)
+	}
+}
+
+func redisResultInt64(v interface{}) (int64, error) {
+	switch n := v.(type) {
+	case int64:
+		return n, nil
+	case uint64:
+		if n > uint64(^uint64(0)>>1) {
+			return 0, fmt.Errorf("offlinewatch: redis integer overflows int64: %d", n)
+		}
+		return int64(n), nil
+	case string:
+		return strconv.ParseInt(n, 10, 64)
+	case []byte:
+		return strconv.ParseInt(string(n), 10, 64)
+	default:
+		return 0, fmt.Errorf("offlinewatch: unexpected redis integer %T %v", v, v)
 	}
 }
 
@@ -391,14 +625,9 @@ func (w *Watcher) remove(ctx context.Context, member string) {
 //
 // 解码失败按 Poison 处理(直接进 DLQ,不重试)——格式坏了的消息重试多少次都还是坏的。
 // Enqueue 失败(Redis 抖动)按普通错误返回,由消费者按 RetryPolicy 重试;彻底失败也
-// 只是丢一个加速信号,业务的 Inspect 兜底仍会补上。
+// 只是丢一个加速信号,业务的 Observe 兜底仍会补上。
 func (w *Watcher) NewConsumer(kcfg config.KafkaConfig, partitionCount int32) (*kafkax.KeyOrderedConsumer, error) {
-	return kafkax.NewKeyOrderedConsumer(kafkax.ConsumerConfig{
-		Brokers:        kcfg.Brokers,
-		Topic:          kafkax.TopicPlayerPresence,
-		GroupID:        "offlinewatch-" + w.opts.Namespace,
-		PartitionCount: partitionCount,
-	}, func(ctx context.Context, msg *sarama.ConsumerMessage) error {
+	return kafkax.NewKeyOrderedConsumer(w.consumerConfig(kcfg, partitionCount), func(ctx context.Context, msg *sarama.ConsumerMessage) error {
 		var evt locatorv1.PlayerLeftHubEvent
 		if err := proto.Unmarshal(msg.Value, &evt); err != nil {
 			return kafkax.Poison(err)
@@ -406,8 +635,24 @@ func (w *Watcher) NewConsumer(kcfg config.KafkaConfig, partitionCount int32) (*k
 		if evt.GetPlayerId() == 0 {
 			return kafkax.Poison(fmt.Errorf("offlinewatch: event without player_id"))
 		}
+		if evt.GetLeftAtMs() <= 0 {
+			// 没有权威离场时刻时不能用消费端 now 猜基线;这是永久坏消息,重试无意义。
+			return kafkax.Poison(fmt.Errorf("offlinewatch: event without left_at_ms player=%d", evt.GetPlayerId()))
+		}
 		return w.Enqueue(ctx, evt.GetPlayerId(), evt.GetLeftAtMs())
 	})
+}
+
+func (w *Watcher) consumerConfig(kcfg config.KafkaConfig, partitionCount int32) kafkax.ConsumerConfig {
+	return kafkax.ConsumerConfig{
+		Brokers:        kcfg.Brokers,
+		Topic:          kafkax.TopicPlayerPresence,
+		GroupID:        "offlinewatch-" + w.opts.Namespace,
+		PartitionCount: partitionCount,
+		// Enqueue 的 Redis 抖动是瞬时错误,不能像零值策略那样首次失败就直接丢事件。
+		// 事件仍只是加速器,三次有限重试耗尽后由 Observe 兜底,不能无限阻塞 Kafka 分区。
+		RetryPolicy: kafkax.RetryPolicy{MaxRetries: 3, Backoff: 200 * time.Millisecond},
+	}
 }
 
 // dedupeIDs 去重并剔除 0(保持首次出现顺序,便于测试断言稳定)。

@@ -2440,3 +2440,48 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   修法 = 玩家回到 Hub 时清掉时刻,维持不变量「last-seen 存在 ⟺ 离开 Hub 后还没回来过」。
   只在 HUB 分支清(last-seen 只由「离开 HUB」写出,要再次离开必先回到 HUB,故已覆盖全部路径;
   无条件清会给 BATTLE 心跳链路每人每 5s 平白加一次 Redis 往返)。已补两条回归测试。
+
+### 2026-08-06 复审修正：秒重连连接代围栏 + 离线观察状态机收口
+
+- 先按用户要求把原改动原样冻结为基线 `a94e738a`，后续修复保持未提交，供 Claude Code 用
+  `git diff a94e738a` 独立审核；未 push。
+- 复审红测稳定复现一条 P0 near-miss：旧连接 A 与秒重连 B 落在同一 Hub Pod 时，A 的迟到
+  `ReportDisconnect(player_id, hub_pod)` 无法区分连接代，会缩短 B 的 locator TTL 并重写
+  last-seen。另有 `SetLocation(HUB)` 与 `ClearLastSeen` 分步导致的崩溃/失败窗口。事故登记为
+  `INC-20260806-001`，功能默认关闭且未发现线上命中，仍按 P0 未关闭标准追踪。
+- locator 修法复用 Hub Admission 已有的 `assignment_id + admission_id + admission_seq`，不改
+  login / matchmaker / ds_allocator / hub_allocator。带 fence 的 HUB 上线先实时查询唯一 owner
+  authority，只有 `HUB/ADMITTED + 有效 lease + exact target/assignment` 才把服务端返回的
+  `owner_epoch + operation_id` 写入投影 fence；调用方不能自铸 owner 代际。连接代与离开时刻进入
+  同一 per-player meta 状态机；带 fence 的旧代 Set/Disconnect 零副作用，legacy Set 仅作滚动升级
+  兼容，legacy Disconnect 安全退化为不缩 TTL。位置 hash 与 meta 不同 Redis key，明确不伪装成
+  跨 key 原子事务，写序与补偿只允许故障造成保守延后。
+- `pkg/offlinewatch` 收口为同 slot 的 `due + evidence`：业务只调用 `Observe`，claim / finish / retry
+  均条件提交，Handler 前最终重查 locator，`ErrDeferred` 保留任务。缺 last-seen 且没有离场事件时
+  必须保持 UNKNOWN，不得用第一次 key miss 或本机 `now` 猜离线起点；因此 Hub 整机掉线且从未留下
+  exact 离场证据的自动清理仍需另接 owner generation / Hub roster 等权威信号，不能由通用包猜测。
+- 对 team 与 StartMatch 做并发时序证明后确认：严格不改 matchmaker 时没有共同 roster CAS，
+  多次读取 commitment 也不能封住“StartMatch 先读旧名单、摘人先提交、StartMatch 后提交旧名单”。
+  因此 `offline_leave.enabled=true` 现在启动 fail-fast；这是防止已知 P0 路径被误开启，不把
+  locator/offlinewatch 通用能力包装成已可安全执行的自动退队。
+- UE 官方 proto 同步必须等服务端协议提交且 proto 工作区干净后运行
+  `Tool\Build\_GenerateClientProto.bat -UpdateLock`。本轮按用户要求保留修复 diff，故旧 Hub 先按
+  legacy 安全降级；禁止手改生成代码绕过协议锁。服务端验证与剩余 UE/集成门见事故文档 §8。
+- **同日三修(审核四条假设后落地)**:
+  ① **P0 止血**:`ReportDisconnect` 的 legacy 降级从 Info 提到 **Error + 新指标
+  `pandora_locator_hub_presence_legacy_degraded_total{op}`**。此前 UE 不带 fence →
+  `fence.isZero()` → 整条 no-op(不缩 TTL / 不记 last-seen / 不发事件)→
+  **离线自动退队一个人也踢不掉,而每一环都返回 OK**;测试全绿掩盖了它。
+  ② **P1 根治**:UE 侧把本就存在的连接 identity(`FHubAdmissionState` 的
+  AssignmentId / AdmissionId / AdmissionSeq)透传到 `SetLocationHub` / `ReportHubDisconnect`。
+  含 cpp pb 同步(先验证过重生成**纯新增、零 message 丢失**)、wire 结构、codec、
+  两处调用点。identity 在 `HubAdmissions.Remove` 之前快照,避免拿不到。
+  ③ **P4 端口漂移**:`-prod.yaml.example` **整族 16 个文件 52 处** 500xx/510xx →
+  200xx/210xx。此前与 `deploy/k8s/services/services.yaml`(20001-20022)、
+  `netpol.yaml`(只放行该段)、`infra.md §6.2` 权威表全部不一致 —— 是 08-05 端口迁移
+  漏掉的一族,不止新增的那一行。零假阳性(52 处全是端口)。
+- **刻意没做**:locator 里的 `owner_epoch` 跨 assignment 全序层未砍。它超出了「组队离线退队」
+  的需求范围(§9.22 的 owner authority 是独立工作线,且该条明写"尚未实现"),但砍掉是
+  不可逆重构、需要先拍板要不要在这条线上开那个工作;连接三元组比较那一层是必要的,保留。
+- **仍未验证**:全部为 build + 单测层面。未连真 Redis Cluster / 真 kafka,未端到端跑过
+  「真掉线 → 真被移出队伍」。UE 侧改动待用户编译。

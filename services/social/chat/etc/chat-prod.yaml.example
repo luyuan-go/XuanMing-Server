@@ -1,18 +1,18 @@
 # Pandora chat 服务生产配置模板(2026-06-16)。
 #
 # 真实部署时复制为 chat-prod.yaml 并按集群实际地址 / 密码填写,**不要提交真实密码到 git**。
-# - gRPC :50005 / HTTP :51005(仅 /metrics)
+# - gRPC :20005 / HTTP :21005(仅 /metrics)
 # - prod: enable_reflection 不写(零值 false,关 reflection 减少攻击面)
 
 server:
   grpc:
     network: tcp
-    addr: ":50005"
+    addr: ":20005"
     enable_rate_limit: true   # 压测前审核门禁-A:BBR 自适应限流(客户端面服务 prod 必开,过载按 CPU/inflight/RT 丢负载)
     timeout: "3s"
   http:
     network: tcp
-    addr: ":51005"
+    addr: ":21005"
 
 node:
   node_id: 1
@@ -36,7 +36,7 @@ kafka:
 chat:
   max_content_len: 256
   history_limit: 50
-  team_addr: "team:50010"
+  team_addr: "team:20010"
   sensitive_words: []
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):生产强制档,顶号后旧 JWT 立即失效;

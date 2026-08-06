@@ -56,15 +56,13 @@ team:
   match_resume_auth_secret: "pandora-dev-team-resume-auth-key-v1!"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
 
-  # locator_addr: player_locator gRPC 直连地址,离线自动退队的判定依据来源。
-  # 留空 = 该功能整块关闭。
+  # locator_addr: player_locator gRPC 直连地址,离线观察的判定依据来源。
   locator_addr: "127.0.0.1:20006"
 
   # offline_leave: 队员离线超时自动移出队伍。
   #
-  # ⚠️ 默认 enabled=false。开之前必须先把 locator 的离场事件打开
-  # (locator-dev.yaml 的 locator.departure_event.enabled=true),否则只剩「有人打开
-  # 组队面板时才复查」的兜底路径,时效从秒级退化到「等下次有人看」。
+  # ⚠️ 当前必须保持 enabled=false。team 成员写与 StartMatch 尚无共用 roster
+  # fence，设为 true 会在启动时 fail-fast；只打开 locator 离场事件不能消除 TOCTOU。
   #
   # threshold 为什么是 180s(别随手调小,推导见 conf.go OfflineLeaveConf 注释):
   #   一个会回来的玩家,从信号恢复到重新出现在 locator 里,保守要 30~60s

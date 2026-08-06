@@ -5,13 +5,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50010"
+    addr: ":20010"
     enable_rate_limit: true   # 压测前审核门禁-A:BBR 自适应限流(客户端面服务 prod 必开,过载按 CPU/inflight/RT 丢负载)
     timeout: "5s"
     # enable_reflection 不写 = false
   http:
     network: tcp
-    addr: ":51010"
+    addr: ":21010"
 
 node:
   node_id: 1
@@ -41,7 +41,7 @@ team:
   max_members: 5
   optimistic_retry: 3
   # 离队/踢人联动撤销匹配票据(弱依赖,留空则不联动)
-  matchmaker_addr: "matchmaker.pandora.svc.cluster.local:50011"
+  matchmaker_addr: "matchmaker.pandora.svc.cluster.local:20011"
   # team→matchmaker 调 ResolvePlayerMatchContext 的服务鉴权(caller 固定签 "team")。
   # 入队闸门是 fail-closed 的:这把密钥漏配 → 招募列表恒空 + 申请入队恒失败。
   # 必须等于 matchmaker 的 match.team_resume_auth_secret,且与 login 那把不同。
@@ -49,10 +49,10 @@ team:
   match_resume_auth_secret: "CHANGE-ME-team-resume-auth-key-32bytes-min"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
 
-  # 离线自动退队的判定依据来源;留空 = 该功能整块关闭。
-  locator_addr: "player-locator.pandora.svc.cluster.local:50006"
-  # 队员离线超时自动移出队伍。默认关;开之前先把 locator 的 departure_event.enabled 打开,
-  # 否则只剩「有人打开组队面板才复查」的兜底路径。
+  # 离线观察的 locator 来源（真实 K8s Service gRPC 端口）。
+  locator_addr: "player-locator.pandora.svc.cluster.local:20006"
+  # 当前必须保持关闭：team 成员写与 StartMatch 尚无共用 roster fence，设为 true 会在
+  # 启动时 fail-fast。仅打开 locator departure_event 不能消除跨服务 TOCTOU。
   # threshold=180s 的推导见 internal/conf/conf.go OfflineLeaveConf 注释:低于它会踢掉
   # 本来能回来的玩家(重连链路本身就要 30~60s),弱网(地铁/隧道)还要再留余量。
   offline_leave:

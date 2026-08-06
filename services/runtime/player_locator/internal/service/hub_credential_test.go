@@ -193,6 +193,14 @@ type sideEffectRepo struct {
 	shrinkCalls   int
 	refreshCalls  int
 	lastSeenCalls int
+	activated     data.HubPresenceFence
+	shrunkFence   data.HubPresenceFence
+}
+
+type serviceStubHubOwner struct{ rec data.HubOwnerSnapshot }
+
+func (s *serviceStubHubOwner) QueryOwner(context.Context, uint64) (data.HubOwnerSnapshot, error) {
+	return s.rec, nil
 }
 
 func (s *sideEffectRepo) SetGuarded(_ context.Context, _ uint64, _ data.LocationRecord, _ time.Duration, _ int, _ func(data.LocationRecord, bool) error) error {
@@ -205,19 +213,26 @@ func (s *sideEffectRepo) Get(context.Context, uint64) (data.LocationRecord, bool
 func (s *sideEffectRepo) BatchGet(context.Context, []uint64) (map[uint64]data.LocationRecord, error) {
 	return map[uint64]data.LocationRecord{}, nil
 }
-func (s *sideEffectRepo) RefreshHubLocations(context.Context, string, []uint64, time.Duration) (int, error) {
+func (s *sideEffectRepo) RefreshHubLocations(context.Context, string, []uint64, time.Duration, time.Duration) (int, error) {
 	s.refreshCalls++
 	return 0, nil
 }
-func (s *sideEffectRepo) ShrinkHubTTL(context.Context, string, uint64, time.Duration) (bool, error) {
-	s.shrinkCalls++
+func (s *sideEffectRepo) ActivateHubPresence(_ context.Context, _ uint64, fence data.HubPresenceFence, _ time.Duration) (bool, error) {
+	s.activated = fence
 	return true, nil
 }
-func (s *sideEffectRepo) SetLastSeen(context.Context, uint64, int64, time.Duration) error {
-	s.lastSeenCalls++
-	return nil
+func (s *sideEffectRepo) ValidateHubPresence(context.Context, uint64, data.HubPresenceFence) (bool, error) {
+	return true, nil
 }
-func (s *sideEffectRepo) ClearLastSeen(context.Context, uint64) error { return nil }
+func (s *sideEffectRepo) ShrinkHubTTL(_ context.Context, _ string, _ uint64, fence data.HubPresenceFence, _ time.Duration) (bool, bool, error) {
+	s.shrinkCalls++
+	s.shrunkFence = fence
+	return true, true, nil
+}
+func (s *sideEffectRepo) RecordLastSeen(_ context.Context, _ uint64, _ data.HubPresenceFence, atMs int64, _ time.Duration) (bool, int64, error) {
+	s.lastSeenCalls++
+	return true, atMs, nil
+}
 func (s *sideEffectRepo) BatchGetLastSeen(context.Context, []uint64) (map[uint64]int64, error) {
 	return map[uint64]int64{}, nil
 }
@@ -275,7 +290,14 @@ func modelBService(t *testing.T, reader data.HubAuthReader) (*LocatorService, *s
 		t.Fatalf("SignHubCredential: %v", err)
 	}
 	repo := &sideEffectRepo{}
-	svc := NewLocatorService(biz.NewLocatorUsecase(repo, 30*time.Second))
+	uc := biz.NewLocatorUsecase(repo, 30*time.Second)
+	uc.SetHubOwnerAuthority(&serviceStubHubOwner{rec: data.HubOwnerSnapshot{
+		OwnerEpoch: 7, OperationID: "owner-operation", OwnerType: 1, Phase: 2,
+		PodName: "hub-1", InstanceUID: "uid-1", InstanceEpoch: 2,
+		AssignmentID: "assignment-42", ReleaseTrack: "stable",
+		LeaseDeadlineMs: time.Now().Add(time.Minute).UnixMilli(),
+	}})
+	svc := NewLocatorService(uc)
 	svc.SetDSCallbackGuard(guard)
 	checker := NewHubCredentialStateChecker(reader).(*redisHubCredentialStateChecker)
 	checker.now = func() time.Time { return credentialTestNow }
@@ -332,6 +354,29 @@ func requestContext(token string) context.Context {
 	h.Set(middleware.MetadataKeyDSGateway, "1")
 	h.Set("authorization", "Bearer "+token)
 	return transport.NewServerContext(context.Background(), &testTransport{req: h})
+}
+
+func TestLocatorService_Off模式无Credential仍由Owner约束FencedSet(t *testing.T) {
+	repo := &sideEffectRepo{}
+	uc := biz.NewLocatorUsecase(repo, 30*time.Second)
+	uc.SetHubOwnerAuthority(&serviceStubHubOwner{rec: data.HubOwnerSnapshot{
+		OwnerEpoch: 7, OperationID: "owner-operation", OwnerType: 1, Phase: 2,
+		PodName: "hub-1", InstanceUID: "uid-1", InstanceEpoch: 2,
+		AssignmentID: "assignment-42", ReleaseTrack: "stable",
+		LeaseDeadlineMs: time.Now().Add(time.Minute).UnixMilli(),
+	}})
+	svc := NewLocatorService(uc) // dsGuard=nil 即 off；CheckHubCredential 返回 nil cred。
+	resp, err := svc.SetLocation(context.Background(), &locatorv1.SetLocationRequest{
+		PlayerId: 42,
+		Location: &locatorv1.Location{State: locatorv1.LocationState_LOCATION_STATE_HUB, HubPod: "hub-1"},
+		HubPresenceFence: &locatorv1.HubPresenceFence{
+			AssignmentId: "assignment-42", AdmissionId: "admission-a", AdmissionSeq: 1,
+		},
+	})
+	if err != nil || resp.GetCode() != commonv1.ErrCode_OK || repo.setCalls != 1 ||
+		!repo.activated.IsFullyFenced() {
+		t.Fatalf("off 模式应由 owner pod+assignment 安全放行: resp=%v err=%v effects=%+v", resp, err, repo)
+	}
 }
 
 func authRecordFromSignerResult(t *testing.T) (*hubv1.HubShardAuthStorageRecord, string) {
@@ -481,9 +526,34 @@ func TestLocatorService_ActiveCredentialBeforeAnySideEffect(t *testing.T) {
 		resp, err := svc.SetLocation(requestContext(tok), &locatorv1.SetLocationRequest{
 			PlayerId: 42,
 			Location: &locatorv1.Location{State: locatorv1.LocationState_LOCATION_STATE_HUB, HubPod: "hub-1"},
+			HubPresenceFence: &locatorv1.HubPresenceFence{
+				AssignmentId: "assignment-42", AdmissionId: "admission-b", AdmissionSeq: 2,
+			},
 		})
 		if err != nil || resp.GetCode() != commonv1.ErrCode_OK || effects.setCalls != 1 {
 			t.Fatalf("resp=%v err=%v setCalls=%d", resp, err, effects.setCalls)
+		}
+		want := data.HubPresenceFence{AssignmentID: "assignment-42", AdmissionID: "admission-b", AdmissionSeq: 2}
+		if !effects.activated.SameConnection(want) || !effects.activated.IsAuthoritative() {
+			t.Fatalf("service 未完整下传 SetLocation fence: got=%+v want=%+v", effects.activated, want)
+		}
+	})
+
+	t.Run("active ReportDisconnect 下传 exact fence", func(t *testing.T) {
+		reader := &stubHubAuthReader{rec: active, found: true}
+		svc, effects, tok := modelBService(t, reader)
+		resp, err := svc.ReportDisconnect(requestContext(tok), &locatorv1.ReportDisconnectRequest{
+			HubPod: "hub-1", PlayerId: 42,
+			HubPresenceFence: &locatorv1.HubPresenceFence{
+				AssignmentId: "assignment-42", AdmissionId: "admission-b", AdmissionSeq: 2,
+			},
+		})
+		if err != nil || resp.GetCode() != commonv1.ErrCode_OK || !resp.GetShrunk() {
+			t.Fatalf("resp=%v err=%v", resp, err)
+		}
+		want := data.HubPresenceFence{AssignmentID: "assignment-42", AdmissionID: "admission-b", AdmissionSeq: 2}
+		if effects.shrinkCalls != 1 || effects.lastSeenCalls != 1 || !effects.shrunkFence.Equal(want) {
+			t.Fatalf("service 未完整下传 Disconnect fence/effects: %+v", effects)
 		}
 	})
 

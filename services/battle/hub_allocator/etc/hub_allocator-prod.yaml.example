@@ -6,13 +6,13 @@
 server:
   grpc:
     network: tcp
-    addr: ":50021"
+    addr: ":20021"
     enable_rate_limit: true   # 压测前审核门禁-A:BBR 自适应限流(客户端面服务 prod 必开,过载按 CPU/inflight/RT 丢负载)
     timeout: "5s"
     # enable_reflection 不写 = false
   http:
     network: tcp
-    addr: ":51021"
+    addr: ":21021"
 
 node:
   node_id: 1
@@ -60,7 +60,7 @@ hub:
   # locator_addr: player_locator gRPC 地址。两个用途：①玩家切线护栏(战斗/匹配中禁切)；
   # ②在线保活链必经一环：Hub DS 心跳捎带 player_ids → 本服务转发 locator 续期 HUB 位置 TTL。
   # ⚠️ matchmaker 开了 liveness_gate_enabled 时此项不可留空，否则在线玩家 30s 后被误判离线、扫掉排队票据。
-  locator_addr: "player-locator.pandora.svc.cluster.local:50006"
+  locator_addr: "player-locator.pandora.svc.cluster.local:20006"
 
   # prod 用真 Agones(下方 agones.enabled: true),不再需要 mock_* 字段
 

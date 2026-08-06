@@ -22,14 +22,46 @@ import (
 
 // stubRepo 内存版 LocationRepo,只供单测用。
 type stubRepo struct {
-	store    map[uint64]data.LocationRecord
-	lastSeen map[uint64]int64
+	store          map[uint64]data.LocationRecord
+	lastSeen       map[uint64]int64
+	meta           map[uint64]data.HubPresenceFence
+	metaExists     map[uint64]bool
+	refreshMetaTTL time.Duration
+}
+
+type stubHubOwner struct {
+	rec   data.HubOwnerSnapshot
+	err   error
+	calls int
+}
+
+func (s *stubHubOwner) QueryOwner(context.Context, uint64) (data.HubOwnerSnapshot, error) {
+	s.calls++
+	return s.rec, s.err
+}
+
+func testOwner(assignmentID string, ownerEpoch uint64) *stubHubOwner {
+	return &stubHubOwner{rec: data.HubOwnerSnapshot{
+		OwnerEpoch: ownerEpoch, OperationID: "owner-operation",
+		OwnerType: ownerTypeHub, Phase: ownerPhaseAdmitted,
+		PodName: "hub-1", InstanceUID: "uid-1", InstanceEpoch: 2,
+		AssignmentID: assignmentID, ReleaseTrack: "stable",
+		LeaseDeadlineMs: time.Now().Add(time.Minute).UnixMilli(),
+	}}
+}
+
+func setTestOwner(uc *LocatorUsecase, assignmentID string, ownerEpoch uint64) *stubHubOwner {
+	authority := testOwner(assignmentID, ownerEpoch)
+	uc.SetHubOwnerAuthority(authority)
+	return authority
 }
 
 func newStubRepo() *stubRepo {
 	return &stubRepo{
-		store:    map[uint64]data.LocationRecord{},
-		lastSeen: map[uint64]int64{},
+		store:      map[uint64]data.LocationRecord{},
+		lastSeen:   map[uint64]int64{},
+		meta:       map[uint64]data.HubPresenceFence{},
+		metaExists: map[uint64]bool{},
 	}
 }
 
@@ -70,14 +102,40 @@ func (s *stubRepo) Delete(_ context.Context, playerID uint64) error {
 	return nil
 }
 
-func (s *stubRepo) SetLastSeen(_ context.Context, playerID uint64, atMs int64, _ time.Duration) error {
-	s.lastSeen[playerID] = atMs
-	return nil
+func (s *stubRepo) ValidateHubPresence(_ context.Context, playerID uint64, fence data.HubPresenceFence) (bool, error) {
+	if current, ok := s.meta[playerID]; ok && current.IsComplete() {
+		if fence.IsZero() {
+			return false, nil
+		}
+		if current.IsFullyFenced() && (!fence.IsFullyFenced() ||
+			fence.OwnerEpoch < current.OwnerEpoch ||
+			(fence.OwnerEpoch == current.OwnerEpoch &&
+				(fence.OwnerOperationID != current.OwnerOperationID || fence.AssignmentID != current.AssignmentID))) {
+			return false, nil
+		}
+		if current.AssignmentID == fence.AssignmentID && current.OwnerEpoch == fence.OwnerEpoch &&
+			(fence.AdmissionSeq < current.AdmissionSeq ||
+				(fence.AdmissionSeq == current.AdmissionSeq && fence.AdmissionID != current.AdmissionID)) {
+			return false, nil
+		}
+		if current.Equal(fence) {
+			if _, left := s.lastSeen[playerID]; left {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
 
-func (s *stubRepo) ClearLastSeen(_ context.Context, playerID uint64) error {
+func (s *stubRepo) ActivateHubPresence(ctx context.Context, playerID uint64, fence data.HubPresenceFence, _ time.Duration) (bool, error) {
+	accepted, err := s.ValidateHubPresence(ctx, playerID, fence)
+	if err != nil || !accepted {
+		return accepted, err
+	}
+	s.meta[playerID] = fence
+	s.metaExists[playerID] = true
 	delete(s.lastSeen, playerID)
-	return nil
+	return true, nil
 }
 
 func (s *stubRepo) BatchGetLastSeen(_ context.Context, playerIDs []uint64) (map[uint64]int64, error) {
@@ -93,15 +151,32 @@ func (s *stubRepo) BatchGetLastSeen(_ context.Context, playerIDs []uint64) (map[
 	return out, nil
 }
 
-func (s *stubRepo) ShrinkHubTTL(_ context.Context, hubPod string, playerID uint64, _ time.Duration) (bool, error) {
+func (s *stubRepo) ShrinkHubTTL(_ context.Context, hubPod string, playerID uint64, fence data.HubPresenceFence, _ time.Duration) (bool, bool, error) {
 	rec, ok := s.store[playerID]
-	if !ok || rec.State != LocationStateHub || rec.HubPod != hubPod {
-		return false, nil
+	if !ok || rec.State != LocationStateHub || rec.HubPod != hubPod || !rec.HubPresenceFence.SameConnection(fence) {
+		return false, false, nil
 	}
-	return true, nil
+	return true, true, nil
 }
 
-func (s *stubRepo) RefreshHubLocations(_ context.Context, hubPod string, playerIDs []uint64, _ time.Duration) (int, error) {
+func (s *stubRepo) RecordLastSeen(_ context.Context, playerID uint64, fence data.HubPresenceFence, atMs int64, _ time.Duration) (bool, int64, error) {
+	current, ok := s.meta[playerID]
+	if ok && !current.SameConnection(fence) {
+		return false, 0, nil
+	}
+	if !ok {
+		s.meta[playerID] = fence
+		s.metaExists[playerID] = true
+	}
+	if existing, exists := s.lastSeen[playerID]; exists {
+		return true, existing, nil
+	}
+	s.lastSeen[playerID] = atMs
+	return true, atMs, nil
+}
+
+func (s *stubRepo) RefreshHubLocations(_ context.Context, hubPod string, playerIDs []uint64, _, metaTTL time.Duration) (int, error) {
+	s.refreshMetaTTL = metaTTL
 	refreshed := 0
 	seen := map[uint64]bool{}
 	for _, pid := range playerIDs {
@@ -290,6 +365,10 @@ func TestRefreshHubLocations(t *testing.T) {
 	if refreshed != 1 {
 		t.Errorf("expected refreshed=1 (only p1 HUB@hub-a), got %d", refreshed)
 	}
+	if repo.refreshMetaTTL != defaultLastSeenRetention {
+		t.Fatalf("心跳必须同时续 Hub meta retention: got=%s want=%s",
+			repo.refreshMetaTTL, defaultLastSeenRetention)
+	}
 }
 
 func TestRefreshHubLocations_InvalidArgs(t *testing.T) {
@@ -310,21 +389,22 @@ func TestReportDisconnect(t *testing.T) {
 	repo := newStubRepo()
 	uc := NewLocatorUsecase(repo, 30*time.Second)
 	ctx := context.Background()
+	fence := testHubFence(1)
 
-	repo.store[1] = data.LocationRecord{State: LocationStateHub, HubPod: "hub-a"}
-	repo.store[2] = data.LocationRecord{State: LocationStateHub, HubPod: "hub-b"}
+	repo.store[1] = data.LocationRecord{State: LocationStateHub, HubPod: "hub-a", HubPresenceFence: fence.toData()}
+	repo.store[2] = data.LocationRecord{State: LocationStateHub, HubPod: "hub-b", HubPresenceFence: fence.toData()}
 	repo.store[3] = data.LocationRecord{State: LocationStateMatching, MatchID: 99}
 
-	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 1); err != nil || !shrunk {
+	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 1, fence); err != nil || !shrunk {
 		t.Errorf("p1 HUB@hub-a expected shrunk=true, got shrunk=%v err=%v", shrunk, err)
 	}
-	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 2); err != nil || shrunk {
+	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 2, fence); err != nil || shrunk {
 		t.Errorf("p2 on hub-b: stale pod report must not shrink, got shrunk=%v err=%v", shrunk, err)
 	}
-	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 3); err != nil || shrunk {
+	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 3, fence); err != nil || shrunk {
 		t.Errorf("p3 MATCHING must not shrink (travel-to-battle immunity), got shrunk=%v err=%v", shrunk, err)
 	}
-	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 4); err != nil || shrunk {
+	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 4, fence); err != nil || shrunk {
 		t.Errorf("missing player: no-op expected, got shrunk=%v err=%v", shrunk, err)
 	}
 }
@@ -333,10 +413,10 @@ func TestReportDisconnect_InvalidArgs(t *testing.T) {
 	uc := NewLocatorUsecase(newStubRepo(), 30*time.Second)
 	ctx := context.Background()
 
-	if _, err := uc.ReportDisconnect(ctx, "", 1); err == nil {
+	if _, err := uc.ReportDisconnect(ctx, "", 1, testHubFence(1)); err == nil {
 		t.Error("expected error for empty hub_pod")
 	}
-	if _, err := uc.ReportDisconnect(ctx, "hub-a", 0); err == nil {
+	if _, err := uc.ReportDisconnect(ctx, "hub-a", 0, testHubFence(1)); err == nil {
 		t.Error("expected error for player_id=0")
 	}
 }
