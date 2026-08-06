@@ -291,13 +291,18 @@ services:
     restart: unless-stopped
     command: serve
     environment:
-      NTFY_BASE_URL: ${PANDORA_NTFY_BASE_URL:-http://127.0.0.1:8080}
+      NTFY_BASE_URL: ${PANDORA_NTFY_BASE_URL:-http://127.0.0.1:${PANDORA_NTFY_BIND_PORT:-8090}}
       NTFY_LISTEN_HTTP: ":80"
       # ntfy 默认只做内存缓存；显式指向持久卷，重启后才能回放离线告警。
       NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
     ports:
       # 独立绑定变量，手机联调时只开 ntfy，不跟着暴露 Grafana/Prometheus/Loki。
-      - "${PANDORA_NTFY_BIND_HOST:-127.0.0.1}:8080:80"
+      # 宿主端口默认 8090 而不是 ntfy 官方的 8080:8080 是 Jenkins 的默认端口,而本仓库
+      # 自带 pandora-jenkins(deploy/docker-compose.devops.yml),两者同时起必然抢端口。
+      # 抢不到时 compose 在建网络阶段就失败,ntfy 的 required:false 根本来不及生效,
+      # 会连带整套基础设施启动中止(2026-08-05 实测)。容器内仍是 80,Grafana 走内网
+      # http://ntfy:80 不受影响;这层映射只给人在浏览器里开 ntfy 页面用。
+      - "${PANDORA_NTFY_BIND_HOST:-127.0.0.1}:${PANDORA_NTFY_BIND_PORT:-8090}:80"
     volumes:
       - ntfy-data:/var/lib/ntfy
     healthcheck:

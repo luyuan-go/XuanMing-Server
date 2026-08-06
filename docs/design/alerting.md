@@ -67,11 +67,18 @@ ntfy URL 需保留 `?tpl=1&t=%7B%7B.title%7D%7D&m=%7B%7B.message%7D%7D`，否则
 Grafana webhook JSON 当成通知正文。
 
 涉及的环境变量:`PANDORA_ALERT_WECOM_URL` / `PANDORA_ALERT_FEISHU_WEBHOOK` /
-`PANDORA_ALERT_NTFY_URL` / `PANDORA_NTFY_BASE_URL` / `PANDORA_NTFY_BIND_HOST`。
+`PANDORA_ALERT_NTFY_URL` / `PANDORA_NTFY_BASE_URL` / `PANDORA_NTFY_BIND_HOST` /
+`PANDORA_NTFY_BIND_PORT`。
 
 `PANDORA_NTFY_BIND_HOST` 默认 `127.0.0.1`。手机在局域网直连时才改为 `0.0.0.0`，并把
 `PANDORA_NTFY_BASE_URL` 改为开发机局域网地址;它与 `PANDORA_OBSERVABILITY_BIND_HOST` 分离，
 避免为了手机推送同时暴露 Grafana/Prometheus/Loki。
+
+`PANDORA_NTFY_BIND_PORT` 默认 `8090`，**不是 ntfy 官方的 8080**:8080 是 Jenkins 默认端口，
+而本仓库自带 `pandora-jenkins`(`deploy/docker-compose.devops.yml`)，两者同时起必然抢端口;
+抢不到时 compose 在建网络阶段就失败，ntfy 的 `required:false` 根本来不及生效，会连带整套
+基础设施启动中止(2026-08-05 实测)。容器内仍监听 80，Grafana 走内网 `http://ntfy:80` 不受影响，
+这层映射只给人在浏览器里开 ntfy 页面用。改端口须同时改 `PANDORA_NTFY_BASE_URL` 的端口。
 
 ## 6. 文件清单
 

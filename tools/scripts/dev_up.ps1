@@ -138,7 +138,7 @@ Write-Host "Kafka       localhost:9093   (host网络可达)"
 Write-Host "etcd        localhost:2380"
 Write-Host "Prometheus  http://localhost:9091"
 Write-Host "Grafana     http://localhost:3001  user=admin pass=pandora_dev_admin"
-Write-Host "ntfy        http://localhost:8080  topic=pandora-alerts"
+Write-Host "ntfy        http://localhost:$(if ($env:PANDORA_NTFY_BIND_PORT) { $env:PANDORA_NTFY_BIND_PORT } else { '8090' })  topic=pandora-alerts"
 Write-Host ""
 Write-Host "===== 状态 =====" -ForegroundColor Green
 docker compose -f $ComposeFile --env-file $EnvFile ps
