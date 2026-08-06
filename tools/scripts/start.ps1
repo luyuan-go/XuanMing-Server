@@ -342,7 +342,15 @@ function Remove-K8sManifestObjectsPreserving {
         [Parameter(Mandatory = $true)][scriptblock]$ShouldPreserve,
         [Parameter(Mandatory = $true)][string]$What
     )
-    $identities = @(Get-K8sManifestObjectIdentities -KubeContext $KubeContext -ManifestText $ManifestText)
+    # ⚠️ 这里**绝不能**套 @()。Get-K8sManifestObjectIdentities 用 `return , $array` 防止
+    # 单元素结果被解包;外面再套 @() 得到的是「只含一个数组的数组」(Count 恒为 1)。
+    # 后果不是少删几个对象,而是保留谓词整体失效:管道只喂给 Where-Object 一个对象,
+    # `[string]$o.Kind` 变成 "Namespace Service Deployment ..." 这样的空格串,
+    # 既不 -ceq 'Namespace' 也不 -ceq 'PersistentVolumeClaim' → 判定为"不保留" →
+    # payload = 整份清单 → 连 namespace/pandora 与 PVC/etcd-data 一起删掉,
+    # 每次 Down 都以「namespace 缺失」的 fail-fast 收场(实测复现)。
+    # 同理 $identities.Count 也会恒为 1,让下面的"清单为空"守卫一并失效。
+    $identities = Get-K8sManifestObjectIdentities -KubeContext $KubeContext -ManifestText $ManifestText
     if ($identities.Count -eq 0) { throw "${What}:清单为空，拒绝在未知状态下继续 Down。" }
     $toDelete = @($identities | Where-Object { -not (& $ShouldPreserve $_) })
     if ($toDelete.Count -eq 0) { return , $identities }
