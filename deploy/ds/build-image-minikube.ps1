@@ -118,7 +118,15 @@ function Resolve-LinuxPkg {
             Get-ChildItem -LiteralPath $flavorRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
                 $verRoot = Join-Path $_.FullName 'Server_Linux_Development'
                 if (-not (Test-Path -LiteralPath $verRoot)) { return }
-                Get-ChildItem -LiteralPath $verRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                # 必须排除 `.tmp-*`:PublishPackages.ps1 的原子发布是「先写 .tmp-<版本>-<PID>
+                # staging、整目录改名」(该脚本 :14/:105)。发布进行中这个半成品目录就摆在同级,
+                # 而且 mtime 恒为最新 —— 下面按 Published 降序取最新会**优先选中它**,
+                # 于是 robocopy /MIR 把一份写了一半的 DS 包镜像进 stage,构建照样成功,
+                # 跑起来才发现包不完整。2026-08-05 实测撞上过一次(解析到
+                # .tmp-r1835-dirty-20260805-231450-23072),只因当时走的是 -ResolveOnly 预检
+                # (不拷贝)才没污染 stage。按发布器的原子性契约,只认已改名到位的目录。
+                Get-ChildItem -LiteralPath $verRoot -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -notlike '.tmp-*' } | ForEach-Object {
                     $ls = Join-Path $_.FullName 'LinuxServer'
                     if (Test-Path -LiteralPath $ls) {
                         [pscustomobject]@{ Path = $ls; Track = $track; Version = $_.Name; Published = $_.LastWriteTime }
