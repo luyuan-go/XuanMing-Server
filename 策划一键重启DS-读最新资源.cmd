@@ -1,8 +1,9 @@
 @echo off
-rem !! DO NOT add `chcp` to this file !! It contains non-ASCII (Chinese) rem
-rem lines; running chcp mid-file shifts cmd.exe's byte offset into the batch and
-rem makes it execute comment fragments. start.ps1 already sets the console to
-rem UTF-8 itself. Keep every `echo` here ASCII-only.
+rem ASCII-ONLY FILE - do NOT put Chinese (or any non-ASCII) text in here, and do
+rem NOT add `chcp`. cmd.exe re-reads the batch file after every line using the
+rem CURRENT console code page; start.ps1 switches the console to UTF-8, which
+rem shifts cmd's saved offset by one byte per multi-byte character and makes cmd
+rem execute fragments of comment lines (2026-08-06 bug).
 rem ============================================================
 rem  Pandora backend - planner one-click: restart the local editor-form DS
 rem  so it re-reads your latest saved assets. (double-click to run)
