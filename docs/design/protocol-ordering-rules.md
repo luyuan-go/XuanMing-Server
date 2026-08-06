@@ -149,7 +149,7 @@ B 看到:
 
 **结论**:多个 push 之间在 kafka 同 partition 内有序,只要 key 设计正确(`key=收件人 player_id`),不会乱。
 
-## 3. 4 个协议设计原则
+## 3. 5 个协议设计原则
 
 ### 原则 1:**Response 必须同步返回完整业务结果**
 
@@ -324,7 +324,7 @@ rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
 
 **评审新 push 通道先问一句:「接收方错过这条推送,还有没有别的途径得知结果?」** 答案是"没有" → 缺 pull 接口,先补;补不了就必须上"启动强依赖 + 服务端可重放补推 + 客户端有界轮询"三层(见 §12.1 的真实事故)。
 
-#### 5.1 两种合法的 apply 模型(二选一,不准混用)
+#### 原则 5-A:两种合法的 apply 模型(二选一,不准混用)
 
 | | **A:push 只当信号**(默认选它) | **B:push 带态 + 单调序** |
 |---|---|---|
@@ -335,7 +335,7 @@ rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
 
 ⚠️ **模型 B 里"同一个 apply 函数"是硬要求,不是建议**。两条通道各写一份状态、再用 revision / 世代守卫去弥合顺序,是 `CLAUDE.md §9.22`(唯一权威,不重复影子状态)与 `§11.7`(客户端单一事实通道)明令禁止的形态——2026-07-28 宝箱读条就是踩了这个坑后整块删掉守卫改单通道的。
 
-#### 5.2 push 是 at-least-once,判重不能只看 ts_ms
+#### 原则 5-B:push 是 at-least-once,判重不能只看 ts_ms
 
 `PushFrame.ts_ms` 是**服务端每玩家严格递增的投递游标**,不是事件时间。同一业务事件被 kafka 重投时会拿到**新的更大游标**再投一次,所以"ts_ms 比上次大就当新事件"挡不住重复(§5.3 的旧写法只挡乱序,不挡重投)。契约以 `proto/pandora/push/v1/push.proto` 为准:
 
@@ -434,7 +434,7 @@ OnPushMatchProgress(push) {
 
 ### 5.3 客户端去重(应对 at-least-once)
 
-⚠️ **2026-08-05 修正**:下面这段只挡「旧帧 / 乱序帧」,**挡不住重投**——同一业务事件被重投会拿到更大的新游标(见 §3 原则 5.2)。真正的判重必须按**业务 ID**;`ts_ms` 只是投递游标,用途是断线重连时回传 `last_seen_ms` 做断点续传,且必须按 player_id 隔离存储。
+⚠️ **2026-08-05 修正**:下面这段只挡「旧帧 / 乱序帧」,**挡不住重投**——同一业务事件被重投会拿到更大的新游标(见 §3 原则 5-B)。真正的判重必须按**业务 ID**;`ts_ms` 只是投递游标,用途是断线重连时回传 `last_seen_ms` 做断点续传,且必须按 player_id 隔离存储。
 
 kafka 是 at-least-once 推送,push 可能重复。客户端按 envelope 时间戳挡旧帧:
 
@@ -518,9 +518,9 @@ func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []ui
 - ❌ **不要**指望 TCP 单连接能解决 RPC response 和 kafka push 的乱序(它们是两个 goroutine 写 ws,Go 调度不保证顺序)
 - ❌ **不要**写"等 response 和 push 都到了再处理 UI"的复杂同步逻辑(直接选对一种语义即可)
 - ❌ **不要**设计"只能靠 push 才能得知结果"的状态 — 必须同时有权威查询 RPC(原则 5)
-- ❌ **不要**让 push 和 pull 各写一份状态再用 revision / 世代守卫弥合 — 选模型 A 或 B,只能有一个写入路径(原则 5.1)
+- ❌ **不要**让 push 和 pull 各写一份状态再用 revision / 世代守卫弥合 — 选模型 A 或 B,只能有一个写入路径(原则 5-A)
 - ❌ **不要**用常驻短周期轮询代替 push — 轮询只能是**有界等待态**里的兜底,状态落地即停表(§5.4)
-- ❌ **不要**只按 `ts_ms` 判重就声称幂等 — 重投会拿到更大的新游标,判重必须按业务 ID(原则 5.2)
+- ❌ **不要**只按 `ts_ms` 判重就声称幂等 — 重投会拿到更大的新游标,判重必须按业务 ID(原则 5-B)
 - ❌ **不要**先拉业务快照再订阅 push — 顺序反了会开一个永久丢失窗口(§5.4 第 3 条)
 
 ## 8. 工程检查清单
@@ -541,7 +541,7 @@ func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []ui
 
 - [ ] 立即完成型 RPC:OnResponse 直接更新 UI
 - [ ] 已受理型 RPC:OnResponse 只显示 loading,UI 状态机由 push 驱动
-- [ ] OnPushReceived 有时间戳去重(挡旧帧)**且**有业务 ID 判重(挡重投,原则 5.2)
+- [ ] OnPushReceived 有时间戳去重(挡旧帧)**且**有业务 ID 判重(挡重投,原则 5-B)
 - [ ] 该状态有权威查询 RPC,且 §5.4 五个触发点(界面进入 / push 重连 / 切前台 / resync / watchdog)都接了刷新
 - [ ] push 与 pull 只有一个写入路径:push 只触发 pull(模型 A),或两者共用同一 apply 函数(模型 B)
 - [ ] 消费 push 的 Model **显式处理 `pandora.push.resync`**(不能落到"其余 topic 原样忽略"分支)
@@ -558,7 +558,7 @@ func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []ui
 `gateway-decision.md` 描述了客户端连接架构(B1 单 WebSocket / 还是 B0 三连接),**那是基础设施层**;
 本文档描述协议语义层 — **乱序问题靠协议规则解决,不靠基础设施**。
 
-无论选 B0 还是 B1,**4 个原则都必须遵守**。
+无论选 B0 还是 B1,**5 个原则都必须遵守**。
 
 ## 10. 历史演化
 
@@ -583,6 +583,29 @@ func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []ui
 - 2026-08-05:修正 §5.3 —— `ts_ms` 是投递游标不是事件时间,只挡旧帧不挡重投;判重必须按业务 ID
 
 ## 12. 权威态刷新的落地现状与缺口(2026-08-05 核查)
+
+### 12.0 哪些状态需要这么做(适用范围判定)
+
+原则 5 不是"所有东西都加轮询"。两问定档:
+
+- **问 1:这份状态,客户端是不是「只能靠 push 才知道」?** → 是 → 必须有权威查询接口。
+- **问 2:漏一帧的后果是「显示旧值」还是「流程卡住」?** → 卡住 → 才需要再加 watchdog。
+
+| 档 | 漏帧后果 | 必须做到 | 现有域 | 现状 |
+|---|---|---|---|---|
+| **A 流程态** | 玩家卡住 / 进不去场景 | 权威查询 + §5.4 五触发点 + **有界 watchdog** | `pandora.match.progress`、`pandora.hub.migrate`(DS 恢复 / 进场链) | 已全套(`MyMatchModel` / `UMyDsRecoveryCoordinator`) |
+| **B 状态 / 列表态** | 只显示旧值,重进界面即自愈 | 权威查询 + 入口点刷新 + resync;**不需要常驻 watchdog** | `pandora.team.update`、`pandora.friend.event`、`pandora.guild.event`、`pandora.player.experience` | 前三个已接 resync;**经验域缺**(§12.4 #1) |
+| **C 事件流** | 少一条消息,不影响状态正确性 | 回源**拉历史**(不是拉快照)+ 按业务 ID 判重 | `pandora.chat.private / .team / .guild / .group` | 客户端尚无消费者(§12.4 #3) |
+
+**A 档是合规项不是选择题**:凡推进玩家进场 / 换场景的状态,`CLAUDE.md §9.19 / §9.20 / §9.23` 明写"任何阶段不允许无人驱动的静默等待",watchdog 必须有。反过来 **B 档不准上常驻轮询**——那违反 `§16.10`(禁止用定时器掩盖时序问题)。
+
+**明确不需要的三类**:
+
+1. **DS ↔ 客户端的战斗内状态**(读条、携带、阶段、血量)。那是另一套规则:`CLAUDE.md §11.7` 复制属性 + OnRep 单通道,UE 在单个 Actor Channel 内保证可靠有序。**不需要 pull,也不准加 pull**。宝箱读条属于这一类,别和本章混起来。
+2. **广播帧**:`pandora.chat.world` 的 `ts_ms=0`,不进游标,本就不参与断点续传。
+3. **本来就每次现拉的界面**:排行榜、商店,以及 `pandora.presence.update`——按 `§9.22` 它就是 presence 投影,定义上"按需查询、不在别处复制",没有"错过推送"的概念。
+
+**一条快速判别**:*打开界面时你会不会重新拉一次?* 会 → 它至少是 B 档,五触发点里"界面进入"已经有了,补齐另外四个即可。不会(常驻 HUD、只靠 push 更新)→ 最危险的形态,经验条就是这种。
 
 ### 12.1 为什么有原则 5:2026-07-20 的真实事故
 

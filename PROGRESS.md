@@ -2251,7 +2251,7 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
 - **起因**:策划一天里绝大多数改动只在客户端仓(改资源 / 重编编辑器 DLL),go 服务一行没动;
   但唯一的入口 `策划一键启动-改资源即时生效.cmd` 每次都要走「等基础设施 healthy → TiDB →
   数据库迁移 → 21 个 go 服务逐个 build/起/端口探活」,这些步骤与改的资源全无关系,纯白等。
-- **落地**:`start.ps1` 新增 `-DsOnly`(仅 `-Mode local`)+ 根目录 `策划一键重启DS-改资源即时生效.cmd`。
+- **落地**:`start.ps1` 新增 `-DsOnly`(仅 `-Mode local`)+ 根目录 `策划一键重启DS-读最新资源.cmd`。
   只做三件事:①重新解析 DS 形态(顺带 `Assert-PandoraEditorModulesMatch` 血统校验,刚重编过
   编辑器 DLL 最容易在这里翻车);②杀掉在跑的本机 DS(editor 形态在**进程启动时**读未 cook 的
   `Content/`,老进程内存里还是旧资源);③重启 `hub_allocator` / `ds_allocator`。
@@ -2269,3 +2269,97 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   → editor 形态与局域网 advertise 均正确继承,随后 `local_hub_ds_started` 拉起新 Hub DS。
 - **已知代价**(文档已写明):本机正在进行的战斗会被中断(战斗 DS 是 `ds_allocator` 子进程);
   改了 go 代码 / 换了 `run/artifacts` 二进制必须回到完整启动。
+
+## 2026-08-05:协议原则 5 落档——推送不承担正确性,权威态必须可查
+
+- **起因**:用户问「刷新状态(比如匹配状态)是不是该客户端主动去拉?后端有些特殊操作可能
+  通知不到客户端」。结论:标准做法不是二选一,而是分工——push 负责变更提示与低延迟,
+  **pull(权威查询 RPC)才是真相源**;客户端不允许存在"只能靠 push 才知道结果"的状态。
+- **落档**:`docs/design/protocol-ordering-rules.md` 补 **原则 5**(+ 5-A 两种 apply 模型、
+  5-B at-least-once 判重)、**§5.4 五个刷新触发点**(界面进入 / push 重连 / 切前台 /
+  `pandora.push.resync` / watchdog)、**§12 落地现状与缺口**(含 §12.0 A/B/C 三档适用判定表)。
+  §7 加 6 条反模式禁令,§8.3 加 5 条 review 清单项。`pandora-arch.md` §11 登记决策行。
+  **原则 1~4 治乱序、原则 5 治丢失,是两种失效模式,做完前者不代表推送可靠。**
+- **顺带修正三处旧内容**:①§5.3 "按 `ts_ms` 去重"只挡旧帧、**挡不住重投**(同一业务事件重投会
+  拿到更大的新游标),判重必须按业务 ID;②文档标题与 §9 的"4 个原则"改为 5 个;
+  ③原则 5 的子编号与既有 §5.1/§5.2 撞号,改为 5-A / 5-B 并同步 4 处引用。
+- **核查推翻了一条旧结论**:UE 侧 `pandora.push.resync` **已经接了**(Match / Team / Friend /
+  Guild / DsRecoveryCoordinator),不是待办;匹配域已是完整参考实现(resync 回源 +
+  `MatchProgressPollTimer` 有界轮询、拿到 `battle_ds_addr` 即停表 + `TeamMatchStandbyTimer`
+  watchdog),新域照抄这三件即可。
+- **剩余缺口(§12.4,均未动代码)**:①`MyPlayerProgressionModel` 只认
+  `pandora.player.experience`、其余 topic 原样忽略 → **没接 resync**,漏帧后等级 / 经验条停在
+  旧值直到下次登录拉快照;②五个触发点未逐域核对(只确证匹配域有有界轮询兜底);
+  ③聊天域客户端尚无 push 消费者,接入时须同时接 resync + `PullHistory` 并按 `message_id` 判重;
+  ④`presence.update` 无消费者、`system.notify` 无 proto 无 producer,接入前不算缺口。
+  以上为对 HEAD 的**静态核查**,未经编译与真机验证(UE 编译归用户,`CLAUDE.md §11.6`)。
+- **待确认**:`CLAUDE.md §11.7` 引用的 `Pandora-Client-SVN/CLAUDE.md`、§16.10 引用的
+  `F:\work\CLAUDE.md` 在当前工作副本中**都不存在**(`Test-Path` 均 False)。客户端侧对应条款
+  因此无处可加;按惯例规则要双仓同步,需要用户确认这两份文件是被移走还是未纳入工作副本。
+
+## 2026-08-05:配置表通用投影查询 `pkg/configtable/query.go`(Claude)
+
+**起因**:「`level_table.gen.go` 该不该加『取全部表 id』『取某主键列全部取值』的接口」。
+结论是**不进生成器模板**——这两件事只依赖「每行都有 uint32 主键」这一条全表共有形状
+(`configtable-gen` 的 `discover.go/buildDef` 强制,§5.6),泛型一次写完即覆盖全部 23 张表、
+加新表零成本;生成逐表副本除了模板变长、每次改动都要全量重生 + 过 `TestGeneratedFilesUpToDate`
+之外没有收益,而且会在第一个消费者出现之前先摊 23 份死代码(§15.2 / §15.3)。**生成器模板
+一个字未改**,`tools/configtable-gen` 全部单测仍绿。
+
+**落码**:新增手写文件 `pkg/configtable/query.go` + `query_test.go`,三个泛型函数——
+`IDs(rows)` 全部主键(加载序)、`Values(rows, get)` 某列投影(加载序、不去重)、
+`DistinctValues(rows, get)` 某列键集合(升序去重,`slices.Sort`+`slices.Compact`)。
+
+**两个刻意的设计取舍(别按「更现代」改回去)**:
+- **不返回 `iter.Seq`**。Go 1.23+ 标准库(`maps.Keys`)确实转向 iterator,但在本项目的快照
+  语义下它更危险:`seq := IDs(tb.Level.All())` 惰性求值,存进字段后每次 range 都**看起来**
+  新鲜,实际永久钉在旧快照上;切片存下来还长得像「一份旧快照」,iterator 长得像「一个查询」。
+- **返回调用方独占的新切片,不返回预计算共享切片**。共享切片只能把只读约定压在注释上,
+  调用方 `sort.Slice(t.IDs())` 就会原地打乱表内部顺序(行切片没人排序,ID 切片很容易)。
+  代价是每次一次分配:最大表 `spawn_point` 402 行(manifest `v20260804002`),全表合计约 900 行,
+  量级微秒,且这些 API 都不在每帧 / 每 tick 路径上——真热路径是 `ByID()` 的 O(1) map 查,本文件
+  完全不碰。**判据:一旦某调用点进了逐帧路径,改成 `new<X>Table` 构建期预计算**,那时零分配
+  才值钱,也才值得承担共享切片的所有权风险。
+
+**热更(§9.15)**:helper 纯读传入的行切片,不碰 `Store`、不缓存。`Store.Load` 是整批新建 +
+`atomic.Pointer` 换指针、旧批次永不原地改,所以结果是「取样那一刻的快照」——不会读到撕裂数据,
+也不会自动跟随热更。调用方纪律不变:每次请求开头取一次 `store.Tables()`,请求内用同一个 `tb`。
+
+**已验证**:`go build ./configtable/...`、`go vet`、`go test ./configtable/...` 全绿;
+`tools/configtable-gen` 全部单测绿(含 `TestGeneratedFilesUpToDate`,证明生成产物未被牵动)。
+**未验证**:`go test -race` 因本机无 gcc 未运行(§16.7 记为阻断项,不计入已验证)。
+
+**同源同步**:mmorpg(`D:\luyuan\mmorpg`)按同结论落了 `go/shared/tablequery`,并顺带修了
+导表器三处问题(bit_index 同目录双 package、TableManager 快照改 `atomic.Pointer`、deploy
+陈旧产物检查),详见该仓 `PROGRESS.md` 2026-08-05 条目;那边的 Python / Jinja 改动本机跑不了
+导表器,已列出 Codex 执行清单。
+
+## 2026-08-05:`-DsOnly` 补「等 DS 真就绪」+ 改名(原名承诺了做不到的"即时")
+
+- **改名**:`策划一键重启DS-改资源即时生效.cmd` → **`策划一键重启DS-读最新资源.cmd`**。
+  原名自相矛盾:这条路恰恰是"必须重启 DS 才生效",叫"即时生效"会让人以为存盘就好。
+  老的启动/停止两个脚本名不动(它们的"改资源即时生效"指的是**免出包**,成立)。
+- **顺手澄清一个术语**:editor 形态的 DS **不是 listen server**。两个 allocator 的 `buildArgs`
+  都无条件拼 `-server`(`local_fleet.go:257` / ds_allocator `local_allocator.go`),NetMode 恒为
+  `NM_DedicatedServer`;策划是另开客户端走 Envoy→login→大厅连过来,两个进程。旁证:这形态
+  **不编 shader**,而 listen server / PIE 必编。准确叫法是 **editor server / 未 cook 形态 DS**。
+- **新增 `Wait-LocalHubDsReady`**:重启完 allocator 后等到 Hub DS 真能进才退出。
+  - 判据 = DS 把 NetDriver 端口绑上(UE 专服在 `LoadMap` 走完后才 `Listen`,绑上 ⇒ 关卡已加载完)。
+    端口**不写死也不读 yaml**,从 DS 自己命令行的 `-port=<N>` 上读(allocator 拼的就是它)。
+  - DS 识别判据与 `run_services.ps1` 的 `Test-IsLocalDsProcess` 逐字同源(进程名 + `-server` +
+    `?game=/Script/Pandora.`),绝不误伤策划手工开的编辑器。
+  - 每轮确认 DS 进程还活着:血统不匹配时 UE 想弹"模块过期"对话框但 headless 弹不出来会直接退,
+    这是本模式最难查的坑,不能干等到超时才说话。
+  - 超时 300s,与 allocator 给 editor 形态放宽的 ready_wait 同源(不另拍数字);**到期不假装成功**,
+    点名 DS 日志目录并让脚本退非零码(§16.10)。窗口绿了 = 能进大厅,这个契约不靠人读滚动输出。
+- **实测(热机)**:allocator 回来 ~10s → DS 进程被拉起 ~18s → 监听 ~44s;二次运行端到端
+  42.7s、rc=0。**关键发现:Hub DS 不需要有人登录就会自己起来** ——
+  `reconcileShardTopology` 挂在 sweep ticker(dev 5s)上,每跳调 `fleet.ListShards`,
+  正好触发 local provider 的 `sync.Once` 懒拉起。所以加载全程在后台并行,等它是划算的。
+- **修正一条昨天的夸大**:`-DsOnly` 省的是 go 侧那 30~60s,DS 自身加载(热机 ~26s /
+  首次进新图更久)省不掉。总时长改善约 1/3,不是"秒重启"。
+- **仍未做(已记录,非本次范围)**:①DS 启动第一步在跑 UnrealBuildTool `-Mode=ValidatePlatforms`
+  (拉 dotnet 做 SDK 平台校验),对 headless DS 无意义,`local_hub.extra_args` 是现成注入口,
+  能不能跳掉**待实测**;②滚动预热双 DS(新 DS 后台加载完再切分片)可把等待压到 ~0,需改
+  `local_fleet.go` 的单实例 `sync.Once`;③先量策划改动构成——若多数是数值,正解是搬进
+  configtable 热更(`ReloadConfigTable` 已可用,不需重启任何东西),而不是继续优化重启速度。
