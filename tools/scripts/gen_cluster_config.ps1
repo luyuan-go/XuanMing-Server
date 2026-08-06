@@ -1072,6 +1072,30 @@ function Assert-NoYamlDsTicketSection {
     }
 }
 
+# ===== match.ds_local_profile 与 DSTicket v2 互斥收口 =====
+# dev 模板给 Windows 本机联调档写死 `ds_local_profile: "local-off-v1"`(签/验都锁 HS256LocalOff)。
+# agones 链路由 Add-YamlDsTicketSection 注入 RS256 私钥,两者**同时出现服务会拒启**
+# (Go 侧 matchmaker/main.go 报 ds_ticket_profile_conflict 后 exit)。注入 v2 的同时必须把本档清空,
+# 否则产物是"半配置"形态,而且生成期一切正常、要到 Pod CrashLoopBackOff 才看得出来。
+# 2026-08-06 实测:matchmaker 与 matchmaker-pve 两个副本全部 CrashLoop,启动卡在 [7/8] rollout 超时。
+function Clear-YamlDsLocalProfile {
+    param([string]$ServiceName, [string]$Text)
+    $pattern = '(?m)^([ \t]*)ds_local_profile:[ \t]*"[^"]+"[ \t]*(?:#.*)?$'
+    $count = ([regex]::Matches($Text, $pattern)).Count
+    if ($count -eq 0) { return $Text }   # 该服务模板没有本地档,无需处理
+    if ($count -ne 1) {
+        throw "[FATAL] $ServiceName 的 ds_local_profile 锚点异常(count=$count),拒绝静默改写。"
+    }
+    return [regex]::Replace($Text, $pattern, '${1}ds_local_profile: ""   # agones 链路由生成器清空(与 ds_ticket v2 互斥)', 1)
+}
+
+function Assert-NoYamlDsLocalProfile {
+    param([string]$ServiceName, [string]$Text)
+    if ([regex]::IsMatch($Text, '(?m)^[ \t]*ds_local_profile:[ \t]*"[^"]+"[ \t]*(?:#.*)?$')) {
+        throw "[FATAL] $ServiceName 的 agones 产物仍带非空 ds_local_profile,与注入的 DSTicket v2 私钥互斥,服务会拒启。"
+    }
+}
+
 function Convert-Secret([string]$ServiceName, [string]$Text) {
     $hasPlayerSection = [regex]::IsMatch($Text, '(?m)^[ ]*jwt:[ \t]*(?:#.*)?\r?$')
     $hasDsSection = [regex]::IsMatch($Text, '(?m)^[ ]*ds_auth:[ \t]*(?:#.*)?\r?$')
@@ -1104,7 +1128,11 @@ function Convert-Secret([string]$ServiceName, [string]$Text) {
         $Text = Set-LoginHubAssignmentBinding $Text ($DsAuthorityModeToInject -eq 'redis')
     }
     if ($DsTicketServiceNames -contains $ServiceName) {
-        if ($AllocatorMode -eq 'agones') { $Text = Add-YamlDsTicketSection $ServiceName $Text }
+        if ($AllocatorMode -eq 'agones') {
+            $Text = Add-YamlDsTicketSection $ServiceName $Text
+            # 注入 v2 私钥的同时清空互斥的本机联调档,否则服务启动即 ds_ticket_profile_conflict 退出。
+            $Text = Clear-YamlDsLocalProfile $ServiceName $Text
+        }
         else { Assert-NoYamlDsTicketSection $ServiceName $Text }
     }
     foreach ($binding in @($PlacementSecretBindings | Where-Object Service -CEQ $ServiceName)) {
@@ -1693,7 +1721,10 @@ function Assert-GeneratedSet {
             Assert-LoginHubAssignmentBinding $yaml ($DsAuthorityModeToInject -eq 'redis')
         }
         if ($DsTicketServiceNames -contains $svc.Name) {
-            if ($AllocatorMode -eq 'agones') { Assert-YamlDsTicketSection $svc.Name $yaml }
+            if ($AllocatorMode -eq 'agones') {
+                Assert-YamlDsTicketSection $svc.Name $yaml
+                Assert-NoYamlDsLocalProfile $svc.Name $yaml
+            }
             else { Assert-NoYamlDsTicketSection $svc.Name $yaml }
         }
         foreach ($binding in @($PlacementSecretBindings | Where-Object Service -CEQ $svc.Name)) {
@@ -1996,6 +2027,15 @@ try {
             throw "[FATAL] $($s.Name).yaml 集群产物仍含宿主相对路径 ../../../configtable/dist。" +
                   "该服务的 dev 模板配了 config_table,但未登记进 Set-ServiceClusterConfigTableDir 的服务白名单;" +
                   "请把 '$($s.Name)' 加进该白名单,并确认 deploy/k8s/services/services.yaml 里它的 Deployment 已挂载 pandora-configtable。"
+        }
+        # 机械闸二:agones 产物里「非空 ds_local_profile」与「DSTicket v2 私钥」不得共存。
+        # 上面的 Clear/Assert 只覆盖 $DsTicketServiceNames 名单内的服务;这条兜住名单外的服务
+        # 将来也长出 ds_local_profile 的情况。同样在写盘前变成生成期错误,而不是 Pod CrashLoop。
+        if ($AllocatorMode -eq 'agones' -and
+            ($out -match '(?m)^[ \t]*ds_local_profile:[ \t]*"[^"]+"') -and
+            $out.Contains('private_key_file: "/run/secrets/pandora-dsticket/private.pem"')) {
+            throw "[FATAL] $($s.Name).yaml 同时带非空 match.ds_local_profile 与 ds_ticket.private_key_file,两者互斥,服务启动会 ds_ticket_profile_conflict 退出。" +
+                  "若该服务确需签票,请把它登记进 `$DsTicketServiceNames(生成器会自动清空本地档);否则应从 dev 模板移除 ds_local_profile。"
         }
         $dst = Join-Path $stageDir "$($s.Name).yaml"
         [System.IO.File]::WriteAllText($dst, $out, (New-Object System.Text.UTF8Encoding($false)))
