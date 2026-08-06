@@ -37,7 +37,9 @@ type HubService struct {
 	// localAdmission:mode=local(local-off-v1)专用准入通道。仅 main 在 case conf.ModeLocal
 	// 且 local-off-v1 profile 校验通过后置 true;与 modelBAuthority 互斥(agones 恒 false)。
 	// 置 true 后 AcknowledgeAdmission 走 uc.AcknowledgeLocalAdmission(归属记录复核 + 与
-	// Model B 同一个 owner Admit 完成点),否则本机 DS 会在 Admission ACK 上被拒并踢玩家。
+	// Model B 同一个 owner Admit 完成点),否则本机 DS 会在 Admission ACK 上被拒并踢玩家;
+	// AcknowledgeDeparture 同样改走 uc.AcknowledgeLocalDeparture —— 进场与离场必须成对,
+	// 只补一半的话离场 ACK 恒 INVALID_ARG,DS 的 Departure 队列每秒重试且永不出队。
 	localAdmission bool
 }
 
@@ -232,6 +234,20 @@ func (s *HubService) AcknowledgeAdmission(ctx context.Context, req *hubv1.Acknow
 // AcknowledgeDeparture exact 删除当前 admission owner；Conflict 返回 OK+departed=false，
 // 让旧连接停止重试且不影响已接管的新连接。
 func (s *HubService) AcknowledgeDeparture(ctx context.Context, req *hubv1.AcknowledgeDepartureRequest) (*hubv1.AcknowledgeDepartureResponse, error) {
+	// local-off-v1:与上面 AcknowledgeAdmission 同源的 legacy 离场通道。走下面 Model B 分支
+	// 只会恒返回 INVALID_ARG(与请求内容无关),而 DS 侧 Departure 队列只认 code=0 才出队,
+	// 结果是每秒一次的永久重试刷屏 + 队列项永不释放(2026-08-06 实测)。
+	if !s.modelBAuthority && s.localAdmission {
+		if req.GetPlayerId() == 0 || req.GetAssignmentId() == "" || req.GetHubPodName() == "" {
+			return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+		}
+		result, err := s.uc.AcknowledgeLocalDeparture(ctx, req.GetPlayerId(),
+			req.GetAssignmentId(), req.GetHubPodName())
+		if err != nil {
+			return &hubv1.AcknowledgeDepartureResponse{Code: toProtoCode(err)}, nil
+		}
+		return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_OK, Departed: result.Departed}, nil
+	}
 	if !s.modelBAuthority || req.GetPlayerId() == 0 || req.GetAssignmentId() == "" ||
 		req.GetHubPodName() == "" || req.GetAdmissionId() == "" || req.GetAdmissionSeq() == 0 {
 		return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil

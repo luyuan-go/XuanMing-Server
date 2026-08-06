@@ -1726,6 +1726,44 @@ func (u *HubUsecase) AcknowledgeLocalAdmission(ctx context.Context, playerID uin
 	return &AcknowledgeAdmissionResult{Admitted: true}, nil
 }
 
+// AcknowledgeLocalDeparture 是 mode=local(legacy 权威面)下的离场确认点。
+//
+// **为什么必须单开一条路径**:与 AcknowledgeLocalAdmission 完全同源 —— local-off-v1 没有
+// authRepo,走下面那条 AcknowledgeDeparture 第一道门就撞 "hub departure requires model B
+// authority"。而 DS 侧 UPandoraDSBackendSubsystem::ShouldCompleteQueuedHubDeparture 只认
+// 传输 + gRPC + 业务码三层全 OK(Result.IsFullySucceeded()),拿不到 code=0 就按
+// HubDepartureRetryIntervalSeconds=1s 周期无限重试:DS 日志被每秒一条
+// "DS call failed: .../AcknowledgeDeparture code=4" 灌爆,PendingHubDepartures 队列项
+// 也永不出队(2026-08-06 mode=local 实测;08-04 只补了 Admission 半边,离场被落下)。
+//
+// **本路径没有可删对象**:Model B 的 AcknowledgeDeparture 删的是 Redis 授权面(authRepo)
+// 里的 connected ownership 记录,并不碰 §9.22 owner 权威;local 下 authRepo=nil,那条记录
+// 压根不存在。玩家在线态由 player_locator 的 30s TTL 自然收敛,大厅归属由 Release/Transfer
+// 显式替换。因此这里只做"确认收到、让 DS 停止重试",返回 Departed=true 表达幂等语义:
+// 该 exact identity 的 connected owner 此刻确实不存在。
+//
+// **刻意不复核归属三元组**(与 AcknowledgeLocalAdmission 相反):准入是开门,归属过期必须
+// fail-closed 拒(否则一人两 DS);离场是关门,没有可授权的对象。且玩家离场最常见的原因
+// 就是归属已被改写(进 Battle / 顶号 / 切线),此时复核必然失败 → 返回非 OK → DS 又回到
+// 每秒重试,正好把本函数要修的 bug 原样重建。
+//
+// 调用方 service 层已按 mode=local 硬门控;这里再自查一次 authRepo,双保险。
+func (u *HubUsecase) AcknowledgeLocalDeparture(ctx context.Context, playerID uint64,
+	assignmentID, pod string) (*AcknowledgeDepartureResult, error) {
+	if err := u.requireWriter(); err != nil {
+		return nil, err
+	}
+	if u.authRepo != nil {
+		// 装了 Redis 授权面还走 legacy 离场 = 绕过 exact admission 仲裁,fail-closed。
+		return nil, errcode.New(errcode.ErrUnauthorized,
+			"local hub departure is rejected while model B authority is configured")
+	}
+	if playerID == 0 || assignmentID == "" || pod == "" {
+		return nil, errcode.New(errcode.ErrInvalidArg, "incomplete local hub departure identity")
+	}
+	return &AcknowledgeDepartureResult{Departed: true}, nil
+}
+
 // AcknowledgeDeparture exact 删除当前 admission owner；Conflict 由旧连接晚到 Logout 触发。
 func (u *HubUsecase) AcknowledgeDeparture(ctx context.Context, playerID uint64, assignmentID, pod,
 	admissionID string, admissionSeq uint64, cred *HubCredential) (*AcknowledgeDepartureResult, error) {

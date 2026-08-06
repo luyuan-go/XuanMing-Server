@@ -119,3 +119,86 @@ func TestModelBAuthorityNeverTakesLocalAdmissionPath(t *testing.T) {
 		t.Fatalf("model B must stay fail-closed: code=%v admitted=%v, want ERR_UNAUTHORIZED", resp.GetCode(), resp.GetAdmitted())
 	}
 }
+
+// localDepartureRequest 是 DS 真实发出的离场 ACK 形状:QueueHubDeparture 在
+// admission_id 为空或 admission_seq=0 时压根不入队,所以线上到达的请求五元组必然齐备。
+func localDepartureRequest() *hubv1.AcknowledgeDepartureRequest {
+	return &hubv1.AcknowledgeDepartureRequest{
+		PlayerId: 42, AssignmentId: "assignment-local-1", HubPodName: "pandora-hub-local-abc12345",
+		AdmissionId: "00000000-0000-4000-8000-000000000001", AdmissionSeq: 1,
+	}
+}
+
+// TestLocalDepartureReturnsOKAndDeparted 锁住本次修复的正向行为:mode=local 下 DS 的
+// Departure ACK 同样拿不出 Model B 凭据,必须仍拿到 OK+Departed=true。回归前这里**与请求
+// 内容无关地**恒返回 ERR_INVALID_ARG,而 DS 侧 ShouldCompleteQueuedHubDeparture 只认
+// code=0 才出队,于是按 1s 周期永久重发:DS 日志每秒一条 "DS call failed:
+// .../AcknowledgeDeparture code=4",PendingHubDepartures 条目永不释放(2026-08-06 实测)。
+func TestLocalDepartureReturnsOKAndDeparted(t *testing.T) {
+	svc := newLocalAdmissionService(t)
+	resp, err := svc.AcknowledgeDeparture(context.Background(), localDepartureRequest())
+	if err != nil {
+		t.Fatalf("transport error: %v", err)
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK || !resp.GetDeparted() {
+		t.Fatalf("local departure: code=%v departed=%v, want OK/true", resp.GetCode(), resp.GetDeparted())
+	}
+}
+
+// TestLocalDepartureStaleAssignmentStillCompletes 钉死与 Admission 刻意相反的一条:离场
+// **不得**复核归属三元组。玩家离场最常见的原因就是归属已被改写(进 Battle / 顶号 / 切线),
+// 若照搬 TestLocalAdmissionRejectsStaleAssignment 的 fail-closed,这里必然返回非 OK,
+// DS 就又回到每秒重试 —— 正好把本次修的 bug 原样重建。准入是开门(归属过期必须拒,否则
+// 一人两 DS),离场是关门,没有可授权的对象。
+func TestLocalDepartureStaleAssignmentStillCompletes(t *testing.T) {
+	svc := newLocalAdmissionService(t)
+	req := localDepartureRequest()
+	req.HubPodName = "pandora-hub-local-OTHER" // 归属已指向别处
+	resp, err := svc.AcknowledgeDeparture(context.Background(), req)
+	if err != nil {
+		t.Fatalf("transport error: %v", err)
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK || !resp.GetDeparted() {
+		t.Fatalf("stale assignment departure: code=%v departed=%v, want OK/true(否则 DS 永久重试)",
+			resp.GetCode(), resp.GetDeparted())
+	}
+}
+
+// TestLocalDepartureRejectsIncompleteIdentity 身份不全仍须拒:真实 DS 不可能发出这种请求
+// (QueueHubDeparture 有同样的门),留着是防止有人把本分支放宽成"无脑回 OK"。
+func TestLocalDepartureRejectsIncompleteIdentity(t *testing.T) {
+	svc := newLocalAdmissionService(t)
+	for _, mutate := range []func(*hubv1.AcknowledgeDepartureRequest){
+		func(r *hubv1.AcknowledgeDepartureRequest) { r.PlayerId = 0 },
+		func(r *hubv1.AcknowledgeDepartureRequest) { r.AssignmentId = "" },
+		func(r *hubv1.AcknowledgeDepartureRequest) { r.HubPodName = "" },
+	} {
+		req := localDepartureRequest()
+		mutate(req)
+		resp, err := svc.AcknowledgeDeparture(context.Background(), req)
+		if err != nil {
+			t.Fatalf("transport error: %v", err)
+		}
+		if resp.GetCode() != commonv1.ErrCode_ERR_INVALID_ARG || resp.GetDeparted() {
+			t.Fatalf("incomplete identity %+v: code=%v departed=%v, want INVALID_ARG",
+				req, resp.GetCode(), resp.GetDeparted())
+		}
+	}
+}
+
+// TestModelBAuthorityNeverTakesLocalDeparturePath 与 Admission 侧同款**线上 k8s 隔离护栏**:
+// 即使 localAdmission 被误置为 true,只要 modelBAuthority 开着就必须走原 Model B 分支,
+// 无 DS 回调凭据即 ERR_UNAUTHORIZED,绝不能被 legacy 通道降级成"无脑放行"。
+func TestModelBAuthorityNeverTakesLocalDeparturePath(t *testing.T) {
+	svc := NewHubService(nil) // usecase 为 nil:一旦误走 local 分支必 panic,是比断言更硬的证据
+	svc.SetModelBAuthority(true)
+	svc.SetLocalAdmission(true)
+	resp, err := svc.AcknowledgeDeparture(context.Background(), localDepartureRequest())
+	if err != nil {
+		t.Fatalf("transport error: %v", err)
+	}
+	if resp.GetCode() != commonv1.ErrCode_ERR_UNAUTHORIZED || resp.GetDeparted() {
+		t.Fatalf("model B must stay fail-closed: code=%v departed=%v, want ERR_UNAUTHORIZED",
+			resp.GetCode(), resp.GetDeparted())
+	}
+}
