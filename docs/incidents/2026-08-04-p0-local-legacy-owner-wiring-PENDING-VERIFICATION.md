@@ -39,7 +39,20 @@
 
 | ID | 项目 | 验证步骤 | 通过判据 | 验证结果 |
 |---|---|---|---|---|
-| V-4 | ⑦-B `ReleaseBattleExpected` 释放 owner | 真集群跑完一局正常结算 | ①`battle_terminal_release_phase1_completed` 之后出现 `owner_release_abandoned_weak released=N`；②该局玩家 `QueryOwner` 无归属；③玩家能正常回 Hub | **未验证（仅代码级证据）** |
+| V-4 | ⑦-B `ReleaseBattleExpected` 释放 owner | 真集群跑完一局正常结算 | ①`battle_terminal_release_phase1_completed` 之后出现 `owner_release_abandoned_weak`；②该局玩家最终**不再指向已销毁的 battle 实例**（`QueryOwner` 无归属，或已推进到新的 Hub 归属）；③玩家能正常回 Hub。**判据①不得写成 `released=N`（N>0）** —— 见下方注 | **部分已验证（2026-08-06 真集群）**：①出现，②③见注 |
+
+> **V-4 判据勘误（2026-08-06 真集群实测）**
+>
+> 2026-08-06T06:10:35Z 实测日志：
+> `owner_release_abandoned_weak players=1 released=0 skipped_not_self=1 pod=pandora-battle-stable-4mr5g-7qdg4`
+>
+> `released=0` 在这里**是预期正确行为，不是失败**：玩家 06:10:19 主动退出副本时，owner 记录已被推进到新的 Hub 归属（`PENDING`），因此已不再指向本 battle 实例，`ownerReleaseAbandonedPlayersWeak` 的「② exact 身份门」（`rec.PodName != selfPod`）理应跳过——那道门正是用来防止误删已迁走玩家的活归属的（`services/battle/ds_allocator/internal/biz/owner_authority.go`）。
+>
+> 原判据把「函数被调用且释放了 ≥1 条」当成通过条件，等于要求 owner 记录**必须**还停在旧实例上，与 ⑦-B 自身的安全边界矛盾：正常退出/正常迁移越是工作良好，`released` 越应该是 0。真正要断言的是**结果**（玩家不再被钉在已销毁实例上），不是**簿记数字**（释放了几条）——与 §3 「绿色测试只证明函数行为正确，没证明它会被调用」是同一类错误的镜像：这次是「数字对不上就判失败」，而数字本就该为 0。
+>
+> 仍需真集群补验的是 `released>0` 的那条路径：**判弃**（DS 崩溃 / 心跳超时，玩家没有主动迁走，记录仍指向旧实例）时是否确实释放。正常结算/正常退出这条路验不到它。
+
+
 | V-5 | ⑦-B 不破坏 outbox 幂等 | 结算 outbox 重放（ACK 丢失重试） | 重放不产生二次 GameServer 删除；`ReleaseBattleExpected` 返回值不因 owner 抖动改变 | **未验证** |
 | V-6 | 前六处修复对 Agones 面零影响 | 集群回归 | Hub/Battle 分配、进场、心跳、结算全链与修复前行为一致 | **未验证**（隔离性目前仅由类型断言 + 静态审计保证） |
 | V-7 | ⑦/⑦-B 在 Agones + legacy 灰度姿态下的行为 | 灰度部署跑一局 | owner 被释放且不误伤已迁走玩家 | **未验证** |
