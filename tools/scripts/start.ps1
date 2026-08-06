@@ -4168,6 +4168,99 @@ function Test-LocalTcpPort([int]$Port) {
     }
 }
 
+# Get-LocalDsChildProcess:找出某个 allocator 直接拉起的那个本机 DS。
+# 判据与 run_services.ps1 的 Test-IsLocalDsProcess 逐字同源(进程名 + `-server` + 关卡 URL),
+# 保证绝不把策划自己手工开着的 UnrealEditor 认成 DS。
+function Get-LocalDsChildProcess([int]$OwnerPid) {
+    $all = @()
+    try { $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue) } catch { return $null }
+    foreach ($p in $all) {
+        if ([int]$p.ParentProcessId -ne $OwnerPid) { continue }
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($p.Name)
+        if (@('UnrealEditor', 'PandoraServer') -notcontains $name) { continue }
+        $cl = $p.CommandLine
+        if (-not $cl) { continue }
+        if (($cl -match '(?i)(^|\s)-server(\s|$)') -and ($cl -match '(?i)\?game=/Script/Pandora\.')) { return $p }
+    }
+    return $null
+}
+
+# Wait-LocalHubDsReady:等常驻 Hub DS 真正能进,而不是重启完 allocator 就宣布"好了"。
+#
+# 为什么等得起:Hub DS **不需要有人登录**就会自己起来 —— reconcileShardTopology 挂在
+# hub_allocator 的 sweep ticker 上(dev 配置 5s 一跳),每跳调一次 fleet.ListShards,
+# 正好触发 local provider 的 sync.Once 懒拉起。实测:allocator 起来后约 8s DS 进程出现,
+# 再约 26s 绑上端口。加载本来就在后台跑,脚本干脆等到能进为止,省得策划对着一个
+# "成功"的黑窗口猜还要等多久 —— 这正是加这一步的全部意义。
+#
+# 就绪判据取「DS 把 NetDriver 端口绑上」:UE 专服是在 LoadMap 走完之后才 Listen,
+# 端口绑上 ⇒ 关卡已经加载完。端口号**不写死也不读 yaml**,从 DS 自己的命令行 `-port=<N>`
+# 上读(allocator 拼的就是它),配置改了这里不会漂。
+#
+# 超时 300s 与 allocator 给 editor 形态放宽的 ready_wait 同源,不另拍一个数字。
+# 到期不假设成功:点名 DS 日志位置并返回失败(§16.10 —— 到期后给出出口,不是当成功往下走)。
+function Wait-LocalHubDsReady {
+    param([int]$SpawnTimeoutSeconds = 90, [int]$ReadyTimeoutSeconds = 300)
+
+    $hub = @(Get-Process -Name 'hub_allocator' -ErrorAction SilentlyContinue)[0]
+    if (-not $hub) {
+        Write-Warn "hub_allocator 不在运行,没法等 Hub DS。"
+        return $false
+    }
+
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    Write-Info "等 Hub DS 自己起来(allocator 每 5s 对账一次分片拓扑会自动拉起,不需要有人登录)..."
+
+    $ds = $null
+    while ($sw.Elapsed.TotalSeconds -lt $SpawnTimeoutSeconds) {
+        $ds = Get-LocalDsChildProcess $hub.Id
+        if ($ds) { break }
+        if ($hub.HasExited) {
+            Write-Err "hub_allocator 自己退出了。看日志:run/dev/logs/hub_allocator.err.log"
+            return $false
+        }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $ds) {
+        Write-Warn "${SpawnTimeoutSeconds}s 内 hub_allocator 没拉起 Hub DS。"
+        Write-Info "看日志:run/dev/logs/hub_allocator.err.log(搜 local_hub_ds_start_failed)"
+        return $false
+    }
+    Write-Ok ("Hub DS 进程已拉起(PID {0},+{1:n0}s)。" -f $ds.ProcessId, $sw.Elapsed.TotalSeconds)
+
+    $port = 0
+    if ($ds.CommandLine -match '(?i)-port=(\d+)') { $port = [int]$Matches[1] }
+    if ($port -le 0) {
+        Write-Warn "没能从 DS 命令行读出 -port=,跳过就绪等待(进程已起,加载完就能进)。"
+        return $true
+    }
+
+    Write-Info "等它加载完关卡并监听 UDP :$port(editor 形态读未 cook 的散装资产,慢;首次进新图还要现场构 DDC,更慢)..."
+    $lastTick = 0
+    while ($sw.Elapsed.TotalSeconds -lt $ReadyTimeoutSeconds) {
+        if (Get-NetUDPEndpoint -LocalPort $port -ErrorAction SilentlyContinue) {
+            Write-Ok ("Hub DS 已监听 UDP :{0}(从重启算起 {1:n0}s)—— 现在可以进大厅了。" -f $port, $sw.Elapsed.TotalSeconds)
+            return $true
+        }
+        # DS 中途死掉是这个模式最难查的坑(血统不匹配时 UE 想弹"模块过期"对话框,headless 弹不出来
+        # 直接退)。每轮都确认它还活着,别干等到超时才说话。
+        if (-not (Get-Process -Id $ds.ProcessId -ErrorAction SilentlyContinue)) {
+            Write-Err "Hub DS 进程中途退出了(加载没走完)。"
+            Write-Info "看它自己的日志:services/battle/hub_allocator/run/dev/logs/ds/"
+            return $false
+        }
+        $elapsed = [int]$sw.Elapsed.TotalSeconds
+        if ($elapsed - $lastTick -ge 15) {
+            $lastTick = $elapsed
+            Write-Info "  ... 还在加载(已等 ${elapsed}s)"
+        }
+        Start-Sleep -Seconds 2
+    }
+    Write-Warn ("等了 {0}s 仍未监听 UDP :{1};DS 进程还活着(PID {2}),多半是首次进新图在构 DDC。" -f $ReadyTimeoutSeconds, $port, $ds.ProcessId)
+    Write-Info "可以直接去客户端试进大厅;卡住就看 DS 日志:services/battle/hub_allocator/run/dev/logs/ds/"
+    return $false
+}
+
 function Invoke-LocalDsOnly {
     if ($Mode -ne 'local') { throw "-DsOnly 只支持 -Mode local(本机 DS 由宿主 allocator exec 拉起);当前 -Mode $Mode。" }
     if ($Down -or $Resume -or $Reset -or $BuildOnly) { throw "-DsOnly 不能与 -Down / -Resume / -Reset / -BuildOnly 同用。" }
@@ -4228,8 +4321,18 @@ function Invoke-LocalDsOnly {
     }
 
     Write-Host ""
-    Write-Ok "本机 DS 已重启。客户端重新登录(或等它自己恢复)进大厅,看到的就是最新资源。"
-    Write-Info "Hub DS 是首次进大厅时才懒拉起的;editor 形态启动慢,首次进图等一两分钟属正常。"
+    # 等到真能进为止。不等的话这里就是一句"成功"+ 一个还要加载几十秒的 DS,
+    # 策划只能靠反复试登录来猜什么时候好了。
+    $ready = Wait-LocalHubDsReady
+
+    Write-Host ""
+    if ($ready) {
+        Write-Ok "搞定。客户端重新登录进大厅,看到的就是你刚存盘的资源。"
+    } else {
+        $script:DsOnlyExitCode = 1
+        Write-Warn "两个 allocator 已重启,但没能确认 Hub DS 就绪(原因见上)。"
+        Write-Info "可以直接去客户端试;真进不去就按上面点名的日志排查。"
+    }
     Write-Info "改了 go 服务代码 / 换了 run/artifacts 里的二进制 → 请改走完整启动(策划一键启动-改资源即时生效.cmd)。"
     return $true
 }
@@ -7129,7 +7232,10 @@ if ($Status) { Show-Status; exit 0 }
 # 那一整套前置(docker 探活 / k8s 互斥停机 / 8443-8444 端口空闲断言)要么白跑要么语义不对
 # (端口正被自己的 Envoy 占着)。后端没在跑时 Invoke-LocalDsOnly 返回 $false,直接落回下面
 # 的完整启动流程,前置检查一步都不少。
-if ($DsOnly -and (Invoke-LocalDsOnly)) { exit 0 }
+# 返回值只表示"这条快速通道处理了没有";处理了但 Hub DS 没等到就绪时,由 $DsOnlyExitCode
+# 带出非零码 —— 双击窗口绿了就等于能进大厅,这个契约不能靠人去读滚动输出。
+$script:DsOnlyExitCode = 0
+if ($DsOnly -and (Invoke-LocalDsOnly)) { exit $script:DsOnlyExitCode }
 
 $prereqOk = Resolve-Prerequisites $Mode
 
