@@ -17,7 +17,16 @@ rem    (docker driver) + Agones: infra + 21 service Deployments, with the
 rem    Battle DS running on a real Linux Agones Fleet.
 rem
 rem  Wraps:
-rem    tools/scripts/start.ps1 -Mode k8s -BuildMode host
+rem    tools/scripts/start.ps1 -Mode k8s -BuildMode host -GenTables
+rem
+rem  About -GenTables: the config tables are NOT baked into the images. The k8s
+rem  path builds the pandora-configtable ConfigMap from the ON-DISK
+rem  configtable/dist, so that directory is what the services actually read.
+rem  Regenerating it here means a planner table edit reaches the intranet
+rem  cluster without anyone remembering a separate export step.
+rem  If this machine has no client SVN checkout, the export is skipped and the
+rem  git-tracked configtable/dist is used as-is - a missing source table must
+rem  never be the reason a shared server refuses to start.
 rem
 rem  Read deploy\k8s\agones\README.md before the first run on a new machine:
 rem  it covers the cluster topology defaults, the PANDORA_MINIKUBE_* overrides,
@@ -44,7 +53,7 @@ if errorlevel 1 (
 )
 set "PS=pwsh"
 
-%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode k8s -BuildMode host
+%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode k8s -BuildMode host -GenTables
 set "RC=%ERRORLEVEL%"
 
 rem Keep the window open only for interactive (double-click) runs. The web admin
