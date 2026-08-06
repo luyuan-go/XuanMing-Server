@@ -59,6 +59,63 @@ docker driver 下拉起容器版 UDP 回程中继 → 打印端到端验收清�
 
 ---
 
+## 🚀 一键入口(内网服务器一键启动-k8s集群.cmd / intranet one-click k8s entry)
+
+> 这段原本写在仓库根目录 `内网服务器一键启动-k8s集群.cmd` 的注释里。2026-08-06 起那个 `.cmd`
+> 必须是**纯 ASCII**(批处理里带中文 + 控制台代码页在运行中被切成 UTF-8,会让 cmd.exe 的文件
+> 偏移错位、开始执行注释碎片),所以中文说明搬到这里,`.cmd` 只留英文指路。
+
+双击 `内网服务器一键启动-k8s集群.cmd` = `tools/scripts/start.ps1 -Mode k8s -BuildMode host`:
+在本机通过 minikube(docker driver 起节点) + Agones 启动真实 Kubernetes 开发集群,基础设施 +
+21 个业务 Deployment 运行,Battle DS 走真实 Linux Agones Fleet。停止双击
+`内网服务器一键停止-k8s集群.cmd`(= `-Mode k8s -Down`,只删业务与基础设施,minikube 集群本身
+保持运行,持久卷保留;要彻底停集群人工执行 `minikube stop`)。
+
+**首次在一台新机器上创建集群时的拓扑**(2026-07-28 起已是脚本默认值,不需要导任何环境变量;
+已存在的 profile 不受影响,拓扑只在创建时生效):
+
+- 容器运行时 containerd(与线上同构;节点内不再用 Docker 跑 Pod)
+- CNI calico(可强制 NetworkPolicy)、K8s 版本钉 v1.35.1
+- 节点底图走阿里云镜像(墙内可达;gcr.io 会卡在 Pulling base image)
+- 发布宿主 `0.0.0.0:8443` → 节点 NodePort 31443,即集群内边缘 Envoy 的客户端入口(本机与局域网
+  都能连,不再需要 21 条 port-forward)。客户端后端地址填 `<本机局域网IP>:8443`;本机自测填
+  `127.0.0.1:8443` 也行。
+- 节点规格随本机自适应:内存 `min(宿主上限x0.85, 40G)`、CPU `min(逻辑核, 16)`。
+  **内存低于 16G 会直接报错退出**——battle DS 单副本 limits 就是 14Gi,内存不够时 DS 永远调度
+  不上,与其卡到超时不如立刻讲清楚。
+- 逐项覆盖用 `PANDORA_MINIKUBE_DRIVER/CPUS/MEMORY/RUNTIME/CNI/K8S_VERSION/BASE_IMAGE/`
+  `IMAGE_REPOSITORY/PORTS`(创建后再改需 `-Reset` 重建才生效)。
+- 只想本机可连时设 `PANDORA_MINIKUBE_PORTS=127.0.0.1:8443:31443` 再重建集群。老集群(建于默认
+  还是回环的年代)局域网连不进来,启动时脚本会点名提示。
+
+**与 local 模式互斥**:两者都占宿主 8443。本入口会先停掉 local 模式的服务;反过来启动 local 时
+也会自动 `minikube stop` 停掉本集群(数据保留,下次自动起回)。
+
+**前置要求**:Go / Docker Desktop / kubectl / minikube / helm 已安装且可用;客户端面 TLS 证书
+(`deploy/envoy/cert.pem`+`key.pem`)不入库,缺失时脚本会调 `tools/scripts/envoy_cert.ps1` 自动
+重签,该步骤需要 mkcert 可用。本入口默认不安装工具,避免未经授权修改本机环境;确需安装缺失
+CLI 时人工确认后在 PowerShell 7 中显式运行:
+
+```powershell
+pwsh tools/scripts/start.ps1 -Mode k8s -BuildMode host -Install
+```
+
+**镜像构建**使用宿主 Go 交叉编译 linux/amd64 静态二进制,再封装成 `pandora/<svc>:dev` scratch
+镜像并加载到 minikube。该路径不是离线 `docker load` 导入包路径。
+
+**UE 战斗/大厅 DS(Linux)镜像**会自动构建:脚本优先从**制品库**取 UE Linux 打包产物
+(`PANDORA_ARTIFACT_ROOT`,默认 `F:\work\artifacts`),没有时才回退到**同级目录**的
+`Packages\Server_Linux_Development\LinuxServer`(不写死路径),同步进 `deploy/ds/stage` 后构建
+`pandora/battle-ds:dev` / `pandora/hub-ds:dev` 到 minikube。DS 起来后看 UE 日志:
+`kubectl get gameservers`、`kubectl logs -f <pod>`。想手动指定 DS 包路径,先设环境变量
+`PANDORA_DS_LINUX_PKG` 再双击本入口。
+
+**注意**:minikube docker driver 下 Pod IP 默认不能被其它内网机器直接访问;本入口用于在这台机器
+上验证真实 k8s + Agones DS 链路。面向内网 / 生产客户端的公开集群仍走 online 模式,由人负责 k8s
+侧操作。
+
+---
+
 ## 🔁 电脑重启后 / 一键重置
 
 **电脑重启后**(minikube 容器被停、宿主 go 进程/UDP 中继都没了,但集群状态和已 load 的镜像都还在磁盘上):
