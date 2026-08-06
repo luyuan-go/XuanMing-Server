@@ -1,5 +1,8 @@
 @echo off
-chcp 65001 >nul
+rem !! DO NOT add `chcp` to this file !! It contains non-ASCII (Chinese) rem
+rem lines; running chcp mid-file shifts cmd.exe's byte offset into the batch and
+rem makes it execute comment fragments. start.ps1 already sets the console to
+rem UTF-8 itself. Keep every `echo` here ASCII-only.
 rem ============================================================
 rem  Pandora backend - planner one-click start with LIVE ASSET DS
 rem  (double-click to run)
@@ -37,11 +40,13 @@ rem  both test !IsRunningDedicatedServer). Shader compiling is what a listen
 rem  server or PIE would do, because those actually render.
 rem
 rem  Daily loop: once the backend is up, you do NOT need this script again for
-rem  an asset-only change. Double-click 策划一键重启DS-读最新资源.cmd - it
-rem  restarts just the DS and leaves infra + the 21 Go services untouched, which
-rem  is much faster. Come back here when the Go backend itself changed.
+rem  an asset-only change. Double-click the planner one-click RESTART-DS entry
+rem  instead - it restarts just the DS and leaves infra + the 21 Go services
+rem  untouched, which is much faster. Come back here when the Go backend itself
+rem  changed.
 rem
-rem  Stop: 策划一键停止.cmd  (or: pwsh tools\scripts\start.ps1 -Mode local -Down)
+rem  Stop: the planner one-click STOP (live-asset) entry
+rem        (or: pwsh tools\scripts\start.ps1 -Mode local -Down)
 rem ============================================================
 setlocal
 cd /d "%~dp0"

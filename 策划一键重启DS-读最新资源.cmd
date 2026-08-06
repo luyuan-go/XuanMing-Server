@@ -1,5 +1,8 @@
 @echo off
-chcp 65001 >nul
+rem !! DO NOT add `chcp` to this file !! It contains non-ASCII (Chinese) rem
+rem lines; running chcp mid-file shifts cmd.exe's byte offset into the batch and
+rem makes it execute comment fragments. start.ps1 already sets the console to
+rem UTF-8 itself. Keep every `echo` here ASCII-only.
 rem ============================================================
 rem  Pandora backend - planner one-click: restart the local editor-form DS
 rem  so it re-reads your latest saved assets. (double-click to run)
@@ -49,8 +52,8 @@ rem  If the backend is NOT running yet, this script notices and automatically
 rem  falls back to the full start, so you can always double-click this one.
 rem
 rem  Go backend changed / new run\artifacts binaries?
-rem    -> use 策划一键启动-改资源即时生效.cmd instead (full start).
-rem  Stop everything: 策划一键停止-改资源即时生效.cmd
+rem    -> use the planner one-click START (live-asset) entry instead (full start).
+rem  Stop everything: the planner one-click STOP (live-asset) entry
 rem ============================================================
 setlocal
 cd /d "%~dp0"

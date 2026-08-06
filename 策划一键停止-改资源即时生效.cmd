@@ -1,16 +1,19 @@
 @echo off
-chcp 65001 >nul
+rem !! DO NOT add `chcp` to this file !! It contains non-ASCII (Chinese) rem
+rem lines; running chcp mid-file shifts cmd.exe's byte offset into the batch and
+rem makes it execute comment fragments. start.ps1 already sets the console to
+rem UTF-8 itself. Keep every `echo` here ASCII-only.
 rem ============================================================
 rem  Pandora backend - planner one-click STOP for the live-asset stack
 rem  (double-click to run)
 rem ------------------------------------------------------------
-rem  Pairs with 策划一键启动-改资源即时生效.cmd:
+rem  Pairs with the planner one-click START (live-asset) entry:
 rem    start.ps1 -Mode local -Down
 rem  Stops the 21 host Go services and the Docker infra started by local mode.
 rem  Data volumes (MySQL/Redis etc.) are kept, so your data survives.
 rem
-rem  If you ever ran the retired with-battle stack on this machine, use
-rem  策划一键停止.cmd to clean that one up instead.
+rem  If you ever ran the retired with-battle stack on this machine, use the
+rem  plain planner one-click STOP entry to clean that one up instead.
 rem ============================================================
 setlocal
 cd /d "%~dp0"

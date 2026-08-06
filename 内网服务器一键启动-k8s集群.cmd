@@ -1,68 +1,43 @@
 @echo off
-chcp 65001 >nul
 rem ============================================================
-rem  Pandora 后端 内网服务器一键启动(k8s 集群)
-rem  双击运行
+rem  Pandora backend - intranet one-click START (k8s cluster)
+rem  (double-click to run)
 rem ------------------------------------------------------------
-rem  在本机通过 minikube(docker driver 起节点) + Agones 启动真实 Kubernetes
-rem  开发集群:基础设施 + 21 个业务 Deployment 运行,Battle DS
-rem  走真实 Linux Agones Fleet。
+rem  ASCII-ONLY FILE - do NOT put Chinese (or any non-ASCII) text in here, and
+rem  do NOT add `chcp`. cmd.exe re-reads the batch file after every line using
+rem  the CURRENT console code page; start.ps1 switches the console to UTF-8,
+rem  which shifts cmd's saved offset by one byte per multi-byte character and
+rem  makes cmd execute fragments of comment lines (2026-08-06 bug).
+rem  The Chinese documentation for this entry point lives in
+rem  deploy\k8s\agones\README.md (section "intranet one-click k8s entry").
 rem
-rem  包装命令:
+rem  What it does:
+rem    Brings up a real Kubernetes dev cluster on this machine via minikube
+rem    (docker driver) + Agones: infra + 21 service Deployments, with the
+rem    Battle DS running on a real Linux Agones Fleet.
+rem
+rem  Wraps:
 rem    tools/scripts/start.ps1 -Mode k8s -BuildMode host
 rem
-rem  【首次在一台新机器上创建集群时的拓扑(2026-07-28 起,已是脚本默认值,
-rem   不需要导任何环境变量;已存在的 profile 不受影响,拓扑只在创建时生效)】
-rem    - 容器运行时 containerd(与线上同构;节点内不再用 Docker 跑 Pod)
-rem    - CNI calico(可强制 NetworkPolicy)、K8s 版本钉 v1.35.1
-rem    - 节点底图走阿里云镜像(墙内可达;gcr.io 会卡在 Pulling base image)
-rem    - 发布宿主 0.0.0.0:8443 → 节点 NodePort 31443,即集群内边缘 Envoy 的
-rem      客户端入口(本机与局域网都能连,不再需要 21 条 port-forward)。
-rem      客户端后端地址填 <本机局域网IP>:8443;本机自测填 127.0.0.1:8443 也行。
-rem    - 节点规格随本机自适应:内存 min(宿主上限x0.85, 40G)、CPU min(逻辑核, 16)。
-rem      **内存低于 16G 会直接报错退出**——battle DS 单副本 limits 就是 14Gi,
-rem      内存不够时 DS 永远调度不上,与其卡到超时不如立刻讲清楚。
-rem    - 逐项覆盖用 PANDORA_MINIKUBE_DRIVER/CPUS/MEMORY/RUNTIME/CNI/K8S_VERSION/
-rem      BASE_IMAGE/IMAGE_REPOSITORY/PORTS(创建后再改需 -Reset 重建才生效)。
-rem    - 只想本机可连时设 PANDORA_MINIKUBE_PORTS=127.0.0.1:8443:31443 再重建集群。
-rem      老集群(建于默认还是回环的年代)局域网连不进来,启动时脚本会点名提示。
+rem  Read deploy\k8s\agones\README.md before the first run on a new machine:
+rem  it covers the cluster topology defaults, the PANDORA_MINIKUBE_* overrides,
+rem  the mutual exclusion with local mode (both bind host 8443), the required
+rem  CLIs (Go / Docker Desktop / kubectl / minikube / helm), how the UE Linux
+rem  DS images are located and built, and the known limits of the docker
+rem  driver on an intranet.
 rem
-rem  【与 local 模式互斥】两者都占宿主 8443:本脚本会先停掉 local 模式的服务;
-rem  反过来启动 local 时也会自动 minikube stop 停掉本集群(数据保留,下次自动起回)。
-rem
-rem  前置要求:Go / Docker Desktop / kubectl / minikube / helm 已安装且可用;
-rem  客户端面 TLS 证书(deploy/envoy/cert.pem+key.pem)不入库,缺失时脚本会调
-rem  tools/scripts/envoy_cert.ps1 自动重签,该步骤需要 mkcert 可用。
-rem  本脚本默认不安装工具,避免未经授权修改本机环境。若确需安装缺失 CLI,
-rem  请人工确认后在 PowerShell 7 中显式运行:
-rem    pwsh tools/scripts/start.ps1 -Mode k8s -BuildMode host -Install
-rem
-rem  镜像构建使用宿主 Go 交叉编译 linux/amd64 静态二进制,再封装成
-rem  pandora/<svc>:dev scratch 镜像并加载到 minikube。该路径不是离线
-rem  docker load 导入包路径。
-rem
-rem  UE 战斗/大厅 DS(Linux)镜像会自动构建:脚本优先从【制品库】取 UE Linux
-rem  打包产物(PANDORA_ARTIFACT_ROOT,默认 F:\work\artifacts),没有时才回退到
-rem  【同级目录】的 Packages\Server_Linux_Development\LinuxServer(不写死路径),
-rem  同步进 deploy/ds/stage 后构建 pandora/battle-ds:dev / pandora/hub-ds:dev 到 minikube。
-rem  DS 起来后看 UE 日志: kubectl get gameservers; kubectl logs -f <pod>。
-rem  想手动指定 DS 包路径,先设环境变量 PANDORA_DS_LINUX_PKG 再双击本脚本。
-rem
-rem  注意:minikube docker driver 下 Pod IP 默认不能被其它内网机器直接访问;
-rem  本入口用于在这台机器上验证真实 k8s + Agones DS 链路。面向内网/生产
-rem  客户端的公开集群仍走 online 模式,由人负责 k8s 侧操作。
-rem
-rem  停止:双击 内网服务器一键停止-k8s集群.cmd
+rem  Stop: double-click the intranet one-click stop (k8s) entry.
 rem ============================================================
 setlocal
 cd /d "%~dp0"
 
-rem 本项目要求 PowerShell 7(pwsh)。若缺失则明确报错,不回退到 Windows PowerShell 5.1。
+rem This project requires PowerShell 7 (pwsh). If missing, error out clearly; do
+rem not fall back to Windows PowerShell 5.1.
 where pwsh >nul 2>nul
 if errorlevel 1 (
   echo.
-  echo  [ERR] 未找到 PowerShell 7 pwsh。本项目脚本要求 PowerShell 7。
-  echo        安装地址: https://aka.ms/powershell 或 winget install Microsoft.PowerShell
+  echo  [ERR] PowerShell 7 pwsh not found. This script requires PowerShell 7.
+  echo        Install: https://aka.ms/powershell  or  winget install Microsoft.PowerShell
   echo.
   pause
   exit /b 1
@@ -72,6 +47,7 @@ set "PS=pwsh"
 %PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode k8s -BuildMode host
 set "RC=%ERRORLEVEL%"
 
-rem 双击运行时保留窗口；web 后台调用会设 PANDORA_NONINTERACTIVE=1，输出改在网页上看。
+rem Keep the window open only for interactive (double-click) runs. The web admin
+rem runs this headless with PANDORA_NONINTERACTIVE=1 and shows the output there.
 if not defined PANDORA_NONINTERACTIVE pause
 exit /b %RC%

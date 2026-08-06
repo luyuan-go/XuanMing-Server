@@ -1,14 +1,20 @@
 @echo off
-chcp 65001 >nul
 rem ============================================================
-rem  Pandora 后端 内网服务器一键停止(k8s 集群)
-rem  双击运行
+rem  Pandora backend - intranet one-click STOP (k8s cluster)
+rem  (double-click to run)
 rem ------------------------------------------------------------
-rem  删除 内网服务器一键启动-k8s集群.cmd 部署的 k8s 业务服务和基础设施。
-rem  minikube 集群本身保持运行;如需完全停止,人工执行:
-rem    minikube stop
+rem  ASCII-ONLY FILE - do NOT put Chinese (or any non-ASCII) text in here, and
+rem  do NOT add `chcp`. cmd.exe re-reads the batch file after every line using
+rem  the CURRENT console code page; start.ps1 switches the console to UTF-8,
+rem  which shifts cmd's saved offset by one byte per multi-byte character and
+rem  makes cmd execute fragments of comment lines (2026-08-06 bug).
+rem  Chinese docs: deploy\k8s\agones\README.md (intranet one-click k8s entry).
 rem
-rem  持久卷默认保留,下次启动时数据仍在。
+rem  Deletes the k8s services and infra deployed by the intranet one-click
+rem  start (k8s) entry. The minikube cluster itself keeps running; to stop it
+rem  completely, run `minikube stop` by hand.
+rem
+rem  Persistent volumes are kept, so your data is still there next start.
 rem ============================================================
 setlocal
 cd /d "%~dp0"
@@ -16,8 +22,8 @@ cd /d "%~dp0"
 where pwsh >nul 2>nul
 if errorlevel 1 (
   echo.
-  echo  [ERR] 未找到 PowerShell 7 pwsh。本项目脚本要求 PowerShell 7。
-  echo        安装地址: https://aka.ms/powershell
+  echo  [ERR] PowerShell 7 pwsh not found. This script requires PowerShell 7.
+  echo        Install: https://aka.ms/powershell
   echo.
   pause
   exit /b 1
@@ -27,6 +33,7 @@ set "PS=pwsh"
 %PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode k8s -Down
 set "RC=%ERRORLEVEL%"
 
-rem 双击运行时保留窗口；web 后台调用会设 PANDORA_NONINTERACTIVE=1，输出改在网页上看。
+rem Keep the window open only for interactive (double-click) runs. The web admin
+rem runs this headless with PANDORA_NONINTERACTIVE=1 and shows the output there.
 if not defined PANDORA_NONINTERACTIVE pause
 exit /b %RC%
