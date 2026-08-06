@@ -2,256 +2,681 @@
   "rows": [
     {
       "id": 1,
+      "monster_id": 3,
       "item_config_id": 10001,
-      "probability_permyriad": 5000,
+      "probability_permyriad": 4500,
       "min_count": 1,
       "max_count": 2
     },
     {
       "id": 2,
-      "monster_id": 2001,
-      "item_config_id": 10002,
-      "probability_permyriad": 2000,
+      "monster_id": 3,
+      "item_config_id": 10015,
+      "probability_permyriad": 6000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 3,
-      "monster_id": 2001,
-      "item_config_id": 10007,
+      "monster_id": 3,
+      "item_config_id": 10010,
       "probability_permyriad": 5000,
       "min_count": 1,
       "max_count": 3
     },
     {
       "id": 4,
-      "monster_id": 2001,
-      "item_config_id": 10012,
-      "probability_permyriad": 3000,
+      "monster_id": 3,
+      "item_config_id": 10025,
+      "probability_permyriad": 4000,
       "min_count": 1,
-      "max_count": 2
+      "max_count": 3
     },
     {
       "id": 5,
-      "monster_id": 2001,
-      "item_config_id": 10017,
-      "probability_permyriad": 3000,
+      "monster_id": 2,
+      "item_config_id": 10007,
+      "probability_permyriad": 5000,
       "min_count": 1,
       "max_count": 2
     },
     {
       "id": 6,
       "monster_id": 2,
-      "item_config_id": 10005,
-      "probability_permyriad": 8000,
-      "min_count": 1,
-      "max_count": 1
-    },
-    {
-      "id": 7,
-      "monster_id": 2,
-      "item_config_id": 10003,
-      "probability_permyriad": 5000,
+      "item_config_id": 10011,
+      "probability_permyriad": 6000,
       "min_count": 1,
       "max_count": 2
     },
     {
+      "id": 7,
+      "monster_id": 2,
+      "item_config_id": 10002,
+      "probability_permyriad": 7000,
+      "min_count": 1,
+      "max_count": 3
+    },
+    {
       "id": 8,
-      "monster_id": 3,
-      "item_config_id": 10001,
-      "probability_permyriad": 3000,
+      "monster_id": 2,
+      "item_config_id": 10032,
+      "probability_permyriad": 2500,
       "min_count": 1,
       "max_count": 1
     },
     {
       "id": 9,
-      "monster_id": 2002,
-      "item_config_id": 10002,
-      "probability_permyriad": 2000,
+      "monster_id": 2,
+      "item_config_id": 10061,
+      "probability_permyriad": 4000,
       "min_count": 1,
       "max_count": 1
     },
     {
       "id": 10,
-      "monster_id": 2002,
-      "item_config_id": 10007,
-      "probability_permyriad": 5000,
+      "monster_id": 2001,
+      "item_config_id": 10001,
+      "probability_permyriad": 3500,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 11,
-      "monster_id": 2002,
-      "item_config_id": 10012,
-      "probability_permyriad": 3000,
+      "monster_id": 2001,
+      "item_config_id": 10015,
+      "probability_permyriad": 7000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 3
     },
     {
       "id": 12,
-      "monster_id": 2002,
-      "item_config_id": 10017,
-      "probability_permyriad": 3000,
+      "monster_id": 2001,
+      "item_config_id": 10002,
+      "probability_permyriad": 4500,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 13,
-      "monster_id": 2003,
-      "item_config_id": 10022,
-      "probability_permyriad": 10000,
+      "monster_id": 2001,
+      "item_config_id": 10010,
+      "probability_permyriad": 5500,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 3
     },
     {
       "id": 14,
-      "monster_id": 2004,
-      "item_config_id": 10004,
+      "monster_id": 2001,
+      "item_config_id": 10025,
       "probability_permyriad": 5000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 15,
-      "monster_id": 2004,
-      "item_config_id": 10009,
-      "probability_permyriad": 5000,
+      "monster_id": 2001,
+      "item_config_id": 10027,
+      "probability_permyriad": 800,
       "min_count": 1,
       "max_count": 1
     },
     {
       "id": 16,
-      "monster_id": 2004,
-      "item_config_id": 10013,
-      "probability_permyriad": 5000,
+      "monster_id": 2001,
+      "item_config_id": 10003,
+      "probability_permyriad": 400,
       "min_count": 1,
       "max_count": 1
     },
     {
       "id": 17,
-      "monster_id": 2004,
-      "item_config_id": 10018,
-      "probability_permyriad": 10000,
+      "monster_id": 2002,
+      "item_config_id": 10006,
+      "probability_permyriad": 3500,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 18,
-      "monster_id": 2005,
-      "item_config_id": 10010,
-      "probability_permyriad": 10000,
+      "monster_id": 2002,
+      "item_config_id": 10016,
+      "probability_permyriad": 7000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 3
     },
     {
       "id": 19,
-      "monster_id": 2005,
-      "item_config_id": 10015,
-      "probability_permyriad": 10000,
+      "monster_id": 2002,
+      "item_config_id": 10002,
+      "probability_permyriad": 4000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 20,
-      "monster_id": 2005,
-      "item_config_id": 10004,
-      "probability_permyriad": 10000,
+      "monster_id": 2002,
+      "item_config_id": 10010,
+      "probability_permyriad": 5500,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 3
     },
     {
       "id": 21,
-      "monster_id": 2005,
-      "item_config_id": 10009,
-      "probability_permyriad": 10000,
+      "monster_id": 2002,
+      "item_config_id": 10026,
+      "probability_permyriad": 3000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 22,
-      "monster_id": 2005,
-      "item_config_id": 10014,
-      "probability_permyriad": 10000,
+      "monster_id": 2002,
+      "item_config_id": 10030,
+      "probability_permyriad": 800,
       "min_count": 1,
       "max_count": 1
     },
     {
       "id": 23,
-      "monster_id": 2005,
-      "item_config_id": 10019,
-      "probability_permyriad": 10000,
+      "monster_id": 2002,
+      "item_config_id": 10036,
+      "probability_permyriad": 350,
       "min_count": 1,
       "max_count": 1
     },
     {
       "id": 24,
-      "monster_id": 2005,
-      "item_config_id": 10024,
-      "probability_permyriad": 10000,
+      "monster_id": 2003,
+      "item_config_id": 10017,
+      "probability_permyriad": 9000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 25,
-      "monster_id": 2101,
-      "item_config_id": 10005,
-      "probability_permyriad": 10000,
+      "monster_id": 2003,
+      "item_config_id": 10025,
+      "probability_permyriad": 6000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 26,
-      "monster_id": 2101,
+      "monster_id": 2003,
       "item_config_id": 10010,
-      "probability_permyriad": 10000,
+      "probability_permyriad": 4000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 27,
-      "monster_id": 2101,
-      "item_config_id": 10015,
-      "probability_permyriad": 10000,
+      "monster_id": 2003,
+      "item_config_id": 10001,
+      "probability_permyriad": 2500,
       "min_count": 1,
       "max_count": 1
     },
     {
       "id": 28,
-      "monster_id": 2101,
-      "item_config_id": 10004,
-      "probability_permyriad": 10000,
+      "monster_id": 2004,
+      "item_config_id": 10018,
+      "probability_permyriad": 8000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 29,
-      "monster_id": 2101,
-      "item_config_id": 10009,
-      "probability_permyriad": 10000,
+      "monster_id": 2004,
+      "item_config_id": 10007,
+      "probability_permyriad": 5000,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 2
     },
     {
       "id": 30,
-      "monster_id": 2101,
-      "item_config_id": 10014,
-      "probability_permyriad": 10000,
+      "monster_id": 2004,
+      "item_config_id": 10011,
+      "probability_permyriad": 6500,
       "min_count": 1,
-      "max_count": 1
+      "max_count": 3
     },
     {
       "id": 31,
-      "monster_id": 2101,
-      "item_config_id": 10019,
-      "probability_permyriad": 10000,
+      "monster_id": 2004,
+      "item_config_id": 10002,
+      "probability_permyriad": 5000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 32,
+      "monster_id": 2004,
+      "item_config_id": 10039,
+      "probability_permyriad": 2200,
       "min_count": 1,
       "max_count": 1
     },
     {
-      "id": 32,
+      "id": 33,
+      "monster_id": 2004,
+      "item_config_id": 10035,
+      "probability_permyriad": 1800,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 34,
+      "monster_id": 2004,
+      "item_config_id": 10061,
+      "probability_permyriad": 4500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 35,
+      "monster_id": 2004,
+      "item_config_id": 10004,
+      "probability_permyriad": 1500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 36,
+      "monster_id": 2005,
+      "item_config_id": 10019,
+      "probability_permyriad": 10000,
+      "min_count": 1,
+      "max_count": 3
+    },
+    {
+      "id": 37,
+      "monster_id": 2005,
+      "item_config_id": 10008,
+      "probability_permyriad": 6000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 38,
+      "monster_id": 2005,
+      "item_config_id": 10012,
+      "probability_permyriad": 7000,
+      "min_count": 1,
+      "max_count": 3
+    },
+    {
+      "id": 39,
+      "monster_id": 2005,
+      "item_config_id": 10040,
+      "probability_permyriad": 3500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 40,
+      "monster_id": 2005,
+      "item_config_id": 10038,
+      "probability_permyriad": 2800,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 41,
+      "monster_id": 2005,
+      "item_config_id": 10043,
+      "probability_permyriad": 2000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 42,
+      "monster_id": 2005,
+      "item_config_id": 10062,
+      "probability_permyriad": 5000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 43,
+      "monster_id": 2005,
+      "item_config_id": 10023,
+      "probability_permyriad": 2500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 44,
+      "monster_id": 2005,
+      "item_config_id": 10004,
+      "probability_permyriad": 3000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 45,
+      "monster_id": 2006,
+      "item_config_id": 10025,
+      "probability_permyriad": 7000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 46,
+      "monster_id": 2006,
+      "item_config_id": 10015,
+      "probability_permyriad": 5000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 47,
+      "monster_id": 2006,
+      "item_config_id": 10010,
+      "probability_permyriad": 4000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 48,
+      "monster_id": 2007,
+      "item_config_id": 10020,
+      "probability_permyriad": 9000,
+      "min_count": 1,
+      "max_count": 3
+    },
+    {
+      "id": 49,
+      "monster_id": 2007,
+      "item_config_id": 10008,
+      "probability_permyriad": 5500,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 50,
+      "monster_id": 2007,
+      "item_config_id": 10012,
+      "probability_permyriad": 6500,
+      "min_count": 1,
+      "max_count": 3
+    },
+    {
+      "id": 51,
+      "monster_id": 2007,
+      "item_config_id": 10041,
+      "probability_permyriad": 3200,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 52,
+      "monster_id": 2007,
+      "item_config_id": 10042,
+      "probability_permyriad": 2800,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 53,
+      "monster_id": 2007,
+      "item_config_id": 10013,
+      "probability_permyriad": 3000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 54,
+      "monster_id": 2007,
+      "item_config_id": 10062,
+      "probability_permyriad": 4500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 55,
+      "monster_id": 2007,
+      "item_config_id": 10057,
+      "probability_permyriad": 2000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 56,
+      "monster_id": 2008,
+      "item_config_id": 10021,
+      "probability_permyriad": 9000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 57,
+      "monster_id": 2008,
+      "item_config_id": 10020,
+      "probability_permyriad": 7000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 58,
+      "monster_id": 2008,
+      "item_config_id": 10009,
+      "probability_permyriad": 4000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 59,
+      "monster_id": 2008,
+      "item_config_id": 10013,
+      "probability_permyriad": 5000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 60,
+      "monster_id": 2008,
+      "item_config_id": 10044,
+      "probability_permyriad": 2800,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 61,
+      "monster_id": 2008,
+      "item_config_id": 10045,
+      "probability_permyriad": 2500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 62,
+      "monster_id": 2008,
+      "item_config_id": 10047,
+      "probability_permyriad": 1800,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 63,
+      "monster_id": 2008,
+      "item_config_id": 10063,
+      "probability_permyriad": 3500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 64,
+      "monster_id": 2008,
+      "item_config_id": 10058,
+      "probability_permyriad": 2000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 65,
+      "monster_id": 2008,
+      "item_config_id": 10023,
+      "probability_permyriad": 3000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 66,
+      "monster_id": 2101,
+      "item_config_id": 10022,
+      "probability_permyriad": 10000,
+      "min_count": 2,
+      "max_count": 4
+    },
+    {
+      "id": 67,
       "monster_id": 2101,
       "item_config_id": 10024,
+      "probability_permyriad": 6000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 68,
+      "monster_id": 2101,
+      "item_config_id": 10014,
+      "probability_permyriad": 7000,
+      "min_count": 1,
+      "max_count": 3
+    },
+    {
+      "id": 69,
+      "monster_id": 2101,
+      "item_config_id": 10009,
+      "probability_permyriad": 8000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 70,
+      "monster_id": 2101,
+      "item_config_id": 10013,
+      "probability_permyriad": 8000,
+      "min_count": 2,
+      "max_count": 4
+    },
+    {
+      "id": 71,
+      "monster_id": 2101,
+      "item_config_id": 10050,
+      "probability_permyriad": 1800,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 72,
+      "monster_id": 2101,
+      "item_config_id": 10051,
+      "probability_permyriad": 1500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 73,
+      "monster_id": 2101,
+      "item_config_id": 10052,
+      "probability_permyriad": 1500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 74,
+      "monster_id": 2101,
+      "item_config_id": 10053,
+      "probability_permyriad": 1200,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 75,
+      "monster_id": 2101,
+      "item_config_id": 10054,
+      "probability_permyriad": 1200,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 76,
+      "monster_id": 2101,
+      "item_config_id": 10055,
+      "probability_permyriad": 1000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 77,
+      "monster_id": 2101,
+      "item_config_id": 10046,
+      "probability_permyriad": 3500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 78,
+      "monster_id": 2101,
+      "item_config_id": 10048,
+      "probability_permyriad": 3500,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 79,
+      "monster_id": 2101,
+      "item_config_id": 10049,
+      "probability_permyriad": 3000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 80,
+      "monster_id": 2101,
+      "item_config_id": 10063,
+      "probability_permyriad": 8000,
+      "min_count": 1,
+      "max_count": 2
+    },
+    {
+      "id": 81,
+      "monster_id": 2101,
+      "item_config_id": 10064,
+      "probability_permyriad": 4000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 82,
+      "monster_id": 2101,
+      "item_config_id": 10059,
+      "probability_permyriad": 5000,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 83,
+      "monster_id": 2101,
+      "item_config_id": 10005,
       "probability_permyriad": 10000,
+      "min_count": 3,
+      "max_count": 8
+    },
+    {
+      "id": 84,
+      "monster_id": 2101,
+      "item_config_id": 10056,
+      "probability_permyriad": 300,
+      "min_count": 1,
+      "max_count": 1
+    },
+    {
+      "id": 85,
+      "monster_id": 2101,
+      "item_config_id": 10065,
+      "probability_permyriad": 200,
       "min_count": 1,
       "max_count": 1
     }

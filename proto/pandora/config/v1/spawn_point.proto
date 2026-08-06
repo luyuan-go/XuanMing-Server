@@ -78,8 +78,10 @@ message SpawnPointRow {
   bool enabled = 21 [(excel_col) = "启用"];
   // 开局刷新(1=开局立即刷 / 0=按首次延迟与触发条件刷)。实测全 1。
   bool spawn_on_start = 22 [(excel_col) = "开局刷新"];
-  // 巡逻路点Id(0 / 留空 = 原地不巡逻)。实测 399 行中仅 4 行填了 2 / 3,其余为空。
+  // 巡逻路点Id(0 / 留空 = 原地不巡逻)。
   //   同 monster_role_id,目标巡逻路点表不在本次登记范围内,刻意不标 (excel_fk)。
+  //   2026-08-05(svn-r1774)实测 402 行:397 行 = 29、各 2 行 = 2 / 3、1 行留空;
+  //   此前(v20260804002 批次)是 4 行填 2/3、其余全空 —— 策划这一版给几乎所有刷怪点都配了巡逻。
   uint32 patrol_route_id = 23 [(excel_col) = "巡逻路点Id"];
   // 权重(同组内随机取点时的权重)。实测全为 100。
   uint32 weight = 24 [(excel_col) = "权重"];
@@ -91,6 +93,13 @@ message SpawnPointRow {
   //   消费者是 DS(客户端 FCfgSpawnPoint 同源导出);服务端登记本列的理由同其它列——
   //   两端共用同一张 xlsx,未登记的表头列会被 configtable-gen 判为非法。
   uint32 monster_level = 26 [(excel_col) = "怪物等级", (excel_default) = "1"];
+  // 阵营(该点刷出的怪属于哪个阵营)。表内说明:「空/0=不指定；1-15=静态保留阵营」。
+  //   **实测 402 行数据全部为空**,本列目前只是策划先把表头占上,登记它是为了解开导表——
+  //   未登记的表头列会被 configtable-gen 判为非法、导致**整批**产物不产出(2026-08-05 卡在这里)。
+  //   刻意不设 (excel_default):空 = 0 = 不指定,与列说明逐字一致,不在服务端另造默认阵营。
+  //   刻意不标 (excel_fk):阵营是静态保留段位,没有对应配置表可引用。
+  //   消费者是 DS(客户端 FCfgSpawnPoint 同源导出);服务端当前不据此判定任何业务。
+  uint32 camp = 27 [(excel_col) = "阵营"];
 }
 
 // SpawnPointTableData 刷怪点整表容器(dist/spawn_point.json 的根对象;excel_file 注解 = 导表登记)。

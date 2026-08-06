@@ -1,8 +1,8 @@
 {
-  "version": 20260804002,
-  "generated_at_ms": 1785824386652,
+  "version": 20260805002,
+  "generated_at_ms": 1785933835255,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-wc-killexp",
+  "source_rev": "svn-r1774",
   "tables": [
     {
       "name": "chest_drop",
@@ -36,8 +36,8 @@
       "name": "drop",
       "file": "drop.json",
       "proto": "pandora.config.v1.DropTableData",
-      "checksum": "sha256:85c4e8abbb5a6895d55312a3bb41f908b7fadbf307bfc281f9fb801ef3f25928",
-      "rows": 32
+      "checksum": "sha256:72fcc7aaa5f40b064bb80b89035101a2973115517b955c0e67c314ef9025b9e7",
+      "rows": 85
     },
     {
       "name": "game_module",
@@ -57,8 +57,8 @@
       "name": "item",
       "file": "item.json",
       "proto": "pandora.config.v1.ItemTableData",
-      "checksum": "sha256:e3ef255ce78f9c3268b1821616ccb1137409892ff143fc903b175b262edaa988",
-      "rows": 100
+      "checksum": "sha256:f96b1ac4eca174d74719fff5874412199c6cd26c9da322f031c0669cebeafab0",
+      "rows": 65
     },
     {
       "name": "level",
@@ -99,7 +99,7 @@
       "name": "role",
       "file": "role.json",
       "proto": "pandora.config.v1.RoleTableData",
-      "checksum": "sha256:4baa34607f63c6e4e7a9d84ab587121566ad7f200373547a4d6501e995da04a0",
+      "checksum": "sha256:52b08e6e38cf899627f6acac2dd0429aa0aec4b8c990b556fe75d475837b6b14",
       "rows": 21
     },
     {
@@ -134,8 +134,8 @@
       "name": "skill",
       "file": "skill.json",
       "proto": "pandora.config.v1.SkillTableData",
-      "checksum": "sha256:5c37271893742b4762c526f41929181b13c9b958eec6ec2aade5c3b0238d9a02",
-      "rows": 61
+      "checksum": "sha256:4b33dca135b9bfe84a2eb52e163b9cf3bcf6e9ab3f6ec35a0502d36dd79013d3",
+      "rows": 63
     },
     {
       "name": "spawn_group",
@@ -148,7 +148,7 @@
       "name": "spawn_point",
       "file": "spawn_point.json",
       "proto": "pandora.config.v1.SpawnPointTableData",
-      "checksum": "sha256:a7cf37c131d4726ced4268f73aada0f6438a9658d575994a6aab75efc831ade9",
+      "checksum": "sha256:81c6209cb766ecff0a3c0a83eab05077ee3281d7b6209cda33d1b17caa64e578",
       "rows": 402
     },
     {

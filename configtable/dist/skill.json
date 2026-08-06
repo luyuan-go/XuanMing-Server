@@ -689,6 +689,8 @@
       "name": "普通攻击",
       "icon": "/Game/Test/UI/Skill/Boris_attack.Boris_attack",
       "segment": 1,
+      "cd_timing": 3,
+      "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken03_Skill01.GA_Kraken03_Skill01_C",
       "target_select_mode": 1,
       "use_distance": 99999
@@ -719,9 +721,12 @@
       "name": "普通攻击",
       "icon": "/Game/Test/UI/Skill/Boris_attack.Boris_attack",
       "segment": 1,
+      "cd_timing": 3,
+      "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken03_Skill04.GA_Kraken03_Skill04_C",
       "target_select_mode": 1,
-      "use_distance": 99999
+      "use_distance": 99999,
+      "damage_rate": 0.1
     },
     {
       "id": 210101,
@@ -739,7 +744,32 @@
       "name": "召唤",
       "icon": "/Game/Test/UI/Skill/Boris_attack.Boris_attack",
       "segment": 1,
+      "cd_timing": 3,
+      "cd_duration": 20,
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken_Skill01.GA_Kraken_Skill01_C",
+      "use_distance": 99999
+    },
+    {
+      "id": 210121,
+      "remark": "震地",
+      "name": "震地",
+      "icon": "/Game/Test/UI/Skill/Boris_attack.Boris_attack",
+      "segment": 1,
+      "cd_timing": 3,
+      "cd_duration": 10,
+      "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken_Skill02.GA_Kraken_Skill02_C",
+      "target_select_mode": 1,
+      "use_distance": 99999
+    },
+    {
+      "id": 210131,
+      "remark": "吸附",
+      "name": "吸附",
+      "icon": "/Game/Test/UI/Skill/Boris_attack.Boris_attack",
+      "segment": 1,
+      "cd_timing": 3,
+      "cd_duration": 30,
+      "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken_Skill03.GA_Kraken_Skill03_C",
       "use_distance": 99999
     }
   ]

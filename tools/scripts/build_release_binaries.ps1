@@ -45,6 +45,25 @@ if ($Service) { $buildArgs['Service'] = $Service }
 & "$ScriptDir/run_services.ps1" @buildArgs
 if ($LASTEXITCODE -ne 0) { Write-Host "[ERR] 构建失败" -ForegroundColor Red; exit 1 }
 
+# 导表器也要给没装 Go 的机器带一份:策划改完 xlsx 要能自己导服务端表(策划一键导表.cmd),
+# 否则每次改表都得等后端同学手动跑一趟,表漂移就是这么来的。
+# 它是独立 module(tools/configtable-gen/go.mod),必须进目录单独 build,不能跟着 run_services 走。
+# 只在整批构建时产出;-Service 是单服务定向构建,不该顺带重编工具。
+if (-not $Service) {
+    $genSrcDir = Join-Path $ProjectRoot 'tools/configtable-gen'
+    $genExePath = Join-Path $ArtifactDir 'configtable-gen.exe'
+    Write-Host "构建导表器 configtable-gen ..." -ForegroundColor DarkGray
+    Push-Location $genSrcDir
+    try {
+        & go build -o $genExePath .
+        $genExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    if ($genExit -ne 0) { Write-Host "[ERR] configtable-gen 构建失败" -ForegroundColor Red; exit 1 }
+    Write-Host "[ OK ] 导表器 -> $genExePath" -ForegroundColor Green
+}
+
 # manifest:记录这批二进制是哪个提交编出来的,升级/排查时能一眼对上版本。
 $revision = try { (& git -C $ProjectRoot rev-parse --short HEAD 2>$null) } catch { $null }
 $exes = @(Get-ChildItem -LiteralPath $ArtifactDir -Filter '*.exe' -ErrorAction SilentlyContinue)
