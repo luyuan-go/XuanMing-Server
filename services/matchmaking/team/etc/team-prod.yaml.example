@@ -49,6 +49,19 @@ team:
   match_resume_auth_secret: "CHANGE-ME-team-resume-auth-key-32bytes-min"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
 
+  # 离线自动退队的判定依据来源;留空 = 该功能整块关闭。
+  locator_addr: "player-locator.pandora.svc.cluster.local:50006"
+  # 队员离线超时自动移出队伍。默认关;开之前先把 locator 的 departure_event.enabled 打开,
+  # 否则只剩「有人打开组队面板才复查」的兜底路径。
+  # threshold=180s 的推导见 internal/conf/conf.go OfflineLeaveConf 注释:低于它会踢掉
+  # 本来能回来的玩家(重连链路本身就要 30~60s),弱网(地铁/隧道)还要再留余量。
+  offline_leave:
+    enabled: false
+    threshold: "180s"
+    check_interval: "15s"
+    budget: 200
+    kafka_partitions: 3
+
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):生产强制档,顶号后旧 JWT 立即失效;
 # 权威端点漏配拒启,权威不可达 fail-closed。与 gen_cluster_config.ps1 -Prod 产物一致。
 session_gate:

@@ -22,11 +22,15 @@ import (
 
 // stubRepo 内存版 LocationRepo,只供单测用。
 type stubRepo struct {
-	store map[uint64]data.LocationRecord
+	store    map[uint64]data.LocationRecord
+	lastSeen map[uint64]int64
 }
 
 func newStubRepo() *stubRepo {
-	return &stubRepo{store: map[uint64]data.LocationRecord{}}
+	return &stubRepo{
+		store:    map[uint64]data.LocationRecord{},
+		lastSeen: map[uint64]int64{},
+	}
 }
 
 func (s *stubRepo) SetGuarded(_ context.Context, playerID uint64, rec data.LocationRecord, _ time.Duration, _ int, guard func(cur data.LocationRecord, found bool) error) error {
@@ -64,6 +68,29 @@ func (s *stubRepo) BatchGet(_ context.Context, playerIDs []uint64) (map[uint64]d
 func (s *stubRepo) Delete(_ context.Context, playerID uint64) error {
 	delete(s.store, playerID)
 	return nil
+}
+
+func (s *stubRepo) SetLastSeen(_ context.Context, playerID uint64, atMs int64, _ time.Duration) error {
+	s.lastSeen[playerID] = atMs
+	return nil
+}
+
+func (s *stubRepo) ClearLastSeen(_ context.Context, playerID uint64) error {
+	delete(s.lastSeen, playerID)
+	return nil
+}
+
+func (s *stubRepo) BatchGetLastSeen(_ context.Context, playerIDs []uint64) (map[uint64]int64, error) {
+	out := make(map[uint64]int64, len(playerIDs))
+	for _, pid := range playerIDs {
+		if pid == 0 {
+			continue
+		}
+		if ms, ok := s.lastSeen[pid]; ok {
+			out[pid] = ms
+		}
+	}
+	return out, nil
 }
 
 func (s *stubRepo) ShrinkHubTTL(_ context.Context, hubPod string, playerID uint64, _ time.Duration) (bool, error) {

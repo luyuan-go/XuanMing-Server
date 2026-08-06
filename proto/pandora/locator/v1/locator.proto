@@ -32,6 +32,22 @@ service PlayerLocatorService {
   // MATCHING/BATTLE/其它 pod 的记录一律不动(不变量 §1,战斗态由战斗链路权威维护)。
   // 玩家掉线/拔线 → Hub DS 不再上报该 id → locator key 30s 自然过期 = OFFLINE。
   rpc RefreshHubLocations(RefreshHubLocationsRequest) returns (RefreshHubLocationsResponse);
+  // BatchGetLastSeen 批量查「该玩家最后一次被观测到离开 Hub 的时刻」(unix ms)。
+  //
+  // 为什么需要它:位置记录 `pandora:locator:<player_id>` 是整 key 带 TTL 的 hash,
+  // key 一过期,`updated_at_ms` 跟着一起消失 —— GetLocation / BatchGetLocation 只能
+  // 回答「此刻在不在线」,回答不了「已经离线多久」。凡是按「离线满 N 秒才动作」做决策的
+  // 业务(组队自动退队等),必须有一个**不随位置 TTL 消失**的时间戳。
+  //
+  // 写入点唯一:ReportDisconnect 成功缩 TTL 时写一次(**一次断线写一次**,不随心跳写,
+  // 开销可忽略)。因此它的语义是「Hub DS 观测到该玩家离开的时刻」,不是「下线时刻」——
+  // 玩家 travel 去战斗同样会触发 Hub Logout。**调用方一律不得单独据此判定离线**,
+  // 必须与 BatchGetLocation 的「此刻是否在线」合用:先确认现在查不到,再看离开了多久。
+  //
+  // 缺席语义:map 里只含有记录的玩家。缺席 = 从未记录 / 已超保留期 / Hub DS 整台挂掉
+  // 时压根没上报过,一律按 UNKNOWN 处理,不得当成「刚刚离开」或「离开很久」(§9.22)。
+  rpc BatchGetLastSeen(BatchGetLastSeenRequest) returns (BatchGetLastSeenResponse);
+
   // ReportDisconnect 快速断线上报:Hub DS 在玩家 Logout / 连接超时断开时调用,
   // 把该玩家 HUB 位置的 TTL 缩短到 grace(~10s)——真退出的玩家 10s 内判离线,
   // 不用等满 30s 心跳 TTL。守卫:只缩「state==HUB 且 hub_pod 匹配」的记录;
@@ -145,6 +161,45 @@ message ReportDisconnectResponse {
   // shrunk: 是否实际缩短了 TTL(false = 记录不存在 / 非 HUB 态 / pod 不匹配 /
   // 剩余 TTL 已更短,均属正常路径);仅观测用。
   bool shrunk = 2;
+}
+
+message BatchGetLastSeenRequest {
+  repeated uint64 player_ids = 1;
+}
+
+message BatchGetLastSeenResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // last_seen_ms 只含有记录的玩家(player_id → 最后一次被观测到离开 Hub 的 unix ms)。
+  // 缺席 = UNKNOWN(见 BatchGetLastSeen 注释),不是 0 也不是「刚离开」。
+  //
+  // 用 int64 而非 §5.12 默认的无符号:与同文件 Location.updated_at_ms 同为时间戳且
+  // 会被直接比较 / 相减(now - last_seen),统一有符号免去调用方逐处转换。
+  map<uint64, int64> last_seen_ms = 2;
+}
+
+// PlayerLeftHubEvent 是「Hub DS 观测到某玩家离开了大厅」的服务间事件。
+//
+// topic: pandora.player.presence(**非推送 topic**,push 服务不订阅,不下发客户端)
+// key:   player_id(不变量 §9,同玩家事件保序)
+// 生产者:player_locator,在 ReportDisconnect 成功缩 TTL 时发一条。
+//
+// ⚠️ 语义是「离开了 Hub」,**不是「玩家下线」**。玩家 travel 去战斗同样会触发 Hub
+// Logout;短暂断线后秒重连也会先产生一条本事件。因此本事件只是**触发器**:
+// 消费者收到后不得直接做业务动作,必须在自己的阈值到期时**回查 locator 权威**
+// (BatchGetLocation 判此刻是否在线 + BatchGetLastSeen 判离开了多久)再决定。
+//
+// 投递保证 at-least-once:消费者必须幂等;事件也可能整条丢失(kafka 故障 /
+// Hub DS 整台挂掉时根本不会调 ReportDisconnect),所以消费方必须另有兜底复查路径,
+// 不能把本事件当成唯一触发源(与 ListMyPendingInvites 同一条原则:推送是加速器,
+// 拉取才是权威)。
+message PlayerLeftHubEvent {
+  uint64 player_id  = 1;
+  // left_at_ms:locator 记录本次离开的时刻(unix ms)。有符号,理由同 last_seen_ms。
+  int64  left_at_ms = 2;
+  // hub_pod:上报本次离开的 Hub DS pod 名,仅供排障 / 审计,消费方不得据此做路由判定。
+  string hub_pod    = 3;
+  // 4-9 reserved(将来如需 shard_id / 离开原因)
+  reserved 4 to 9;
 }
 
 // PlacementRoute 是持久 placement 的逻辑路由；UNKNOWN 不是 HUB。

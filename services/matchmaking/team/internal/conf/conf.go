@@ -91,12 +91,73 @@ type TeamConf struct {
 	// 也按此值截断(写入侧硬上限已兜住总量,无需分页)。默认 10。
 	MaxApplicationsPerTeam int `yaml:"max_applications_per_team,omitempty" json:"max_applications_per_team,omitempty"`
 
+	// LocatorAddr player_locator 服务 gRPC 直连地址(host:port,内网 insecure)。
+	// 留空 → 离线自动退队整块关闭(offline_leave.enabled 也会被强制视为关)。
+	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
+
+	// OfflineLeave 离线成员自动退队。
+	OfflineLeave OfflineLeaveConf `yaml:"offline_leave,omitempty" json:"offline_leave,omitempty"`
+
 	// ApplyTTL 入队申请令牌的存活时长。取值依据:队长要能在一次组队界面停留内看到并处理
 	// (推送到达 + 人眼反应 + 点击),同时申请人不该被无限期挂着——到期后客户端按钮自动
 	// 恢复可点,是"有界等待 + 可见出口"(验收底线第 1 条)。默认 120s(邀请是 60s,
 	// 申请方向多一次队长注意力成本,故取两倍)。**待实测复核**:若线上出现大量
 	// "队长还没看到就过期",优先调大本值而不是取消上限。
 	ApplyTTL config.Duration `yaml:"apply_ttl,omitempty" json:"apply_ttl,omitempty"`
+}
+
+// OfflineLeaveConf 是「队员离线超时自动移出队伍」的配置。
+//
+// **默认关闭**(§14.2):这是玩家可见的行为改变,打开必须是显式动作。
+// 关闭时 team 不查 locator、不起消费者与复查循环,行为与历史完全一致。
+type OfflineLeaveConf struct {
+	// Enabled 是否启用。需同时满足 locator_addr 已配;否则启动 fail-fast。
+	Enabled bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+
+	// Threshold 离线多久才移出队伍。默认 180s。
+	//
+	// 取值依据(**不要随手调小**):
+	//  ① 下界由「一个会回来的玩家最快多久能回来」决定 —— 客户端 watchdog 发现断线 →
+	//     重新走登录恢复 → 旧 Controller 清退(Hub DS 上最长挂满 UE ConnectionTimeout=60s)
+	//     → Travel + Hub 地图加载 → Admission ACK → PostLogin 重写位置,保守 30~60s。
+	//     低于这个数,一个只断了几秒网、立刻开始重连的玩家也会被踢,与网络好坏无关,是纯误伤。
+	//  ② 上界由「弱网玩家的连续失联时长」决定 —— 地铁 / 隧道 / 电梯断 10~30s 是常态,
+	//     要容忍一段 ~2 分钟的无信号区就得再加 120s。
+	//  ③ 另外还要叠加**检测本身的延迟**:静默掉线要等 UE ConnectionTimeout(60s)+
+	//     locator grace(10s)才被观测到,所以玩家实际被容忍的总时长 ≈ 阈值 + 60~90s。
+	// 180s 是 ①②③ 下的保守取值。**待实测复核**:线上若出现「地铁回来队伍没了」的反馈,
+	// 优先调大本值,而不是去压 UE 的 ConnectionTimeout(那会让全服弱网玩家更容易掉线)。
+	Threshold config.Duration `yaml:"threshold,omitempty" json:"threshold,omitempty"`
+
+	// CheckInterval 到期复查轮询周期。默认 15s。
+	// 不必更细:上游检测本身就有 60~90s 的模糊,压到秒级只是成倍花钱买不到精度。
+	CheckInterval config.Duration `yaml:"check_interval,omitempty" json:"check_interval,omitempty"`
+
+	// Budget 单轮最多处理多少个到期玩家。默认 200(防积压一次性打爆 locator / matchmaker)。
+	Budget int `yaml:"budget,omitempty" json:"budget,omitempty"`
+
+	// KafkaPartitions 离场事件 topic 的分区数(消费者按分区起 worker)。默认 3。
+	KafkaPartitions int32 `yaml:"kafka_partitions,omitempty" json:"kafka_partitions,omitempty"`
+}
+
+// ValidateOfflineLeave 供 main 启动时 fail-fast。
+//
+// 开了自动退队却没配 locator 地址 = 判定依据缺失。此时若静默降级,团队会以为功能在跑,
+// 实际一个人也踢不掉(或更糟:如果实现里把「查不到」当离线,会把全服人踢光)。
+// 这类"配了却不生效"的失败模式必须启动就暴露(同 join_policy / retention_mode 的口径)。
+func (c *Config) ValidateOfflineLeave() error {
+	if !c.Team.OfflineLeave.Enabled {
+		return nil
+	}
+	if c.Team.LocatorAddr == "" {
+		return fmt.Errorf("team: offline_leave.enabled=true requires team.locator_addr")
+	}
+	if c.Team.MatchmakerAddr == "" {
+		// 没有 matchmaker 就没法判「这支队伍是不是正被一场对局占住」,
+		// 自动退队会有把在打的队伍拆掉的风险,宁可不启动。
+		return fmt.Errorf("team: offline_leave.enabled=true requires team.matchmaker_addr (match commitment gate)")
+	}
+	return nil
 }
 
 // 入队策略取值(JoinPolicy)。
@@ -165,6 +226,18 @@ func (c *Config) Defaults() {
 	}
 	if c.Team.ApplyTTL == 0 {
 		c.Team.ApplyTTL = config.Duration(120 * time.Second)
+	}
+	if c.Team.OfflineLeave.Threshold == 0 {
+		c.Team.OfflineLeave.Threshold = config.Duration(180 * time.Second)
+	}
+	if c.Team.OfflineLeave.CheckInterval == 0 {
+		c.Team.OfflineLeave.CheckInterval = config.Duration(15 * time.Second)
+	}
+	if c.Team.OfflineLeave.Budget == 0 {
+		c.Team.OfflineLeave.Budget = 200
+	}
+	if c.Team.OfflineLeave.KafkaPartitions == 0 {
+		c.Team.OfflineLeave.KafkaPartitions = 3
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":20010"

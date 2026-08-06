@@ -29,6 +29,22 @@ locator:
   # W3 ⑥ 起可直接 yaml 写字符串:
   location_ttl: "30s"
 
+  # last_seen_retention: 「玩家最后一次被观测到离开 Hub 的时刻」独立 key 的保留时长。
+  # 位置 key 一过期,updated_at_ms 跟着消失,于是「已经离线多久」在权威侧无处可查;
+  # 这个独立 key 就是补那一块。ReportDisconnect 守卫通过时写一次(不随心跳写)。
+  # 必须远大于所有消费方的离线阈值(当前最长 team.offline_leave.threshold=180s),
+  # 否则时刻先过期 → 消费方查到 UNKNOWN → fail-closed 不动作 → 功能静默失效。
+  last_seen_retention: "1h"
+
+  # departure_event: 是否生产「玩家离开 Hub」服务间事件(topic pandora.player.presence)。
+  #
+  # ⚠️ 语义是「离开了 Hub」不是「下线」(travel 去战斗、秒重连都会产生),
+  # 消费者只能拿它当触发器,到自己的阈值后回查 locator 权威再动作。
+  # 默认 false:关闭时 last-seen 照常记录,消费方退化为「读到该实体时顺手复查」的兜底。
+  # 开启后 kafka.brokers 是启动强依赖(producer 静默不可用会让整条链看起来在跑却永不触发)。
+  departure_event:
+    enabled: false
+
 # 好友在线态订阅推送 fan-out(docs/design/friend-distributed-scaling.md §13.4 / §13.5)。
 # 2026-06-19:默认 enabled=false(§13.7「先拉后推」)。开启需配 kafka.brokers(往
 # pandora.presence.update 生产 → push 服务投递)。洪峰把 presence/fanout 写进 killswitch 规则即降纯拉。

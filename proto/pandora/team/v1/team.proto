@@ -416,6 +416,11 @@ enum TeamUpdateReason {
   TEAM_UPDATE_REASON_APPLICATION_RECEIVED = 10;
   // 队长改了本队目标关卡(SetTeamMap)。
   TEAM_UPDATE_REASON_MAP_CHANGED          = 11;
+  // 成员离线超过 team.offline_leave.threshold 被服务端自动移出队伍。
+  // 与 MEMBER_KICKED 区分开:那是队长的主动操作,这是系统行为,客户端文案不同
+  // (「XXX 掉线已离队」而不是「XXX 被踢出队伍」)。老客户端不认识本值时按
+  // UNSPECIFIED 走默认刷新分支,队伍快照仍然正确,只是少一句文案。
+  TEAM_UPDATE_REASON_MEMBER_OFFLINE_LEFT  = 12;
 }
 
 message TeamUpdateEvent {

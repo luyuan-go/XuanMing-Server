@@ -60,6 +60,28 @@ type LocationRepo interface {
 	// Lua 原子(单 key):校验与缩 TTL 同脚本执行,不存在「读到旧 HUB → 并发写成
 	// MATCHING/BATTLE → 误缩新状态 TTL」的窗口(Codex 复审 2026-07-06)。
 	ShrinkHubTTL(ctx context.Context, hubPod string, playerID uint64, grace time.Duration) (bool, error)
+	// SetLastSeen 记录「Hub DS 观测到该玩家离开的时刻」,写在**独立 key**
+	// `pandora:locator:lastseen:<player_id>` 上,retention 远长于位置 TTL。
+	//
+	// 为什么必须独立 key:位置记录是整 key 带 TTL 的 hash,key 一过期 updated_at_ms
+	// 跟着消失,于是「已经离线多久」在权威侧无处可查。把时间戳放进同一个 hash 解决不了
+	// 问题(一起被删),延长位置 TTL 更不行(会破坏 key miss = 离线这个全链依赖的判据,
+	// 以及 §9.22 的 27s 再入屏障推导)。
+	//
+	// 只在 ShrinkHubTTL 守卫通过后调用(见 biz.ReportDisconnect 的顺序说明),
+	// 因此语义严格是「确实离开了 Hub」,而不是「某台 DS 声称他走了」。
+	SetLastSeen(ctx context.Context, playerID uint64, atMs int64, retention time.Duration) error
+	// ClearLastSeen 删掉 last-seen 时刻(玩家回到 Hub 时调用)。
+	//
+	// 维持不变量:**last-seen 存在 ⟺ 该玩家离开 Hub 后还没回来过**。
+	// 不清的话,一次「断线→秒重连」会在权威侧留下一个陈旧时刻;等到下一次掉线
+	// 恰好没能写新时刻时(Hub DS 整台挂掉 → 压根不会调 ReportDisconnect),
+	// 消费方就会拿那个旧时刻算出「已离线几十分钟」,把刚掉线 10 秒的玩家立刻踢掉。
+	ClearLastSeen(ctx context.Context, playerID uint64) error
+	// BatchGetLastSeen 批量读 last-seen 时刻。用 pipeline 一次往返。
+	// 返回 map 只含有记录的玩家;缺席 = UNKNOWN(从未记录 / 已超 retention),
+	// 调用方不得当成 0 或「刚离开」(§9.22 不确定不得冒充默认值)。
+	BatchGetLastSeen(ctx context.Context, playerIDs []uint64) (map[uint64]int64, error)
 	Delete(ctx context.Context, playerID uint64) error
 }
 
@@ -75,6 +97,16 @@ func NewRedisLocationRepo(rdb redis.UniversalClient) *RedisLocationRepo {
 
 func locKey(playerID uint64) string {
 	return fmt.Sprintf("pandora:locator:%d", playerID)
+}
+
+// lastSeenKey returns "pandora:locator:lastseen:<playerID>" —— 与位置 key 分开,
+// 好让它在位置 key 过期之后依然存在(见 LocationRepo.SetLastSeen 注释)。
+//
+// ⚠️ 刻意**不**与 locKey 做同 slot 的 hash tag:两者永远不在同一条 Lua / 事务里写
+// (biz 按「先守卫缩 TTL、成功后再记时刻」的顺序分两步做,见 ReportDisconnect),
+// 因此不存在 CROSSSLOT 问题;而给 locKey 补 hash tag 会改动全链已在用的 key 形态。
+func lastSeenKey(playerID uint64) string {
+	return fmt.Sprintf("pandora:locator:lastseen:%d", playerID)
 }
 
 // SetGuarded WATCH/MULTI/EXEC 原子读-判-写。
@@ -278,6 +310,75 @@ func (r *RedisLocationRepo) ShrinkHubTTL(ctx context.Context, hubPod string, pla
 		return false, errcode.New(errcode.ErrInternal, "redis shrink hub ttl: %v", err)
 	}
 	return shrunk == 1, nil
+}
+
+// SetLastSeen 写 last-seen 时刻(SET + PX,覆盖式)。
+//
+// 覆盖而非「只增不减」:同一玩家的多次离开,最后一次才是有效的「离开多久」基线。
+// 重复 / 迟到的 ReportDisconnect 只会把时刻刷新到更晚,后果是**晚一点**才判定超时,
+// 偏保守的方向(宁可多留他一会儿,也不要把在线的人误算成离线很久)。
+func (r *RedisLocationRepo) SetLastSeen(ctx context.Context, playerID uint64, atMs int64, retention time.Duration) error {
+	if playerID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "playerID must > 0")
+	}
+	if retention <= 0 {
+		return errcode.New(errcode.ErrInvalidArg, "retention must > 0")
+	}
+	if err := r.rdb.Set(ctx, lastSeenKey(playerID), strconv.FormatInt(atMs, 10), retention).Err(); err != nil {
+		return errcode.New(errcode.ErrInternal, "redis set last seen: %v", err)
+	}
+	return nil
+}
+
+// ClearLastSeen UNLINK(异步删)。key 不存在不是错误(玩家本来就没离开过)。
+func (r *RedisLocationRepo) ClearLastSeen(ctx context.Context, playerID uint64) error {
+	if playerID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "playerID must > 0")
+	}
+	if err := r.rdb.Unlink(ctx, lastSeenKey(playerID)).Err(); err != nil && !errors.Is(err, redis.Nil) {
+		return errcode.New(errcode.ErrInternal, "redis clear last seen: %v", err)
+	}
+	return nil
+}
+
+// BatchGetLastSeen 用 pipeline 一次往返批量读。
+//
+// 单 key miss / 解析失败一律跳过(缺席 = UNKNOWN),不让整批失败:调用方对 UNKNOWN
+// 的处理必须是「不动作」,所以把坏值当缺席比返回一个可能被误用的 0 更安全。
+func (r *RedisLocationRepo) BatchGetLastSeen(ctx context.Context, playerIDs []uint64) (map[uint64]int64, error) {
+	out := make(map[uint64]int64, len(playerIDs))
+	if len(playerIDs) == 0 {
+		return out, nil
+	}
+	pipe := r.rdb.Pipeline()
+	cmds := make(map[uint64]*redis.StringCmd, len(playerIDs))
+	for _, pid := range playerIDs {
+		if pid == 0 {
+			continue
+		}
+		if _, dup := cmds[pid]; dup {
+			continue
+		}
+		cmds[pid] = pipe.Get(ctx, lastSeenKey(pid))
+	}
+	if len(cmds) == 0 {
+		return out, nil
+	}
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		return nil, errcode.New(errcode.ErrInternal, "redis batch get last seen: %v", err)
+	}
+	for pid, cmd := range cmds {
+		v, err := cmd.Result()
+		if err != nil {
+			continue // redis.Nil(无记录)/ 单命令失败 → 缺席判 UNKNOWN
+		}
+		ms, perr := strconv.ParseInt(v, 10, 64)
+		if perr != nil {
+			continue // 坏值当缺席,不喂给调用方
+		}
+		out[pid] = ms
+	}
+	return out, nil
 }
 
 // readLocation HGETALL 并解析为 LocationRecord。c 可以是 *redis.Client 或 WATCH 内的 *redis.Tx。

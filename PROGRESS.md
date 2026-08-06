@@ -2388,3 +2388,55 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   已被容器吃到,无需手工重建);④导表 23 张表全过(源表 svn-r1774);⑤Hub DS 起来,UDP 7777 已绑。
 - **遗留**:`dist/` 里的预编译 linux 二进制和 `deploy/ds/stage` 的 pak 仍含旧端口字面量,
   属构建产物,下次出包自然覆盖;本机那条 `50000-50059` 的 netsh 保留现在已无用,可留可删。
+
+## 2026-08-06:队员离线自动退队(locator 记时刻 + pkg/offlinewatch 通用骨架 + team 首个接入)
+
+- **需求**:没在战斗中的队员掉线一段时间后自动移出队伍,不要让队伍里挂着一个占坑的死人。
+- **先量了现状**(全部代码/配置读数,非估算):唯一的"下线"判据是 locator key 过期;
+  链路常数 = Hub DS 心跳 5s(代码钳 `[1,5]`)/ `location_ttl` 30s / 断线宽限 10s /
+  UE `ConnectionTimeout` **60s**(项目 ini 未覆盖,吃引擎默认)。所以**正常退出约 10s 判离线,
+  静默掉线(拔网线/断电)约 70s,最坏 90s**。
+- **明确否决了压 `ConnectionTimeout`**:该值 client / DS 共用一份,压到 20s 会让
+  ①地铁隧道断 10~30s 的玩家每过一个隧道断一次线(且重连要重走 login→Travel→Admission,
+  一次 20s 隧道换 30~60s 不可玩,净亏);②DS 侧 hitch 超时就被客户端主动断开 ——
+  本仓画像有 Chaos 加速结构重建**单帧 3.58s**、Artic01 加载期 GT 阻塞 **15.6~22.2s** 的实测。
+  60s 不是没人调过的默认值,它在保护弱网玩家和 hitch。**结论:一行不改。**
+- **架构要点**:「玩家什么时候离开的」这个事实只放 locator 一份(§9.22)。位置 key 整个带 TTL,
+  过期时 `updated_at_ms` 跟着消失 → 权威侧答不了"离线多久",故新增**独立 key**
+  `pandora:locator:lastseen:<id>`(`last_seen_retention` 默认 1h)+ `BatchGetLastSeen` RPC。
+  刻意**不**给各业务抽"扫描全量实体"的公共库 —— 那只解决代码重复、不解决状态重复。
+- **落地三块**:
+  ① **locator**:`ReportDisconnect` 守卫通过后记 last-seen + 发离场事件
+  (新 topic `pandora.player.presence`,proto `PlayerLeftHubEvent`)。
+  **顺序铁律**:先守卫缩 TTL、成功才记时刻/发事件,两步刻意非原子 —— 中间挂掉最多"缩了 TTL 没时刻",
+  消费方查到 UNKNOWN 一律不动作,失效方向安全;反过来会留下无守卫背书的时刻,
+  让在线玩家在下次真离线时被算成已离线很久、提前踢人。
+  ② **`pkg/offlinewatch`**:事件驱动 + 延迟复查骨架(kafka consumer → 到期 ZSET → ticker
+  只取到期项 → 回查 locator 权威 → Handler)。业务只实现 `OnPlayerOffline`。
+  ZSET 是**独立 key 的调度提示、非权威**,可重建、不寄生在任何有语义的索引 score 上(§16.10)。
+  复用 `safego.Loop`,不新建 timer 状态机。
+  ③ **team**:第一个使用者,`offline_leave.enabled` **默认关**(§14.2)。三道闸:
+  此刻真不在线(骨架判)/ 整队没被对局占住 / 该玩家自己没被对局占住 —— 后两道读 matchmaker,
+  **读不确定一律 fail-closed 返回 error 重试,绝不放行**(拆掉一支正在打的队伍会波及还在游戏的队友)。
+- **阈值 180s 的推导**(写进 conf 注释,别随手调小):下界由"一个会回来的玩家最快多久能回来"定
+  —— 旧 Controller 清退 + Travel + Hub 地图加载 + Admission,保守 30~60s;低于它踢的是本来
+  能回来的人,与网络好坏无关。再叠容忍一段 ~2 分钟弱网失联 → 180s。玩家实际被容忍
+  ≈ 阈值 + 60~90s 检测延迟 ≈ 4 分钟。
+- **两条独立触发源缺一不可**:kafka 事件(秒级)+ `GetMyTeam` 读路径兜底(Inspect → 只排队不写队伍)。
+  事件会丢、Hub DS 整台挂掉时压根不发事件,只接事件会留下永远清不掉的残留成员。
+- **验证**:go.work **全部模块 build 通过**;`pkg/offlinewatch` / team biz / locator biz+service
+  测试全绿;proto 重生前先验证过生成器**字节可复现**(改动前重生与仓库版 diff 为空),
+  故 pb 的 diff 恰为本次改动。新增测试重点全在闸门上(守卫没过不留痕、对局中不动、
+  读不到对局状态必须重试而非放行、拿不到时刻则出队不猜、locator 挂了不影响读返回)。
+- **遗留**:①UE cpp pb 未同步(新 message 是服务端内部事件,客户端用不到;
+  `TEAM_UPDATE_REASON_MEMBER_OFFLINE_LEFT` 客户端不认识时按默认分支刷新,队伍快照仍正确,
+  只是少一句"XXX 掉线已离队"文案);②功能默认关,启用顺序 = 先 locator `departure_event.enabled`
+  再 team `offline_leave.enabled`,只开后者会退化成纯兜底(已打 WARN)。
+- **同日补修(自查「断线→秒重连」路径时发现的真 bug)**:`SetLocation(state=HUB)` 原本不清
+  last-seen,于是一次「断线→秒重连」会在权威侧留下陈旧时刻。当下不出错(消费方永远先看
+  「此刻是否在线」),但会在**下一次掉线恰好写不出新时刻**时爆 —— Hub DS 整台挂掉压根不会调
+  `ReportDisconnect`,位置 key 自然过期判离线,而权威侧还留着半小时前的旧时刻 →
+  算出「已离线半小时」→ 把刚掉线 10 秒的玩家立刻踢出队伍,**180s 宽限形同虚设**。
+  修法 = 玩家回到 Hub 时清掉时刻,维持不变量「last-seen 存在 ⟺ 离开 Hub 后还没回来过」。
+  只在 HUB 分支清(last-seen 只由「离开 HUB」写出,要再次离开必先回到 HUB,故已覆盖全部路径;
+  无条件清会给 BATTLE 心跳链路每人每 5s 平白加一次 Redis 往返)。已补两条回归测试。

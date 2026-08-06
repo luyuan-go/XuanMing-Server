@@ -38,6 +38,28 @@ type LocatorConf struct {
 	// LocationTTL Redis hash 的 TTL。默认 30s,对齐 infra.md §3.2 表中的 30s heartbeat。
 	// W3 ⑥(2026-06-05):字段改用 config.Duration,etc yaml 可写 "30s" 字符串。
 	LocationTTL config.Duration `yaml:"location_ttl,omitempty" json:"location_ttl,omitempty"`
+
+	// LastSeenRetention 是「玩家最后一次离开 Hub 的时刻」独立 key 的保留时长,默认 1h。
+	//
+	// 必须**远大于**所有消费方的离线阈值(当前最长 team.offline_leave.threshold=180s):
+	// 时刻先于阈值过期 → 消费方查到 UNKNOWN → 按 §9.22 fail-closed 不动作 → 功能静默失效。
+	// 新增更长阈值的消费方时必须同步调大本值。
+	LastSeenRetention config.Duration `yaml:"last_seen_retention,omitempty" json:"last_seen_retention,omitempty"`
+
+	// DepartureEvent 控制「玩家离开 Hub」服务间事件的生产(topic pandora.player.presence)。
+	DepartureEvent DepartureEventConf `yaml:"departure_event,omitempty" json:"departure_event,omitempty"`
+}
+
+// DepartureEventConf 是离场事件出口配置。
+//
+// **默认关闭**(§14.2:新行为允许配置开关默认关,但打开后必须是完整实现):
+// 关闭时 last-seen 时刻照常记录,消费方退化为「读到该实体时顺手复查」的兜底路径,
+// 只是不再有秒级触发器。这条降级是设计的一部分,不是半成品。
+type DepartureEventConf struct {
+	// Enabled 是否生产离场事件。true 时 kafka.brokers 是**启动强依赖**:
+	// 消费方按「有事件」设计触发时效,producer 静默不可用会让整条链看起来在跑却永不触发,
+	// 这种失败模式比起不来更糟(同 team 服务对 kafka producer 的处理口径)。
+	Enabled bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 }
 
 // PresenceConf 是好友在线态订阅推送 fan-out 的配置
@@ -64,6 +86,9 @@ type PresenceConf struct {
 func (c *Config) Defaults() {
 	if c.Locator.LocationTTL == 0 {
 		c.Locator.LocationTTL = config.Duration(30 * time.Second)
+	}
+	if c.Locator.LastSeenRetention == 0 {
+		c.Locator.LastSeenRetention = config.Duration(time.Hour)
 	}
 	if c.Presence.DebounceWindow == 0 {
 		c.Presence.DebounceWindow = config.Duration(8 * time.Second)

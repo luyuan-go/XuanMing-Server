@@ -27,3 +27,10 @@ snowflake:
 
 locator:
   location_ttl: "30s"             # 不变量 §1:玩家位置 30s heartbeat,SetLocation 刷 TTL
+  # 「最后一次被观测到离开 Hub 的时刻」保留时长。必须远大于所有消费方的离线阈值
+  # (当前最长 team.offline_leave.threshold=180s),否则消费方查到 UNKNOWN 会永不动作。
+  last_seen_retention: "1h"
+  # 「玩家离开 Hub」服务间事件(topic pandora.player.presence)。开启后 kafka.brokers 是强依赖。
+  # 语义是「离开了 Hub」不是「下线」——消费者必须回查 locator 权威再动作。
+  departure_event:
+    enabled: false

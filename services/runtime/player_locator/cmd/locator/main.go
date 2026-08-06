@@ -142,6 +142,30 @@ func main() {
 		presence = presenceHub
 	}
 	uc := biz.NewLocatorUsecase(repo, cfg.Locator.LocationTTL.Std(), presence)
+	uc.SetLastSeenRetention(cfg.Locator.LastSeenRetention.Std())
+
+	// 4.2 离场事件出口(topic pandora.player.presence):默认关,开启后 kafka 是强依赖。
+	//
+	// 为什么开启后必须 fail-fast 而不是像 presence 那样降级:消费方(pkg/offlinewatch)
+	// 的时效是按「有事件」设计的,producer 静默不可用会让整条链**看起来在跑却永不触发**,
+	// 排查时还会误以为是消费方的问题。宁可不 Ready 让编排器重试(与 team 服务对
+	// kafka producer 的处理口径一致)。关闭时 last-seen 时刻照常记录,消费方走兜底复查。
+	if cfg.Locator.DepartureEvent.Enabled {
+		if len(cfg.Kafka.Brokers) == 0 {
+			helper.Errorw("msg", "departure_event_enabled_but_no_kafka",
+				"hint", "set kafka.brokers, or turn off locator.departure_event.enabled")
+			os.Exit(1)
+		}
+		depProducer, derr := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicPlayerPresence)
+		if derr != nil {
+			helper.Errorw("msg", "departure_event_producer_init_failed", "err", derr,
+				"topic", kafkax.TopicPlayerPresence)
+			os.Exit(1)
+		}
+		defer func() { _ = depProducer.Close() }()
+		uc.SetDepartureNotifier(&departureNotifier{p: depProducer})
+		helper.Infow("msg", "departure_event_enabled", "topic", kafkax.TopicPlayerPresence)
+	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)
@@ -218,6 +242,23 @@ func main() {
 		helper.Errorw("msg", "app_run_failed", "err", err)
 		os.Exit(1)
 	}
+}
+
+// departureNotifier 把 biz.DepartureNotifier 适配到 kafkax.KeyOrderedProducer。
+// kafka key = player_id(不变量 §9:同玩家事件保序 —— 「离开」与后续可能的「又离开」
+// 必须落同一分区,否则消费方会先看到旧的那条)。
+// payload = PlayerLeftHubEvent proto bytes(服务间事件,push 不订阅、不下发客户端)。
+type departureNotifier struct {
+	p *kafkax.KeyOrderedProducer
+}
+
+func (a *departureNotifier) NotifyLeftHub(ctx context.Context, playerID uint64, leftAtMs int64, hubPod string) error {
+	evt := &locatorv1.PlayerLeftHubEvent{
+		PlayerId: playerID,
+		LeftAtMs: leftAtMs,
+		HubPod:   hubPod,
+	}
+	return a.p.Send(ctx, strconv.FormatUint(playerID, 10), evt)
 }
 
 // presencePusher 把 biz.PresencePusher 接口适配到 kafkax.KeyOrderedProducer。

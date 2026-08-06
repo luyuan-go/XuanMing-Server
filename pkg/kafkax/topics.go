@@ -100,6 +100,18 @@ const (
 	// TopicDSLifecycle — proto: pandora.ds.v1.DSLifecycleEvent
 	// key=match_id;W4 ③ ds_allocator 心跳超时发 ABANDONED → battle_result 写补偿记录(不变量 §4)
 	TopicDSLifecycle = "pandora.ds.lifecycle"
+
+	// TopicPlayerPresence — proto: pandora.locator.v1.PlayerLeftHubEvent
+	// key=player_id;player_locator 在 ReportDisconnect 成功缩 TTL 时生产。
+	//
+	// ⚠️ 语义是「离开了 Hub」而**不是「下线」**(travel 去战斗、秒重连都会产生),
+	// 消费者只能把它当触发器,到自己的阈值后回查 locator 权威再动作(见 proto 注释)。
+	// 供 pkg/offlinewatch 的通用消费骨架订阅;push 不订阅,不下发客户端。
+	//
+	// ⚠️ 勿与 TopicPresenceUpdate 混用:那条是给好友面板的粗粒度状态批量推送
+	// (key=subscriber_id、单实例内存订阅 + 去抖、可 killswitch 丢弃),
+	// 投递保证与语义都不同,混用会让「可丢的展示流」和「要兜底的业务触发流」互相污染。
+	TopicPlayerPresence = "pandora.player.presence"
 )
 
 // BuildDLQTopic 构造死信队列 topic(infra.md §4.4),委托 config.BuildDLQTopic。

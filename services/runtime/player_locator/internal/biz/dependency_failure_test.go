@@ -31,6 +31,16 @@ func (r failingLocationRepo) ShrinkHubTTL(context.Context, string, uint64, time.
 	return false, r.err
 }
 
+func (r failingLocationRepo) SetLastSeen(context.Context, uint64, int64, time.Duration) error {
+	return r.err
+}
+
+func (r failingLocationRepo) ClearLastSeen(context.Context, uint64) error { return r.err }
+
+func (r failingLocationRepo) BatchGetLastSeen(context.Context, []uint64) (map[uint64]int64, error) {
+	return nil, r.err
+}
+
 func (r failingLocationRepo) Delete(context.Context, uint64) error { return r.err }
 
 func TestLocationRead_DependencyFailureNeverMasqueradesAsOffline(t *testing.T) {

@@ -56,6 +56,28 @@ team:
   match_resume_auth_secret: "pandora-dev-team-resume-auth-key-v1!"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
 
+  # locator_addr: player_locator gRPC 直连地址,离线自动退队的判定依据来源。
+  # 留空 = 该功能整块关闭。
+  locator_addr: "127.0.0.1:20006"
+
+  # offline_leave: 队员离线超时自动移出队伍。
+  #
+  # ⚠️ 默认 enabled=false。开之前必须先把 locator 的离场事件打开
+  # (locator-dev.yaml 的 locator.departure_event.enabled=true),否则只剩「有人打开
+  # 组队面板时才复查」的兜底路径,时效从秒级退化到「等下次有人看」。
+  #
+  # threshold 为什么是 180s(别随手调小,推导见 conf.go OfflineLeaveConf 注释):
+  #   一个会回来的玩家,从信号恢复到重新出现在 locator 里,保守要 30~60s
+  #   (旧 Controller 清退 + Travel + Hub 地图加载 + Admission);低于这个数会踢掉
+  #   本来能回来的人。再叠上要容忍的弱网失联时长(地铁/隧道 ~2 分钟)得到 180s。
+  #   另外还要记得:静默掉线本身要 60~90s 才被观测到,玩家实际被容忍 ≈ 阈值 + 60~90s。
+  offline_leave:
+    enabled: false
+    threshold: "180s"
+    check_interval: "15s"
+    budget: 200
+    kafka_partitions: 3
+
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威
 # (pandora:sess,node.redis_client 指向的共享 Redis)当前一代,顶号后旧 JWT 立即失效。
 # dev 宽松档 require=false(gate 已装配时顶号/登出照常拒;仅漏配端点时跳过判定);

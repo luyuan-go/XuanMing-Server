@@ -28,8 +28,10 @@ import (
 	pconfig "github.com/luyuancpp/pandora/pkg/config"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 
+	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
+	"github.com/luyuancpp/pandora/pkg/offlinewatch"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
@@ -81,6 +83,14 @@ func main() {
 	// 对任何人敞开——这是静默的权限放大,必须启动就拒,不能等第一个玩家点"申请"才暴露。
 	if err := cfg.ValidateJoinPolicy(); err != nil {
 		helper.Errorw("msg", "team_join_policy_invalid", "err", err, "value", cfg.Team.JoinPolicy)
+		os.Exit(1)
+	}
+
+	// 离线自动退队的依赖必须齐:开了却缺 locator / matchmaker 地址,功能会静默不生效
+	// (或更糟:缺了对局闸门就有拆掉正在打的队伍的风险)。这类「配了却不生效」的失败
+	// 模式必须启动就暴露,不能等第一个玩家掉线才发现。
+	if err := cfg.ValidateOfflineLeave(); err != nil {
+		helper.Errorw("msg", "team_offline_leave_config_invalid", "err", err)
 		os.Exit(1)
 	}
 
@@ -167,6 +177,57 @@ func main() {
 		helper.Warnw("msg", "matchmaker_addr_empty",
 			"hint", "leave/kick will not cancel matchmaking tickets; team join match-gate disabled")
 	}
+
+	// 6.1 离线成员自动退队(默认关,见 conf.OfflineLeaveConf)。
+	//
+	// 装配三件:locator 只读客户端(判定依据)、offlinewatch 复查骨架(排期 + 到期回查)、
+	// kafka 消费者(离场事件 → 排期)。三者任一装不起来都 fail-fast:半截接线会让功能
+	// 看起来在跑却永不触发,排查成本远高于起不来。
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	defer watchCancel()
+	if cfg.Team.OfflineLeave.Enabled {
+		locatorConn := grpcclient.MustDialInsecure(cfg.Team.LocatorAddr)
+		defer func() { _ = locatorConn.Close() }()
+
+		watcher, werr := offlinewatch.New(rdb, offlinewatch.NewGrpcPresenceReader(locatorConn), uc,
+			offlinewatch.Options{
+				Namespace:    serviceName,
+				Threshold:    cfg.Team.OfflineLeave.Threshold.Std(),
+				Interval:     cfg.Team.OfflineLeave.CheckInterval.Std(),
+				Budget:       cfg.Team.OfflineLeave.Budget,
+				RetryBackoff: cfg.Team.OfflineLeave.CheckInterval.Std(),
+			})
+		if werr != nil {
+			helper.Errorw("msg", "offline_watch_init_failed", "err", werr)
+			os.Exit(1)
+		}
+		// 读路径兜底(GetMyTeam 顺手复查),与下面的事件链是两条独立触发源:
+		// 事件丢了靠它补,没人看队伍时靠事件。少接一条就会有清不掉的残留。
+		uc.SetPresenceInspector(watcher)
+
+		if len(cfg.Kafka.Brokers) == 0 {
+			// 允许:没有 kafka 时退化成「纯兜底」——玩家打开面板才复查。
+			// 这不是半成品,是明确的降级档;但必须让运维看见,否则会误以为有秒级时效。
+			helper.Warnw("msg", "offline_leave_without_kafka",
+				"hint", "no kafka.brokers: offline members are only reaped when someone reads the team; configure kafka + locator.departure_event.enabled for timely removal")
+		} else {
+			consumer, cerr := watcher.NewConsumer(cfg.Kafka, cfg.Team.OfflineLeave.KafkaPartitions)
+			if cerr != nil {
+				helper.Errorw("msg", "offline_watch_consumer_init_failed", "err", cerr)
+				os.Exit(1)
+			}
+			consumer.Start()
+			defer func() { _ = consumer.Close() }()
+		}
+
+		watcher.Start(watchCtx)
+		helper.Infow("msg", "offline_leave_enabled",
+			"locator_addr", cfg.Team.LocatorAddr,
+			"threshold", cfg.Team.OfflineLeave.Threshold.String(),
+			"check_interval", cfg.Team.OfflineLeave.CheckInterval.String(),
+			"budget", cfg.Team.OfflineLeave.Budget)
+	}
+
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)

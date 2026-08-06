@@ -32,6 +32,7 @@ const (
 	PlayerLocatorService_UnsubscribePresence_FullMethodName             = "/pandora.locator.v1.PlayerLocatorService/UnsubscribePresence"
 	PlayerLocatorService_ClearLocation_FullMethodName                   = "/pandora.locator.v1.PlayerLocatorService/ClearLocation"
 	PlayerLocatorService_RefreshHubLocations_FullMethodName             = "/pandora.locator.v1.PlayerLocatorService/RefreshHubLocations"
+	PlayerLocatorService_BatchGetLastSeen_FullMethodName                = "/pandora.locator.v1.PlayerLocatorService/BatchGetLastSeen"
 	PlayerLocatorService_ReportDisconnect_FullMethodName                = "/pandora.locator.v1.PlayerLocatorService/ReportDisconnect"
 	PlayerLocatorService_GetPlacement_FullMethodName                    = "/pandora.locator.v1.PlayerLocatorService/GetPlacement"
 	PlayerLocatorService_BeginPlacementTransition_FullMethodName        = "/pandora.locator.v1.PlayerLocatorService/BeginPlacementTransition"
@@ -68,6 +69,21 @@ type PlayerLocatorServiceClient interface {
 	// MATCHING/BATTLE/其它 pod 的记录一律不动(不变量 §1,战斗态由战斗链路权威维护)。
 	// 玩家掉线/拔线 → Hub DS 不再上报该 id → locator key 30s 自然过期 = OFFLINE。
 	RefreshHubLocations(ctx context.Context, in *RefreshHubLocationsRequest, opts ...grpc.CallOption) (*RefreshHubLocationsResponse, error)
+	// BatchGetLastSeen 批量查「该玩家最后一次被观测到离开 Hub 的时刻」(unix ms)。
+	//
+	// 为什么需要它:位置记录 `pandora:locator:<player_id>` 是整 key 带 TTL 的 hash,
+	// key 一过期,`updated_at_ms` 跟着一起消失 —— GetLocation / BatchGetLocation 只能
+	// 回答「此刻在不在线」,回答不了「已经离线多久」。凡是按「离线满 N 秒才动作」做决策的
+	// 业务(组队自动退队等),必须有一个**不随位置 TTL 消失**的时间戳。
+	//
+	// 写入点唯一:ReportDisconnect 成功缩 TTL 时写一次(**一次断线写一次**,不随心跳写,
+	// 开销可忽略)。因此它的语义是「Hub DS 观测到该玩家离开的时刻」,不是「下线时刻」——
+	// 玩家 travel 去战斗同样会触发 Hub Logout。**调用方一律不得单独据此判定离线**,
+	// 必须与 BatchGetLocation 的「此刻是否在线」合用:先确认现在查不到,再看离开了多久。
+	//
+	// 缺席语义:map 里只含有记录的玩家。缺席 = 从未记录 / 已超保留期 / Hub DS 整台挂掉
+	// 时压根没上报过,一律按 UNKNOWN 处理,不得当成「刚刚离开」或「离开很久」(§9.22)。
+	BatchGetLastSeen(ctx context.Context, in *BatchGetLastSeenRequest, opts ...grpc.CallOption) (*BatchGetLastSeenResponse, error)
 	// ReportDisconnect 快速断线上报:Hub DS 在玩家 Logout / 连接超时断开时调用,
 	// 把该玩家 HUB 位置的 TTL 缩短到 grace(~10s)——真退出的玩家 10s 内判离线,
 	// 不用等满 30s 心跳 TTL。守卫:只缩「state==HUB 且 hub_pod 匹配」的记录;
@@ -168,6 +184,16 @@ func (c *playerLocatorServiceClient) RefreshHubLocations(ctx context.Context, in
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RefreshHubLocationsResponse)
 	err := c.cc.Invoke(ctx, PlayerLocatorService_RefreshHubLocations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerLocatorServiceClient) BatchGetLastSeen(ctx context.Context, in *BatchGetLastSeenRequest, opts ...grpc.CallOption) (*BatchGetLastSeenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchGetLastSeenResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_BatchGetLastSeen_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -280,6 +306,21 @@ type PlayerLocatorServiceServer interface {
 	// MATCHING/BATTLE/其它 pod 的记录一律不动(不变量 §1,战斗态由战斗链路权威维护)。
 	// 玩家掉线/拔线 → Hub DS 不再上报该 id → locator key 30s 自然过期 = OFFLINE。
 	RefreshHubLocations(context.Context, *RefreshHubLocationsRequest) (*RefreshHubLocationsResponse, error)
+	// BatchGetLastSeen 批量查「该玩家最后一次被观测到离开 Hub 的时刻」(unix ms)。
+	//
+	// 为什么需要它:位置记录 `pandora:locator:<player_id>` 是整 key 带 TTL 的 hash,
+	// key 一过期,`updated_at_ms` 跟着一起消失 —— GetLocation / BatchGetLocation 只能
+	// 回答「此刻在不在线」,回答不了「已经离线多久」。凡是按「离线满 N 秒才动作」做决策的
+	// 业务(组队自动退队等),必须有一个**不随位置 TTL 消失**的时间戳。
+	//
+	// 写入点唯一:ReportDisconnect 成功缩 TTL 时写一次(**一次断线写一次**,不随心跳写,
+	// 开销可忽略)。因此它的语义是「Hub DS 观测到该玩家离开的时刻」,不是「下线时刻」——
+	// 玩家 travel 去战斗同样会触发 Hub Logout。**调用方一律不得单独据此判定离线**,
+	// 必须与 BatchGetLocation 的「此刻是否在线」合用:先确认现在查不到,再看离开了多久。
+	//
+	// 缺席语义:map 里只含有记录的玩家。缺席 = 从未记录 / 已超保留期 / Hub DS 整台挂掉
+	// 时压根没上报过,一律按 UNKNOWN 处理,不得当成「刚刚离开」或「离开很久」(§9.22)。
+	BatchGetLastSeen(context.Context, *BatchGetLastSeenRequest) (*BatchGetLastSeenResponse, error)
 	// ReportDisconnect 快速断线上报:Hub DS 在玩家 Logout / 连接超时断开时调用,
 	// 把该玩家 HUB 位置的 TTL 缩短到 grace(~10s)——真退出的玩家 10s 内判离线,
 	// 不用等满 30s 心跳 TTL。守卫:只缩「state==HUB 且 hub_pod 匹配」的记录;
@@ -335,6 +376,9 @@ func (UnimplementedPlayerLocatorServiceServer) ClearLocation(context.Context, *C
 }
 func (UnimplementedPlayerLocatorServiceServer) RefreshHubLocations(context.Context, *RefreshHubLocationsRequest) (*RefreshHubLocationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshHubLocations not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) BatchGetLastSeen(context.Context, *BatchGetLastSeenRequest) (*BatchGetLastSeenResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BatchGetLastSeen not implemented")
 }
 func (UnimplementedPlayerLocatorServiceServer) ReportDisconnect(context.Context, *ReportDisconnectRequest) (*ReportDisconnectResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReportDisconnect not implemented")
@@ -502,6 +546,24 @@ func _PlayerLocatorService_RefreshHubLocations_Handler(srv interface{}, ctx cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlayerLocatorServiceServer).RefreshHubLocations(ctx, req.(*RefreshHubLocationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerLocatorService_BatchGetLastSeen_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchGetLastSeenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).BatchGetLastSeen(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_BatchGetLastSeen_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).BatchGetLastSeen(ctx, req.(*BatchGetLastSeenRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -684,6 +746,10 @@ var PlayerLocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshHubLocations",
 			Handler:    _PlayerLocatorService_RefreshHubLocations_Handler,
+		},
+		{
+			MethodName: "BatchGetLastSeen",
+			Handler:    _PlayerLocatorService_BatchGetLastSeen_Handler,
 		},
 		{
 			MethodName: "ReportDisconnect",

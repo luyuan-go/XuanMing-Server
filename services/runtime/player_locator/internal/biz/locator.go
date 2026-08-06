@@ -69,11 +69,32 @@ type LocationOutput struct {
 	UpdatedAtMs int64
 }
 
+// DepartureNotifier 把「Hub DS 观测到某玩家离开大厅」发成服务间事件
+// (topic pandora.player.presence,payload=PlayerLeftHubEvent)。
+//
+// nil = 未开启(departure_event.enabled=false / 未配 kafka):此时 last-seen 时刻照常
+// 记录,只是没有实时触发器,消费方退化为「下次读到该实体时顺手复查」的兜底路径。
+// 这条降级是刻意保留的:事件流是加速器,权威始终是 locator 的查询接口。
+type DepartureNotifier interface {
+	// NotifyLeftHub best-effort 投递;返回 error 只用于打日志,绝不阻断 ReportDisconnect
+	// (断线上报本身是尽力而为的在线态优化,不能因为 kafka 抖动就把它变成失败)。
+	NotifyLeftHub(ctx context.Context, playerID uint64, leftAtMs int64, hubPod string) error
+}
+
 // LocatorUsecase 实现 SetLocation / GetLocation / ClearLocation。
 type LocatorUsecase struct {
 	repo     data.LocationRepo
 	ttl      time.Duration
 	presence PresenceNotifier // 可为 nil(presence 订阅推送未开启 → 纯拉模式)
+
+	// lastSeenRetention 是 last-seen 时刻的保留时长,必须**远大于**所有消费方的离线阈值
+	// (当前最长是 team 的 offline_leave.threshold=180s),否则玩家还没到阈值、时刻先过期了,
+	// 消费方查到 UNKNOWN 就永远不会动作。默认 1h,由 conf 注入。
+	// 容量有界(§9.18):一次断线一个小 key,retention 到期自动消失,不随 DAU 累积。
+	lastSeenRetention time.Duration
+
+	// departure 是离场事件出口,可为 nil(见 DepartureNotifier 注释)。nil-safe。
+	departure DepartureNotifier
 
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
 	// 可为 nil:单 Cell / dev / 阶段 1~2 不分片,位置 owner 落点观测退化为不打日志(行为不变)。
@@ -103,12 +124,26 @@ func NewLocatorUsecase(repo data.LocationRepo, ttl time.Duration, presence ...Pr
 		ttl = placement.DSFenceReentryBarrier
 	}
 	// u 保存钳制后的有效 TTL，后续写入不能再使用调用方传入的过短原值。
-	u := &LocatorUsecase{repo: repo, ttl: ttl}
+	u := &LocatorUsecase{repo: repo, ttl: ttl, lastSeenRetention: defaultLastSeenRetention}
 	// presence 是可选弱依赖；仅在调用方显式提供时记录首个通知器，未提供则保持纯拉模式。
 	if len(presence) > 0 {
 		u.presence = presence[0]
 	}
 	return u
+}
+
+// SetLastSeenRetention 覆盖 last-seen 时刻的保留时长(conf 注入)。
+// <=0 视为不改(保持默认),避免配置缺字段时把保留期设成 0 让整条链静默失效。
+func (u *LocatorUsecase) SetLastSeenRetention(d time.Duration) {
+	if d > 0 {
+		u.lastSeenRetention = d
+	}
+}
+
+// SetDepartureNotifier 注入离场事件出口(nil = 不发事件,见 DepartureNotifier 注释)。
+// 用 setter 而非构造参数,与 SetCellRouter / SetMatchCanceler 等既有形态一致。
+func (u *LocatorUsecase) SetDepartureNotifier(n DepartureNotifier) {
+	u.departure = n
 }
 
 // SetCellRouter 注入确定性 region/cell 路由器(scale-cellular-20m.md §4.2 两级架构)。
@@ -166,6 +201,27 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 	}
 	if err := u.repo.SetGuarded(ctx, in.PlayerID, rec, u.ttl, optimisticRetry, guardTransition(ctx, in)); err != nil {
 		return err
+	}
+	// 玩家回到 Hub → 清掉上一次的离开时刻,维持不变量:
+	//   **last-seen 存在 ⟺ 离开 Hub 后还没回来过**。
+	//
+	// 为什么必须清(「断线→秒重连」的真实故障链):留着旧时刻本身不会立刻出错,因为消费方
+	// 永远先看「此刻是否在线」;但等到下一次掉线**恰好没能写新时刻**时就会出事 ——
+	// Hub DS 整台挂掉时压根不会调 ReportDisconnect,此时玩家位置 key 自然过期(离线),
+	// 而权威侧还留着半小时前那次重连前的旧时刻 → 消费方算出「已离线半小时」→
+	// 把刚掉线 10 秒的玩家立刻踢出队伍,180s 宽限形同虚设。
+	//
+	// 只在 HUB 分支清,不是图省事:last-seen 只可能由「离开 HUB」写出(ShrinkHubTTL 只缩
+	// HUB 记录),而玩家要再次离开就必须先回到 HUB,所以 HUB 这一处就覆盖了全部路径。
+	// 反过来若无条件清,会给 BATTLE 心跳链路(ds_allocator 每 5s 每人一次 SetLocation)
+	// 平白加一次 Redis 往返,纯浪费。
+	//
+	// best-effort:清失败只告警。失效方向是「退回本次修复前的行为」,而不是引入新错误。
+	if in.State == LocationStateHub {
+		if cerr := u.repo.ClearLastSeen(ctx, in.PlayerID); cerr != nil {
+			plog.With(ctx).Warnw("msg", "location_last_seen_clear_failed",
+				"player_id", in.PlayerID, "hub_pod", in.HubPod, "err", cerr)
+		}
 	}
 	// presence fan-out(§13.4):写成功后通知 hub,内部转粗粒度 + 去抖 + 合并 + 只推订阅者。
 	if u.presence != nil {
@@ -350,6 +406,13 @@ func (u *LocatorUsecase) RefreshHubLocations(ctx context.Context, hubPod string,
 // 绝不即时置 OFFLINE:玩家 travel 去战斗也触发 Hub Logout,靠 grace + 守卫免疫误判。
 const disconnectGrace = 10 * time.Second
 
+// defaultLastSeenRetention 是 last-seen 时刻的默认保留时长。
+// 取值依据:必须远大于所有消费方的离线阈值(当前最长 team 的 180s),留足一个数量级的
+// 余量以容纳消费方重启 / 积压补跑;同时不能大到让 key 无谓堆积(一次断线一个小 key)。
+// 1h 同时也大于 team active_ttl 之外任何合理阈值,新增消费方若要更长阈值,
+// 必须同步调大 locator.last_seen_retention,否则会查到 UNKNOWN 而永不动作。
+const defaultLastSeenRetention = time.Hour
+
 // ReportDisconnect 快速断线上报:Hub DS 在玩家 Logout / 连接超时断开时调用,
 // 把该玩家 HUB 位置的 TTL 缩短到 disconnectGrace。守卫在 data 层:只缩
 // 「state==HUB 且 hub_pod 匹配」且只缩不涨(EXPIRE LT)。
@@ -365,10 +428,47 @@ func (u *LocatorUsecase) ReportDisconnect(ctx context.Context, hubPod string, pl
 	if err != nil {
 		return false, err
 	}
+	// 顺序铁律:**先守卫缩 TTL,成功后才记时刻 / 发事件**,两步刻意不做成一个原子操作。
+	//
+	// ① 只在 shrunk==true 时才记:ShrinkHubTTL 的 Lua 守卫(state==HUB 且 pod 匹配)
+	//    才是「他确实离开了大厅」的唯一判据。守卫没过意味着这是 travel 去战斗、切线后
+	//    旧 pod 的迟到报文、或记录早已不在——那些都不该在权威侧留下「离开时刻」,
+	//    否则会让一个其实在线的玩家在下次真离线时被算成已离线很久,提前踢人。
+	// ② 顺序不能反:先记时刻再缩 TTL,进程恰好在中间挂掉就会留下无守卫背书的时刻。
+	//    按现在的顺序,中间挂掉最多是「缩了 TTL 但没时刻」——消费方查到 UNKNOWN 一律
+	//    不动作(§9.22),失效方向是安全的那一侧。
+	// ③ 两步失败都不回滚、也不阻断本 RPC:断线上报本身是尽力而为的在线态优化,
+	//    不能因为 Redis / kafka 抖动就把它变成失败(那会让 Hub DS 反复重试真正重要的
+	//    TTL 收缩)。丢了的后果是这一次掉线少一个加速信号,兜底复查路径仍然成立。
+	nowMs := time.Now().UnixMilli()
+	if shrunk {
+		if serr := u.repo.SetLastSeen(ctx, playerID, nowMs, u.lastSeenRetention); serr != nil {
+			plog.With(ctx).Warnw("msg", "location_last_seen_write_failed",
+				"player_id", playerID, "hub_pod", hubPod, "err", serr)
+		}
+		if u.departure != nil {
+			if nerr := u.departure.NotifyLeftHub(ctx, playerID, nowMs, hubPod); nerr != nil {
+				plog.With(ctx).Warnw("msg", "location_departure_event_failed",
+					"player_id", playerID, "hub_pod", hubPod, "err", nerr)
+			}
+		}
+	}
 	plog.With(ctx).Infow("msg", "location_disconnect_reported",
 		"player_id", playerID, "hub_pod", hubPod, "shrunk", shrunk,
 		"grace_ms", disconnectGrace.Milliseconds())
 	return shrunk, nil
+}
+
+// BatchGetLastSeen 批量查「最后一次被观测到离开 Hub 的时刻」(unix ms)。
+//
+// 返回 map 只含有记录的玩家;缺席 = UNKNOWN。调用方必须与 BatchGetLocation 合用:
+// 先确认此刻查不到位置(离线),再看 last-seen 判断离开了多久;单看本接口不能判离线
+// (玩家可能已经回来了,而上一次的离开时刻还在保留期内没过期)。
+func (u *LocatorUsecase) BatchGetLastSeen(ctx context.Context, playerIDs []uint64) (map[uint64]int64, error) {
+	if len(playerIDs) == 0 {
+		return map[uint64]int64{}, nil
+	}
+	return u.repo.BatchGetLastSeen(ctx, playerIDs)
 }
 
 // ClearLocation Unlink redis hash。

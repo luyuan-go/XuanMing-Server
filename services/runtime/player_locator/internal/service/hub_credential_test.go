@@ -189,9 +189,10 @@ func TestHubCredentialStateChecker_StrictActiveTuple(t *testing.T) {
 
 // 下列 fake 只记录 usecase 是否真正触发 Redis 位置副作用。
 type sideEffectRepo struct {
-	setCalls     int
-	shrinkCalls  int
-	refreshCalls int
+	setCalls      int
+	shrinkCalls   int
+	refreshCalls  int
+	lastSeenCalls int
 }
 
 func (s *sideEffectRepo) SetGuarded(_ context.Context, _ uint64, _ data.LocationRecord, _ time.Duration, _ int, _ func(data.LocationRecord, bool) error) error {
@@ -211,6 +212,14 @@ func (s *sideEffectRepo) RefreshHubLocations(context.Context, string, []uint64, 
 func (s *sideEffectRepo) ShrinkHubTTL(context.Context, string, uint64, time.Duration) (bool, error) {
 	s.shrinkCalls++
 	return true, nil
+}
+func (s *sideEffectRepo) SetLastSeen(context.Context, uint64, int64, time.Duration) error {
+	s.lastSeenCalls++
+	return nil
+}
+func (s *sideEffectRepo) ClearLastSeen(context.Context, uint64) error { return nil }
+func (s *sideEffectRepo) BatchGetLastSeen(context.Context, []uint64) (map[uint64]int64, error) {
+	return map[uint64]int64{}, nil
 }
 func (s *sideEffectRepo) Delete(context.Context, uint64) error { return nil }
 

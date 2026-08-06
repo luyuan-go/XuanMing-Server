@@ -101,6 +101,10 @@ type TeamUsecase struct {
 	// 被对局占住的队伍,与 matchCanceler 的弱依赖口径一致。nil-safe。
 	matchCommitment MatchCommitmentReader
 
+	// presence 是「离线成员自动退队」的读路径兜底入口(见 offline_leave.go)。
+	// 可为 nil(功能关 / 未配 locator_addr)→ 读路径不做任何额外查询,行为与历史一致。nil-safe。
+	presence PresenceInspector
+
 	// lastTouch 记录每个玩家上次 GetMyTeam 续期队伍 TTL 的时刻(节流,避免每次
 	// 轮询都敲 Redis EXPIRE)。key=playerID(uint64) value=time.Time。
 	// 多实例部署下各实例独立节流,最坏情况多几次 EXPIRE,无正确性影响。
@@ -690,6 +694,10 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 	// 只在 GetMyTeam(本人+索引校验过)续,GetTeam(任意 teamID)绝不续,
 	// 防旁人反复读把已抛弃队伍永久续命;disbanded 分支已在上方 return,不续。
 	u.maybeTouchTeam(ctx, team, playerID)
+	// 离线成员兜底复查(功能关闭时为 no-op):kafka 事件会丢、Hub DS 整台挂掉时压根不发
+	// 事件,只靠事件会留下永远清不掉的残留成员。玩家打开组队面板这一下顺手补一次,
+	// best-effort、只排队不写队伍,失败不影响本次读返回(见 offline_leave.go)。
+	u.inspectTeamPresence(ctx, team)
 	return team, true, nil
 }
 

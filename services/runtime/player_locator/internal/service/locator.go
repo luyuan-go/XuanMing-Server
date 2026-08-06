@@ -122,6 +122,22 @@ func (s *LocatorService) BatchGetLocation(ctx context.Context, req *locatorv1.Ba
 	}, nil
 }
 
+// BatchGetLastSeen 批量查「最后一次被观测到离开 Hub 的时刻」(见 proto 注释)。
+//
+// 与 BatchGetLocation 同档:内部只读、不加 DS 守卫(调用方是内网业务服务,不经 DS 面)。
+// 分批由调用方负责(pkg/offlinewatch 按固定批量切),此处不设截断——静默截断会让调用方
+// 误以为「这些玩家都没有记录」,进而按 UNKNOWN 放行,比返回大响应糟糕。
+func (s *LocatorService) BatchGetLastSeen(ctx context.Context, req *locatorv1.BatchGetLastSeenRequest) (*locatorv1.BatchGetLastSeenResponse, error) {
+	out, err := s.uc.BatchGetLastSeen(ctx, req.GetPlayerIds())
+	if err != nil {
+		return &locatorv1.BatchGetLastSeenResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.BatchGetLastSeenResponse{
+		Code:       commonv1.ErrCode_OK,
+		LastSeenMs: out,
+	}, nil
+}
+
 // SubscribePresence 客户端打开好友面板 → 订阅这批好友的在线态变更(§13.4.1)。
 func (s *LocatorService) SubscribePresence(ctx context.Context, req *locatorv1.SubscribePresenceRequest) (*locatorv1.SubscribePresenceResponse, error) {
 	if err := s.uc.SubscribePresence(req.GetSubscriberId(), req.GetWatchedPlayerIds()); err != nil {
