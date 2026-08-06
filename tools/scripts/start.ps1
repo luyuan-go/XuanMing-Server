@@ -408,6 +408,7 @@ function Apply-PandoraConfigSecret {
 
     $kubectlContextArgs = @('--context', $KubeContext)
     $expectedNames = @()
+    $expectedPaths = @{}
     $fileArgs = @(
         foreach ($svc in (Get-ServiceList)) {
             $name = "$($svc.Name).yaml"
@@ -416,6 +417,7 @@ function Apply-PandoraConfigSecret {
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
                 throw "pandora-config Secret 缺少必需配置:$path"
             }
+            $expectedPaths[$name] = $path
             "--from-file=$name=$path"
         }
     )
@@ -439,6 +441,45 @@ function Apply-PandoraConfigSecret {
         $extra = @($keyDiff | Where-Object SideIndicator -eq '=>' | ForEach-Object InputObject)
         throw "pandora-config Secret 服务端 key 集不精确:缺少=[$($missing -join ', ')],多余=[$($extra -join ', ')]。" +
               '请先清理漂移 key 后重跑；当前不会继续 rollout。'
+    }
+
+    # 只核对 key 名不够 —— 名字齐全但**内容陈旧**同样是致命漂移,而且更隐蔽。
+    # 2026-08-05 实测事故:磁盘已是 :20001 的集群配置,Secret 里却still是 :50001 的旧端口方案,
+    # 而 `kubectl apply` 报的是 `unchanged`(客户端侧 apply 以 last-applied 注解为基线做三方合并,
+    # live 被带外改动过时可能算不出 patch)。结果 21 个服务全部按错端口启动、gRPC readiness 探针
+    # 全红,直到 [7/8] rollout 180s 超时才暴露,且报错指向"新 Pod 未就绪"这种无关症状。
+    # 因此这里逐 key 比对**内容字节**;漂移就用 replace 强制收敛(整份覆盖 data,不走三方合并),
+    # 再复验一次,仍不一致才 fail-fast。
+    $driftedKeys = @(
+        foreach ($name in $expectedNames) {
+            $liveBytes = [Convert]::FromBase64String([string]$secret.data.$name)
+            $diskBytes = [System.IO.File]::ReadAllBytes($expectedPaths[$name])
+            $liveHash = [BitConverter]::ToString([System.Security.Cryptography.SHA256]::HashData($liveBytes))
+            $diskHash = [BitConverter]::ToString([System.Security.Cryptography.SHA256]::HashData($diskBytes))
+            if ($liveHash -cne $diskHash) { $name }
+        }
+    )
+    if ($driftedKeys.Count -gt 0) {
+        Write-Warn "pandora-config Secret 内容与磁盘不一致($($driftedKeys.Count)/21 项:$($driftedKeys -join ', ')),apply 未收敛;改用 replace 强制覆盖。"
+        $manifest | kubectl @kubectlContextArgs replace -f -
+        Assert-LastExit "$Action(内容漂移 → replace 强制覆盖)"
+        $secret = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'secret/pandora-config', '-n', $K8sNamespace, '-o', 'json') `
+            -Action '复验 pandora-config Secret'
+        $stillDrifted = @(
+            foreach ($name in $expectedNames) {
+                $liveBytes = [Convert]::FromBase64String([string]$secret.data.$name)
+                $diskBytes = [System.IO.File]::ReadAllBytes($expectedPaths[$name])
+                $liveHash = [BitConverter]::ToString([System.Security.Cryptography.SHA256]::HashData($liveBytes))
+                $diskHash = [BitConverter]::ToString([System.Security.Cryptography.SHA256]::HashData($diskBytes))
+                if ($liveHash -cne $diskHash) { $name }
+            }
+        )
+        if ($stillDrifted.Count -gt 0) {
+            throw "pandora-config Secret 内容在 replace 后仍与磁盘不一致:$($stillDrifted -join ', ')。" +
+                  '继续 rollout 只会让 Pod 加载陈旧配置,已中止。'
+        }
+        Write-Ok "pandora-config Secret 已强制收敛到磁盘内容(21/21 项逐字节一致)。"
     }
 }
 
