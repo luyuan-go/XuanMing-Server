@@ -108,6 +108,45 @@ func TestMatchResumeAuthSecretMustBeIndependent(t *testing.T) {
 	}
 }
 
+// Team 与 Login 读的是同一个 ResolvePlayerMatchContext,但必须各持一把 key:
+// 共用等于两个服务的信任域合并(任一方可冒充另一方),且换钥变成全有全无。
+func TestTeamResumeAuthSecretMustBeIndependent(t *testing.T) {
+	base := loadConfig(t, "etc/matchmaker-dev.yaml")
+	if base.Match.TeamResumeAuthSecret == "" {
+		t.Fatal("dev 模板缺 match.team_resume_auth_secret;缺它 team 入队闸门出厂即 fail-closed、招募列表恒空")
+	}
+	if base.Match.TeamResumeAuthSecret == base.Match.MatchResumeAuthSecret {
+		t.Fatal("dev 模板把 team 与 login 的 resume key 配成了同一把")
+	}
+	for name, reused := range map[string]string{
+		"player-jwt":   base.JWT.Secret,
+		"login-resume": base.Match.MatchResumeAuthSecret,
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := base
+			cfg.Match.TeamResumeAuthSecret = reused
+			if err := cfg.Validate(); err == nil {
+				t.Fatalf("team resume key reused %s trust domain", name)
+			}
+		})
+	}
+	cfg := base
+	cfg.Match.TeamResumeAuthSecret = "short"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("配错(过短)的 team resume key 必须致命:它看着已启用,实际每次 team 调用都静默失败")
+	}
+}
+
+// 留空是允许的:尚未分发该 key 的存量部署要能继续启动(team 保持被拒 = 原本的
+// fail-closed 现状),它绝不能回落到 Login 那把。
+func TestTeamResumeAuthSecretOptionalKeepsExistingDeploymentsBootable(t *testing.T) {
+	cfg := loadConfig(t, "etc/matchmaker-dev.yaml")
+	cfg.Match.TeamResumeAuthSecret = ""
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("未配 team resume key 不应阻断启动: %v", err)
+	}
+}
+
 func TestAllocationAbortAuthMustBeDedicatedForRealAllocator(t *testing.T) {
 	base := loadConfig(t, "etc/matchmaker-dev.yaml")
 	for name, reused := range map[string]string{

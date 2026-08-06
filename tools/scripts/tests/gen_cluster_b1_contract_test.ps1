@@ -90,6 +90,7 @@ function Assert-B1ProdAllocationAbortRejected {
         '-PlacementHubTransferSecret', 'prod-placement-hub-transfer-0123456789abcdef-006',
         '-PlacementBattleDepartureSecret', 'prod-placement-battle-departure-0123456789abcdef-007',
         '-MatchResumeAuthSecret', 'prod-match-resume-auth-0123456789abcdef-008',
+        '-TeamResumeAuthSecret', 'prod-team-resume-auth-0123456789abcdef-012',
         '-DsAuthMode', 'enforce', '-DsAuthorityMode', 'redis',
         '-DsFenceEtcdEndpoints', 'etcd.pandora.svc:2379',
         '-DsFenceKeysetRevision', 'pandora-ds-auth-v2-prod-r1',

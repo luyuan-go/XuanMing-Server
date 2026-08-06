@@ -18,6 +18,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 )
@@ -27,14 +28,22 @@ import (
 type GrpcMatchClient struct {
 	conn *grpc.ClientConn
 	cli  matchv1.MatchServiceClient
+	// signer 是 team→matchmaker 的东西向服务鉴权签名器(caller="team")。
+	// **只用于 ResolvePlayerMatchContext**:matchmaker 对该方法强制验签,不签必被
+	// ERR_PERMISSION_DENY(7) 拒。CancelMatch 走的是另一条 AuthOptional 内部路径
+	// (callerID==0 + 请求内 player_id),不需要也不应该签。
+	// nil = 未配密钥,IsPlayerCommittedToMatch 会被拒 → 调用方按 UNKNOWN fail-closed。
+	signer *internalrpcauth.Signer
 }
 
 // NewGrpcMatchClient 直连 matchmaker 服务 endpoint(host:port,内网 insecure)。
-func NewGrpcMatchClient(matchmakerAddr string) *GrpcMatchClient {
+// signer 可为 nil(见字段注释)。
+func NewGrpcMatchClient(matchmakerAddr string, signer *internalrpcauth.Signer) *GrpcMatchClient {
 	conn := grpcclient.MustDialInsecure(matchmakerAddr)
 	return &GrpcMatchClient{
-		conn: conn,
-		cli:  matchv1.NewMatchServiceClient(conn),
+		conn:   conn,
+		cli:    matchv1.NewMatchServiceClient(conn),
+		signer: signer,
 	}
 }
 
@@ -70,6 +79,18 @@ func (g *GrpcMatchClient) CancelMatch(ctx context.Context, playerID uint64) erro
 //   - NONE   → (false, nil)
 //   - UNSPECIFIED / 非 OK code / RPC error → (false, err),由调用方 fail-closed。
 func (g *GrpcMatchClient) IsPlayerCommittedToMatch(ctx context.Context, playerID uint64) (bool, error) {
+	// 每次调用签一份新鲜的 request-bound 凭证(方法 + player_id + 时间戳 + 一次性 nonce)。
+	// 未配 signer 时照常发出:matchmaker 会拒(code=7),按上面的三态约定落到 err 分支
+	// fail-closed,而不是被静默当成"没在对局中"。
+	if g.signer != nil {
+		signed, serr := g.signer.SignContext(ctx,
+			matchv1.MatchService_ResolvePlayerMatchContext_FullMethodName, playerID)
+		if serr != nil {
+			return false, errcode.NewCause(errcode.ErrInternal, serr,
+				"sign matchmaker resume-auth credential for player %d", playerID)
+		}
+		ctx = signed
+	}
 	resp, err := g.cli.ResolvePlayerMatchContext(ctx, &matchv1.ResolvePlayerMatchContextRequest{PlayerId: playerID})
 	if err != nil {
 		return false, err

@@ -164,10 +164,78 @@ func NewVerifier(secret, expectedCaller, expectedAudience string, maxClockSkew t
 	}, nil
 }
 
+// Caller reports the single caller identity this verifier accepts.
+func (v *Verifier) Caller() string {
+	if v == nil {
+		return ""
+	}
+	return v.expectedCaller
+}
+
 // Verify validates and consumes a request credential before protected code is
 // allowed to read state or mint a downstream credential.
 func (v *Verifier) Verify(ctx context.Context, fullMethod string, subject uint64) error {
 	return v.verify(ctx, fullMethod, subject, "")
+}
+
+// MultiCallerVerifier accepts one protected method from several caller
+// services, each holding an **independent** key. It exists because collapsing
+// two callers onto one shared secret would merge their trust domains: whoever
+// holds the key can impersonate the other caller.
+//
+// Dispatching on the (unauthenticated) caller header is safe because the caller
+// identity is signed into the canonical message and each Verifier re-compares
+// it against its own expectedCaller. A forged header only routes the request to
+// a key that cannot produce a matching signature, so it fails closed. Nonces are
+// already namespaced by caller in the replay store, so no two verifiers can
+// consume each other's nonce.
+type MultiCallerVerifier struct {
+	byCaller map[string]*Verifier
+}
+
+// NewMultiCallerVerifier indexes verifiers by their accepted caller identity.
+// Duplicate callers are rejected: silently keeping one of two keys for the same
+// identity would make a rotation look applied when it is not.
+func NewMultiCallerVerifier(verifiers ...*Verifier) (*MultiCallerVerifier, error) {
+	byCaller := make(map[string]*Verifier, len(verifiers))
+	for _, v := range verifiers {
+		if v == nil {
+			return nil, errors.New("internal RPC multi-caller verifier: nil verifier")
+		}
+		caller := v.Caller()
+		if caller == "" {
+			return nil, errors.New("internal RPC multi-caller verifier: empty caller identity")
+		}
+		if _, dup := byCaller[caller]; dup {
+			return nil, fmt.Errorf("internal RPC multi-caller verifier: duplicate caller %q", caller)
+		}
+		byCaller[caller] = v
+	}
+	if len(byCaller) == 0 {
+		return nil, errors.New("internal RPC multi-caller verifier: at least one verifier is required")
+	}
+	return &MultiCallerVerifier{byCaller: byCaller}, nil
+}
+
+// Verify routes to the verifier registered for the request's caller identity.
+// An unknown caller is rejected without consuming any nonce.
+func (m *MultiCallerVerifier) Verify(ctx context.Context, fullMethod string, subject uint64) error {
+	if m == nil || len(m.byCaller) == 0 {
+		return ErrUnauthorized
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ErrUnauthorized
+	}
+	caller, ok := single(md, CallerMetadataKey)
+	if !ok {
+		return ErrUnauthorized
+	}
+	v, ok := m.byCaller[caller]
+	if !ok {
+		return ErrUnauthorized
+	}
+	return v.Verify(ctx, fullMethod, subject)
 }
 
 // VerifyWithPayload verifies the request-bound service credential and consumes

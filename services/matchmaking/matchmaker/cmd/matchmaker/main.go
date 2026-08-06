@@ -300,10 +300,33 @@ func main() {
 		helper.Errorw("msg", "match_resume_replay_store_init_failed", "err", replayErr)
 		os.Exit(1)
 	}
-	resumeAuth, authErr := internalrpcauth.NewVerifier(cfg.Match.MatchResumeAuthSecret,
+	loginResumeAuth, authErr := internalrpcauth.NewVerifier(cfg.Match.MatchResumeAuthSecret,
 		"login", cfg.Match.MatchResumeAuthAudience, 30*time.Second, resumeReplayStore)
 	if authErr != nil {
 		helper.Errorw("msg", "match_resume_service_auth_init_failed", "err", authErr)
+		os.Exit(1)
+	}
+	// ResolvePlayerMatchContext has two legitimate internal callers, each with its
+	// own key (see conf.Match.TeamResumeAuthSecret). Team's key being absent keeps
+	// Team rejected rather than falling back to Login's — but that also means
+	// Team's join gate stays fail-closed, so say so loudly at startup instead of
+	// letting it look healthy.
+	resumeVerifiers := []*internalrpcauth.Verifier{loginResumeAuth}
+	if cfg.Match.TeamResumeAuthSecret != "" {
+		teamResumeAuth, teamAuthErr := internalrpcauth.NewVerifier(cfg.Match.TeamResumeAuthSecret,
+			"team", cfg.Match.MatchResumeAuthAudience, 30*time.Second, resumeReplayStore)
+		if teamAuthErr != nil {
+			helper.Errorw("msg", "team_resume_service_auth_init_failed", "err", teamAuthErr)
+			os.Exit(1)
+		}
+		resumeVerifiers = append(resumeVerifiers, teamResumeAuth)
+	} else {
+		helper.Warnw("msg", "team_resume_service_auth_disabled",
+			"hint", "match.team_resume_auth_secret is empty: team ListOpenTeams returns empty and team join is rejected with ERR_UNAVAILABLE")
+	}
+	resumeAuth, multiErr := internalrpcauth.NewMultiCallerVerifier(resumeVerifiers...)
+	if multiErr != nil {
+		helper.Errorw("msg", "match_resume_service_auth_init_failed", "err", multiErr)
 		os.Exit(1)
 	}
 	svc := service.NewMatchService(uc, ticketSF, resumeAuth)

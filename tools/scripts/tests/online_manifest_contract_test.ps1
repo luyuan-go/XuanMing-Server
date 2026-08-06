@@ -337,10 +337,11 @@ function Assert-OnlineHmacGateOrdering([string]$OnlineSource) {
     $generate = $OnlineSource.IndexOf('& "$ScriptDir/gen_cluster_config.ps1" @genArgs', [StringComparison]::Ordinal)
     $continuity = $OnlineSource.IndexOf('Assert-PandoraOnlineHmacContinuity', [StringComparison]::Ordinal)
     $abortContinuity = $OnlineSource.IndexOf('Assert-PandoraOnlineAllocationAbortAuthContinuity', [StringComparison]::Ordinal)
+    $teamContinuity = $OnlineSource.IndexOf('Assert-PandoraOnlineTeamResumeAuthContinuity', [StringComparison]::Ordinal)
     $buildPush = $OnlineSource.IndexOf('if ($BuildPush)', [StringComparison]::Ordinal)
     $runtimeOverlay = $OnlineSource.IndexOf('New-OnlineRuntimeOverlay', [StringComparison]::Ordinal)
     $configApply = $OnlineSource.IndexOf('Apply-PandoraConfigSecret', [StringComparison]::Ordinal)
-    foreach ($position in @($liveRead, $generate, $continuity, $abortContinuity, $buildPush, $runtimeOverlay, $configApply)) {
+    foreach ($position in @($liveRead, $generate, $continuity, $abortContinuity, $teamContinuity, $buildPush, $runtimeOverlay, $configApply)) {
         Assert-True ($position -ge 0) 'online HMAC 门禁顺序所需 marker 必须存在'
     }
     Assert-True ($liveRead -lt $generate) '必须先读取 live pandora-config 再生成候选配置'
@@ -348,6 +349,8 @@ function Assert-OnlineHmacGateOrdering([string]$OnlineSource) {
     Assert-True ($continuity -lt $buildPush) 'HMAC 连续性门禁必须早于 BuildPush'
     Assert-True ($abortContinuity -gt $generate -and $abortContinuity -lt $buildPush) `
         'allocation abort service key 连续性门禁必须在候选生成后、BuildPush 前执行'
+    Assert-True ($teamContinuity -gt $generate -and $teamContinuity -lt $buildPush) `
+        'Team resume service key 连续性门禁必须在候选生成后、BuildPush 前执行'
     Assert-True ($continuity -lt $runtimeOverlay -and $continuity -lt $configApply) `
         'HMAC 连续性门禁必须早于 runtime overlay 与集群配置写入'
 }

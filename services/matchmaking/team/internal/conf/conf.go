@@ -39,6 +39,20 @@ type TeamConf struct {
 	// 行为与历史一致(本机不起 matchmaker 的骨架联调路径)。
 	MatchmakerAddr string `yaml:"matchmaker_addr,omitempty" json:"matchmaker_addr,omitempty"`
 
+	// MatchResumeAuthSecret / MatchResumeAuthAudience 是 team→matchmaker 调
+	// ResolvePlayerMatchContext 的东西向服务鉴权凭据(pkg/internalrpcauth),caller 固定
+	// 签成 "team"。matchmaker 侧对该方法强制验签,**不签名一律 ERR_PERMISSION_DENY(7)**。
+	//
+	// 这把密钥必须与 login 那把 match_resume_auth_secret **不同**(matchmaker 侧按 caller
+	// 分别持有独立密钥,共用会把两个服务的信任域合并),对应 matchmaker 的
+	// match.team_resume_auth_secret。audience 填 matchmaker 的 match_resume_auth_audience
+	// (audience 标识被调方服务池,不区分调用方,故与 login 相同)。
+	//
+	// 留空 → 不签名:入队闸门与招募列表复核都会拿不到判定,前者 fail-closed 拒绝入队、
+	// 后者返回空列表。因此 matchmaker_addr 已配时留空会在启动打 WARN。
+	MatchResumeAuthSecret   string `yaml:"match_resume_auth_secret,omitempty" json:"match_resume_auth_secret,omitempty"`
+	MatchResumeAuthAudience string `yaml:"match_resume_auth_audience,omitempty" json:"match_resume_auth_audience,omitempty"`
+
 	// InvitePushMode 邀请推送模式(金丝雀灰度用)。老客户端只认 TeamUpdateEvent(reason=INVITE_SENT),
 	// 新客户端只认独立的 TeamInviteEvent(event_type=INVITE=1、已不再从 TeamUpdateEvent 读邀请)。
 	// 两代客户端各认各的 payload,单一模式无法同时喂饱两代 → 灰度共存期必须"双发"。

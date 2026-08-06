@@ -21,7 +21,10 @@
 生产生成除了玩家面、DS callback 两把 key，还必须注入四把互不相同的 placement proof key：
 `PANDORA_PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET`、`PANDORA_PLACEMENT_MATCH_START_SECRET`、
 `PANDORA_PLACEMENT_BATTLE_EXIT_SECRET`、`PANDORA_PLACEMENT_HUB_TRANSFER_SECRET`，以及独立的
-Login→Matchmaker 服务身份 key `PANDORA_MATCH_RESUME_AUTH_SECRET`。生成器会拒绝公开 dev key、短 key
+Login→Matchmaker 服务身份 key `PANDORA_MATCH_RESUME_AUTH_SECRET`、
+Team→Matchmaker 服务身份 key `PANDORA_TEAM_RESUME_AUTH_SECRET`（两者读同一个
+`ResolvePlayerMatchContext`，但必须是两把 key：共用等于两个服务的信任域合并；team 侧漏配会让入队闸门
+fail-closed、招募列表恒空）。生成器会拒绝公开 dev key、短 key
 或跨权限域复用；普通 online 发布还会在 apply 前与锁内两次拒绝服务身份 key 漂移。`placement_mode=shadow`
 仅供先服务端后客户端的短期灰度，终态为 `enforce`。
 
@@ -73,4 +76,6 @@ Login→Matchmaker 服务身份 key `PANDORA_MATCH_RESUME_AUTH_SECRET`。生成�
 | `tests/dsticket_rotation_contract_test.ps1` | K1/K2 三阶段、225 秒清退窗、marker 历史链、孤儿/伪造 owner 与发布互斥 mutant 测试 | 手动/CI |
 | `tests/services_dsticket_secret_contract_test.ps1` | 四个 signer 私钥卷/非 root/fsGroup 与 Login-only public JWKS 契约 | 手动/CI |
 | `tests/gen_cluster_b1_contract_test.ps1` | B1 signer/verifier、Model-B callback、Stable/Canary allocator 配置生成契约 | 手动/CI |
+| `tests/gen_cluster_team_resume_auth_contract_test.ps1` | Team→Matchmaker 服务身份 key:两端成对、与 login 那把独立、-Prod 必填与跨域复用反例 | 手动/CI |
+| `tests/configtable_gen_svn_status_test.ps1` | 导表失败归因用的 SVN 判定(取版本号 / 未提交判定,含"干净副本 ≠ 没装 svn")行为测试 | 手动/CI |
 | `tests/infra_etcd_persistence_contract_test.ps1` | 本地 etcd PVC/Recreate 持久化契约与反例 | 手动/CI |

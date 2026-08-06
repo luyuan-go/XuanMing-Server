@@ -84,10 +84,12 @@ param(
     # editor:UnrealEditor.exe 路径。留空则按 .uproject 里的 EngineAssociation 查注册表定位引擎,
     # 所以策划机引擎装在哪个盘/哪个目录都行(源码版走 HKCU Builds GUID,发行版走 HKLM 版本号)。
     [string]$DsEditorExe = '',
-    # -GenTables(仅 -Mode local):起服务/重启服务之前,先把策划 xlsx 导成服务端配置表
-    # (configtable/dist)。策划改完表就是为了测这一改动,让他们再记一个"先双击导表"的步骤
-    # 迟早会漏。**只对策划那两个一键入口开**,不传时行为逐字节不变。
-    # docker/k8s/online 不适用:那几条路的表随镜像走,不读本机 dist。
+    # -GenTables:起服务/重启服务之前,先把策划 xlsx 导成服务端配置表(configtable/dist)。
+    # 策划改完表就是为了测这一改动,让他们再记一个"先双击导表"的步骤迟早会漏。
+    # 适用于 local / docker / intranet / k8s —— 这几条路吃的都是磁盘上同一份 configtable/dist
+    # (compose 是 bind mount,k8s 是由该目录生成 pandora-configtable ConfigMap),表并不在镜像里。
+    # 非 local 时若本机没有客户端源表,则跳过导表、沿用仓库里已有的 dist,不拦启动。
+    # -Mode online 明确不支持:线上部署的表必须能从 git 检出复现。不传时行为逐字节不变。
     [switch]$GenTables,
     # -DsOnly(仅 -Mode local):**只重启本机 DS**,不动 docker 基础设施、不动其余 go 服务。
     # 给「只更新了客户端仓(改资源 / 重编编辑器 DLL),go 服务一行没改」的日常循环用:
@@ -4201,6 +4203,13 @@ function Invoke-Local {
 # 从 configtable/dist 加载的。让策划自己记着"先双击导表、再双击启动"迟早会漏一次,
 # 而漏掉的表现是"我明明改了表却没生效",最难自查。
 #
+# 为什么 docker / k8s 也要导:表**不在镜像里**。deploy/services/Dockerfile 只 COPY 了各服务
+# 的 etc/,configtable 一个字节都没进镜像;docker-compose 是把 ../configtable/dist 以只读
+# bind mount 挂到 /app/configtable/active,k8s 则由 Apply-PandoraConfigTableConfigMap 读
+# **磁盘上的** configtable/dist 生成 pandora-configtable ConfigMap 再挂进去。也就是说所有
+# 形态吃的都是同一份磁盘目录 —— 早先"docker/k8s 的表随镜像走"的说法是错的,正是那个错误
+# 判断把非 local 入口挡在了导表之外。
+#
 # 真正的生成逻辑一行都不重写,直接调既有的 configtable_gen.ps1(它已经会自动定位客户端
 # Table 目录、自动取 SVN 版本号、没装 Go 就用预编译 exe,并把生成器的报错翻译成人话)。
 function Get-ConfigTableDistVersion {
@@ -4213,11 +4222,29 @@ function Get-ConfigTableDistVersion {
 }
 
 function Invoke-ConfigTableGen {
-    if ($Mode -ne 'local') {
-        throw "-GenTables 只支持 -Mode local(本机 go 服务直接读 configtable/dist;docker/k8s 的表随镜像走)。当前 -Mode $Mode。"
+    # online 是唯一的例外:线上集群部署的表必须能从 git 检出原样复现,不能取决于"执行部署的
+    # 那台机器上恰好检出了哪个版本的 SVN 工作副本"。线上要换表就走提交 configtable/dist。
+    if ($Mode -eq 'online') {
+        throw "-GenTables 不支持 -Mode online(线上部署的表必须来自 git 检出的 configtable/dist,不能就地生成)。"
     }
 
     Write-Step "导表:策划 xlsx → 服务端配置表(configtable/dist)"
+
+    # 非 local(内网 / k8s / docker)跑在共享服务器上,那台机器不一定检出了客户端 SVN。
+    # 拿不到源表时**不能**把启动拦下来:git 跟踪的 configtable/dist 本身就是完整可用的一批
+    # (下游 Get-PandoraConfigTableCandidate 还会逐表验 checksum),"这次没得可导"不等于
+    # "服务不该起" —— 为了一台没有策划源表的机器而拒绝启动,恰恰是把可用性问题造出来。
+    # 用 configtable_gen.ps1 -Check 探测而不是在这里重写一遍定位逻辑,免得两处口径漂移。
+    if ($Mode -ne 'local') {
+        $probe = & "$ScriptDir/configtable_gen.ps1" -Check 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "本机导不了表,跳过导表,沿用仓库里已有的 configtable/dist。"
+            $probe | ForEach-Object { Write-Host "       $_" }
+            Write-Info "想让这台机器也能导表:检出客户端 SVN,再设 PANDORA_CLIENT_TABLE_ROOT 指向它的 Table 目录。"
+            return $false
+        }
+    }
+
     $before = Get-ConfigTableDistVersion
 
     & "$ScriptDir/configtable_gen.ps1"
@@ -4227,7 +4254,7 @@ function Invoke-ConfigTableGen {
         Write-Err "导表没过,已中止(上面有具体原因和该找谁)。"
         Write-Info "为什么不带着旧表继续起:你改表就是为了测它,用旧表起来只会让你以为改动没生效 —— 那比起不来更难查。"
         Write-Info "配置表是全批原子的,现在 dist 一个字节没动,原来的表还能用。"
-        Write-Info "确实想先不导表、把后端起起来:pwsh tools\scripts\start.ps1 -Mode local -DsLauncher editor"
+        Write-Info "确实想先不导表、把后端起起来:去掉 -GenTables 再跑一次(用仓库里已有的那批表)。"
         exit $rc
     }
 
@@ -6192,16 +6219,18 @@ function Invoke-Online {
     Assert-PandoraImmutableReleaseTag -Tag $Tag -CurrentCommit $currentCommit -RequireCurrentCommit:$BuildPush
 
     # ===== 生产密钥预检(P0 安全审核)=====
-    # 必须在 BuildPush(推镜像到远端 registry)之前就确认玩家、DS callback、Match resume
-    # 与 allocation abort 服务身份四套真密钥齐全 —— 否则可能镜像已推、稍后
+    # 必须在 BuildPush(推镜像到远端 registry)之前就确认玩家、DS callback、Match resume、
+    # Team resume 与 allocation abort 服务身份五套真密钥齐全 —— 否则可能镜像已推、稍后
     # gen -Prod 才因缺密钥失败,留下「半推 + 未部署」的脏状态。玩家面 / DS 回调面必须分离:
     # 同一把密钥覆盖玩家 JWT 与 DS 回调令牌时,泄露玩家面即可伪造 DS 回调绕过范围绑定。
     $devPubSecret = 'pandora-dev-jwt-secret-change-me-32!'
     $devMatchResumeSecret = 'pandora-dev-match-resume-auth-key-v1!'
+    $devTeamResumeSecret = 'pandora-dev-team-resume-auth-key-v1!'
     $devAllocationAbortSecret = 'pandora-dev-allocation-abort-auth-key-v1!'
     $playerSec = $env:PANDORA_JWT_SECRET
     $dsSec = $env:PANDORA_DS_JWT_SECRET
     $matchResumeSec = $env:PANDORA_MATCH_RESUME_AUTH_SECRET
+    $teamResumeSec = $env:PANDORA_TEAM_RESUME_AUTH_SECRET
     $allocationAbortSec = $env:PANDORA_ALLOCATION_ABORT_AUTH_SECRET
     # additional_secrets 部分接线仅供非生产验证；两份轮换决策未拍板前 online 直接拒绝。
     $playerSecAdd = $env:PANDORA_JWT_SECRET_ADDITIONAL
@@ -6214,6 +6243,7 @@ function Invoke-Online {
         @{ n = 'PANDORA_JWT_SECRET(玩家面)';    v = $playerSec; required = $true },
         @{ n = 'PANDORA_DS_JWT_SECRET(DS 回调面)'; v = $dsSec; required = $true },
         @{ n = 'PANDORA_MATCH_RESUME_AUTH_SECRET(Login→Matchmaker 服务身份)'; v = $matchResumeSec; required = $true },
+        @{ n = 'PANDORA_TEAM_RESUME_AUTH_SECRET(Team→Matchmaker 服务身份)'; v = $teamResumeSec; required = $true },
         @{ n = 'PANDORA_ALLOCATION_ABORT_AUTH_SECRET(Matchmaker→DS 销毁服务身份)'; v = $allocationAbortSec; required = $true },
         @{ n = 'PANDORA_JWT_SECRET_ADDITIONAL(玩家面轮换兼容密钥)';    v = $playerSecAdd; required = $false },
         @{ n = 'PANDORA_DS_JWT_SECRET_ADDITIONAL(DS 回调面轮换兼容密钥)'; v = $dsSecAdd; required = $false })
@@ -6226,6 +6256,7 @@ function Invoke-Online {
         }
         if ($p.v -eq $devPubSecret) { throw "$($p.n) 不能等于公开 dev 密钥,请换成真密钥。" }
         if ($p.v -eq $devMatchResumeSecret) { throw "$($p.n) 不能等于公开 Match resume dev 密钥,请换成真密钥。" }
+        if ($p.v -eq $devTeamResumeSecret) { throw "$($p.n) 不能等于公开 Team resume dev 密钥,请换成真密钥。" }
         if ($p.v -eq $devAllocationAbortSecret) { throw "$($p.n) 不能等于公开 allocation abort dev 密钥,请换成真密钥。" }
         if ([System.Text.Encoding]::UTF8.GetByteCount($p.v) -lt 32) { throw "$($p.n) 至少需要 32 字节(HS256)。" }
         # C0/C1 控制字符防线(二审 #12):换行/回车/制表等混进密钥会被 YAML 双引号转义后原样进服务,
@@ -6324,9 +6355,11 @@ function Invoke-Online {
             -CandidateConfigs $candidateHmacConfigs | Out-Null
         Assert-PandoraOnlineMatchResumeAuthContinuity -LiveConfigs $liveHmacConfigs `
             -CandidateConfigs $candidateHmacConfigs | Out-Null
+        Assert-PandoraOnlineTeamResumeAuthContinuity -LiveConfigs $liveHmacConfigs `
+            -CandidateConfigs $candidateHmacConfigs | Out-Null
         Assert-PandoraOnlineAllocationAbortAuthContinuity -LiveConfigs $liveHmacConfigs `
             -CandidateConfigs $candidateHmacConfigs | Out-Null
-        Write-Ok '普通发布 HMAC 连续性门禁通过（玩家 Session / DS callback / placement proof / Match resume / allocation abort service identity / additional keyset 均未变化；不打印指纹）。'
+        Write-Ok '普通发布 HMAC 连续性门禁通过（玩家 Session / DS callback / placement proof / Match resume / Team resume / allocation abort service identity / additional keyset 均未变化；不打印指纹）。'
     } else {
         # 首次 bootstrap 没有 live baseline 可比较；后续普通发布一律走上面的连续性门禁。
         # 若运行中的业务对象仍在但 Secret 被删，不能把它误判成首次 bootstrap。
@@ -6626,6 +6659,8 @@ function Invoke-Online {
         Assert-PandoraOnlinePlacementContinuity -LiveConfigs $lockedHmacConfigs `
             -CandidateConfigs $lockedCandidateHmacConfigs | Out-Null
         Assert-PandoraOnlineMatchResumeAuthContinuity -LiveConfigs $lockedHmacConfigs `
+            -CandidateConfigs $lockedCandidateHmacConfigs | Out-Null
+        Assert-PandoraOnlineTeamResumeAuthContinuity -LiveConfigs $lockedHmacConfigs `
             -CandidateConfigs $lockedCandidateHmacConfigs | Out-Null
     }
     if ($Env -eq 'prod') {

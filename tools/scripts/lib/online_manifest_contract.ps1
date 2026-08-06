@@ -12,6 +12,13 @@ $script:PandoraPlacementDomains = [ordered]@{}
 $script:PandoraMatchResumeAuthBindings = @(
     @{ Service = 'matchmaker'; Section = 'match'; Child = 'match_resume_auth_secret' },
     @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'match_resume_auth_secret' })
+# Team→Matchmaker 是 ResolvePlayerMatchContext 的第二个合法内部调用方，持**独立**于 login 的密钥。
+# 验签端 matchmaker.match.team_resume_auth_secret 与签名端 team.team.match_resume_auth_secret 必须同值：
+# 只改一端不会报错，只会让 matchmaker 拒掉每一次 team 调用（招募列表恒空 + 入队恒失败），两边进程都健康。
+# matchmaker-pve 不参与：team 只连 PVP matchmaker，PVE 模板也没有该节点。
+$script:PandoraTeamResumeAuthBindings = @(
+    @{ Service = 'matchmaker'; Section = 'match'; Child = 'team_resume_auth_secret' },
+    @{ Service = 'team'; Section = 'team'; Child = 'match_resume_auth_secret' })
 $script:PandoraAllocationAbortAuthBindings = @(
     @{ Service = 'matchmaker'; Section = 'match'; Child = 'allocation_abort_auth_secret' },
     @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'allocation_abort_auth_secret' },
@@ -411,6 +418,74 @@ function Assert-PandoraOnlineAllocationAbortAuthContinuity {
     $candidate = Get-PandoraOnlineAllocationAbortAuthContract -Configs $CandidateConfigs
     if ($live -cne $candidate) {
         throw '普通 online 发布检测到 allocation abort service identity key 变化；必须走独立先 verifier 后 emitter 换钥流程，本次未 push/apply。'
+    }
+    return $candidate
+}
+
+function Get-PandoraOnlineTeamResumeAuthContract {
+    param([Parameter(Mandatory = $true)][System.Collections.IDictionary]$Configs)
+    $baseline = ''
+    foreach ($binding in $script:PandoraTeamResumeAuthBindings) {
+        $service = [string]$binding.Service
+        if (-not $Configs.Contains($service) -or [string]::IsNullOrWhiteSpace([string]$Configs[$service])) {
+            throw "Team resume service identity 连续性检查缺 $service 配置；拒绝普通发布。"
+        }
+        $current = Get-PandoraYamlDirectStringSha256 -ServiceName $service `
+            -Text ([string]$Configs[$service]) -SectionName ([string]$binding.Section) `
+            -ChildName ([string]$binding.Child)
+        if ([string]::IsNullOrEmpty($baseline)) { $baseline = $current; continue }
+        if ($current -cne $baseline) {
+            throw 'Team 签名端与 Matchmaker 验签端的 Team resume service identity key 不一致；拒绝普通发布。'
+        }
+    }
+    $hmac = Get-PandoraOnlineHmacContract -Configs $Configs
+    $hmacSet = @($hmac.Player.PrimarySha256) + @($hmac.Player.AdditionalSha256) +
+        @($hmac.DsCallback.PrimarySha256) + @($hmac.DsCallback.AdditionalSha256)
+    if ($hmacSet -contains $baseline) {
+        throw 'Team resume service identity key 不得与玩家 Session/DS callback HMAC keyset 相交；拒绝普通发布。'
+    }
+    # 与 login 那把复用 = 两个服务的信任域合并（任一方可冒充另一方），且轮换变成全有全无。
+    $matchResume = Get-PandoraOnlineMatchResumeAuthContract -Configs $Configs
+    if ($matchResume -ceq $baseline) {
+        throw 'Team resume service identity key 不得与 Login→Matchmaker 的 Match resume key 复用；拒绝普通发布。'
+    }
+    $allocationAbort = Get-PandoraOnlineAllocationAbortAuthContract -Configs $Configs
+    if ($allocationAbort -ceq $baseline) {
+        throw 'Team resume service identity key 不得与 allocation abort service key 复用；拒绝普通发布。'
+    }
+    # 与 allocation abort 同样的理由：内联遍历 placement 权限域，避免经
+    # Get-PandoraOnlinePlacementContract 递归回本函数。
+    foreach ($domain in $script:PandoraPlacementDomains.GetEnumerator()) {
+        $domainHash = ''
+        foreach ($binding in $domain.Value) {
+            $service = [string]$binding.Service
+            if (-not $Configs.Contains($service) -or [string]::IsNullOrWhiteSpace([string]$Configs[$service])) {
+                throw "team resume/placement distinctness 检查缺 $service 配置；拒绝普通发布。"
+            }
+            $current = Get-PandoraYamlDirectStringSha256 -ServiceName $service `
+                -Text ([string]$Configs[$service]) -SectionName ([string]$binding.Section) `
+                -ChildName ([string]$binding.Child)
+            if ([string]::IsNullOrEmpty($domainHash)) { $domainHash = $current }
+            elseif ($current -cne $domainHash) {
+                throw "placement $($domain.Key) proof key 在 writer/verifier 间不一致；拒绝普通发布。"
+            }
+        }
+        if ($domainHash -ceq $baseline) {
+            throw "Team resume service identity key 不得与 placement $($domain.Key) proof key 复用；拒绝普通发布。"
+        }
+    }
+    return $baseline
+}
+
+function Assert-PandoraOnlineTeamResumeAuthContinuity {
+    param(
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$LiveConfigs,
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$CandidateConfigs
+    )
+    $live = Get-PandoraOnlineTeamResumeAuthContract -Configs $LiveConfigs
+    $candidate = Get-PandoraOnlineTeamResumeAuthContract -Configs $CandidateConfigs
+    if ($live -cne $candidate) {
+        throw '普通 online 发布检测到 Team resume service identity key 变化；必须走独立先 verifier 后 signer 换钥流程，本次未 push/apply。'
     }
     return $candidate
 }

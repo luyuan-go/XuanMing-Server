@@ -42,6 +42,12 @@ team:
   optimistic_retry: 3
   # 离队/踢人联动撤销匹配票据(弱依赖,留空则不联动)
   matchmaker_addr: "matchmaker.pandora.svc.cluster.local:50011"
+  # team→matchmaker 调 ResolvePlayerMatchContext 的服务鉴权(caller 固定签 "team")。
+  # 入队闸门是 fail-closed 的:这把密钥漏配 → 招募列表恒空 + 申请入队恒失败。
+  # 必须等于 matchmaker 的 match.team_resume_auth_secret,且与 login 那把不同。
+  # 生产环境请换成 ≥32 字节的随机密钥,勿沿用 dev 示例值。
+  match_resume_auth_secret: "CHANGE-ME-team-resume-auth-key-32bytes-min"
+  match_resume_auth_audience: "matchmaker:5v5_ranked"
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):生产强制档,顶号后旧 JWT 立即失效;
 # 权威端点漏配拒启,权威不可达 fail-closed。与 gen_cluster_config.ps1 -Prod 产物一致。

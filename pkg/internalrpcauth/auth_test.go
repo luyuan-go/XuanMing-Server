@@ -206,3 +206,142 @@ func TestPlainCredentialCannotUpgradeToPayloadVerify(t *testing.T) {
 		t.Fatal("upgrade attempt consumed replay nonce")
 	}
 }
+
+// --- MultiCallerVerifier: one protected method, several callers, independent keys ---
+
+const teamTestSecret = "internal-rpc-auth-test-secret-team-9876543210fedcba"
+
+// newMultiCallerFixture wires the production shape: Login and Team both call the
+// same method, each with its own key, sharing one replay store.
+func newMultiCallerFixture(t *testing.T) (loginSigner, teamSigner *Signer, mv *MultiCallerVerifier, store *memoryReplayStore) {
+	t.Helper()
+	store = &memoryReplayStore{seen: map[string]struct{}{}}
+	fixed := time.Unix(1_800_000_000, 123_000_000).UTC()
+
+	newSigner := func(secret, caller string) *Signer {
+		s, err := NewSigner(secret, caller, testAudience)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.now = func() time.Time { return fixed }
+		s.random = bytes.NewReader(bytes.Repeat([]byte{0x5a}, nonceBytes))
+		return s
+	}
+	newVerifier := func(secret, caller string) *Verifier {
+		v, err := NewVerifier(secret, caller, testAudience, 30*time.Second, store)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v.now = func() time.Time { return fixed }
+		return v
+	}
+
+	loginSigner = newSigner(testSecret, "login")
+	teamSigner = newSigner(teamTestSecret, "team")
+	mv, err := NewMultiCallerVerifier(newVerifier(testSecret, "login"), newVerifier(teamTestSecret, "team"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return loginSigner, teamSigner, mv, store
+}
+
+// Regression for the team browse/join outage: team's credential must be accepted
+// on the same method as login's. Before the fix team sent no credential at all
+// and every ListOpenTeams candidate was pruned, so the recruiting list was
+// permanently empty and the fail-closed join gate always rejected.
+func TestMultiCallerVerifierAcceptsEachCallerWithItsOwnKey(t *testing.T) {
+	loginSigner, teamSigner, mv, _ := newMultiCallerFixture(t)
+
+	if err := mv.Verify(signedIncoming(t, loginSigner, testMethod, 42), testMethod, 42); err != nil {
+		t.Fatalf("login Verify: %v", err)
+	}
+	if err := mv.Verify(signedIncoming(t, teamSigner, testMethod, 42), testMethod, 42); err != nil {
+		t.Fatalf("team Verify: %v", err)
+	}
+}
+
+// Nonces are namespaced by caller, so two callers reusing the same nonce bytes
+// must not consume each other's entry — but each caller still cannot replay.
+func TestMultiCallerVerifierIsolatesReplayNoncesPerCaller(t *testing.T) {
+	loginSigner, teamSigner, mv, _ := newMultiCallerFixture(t)
+
+	loginCtx := signedIncoming(t, loginSigner, testMethod, 42)
+	teamCtx := signedIncoming(t, teamSigner, testMethod, 42)
+	if err := mv.Verify(loginCtx, testMethod, 42); err != nil {
+		t.Fatalf("login Verify: %v", err)
+	}
+	// Same fixed nonce bytes, different caller: must still be accepted.
+	if err := mv.Verify(teamCtx, testMethod, 42); err != nil {
+		t.Fatalf("team Verify after login consumed same nonce: %v", err)
+	}
+	if err := mv.Verify(teamCtx, testMethod, 42); !errors.Is(err, ErrReplay) {
+		t.Fatalf("team replay error=%v, want ErrReplay", err)
+	}
+}
+
+// The whole point of separate keys: holding one caller's secret must not let you
+// speak as the other. Dispatching on the caller header is only safe because the
+// identity is signed into the canonical message.
+func TestMultiCallerVerifierRejectsCrossCallerImpersonation(t *testing.T) {
+	_, _, mv, store := newMultiCallerFixture(t)
+	fixed := time.Unix(1_800_000_000, 123_000_000).UTC()
+
+	// Login's key, but claiming to be "team".
+	forged, err := NewSigner(testSecret, "team", testAudience)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forged.now = func() time.Time { return fixed }
+	forged.random = bytes.NewReader(bytes.Repeat([]byte{0x5a}, nonceBytes))
+
+	if err := mv.Verify(signedIncoming(t, forged, testMethod, 42), testMethod, 42); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("impersonation error=%v, want ErrUnauthorized", err)
+	}
+	if len(store.seen) != 0 {
+		t.Fatalf("rejected impersonation consumed %d nonce(s), want 0", len(store.seen))
+	}
+}
+
+// An unregistered caller is rejected without touching the replay store, so an
+// unknown identity cannot burn nonce entries.
+func TestMultiCallerVerifierRejectsUnknownCallerWithoutConsumingNonce(t *testing.T) {
+	_, _, mv, store := newMultiCallerFixture(t)
+	fixed := time.Unix(1_800_000_000, 123_000_000).UTC()
+
+	stranger, err := NewSigner(teamTestSecret, "battle-result", testAudience)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stranger.now = func() time.Time { return fixed }
+	stranger.random = bytes.NewReader(bytes.Repeat([]byte{0x5a}, nonceBytes))
+
+	if err := mv.Verify(signedIncoming(t, stranger, testMethod, 42), testMethod, 42); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("unknown caller error=%v, want ErrUnauthorized", err)
+	}
+	if len(store.seen) != 0 {
+		t.Fatalf("unknown caller consumed %d nonce(s), want 0", len(store.seen))
+	}
+}
+
+// A request with no credential at all is exactly what team sent before the fix.
+func TestMultiCallerVerifierRejectsUnsignedRequest(t *testing.T) {
+	_, _, mv, _ := newMultiCallerFixture(t)
+	if err := mv.Verify(context.Background(), testMethod, 42); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("unsigned error=%v, want ErrUnauthorized", err)
+	}
+}
+
+func TestNewMultiCallerVerifierRejectsDuplicateCaller(t *testing.T) {
+	store := &memoryReplayStore{seen: map[string]struct{}{}}
+	first, err := NewVerifier(testSecret, "login", testAudience, 30*time.Second, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewVerifier(teamTestSecret, "login", testAudience, 30*time.Second, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewMultiCallerVerifier(first, second); err == nil {
+		t.Fatal("duplicate caller accepted, want error")
+	}
+}

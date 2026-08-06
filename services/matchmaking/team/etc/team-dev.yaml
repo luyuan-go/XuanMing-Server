@@ -48,6 +48,13 @@ team:
   # matchmaker_addr: matchmaker gRPC 直连地址——成员离队/被踢时联动撤销其匹配票据
   # (弱依赖,留空则不联动)
   matchmaker_addr: "127.0.0.1:20011"
+  # team→matchmaker 调 ResolvePlayerMatchContext 的服务鉴权(caller 固定签 "team")。
+  # 用于入队闸门(fail-closed)与招募列表复核;不签名会被 matchmaker 拒(code=7),
+  # 表现为"获取队伍恒空 + 申请入队恒失败"。
+  # secret 必须等于 matchmaker-dev.yaml 的 match.team_resume_auth_secret,
+  # 且必须与 login 那把 match_resume_auth_secret 不同(独立信任域)。
+  match_resume_auth_secret: "pandora-dev-team-resume-auth-key-v1!"
+  match_resume_auth_audience: "matchmaker:5v5_ranked"
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威
 # (pandora:sess,node.redis_client 指向的共享 Redis)当前一代,顶号后旧 JWT 立即失效。

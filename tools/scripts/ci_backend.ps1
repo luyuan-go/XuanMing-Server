@@ -79,6 +79,11 @@ $contractTests = @(
     'tools/scripts/tests/gen_cluster_session_gate_contract_test.ps1'
     # -Prod 账号库 TiDB DSN + login 开发后门关断(免密登录曾随 -Prod 产物出厂,见脚本头注释)。
     'tools/scripts/tests/gen_cluster_prod_account_contract_test.ps1'
+    # Team→Matchmaker 服务身份 key 必须两端成对且与 login 那把不同(漏配只表现为
+    # 「招募列表恒空 + 入队被拒」,两端进程都启动成功,人工 review 抓不住)。
+    'tools/scripts/tests/gen_cluster_team_resume_auth_contract_test.ps1'
+    # 策划一键导表失败时的 SVN 归因(取版本号 / 判未提交)。判错方向 = 把人指到错的地方。
+    'tools/scripts/tests/configtable_gen_svn_status_test.ps1'
 )
 $contractFailed = @()
 foreach ($rel in $contractTests) {

@@ -49,6 +49,11 @@ match:
   # 独立 Login→Matchmaker 服务身份 key；不得复用 JWT / DS callback key。
   match_resume_auth_secret: "__MATCH_RESUME_AUTH_SECRET_32B__"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
+  # Team→Matchmaker 读同一个 ResolvePlayerMatchContext(入队闸门 + 招募列表复核),
+  # 但持有**另一把**独立 key：共用一把等于 login 与 team 的信任域合并(任一方可冒充另一方),
+  # 且轮换变成全有全无。必须等于 team 的 team.match_resume_auth_secret。
+  # 留空不会回落到 login 那把：team 会被 matchmaker 拒(code=7) ⇒ 入队 fail-closed、招募列表恒空。
+  team_resume_auth_secret: "__TEAM_RESUME_AUTH_SECRET_32B__"
   allocation_abort_auth_secret: "__ALLOCATION_ABORT_AUTH_SECRET_32B__"
   allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"
   # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 livenessSweep + 成局最终门 findOfflineMembers)。

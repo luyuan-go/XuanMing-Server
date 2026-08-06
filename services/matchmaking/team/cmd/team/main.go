@@ -28,6 +28,7 @@ import (
 	pconfig "github.com/luyuancpp/pandora/pkg/config"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
@@ -140,11 +141,28 @@ func main() {
 	// matchmaker 联动(弱依赖:matchmaker_addr 留空 → 离队/踢人不撤匹配票据,
 	// 且入队闸门跳过 —— 没有匹配链路的部署本就不存在"被对局占住的队伍")
 	if cfg.Team.MatchmakerAddr != "" {
-		matchCli := data.NewGrpcMatchClient(cfg.Team.MatchmakerAddr)
+		// ResolvePlayerMatchContext 在 matchmaker 侧强制验签(caller="team",独立密钥)。
+		// 密钥缺失不阻断启动:CancelMatch 那半边不需要签名,仍然可用;但入队闸门会
+		// fail-closed、招募列表会恒空,所以必须打 WARN 而不是静默降级。
+		var matchSigner *internalrpcauth.Signer
+		if cfg.Team.MatchResumeAuthSecret != "" {
+			s, signErr := internalrpcauth.NewSigner(cfg.Team.MatchResumeAuthSecret,
+				"team", cfg.Team.MatchResumeAuthAudience)
+			if signErr != nil {
+				helper.Errorw("msg", "match_resume_signer_init_failed", "err", signErr)
+				os.Exit(1)
+			}
+			matchSigner = s
+		} else {
+			helper.Warnw("msg", "match_resume_signer_missing",
+				"hint", "team.match_resume_auth_secret is empty: join gate will reject with ERR_UNAVAILABLE and ListOpenTeams will return empty")
+		}
+		matchCli := data.NewGrpcMatchClient(cfg.Team.MatchmakerAddr, matchSigner)
 		defer func() { _ = matchCli.Close() }()
 		uc.SetMatchCanceler(matchCli)
 		uc.SetMatchCommitmentReader(matchCli)
-		helper.Infow("msg", "match_client_ready", "matchmaker_addr", cfg.Team.MatchmakerAddr)
+		helper.Infow("msg", "match_client_ready", "matchmaker_addr", cfg.Team.MatchmakerAddr,
+			"resume_auth_signed", matchSigner != nil)
 	} else {
 		helper.Warnw("msg", "matchmaker_addr_empty",
 			"hint", "leave/kick will not cancel matchmaking tickets; team join match-gate disabled")

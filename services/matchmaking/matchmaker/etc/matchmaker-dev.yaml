@@ -60,6 +60,11 @@ match:
   # signed nonce once across replicas.
   match_resume_auth_secret: "pandora-dev-match-resume-auth-key-v1!"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
+  # Team→Matchmaker reads the same ResolvePlayerMatchContext method for its join
+  # gate and recruiting-list pruning. Independent key from Login's on purpose:
+  # one shared secret would let either service impersonate the other.
+  # Must equal team-dev.yaml team.match_resume_auth_secret.
+  team_resume_auth_secret: "pandora-dev-team-resume-auth-key-v1!"
   # Matchmaker→DS allocator signed exact allocation abort only.
   allocation_abort_auth_secret: "pandora-dev-allocation-abort-auth-key-v1!"
   allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"

@@ -74,10 +74,21 @@ type MatchConf struct {
 	// LocatorAddr 是 player_locator 服务 gRPC 直连地址（撮合状态机上报玩家位置：
 	// 成局→MATCHING、就绪→BATTLE，不变量 §1）。留空则不上报（本机不起 locator 也能跑撮合）。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
-	// MatchResumeAuthSecret authenticates the sole Login→Matchmaker canonical
+	// MatchResumeAuthSecret authenticates the Login→Matchmaker canonical
 	// resume read. It is never shared with player JWT keys.
 	MatchResumeAuthSecret   string `yaml:"match_resume_auth_secret,omitempty" json:"match_resume_auth_secret,omitempty"`
 	MatchResumeAuthAudience string `yaml:"match_resume_auth_audience,omitempty" json:"match_resume_auth_audience,omitempty"`
+	// TeamResumeAuthSecret authenticates the Team→Matchmaker read of the same
+	// ResolvePlayerMatchContext method. Team needs it for two gates: the join
+	// gate (ensureTeamNotCommittedToMatch, fail-closed) and pruning already
+	// committed teams out of ListOpenTeams.
+	//
+	// It is a **separate key from Login's** on purpose: both callers read the
+	// same method, but sharing one secret would let either service mint
+	// credentials as the other, collapsing two trust domains into one and making
+	// key rotation all-or-nothing. Leaving it empty keeps Team locked out
+	// (fail-closed), it does not fall back to Login's key.
+	TeamResumeAuthSecret string `yaml:"team_resume_auth_secret,omitempty" json:"team_resume_auth_secret,omitempty"`
 	// AllocationAbortAuth authenticates only Matchmaker→DS allocator's exact
 	// pre-admission abort request. It must not reuse Login resume, player JWT,
 	// or DS callback trust-domain keys.
@@ -270,6 +281,23 @@ func (c *Config) Validate() error {
 	if c.Match.MatchResumeAuthSecret == c.JWT.Secret {
 		return fmt.Errorf("match.match_resume_auth_secret must use an independent trust-domain key")
 	}
+	// Team's key is optional so an existing deployment that has not distributed it
+	// yet keeps starting (Team simply stays rejected, which is the fail-closed
+	// status quo). Configured-but-invalid is still fatal: a typo'd key would look
+	// enabled while every Team call silently fails auth.
+	if c.Match.TeamResumeAuthSecret != "" {
+		if err := internalrpcauth.ValidateSecret(c.Match.TeamResumeAuthSecret); err != nil {
+			return fmt.Errorf("match.team_resume_auth_secret invalid: %w", err)
+		}
+		for name, secret := range map[string]string{
+			"player JWT":   c.JWT.Secret,
+			"Login resume": c.Match.MatchResumeAuthSecret,
+		} {
+			if c.Match.TeamResumeAuthSecret == secret {
+				return fmt.Errorf("match.team_resume_auth_secret must not reuse %s key", name)
+			}
+		}
+	}
 	if c.Match.DSAllocatorAddr != "" {
 		if err := internalrpcauth.ValidateSecret(c.Match.AllocationAbortAuthSecret); err != nil {
 			return fmt.Errorf("match.allocation_abort_auth_secret invalid: %w", err)
@@ -280,8 +308,9 @@ func (c *Config) Validate() error {
 		for name, secret := range map[string]string{
 			"player JWT":   c.JWT.Secret,
 			"Login resume": c.Match.MatchResumeAuthSecret,
+			"Team resume":  c.Match.TeamResumeAuthSecret,
 		} {
-			if c.Match.AllocationAbortAuthSecret == secret {
+			if secret != "" && c.Match.AllocationAbortAuthSecret == secret {
 				return fmt.Errorf("match.allocation_abort_auth_secret must not reuse %s key", name)
 			}
 		}

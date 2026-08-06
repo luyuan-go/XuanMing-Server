@@ -27,6 +27,7 @@ try {
         -PlacementHubTransferSecret 'prod-placement-hub-transfer-0123456789abcdef-006' `
         -PlacementBattleDepartureSecret 'prod-placement-battle-departure-0123456789abcdef-007' `
         -MatchResumeAuthSecret 'prod-match-resume-auth-0123456789abcdef-008' `
+        -TeamResumeAuthSecret 'prod-team-resume-auth-0123456789abcdef-012' `
         -AllocationAbortAuthSecret 'prod-allocation-abort-auth-0123456789abcdef-009' `
         -OwnerStoreDsn 'prod_owner:prod-owner-pwd-010@tcp(tidb.pandora.svc:4000)/pandora_owner?parseTime=true&loc=UTC' `
         -AccountStoreDsn 'prod_login:prod-acct-pwd-011@tcp(tidb.pandora.svc:4000)/pandora_account?parseTime=true&loc=UTC' `

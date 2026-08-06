@@ -42,6 +42,7 @@ function Invoke-ProdGen([string[]]$OwnerDsnArgs, [string]$OutDir) {
         '-PlacementHubTransferSecret', 'prod-placement-hub-transfer-0123456789abcdef-006',
         '-PlacementBattleDepartureSecret', 'prod-placement-battle-departure-0123456789abcdef-007',
         '-MatchResumeAuthSecret', 'prod-match-resume-auth-0123456789abcdef-008',
+        '-TeamResumeAuthSecret', 'prod-team-resume-auth-0123456789abcdef-012',
         '-AllocationAbortAuthSecret', 'prod-allocation-abort-auth-0123456789abcdef-009',
         '-DsAuthMode', 'enforce', '-DsAuthorityMode', 'redis',
         '-DsFenceEtcdEndpoints', 'https://etcd.pandora.svc:2379',
