@@ -40,6 +40,17 @@
           <description>Optional artifact root override. Empty preserves the agent PANDORA_ARTIFACT_ROOT and then falls back to @@PANDORA_ARTIFACT_ROOT@@.</description>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>PUSH_REGISTRY</name>
+          <description>Also push the business images to the local dev registry so the dev k8s cluster can pull them. Dev only - production releases go through start.ps1 -Mode online (digest-pinned).</description>
+          <defaultValue>true</defaultValue>
+        </hudson.model.BooleanParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>REGISTRY_HOST</name>
+          <description>Target registry for PUSH_REGISTRY. Must be a local dev registry (localhost / 127.0.0.1); the publish script rejects remote hosts by design.</description>
+          <defaultValue>localhost:5000</defaultValue>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
     <jenkins.model.BuildDiscarderProperty>

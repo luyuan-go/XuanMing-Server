@@ -64,13 +64,13 @@ spec:
               # desired state,钉 :dev 滚动 tag 会让任意一次 kubectl apply 把 live 降回本机
               # IfNotPresent 缓存里的旧 :dev 构建。换版流程 = 打新不可变 tag → minikube image
               # load → 改本行 → apply;严禁回填 :dev。
-              # 当前本地开发镜像:r1835-dirty-20260805-231450
+              # 当前本地开发镜像:r1918-dirty-20260807-022839
               # (tag = 制品库快照版本号,契约见 start.ps1 Build-DsImagesForMinikube:宿主 docker
               # 缺该镜像时会按此名去制品库定位包并自动重建同名镜像,任何可达制品库的机器可复现。
               # 制品:<PANDORA_ARTIFACT_ROOT>\snapshots\client\trunk_Client\
-              # Server_Linux_Development\r1835-dirty-20260805-231450\LinuxServer,
-              # PandoraServer sha256 54884AF4…E8E6,293,588,408 字节,二进制 2026-08-05 22:56 编译,
-              # BUILD_INFO: FullBuild Revision=1835 Time=2026-08-05 23:12,发布于 23:16)。
+              # Server_Linux_Development\r1918-dirty-20260807-022839\LinuxServer,
+              # PandoraServer sha256 723F01C6…9E68,293,613,688 字节,二进制 2026-08-07 01:00 编译,
+              # BUILD_INFO: FullBuild Revision=1918 Time=2026-08-07 01:04,发布于 02:28)。
               #
               # ⚠️ tag 里的 r<数字> **不是源码 revision 凭据**:发布器取的是发布时刻
               # `svnversion` 的上界,工作副本混合版本(实测 1719:1833M)时它只是其中最高的那个,
@@ -80,12 +80,20 @@ spec:
               # 换版沿革:2026-08-05 由 r1707-dirty-dbcbba84-20260804-100500z(非最新源码,且该 tag
               # 在制品库查无快照、只存在于原机 docker,换机器必 ImagePullBackOff)先换到 r1833,
               # 同日客户端又出了 r1835,遂跟到本 tag。两者均已随发布进制品库,无上述缺口。
+              # 2026-08-07 换到 r1918:内容 = Jenkins client-dev #76 的 Linux DS 产物
+              # (Packages\Server_Linux_Development,BUILD_INFO Revision=1918)。该包**本来就没进
+              # 制品库** —— client-dev 的 Publish 阶段把 `-Flavors A B` 写成空格分隔,PowerShell
+              # 只把第一个裸值绑给 -Flavors、第二个溢出到位置参数 $ArtifactRoot,于是 #74~#76 只发布了
+              # Client_Win64_Development 且发进了工作区里的错误目录,DS 包一次都没发出去,发布阶段
+              # 却报 SUCCESS。制品库因此停在 08-05 的 r1835,集群跟着跑了两天前的 DS 代码。
+              # 客户端仓 Tool/Build/Jenkinsfile 已按逗号分隔修好(工作副本已改,待提交 SVN 生效);
+              # 本 tag 的包由 PublishPackages.ps1 从 #76 工作区补发,sha256 与工作区产物逐字节一致。
               #
               # ⚠️ 换版必须改本行再 apply。历史教训:2026-07-31 曾有人绕过本文件直接改集群,
               # 结果 live 跑着 r1642-dirty-9ab0ee7f-20260731-130850 而本文件还写着 r1604,
               # 且那个 tag 在制品库里查无快照 —— 任何一次 apply 都会把 live 打回旧版,
               # 换机器更是直接 ImagePullBackOff。
-              image: pandora/battle-ds:r1835-dirty-20260805-231450
+              image: pandora/battle-ds:r1918-dirty-20260807-022839
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

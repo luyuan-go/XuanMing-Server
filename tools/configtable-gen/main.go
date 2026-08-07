@@ -46,12 +46,34 @@ func main() {
 	sourceRev := flag.String("source-rev", "",
 		"源表版本标注(必填,如 svn-r123;产物 manifest 溯源依据,不允许不可追溯批次)")
 	forceVersion := flag.Uint64("version", 0, "强制指定版本号(默认自动单调递增)")
+	syncMode := flag.Bool("sync", false,
+		"表头漂移同步:比对 xlsx 表头与 proto (excel_col) 注解并报告差异,不改任何文件也不产出")
+	syncWrite := flag.Bool("sync-write", false,
+		"随 -sync 使用:把「列改名」「末尾加列」这类机械漂移写回 .proto(删列 / 挪位只报告)")
+	protoRoot := flag.String("proto-root", "proto", "-sync-write 改写 .proto 的根目录")
+	clientRegistry := flag.String("client-registry", "",
+		"客户端列登记目录(默认 <-tables>/../Tool/Table/Cs/Proto;新增列的字段名 / 类型取这里,保证两仓一致)")
+	var syncCols stringList
+	flag.Var(&syncCols, "sync-col",
+		"指定新增列的字段名 / 类型,格式 <表名>.<列名>=<字段名>[:<类型>],可重复")
 	flag.Parse()
 
 	if *tablesRoot == "" {
 		fmt.Fprintln(os.Stderr, "缺少 -tables 源表根目录")
 		flag.Usage()
 		os.Exit(2)
+	}
+
+	// 同步模式只读 xlsx 表头、只写 .proto,不碰 dist / Go / 位序状态,
+	// 因此走在生成锁之前并直接返回(不与生成流程共用锁,也不需要 -source-rev)。
+	if *syncMode || *syncWrite {
+		os.Exit(runSync(syncOptions{
+			tablesRoot: *tablesRoot,
+			protoRoot:  *protoRoot,
+			registry:   *clientRegistry,
+			write:      *syncWrite,
+			overrides:  syncCols,
+		}))
 	}
 	// source_rev 溯源门禁(审计 P1):空白与 "unknown" 占位一律拒(只拒空字符串时,
 	// unknown/纯空白照样产出不可追溯批次)。

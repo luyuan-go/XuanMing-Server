@@ -54,11 +54,12 @@ spec:
               # Agones 自动注入 SDK sidecar；DS 内 UPandoraAgonesSubsystem 走 sidecar HTTP 调 Ready/Health/Shutdown。
               # 镜像一律钉**不可变 tag**,与 20-fleet-battle.yaml 同改同收(P1-4,§9.21;
               # 推导与换版流程见该文件注释)。canary 轨换新版本时改本行为新的不可变 tag。
-              # 2026-08-05 与 stable 同步换到 r1835(制品库快照 r1835-dirty-20260805-231450;
-              # 依据、sha256 与「tag 不是源码 revision 凭据」的告诫记在 20-fleet-battle.yaml 该行注释)。
+              # 2026-08-07 与 stable 同步换到 r1918(制品库快照 r1918-dirty-20260807-022839,
+              # 内容 = Jenkins client-dev #76 的 Linux DS 产物;依据、sha256、Jenkins 发布阶段
+              # 漏发 DS 包的成因与「tag 不是源码 revision 凭据」的告诫,均记在 20-fleet-battle.yaml 该行注释)。
               # 注:canary 与 stable 钉同一 tag = 灰度轨当前无差异版本,只作容量/轨道演练;
               # 真正灰度时本行必须换成与 stable **不同** digest 的新镜像。
-              image: pandora/battle-ds:r1835-dirty-20260805-231450
+              image: pandora/battle-ds:r1918-dirty-20260807-022839
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT
