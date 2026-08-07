@@ -2011,6 +2011,7 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 		AuthTTL:            u.dsCredentialTTL,
 		BattleTTL:          u.battleTTL(),
 		EmptyBattleTimeout: u.cfg.EmptyBattleTimeout.Std(),
+		NoShowTimeout:      u.cfg.ResolveNoShowTimeout(),
 		StabilityBeats:     u.cfg.ActivationStabilityBeats,
 		StabilitySpanMs:    u.cfg.ActivationStabilitySpan.Std().Milliseconds(),
 	})
@@ -2069,7 +2070,8 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 		finished := u.finishEmptyAbandon(ctx, matchID, out.Battle.DsPodName,
 			out.Battle.GameserverUid, out.Battle.PodUid, out.Battle.AllocationId,
 			out.Battle.ReleaseTrack, out.Battle.InstanceEpoch,
-			out.Battle.PlayerIds, out.Battle.MapId, out.Battle.GameMode)
+			out.Battle.PlayerIds, out.Battle.MapId, out.Battle.GameMode,
+			!out.Battle.GetEverHadPlayers())
 		result.Command = finished.Command
 		return result, nil
 	}
@@ -2197,10 +2199,15 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 	var refreshActive bool
 	var refreshAddr string
 	var refreshPlayers []uint64
-	// 空场兜底(2026-07-06):对局活跃但 player_count==0 持续超过 EmptyBattleTimeout → 判 abandoned
+	// 空场兜底(2026-07-06):对局活跃但 player_count==0 持续超阈 → 判 abandoned
 	// (全员掉线未归 / 客户端从未连入,DS 空转烧资源)。主路径是 DS 侧空场计时器自结算
-	// (agones-dev.md §2.4),这里是后端保险;阈值必须远大于断线重连窗口(~30s),默认 5m。
+	// (agones-dev.md §2.4),这里是后端保险。
+	//
+	// 双阈值(2026-08-07,anti-abuse-scene-entry.md §3.2.1):阈值按 EverHadPlayers 二选一 ——
+	// 有人连入过的局要给断线重连留路(默认 5m,远大于 ~30s 重连窗);从未连入的局
+	// 根本没人要回来,只需覆盖「DS 报 ready → travel + 连接 + Admission」(默认 150s)。
 	var emptyAbandoned bool
+	var abandonNoShow bool
 	var abandonPod string
 	var abandonUID string
 	var abandonPodUID string
@@ -2211,10 +2218,12 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 	var abandonMapID uint32
 	var abandonGameMode string
 	emptyTimeoutMs := u.cfg.EmptyBattleTimeout.Std().Milliseconds()
+	noShowTimeoutMs := u.cfg.ResolveNoShowTimeout().Milliseconds()
 	err := u.repo.UpdateBattleWithLock(ctx, matchID, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
 		// CAS 冲突重跑时以最后一轮为准,每轮重置出参标记
 		refreshActive = false
 		emptyAbandoned = false
+		abandonNoShow = false
 		if b.State == stateAllocationUncertain || b.State == stateAllocationReconciling ||
 			b.State == stateAllocationEmptyFence ||
 			b.State == statePreactiveReleasing || b.State == stateAllocationAbort {
@@ -2240,16 +2249,26 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 			becameReady = true
 		}
 		// 空场跟踪:活跃对局无人 → 盖 EmptySinceMs 起计时;有人回来 → 清零;
-		// 持续空场超阈值 → 同一 CAS 内直接写 abandoned(与心跳写回原子,无额外竞态窗口)。
+		// 持续空场超阈 → 同一 CAS 内直接写 abandoned(与心跳写回原子,无额外竞态窗口)。
 		if b.State == stateReady || b.State == stateRunning {
+			// 阈值取 EverHadPlayers ? empty : no-show —— EverHadPlayers 一经置位永不清零,
+			// 因此只要有一个玩家进来过,本局就永久享受长阈值(5v5 里「9 人在打、1 人掉线」
+			// 绝不会走 no-show)。noShowTimeoutMs<=0 回退长阈值:未配差异化时退化成改动前行为,
+			// 绝不能让阈值变 0 导致 no-show 局永不回收(fail-safe:宁可回收晚,不可不回收)。
+			activeTimeoutMs := emptyTimeoutMs
+			if !b.EverHadPlayers && noShowTimeoutMs > 0 {
+				activeTimeoutMs = noShowTimeoutMs
+			}
 			switch {
 			case playerCount > 0:
 				b.EmptySinceMs = 0
+				b.EverHadPlayers = true
 			case b.EmptySinceMs == 0:
 				b.EmptySinceMs = now
-			case emptyTimeoutMs > 0 && now-b.EmptySinceMs >= emptyTimeoutMs:
+			case activeTimeoutMs > 0 && now-b.EmptySinceMs >= activeTimeoutMs:
 				b.State = stateAbandoned
 				emptyAbandoned = true
+				abandonNoShow = !b.EverHadPlayers
 				abandonPod = b.DsPodName
 				abandonUID = b.GameserverUid
 				abandonPodUID = b.PodUid
@@ -2336,7 +2355,7 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 		// 空场超时判弃:回收 pod + 投递补偿 + 移出 active,回 stop 指令令 DS 停机。
 		return u.finishEmptyAbandon(ctx, matchID, abandonPod, abandonUID,
 			abandonPodUID, abandonAllocationID, abandonReleaseTrack, abandonInstanceEpoch,
-			abandonPlayers, abandonMapID, abandonGameMode), nil
+			abandonPlayers, abandonMapID, abandonGameMode, abandonNoShow), nil
 	}
 	// owner 权威实例租约双写 + 在场玩家准入代提交(与 Model B 心跳同语义,见函数注释)。
 	// 时序同 owner-authority.md §4:必须在心跳响应返回前完成租约续写。
@@ -2398,9 +2417,17 @@ func (u *AllocatorUsecase) finishEmptyAbandon(
 	playerIDs []uint64,
 	mapID uint32,
 	gameMode string,
+	noShow bool,
 ) *HeartbeatResult {
+	// reason 区分两档阈值:no_show = 从头到尾没人连入(可能是刷进出副本的滥用,
+	// 也可能是客户端进场链路断了);all_disconnected = 有人打过但全员掉线未归。
+	// 两者的排查方向完全不同,日志必须能分开统计(否则滥用会被当成“玩家网络差”)。
+	reason, timeout := "all_disconnected", u.cfg.EmptyBattleTimeout.Std()
+	if noShow {
+		reason, timeout = "no_show", u.cfg.ResolveNoShowTimeout()
+	}
 	plog.With(ctx).Warnw("msg", "battle_abandoned_empty_timeout",
-		"match_id", matchID, "pod", podName, "empty_timeout", u.cfg.EmptyBattleTimeout.String())
+		"match_id", matchID, "pod", podName, "reason", reason, "empty_timeout", timeout.String())
 	var expected *data.AuthoritativeGameServerAllocation
 	if u.modelB {
 		fence := data.BattleExpectedInstance{

@@ -124,6 +124,12 @@ type BattleHeartbeatInput struct {
 	AuthTTL            time.Duration
 	BattleTTL          time.Duration
 	EmptyBattleTimeout time.Duration
+	// NoShowTimeout 是「从未连入」(BattleStorageRecord.ever_had_players=false)局的空场
+	// 回收阈值,由 conf.AllocatorConf.ResolveNoShowTimeout 解析(已含钳制与禁用语义)。
+	// 与 EmptyBattleTimeout 二选一,选择依据只看 ever_had_players,不看当前 PlayerCount:
+	// 有人连入过的局即便此刻空了也要给断线重连留路(长阈值),从未连入的局没人要回来(短阈值)。
+	// 零值 = 不区分,退化为 EmptyBattleTimeout 单阈值(改动前行为)。
+	NoShowTimeout time.Duration
 	// StabilityBeats/StabilitySpanMs 是两阶段激活稳定性门(INC-20260727-001 第三 P0,
 	// 推导见 conf.ActivationStabilityBeats):staged→ACTIVE 提升要求 ≥Beats 次实收
 	// 心跳且首尾跨度 ≥SpanMs。Beats≤1 且 SpanMs≤0 时门关闭(零值兼容旧行为)。
@@ -902,12 +908,24 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 				battle.State = in.State
 			}
 			if battle.State == "ready" || battle.State == "running" {
+				// 双阈值空场回收(2026-08-07,anti-abuse-scene-entry.md §3.2.1):
+				// 从未连入(EverHadPlayers=false)的局没有“谁要回来”的问题,走短阈值;
+				// 有人连入过的局必须给断线重连留路,走长阈值。EverHadPlayers 一经置位永不清零。
+				//
+				// NoShowTimeout<=0 一律回退 EmptyBattleTimeout:未配置差异化时必须退化成
+				// 改动前的单阈值行为,绝不能让 timeout 变成 0 —— 那会让 no-show 局**永不回收**,
+				// 比改动前更糟(fail-safe 方向:宁可回收得晚,不可不回收)。
+				timeout := in.EmptyBattleTimeout
+				if !battle.EverHadPlayers && in.NoShowTimeout > 0 {
+					timeout = in.NoShowTimeout
+				}
 				switch {
 				case in.PlayerCount > 0:
 					battle.EmptySinceMs = 0
+					battle.EverHadPlayers = true
 				case battle.EmptySinceMs == 0:
 					battle.EmptySinceMs = serverNowMs
-				case in.EmptyBattleTimeout > 0 && serverNowMs-battle.EmptySinceMs >= in.EmptyBattleTimeout.Milliseconds():
+				case timeout > 0 && serverNowMs-battle.EmptySinceMs >= timeout.Milliseconds():
 					battle.State = "abandoned"
 				}
 			}

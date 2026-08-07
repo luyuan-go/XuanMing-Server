@@ -397,3 +397,50 @@ go run ./cmd/gmctl additem --match <matchID> --player <playerID> --config <真�
 - `:s`/`:h` 是非权威可重建派生状态(§22),禁止用于结算 / 发奖 / 任何权威写;SettleBoard 仍只读精确 ZSET Top-N。
 - 桶宽建榜定死不可变;估算名次钳制到 ZCARD+1 之后,不与精确区打架。
 - 直方图增量计数存在理论漂移,当前不加重建 job(§15.3);永久榜压测若漂移可感知,补「从 :s 重算 :h」低峰任务。
+
+---
+
+## §10 Battle DS 双阈值空场回收交接(2026-08-07)
+
+### 10.1 背景
+
+`docs/design/anti-abuse-scene-entry.md` §3.2.1:「进副本→退出→再进」能把一台 14Gi 的 Battle DS
+押约 6 分钟(冷启动 + 5min 空场兜底),`maxReplicas` 个小号即可押死整个 Fleet,速率比正常玩家还低,
+**任何频率闸都拦不住**。同一处还有个 §9.20 卡玩家 bug:正常玩家强退后被 `ensureNoneInBattle`
+锁最多 5 分钟,只看到 `ErrMatchInBattle(4007)`。缩短「从未连入」局的持有时间**一个修同时解决两件事**。
+
+### 10.2 已完成代码范围(Claude,**未编译、未跑测试**)
+
+把空场回收拆成两档:`ever_had_players=false`(no-show)走短阈值,其余走原 `empty_battle_timeout`。
+
+- `proto/pandora/ds/v1/allocator.proto`:`BattleStorageRecord.ever_had_players = 21`(纯加字段,§9.17 双向兼容)**[proto]**
+- `services/battle/ds_allocator/internal/conf/conf.go`:`no_show_battle_timeout` +
+  `DefaultNoShowBattleTimeout=150s` / `NoShowTimeoutFloor=60s` + `ResolveNoShowTimeout()`
+- `internal/biz/allocator.go`:`heartbeatLegacy` 按位选阈值;判弃日志分 `reason=no_show` / `all_disconnected`
+- `internal/data/battle_auth.go`:`ActivateHeartbeat`(**Model B 生产路径**)同款双阈值 + `BattleHeartbeatInput.NoShowTimeout`
+- 新增 6 个单测(biz 4 + conf 2),**均未运行**
+
+### 10.3 Codex 待办(阻塞本模块编译)
+
+1. ⚠️ **跑 `pwsh tools/scripts/proto_gen.ps1` 重生 ds pb** —— 代码引用的
+   `EverHadPlayers` / `GetEverHadPlayers()` 目前在 `proto/gen` 里**还不存在**,不跑必然 build 红。
+2. 无需 `go mod tidy`(未引入新依赖)。
+3. cpp pb 无需同步(存储侧字段,UE 不可见)。
+
+### 10.4 语义约束(review 红线)
+
+- **两条心跳路径必须同时改**:`heartbeatLegacy`(`!RedisAuthorityEnabled()`)和 `ActivateHeartbeat`(Model B)。
+  只改一条 = 线上没生效。
+- **阈值解析结果绝不允许是 0**:判定是 `timeout > 0 && ...`,0 会让 no-show 局**永不回收**,比不改还糟。
+  fail-safe 方向统一为「宁可回收得晚,不可不回收」。
+- **不要缩 `heartbeat_timeout`** 来达成类似效果:空场回收与失联回收是两条独立时钟,
+  INC-20260727-001 的根因正是单阈值同时管启动与稳态。
+- `ever_had_players` 一经置位**永不清零**,保证「9 人在打、1 人掉线」绝不会走 no-show 短档。
+- 回滚开关:`no_show_battle_timeout: -1s` = 禁用差异化,退回改动前单阈值行为。
+
+### 10.5 仍未验证(§6 第 0 项不算验收完成)
+
+- 未编译、未跑测试(用户自行编译)
+- 未做故障注入验证真实断线玩家在重连窗内不被误判
+- 未实测「DS 报 ready → 客户端完成 Admission」P99 来复核 150s 默认值(该值目前是**有推导依据的保守初值**,不是实测值)
+- 未给出「单次进场占用 Pod·分钟」前后对比表

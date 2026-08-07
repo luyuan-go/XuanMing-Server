@@ -3919,6 +3919,163 @@ func TestHeartbeatEmptyTimeoutDisabled(t *testing.T) {
 	}
 }
 
+// ── 双阈值空场回收(2026-08-07,anti-abuse-scene-entry.md §3.2.1)────────────────
+//
+// 语义:「从未连入」(EverHadPlayers=false)走短阈值 no_show_battle_timeout;
+// 「有人连入过」走长阈值 empty_battle_timeout(必须远大于 ~30s 断线重连窗)。
+// 这两条测试是本次改动的核心断言 —— 它们同时锁住「防刷」和「不误杀掉线玩家」两个方向。
+
+// allocateReadyNoShow 造一局「DS 已就绪但一个玩家都没连进来」的 no-show 局:
+// ready 心跳上报 player_count=0,因此 EverHadPlayers 保持 false。
+func allocateReadyNoShow(t *testing.T, uc *AllocatorUsecase, repo *data.RedisBattleRepo,
+	matchID uint64, playerIDs []uint64,
+) *AllocateResult {
+	t.Helper()
+	type out struct {
+		res *AllocateResult
+		err error
+	}
+	done := make(chan out, 1)
+	go func() {
+		res, err := uc.AllocateBattle(context.Background(), matchID, playerIDs, 1, "pve_coop")
+		done <- out{res, err}
+	}()
+	feedReadyHeartbeat(t, uc, repo, matchID, 0) // 关键:0 人上报 ⇒ EverHadPlayers 保持 false
+	r := <-done
+	if r.err != nil {
+		t.Fatalf("allocate match %d: %v", matchID, r.err)
+	}
+	return r.res
+}
+
+// backdateEmptySinceBy 把 EmptySinceMs 精确回拨 d,用于卡在两档阈值之间做判别。
+func backdateEmptySinceBy(t *testing.T, repo *data.RedisBattleRepo, matchID uint64, d time.Duration) {
+	t.Helper()
+	if err := repo.UpdateBattleWithLock(context.Background(), matchID, 3, func(b *dsv1.BattleStorageRecord) error {
+		b.EmptySinceMs = time.Now().UnixMilli() - d.Milliseconds()
+		return nil
+	}, 2*time.Hour); err != nil {
+		t.Fatalf("backdate empty_since by %s: %v", d, err)
+	}
+}
+
+// TestHeartbeatNoShowUsesShortTimeout:从未连入的局空场超过**短**阈值即判弃,
+// 无需等满 empty_battle_timeout(否则每次分配白押一台 14Gi Pod 满 5 分钟)。
+func TestHeartbeatNoShowUsesShortTimeout(t *testing.T) {
+	ctx := context.Background()
+	_, repo := newUsecase(t)
+	cfg := testCfg()
+	cfg.EmptyBattleTimeout = config.Duration(5 * time.Minute)
+	cfg.NoShowBattleTimeout = config.Duration(90 * time.Second)
+	uc := NewAllocatorUsecase(repo, NewMockGameServerAllocator(cfg), cfg)
+
+	res := allocateReadyNoShow(t, uc, repo, 7, []uint64{10, 20})
+	if got, _, _ := repo.GetBattle(ctx, 7); got.EverHadPlayers {
+		t.Fatal("EverHadPlayers must stay false when nobody ever connected")
+	}
+
+	// 卡在两档之间:已超 no-show(90s),未到 empty(5m)
+	backdateEmptySinceBy(t, repo, 7, 2*time.Minute)
+	hb, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if hb.Command != commandStop {
+		t.Fatalf("command = %q, want stop (no-show 应走短阈值,不等满 5m)", hb.Command)
+	}
+	if got, _, _ := repo.GetBattle(ctx, 7); got.State != stateAbandoned {
+		t.Fatalf("state = %q, want abandoned", got.State)
+	}
+}
+
+// TestHeartbeatEverHadPlayersKeepsLongTimeout:有人连入过的局在同一时刻**不得**判弃 ——
+// 短阈值只对 no-show 生效,断线重连的玩家必须仍有 empty_battle_timeout 那么久可以回来。
+// 这条是防止「防刷改动误伤真实掉线玩家」的护栏(§9.20)。
+func TestHeartbeatEverHadPlayersKeepsLongTimeout(t *testing.T) {
+	ctx := context.Background()
+	_, repo := newUsecase(t)
+	cfg := testCfg()
+	cfg.EmptyBattleTimeout = config.Duration(5 * time.Minute)
+	cfg.NoShowBattleTimeout = config.Duration(90 * time.Second)
+	uc := NewAllocatorUsecase(repo, NewMockGameServerAllocator(cfg), cfg)
+
+	// allocateReady 会以 player_count=len(playerIDs)>0 上报 ⇒ EverHadPlayers 置位
+	res := allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
+	got, _, _ := repo.GetBattle(ctx, 7)
+	if !got.EverHadPlayers {
+		t.Fatal("EverHadPlayers should be set after a heartbeat with player_count>0")
+	}
+
+	// 全员掉线 → 起计时
+	if _, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("empty heartbeat: %v", err)
+	}
+	// 与上面那条测试**完全相同**的空场时长,但因为有人连入过,必须仍然活着
+	backdateEmptySinceBy(t, repo, 7, 2*time.Minute)
+	hb, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if hb.Command != commandNone {
+		t.Fatalf("command = %q, want none (有人连入过 ⇒ 必须给断线重连留满 5m)", hb.Command)
+	}
+	if got2, _, _ := repo.GetBattle(ctx, 7); got2.State != stateRunning {
+		t.Fatalf("state = %q, want still running", got2.State)
+	}
+}
+
+// TestHeartbeatEverHadPlayersStickyAcrossDisconnect:EverHadPlayers 一经置位永不清零 ——
+// 玩家进来又全部离开后,该局不得退回 no-show 短阈值档。
+func TestHeartbeatEverHadPlayersStickyAcrossDisconnect(t *testing.T) {
+	ctx := context.Background()
+	uc, repo := newUsecase(t)
+
+	res := allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
+	// 连续多跳 0 人,EverHadPlayers 必须保持 true
+	for i := 0; i < 3; i++ {
+		if _, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli()); err != nil {
+			t.Fatalf("empty heartbeat %d: %v", i, err)
+		}
+	}
+	got, _, _ := repo.GetBattle(ctx, 7)
+	if !got.EverHadPlayers {
+		t.Fatal("EverHadPlayers must stay true after players leave (sticky)")
+	}
+}
+
+// TestHeartbeatNoShowDisabledFallsBackToEmpty:no_show_battle_timeout 配负值 = 显式禁用差异化,
+// 退化成改动前的单阈值行为(no-show 局也享受长阈值,绝不能变成"永不回收")。
+func TestHeartbeatNoShowDisabledFallsBackToEmpty(t *testing.T) {
+	ctx := context.Background()
+	_, repo := newUsecase(t)
+	cfg := testCfg()
+	cfg.EmptyBattleTimeout = config.Duration(5 * time.Minute)
+	cfg.NoShowBattleTimeout = config.Duration(-1) // 显式禁用差异化
+	uc := NewAllocatorUsecase(repo, NewMockGameServerAllocator(cfg), cfg)
+
+	res := allocateReadyNoShow(t, uc, repo, 7, []uint64{10, 20})
+
+	// 超短阈值但未到长阈值:禁用差异化后不应判弃
+	backdateEmptySinceBy(t, repo, 7, 2*time.Minute)
+	hb, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if hb.Command != commandNone {
+		t.Fatalf("command = %q, want none (差异化已禁用,应等满 empty_battle_timeout)", hb.Command)
+	}
+
+	// 但超过长阈值后仍必须回收 —— 禁用差异化 ≠ 永不回收
+	backdateEmptySinceBy(t, repo, 7, 6*time.Minute)
+	hb2, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat2: %v", err)
+	}
+	if hb2.Command != commandStop {
+		t.Fatalf("command = %q, want stop (超长阈值必须回收)", hb2.Command)
+	}
+}
+
 // TestHeartbeatEmptyTimeoutDeliveryRetry:空场判弃时 Kafka 不可用 → 保留在 active;
 // 后续 sweep 以 firstAbandon=false 路径重试投递(不重复回收 pod),闭环同心跳超时补偿(不变量 §4)。
 func TestHeartbeatEmptyTimeoutDeliveryRetry(t *testing.T) {

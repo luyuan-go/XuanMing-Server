@@ -2622,3 +2622,51 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
 - **落地顺序已重排**:双阈值空场回收提为**第 0 项(最高优先级)**,排在限流原语之前。
 - 待拍板升级为 5 项,**自动注册是否保留升到第 1 位**(它直接决定攻击成本上限)。
 
+### 2026-08-07:落地第 0 项 —— Battle DS 双阈值空场回收(代码完成,待编译/实测)
+
+用户拍板「先做第 0 项」。理由不变:它同时修掉「正常玩家强退后被锁 5 分钟」这个 §9.20 卡玩家 bug,
+收益不依赖任何产品决策,改动也小。
+
+**改了什么**(4 个文件,`ds_allocator` + proto):
+
+| 文件 | 改动 |
+|---|---|
+| `proto/pandora/ds/v1/allocator.proto` | `BattleStorageRecord.ever_had_players = 21`(纯加字段,§9.17 双向兼容;`updateWithLock` 的 read-modify-write 不 `DiscardUnknown`,滚动升级期旧副本回写不会丢它) |
+| `internal/conf/conf.go` | 新增 `no_show_battle_timeout`;常量 `DefaultNoShowBattleTimeout=150s`、`NoShowTimeoutFloor=60s`;新增 `ResolveNoShowTimeout()` 把四个分支收敛成一个返回值,调用方不再判分支 |
+| `internal/biz/allocator.go` | `heartbeatLegacy` 按 `EverHadPlayers` 选阈值;判弃日志分 `reason=no_show` / `all_disconnected`(运维能一眼分清「刷子」和「真掉线」) |
+| `internal/data/battle_auth.go` | `ActivateHeartbeat`(Model B 生产路径)同款双阈值;`BattleHeartbeatInput` 加 `NoShowTimeout` |
+
+**两条路径都改了**:`heartbeatLegacy`(`!RedisAuthorityEnabled()` 时走)和 `ActivateHeartbeat`
+(Model B 生产路径)。只改一条等于线上没生效。
+
+**默认 150s 的推导(不是拍脑袋)**:DSTicket v2 生产档 TTL 120s(§9.3,签发与验签双向强制)
++ 30s 余量。票据过期后该客户端**已不可能**再进入这一局(DS 验签必拒),继续押 Pod 是纯浪费。
+这条推导比「感觉 90s 够用」站得住,也天然满足「不误杀正在 travel 的正常玩家」——他们票还没过期。
+
+**实现中踩到并修掉的自造 bug(写下来免得后人重犯)**:第一版把 `timeout = in.NoShowTimeout`
+无条件赋值,于是 legacy 调用方 / 存量单测传的零值会让阈值变 0,而判定是 `timeout > 0 && ...` ——
+**no-show 局将永不回收**,比不改还糟。已在两条路径都加 `> 0` 回退,并由
+`TestResolveNoShowTimeoutNeverSilentlyZero` 锁住。fail-safe 方向统一为「宁可回收得晚,不可不回收」。
+
+**护栏**:`no_show_battle_timeout` 配小于 60s 被钳到 60s —— 手滑把 `150s` 写成 `1.5s` 不能变成
+「玩家进不去场景」(§9.20 红线)。配负值 = 显式禁用差异化,退回改动前单阈值行为(回滚开关)。
+
+**新增单测**(共 6 个,均**未运行**):
+- `TestHeartbeatNoShowUsesShortTimeout` / `TestHeartbeatEverHadPlayersKeepsLongTimeout` ——
+  两条用**完全相同的空场时长**,只差 `EverHadPlayers`,一个必须判弃、一个必须活着。
+  后者就是「防刷改动不许误伤真实掉线玩家」的护栏。
+- `TestHeartbeatEverHadPlayersStickyAcrossDisconnect` —— 该位一经置位永不清零。
+- `TestHeartbeatNoShowDisabledFallsBackToEmpty` —— 禁用差异化 ≠ 永不回收。
+- `TestResolveNoShowTimeout`(表驱动 7 例)+ `TestResolveNoShowTimeoutNeverSilentlyZero`。
+- **存量测试语义已核**:`allocateReady` 以 `player_count=len(playerIDs)>0` 上报,故存量空场测试
+  的局都会置位 `EverHadPlayers` 走长阈值,而它们的 `backdateEmptySince` 回拨到 epoch,仍超时 ⇒ 不受影响。
+
+**交接(§14.3)**:
+1. ⚠️ **必须先由 Codex 跑 `pwsh tools/scripts/proto_gen.ps1`** —— 代码引用的
+   `EverHadPlayers` / `GetEverHadPlayers()` 在生成的 pb 里**还不存在**,不跑必然 build 红。
+2. 无需 `go mod tidy`(没引入新依赖)。
+3. **默认行为变了**:no-show 局从 300s 提前到 150s 回收。要退回改动前行为:`no_show_battle_timeout: -1s`。
+4. **仍未验证**:未编译、未跑测试(用户自行编译)、未做故障注入验证真实断线玩家在重连窗内不被误判、
+   未实测「DS 报 ready → 客户端完成 Admission」的 P99 来复核 150s、未给出「单次进场占用 Pod·分钟」前后对比。
+   在这些补齐前,§6 第 0 项不算验收完成。
+

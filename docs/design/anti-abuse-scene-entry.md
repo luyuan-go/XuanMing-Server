@@ -240,6 +240,8 @@ pkg/redisx/ratelimit.go
 
 #### ① 缩短空场持有时间——把「从未连入」和「全员掉线」分开(最高杠杆,且顺带修卡玩家)
 
+> **状态:代码已实现(2026-08-07),未编译验证 / 未实测调参**。落点见本节末「实现落点」。
+
 现在两种情况共用一个 5min 阈值,而它们的安全下界完全不同:
 
 | 情况 | 安全下界由什么决定 | 建议阈值 |
@@ -255,16 +257,40 @@ pkg/redisx/ratelimit.go
 > travel 过来并完成 Admission」这一段。这也是为什么 5min 对 no-show 而言过于宽松。
 > 但**总持有时间仍是 冷启动 + 空场超时**(两段串行),所以 §3.2.1 的「约 6 分钟」放大比不变。
 
-**为什么这条最值**:no-show 是攻击者的**唯一**姿势(他不会连进去),而 5min→~75s 直接把
-放大比砍掉约 3 倍;同时它**不影响任何真实断线玩家**(那条走另一个阈值)。
+**为什么这条最值**:no-show 是攻击者的**唯一**姿势(他不会连进去),而 5min→~150s 直接把
+放大比砍掉一半;同时它**不影响任何真实断线玩家**(那条走另一个阈值)。
 
 **实现极廉价**:`BattleStorageRecord` 已有 `empty_since_ms`;只需再加一个
 `ever_had_players`(bool,新字段编号,§9.17 加字段兼容),在心跳里 `playerCount>0` 时置位。
-判定处 `battle_auth.go:910` / `allocator.go` 的 `case` 按该位选阈值即可,**不新增任何计时器或状态机**
+判定处 `battle_auth.go` / `allocator.go` 的 `case` 按该位选阈值即可,**不新增任何计时器或状态机**
 (§16.10:这是「到期后重查权威并回收」的有界兜底,不是掩盖时序)。
 
-> ⚠️ 阈值不得拍脑袋:no-show 档必须实测「DS 报 ready → 客户端完成 Admission」的 P99,
-> 取值写进 yaml 不硬编码,注释标明推导依据。
+##### 实现落点(2026-08-07)
+
+| 文件 | 改动 |
+|---|---|
+| `proto/pandora/ds/v1/allocator.proto` | `BattleStorageRecord.ever_had_players = 21`(加字段,§9.17 双向兼容) |
+| `internal/conf/conf.go` | 新增 `no_show_battle_timeout`;`DefaultNoShowBattleTimeout=150s`、`NoShowTimeoutFloor=60s`;`ResolveNoShowTimeout()` 统一解析 |
+| `internal/biz/allocator.go` | `heartbeatLegacy` 按位选阈值;判弃日志分 `reason=no_show` / `all_disconnected` |
+| `internal/data/battle_auth.go` | `ActivateHeartbeat`(Model B 生产路径)同款双阈值;`BattleHeartbeatInput.NoShowTimeout` |
+
+**默认值 150s 的推导**:DSTicket v2 生产档 TTL 120s(§9.3,`pkg/auth/dsticket.go` 签发与验签双向
+强制)+ 30s 余量。取这个数的理由是**可证明**:票据过期后该客户端已经**不可能**再进入这一局
+(DS 侧验签必拒),继续押着 Pod 是纯浪费。这比拍一个「感觉够用」的数字站得住脚,也天然
+满足「不误杀正在 travel 的正常玩家」——他们手里的票还没过期。
+
+**两个 fail-safe 方向**(实现时踩过,写下来免得后人重犯):
+
+1. **解析结果绝不允许是 0**。判定处是 `timeout > 0 && ...`,阈值为 0 会让分支永假 ⇒
+   no-show 局**永不回收**,比不改还糟。`ResolveNoShowTimeout()` 在 `empty` 启用时保证返回正数,
+   并有 `TestResolveNoShowTimeoutNeverSilentlyZero` 锁住。
+2. **配小于 60s 被钳到 60s**。手滑把 `150s` 写成 `1.5s` 不能变成「玩家进不去场景」(§9.20 红线)。
+   宁可回收得晚,不可误杀。
+
+**回滚开关**:`no_show_battle_timeout: -1s` = 显式禁用差异化,退回改动前的单阈值行为。
+
+> ⚠️ **仍待实测**:no-show 档最终取值必须实测「DS 报 ready → 客户端完成 Admission」的 P99 复核。
+> 150s 是**有推导依据的保守初值**,不是实测值。
 
 #### ② 让「占一台 DS」这件事有成本——账号不能免费
 
@@ -339,7 +365,7 @@ per-player 配额都可以用换号绕过**。因此必须把分配配额绑到�
 
 | 序 | 项 | 涉及 | 验收 |
 |---|---|---|---|
-| **0** | **no-show / 全员掉线双阈值空场回收**(§4.3①) | ds_allocator + proto | **本表最高优先级**:单测锁定 no-show 走短阈值、有人连过走长阈值;故障注入验证真实断线玩家在重连窗内不被误判;压测给出「单次进场占用 Pod·分钟」前后对比 |
+| **0** | **no-show / 全员掉线双阈值空场回收**(§4.3①) | ds_allocator + proto | ✅ **代码已实现(2026-08-07)**,单测已锁定 no-show 走短阈值 / 有人连过走长阈值 / EverHadPlayers 粘滞 / 禁用差异化后仍会回收 / 解析结果绝不为 0。**未完成**:未编译验证(需先跑 proto 生成)、未做故障注入验证真实断线玩家不被误判、未给出「单次进场占用 Pod·分钟」前后对比 |
 | 1 | `pkg/redisx/ratelimit.go` 两原语 + 契约测试 | pkg | 单测锁定:窗口内拒第二次、窗口后放行、error 时 fail-open 返回 allow |
 | 2 | `StartMatch` per-队长/队伍 Cooldown | matchmaker | 单测:冷却内返回 `ErrRateLimited` 且**零副作用**(不创建 operation、不占 claim);Redis 故障时放行 |
 | 3 | 容量耗尽改 `WAIT + retry_after`(§4.3③) | ds_allocator + matchmaker + 客户端 | 满载时玩家看到排队而非硬失败;必须并入 §9.23 同一恢复协调器,**不新建第二套状态机** |
