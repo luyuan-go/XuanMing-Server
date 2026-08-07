@@ -1,6 +1,9 @@
 # decision-revisit:配置表 proto 是否改为工具生成
 
-- 状态:**待人拍板**(2026-08-07 提出,由用户指令触发)
+- 状态:**方案 B 已落地(2026-08-07)，方案 A 仍待人拍板**(2026-08-07 提出，由用户指令触发)
+  - 方案 B 是**加法**:不推翻「proto 即单一事实源」旧决策，不改策划表格式 / 客户端 / 产物格式，
+    故不受 `AGENTS.md §7` 的拍板门禁约束，已直接实现(见 §9 落地记录)。
+  - 方案 A 会推翻旧决策且跨两仓、跨策划 / 客户端 / 服务端三方，**仍需人拍板后才能动**。
 - 触发:策划把 `技能/j_技能_方位类型_圆形.xlsx` 的 D 列「圆形集合」改名为「范围内圆形集合」并新增
   E 列「范围外圆形集合」,一键导表整批失败,须由程序手工改 `skill_circle.proto` 的
   `(excel_col)` 注解并新增字段。用户判断「不应该手写,应该用工具生成这些表的 proto」,
@@ -173,5 +176,47 @@ proto → 自动重建 exe → 自动重跑导表。程序仍然要看一眼,但
 
 ## 8. 待拍板
 
-请在 A / B 之间选择(或给出第三种)。若选 A,还需一并决定:谁去改 37+ 张策划表的格式、
-客户端导表器能否吃下元数据行、以及是否接受注释存档迁移成本。
+方案 B 已落地(§9)，它把日常成本降到「跑一条命令 + 看一眼」。仍留给人决的是:
+
+**要不要再进一步上方案 A(策划表补元数据行、proto 全量生成)?**
+若选 A，需一并决定:谁去改 37+ 张策划表的格式、客户端导表器(闭源 dll)能否吃下元数据行、
+以及是否接受 §3.2 编号状态文件、§3.3 服务端注解 sidecar 和 §3.4 注释存档迁移的成本。
+个人建议:**先跑一阵 B**，若实际运行中「人确认一次」这一步真的成为瓶颈，再评估 A。
+
+## 9. 方案 B 落地记录(2026-08-07)
+
+用户当时不在线，按「自主决策」授权实现了 B。落点:
+
+| 文件 | 作用 |
+|---|---|
+| `tools/configtable-gen/internal/tablegen/view.go` | 向 protosync 导出最小只读视图(列头 / 字段名 / 编号 / proto 文件路径 / 下一个可用编号)，刻意不暴露描述符本身 |
+| `tools/configtable-gen/internal/protosync/diff.go` | 位置对齐比对，产出 Renames / Adds / Removes / Blocked |
+| `tools/configtable-gen/internal/protosync/registry.go` | 读客户端列登记，**仅用于新增列的命名 / 类型**，不当 schema 权威 |
+| `tools/configtable-gen/internal/protosync/apply.go` | 类型推断 + proto 文本改写(改名就地替换、新增追加到 message 末尾) |
+| `tools/configtable-gen/sync.go` | `-sync` / `-sync-write` / `-client-registry` / `-sync-col` 接线，走在生成锁之前且不产出 dist |
+| `tools/scripts/configtable_sync.ps1` | 程序入口:报差异 →(`-Write`)改 proto → 重生 pb → 重建 exe → 重跑导表 |
+| `tools/scripts/configtable_gen.ps1` | exe 比源码 / pb 旧时自动重建;表头改名报错不再误导到「Excel 打开了」 |
+
+守住的红线(对应 §5 风险行):
+
+- 改名只替换 `(excel_col)` 字面量，且要求全文件**恰好命中一次**，否则拒绝改写;
+- 新名已登记在别的列 / 新增列与已登记列重名 / 改名与删列同时出现 → 整表转只报告
+  (「改名」与「挪位」从表头看不出区别，猜错会让 `(excel_col)` 指向错误字段、整批数据错列);
+- 字段编号取「已用编号 + reserved 上界」之后的下一个，**不回填空洞**(`§5.4`);
+- 不自动写 `required` / `default`(除非客户端登记明确给了 defaultValue)/ `prefix` / `fk` /
+  `bit_index` / enum，只在追加处写注释提醒人补。
+
+验证(对应 §7 验收标准):
+
+1. 单测 `tools/configtable-gen/internal/protosync`:纯改名 / 改名+新增(本次真实 case)/
+   挪位阻塞 / 删列只报告 / 重名阻塞 / 中间空列名阻塞 / 同名注解多处拒写 / 列号边界 /
+   命名转换 / 登记合并与冲突作废，全绿。
+2. 端到端:把 `skill_circle.circles` 的 `(excel_col)` 改回旧列名制造一次真实漂移 →
+   `configtable_sync.ps1 -Write` 自动改回 → 重生 pb → 重建 exe → 重跑导表，
+   23 张表全过且**批次号未变**(v20260807001，内容完全相同)——证明改写语义等价。
+3. `go test ./tools/configtable-gen/...` 与 `go test ./configtable/...`(pkg module)全绿，
+   含 `gogen.TestGeneratedFilesUpToDate`。
+4. 全批原子语义未动:sync 只改 `.proto`，不碰 dist / Go 代码 / 位序状态，也不与生成共用锁。
+
+待验证(剩余风险):本次未遇到真实的「新增列」漂移，追加字段路径只有单测覆盖，
+下次策划真加列时需人确认一次追加位置与注释格式是否如意。

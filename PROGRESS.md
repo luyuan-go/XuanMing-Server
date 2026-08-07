@@ -2670,3 +2670,44 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
    未实测「DS 报 ready → 客户端完成 Admission」的 P99 来复核 150s、未给出「单次进场占用 Pod·分钟」前后对比。
    在这些补齐前,§6 第 0 项不算验收完成。
 
+
+---
+
+## 2026-08-07 配置表表头漂移同步工具(configtable-sync)
+
+**起因**:策划把 技能/j_技能_方位类型_圆形.xlsx 的 D 列「圆形集合」改名为「范围内圆形集合」
+并新增 E 列「范围外圆形集合」,一键导表整批失败。手工修完之后暴露两个更值得修的问题:
+① 这类「列改名 / 加列 → 手改 proto 注解」本来就该是工具干的;
+② configtable_gen.ps1 优先用预编译 exe,而 exe 内嵌的是**编译时**的 proto 描述符——
+改完 proto 只跑 proto_gen 而忘了重建 exe,导表会报一字不差的旧错,极难想到原因。
+
+**用户指令**:「不应该手写,而是用工具去生成这些表的 Proto」(参照 D:\luyuan\mmorpg\tools\data_table_exporter)。
+
+**调查结论(实测,非推测)**:旧项目能生成 proto 的前提是它的 xlsx **自带 schema 元数据行**
+(类型 / map 角色 / owner / 外键)。Pandora 的策划表**一行元数据都没有**,而唯一像 schema 的
+客户端列登记是严格子集(ole_level 登记 10 列而服务端要 12 列、缺的正是击杀经验唯一权威
+kill_exp;z_专精.xlsx 客户端根本没登记)。加上字段编号必须跨版本稳定、equired /
+prefix / k / enum / 上限全是服务端决策、proto 注释是这些决策的唯一存档 —— 四条阻塞。
+详见 docs/design/decision-revisit-configtable-proto-generation.md。
+
+**落地(方案 B,自主决策)**:proto 仍是单一事实源,新增 configtable-sync 只做机械那一半。
+这是加法不是推翻旧决策,故未走 AGENTS.md §7 拍板门禁;全量生成 proto(方案 A)跨两仓、
+跨策划/客户端/服务端三方,**仍待人拍板**。
+
+- 新增 	ools/configtable-gen 的 -sync / -sync-write / -client-registry / -sync-col;
+  internal/protosync(diff / registry / apply)+ internal/tablegen/view.go 只读视图。
+- 新增 	ools/scripts/configtable_sync.ps1:报差异 →(-Write)改 proto → 重生 pb →
+  重建 exe → 重跑导表,一条命令走完。
+- 	ools/scripts/configtable_gen.ps1:exe 比源码 / pb 旧时自动重建;表头改名报错不再误导到
+  「文件被 Excel 打开」,改为指向 configtable_sync.ps1。
+
+**守住的红线**:改名只替换 (excel_col) 字面量且要求全文件恰好命中一次;挪位 / 删列 / 重名
+一律只报告(改名与挪位从表头看不出区别,猜错会让整批数据错列);字段编号取「已用 + reserved
+上界」之后,不回填空洞(§5.4);不自动写 required / prefix / fk / bit_index / enum。
+
+**验证**:protosync 单测 11 组全绿;端到端把 skill_circle.circles 的注解改回旧列名制造真实
+漂移,-Write 自动改回并跑完全链,23 张表全过且**批次号未变**(v20260807001,内容完全相同),
+证明改写语义等价;go test ./tools/configtable-gen/... 与 pkg/configtable 全绿。
+
+**剩余风险**:本次未遇到真实的「新增列」漂移,追加字段路径只有单测覆盖,下次策划真加列时
+需人确认一次追加位置与注释格式。

@@ -168,6 +168,47 @@ F:\work\XuanMing-Server\configtable\dist\
 6. **非空 / 范围**:必填列不为空;有范围约束的数值在合法区间。
 7. **行数一致**:产出行数写入 manifest,服务端加载后断言一致。
 
+### §7.1 表头漂移:策划改了列名 / 加了列,proto 注解怎么跟上
+
+第 1 条「字段名对齐」是**整批不产出**的硬校验,所以策划一改表头,导表立刻整批失败:
+
+```
+校验失败,整批不产出: 技能/j_技能_方位类型_圆形.xlsx 表头第 D 列: 期望 "圆形集合" 实为 "范围内圆形集合"(列被改名 / 挪位,须同步 proto 注解)
+技能/xxx.xlsx 表头出现未登记的第 E 列 "范围外圆形集合"
+```
+
+这**不是**策划能修的,也不是「文件被 Excel 占着」;要程序去同步 `(excel_col)` 注解。
+这一步的机械部分已工具化,**不要手改 proto 再手跑三条命令**:
+
+```powershell
+pwsh tools\scripts\configtable_sync.ps1           # 只报差异,不改文件
+pwsh tools\scripts\configtable_sync.ps1 -Write    # 确认后自动改 proto,并接着重生 pb → 重建 exe → 重跑导表
+```
+
+工具(`tools/configtable-gen -sync` / `-sync-write`)刻意只做机械的那一半:
+
+| 漂移 | 处理 |
+|---|---|
+| 列改名(位置不变) | 就地替换 `(excel_col)` 字面量;**字段名 / 编号 / 注释一律不动**(JSON key 不变、`§5.4` 编号不复用) |
+| 末尾新增列 | 追加字段,取「已用编号 + reserved 上界」之后的下一个编号,不回填空洞 |
+| 删列 / 挪位 / 列名重复 / 中间空列名 | **只报告不自动改**:删列要走 `reserved`,挪位与改名从表头看不出区别,猜错会让整批数据错列 |
+
+新增列的字段名 / 类型优先取客户端列登记(`Pandora-Client-SVN/Tool/Table/Cs/Proto/*.json`),
+保证同一列在两仓同名同类型;客户端没登记就按数据推断类型 + 占位名 `col_<列号>`,
+并把来源写进注释等人改(也可以 `-SyncCol 'skill_circle.范围外圆形集合=out_range_circles:string'` 直接指定)。
+
+**工具不碰、也不该碰的**:`(excel_required)` / `(excel_default)` / `(excel_prefix)` / `(excel_fk)` /
+`(excel_bit_index)` / enum —— 这些是服务端业务决策,xlsx 里没有对应事实可反推。
+追加完必须人 review 补齐,并按 `CLAUDE.md §4` 在 commit message 标注 `[proto]`。
+
+**为什么不干脆「从 xlsx 全量生成 proto」**:Pandora 策划表没有类型元数据行,客户端列登记又是
+严格子集(有整张表完全没登记),字段编号还必须跨版本稳定。详见
+[`decision-revisit-configtable-proto-generation.md`](./decision-revisit-configtable-proto-generation.md)。
+
+**一个必踩的坑**:`configtable-gen.exe` 内嵌的是**编译时**的 proto 描述符。改完 `.proto` 只跑
+`proto_gen.ps1` 而忘了重建 exe,导表会报一字不差的旧错。`configtable_gen.ps1` / `configtable_sync.ps1`
+现在都会在 exe 比源码 / pb 旧时自动重建(本机没装 Go 时改为显式告警)。
+
 ## §8 用 proto 读 JSON 的三个硬约束
 
 方向正确(契合 `CLAUDE.md §5.8`「新增结构优先 proto、不写并行 struct」):给每张表定义 proto message,JSON 用 `protojson.Unmarshal` 读入 proto 结构。但 `protojson` ≠ 任意 JSON,生成器必须钉死下列三件事:
