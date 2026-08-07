@@ -27,7 +27,9 @@ param(
     [switch]$AllowDirty,    # git 工作区脏时仍发布(版本号带 -dirty-时间戳;仅本机联调用,CI 禁用)
     [switch]$SkipIfExists,  # 目标版本已发布时静默成功(CI 幂等重跑用)
     [string]$ArtifactRoot,  # 制品根目录覆盖
-    [string]$Version        # 发布版本号(如 v0.1.0):显式覆盖 git describe 注入镜像,免打 tag;记入 build-info.app_version
+    [string]$Version,       # 发布版本号(如 v0.1.0):显式覆盖 git describe 注入镜像,免打 tag;记入 build-info.app_version
+    [switch]$PushRegistry,  # 同时把业务镜像推到 registry —— k8s 只能从 registry 拉,离线 tar 集群用不了
+    [string]$RegistryHost = 'localhost:5000'  # -PushRegistry 的目标 registry(deploy/devops .env 的 REGISTRY_PORT)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -128,6 +130,53 @@ $imagesManifest = @(foreach ($e in @($entries)) {
 })
 if ($imagesManifest.Count -eq 0) { throw '离线包 manifest 为空,拒绝发布。' }
 
+# ---- 3.5) 推送业务镜像到 registry(-PushRegistry) ----
+# k8s 只能从 registry 拉镜像,离线 tar 集群用不了 —— 这一步是 GitOps 链上 CI 侧的终点。
+#
+# 【顺序:必须在下面的原子发布之前】版本目录一旦落地就不可变,-SkipIfExists 会让重跑直接 exit 0,
+# 那时 push 永远补不上,形成"制品目录有、registry 没有"的静默缺口(k8s ImagePullBackOff 却查不到源头)。
+# 放在前面则 push 失败可无损重跑:docker push 同 tag 同内容天然幂等(重推全是 Layer already exists)。
+#
+# 【tag 用 $folderVer 而非 :dev】:dev 是可变 tag,在 GitOps 下是硬伤 —— 镜像换了但 manifest 一个字节
+# 没变,Argo CD 永远显示 Synced、没法回滚到具体版本、也无法审计线上到底跑的哪次构建。
+# 不可变 tag 是 §9.21 金丝雀(stable/canary 必须能同时指定两个确定版本)的前提。
+#
+# 【适用范围:只限 dev registry,不是线上发布通道】
+# start.ps1 -Mode online 的 -BuildPush 路径被主动 throw 阻断,理由是:"先检查 tag 不存在再 push"
+# (Assert-RemoteImageTagAbsent)存在 TOCTOU —— 检查与 push 之间他人可抢占同一 tag,客户端预检
+# 证明不了不可变,必须由 registry 原生 immutable-tag / create-only 策略 + 发布锁保证。
+# 本开关同样绕不过那个论证:它只补"dev 集群拉不到镜像"这个缺口,不是发布通道。
+# 线上仍走 start.ps1 -Mode online —— 它按 digest 部署(不按 tag),保证比 tag 更强。
+$pushedImages = @()
+if ($PushRegistry) {
+    $devRegistryPattern = '^(localhost|127\.0\.0\.1|host\.docker\.internal)(:\d+)?$'
+    if ($RegistryHost -notmatch $devRegistryPattern) {
+        throw @"
+-PushRegistry 只允许推本机 dev registry(localhost / 127.0.0.1 / host.docker.internal),当前:$RegistryHost
+线上发布不能走这里 —— start.ps1 -Mode online 的 -BuildPush 已因 TOCTOU 主动阻断:
+客户端"预检 tag 不存在"证明不了不可变,必须先在目标 registry 启用 native immutable-tag /
+create-only 策略与发布锁。绕开它等于把那个论证作废。
+线上路径:先配好 registry 不可变策略 → 解除 start.ps1 的 BuildPush 阻断 → 按 digest 部署。
+"@
+    }
+    Write-Info "推送业务镜像 → $RegistryHost(tag=$folderVer)"
+    # 镜像清单取自离线包 manifest,与 tar 同源;不另抄一份服务清单(§15.5,避免与 Get-ServiceList 漂移)
+    $bizTags = @($imagesManifest | ForEach-Object { $_.repo_tags } | Where-Object { $_ -like 'pandora/*' })
+    if ($bizTags.Count -eq 0) { throw "离线包里没有 pandora/* 业务镜像,拒绝推送(export_images.ps1 是否构建成功?)" }
+    foreach ($src in $bizTags) {
+        # pandora/login:dev → <registry>/pandora/login:<folderVer>
+        # ${repo} 的花括号不能省:PowerShell 会把 "$repo:" 解析成 drive qualifier
+        $repo = ($src -split ':')[0]
+        $dst  = "$RegistryHost/${repo}:$folderVer"
+        & docker tag $src $dst
+        if ($LASTEXITCODE -ne 0) { throw "docker tag 失败:$src → $dst" }
+        & docker push $dst
+        if ($LASTEXITCODE -ne 0) { throw "docker push 失败:$dst(registry 活着吗?curl http://$RegistryHost/v2/)" }
+        $pushedImages += $dst
+    }
+    Write-Ok "已推送 $($pushedImages.Count) 个镜像 → $RegistryHost(tag=$folderVer)"
+}
+
 # ---- 4) 原子发布(按频道分仓) ----
 $channelRoot = Get-ChannelRoot -Override $ArtifactRoot -Channel $channel
 $finalDir = Join-Path $channelRoot "images\$folderVer"
@@ -149,6 +198,9 @@ try {
         source_rev   = $srcId    # SVN 为 r<rev>,git 为 g<sha>;与客户端包命名一致
         dirty        = $dirty
         image_count  = $imagesManifest.Count
+        # registry 落点:空=本次只发离线 tar,没推 registry(k8s 拉不到这个版本)
+        registry       = if ($PushRegistry) { $RegistryHost } else { $null }
+        pushed_images  = $pushedImages
         published_at = (Get-Date -Format 'o')
         machine      = $env:COMPUTERNAME
         publisher    = $env:USERNAME
