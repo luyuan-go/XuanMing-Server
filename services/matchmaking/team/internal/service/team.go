@@ -373,3 +373,21 @@ func callerID(ctx context.Context) uint64 {
 func toProtoCode(err error) commonv1.ErrCode {
 	return commonv1.ErrCode(errcode.As(err))
 }
+
+// BeginTeamMatch 组票前的 roster fence(matchmaker 专用,内部东西向)。
+//
+// 与其它 RPC 的区别:它不是客户端面接口,身份不取 JWT —— 调用方是 matchmaker,
+// captain_id 由它从已校验的 JWT sub 透传过来,team 侧仍会复核那确实是本队队长
+// (§9.6 派生判定服务端重算,不因为「内部调用」就免检)。
+func (s *TeamService) BeginTeamMatch(ctx context.Context, req *teamv1.BeginTeamMatchRequest) (*teamv1.BeginTeamMatchResponse, error) {
+	team, expiresAtMs, err := s.uc.BeginTeamMatch(ctx,
+		req.GetTeamId(), req.GetCaptainId(), req.GetOperationId(), req.GetLeaseMs())
+	if err != nil {
+		return &teamv1.BeginTeamMatchResponse{Code: toProtoCode(err)}, nil
+	}
+	return &teamv1.BeginTeamMatchResponse{
+		Code:             commonv1.ErrCode_OK,
+		Team:             s.uc.TeamToProto(team),
+		LeaseExpiresAtMs: expiresAtMs,
+	}, nil
+}

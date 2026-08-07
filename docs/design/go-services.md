@@ -129,6 +129,9 @@ AddExperience(player_id, delta, reason, idempotency_key) → level/exp/is_max
   `players.level` 范围;生产正式数值确认前 `experience_enabled=false`。
 - 配置表热更只保证单 player 进程原子切换;曲线变更需先关入账入口并完成全 fleet 收敛。
 - 所有读优先走 redis 缓存(5min TTL)
+- `UpdateNickname` 当前只做 trim + 非空 + rune 长度三条,**归一化 / 字符白名单 / 保留前缀 /
+  同形字唯一性 / 敏感词全部缺失**;规范与实现落点见
+  [player-name-validation.md](./player-name-validation.md),实现前不得声称昵称校验已达标。
 
 ---
 

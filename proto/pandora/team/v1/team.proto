@@ -35,6 +35,23 @@ service TeamService {
   rpc ApplyToTeam(ApplyToTeamRequest) returns (ApplyToTeamResponse);     // 立即完成型;按服务端 join_policy 走"申请待审批"或"直接入队"
   rpc ListTeamApplications(ListTeamApplicationsRequest) returns (ListTeamApplicationsResponse);  // 只读,队长查本队待处理入队申请
   rpc HandleTeamApplication(HandleTeamApplicationRequest) returns (HandleTeamApplicationResponse);  // 立即完成型;队长同意/拒绝一份入队申请
+
+  // ── 内部:组票前的 roster fence(matchmaker 专用,不对客户端开放)─────────────
+  //
+  // BeginTeamMatch 在 team 自己的乐观锁内**原子地**完成「校验 + 冻结名单 + 返回快照」。
+  //
+  // 为什么必须有它:matchmaker 原先用只读 GetTeam 取名单,而 team 侧的自动摘人
+  // (离线超时)用的是另一把锁,两者跨服务凑不出共同线性化点 —— 于是存在
+  // 「闸门放行 → 名单被冻进票据 → 才把人摘走」的窗口,结果是人在票据里却不在队伍里,
+  // 被拉进一场自己不在场的对局。把「读名单」升级成「在锁内读并上锁」,窗口才真正消失。
+  //
+  // 锁的形态刻意是**短租约**而不是 TeamState=MATCHING:
+  //   - 写 State 需要有人负责改回来,matchmaker 中途崩溃就会把队伍永久卡在 MATCHING
+  //     (违反不变量 §20「任何代码都不能让玩家卡死」),这也正是 State 至今没有写入点的原因;
+  //   - 短租约到期自净,不需要补偿路径。它只需覆盖「组票 → ClaimPlayer 落地」这一小段(秒级);
+  //     此后整场对局的占用判定仍由 matchmaker 的 player→ticket claim(ResolvePlayerMatchContext)负责。
+  // 因此这把锁不是权威状态,只是一个有界互斥窗口,不得被解释成「队伍在对局中」。
+  rpc BeginTeamMatch(BeginTeamMatchRequest) returns (BeginTeamMatchResponse);
 }
 
 enum TeamState {
@@ -114,6 +131,19 @@ message TeamStorageRecord {
   // 新增字段,老副本写回不会丢(§9.17:read-modify-write 全走 proto.Unmarshal→改→Marshal,
   // 不 DiscardUnknown)。
   uint32 map_id        = 10;
+
+  // ── 组票 roster fence(短租约互斥,见 BeginTeamMatch)────────────────────────
+  //
+  // match_lock_until_ms:租约截止(unix ms)。到期即自动失效,**没有任何解锁路径需要维护**
+  // —— matchmaker 中途崩溃只会让队伍多等这一小段,不会永久卡住(不变量 §20)。
+  // match_lock_operation_id:本次组票的稳定 operation id,仅供排障与幂等重入识别。
+  //
+  // ⚠️ 这两个字段**不表示「队伍在对局中」**。对局占用的唯一权威是 matchmaker 的
+  // player→ticket claim(ResolvePlayerMatchContext);这里只是一个秒级的互斥窗口,
+  // 用来让「冻结名单」与「移除离线成员」落在 team 的同一把乐观锁里。
+  // 任何按「是不是在打」做的判断都不得读这两个字段(§9.22 不重复影子状态)。
+  int64  match_lock_until_ms       = 11;
+  string match_lock_operation_id   = 12;
 }
 
 // ===== RPC =====
@@ -461,4 +491,26 @@ message TeamInviteEvent {
   int64  expires_at_ms = 6;  // 邀请过期时间(unix ms),与 InviteResponse.expires_at_ms 一致
   // 7-9 reserved(将来如需队长昵称等展示字段)
   reserved 7 to 9;
+}
+
+// BeginTeamMatchRequest 由 matchmaker 在组票前调用(内部东西向,不经客户端面)。
+message BeginTeamMatchRequest {
+  uint64 team_id      = 1;
+  // captain_id 取自 matchmaker 已校验的 JWT sub;team 侧仍会复核它确实是本队队长。
+  uint64 captain_id   = 2;
+  // operation_id:本次进场的稳定 operation(§9.23)。同 operation 重入必须幂等续租,
+  // 不得因为「已经上锁」就把自己的重试判成冲突。
+  string operation_id = 3;
+  // lease_ms:租约时长。取值只需覆盖「组票 → ClaimPlayer 落地」,秒级即可;
+  // 服务端会钳到 [min, max] 防误配成 0(永不生效)或过长(拖住摘人)。
+  int64  lease_ms     = 4;
+}
+
+message BeginTeamMatchResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // team:上锁那一刻的权威快照。matchmaker **必须**用它建票,
+  // 不得再另发 GetTeam —— 那等于把刚消灭的窗口重新打开一次。
+  Team team = 2;
+  // lease_expires_at_ms:租约截止,供 matchmaker 判断自己是否已超时(超时须重新 Begin)。
+  int64 lease_expires_at_ms = 3;
 }

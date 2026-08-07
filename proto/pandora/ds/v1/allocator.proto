@@ -245,8 +245,10 @@ message BattleStorageRecord {
   int64  last_heartbeat_ms = 9;  // 最近一次 DS Heartbeat 时刻(心跳超时扫描用,不变量 §4)
   int32  player_count      = 10;
   // 空场起始时刻:对局活跃(ready/running)且 DS 上报 player_count==0 时盖章,有人回来清零。
-  // 持续空场超过 allocator.empty_battle_timeout → 后端兜底判 abandoned(全员掉线未归 /
-  // 客户端从未连入,DS 空转烧资源)。主路径是 DS 侧空场计时器自结算(agones-dev.md §2.4)。
+  // 持续空场超过阈值 → 后端兜底判 abandoned(全员掉线未归 / 客户端从未连入,DS 空转烧资源)。
+  // 阈值按 ever_had_players 二选一:从未连入取 allocator.no_show_battle_timeout(短),
+  // 有人连过取 allocator.empty_battle_timeout(长,必须 >> 断线重连窗)。
+  // 主路径是 DS 侧空场计时器自结算(agones-dev.md §2.4)。
   int64  empty_since_ms    = 11;
   string gameserver_uid    = 12;
   uint32 instance_epoch    = 13;
@@ -263,6 +265,17 @@ message BattleStorageRecord {
   // 与 player_ids 同源的权威单局战斗阵营快照。空列表表示滚动升级前的 legacy 分配；
   // 非空时必须按 player_id 升序且完整覆盖 player_ids。
   repeated BattlePlayerCombatFaction player_combat_factions = 20;
+  // 本局是否**曾经**有玩家真正连入(DS 上报过 player_count>0)。一经置位不再清零。
+  //
+  // 用途:把「从未连入(no-show)」与「有人连过后全员掉线」拆成两个空场回收阈值
+  // (allocator.no_show_battle_timeout / empty_battle_timeout)。二者安全下界完全不同:
+  // 前者只需覆盖「DS 报 ready → 客户端 travel + 连接 + Admission」,后者必须远大于
+  // 断线重连窗(~30s),不能用同一个值(用同一个值时,刷进出副本的外挂能让每次分配
+  // 白押一台 14Gi Pod 满 5 分钟,见 docs/design/anti-abuse-scene-entry.md §3.2.1)。
+  //
+  // 滚动升级:旧副本不写本字段,因此「旧副本见过玩家 → 新副本判定」的窗口内,
+  // 一局全员掉线的对局可能按 no-show 短阈值回收。仍远大于重连窗,可接受(见 §9.17)。
+  bool ever_had_players = 21;
 }
 
 // ===== Model B Battle DS 回调授权状态机 =====

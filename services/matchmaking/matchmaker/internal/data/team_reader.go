@@ -3,6 +3,7 @@ package data
 
 import (
 	"context"
+	"github.com/luyuancpp/pandora/pkg/errcode"
 
 	"google.golang.org/grpc"
 
@@ -42,4 +43,31 @@ func (g *GrpcTeamReader) GetTeam(ctx context.Context, teamID uint64) (*teamv1.Te
 		return nil, false, nil
 	}
 	return resp.GetTeam(), true, nil
+}
+
+// BeginTeamMatch 调 team 服务在其乐观锁内冻结名单并返回快照(见 biz.TeamReader 注释)。
+//
+// 与 GetTeam 不同,这里**不把非 OK code 压成 (nil,false,nil)**:组票拿不到锁是一个需要
+// 调用方区分对待的结果(队伍不 READY / 不是队长 / 正被另一次组票占着),
+// 压成"没找到"会让 StartMatch 报一个误导性的错误,也会把可重试的竞争说成终态。
+func (g *GrpcTeamReader) BeginTeamMatch(
+	ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64,
+) (*teamv1.Team, error) {
+	resp, err := g.cli.BeginTeamMatch(ctx, &teamv1.BeginTeamMatchRequest{
+		TeamId:      teamID,
+		CaptainId:   captainID,
+		OperationId: operationID,
+		LeaseMs:     leaseMs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return nil, errcode.New(errcode.Code(resp.GetCode()),
+			"team.BeginTeamMatch code=%d team=%d", resp.GetCode(), teamID)
+	}
+	if resp.GetTeam() == nil {
+		return nil, errcode.New(errcode.ErrMatchTeamNotReady, "team %d returned empty roster", teamID)
+	}
+	return resp.GetTeam(), nil
 }

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -49,6 +50,13 @@ import (
 // 实现:data.GrpcTeamReader(team 服务 gRPC client)。nil 时跳过校验。
 type TeamReader interface {
 	GetTeam(ctx context.Context, teamID uint64) (*teamv1.Team, bool, error)
+	// BeginTeamMatch 在 team 自己的乐观锁内原子完成「校验 + 冻结名单 + 返回快照」。
+	//
+	// **组票必须走它,不能用只读 GetTeam**:GetTeam 与 team 侧的自动摘人(离线超时)
+	// 分属两把锁,凑不出共同线性化点 —— 于是存在「读到名单 → 那个人被摘走 → 才建票」
+	// 的窗口,结果是人在票据里却已不在队伍里,被拉进一场自己不在场的对局。
+	// BeginTeamMatch 上的是秒级自净租约,只需覆盖到 ClaimPlayer 落地。
+	BeginTeamMatch(ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64) (*teamv1.Team, error)
 }
 
 // MatchEventPusher 把 match 进度事件推给玩家(kafka pandora.match.progress)。
@@ -916,18 +924,12 @@ func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uin
 		return m, 0, nil
 	}
 
-	team, found, err := u.reader.GetTeam(ctx, teamID)
+	// 在 team 的乐观锁内冻结名单(见 TeamReader.BeginTeamMatch)。READY / 队长 / 存在性
+	// 三项校验都挪到了那把锁里 —— 在这里再查一遍只会重新打开刚消灭的窗口。
+	// 租约用 rosterLockLeaseMs:够覆盖本函数返回后到 ClaimPlayer 落地这一小段即可。
+	team, err := u.reader.BeginTeamMatch(ctx, teamID, captainID, rosterLockOperationID(teamID, captainID), rosterLockLeaseMs)
 	if err != nil {
 		return nil, 0, err
-	}
-	if !found {
-		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d not found", teamID)
-	}
-	if team.State != teamv1.TeamState_TEAM_STATE_READY {
-		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d not ready (state=%d)", teamID, team.State)
-	}
-	if team.CaptainId != captainID {
-		return nil, 0, errcode.New(errcode.ErrTeamNotCaptain, "player %d not captain of team %d", captainID, teamID)
 	}
 	if teamSize := u.teamSizeForMap(mapID); len(team.Members) == 0 || len(team.Members) > teamSize {
 		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d invalid size %d (map %d team_size %d)",
@@ -3477,4 +3479,21 @@ func (u *MatchUsecase) rollbackClaims(ctx context.Context, ticketID uint64, play
 			plog.With(ctx).Warnw("msg", "rollback_claim_failed", "player_id", pid, "ticket_id", ticketID, "err", err)
 		}
 	}
+}
+
+// rosterLockLeaseMs 是组票 roster 租约时长(team 侧会钳到 [2s,15s])。
+//
+// 只需覆盖「BeginTeamMatch 返回 → 本次 StartMatch 把 ClaimPlayer 落地」这一小段:
+// 此后对局占用由 matchmaker 自己的 player→ticket claim 负责,不再依赖这把锁。
+// 取 5s 是保守值(同机房 RPC + Redis 写通常 <50ms),给 GC / 抖动留两个数量级余量;
+// 租约到期自净,取大一点的代价只是「摘人多等一会儿」,取小了才会真漏窗口。
+const rosterLockLeaseMs = 5_000
+
+// rosterLockOperationID 生成本次组票的稳定 operation id。
+//
+// 同一个 (team, captain) 的并发/重试拿到同一个 id,于是 team 侧按幂等续租而不是判冲突
+// (§9.23:响应丢失后的重试必须继续同一个 operation,不能竞争创建第二个)。
+// 不掺时间戳正是为此 —— 掺了就会让自己的重试变成"另一次组票"而互相顶掉。
+func rosterLockOperationID(teamID, captainID uint64) string {
+	return "startmatch:" + strconv.FormatUint(teamID, 10) + ":" + strconv.FormatUint(captainID, 10)
 }

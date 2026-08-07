@@ -20,15 +20,24 @@
 //     第 1 道闸本就拦得住;这道是冗余的第二保险,防的是 locator 与 matchmaker 之间的
 //     短暂不一致(位置已掉、票据还在)。
 //
-// ⚠️ 上述读取闸门只能 fail-closed，不能与 StartMatch 形成共同线性化点。当前启动
-// 配置因此禁止开启本功能（见 conf.ValidateOfflineLeave）；这里保留实现与防御分支，供后续
-// roster fence 接入及回归测试使用。不得把这些前置读取解释成并发安全证明。
+// # TOCTOU 已消除(2026-08-06)
+//
+// 闸 ②③ 读的是 matchmaker 权威、写的是 team 的 Redis,这两步之间曾有一个真实窗口:
+// 闸门放行后、`UpdateWithLock` 提交前,队长若刚好点了开始匹配,matchmaker 会把含该
+// 离线成员的 roster 冻进票据 —— 人在票据里却已不在队伍里,被拉进一场自己不在场的对局。
+//
+// 现在 matchmaker 组票改走 `TeamService.BeginTeamMatch`,在 **team 自己的乐观锁内**
+// 冻结名单并留下一把秒级自净租约;摘人在**同一把锁内**看到租约就推迟(ErrDeferred)。
+// 两个操作因此只能有一个赢,窗口不再存在 —— 不是「后果收敛」,是消除。
+// compensateIfCommittedDuringRemoval 作为纵深防御保留(覆盖租约已过期、
+// 而 claim 恰在此刻落地的极窄残留),正常路径不会触发。
 //
 // # 刻意不做的事
 //
-//   - **不联动 cancelMatchmaking**。LeaveTeam / Kick 会撤票是因为那是玩家的主动操作;
+//   - **正常路径不联动 cancelMatchmaking**。LeaveTeam / Kick 会撤票是因为那是玩家的主动操作;
 //     自动摘人只在「队伍没被对局占住」时发生,此时根本没有票可撤,调用它只会平添一次
-//     无谓 RPC 和一条误导性日志。
+//     无谓 RPC 和一条误导性日志。**唯一例外**是上面那个 TOCTOU 窗口被命中时的补偿撤票 ——
+//     那时票据确实存在,且它里面那份成员快照已经不成立了。
 //   - **不处理单人队**。一个人的队伍没有队友受影响,摘掉他等于解散,不如留给 active_ttl
 //     自然回收 —— 玩家断线重连回来还能看到自己的队伍,少一次「队伍怎么没了」。
 package biz
@@ -152,6 +161,14 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 		if len(team.Members) <= 1 {
 			return errcode.New(errcode.ErrTeamWrongState, "team %d has no teammate to keep", teamID)
 		}
+		// ★ 与 matchmaker 的共同线性化点:BeginTeamMatch 在**同一把锁**内上的租约。
+		// 看到它就说明有一次组票已经(或正在)把这份名单冻进票据 —— 这时摘人就会造出
+		// 「人在票据里、却不在队伍里」。两个操作现在只能有一个赢,窗口不再存在。
+		// 租约是秒级且会自净,所以这里推迟重试即可,不需要任何补偿。
+		if rosterLockedForMatch(team) {
+			return errcode.New(errcode.ErrTeamConcurrent,
+				"team %d roster locked for matchmaking until %d", teamID, team.GetMatchLockUntilMs())
+		}
 
 		team.Members = removeMember(team.Members, playerID)
 		team.UpdatedAtMs = time.Now().UnixMilli()
@@ -177,6 +194,11 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 				return u.deleteOfflinePlayerIndex(ctx, playerID, teamID)
 			}
 			return nil
+		case errcode.ErrTeamConcurrent:
+			// 组票租约赢了这一轮(或乐观锁重试耗尽)。都是暂态,不是处理终态:
+			// 保留到期项,租约自净后下轮重来。用 ErrDeferred 而非普通 error,
+			// 免得每次正常竞争都刷一条 handler_failed 的 Warn。
+			return offlinewatch.ErrDeferred
 		default:
 			return err
 		}
@@ -286,4 +308,78 @@ func (u *TeamUsecase) compensateIfCommittedDuringRemoval(ctx context.Context, te
 		"team_id", teamID, "player_id", playerID,
 		"detail", "match ticket froze this member between the gate check and the team write; cancelling it so the team rematches without him")
 	u.cancelMatchmaking(ctx, teamID, playerID)
+}
+
+// ── 组票 roster fence:与 matchmaker 的共同线性化点 ───────────────────────────
+
+// 租约钳制范围。只需覆盖「matchmaker 拿到名单 → ClaimPlayer 落地」这一小段。
+//
+// 下限防误配成 0(锁瞬间失效 = 等于没上锁);上限防一次异常的 Begin 把摘人挡住太久 ——
+// 租约到期即自净,所以上限也是「matchmaker 崩了最多拖多久」的上界。
+const (
+	matchLockMinLease = 2 * time.Second
+	matchLockMaxLease = 15 * time.Second
+)
+
+// BeginTeamMatch 在 team 的乐观锁内原子完成「校验 + 上租约锁 + 返回快照」。
+//
+// 这是消除 TOCTOU 的关键:matchmaker 原先只读 GetTeam 取名单,与本服务的自动摘人
+// 分属两把锁,凑不出共同线性化点。改成在这里上锁后,「冻结名单」与「移除离线成员」
+// 落在同一把 team 乐观锁上,两者只能有一个赢 —— 窗口从「收敛后果」变成「不存在」。
+//
+// 同 operation_id 幂等续租:matchmaker 的重试(网络抖动 / 响应丢失)不得把自己的锁
+// 判成冲突(§9.23 端到端幂等)。
+func (u *TeamUsecase) BeginTeamMatch(
+	ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64,
+) (*teamv1.TeamStorageRecord, int64, error) {
+	if teamID == 0 || captainID == 0 || operationID == "" {
+		return nil, 0, errcode.New(errcode.ErrInvalidArg, "team_id, captain_id and operation_id required")
+	}
+	lease := time.Duration(leaseMs) * time.Millisecond
+	if lease < matchLockMinLease {
+		lease = matchLockMinLease
+	}
+	if lease > matchLockMaxLease {
+		lease = matchLockMaxLease
+	}
+
+	var result *teamv1.TeamStorageRecord
+	var expiresAtMs int64
+	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
+		if team.State == stateDisbanded {
+			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
+		}
+		if team.CaptainId != captainID {
+			return errcode.New(errcode.ErrTeamNotCaptain, "player %d is not captain of team %d", captainID, teamID)
+		}
+		// 与 matchmaker 原先在 resolveMembers 里做的校验保持一致,只是挪进了锁内。
+		if team.State != stateReady {
+			return errcode.New(errcode.ErrTeamWrongState, "team %d not ready (state=%d)", teamID, team.State)
+		}
+		now := time.Now().UnixMilli()
+		if team.MatchLockUntilMs > now && team.MatchLockOperationId != operationID {
+			// 另一次组票的租约还没到期。这是正常竞争(队长连点 / 并发重试),
+			// 调用方退避重来即可,不是错误状态。
+			return errcode.New(errcode.ErrTeamConcurrent,
+				"team %d roster locked by operation %s until %d", teamID, team.MatchLockOperationId, team.MatchLockUntilMs)
+		}
+		expiresAtMs = now + lease.Milliseconds()
+		team.MatchLockUntilMs = expiresAtMs
+		team.MatchLockOperationId = operationID
+		team.UpdatedAtMs = now
+		result = cloneTeam(team)
+		return nil
+	}, u.activeTTL()); err != nil {
+		return nil, 0, err
+	}
+
+	plog.With(ctx).Debugw("msg", "team_match_roster_locked",
+		"team_id", teamID, "captain_id", captainID, "operation_id", operationID,
+		"lease_ms", lease.Milliseconds(), "expires_at_ms", expiresAtMs, "members", len(result.Members))
+	return result, expiresAtMs, nil
+}
+
+// rosterLockedForMatch 判断此刻是否有未过期的组票租约。只在 team 的乐观锁**内**调用。
+func rosterLockedForMatch(team *teamv1.TeamStorageRecord) bool {
+	return team.GetMatchLockUntilMs() > time.Now().UnixMilli()
 }

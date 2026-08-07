@@ -7,7 +7,9 @@ package biz
 import (
 	"context"
 	"errors"
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -413,3 +415,181 @@ var _ interface {
 } = (*TeamUsecase)(nil)
 
 var _ = teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_OFFLINE_LEFT
+
+// ── TOCTOU 窗口补偿 ─────────────────────────────────────────────────────────
+
+// 闸门放行后、改队伍前，队长恰好点了开始匹配 → matchmaker 把这名离线成员冻进票据。
+// 摘人已经发生，此时必须撤票让全队重新匹配，而不是让他被拉进一场自己不在场的对局。
+func TestOnPlayerOffline_窗口内被冻进票据时撤票补偿(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9614, 7741, 7742)
+
+	// 闸门读到「都没被占住」放行；写完队伍后的复核才看到票据已成立。
+	commitment := &raceCommitment{}
+	uc.SetMatchCommitmentReader(commitment)
+	canceler := &recordingCanceler{}
+	uc.SetMatchCanceler(canceler)
+
+	if err := uc.OnPlayerOffline(ctx, 7742, 1_000); err != nil {
+		t.Fatalf("OnPlayerOffline: %v", err)
+	}
+	if got := teamMemberIDs(t, uc, 9614); len(got) != 1 {
+		t.Fatalf("摘人本身应当完成, 剩余=%v", got)
+	}
+	if len(canceler.cancelled) != 1 || canceler.cancelled[0] != 7742 {
+		t.Fatalf("窗口命中必须撤票(否则他会被拉进一场自己不在场的对局), got=%v", canceler.cancelled)
+	}
+}
+
+func TestOnPlayerOffline_窗口未命中不得撤票(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9615, 7751, 7752)
+	uc.SetMatchCommitmentReader(&mockCommitment{})
+	canceler := &recordingCanceler{}
+	uc.SetMatchCanceler(canceler)
+
+	if err := uc.OnPlayerOffline(ctx, 7752, 1_000); err != nil {
+		t.Fatalf("OnPlayerOffline: %v", err)
+	}
+	// 常态下根本没有票可撤，多打一次 RPC 只会制造误导性日志。
+	if len(canceler.cancelled) != 0 {
+		t.Fatalf("没被占住时不得撤票, got=%v", canceler.cancelled)
+	}
+}
+
+// raceCommitment 模拟 TOCTOU：前两次(闸②队长 / 闸③本人)都说没被占住，
+// 摘人之后的复核才说已被占住。
+type raceCommitment struct{ calls int }
+
+func (m *raceCommitment) IsPlayerCommittedToMatch(_ context.Context, _ uint64) (bool, error) {
+	m.calls++
+	return m.calls > 2, nil
+}
+
+type recordingCanceler struct{ cancelled []uint64 }
+
+func (c *recordingCanceler) CancelMatch(_ context.Context, playerID uint64) error {
+	c.cancelled = append(c.cancelled, playerID)
+	return nil
+}
+
+// ── 组票 roster fence:与 matchmaker 的共同线性化点 ───────────────────────────
+
+// 这条是 TOCTOU 真正被消除的判据:BeginTeamMatch 上锁之后,摘人必须在**同一把锁内**
+// 被拒。此前两者分属两把锁,只能靠事后补偿收敛后果。
+func TestBeginTeamMatch_上锁后摘人必须被拒(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9620, 7761, 7762)
+	if _, err := uc.SetReady(ctx, 9620, 7761, true, 1); err != nil {
+		t.Fatalf("SetReady: %v", err)
+	}
+	if _, err := uc.SetReady(ctx, 9620, 7762, true, 1); err != nil {
+		t.Fatalf("SetReady: %v", err)
+	}
+	uc.SetMatchCommitmentReader(&mockCommitment{})
+
+	frozen, expiresAt, err := uc.BeginTeamMatch(ctx, 9620, 7761, "op-1", 5000)
+	if err != nil {
+		t.Fatalf("BeginTeamMatch: %v", err)
+	}
+	if len(frozen.Members) != 2 {
+		t.Fatalf("冻结的名单应含全部成员, got=%d", len(frozen.Members))
+	}
+	if expiresAt <= time.Now().UnixMilli() {
+		t.Fatalf("租约必须在未来: expires=%d", expiresAt)
+	}
+
+	// 组票已经把这份名单冻进票据的路上 —— 此刻摘人会造出「人在票据、不在队伍」。
+	err = uc.OnPlayerOffline(ctx, 7762, 1_000)
+	if !errors.Is(err, offlinewatch.ErrDeferred) {
+		t.Fatalf("上锁期间摘人必须推迟(ErrDeferred)而不是执行: %v", err)
+	}
+	if got := teamMemberIDs(t, uc, 9620); len(got) != 2 {
+		t.Fatalf("上锁期间队伍成员不得被改动, 剩余=%v", got)
+	}
+}
+
+// 租约到期自净:matchmaker 崩在半路也不会把队伍永久卡住(不变量 §20)。
+func TestBeginTeamMatch_租约过期后摘人恢复(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9621, 7771, 7772)
+	if _, err := uc.SetReady(ctx, 9621, 7771, true, 1); err != nil {
+		t.Fatalf("SetReady: %v", err)
+	}
+	if _, err := uc.SetReady(ctx, 9621, 7772, true, 1); err != nil {
+		t.Fatalf("SetReady: %v", err)
+	}
+	uc.SetMatchCommitmentReader(&mockCommitment{})
+
+	if _, _, err := uc.BeginTeamMatch(ctx, 9621, 7771, "op-1", 1); err != nil {
+		t.Fatalf("BeginTeamMatch: %v", err)
+	}
+	// lease 被钳到下限 2s；直接把租约改成过去,模拟到期(不 sleep 真实时间)。
+	if err := uc.repo.UpdateWithLock(ctx, 9621, 3, func(team *teamv1.TeamStorageRecord) error {
+		team.MatchLockUntilMs = time.Now().Add(-time.Second).UnixMilli()
+		return nil
+	}, uc.activeTTL()); err != nil {
+		t.Fatalf("过期租约: %v", err)
+	}
+
+	if err := uc.OnPlayerOffline(ctx, 7772, 1_000); err != nil {
+		t.Fatalf("租约过期后应恢复正常摘人: %v", err)
+	}
+	if got := teamMemberIDs(t, uc, 9621); len(got) != 1 {
+		t.Fatalf("租约过期后应当摘掉离线成员, 剩余=%v", got)
+	}
+}
+
+// 同 operation 的重试必须幂等续租,不能把自己的重试判成冲突(§9.23)。
+func TestBeginTeamMatch_同Operation幂等续租(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9622, 7781, 7782)
+	if _, err := uc.SetReady(ctx, 9622, 7781, true, 1); err != nil {
+		t.Fatalf("SetReady: %v", err)
+	}
+	if _, err := uc.SetReady(ctx, 9622, 7782, true, 1); err != nil {
+		t.Fatalf("SetReady: %v", err)
+	}
+
+	if _, _, err := uc.BeginTeamMatch(ctx, 9622, 7781, "op-same", 5000); err != nil {
+		t.Fatalf("首次 Begin: %v", err)
+	}
+	if _, _, err := uc.BeginTeamMatch(ctx, 9622, 7781, "op-same", 5000); err != nil {
+		t.Fatalf("同 operation 重试必须幂等续租,不得判冲突: %v", err)
+	}
+	// 另一次组票在租约内必须被拒。
+	if _, _, err := uc.BeginTeamMatch(ctx, 9622, 7781, "op-other", 5000); err == nil {
+		t.Fatal("租约内的另一次组票必须被拒")
+	} else if errcode.As(err) != errcode.ErrTeamConcurrent {
+		t.Fatalf("应为 ErrTeamConcurrent, got=%v", err)
+	}
+}
+
+// 非 READY / 非队长的校验挪进锁内后不能丢。
+func TestBeginTeamMatch_锁内仍复核READY与队长(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9623, 7791, 7792)
+
+	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7791, "op-1", 5000); err == nil {
+		t.Fatal("未全员 READY 时不得上锁")
+	} else if errcode.As(err) != errcode.ErrTeamWrongState {
+		t.Fatalf("应为 ErrTeamWrongState, got=%v", err)
+	}
+	if _, err := uc.SetReady(ctx, 9623, 7791, true, 1); err != nil {
+		t.Fatalf("SetReady: %v", err)
+	}
+	if _, err := uc.SetReady(ctx, 9623, 7792, true, 1); err != nil {
+		t.Fatalf("SetReady: %v", err)
+	}
+	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7792, "op-1", 5000); err == nil {
+		t.Fatal("非队长不得上锁")
+	} else if errcode.As(err) != errcode.ErrTeamNotCaptain {
+		t.Fatalf("应为 ErrTeamNotCaptain, got=%v", err)
+	}
+}

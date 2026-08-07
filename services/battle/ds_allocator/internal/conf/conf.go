@@ -385,7 +385,33 @@ type AllocatorConf struct {
 	// 主路径是 DS 侧空场计时器自结算 + Shutdown(agones-dev.md §2.4),此阈值应大于 DS 侧计时器,
 	// 且必须远大于战斗断线重连窗口(~30s,battle-reconnect.md),避免误杀「全员短暂掉线正在重连」的局。
 	// 设为负值禁用(0 = 用默认 5m)。
+	//
+	// ⚠️ 本值**只管「有人连进来过」的局**(BattleStorageRecord.ever_had_players=true);
+	// 「从未连入」的局走下面更短的 NoShowBattleTimeout。
 	EmptyBattleTimeout config.Duration `yaml:"empty_battle_timeout,omitempty" json:"empty_battle_timeout,omitempty"`
+
+	// NoShowBattleTimeout 从未连入超时(默认 150s):对局已 ready/running 但**从头到尾没有任何
+	// 玩家连入过**(ever_had_players=false)持续超过此时长 → 判 abandoned。
+	//
+	// 为什么必须与 EmptyBattleTimeout 分开(docs/design/anti-abuse-scene-entry.md §3.2.1):
+	// 两者安全下界完全不同。EmptyBattleTimeout 必须远大于断线重连窗(~30s),让掉线的人回得来;
+	// 而 no-show 局里**一个玩家都没有**,没有"谁要回来"的问题,只需覆盖「DS 报 ready →
+	// 客户端 travel + 连接 + Admission」。用同一个 5m 值的后果:每次分配都白押一台 14Gi Pod
+	// 满 5 分钟,刷进出副本的外挂能用 maxReplicas 个小号把整个 Fleet 押死(正常玩家进不去,
+	// 本身即违反 §9.20);正常玩家强退后也会被 locator BATTLE 锁满 5 分钟。
+	//
+	// 默认值推导:DSTicket v2 生产档 TTL 120s(pkg/auth/dsticket.go)+ 30s 时钟/网络余量。
+	// 票据是进场权威的唯一搬运通道(§9.3),票据过期后该客户端不可能再凭它进来 ⇒ 150s 后
+	// "没人连入"这件事已不可逆,回收是安全的,不是拍脑袋的经验值。
+	// ⚠️ 仍需实测「DS 报 ready → 首次 player_count>0」的 P99 复核本值。
+	//
+	// 爆炸半径:no-show 只在**全员缺席**时成立;只要有一个玩家连入过就永久切到
+	// EmptyBattleTimeout 长阈值。因此 5v5 里"9 个人在打、1 个没连上"绝不会走这条。
+	//
+	// 取值:0 = 用默认 150s;负值 = 显式禁用差异化(退化为单阈值,与改动前行为一致);
+	// 正值按 [NoShowTimeoutFloor, EmptyBattleTimeout] 钳制(下限防手滑配出"玩家进不去",
+	// 上限保证 no-show 不会比普通空场还晚回收)。
+	NoShowBattleTimeout config.Duration `yaml:"no_show_battle_timeout,omitempty" json:"no_show_battle_timeout,omitempty"`
 
 	// OrphanGsReclaimAfter 孤儿 Allocated GameServer(处于 Allocated 却无任何权威分配
 	// 记录引用)连续观察超过该时长后,由 sweep 的对账清扫按 UID+resourceVersion
@@ -429,6 +455,49 @@ func (c AllocatorConf) ResolveWriterLeaseMode() (string, error) {
 	default:
 		return "", fmt.Errorf("allocator.writer_lease_mode %q invalid (want enforce|warmup|off)", c.WriterLeaseMode)
 	}
+}
+
+// 空场回收双阈值常量(AllocatorConf.NoShowBattleTimeout)。
+const (
+	// DefaultNoShowBattleTimeout「从未连入」局的默认回收阈值。
+	// 推导:DSTicket v2 生产档 TTL 120s(pkg/auth/dsticket.go)+ 30s 时钟/网络余量。
+	// 票据是进场权威的唯一搬运通道(§9.3),过期后客户端不可能再凭它连入。
+	DefaultNoShowBattleTimeout = 150 * time.Second
+
+	// NoShowTimeoutFloor no-show 阈值下限护栏。配得比这更短会开始误杀「正在加载地图 /
+	// 正在 travel」的正常玩家,把防刷改动变成"玩家进不去场景"(§9.20 红线)。
+	// 手滑配 1s 必须被钳住并留日志,而不是静默生效。
+	NoShowTimeoutFloor = 60 * time.Second
+)
+
+// ResolveNoShowTimeout 返回「从未连入」(ever_had_players=false)局实际生效的空场回收阈值。
+//
+// 语义(见 NoShowBattleTimeout 字段注释):
+//   - EmptyBattleTimeout <= 0(整体禁用/未配):跟随它,不做差异化;
+//   - NoShowBattleTimeout < 0:显式禁用差异化 → 退回 EmptyBattleTimeout(改动前的单阈值行为);
+//   - == 0:用 DefaultNoShowBattleTimeout;
+//   - > 0:按 [NoShowTimeoutFloor, EmptyBattleTimeout] 钳制。
+//
+// 返回值直接就是可用阈值,调用方无需再判分支:no-show 用本函数,其余用 EmptyBattleTimeout。
+func (c AllocatorConf) ResolveNoShowTimeout() time.Duration {
+	empty := c.EmptyBattleTimeout.Std()
+	if empty <= 0 {
+		return empty
+	}
+	noShow := c.NoShowBattleTimeout.Std()
+	switch {
+	case noShow < 0:
+		return empty
+	case noShow == 0:
+		noShow = DefaultNoShowBattleTimeout
+	}
+	if noShow < NoShowTimeoutFloor {
+		noShow = NoShowTimeoutFloor
+	}
+	if noShow > empty {
+		noShow = empty
+	}
+	return noShow
 }
 
 // Defaults 填默认值。

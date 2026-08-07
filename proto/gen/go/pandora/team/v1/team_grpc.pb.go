@@ -43,6 +43,7 @@ const (
 	TeamService_ApplyToTeam_FullMethodName           = "/pandora.team.v1.TeamService/ApplyToTeam"
 	TeamService_ListTeamApplications_FullMethodName  = "/pandora.team.v1.TeamService/ListTeamApplications"
 	TeamService_HandleTeamApplication_FullMethodName = "/pandora.team.v1.TeamService/HandleTeamApplication"
+	TeamService_BeginTeamMatch_FullMethodName        = "/pandora.team.v1.TeamService/BeginTeamMatch"
 )
 
 // TeamServiceClient is the client API for TeamService service.
@@ -70,6 +71,23 @@ type TeamServiceClient interface {
 	ApplyToTeam(ctx context.Context, in *ApplyToTeamRequest, opts ...grpc.CallOption) (*ApplyToTeamResponse, error)
 	ListTeamApplications(ctx context.Context, in *ListTeamApplicationsRequest, opts ...grpc.CallOption) (*ListTeamApplicationsResponse, error)
 	HandleTeamApplication(ctx context.Context, in *HandleTeamApplicationRequest, opts ...grpc.CallOption) (*HandleTeamApplicationResponse, error)
+	// ── 内部:组票前的 roster fence(matchmaker 专用,不对客户端开放)─────────────
+	//
+	// BeginTeamMatch 在 team 自己的乐观锁内**原子地**完成「校验 + 冻结名单 + 返回快照」。
+	//
+	// 为什么必须有它:matchmaker 原先用只读 GetTeam 取名单,而 team 侧的自动摘人
+	// (离线超时)用的是另一把锁,两者跨服务凑不出共同线性化点 —— 于是存在
+	// 「闸门放行 → 名单被冻进票据 → 才把人摘走」的窗口,结果是人在票据里却不在队伍里,
+	// 被拉进一场自己不在场的对局。把「读名单」升级成「在锁内读并上锁」,窗口才真正消失。
+	//
+	// 锁的形态刻意是**短租约**而不是 TeamState=MATCHING:
+	//   - 写 State 需要有人负责改回来,matchmaker 中途崩溃就会把队伍永久卡在 MATCHING
+	//     (违反不变量 §20「任何代码都不能让玩家卡死」),这也正是 State 至今没有写入点的原因;
+	//   - 短租约到期自净,不需要补偿路径。它只需覆盖「组票 → ClaimPlayer 落地」这一小段(秒级);
+	//     此后整场对局的占用判定仍由 matchmaker 的 player→ticket claim(ResolvePlayerMatchContext)负责。
+	//
+	// 因此这把锁不是权威状态,只是一个有界互斥窗口,不得被解释成「队伍在对局中」。
+	BeginTeamMatch(ctx context.Context, in *BeginTeamMatchRequest, opts ...grpc.CallOption) (*BeginTeamMatchResponse, error)
 }
 
 type teamServiceClient struct {
@@ -220,6 +238,16 @@ func (c *teamServiceClient) HandleTeamApplication(ctx context.Context, in *Handl
 	return out, nil
 }
 
+func (c *teamServiceClient) BeginTeamMatch(ctx context.Context, in *BeginTeamMatchRequest, opts ...grpc.CallOption) (*BeginTeamMatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginTeamMatchResponse)
+	err := c.cc.Invoke(ctx, TeamService_BeginTeamMatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TeamServiceServer is the server API for TeamService service.
 // All implementations should embed UnimplementedTeamServiceServer
 // for forward compatibility.
@@ -245,6 +273,23 @@ type TeamServiceServer interface {
 	ApplyToTeam(context.Context, *ApplyToTeamRequest) (*ApplyToTeamResponse, error)
 	ListTeamApplications(context.Context, *ListTeamApplicationsRequest) (*ListTeamApplicationsResponse, error)
 	HandleTeamApplication(context.Context, *HandleTeamApplicationRequest) (*HandleTeamApplicationResponse, error)
+	// ── 内部:组票前的 roster fence(matchmaker 专用,不对客户端开放)─────────────
+	//
+	// BeginTeamMatch 在 team 自己的乐观锁内**原子地**完成「校验 + 冻结名单 + 返回快照」。
+	//
+	// 为什么必须有它:matchmaker 原先用只读 GetTeam 取名单,而 team 侧的自动摘人
+	// (离线超时)用的是另一把锁,两者跨服务凑不出共同线性化点 —— 于是存在
+	// 「闸门放行 → 名单被冻进票据 → 才把人摘走」的窗口,结果是人在票据里却不在队伍里,
+	// 被拉进一场自己不在场的对局。把「读名单」升级成「在锁内读并上锁」,窗口才真正消失。
+	//
+	// 锁的形态刻意是**短租约**而不是 TeamState=MATCHING:
+	//   - 写 State 需要有人负责改回来,matchmaker 中途崩溃就会把队伍永久卡在 MATCHING
+	//     (违反不变量 §20「任何代码都不能让玩家卡死」),这也正是 State 至今没有写入点的原因;
+	//   - 短租约到期自净,不需要补偿路径。它只需覆盖「组票 → ClaimPlayer 落地」这一小段(秒级);
+	//     此后整场对局的占用判定仍由 matchmaker 的 player→ticket claim(ResolvePlayerMatchContext)负责。
+	//
+	// 因此这把锁不是权威状态,只是一个有界互斥窗口,不得被解释成「队伍在对局中」。
+	BeginTeamMatch(context.Context, *BeginTeamMatchRequest) (*BeginTeamMatchResponse, error)
 }
 
 // UnimplementedTeamServiceServer should be embedded to have
@@ -295,6 +340,9 @@ func (UnimplementedTeamServiceServer) ListTeamApplications(context.Context, *Lis
 }
 func (UnimplementedTeamServiceServer) HandleTeamApplication(context.Context, *HandleTeamApplicationRequest) (*HandleTeamApplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method HandleTeamApplication not implemented")
+}
+func (UnimplementedTeamServiceServer) BeginTeamMatch(context.Context, *BeginTeamMatchRequest) (*BeginTeamMatchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BeginTeamMatch not implemented")
 }
 func (UnimplementedTeamServiceServer) testEmbeddedByValue() {}
 
@@ -568,6 +616,24 @@ func _TeamService_HandleTeamApplication_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TeamService_BeginTeamMatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginTeamMatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).BeginTeamMatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_BeginTeamMatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).BeginTeamMatch(ctx, req.(*BeginTeamMatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TeamService_ServiceDesc is the grpc.ServiceDesc for TeamService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -630,6 +696,10 @@ var TeamService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HandleTeamApplication",
 			Handler:    _TeamService_HandleTeamApplication_Handler,
+		},
+		{
+			MethodName: "BeginTeamMatch",
+			Handler:    _TeamService_BeginTeamMatch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

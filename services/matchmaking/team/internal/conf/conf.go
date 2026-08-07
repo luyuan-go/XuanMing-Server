@@ -153,7 +153,21 @@ func (c *Config) ValidateOfflineLeave() error {
 	if !c.Team.OfflineLeave.Enabled {
 		return nil
 	}
-	return fmt.Errorf("team: offline_leave.enabled=true 当前不安全：缺少与 StartMatch 共享的原子 roster fence，请保持关闭")
+	// 曾经因为「与 StartMatch 缺少共同线性化点」在这里 fail-fast。该前提已不成立:
+	// matchmaker 组票改走 TeamService.BeginTeamMatch,在 team 自己的乐观锁内冻结名单,
+	// 摘人在同一把锁内看到租约即推迟 —— TOCTOU 窗口已消除,不再只是后果收敛。
+	//
+	// 剩下的依赖校验照旧:少任一个都会让功能静默失效或失去对局闸门。
+	if c.Team.LocatorAddr == "" {
+		return fmt.Errorf("team: offline_leave.enabled=true requires team.locator_addr")
+	}
+	if c.Team.MatchmakerAddr == "" {
+		// 没有 matchmaker 就没法判「这支队伍是不是正被一场对局占住」(整场战斗期间的占用
+		// 权威是 player→ticket claim,不是那把秒级 roster 租约),自动退队会有把在打的
+		// 队伍拆掉的风险,宁可不启动。
+		return fmt.Errorf("team: offline_leave.enabled=true requires team.matchmaker_addr (match commitment gate)")
+	}
+	return nil
 }
 
 // 入队策略取值(JoinPolicy)。

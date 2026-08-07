@@ -2502,3 +2502,123 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   HUB 写的毒 key(已补回归测试);②pipeline 里必须用 `Script.Eval`(全文)而非 `Run` ——
   `Run` 只发 EVALSHA,脚本未被本连接加载过就整批 `NOSCRIPT` 失败,而 pipeline 内拿不到
   单命令的自动 fallback(实测踩到,测试先红后绿)。
+- **同日六修:H3 后半(闸门检查 → 改队伍 的 TOCTOU)后果收敛**。
+  先量化再决定:窗口命中 = 队长在闸门放行后、`UpdateWithLock` 提交前点了开始匹配,
+  matchmaker 把含该离线成员的 roster 冻进票据 → **人在票据里却已不在队伍里**,
+  被拉进一场自己不在场的对局(掉分),回来还发现没了队伍。不卡死、不破 §1、claim 也会
+  正常释放,但可低成本修掉。
+  **修法复用既有语义**:摘人成功后复核一次,发现票据确实在窗口内成立了,就走与
+  `LeaveTeam` 完全相同的补偿 —— 撤销整张票据、全队退回队列重新匹配(理由也一样:
+  队伍人数已变,票据里那份成员快照不再成立)。后果从「带着离线的人开局」降为「重匹一次」。
+  不在锁内复核(Redis 事务里发不了 gRPC);不回滚摘人(票据已冻结,加回去只会制造
+  第二种不一致)。新增 `pandora_team_offline_leave_race_total{outcome}` 让窗口真实频率
+  由线上数据说话,而不是靠推理。
+  **诚实边界:收敛 ≠ 消除。** 复核 RPC 自身失败时仍会留下「人在票据、不在队伍」且无从判定,
+  只能靠 Error + `outcome="recheck_failed"` 人工兜。因此**没有**放开
+  `conf.ValidateOfflineLeave` 的 fail-fast —— 那道闸是上一轮别人基于同一风险加的,
+  放开的前置条件是 matchmaker 组票时写一下 team key、借 team 自己的乐观锁形成共同
+  线性化点(顺带能修「MATCHING/IN_BATTLE 全仓无写入点」那个老问题),属独立设计变更,
+  不由本开关决定。同步修正了文件头「刻意不联动 cancelMatchmaking」与新补偿路径的矛盾表述。
+- **同日七修:H3 TOCTOU 真正消除(用户拍板开 matchmaker fence 线)**。
+  matchmaker 组票不再用只读 `GetTeam`,改走新增的内部 RPC `TeamService.BeginTeamMatch`:
+  在 **team 自己的乐观锁内**原子完成「存在/READY/队长 三项校验 + 冻结名单 + 上租约 + 返回快照」;
+  `removeOfflineMember` 在**同一把锁内**看到未过期租约就返回 `ErrDeferred`。
+  两个操作因此只能有一个赢 —— 从「后果收敛」升级为「窗口不存在」,
+  于是 `conf.ValidateOfflineLeave` 那道 fail-fast 得以名正言顺撤掉(只保留依赖缺失拒启)。
+  **锁的形态刻意是短租约而不是 `TeamState=MATCHING`**:写 State 需要有人负责改回来,
+  matchmaker 中途崩溃就会把队伍永久卡在 MATCHING(违反 §20),这也正是 State 至今
+  无写入点的原因;租约到期自净、无补偿路径,钳在 `[2s,15s]`,只需覆盖「组票 → ClaimPlayer 落地」,
+  此后整场对局的占用判定仍由 player→ticket claim 负责。两者语义不同不可互相顶替,
+  所以 matchmaker_addr 仍是启用前提。
+  operation_id 取 `startmatch:<team>:<captain>`(**刻意不掺时间戳**):同一次组票的重试
+  必须拿到同一个 id 才能幂等续租,掺了就会让自己的重试变成"另一次组票"而互相顶掉(§9.23)。
+  校验从 matchmaker 挪进 team 的锁后,matchmaker 侧的非法状态矩阵测试同步在 fake reader 里
+  复刻那三项校验,断言不丢。新增 4 条 fence 回归(上锁后摘人必须被拒 / 租约过期恢复 /
+  同 operation 幂等续租 / 锁内仍复核 READY 与队长);上一轮那条「无 fence 必须拒启」的
+  conf 测试前提已不成立,改为断言「依赖配齐即可启动」+ 两条依赖缺失拒启。
+  `compensateIfCommittedDuringRemoval` 作为纵深防御保留(覆盖租约已过期而 claim 恰在此刻
+  落地的极窄残留),正常路径不再触发。14 个包测试全绿。
+
+## 2026-08-06:玩家昵称校验规范落档(仅文档,未改代码)
+
+- 新增 [`docs/design/player-name-validation.md`](./docs/design/player-name-validation.md),
+  并在 `go-services.md §2.2 player` 的关键不变量里加了指回链接。
+- **动机**:现状只有三条校验(`TrimSpace` → 非空 → rune 数 ≤ `max_nickname_len` 默认 32),
+  唯一性全靠 `uk_nickname`。归一化、字符白名单、保留前缀、同形字防仿冒、敏感词**全部缺失**,
+  且玩家可自取默认昵称前缀 `Player_` 冒充他人。
+- **文档要点**(七层,顺序不可颠倒):①NFKC 归一化必须在校验之前,且校验对象与入库对象是同一个串,
+  否则全角可绕过白名单与敏感词;②长度要 rune 上限 + 字节上限两条,后者兜 `VARCHAR(64)` 列,
+  非严格 `sql_mode` 下超长是**静默截断**(§9.24);③字符集用白名单不用黑名单,显式拒
+  `\p{Cc}`/`\p{Cf}`(零宽、RTL override)/`\p{Co}`/Zalgo;④唯一性另存 `nickname_normalized` 列
+  (casefold + confusables 折叠)防西里尔同形字,现有 `utf8mb4_0900_ai_ci` 挡不住;判定只能靠
+  唯一键冲突,"先查再写"是 §9.22 点名的 TOCTOU;⑤保留前缀读同一份配置不硬编码;
+  ⑥敏感词独立一层、走 §9.15 热更、匹配前去分隔符;⑦服务端唯一权威,客户端只做展示灰化(§17.3)。
+- **状态:设计稿,一行代码未动。** 实现落点建议(`pkg/namecheck` + 迁移加 normalized 列 +
+  错误码细分 + 改名 CD/审计)与验收矩阵已写在文档 §9/§10;实现前不得声称昵称校验已达标。
+
+## 2026-08-06:外挂滥用(刷进出副本 + 各功能面被刷)防护盘点与设计落档(仅文档,未改代码)
+
+- 新增 [`docs/design/anti-abuse-scene-entry.md`](./docs/design/anti-abuse-scene-entry.md)。
+- **威胁模型**:外挂 = 持合法 session、按协议发包、把频率拉到人做不到的程度。四类危害:
+  A 资源放大(刷进出副本 → 拉起 GameServer)、B 扇出放大(世界喊话/群发申请)、
+  C 状态搅动(反复 owner 迁移)、D 存储膨胀(高频写只增表)。
+- **一条铁律**:限流是**背压**不是权威门 —— 依赖故障时 fail-open(牺牲限流保可用),
+  正确性另由 fail-closed 权威门(`ensureNoneInBattle`、owner lease fencing、Admission CAS)兜。
+  两者不得互相冒充;限流器故障绝不能变成 §9.20 的卡玩家源头。
+- **盘点结论(带证据)**:进出副本链上**权威门齐全、成本闸完全没有** ——
+  `validateMapID`/`ensureNoneInBattle`/durable operation/全局 `MaxQueueTickets` 都在,
+  但 `StartMatch` **无 per-player 频率闸**;成局级冷却 + 换 match_id 仍是
+  `decision-revisit-allocating-bounded-terminal.md:48` 记着的未落地前置;abandon 无任何代价。
+  Hub 切线的 `TryTransferCooldown`(SETNX,10s,失败即释放)是本仓唯一做对的进场侧防刷范例,
+  被定为模板。其余:私聊/交易撤单/改名/登录失败全无频率闸;**Envoy 边缘零限流**
+  (envoy.yaml 只有一行注释);**登录 `ensureAccount` 是自动注册**,是「无成本创建身份」入口,
+  会让所有 per-player 配额被「换个号」绕过。
+- **设计**:四层 —— ①Envoy `local_ratelimit` 挡未鉴权洪水(不上全局 RLS,§15.3);
+  ②`pkg/redisx/ratelimit.go` 两原语 `Cooldown`(SETNX)/`Quota`(Lua INCR+PEXPIRE)统一现有两份
+  散写 SETNX,**不做滑动窗口/令牌桶**;③A 类专属成本闸(在途分配唯一 + 成局级冷却 + abandon 计数);
+  ④复用 Prometheus + killswitch 观测止血(player_id 绝不做 label,§12)。
+  明确拒绝清单已写进 §5(行为分析、全局 RLS、客户端限流、给 CancelMatch 加闸等)。
+- **验收底线**:零副作用拒绝(不得先干重活再判限流)、fail-open 已注入验证、被拒时不卡玩家、
+  退出路径永不受限、压测给出前后对比表。
+- **状态:设计稿,一行代码未动。** 三项待人拍板:abandon 惩罚是否做、各限流初值、
+  自动注册是否保留(§7)。
+
+### 同日补充:用户圈定真正的高危面 = Battle DS 占位耗尽(文档已加 §3.2.1,并重排优先级)
+
+用户三次澄清把范围收窄到:**「玩家进 battle DS,DS 没回收就退出又进新的 battle DS,
+耗尽 DS 资源导致进不去」**。Hub DS 按人数自动扩展,**明确不在射程**。
+
+- **这不是限流问题,是持有时间问题**。核准的成本账(全部有出处):
+  - Battle DS = 一局一 Pod,`requests = limits = 14Gi`(`20-fleet-battle.yaml:199,211`,
+    由 INC-20260727-002 实测 `memory.peak≈10.43GiB` × 1.34 定档);
+  - 同时最大局数 = `maxReplicas`(本地 2,线上按节点池覆写),是**硬上限**;
+  - 空场回收 **5 分钟**(`empty_battle_timeout`,判定在心跳 CAS 内 `battle_auth.go:910`);
+  - **DS 侧 2~3min 自结算计时器(主路径)UE 仍未实现**(`agones-dev.md:465` 写着「待实现」),
+    ⇒ 当前 5min 后端兜底是**唯一**回收手段;
+  - 冷启动 22s/48~58s/>120s 期间 Pod 已被占;
+  - **⇒ 单次 StartMatch 放大比 = 14Gi × 约 6 分钟。**
+- **押死 Fleet 的成本低到离谱**:`maxReplicas` 个小号 × 每 6 分钟点一次。线上若 20,
+  就是 20 个号每号 6 分钟一次 —— **比正常玩家还慢**,BBR 不会触发(服务毫不繁忙),
+  任何频率闸也拦不住。正常玩家此时拿 `ErrDSNoAvailable(5001)`,**这本身就是 §9.20 违规**。
+- **最便宜的攻击面是单人 PVE**(`team_size=1`):1 账号 = 1 台独占 DS;5v5 反而贵 5 倍。
+- **`ensureNoneInBattle` 拦不住但值得注意**:`refreshBattleLocations` 刷的是 roster 全员
+  (`allocator.go:2382`),所以从未连入的玩家也被标 BATTLE、5min 内开不了新局 ——
+  它把乘数从「频率」换成了「账号数」,而 `ensureAccount` 自动注册让账号免费。
+  **副作用**:正常玩家强退后同样被锁最多 5 分钟,只看到 `ErrMatchInBattle(4007)`「正在战斗中」,
+  这是实打实的 §9.20 卡玩家 —— **所以缩短空场回收既是防刷也是修 bug,一个修同时解决两件事**。
+- **对策按杠杆排序(已写进 §4.3)**:
+  ①**把「从未连入(no-show)」与「有人连过后全员掉线」拆成两个阈值** —— 前者只需覆盖
+  「DS 报 ready 之后 travel+连接+Admission」(建议 60~90s,待实测),后者必须 > 重连窗(2~3min)。
+  **读 CAS 核准的关键事实**:空场计时只在 `state ∈ {ready,running}` 才推进
+  (`heartbeatLegacy` 守卫),**冷启动 warming 期不计入空场窗口**(那段归 `heartbeat_timeout` 管),
+  所以 no-show 阈值不必给冷启动留余量;但总持有 = 冷启动 + 空场超时两段串行,6 分钟放大比不变。
+  实现极廉价:`BattleStorageRecord` 加一个 `ever_had_players` 位(§9.17 加字段兼容),
+  判定处按位选阈值,**不新增计时器/状态机**(§16.10:到期后重查权威属有界兜底,非掩盖时序)。
+  ②**账号必须有成本**(否则①只是让攻击者多开几个号);③容量分级准入 + no-show 指数退避 +
+  `ErrDSNoAvailable` 改带 `retry_after` 的 `WAIT` 并入 §9.23 同一恢复协调器;④原在途成本闸并入。
+- **明确不做**:不靠调大 `maxReplicas`(把被押死换成被烧钱);**不缩 `heartbeat_timeout`**
+  (INC-20260727-001 根因正是单阈值同时管启动与稳态,缩它会重新击穿冷加载中的 warming DS —— 
+  空场回收与失联回收是两条独立时钟,不要合并)。
+- **落地顺序已重排**:双阈值空场回收提为**第 0 项(最高优先级)**,排在限流原语之前。
+- 待拍板升级为 5 项,**自动注册是否保留升到第 1 位**(它直接决定攻击成本上限)。
+

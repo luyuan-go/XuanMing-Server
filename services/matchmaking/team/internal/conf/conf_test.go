@@ -24,21 +24,50 @@ func TestValidateOfflineLeaveDisabled(t *testing.T) {
 	}
 }
 
-func TestValidateOfflineLeaveEnabledFailsWithoutSharedRosterFence(t *testing.T) {
+// 该用例原本断言「没有共用 roster fence 就必须拒启动」。
+// 2026-08-06 起 matchmaker 组票改走 TeamService.BeginTeamMatch，在 team 自己的乐观锁内
+// 冻结名单、摘人在同一把锁内看到租约即推迟 —— 共同线性化点已经存在，前提不再成立。
+// 因此改为断言「依赖配齐即可启动」，并保留下面两条依赖缺失的拒启用例。
+func TestValidateOfflineLeaveEnabledPassesWithSharedRosterFence(t *testing.T) {
 	var cfg conf.Config
 	cfg.Defaults()
 	cfg.Team.OfflineLeave.Enabled = true
-	// 两个读取依赖都配齐也不能弥合跨服务 TOCTOU；该用例防止以后误把“能查到状态”
-	// 当成“摘人与 StartMatch 已经共享线性化点”。
 	cfg.Team.LocatorAddr = "player-locator:20006"
 	cfg.Team.MatchmakerAddr = "matchmaker:20011"
 
-	err := cfg.ValidateOfflineLeave()
-	if err == nil {
-		t.Fatal("缺少与 StartMatch 共用的 roster fence 时，offline_leave.enabled=true 必须拒绝启动")
+	if err := cfg.ValidateOfflineLeave(); err != nil {
+		t.Fatalf("依赖配齐且 roster fence 已就位时应允许启动: %v", err)
 	}
-	if !strings.Contains(err.Error(), "roster fence") {
-		t.Fatalf("拒启原因必须明确指出缺少 roster fence，实际错误: %v", err)
+}
+
+// 依赖缺失必须仍然拒启:少了 locator 判不了离线(功能静默失效),
+// 少了 matchmaker 就失去「整场对局占用」的闸门 —— 那把秒级 roster 租约只覆盖组票瞬间，
+// 覆盖不了整场战斗，两者不能互相顶替。
+func TestValidateOfflineLeaveEnabledFailsWithoutDeps(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		locator   string
+		matchmake string
+		want      string
+	}{
+		{"缺 locator", "", "matchmaker:20011", "locator_addr"},
+		{"缺 matchmaker", "player-locator:20006", "", "matchmaker_addr"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var cfg conf.Config
+			cfg.Defaults()
+			cfg.Team.OfflineLeave.Enabled = true
+			cfg.Team.LocatorAddr = tc.locator
+			cfg.Team.MatchmakerAddr = tc.matchmake
+
+			err := cfg.ValidateOfflineLeave()
+			if err == nil {
+				t.Fatal("依赖缺失时必须拒绝启动,不能静默降级")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("拒启原因必须点名缺失项 %q,实际: %v", tc.want, err)
+			}
+		})
 	}
 }
 
