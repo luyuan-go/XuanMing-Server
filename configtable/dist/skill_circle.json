@@ -22,7 +22,8 @@
       "id": 5,
       "remark": "5米半径圆形",
       "pos_option": 2,
-      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,500"
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,500",
+      "out_range_circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_03.NS_Decal_CycleRange_03,600"
     },
     {
       "id": 6,
@@ -52,7 +53,7 @@
       "id": 100321,
       "remark": "控场辅助Dekker技能2",
       "pos_option": 2,
-      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,600"
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,480"
     },
     {
       "id": 100331,
@@ -64,7 +65,7 @@
       "id": 100421,
       "remark": "Murdock技能2",
       "pos_option": 2,
-      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,1000"
+      "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,600"
     }
   ]
 }

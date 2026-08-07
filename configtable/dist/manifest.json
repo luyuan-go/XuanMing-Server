@@ -1,8 +1,8 @@
 {
-  "version": 20260806001,
-  "generated_at_ms": 1786002666736,
+  "version": 20260807001,
+  "generated_at_ms": 1786082796888,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-r1844",
+  "source_rev": "svn-r1872",
   "tables": [
     {
       "name": "chest_drop",
@@ -99,7 +99,7 @@
       "name": "role",
       "file": "role.json",
       "proto": "pandora.config.v1.RoleTableData",
-      "checksum": "sha256:52b08e6e38cf899627f6acac2dd0429aa0aec4b8c990b556fe75d475837b6b14",
+      "checksum": "sha256:f9eefaa96fc9f2383a9f8ea3c3cf70e569b9afb683a86017a4c409ff6c126e8e",
       "rows": 21
     },
     {
@@ -113,7 +113,7 @@
       "name": "skill_circle",
       "file": "skill_circle.json",
       "proto": "pandora.config.v1.SkillCircleTableData",
-      "checksum": "sha256:1b078a2f05c58f44cafd5e2f87279734957ca3c0c8c96c6e40e252cfe5c16956",
+      "checksum": "sha256:87512af923de6f32f6578110acb97073490fbb502ed3c9fe5821c8a14d34653a",
       "rows": 11
     },
     {
@@ -127,14 +127,14 @@
       "name": "skill_sector",
       "file": "skill_sector.json",
       "proto": "pandora.config.v1.SkillSectorTableData",
-      "checksum": "sha256:0be95d0c6f96a09436dcf950ca4f3ee0b08d8415520f8dcd3cb12c316eb9e70f",
-      "rows": 4
+      "checksum": "sha256:5c4fa9b48ab6ca0080f29f7a42306cf05b3bbba5ef32a95c57a5fe01bac4c129",
+      "rows": 5
     },
     {
       "name": "skill",
       "file": "skill.json",
       "proto": "pandora.config.v1.SkillTableData",
-      "checksum": "sha256:cf809c854c8a25c8012ac0ee24d5270d724f8e05221fd686598bada705f3fc81",
+      "checksum": "sha256:9bbb4ad9dee01a4dcaaca2fe49a8b56bc031af35ee5c6ac058c22249023ff2b6",
       "rows": 63
     },
     {

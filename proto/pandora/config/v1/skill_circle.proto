@@ -10,7 +10,7 @@
 //   登记它的理由与 particle / weapon 表一致:两端共用同一张 xlsx,未登记的表头列会被
 //   configtable-gen 判为非法,登记后「改列只改 xlsx 表头 + 本文件注解」两处。
 //
-// 版式(实测):第 1 行列名(A..D),第 2-3 行是「位置选项」取值说明(1:固定在自身 / 2:跟随鼠标指针),
+// 版式(实测):第 1 行列名(A..E),第 2-3 行是「位置选项」取值说明(1:固定在自身 / 2:跟随鼠标指针),
 //   第 4-6 行为整行空(仅有样式,无值),数据自**第 7 行**起至第 17 行共 11 行。
 //   显式写 (excel_data_start_row) = 7 是把实测版式钉进 proto:通用默认值 5 当前碰巧也能导出
 //   同样结果(第 5-6 行整行空会被 allEmpty 跳过),但那是巧合——策划一旦在第 5 / 6 行补一句
@@ -28,7 +28,7 @@ package pandora.config.v1;
 
 import "pandora/config/v1/excel.proto";
 
-// SkillCircleRow 技能圆形方位表一行(列序 = 字段号序 = 表头 A..D)。
+// SkillCircleRow 技能圆形方位表一行(列序 = 字段号序 = 表头 A..E)。
 message SkillCircleRow {
   // ID(主键,方位规格 ID;由技能表按 ID 引用)。实测 11 行互不重复:
   //   1 / 2 / 4 / 5 / 6 / 8 是通用规格,100211 / 100311 / 100321 / 100331 / 100421 是按
@@ -42,15 +42,22 @@ message SkillCircleRow {
   //   判为非法值(CLAUDE.md §5.12 / weapon.weapon_type 同理),用无符号整型承载即可。
   // 空单元格取 1(= 固定在自身),与客户端列登记 defaultValue="1" 对齐。
   uint32 pos_option = 3 [(excel_col) = "位置选项", (excel_default) = "1"];
-  // 圆形集合(可叠加的多个同心圆表现规格)。文本格式:多组以 ';' 分隔,组内以 ',' 分隔为
+  // 范围内圆形集合(可叠加的多个同心圆表现规格)。文本格式:多组以 ';' 分隔,组内以 ',' 分隔为
   //   「Niagara 资产路径,半径(厘米)」,实例:
   //   "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,400"。
   //   客户端解析成 TArray<FMySkillCircleFxSpec>{Fx, Radius}(csp=';' / ksp=',')。
+  // 列名历史:原列名「圆形集合」,策划在 svn-r1872 拆出「范围外圆形集合」后改名为「范围内圆形集合」;
+  //   字段名 circles 保持不变(= 客户端列登记的 Circles),只改 (excel_col) 注解,JSON key 不变。
   // 刻意**不标 (excel_prefix) = "/"**:本列是复合值而非纯资产路径(同 weapon.model_info),
   //   前缀约束会把「留空 = 不显示圆形指示器」这类合法写法卡死;路径合法性由 UE 侧加载时暴露。
   // 刻意**不标 required**:客户端列登记 defaultValue="" 允许留空,服务端标 required 会让
   //   同一张表在两仓一边能导一边导不出(整批生成失败)。实测 11 行当前均已填。
-  string circles = 4 [(excel_col) = "圆形集合"];
+  string circles = 4 [(excel_col) = "范围内圆形集合"];
+  // 范围外圆形集合(技能有效射程之外的圆形指示器表现,与 circles 同格式同分隔符)。
+  //   客户端列登记 OutRangeCircles / FCfgSkillCircleFxSpec List(csp=';' / ksp=',')。
+  // 同样**不标 required / prefix**:客户端 defaultValue="" 允许留空,实测 11 行仅 ID=5 一行填了值,
+  //   其余留空表示「不额外画范围外圆」;标 required 会让同一张表在两仓一边能导一边导不出。
+  string out_range_circles = 5 [(excel_col) = "范围外圆形集合"];
 }
 
 // SkillCircleTableData 技能圆形方位整表容器(dist/skill_circle.json 的根对象;excel_file 注解 = 导表登记)。

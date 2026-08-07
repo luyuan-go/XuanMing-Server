@@ -22,10 +22,17 @@
       "angle": 45
     },
     {
-      "id": 100921,
-      "remark": "120°8米半径",
+      "id": 100411,
+      "remark": "60°15米半径",
       "fx": "/Game/Fx/SkillRangeLocator/NS_Decal_Arc.NS_Decal_Arc",
-      "radius": 800,
+      "radius": 1500,
+      "angle": 60
+    },
+    {
+      "id": 100921,
+      "remark": "120°20米半径",
+      "fx": "/Game/Fx/SkillRangeLocator/NS_Decal_Arc.NS_Decal_Arc",
+      "radius": 2000,
       "angle": 120
     }
   ]
