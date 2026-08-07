@@ -80,8 +80,6 @@ func (s *LocatorService) SetLocation(ctx context.Context, req *locatorv1.SetLoca
 	if cred != nil {
 		// Hub owner authority 的实例 epoch 与 hub_allocator 签票/Admission 路径一致，
 		// 使用 callback credential 的 ProtocolEpoch（该服务没有另一个可猜的 epoch）。
-		in.HubInstanceUID = cred.InstanceUID
-		in.HubInstanceEpoch = cred.ProtocolEpoch
 	}
 	if err := s.uc.SetLocation(ctx, in); err != nil {
 		return &locatorv1.SetLocationResponse{Code: toProtoCode(err)}, nil

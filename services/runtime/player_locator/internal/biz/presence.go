@@ -1,12 +1,13 @@
 // presence.go — 好友在线态扇出优化 fan-out worker(2026-06-19)。
 //
 // 落地 docs/design/friend-distributed-scaling.md §13.4 / §13.5:
-//   §13.4.1 只推订阅者:内存订阅倒排索引(watchedID → 订阅者集合);
-//            好友上线事件只推给「此刻正盯着这一行看的人」,扇出从 N 降到个位数。
-//   §13.4.2 去抖(debounce):变更进 debounce 窗口,窗口内回退到原状态判为抖动不推。
-//   §13.4.3 合并(coalesce):tick(默认 1s)把同一订阅者的多条变更攒成一条 PresenceBatchEvent。
-//   §13.4.4 降采样:只推粗粒度 PresenceStatus(在线/离线/游戏中),细节点详情再单独拉。
-//   §13.5  洪峰降级:挂 pkg/killswitch,降级时丢事件退回纯拉模式,保主链路。
+//
+//	§13.4.1 只推订阅者:内存订阅倒排索引(watchedID → 订阅者集合);
+//	         好友上线事件只推给「此刻正盯着这一行看的人」,扇出从 N 降到个位数。
+//	§13.4.2 去抖(debounce):变更进 debounce 窗口,窗口内回退到原状态判为抖动不推。
+//	§13.4.3 合并(coalesce):tick(默认 1s)把同一订阅者的多条变更攒成一条 PresenceBatchEvent。
+//	§13.4.4 降采样:只推粗粒度 PresenceStatus(在线/离线/游戏中),细节点详情再单独拉。
+//	§13.5  洪峰降级:挂 pkg/killswitch,降级时丢事件退回纯拉模式,保主链路。
 //
 // 架构取舍(v1):订阅倒排索引是「单实例内存态」,与 push 服务的 ConnectionManager 同档
 // (一个玩家的 stream / 订阅都粘在一个实例上)。多实例水平扩展需把倒排索引下沉 Redis
@@ -83,12 +84,12 @@ type PresenceHub struct {
 	clock    func() time.Time
 
 	mu       sync.Mutex
-	watchers map[uint64]map[uint64]struct{}            // watchedID → set(subscriberID):谁在关注 watchedID
-	watching map[uint64]map[uint64]struct{}            // subscriberID → set(watchedID):订阅者清理用
-	pending  map[uint64]pendingChange                  // watchedID → 去抖窗口内的最新变更
-	lastSent map[uint64]int32                          // watchedID → 上次已广播的粗状态(去抖去重基线)
-	buffer   map[uint64]map[uint64]PresenceChangeOut   // subscriberID → (watchedID → 合并变更)
-	degraded bool                                      // 当前是否处降级(纯拉)态,用于日志去抖
+	watchers map[uint64]map[uint64]struct{}          // watchedID → set(subscriberID):谁在关注 watchedID
+	watching map[uint64]map[uint64]struct{}          // subscriberID → set(watchedID):订阅者清理用
+	pending  map[uint64]pendingChange                // watchedID → 去抖窗口内的最新变更
+	lastSent map[uint64]int32                        // watchedID → 上次已广播的粗状态(去抖去重基线)
+	buffer   map[uint64]map[uint64]PresenceChangeOut // subscriberID → (watchedID → 合并变更)
+	degraded bool                                    // 当前是否处降级(纯拉)态,用于日志去抖
 
 	stopCh chan struct{}
 	doneCh chan struct{}

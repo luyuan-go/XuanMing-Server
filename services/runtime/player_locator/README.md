@@ -17,7 +17,7 @@
 - **权威边界**(不变量 §22):player_locator 只是**短期 presence / 最近活跃投影**(TTL 位置租约),
   **不是玩家归属权威**。key miss 只说明「presence 不可见」,**不能**单独证明玩家已离开旧 DS,也不能授权进入另一台 DS。
   当前哪台 DS 有权控制玩家由 owner authority(§9.22)裁决;`MATCHING` 也只是投影,durable match stage 在 matchmaker。
-- **单一真源**:位置投影全在 **Redis**(hash by `player_id`),无 MySQL、无进程内长期状态 —— 服务无状态、可水平扩展、可随时被杀被替换(不变量 §16)。带 fence 的 HUB 上线只读查询 owner authority 绑定全局 owner 代际；locator 不写 owner。
+- **单一真源**:位置投影全在 **Redis**(hash by `player_id`),无 MySQL、无进程内长期状态 —— 服务无状态、可水平扩展、可随时被杀被替换(不变量 §16)。带 fence 的 HUB 上线只按连接三元组在同 assignment 内定序；跨 assignment 归属由 hub_allocator 权威决定，locator 不反向定序、也不查 owner。
 - **状态权属**:`MATCHING` / `BATTLE` 由 matchmaker / ds_allocator 控制面写;`HUB` 由 Hub DS 经回调令牌写;
   `LOGIN_PENDING` 由 login 写。写入方权威不同 → SetLocation 走状态机守卫分类放行 / 拒绝(见下)。
 - **不做的事**:不算 MMR / 经验 / 掉落;不做 leader 选举 / 集群拓扑(无状态);不消费 `pandora.locator.update` topic
@@ -40,7 +40,7 @@ login 等调用,不直接暴露给玩家客户端,Envoy 路由层限制本路径
 
 | RPC | 调用方 | 语义 | 鉴权 |
 |---|---|---|---|
-| `SetLocation(player_id, Location, hub_presence_fence)` | login(LOGIN_PENDING)/ matchmaker(MATCHING/BATTLE)/ ds_allocator(BATTLE)/ Hub DS(HUB) | 覆盖式写位置；带 fence 的 HUB 写先核对 owner `HUB/ADMITTED`、有效 lease 与 exact target，再以 owner+Admission 代际守卫同 Pod ABA | **HUB** 状态:Hub DS 回调令牌(`sub=hub_pod`,`RequireToken`);**其余状态**:`DenyDS`(带 DS 令牌 / 经网关即拒,仅内部东西向服务可写) |
+| `SetLocation(player_id, Location, hub_presence_fence)` | login(LOGIN_PENDING)/ matchmaker(MATCHING/BATTLE)/ ds_allocator(BATTLE)/ Hub DS(HUB) | 覆盖式写位置；带 fence 的 HUB 写以 assignment+admission 三元组守卫同 Pod ABA(同 assignment 内定序，跨 assignment 接受) | **HUB** 状态:Hub DS 回调令牌(`sub=hub_pod`,`RequireToken`);**其余状态**:`DenyDS`(带 DS 令牌 / 经网关即拒,仅内部东西向服务可写) |
 | `GetLocation(player_id)` | login / team / matchmaker / friend 等 | 查单个玩家位置;key miss 返回 `OFFLINE` 占位(不报错) | 内网 |
 | `BatchGetLocation(player_ids)` | friend(ListFriends 在线态) | Redis pipeline 一次往返批量查;miss 的 id **不回填占位**(调用方按缺席判离线) | 内网 |
 | `SubscribePresence(subscriber_id, watched_player_ids)` | 客户端(打开好友面板) | 注册在线态订阅(替换语义);`presence.enabled=false` 时 no-op | 内网(`presence.enabled` 门控) |
@@ -71,8 +71,7 @@ internal/
     presence.go                  PresenceHub 好友在线态扇出 worker(订阅倒排 + 去抖 + 合并 + killswitch 降级)
     locator_sharding.go          位置 owner cell 锚定 / 分片键口径(LocationShardKey = player_id,nil-safe 观测)
   data/
-    location.go                  RedisLocationRepo(location + HUB meta；SetGuarded / owner+Admission fence / Refresh / exact Disconnect)
-    owner_client.go              OwnerService.QueryOwner 只读客户端(带 fence HUB Set 的全局代际与 lease 校验)
+    location.go                  RedisLocationRepo(location + HUB meta；SetGuarded / Admission fence / Refresh / exact Disconnect)
     hub_auth.go                  RedisHubAuthReader(只读 pandora:hub:auth:{pod},Model B 鉴权用)
   server/
     grpc.go                      gRPC server 注册(不挂玩家 AuthRequired)
@@ -89,8 +88,8 @@ internal/
 service.SetLocation (service/locator.go)
 ├─ dsGuard.CheckHubCredential(scope)            HUB→hub 令牌(sub=pod,RequireToken);非 HUB→DenyDS
 │     └─ [Model B] hubCredentialChecker.CheckActive(pod, cred)  读 Redis 唯一授权权威,fail-closed
-├─ biz.SetLocation (biz/locator.go)             入参校验；完整 HUB fence → QueryOwner 并核对 ADMITTED/lease/target
-│     ├─ repo.ValidateHubPresence               只读校验长 TTL meta，拒旧 owner/Admission
+├─ biz.SetLocation (biz/locator.go)             入参校验；完整 HUB fence → 同 assignment 内按 admission_seq/id 定序
+│     ├─ repo.ValidateHubPresence               只读校验长 TTL meta，拒同 assignment 内的旧 Admission
 │     ├─ repo.SetGuarded                        WATCH/MULTI/EXEC 写位置 + 状态机/当前连接代守卫
 │     └─ repo.ActivateHubPresence               条件提交 meta 并清上一连接 left_at；并发 Disconnect 时 exact 补偿缩 TTL
 ├─ presence.Notify(player_id, state)            写成功后扇出(presence 未启用则 nil,跳过)
@@ -154,7 +153,7 @@ CAS 冲突耗尽 `optimisticRetry`(3 次,`biz/locator.go:50`)返回 `ERR_LOCATOR
 | Key | 类型 | TTL | 用途 |
 |---|---|---|---|
 | `pandora:locator:<player_id>` | hash | 30s(`location_ttl`,SetLocation / Refresh 刷新) | 玩家位置 |
-| `pandora:locator:hubmeta:<player_id>` | hash | `last_seen_retention`(在线心跳续期) | 当前 owner/Admission fence + 可选首次 `left_at_ms` |
+| `pandora:locator:hubmeta:<player_id>` | hash | `last_seen_retention`(在线心跳续期) | 当前连接 Admission fence + 可选首次 `left_at_ms` |
 
 字段(实际由 `data/location.go` `HSet` 写入,`parseLocationMap` 解析):
 
@@ -165,7 +164,6 @@ CAS 冲突耗尽 `optimisticRetry`(3 次,`biz/locator.go:50`)返回 `ERR_LOCATOR
 - `battle_pod`    BATTLE 时填;HUB 时清空
 - `updated_at_ms` `int64`,服务端记录的写入时刻
 - `hub_assignment_id` / `hub_admission_id` / `hub_admission_seq`,HUB 连接 identity
-- `hub_owner_epoch` / `hub_owner_operation_id`,只来自 owner authority 查询结果
 
 写入用 `DEL + HSET + EXPIRE`(先 DEL 保证切状态时不残留旧字段,如 BATTLE→HUB 时 match_id 不清会误读)。
 `Delete` 用 `UNLINK`(异步删,避免大 key 阻塞)。
@@ -201,7 +199,6 @@ player_locator **只读不写**该记录(`data/hub_auth.go`),不参与 stage / p
 | `server.grpc.addr` | `:20006` | gRPC 监听(`Defaults()` 兜底) |
 | `server.http.addr` | `:21006` | HTTP 监听,仅 `/metrics` |
 | `locator.location_ttl` | `30s` | 位置 hash TTL(有效值经代码钳到 `≥ 27s` DS 再入屏障下限) |
-| `locator.owner_addr` | — | OwnerService 内网地址；带 fence 的 HUB Set 强依赖，未配置时 fail-closed；legacy Set 仍兼容 |
 | `presence.enabled` | `false` | 是否开好友在线态订阅扇出;false = 纯拉(Subscribe/Unsubscribe no-op) |
 | `presence.debounce_window` | `8s` | 上线去抖窗口(§13.4.2) |
 | `presence.coalesce_tick` | `1s` | 合并 / flush tick 间隔(§13.4.3) |
@@ -213,8 +210,8 @@ player_locator **只读不写**该记录(`data/hub_auth.go`),不参与 stage / p
 | `ds_auth.fence.*` | — | `authority_mode=redis` 时的 etcd capability lease(endpoints / prefix / lease_ttl / keyset_revision) |
 
 **强依赖**:Redis(`node.redis_client.host` 单实例或 `.addrs` 集群),启动期 `Ping` 失败直接 exit。
-带 fence 的 HUB 上线还强依赖 `owner_addr` 的实时 QueryOwner；RPC/in-band 错误、过期 lease 或 target 不匹配均 fail-closed，
-不回退到 locator 猜测。**启动校验**:`ValidateDSAuthAuthorityMode` 拒绝拼错的 `authority_mode`
+带 fence 的 HUB 上线**不引入额外服务依赖**：连接身份由 Hub DS 随请求携带，locator 只在同 assignment 内比对，
+跨 assignment 的归属交给 hub_allocator 权威(§9.22，locator 不反向定序)。**启动校验**:`ValidateDSAuthAuthorityMode` 拒绝拼错的 `authority_mode`
 (误写非 `legacy|redis` 会静默绕过 active credential 门);`authority_mode=redis` 时还校验 fence 配置并申请
 `dsauthfence` capability,失租(`fence.Lost()`)立即 `os.Exit`,禁止旧 epoch 副本继续接受 Hub 写回。
 

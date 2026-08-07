@@ -205,6 +205,7 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 		"offline_since_ms", offlineSinceMs,
 		"threshold", u.cfg.OfflineLeave.Threshold.String(),
 		"new_state", result.State, "remaining", len(result.Members))
+	u.compensateIfCommittedDuringRemoval(ctx, teamID, playerID)
 	if indexErr != nil {
 		return indexErr
 	}
@@ -242,4 +243,47 @@ func (u *TeamUsecase) inspectTeamPresence(ctx context.Context, team *teamv1.Team
 		plog.With(ctx).Warnw("msg", "team_presence_observe_failed",
 			"team_id", team.GetTeamId(), "members", len(ids), "err", err)
 	}
+}
+
+// compensateIfCommittedDuringRemoval 收口「检查对局占用 → 改队伍」之间的 TOCTOU。
+//
+// 这个窗口跨服务(matchmaker 权威 + team 的 Redis 乐观锁),没法做成一个原子操作:
+// 闸门放行之后、`UpdateWithLock` 提交之前,队长完全可能刚好点了开始匹配,
+// matchmaker 把包含这名离线成员的 roster 冻进票据。那样就会出现
+// **人在票据里、却已经不在队伍里** —— 他被拉进一场自己不在场的对局(掉分),
+// 回来还发现没了队伍。
+//
+// 窗口消不掉,但后果能收敛:摘人成功后复核一次,发现票据确实在窗口内成立了,
+// 就走**与 LeaveTeam 完全相同的补偿** —— 撤销整张票据,全队退回队列重新匹配。
+// 理由也和 LeaveTeam 一样:队伍人数已经变了,票据里那份成员快照不再成立。
+// 结果从「带着一个离线的人开局」变成「重新匹配一次(且这次不含他)」。
+//
+// 为什么不在锁内复核:Redis 事务里发不了 gRPC。
+// 为什么不回滚摘人:那时票据已冻结,把人加回去反而制造第二种不一致,还可能撞上其它并发写。
+//
+// 复核 RPC 失败时不重试也不回滚(人已经摘了),只记 Error + 计数 —— 这是本路径唯一
+// 需要人工看一眼的残留,必须可观测,不能静默。
+func (u *TeamUsecase) compensateIfCommittedDuringRemoval(ctx context.Context, teamID, playerID uint64) {
+	if u.matchCommitment == nil {
+		return
+	}
+	committed, err := u.matchCommitment.IsPlayerCommittedToMatch(ctx, playerID)
+	if err != nil {
+		OfflineLeaveRace.WithLabelValues("recheck_failed").Inc()
+		plog.With(ctx).Errorw("msg", "team_offline_leave_race_recheck_failed",
+			"team_id", teamID, "player_id", playerID, "err", err,
+			"impact", "member already removed; cannot tell whether a ticket froze him in during the window")
+		return
+	}
+	if !committed {
+		return // 常态:窗口没被命中
+	}
+
+	// 窗口被命中了。撤票语义与 LeaveTeam 一致:排队中 → 全队退出队列;
+	// 确认期 → 等价该玩家拒绝确认(match 失败,其余票据退回队列)。
+	OfflineLeaveRace.WithLabelValues("compensated").Inc()
+	plog.With(ctx).Warnw("msg", "team_offline_leave_race_compensated",
+		"team_id", teamID, "player_id", playerID,
+		"detail", "match ticket froze this member between the gate check and the team write; cancelling it so the team rematches without him")
+	u.cancelMatchmaking(ctx, teamID, playerID)
 }

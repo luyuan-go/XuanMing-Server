@@ -106,10 +106,14 @@ message Location {
 //   - 全无：滚动升级中的旧 Hub DS，只允许 SetLocation 走安全降级，Disconnect 不缩 TTL；
 //   - 部分缺失：非法，拒绝，禁止把残缺身份冒充 legacy。
 //
-// admission_seq 只在同 assignment 内排序。跨 assignment 时 locator 必须实时查询唯一
-// owner authority，始终核对 ADMITTED、有效 lease、完整 target 及 pod+全局唯一 assignment；
-// Model B callback credential 可用时再额外精确核对实例 UID/epoch。locator 把查询返回的
-// owner_epoch+operation_id 仅作为内部投影 fence；客户端/Hub DS 不传也不能自铸 owner 代际。
+// admission_seq 只在**同 assignment 内**排序，admission_id 负责同序号 ABA 校验。
+// 这正好覆盖本 fence 要解决的那件事：同一个 Pod 上，哪条物理连接是当前这条。
+//
+// **跨 assignment 的归属顺序刻意不在 locator 判**：玩家该属于哪台 Hub 由 hub_allocator
+// 的 assignment / placement 权威决定，locator 只是 presence 投影，不得反向充当 owner
+// authority(CLAUDE.md §9.22)。若要在这里反向定序，locator 就必须实时查询 owner 服务，
+// 等于让「玩家进大厅写位置」强依赖它——owner 不可用时 fail-closed，玩家直接进不去大厅。
+// 那是拿一条关键路径的可用性，去换一个本就不归自己管的判定。
 message HubPresenceFence {
   string assignment_id = 1;
   string admission_id  = 2;

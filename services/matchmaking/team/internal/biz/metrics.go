@@ -36,3 +36,27 @@ var InvitePushFailed = prometheus.NewCounterVec(
 func init() {
 	metrics.Register(InvitePushFailed)
 }
+
+// OfflineLeaveRace 统计「闸门检查 → 改队伍」之间 TOCTOU 窗口的命中情况。
+//
+// label:
+//   - outcome:"compensated"(窗口确实被命中,已撤票让全队重新匹配)
+//     | "recheck_failed"(复核 RPC 失败,无法判断窗口是否被命中 —— 人已摘走,需人工看)。
+//     低基数(2 值)。
+//
+// 为什么要单独计数:这个窗口跨服务、消不掉,只能收敛后果。它到底多罕见,
+// 靠推理说不准,得让线上数据说话 —— 长期为 0 就证明窗口确实极窄;
+// 若持续有值,说明「先查闸门后改队伍」这个顺序需要重新设计(例如让 matchmaker
+// 组票时写一下 team key,借 team 自己的乐观锁天然互斥)。
+// recheck_failed 恒为 0 是预期;> 0 即需要人工核对那名玩家的对局与队伍状态。
+var OfflineLeaveRace = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "pandora_team_offline_leave_race_total",
+		Help: "离线自动退队在「闸门检查→改队伍」窗口内与匹配组票撞车的次数(compensated=已撤票补偿;recheck_failed=无法判定,需人工核对)",
+	},
+	[]string{"outcome"},
+)
+
+func init() {
+	metrics.Register(OfflineLeaveRace)
+}

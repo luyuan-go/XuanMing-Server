@@ -100,8 +100,8 @@ func TestPresence_CoalesceMultiple(t *testing.T) {
 	h, clk := newTestHub(pusher, nil)
 	h.Subscribe(100, []uint64{200, 300})
 
-	h.Notify(200, LocationStateHub)     // 在线
-	h.Notify(300, LocationStateBattle)  // 游戏中
+	h.Notify(200, LocationStateHub)    // 在线
+	h.Notify(300, LocationStateBattle) // 游戏中
 	*clk = clk.Add(9 * time.Second)
 	h.step(context.Background(), *clk)
 

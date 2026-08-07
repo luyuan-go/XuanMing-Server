@@ -197,12 +197,6 @@ type sideEffectRepo struct {
 	shrunkFence   data.HubPresenceFence
 }
 
-type serviceStubHubOwner struct{ rec data.HubOwnerSnapshot }
-
-func (s *serviceStubHubOwner) QueryOwner(context.Context, uint64) (data.HubOwnerSnapshot, error) {
-	return s.rec, nil
-}
-
 func (s *sideEffectRepo) SetGuarded(_ context.Context, _ uint64, _ data.LocationRecord, _ time.Duration, _ int, _ func(data.LocationRecord, bool) error) error {
 	s.setCalls++
 	return nil
@@ -291,12 +285,6 @@ func modelBService(t *testing.T, reader data.HubAuthReader) (*LocatorService, *s
 	}
 	repo := &sideEffectRepo{}
 	uc := biz.NewLocatorUsecase(repo, 30*time.Second)
-	uc.SetHubOwnerAuthority(&serviceStubHubOwner{rec: data.HubOwnerSnapshot{
-		OwnerEpoch: 7, OperationID: "owner-operation", OwnerType: 1, Phase: 2,
-		PodName: "hub-1", InstanceUID: "uid-1", InstanceEpoch: 2,
-		AssignmentID: "assignment-42", ReleaseTrack: "stable",
-		LeaseDeadlineMs: time.Now().Add(time.Minute).UnixMilli(),
-	}})
 	svc := NewLocatorService(uc)
 	svc.SetDSCallbackGuard(guard)
 	checker := NewHubCredentialStateChecker(reader).(*redisHubCredentialStateChecker)
@@ -356,15 +344,9 @@ func requestContext(token string) context.Context {
 	return transport.NewServerContext(context.Background(), &testTransport{req: h})
 }
 
-func TestLocatorService_Off模式无Credential仍由Owner约束FencedSet(t *testing.T) {
+func TestLocatorService_Off模式无Credential仍下传连接Fence(t *testing.T) {
 	repo := &sideEffectRepo{}
 	uc := biz.NewLocatorUsecase(repo, 30*time.Second)
-	uc.SetHubOwnerAuthority(&serviceStubHubOwner{rec: data.HubOwnerSnapshot{
-		OwnerEpoch: 7, OperationID: "owner-operation", OwnerType: 1, Phase: 2,
-		PodName: "hub-1", InstanceUID: "uid-1", InstanceEpoch: 2,
-		AssignmentID: "assignment-42", ReleaseTrack: "stable",
-		LeaseDeadlineMs: time.Now().Add(time.Minute).UnixMilli(),
-	}})
 	svc := NewLocatorService(uc) // dsGuard=nil 即 off；CheckHubCredential 返回 nil cred。
 	resp, err := svc.SetLocation(context.Background(), &locatorv1.SetLocationRequest{
 		PlayerId: 42,
@@ -374,8 +356,8 @@ func TestLocatorService_Off模式无Credential仍由Owner约束FencedSet(t *test
 		},
 	})
 	if err != nil || resp.GetCode() != commonv1.ErrCode_OK || repo.setCalls != 1 ||
-		!repo.activated.IsFullyFenced() {
-		t.Fatalf("off 模式应由 owner pod+assignment 安全放行: resp=%v err=%v effects=%+v", resp, err, repo)
+		!repo.activated.IsComplete() {
+		t.Fatalf("off 模式应连接 fence 应完整下传: resp=%v err=%v effects=%+v", resp, err, repo)
 	}
 }
 
@@ -534,7 +516,7 @@ func TestLocatorService_ActiveCredentialBeforeAnySideEffect(t *testing.T) {
 			t.Fatalf("resp=%v err=%v setCalls=%d", resp, err, effects.setCalls)
 		}
 		want := data.HubPresenceFence{AssignmentID: "assignment-42", AdmissionID: "admission-b", AdmissionSeq: 2}
-		if !effects.activated.SameConnection(want) || !effects.activated.IsAuthoritative() {
+		if !effects.activated.Equal(want) {
 			t.Fatalf("service 未完整下传 SetLocation fence: got=%+v want=%+v", effects.activated, want)
 		}
 	})

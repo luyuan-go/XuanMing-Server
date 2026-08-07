@@ -29,33 +29,6 @@ type stubRepo struct {
 	refreshMetaTTL time.Duration
 }
 
-type stubHubOwner struct {
-	rec   data.HubOwnerSnapshot
-	err   error
-	calls int
-}
-
-func (s *stubHubOwner) QueryOwner(context.Context, uint64) (data.HubOwnerSnapshot, error) {
-	s.calls++
-	return s.rec, s.err
-}
-
-func testOwner(assignmentID string, ownerEpoch uint64) *stubHubOwner {
-	return &stubHubOwner{rec: data.HubOwnerSnapshot{
-		OwnerEpoch: ownerEpoch, OperationID: "owner-operation",
-		OwnerType: ownerTypeHub, Phase: ownerPhaseAdmitted,
-		PodName: "hub-1", InstanceUID: "uid-1", InstanceEpoch: 2,
-		AssignmentID: assignmentID, ReleaseTrack: "stable",
-		LeaseDeadlineMs: time.Now().Add(time.Minute).UnixMilli(),
-	}}
-}
-
-func setTestOwner(uc *LocatorUsecase, assignmentID string, ownerEpoch uint64) *stubHubOwner {
-	authority := testOwner(assignmentID, ownerEpoch)
-	uc.SetHubOwnerAuthority(authority)
-	return authority
-}
-
 func newStubRepo() *stubRepo {
 	return &stubRepo{
 		store:      map[uint64]data.LocationRecord{},
@@ -103,17 +76,13 @@ func (s *stubRepo) Delete(_ context.Context, playerID uint64) error {
 }
 
 func (s *stubRepo) ValidateHubPresence(_ context.Context, playerID uint64, fence data.HubPresenceFence) (bool, error) {
+	// 与 data 层 Lua 同一套判定:只在**同 assignment 内**定序;跨 assignment 一律接受
+	// (归属由 hub_allocator 权威决定,本投影不反向定序)。
 	if current, ok := s.meta[playerID]; ok && current.IsComplete() {
 		if fence.IsZero() {
 			return false, nil
 		}
-		if current.IsFullyFenced() && (!fence.IsFullyFenced() ||
-			fence.OwnerEpoch < current.OwnerEpoch ||
-			(fence.OwnerEpoch == current.OwnerEpoch &&
-				(fence.OwnerOperationID != current.OwnerOperationID || fence.AssignmentID != current.AssignmentID))) {
-			return false, nil
-		}
-		if current.AssignmentID == fence.AssignmentID && current.OwnerEpoch == fence.OwnerEpoch &&
+		if current.AssignmentID == fence.AssignmentID &&
 			(fence.AdmissionSeq < current.AdmissionSeq ||
 				(fence.AdmissionSeq == current.AdmissionSeq && fence.AdmissionID != current.AdmissionID)) {
 			return false, nil
@@ -153,7 +122,7 @@ func (s *stubRepo) BatchGetLastSeen(_ context.Context, playerIDs []uint64) (map[
 
 func (s *stubRepo) ShrinkHubTTL(_ context.Context, hubPod string, playerID uint64, fence data.HubPresenceFence, _ time.Duration) (bool, bool, error) {
 	rec, ok := s.store[playerID]
-	if !ok || rec.State != LocationStateHub || rec.HubPod != hubPod || !rec.HubPresenceFence.SameConnection(fence) {
+	if !ok || rec.State != LocationStateHub || rec.HubPod != hubPod || !rec.HubPresenceFence.Equal(fence) {
 		return false, false, nil
 	}
 	return true, true, nil
@@ -161,7 +130,7 @@ func (s *stubRepo) ShrinkHubTTL(_ context.Context, hubPod string, playerID uint6
 
 func (s *stubRepo) RecordLastSeen(_ context.Context, playerID uint64, fence data.HubPresenceFence, atMs int64, _ time.Duration) (bool, int64, error) {
 	current, ok := s.meta[playerID]
-	if ok && !current.SameConnection(fence) {
+	if ok && !current.Equal(fence) {
 		return false, 0, nil
 	}
 	if !ok {

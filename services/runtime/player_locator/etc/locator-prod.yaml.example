@@ -27,7 +27,6 @@ snowflake:
 
 locator:
   # owner authority 是带 HubPresenceFence 的 SetLocation 强依赖；填集群内 owner Service FQDN。
-  owner_addr: "owner.pandora.svc.cluster.local:20017"
   location_ttl: "30s"             # 不变量 §1:玩家位置 30s heartbeat,SetLocation 刷 TTL
   # 「最后一次被观测到离开 Hub 的时刻」保留时长。必须远大于所有消费方的离线阈值
   # (当前最长 team.offline_leave.threshold=180s),否则消费方查到 UNKNOWN 会永不动作。

@@ -54,8 +54,6 @@ type LocationInput struct {
 	PlayerID         uint64
 	State            int32
 	HubPod           string
-	HubInstanceUID   string
-	HubInstanceEpoch uint32
 	ShardID          uint32
 	MatchID          uint64
 	BattlePod        string
@@ -68,17 +66,6 @@ type HubPresenceFence struct {
 	AdmissionID  string
 	AdmissionSeq uint64
 }
-
-// HubOwnerAuthority 只读查询唯一 owner authority。查询失败必须 fail-closed，不能把
-// UNKNOWN 当成“仍属于这个 Hub”。
-type HubOwnerAuthority interface {
-	QueryOwner(ctx context.Context, playerID uint64) (data.HubOwnerSnapshot, error)
-}
-
-const (
-	ownerTypeHub       int32 = 1
-	ownerPhaseAdmitted int32 = 2
-)
 
 func (f HubPresenceFence) isZero() bool {
 	return f.AssignmentID == "" && f.AdmissionID == "" && f.AdmissionSeq == 0
@@ -133,10 +120,6 @@ type LocatorUsecase struct {
 	// departure 是离场事件出口,可为 nil(见 DepartureNotifier 注释)。nil-safe。
 	departure DepartureNotifier
 
-	// hubOwner 仅供带完整 connection fence 的 HUB Set 使用。nil 表示部署尚未接 owner：
-	// legacy Set 继续兼容；fenced Set fail-closed，禁止退化为 assignment 猜顺序。
-	hubOwner HubOwnerAuthority
-
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
 	// 可为 nil:单 Cell / dev / 阶段 1~2 不分片,位置 owner 落点观测退化为不打日志(行为不变)。
 	// 分片部署时由 main 经 SetCellRouter 注入,SetLocation 写成功后额外打一条位置 owner 落点
@@ -187,11 +170,6 @@ func (u *LocatorUsecase) SetDepartureNotifier(n DepartureNotifier) {
 	u.departure = n
 }
 
-// SetHubOwnerAuthority 注入唯一 owner authority 只读客户端。
-func (u *LocatorUsecase) SetHubOwnerAuthority(authority HubOwnerAuthority) {
-	u.hubOwner = authority
-}
-
 // SetCellRouter 注入确定性 region/cell 路由器(scale-cellular-20m.md §4.2 两级架构)。
 //
 // nil-safe:不调用 / 传 nil 时(单 Cell / dev / 阶段 1~2),SetLocation 不做位置 owner 落点观测,
@@ -238,13 +216,7 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 	}
 
 	resolvedHubFence := in.HubPresenceFence.toData()
-	if in.State == LocationStateHub && !in.HubPresenceFence.isZero() {
-		var err error
-		resolvedHubFence, err = u.resolveAuthoritativeHubFence(ctx, in)
-		if err != nil {
-			return err
-		}
-	} else if in.State == LocationStateHub {
+	if in.State == LocationStateHub && in.HubPresenceFence.isZero() {
 		// 旧 Hub DS 没带连接级 fence:HUB 写仍然放行(滚动升级必须能跑),但要留计数。
 		// 这里只计数不打 Error —— 与 ReportDisconnect 的降级不同,写 HUB 走 legacy
 		// 不会让任何功能失效,只是失去「同 pod 旧连接迟到写」的防护。真正会静默吃掉
@@ -254,7 +226,7 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 	}
 
 	// 先只读校验长 TTL meta，再 CAS 写 location，最后 commit meta。这样 location 已过期时
-	// 仍可用 owner_epoch 挡住旧 assignment；而 MATCHING/BATTLE guard 拒绝时 meta 零副作用。
+	// 仍可用长 TTL meta 挡住同 assignment 的旧 admission；而 MATCHING/BATTLE guard 拒绝时 meta 零副作用。
 	if in.State == LocationStateHub {
 		accepted, err := u.repo.ValidateHubPresence(ctx, in.PlayerID, resolvedHubFence)
 		if err != nil {
@@ -319,55 +291,6 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 	return nil
 }
 
-// resolveAuthoritativeHubFence 把调用方提供的 connection identity 绑定到 owner authority
-// 的全局代际。始终要求权威 target 自身完整并核对 pod+全局唯一 assignment；这里不猜
-// 请求侧没有的 release_track。Model B callback credential 可用时再额外核对 UID/epoch。
-func (u *LocatorUsecase) resolveAuthoritativeHubFence(ctx context.Context, in LocationInput) (data.HubPresenceFence, error) {
-	if u.hubOwner == nil {
-		return data.HubPresenceFence{}, errcode.New(errcode.ErrUnavailable,
-			"owner authority is required for fenced HUB presence")
-	}
-	if (in.HubInstanceUID == "") != (in.HubInstanceEpoch == 0) {
-		return data.HubPresenceFence{}, errcode.New(errcode.ErrOwnerIdentityMismatch,
-			"Hub instance identity must be complete or absent")
-	}
-	rec, err := u.hubOwner.QueryOwner(ctx, in.PlayerID)
-	if err != nil {
-		return data.HubPresenceFence{}, errcode.NewCause(errcode.ErrUnavailable, err,
-			"owner authority unavailable for player=%d", in.PlayerID)
-	}
-	nowMs := time.Now().UnixMilli()
-	if rec.OwnerEpoch == 0 || rec.OperationID == "" || rec.OwnerType != ownerTypeHub ||
-		rec.Phase != ownerPhaseAdmitted || rec.PodName != in.HubPod ||
-		rec.InstanceUID == "" || rec.InstanceEpoch == 0 ||
-		rec.AssignmentID != in.HubPresenceFence.AssignmentID || rec.ReleaseTrack == "" ||
-		rec.LeaseDeadlineMs <= nowMs {
-		plog.With(ctx).Warnw("msg", "locator_hub_owner_rejected",
-			"player_id", in.PlayerID, "hub_pod", in.HubPod,
-			"assignment_id", in.HubPresenceFence.AssignmentID,
-			"owner_epoch", rec.OwnerEpoch, "owner_type", rec.OwnerType, "owner_phase", rec.Phase,
-			"owner_pod", rec.PodName, "owner_uid", rec.InstanceUID,
-			"owner_assignment", rec.AssignmentID, "owner_lease_deadline_ms", rec.LeaseDeadlineMs)
-		return data.HubPresenceFence{}, errcode.New(errcode.ErrOwnerIdentityMismatch,
-			"current admitted Hub owner does not match fenced presence player=%d", in.PlayerID)
-	}
-	// off/dev/legacy DSAuth 没有 VerifiedCredential：依赖 owner 的 pod+全局唯一 assignment
-	// 仍可安全排序，避免升级后本地服无法进 Hub。生产 Model B cred 非空时再把 UID/epoch
-	// 精确核对到同一 owner target，任何不一致 fail-closed。
-	if in.HubInstanceUID != "" &&
-		(rec.InstanceUID != in.HubInstanceUID || rec.InstanceEpoch != in.HubInstanceEpoch) {
-		return data.HubPresenceFence{}, errcode.New(errcode.ErrOwnerIdentityMismatch,
-			"verified Hub instance does not match owner target player=%d", in.PlayerID)
-	}
-	return data.HubPresenceFence{
-		AssignmentID:     in.HubPresenceFence.AssignmentID,
-		AdmissionID:      in.HubPresenceFence.AdmissionID,
-		AdmissionSeq:     in.HubPresenceFence.AdmissionSeq,
-		OwnerEpoch:       rec.OwnerEpoch,
-		OwnerOperationID: rec.OperationID,
-	}, nil
-}
-
 // guardTransition 返回 SetGuarded 的状态机守卫闭包,实现不变量 §1。
 //
 // 守卫只在当前状态是 MATCHING / BATTLE(对局相关、需保护的状态)时介入:
@@ -423,25 +346,32 @@ func guardTransition(ctx context.Context, in LocationInput, incomingHubFence dat
 		if cur.State == LocationStateHub && in.State == LocationStateHub {
 			currentFence := cur.HubPresenceFence
 			incomingFence := incomingHubFence
-			if currentFence.IsFullyFenced() {
+			if currentFence.IsComplete() {
+				// 已经有带 fence 的当前连接,就不再接受不带 fence 的写覆盖它 ——
+				// 否则一台还没升级的旧 DS 能把新连接的投影降级回「谁也说不清是哪条连接」。
 				if incomingFence.IsZero() {
 					reject("legacy_hub_write_downgrades_fenced_presence", cur)
 					return errcode.New(errcode.ErrLocatorConflict,
 						"player %d reject legacy HUB write over fenced current presence", in.PlayerID)
 				}
-				if !incomingFence.IsFullyFenced() || incomingFence.OwnerEpoch < currentFence.OwnerEpoch ||
-					(incomingFence.OwnerEpoch == currentFence.OwnerEpoch &&
-						(incomingFence.OwnerOperationID != currentFence.OwnerOperationID ||
-							incomingFence.AssignmentID != currentFence.AssignmentID)) ||
-					(incomingFence.OwnerEpoch == currentFence.OwnerEpoch &&
-						incomingFence.AssignmentID == currentFence.AssignmentID &&
-						(incomingFence.AdmissionSeq < currentFence.AdmissionSeq ||
-							(incomingFence.AdmissionSeq == currentFence.AdmissionSeq &&
-								incomingFence.AdmissionID != currentFence.AdmissionID))) {
+				// **只在同 assignment 内定序**:秒重连落回同一 assignment 时,靠 seq 单调
+				// + 同序 admission_id 防 ABA,挡住旧连接迟到的 SetLocation 反向夺回投影。
+				// 跨 assignment 不在这里判 —— 那是 hub_allocator 的归属权威说了算,
+				// locator 是投影不是 owner authority(§9.22)。
+				if !incomingFence.IsComplete() {
+					reject("incomplete_hub_presence_fence", cur)
+					return errcode.New(errcode.ErrLocatorConflict,
+						"player %d reject incomplete HUB presence fence", in.PlayerID)
+				}
+				if incomingFence.AssignmentID == currentFence.AssignmentID &&
+					(incomingFence.AdmissionSeq < currentFence.AdmissionSeq ||
+						(incomingFence.AdmissionSeq == currentFence.AdmissionSeq &&
+							incomingFence.AdmissionID != currentFence.AdmissionID)) {
 					reject("stale_hub_presence_generation", cur)
 					return errcode.New(errcode.ErrLocatorConflict,
-						"player %d reject stale HUB owner/admission current_epoch=%d incoming_epoch=%d",
-						in.PlayerID, currentFence.OwnerEpoch, incomingFence.OwnerEpoch)
+						"player %d reject stale HUB admission assignment=%s current_seq=%d incoming_seq=%d",
+						in.PlayerID, currentFence.AssignmentID,
+						currentFence.AdmissionSeq, incomingFence.AdmissionSeq)
 				}
 			}
 		}

@@ -25,10 +25,6 @@ node:
     dial_timeout: "2s"          # W3 ⑥ 示范
 
 locator:
-  # 新协议 HUB Set 的跨 assignment fence 唯一来源。查询失败/身份不符一律 fail-closed；
-  # 集群生成器将本机地址改写为 owner:20017。
-  owner_addr: "127.0.0.1:20017"
-
   # infra.md §3.2 表中 30s heartbeat。SetLocation 每次刷 TTL,30s 不刷 → 视为离线。
   # W3 ⑥ 起可直接 yaml 写字符串:
   location_ttl: "30s"

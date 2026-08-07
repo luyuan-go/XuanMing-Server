@@ -47,12 +47,11 @@ func newHubUsecase(t *testing.T) (*LocatorUsecase, *stubRepo, *recordingNotifier
 	t.Helper()
 	repo := newStubRepo()
 	uc := NewLocatorUsecase(repo, 30*time.Second)
-	setTestOwner(uc, "assignment-42", 7)
 	notifier := &recordingNotifier{}
 	uc.SetDepartureNotifier(notifier)
 	if err := uc.SetLocation(context.Background(), LocationInput{
 		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1",
-		HubInstanceUID: "uid-1", HubInstanceEpoch: 2,
+
 		HubPresenceFence: testHubFence(1),
 	}); err != nil {
 		t.Fatalf("准备 HUB 记录失败: %v", err)
@@ -160,7 +159,7 @@ func TestReportDisconnect_同Pod秒重连后旧连接迟到不得污染新位置
 	// 新连接 B 在同一 Pod 完成重连并重写位置。
 	if err := uc.SetLocation(ctx, LocationInput{
 		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1",
-		HubInstanceUID: "uid-1", HubInstanceEpoch: 2,
+
 		HubPresenceFence: newFence,
 	}); err != nil {
 		t.Fatalf("同 Pod 重连写 HUB 失败: %v", err)
@@ -187,20 +186,20 @@ func TestSetLocation_同Pod旧连接迟到不得反向夺回新位置(t *testing
 	ctx := context.Background()
 	newFence := testHubFence(2)
 	if err := uc.SetLocation(ctx, LocationInput{
-		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: newFence,
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubPresenceFence: newFence,
 	}); err != nil {
 		t.Fatalf("新连接写入失败: %v", err)
 	}
 
 	if err := uc.SetLocation(ctx, LocationInput{
-		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: testHubFence(1),
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubPresenceFence: testHubFence(1),
 	}); err == nil {
 		t.Fatal("旧连接迟到 SetLocation 必须被 admission_seq fence 拒绝")
 	}
-	if got := repo.store[42].HubPresenceFence; !got.SameConnection(newFence.toData()) || !got.IsAuthoritative() {
+	if got := repo.store[42].HubPresenceFence; !got.Equal(newFence.toData()) {
 		t.Fatalf("旧连接反向覆盖了新位置 fence: got=%+v want=%+v", got, newFence)
 	}
-	if got := repo.meta[42]; !got.SameConnection(newFence.toData()) || !got.IsAuthoritative() {
+	if got := repo.meta[42]; !got.Equal(newFence.toData()) {
 		t.Fatalf("旧连接反向覆盖了 meta fence: got=%+v want=%+v", got, newFence)
 	}
 }
@@ -218,7 +217,7 @@ func TestSetLocation_同Admission已离开后迟到重放不得复活(t *testing
 	}
 
 	if err := uc.SetLocation(ctx, LocationInput{
-		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: fence,
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubPresenceFence: fence,
 	}); err == nil {
 		t.Fatal("同 admission 已离开后，迟到 SetLocation 不得清掉 left_at 复活")
 	}
@@ -230,7 +229,6 @@ func TestSetLocation_同Admission已离开后迟到重放不得复活(t *testing
 func TestSetLocation_AdmissionSeq超过2的53次方仍按相邻整数排序(t *testing.T) {
 	repo := newStubRepo()
 	uc := NewLocatorUsecase(repo, 30*time.Second)
-	setTestOwner(uc, "assignment-large-seq", 7)
 	ctx := context.Background()
 	oldFence := HubPresenceFence{
 		AssignmentID: "assignment-large-seq", AdmissionID: "admission-old",
@@ -241,21 +239,21 @@ func TestSetLocation_AdmissionSeq超过2的53次方仍按相邻整数排序(t *t
 		AdmissionSeq: 9_007_199_254_740_993,
 	}
 	if err := uc.SetLocation(ctx, LocationInput{
-		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: oldFence,
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubPresenceFence: oldFence,
 	}); err != nil {
 		t.Fatalf("写旧代失败: %v", err)
 	}
 	if err := uc.SetLocation(ctx, LocationInput{
-		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: newFence,
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubPresenceFence: newFence,
 	}); err != nil {
 		t.Fatalf("2^53 以上相邻新序号必须能接管: %v", err)
 	}
 	if err := uc.SetLocation(ctx, LocationInput{
-		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: oldFence,
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubPresenceFence: oldFence,
 	}); err == nil {
 		t.Fatal("2^53 以上相邻旧序号不得因浮点精度折叠而被接受")
 	}
-	if got := repo.store[42].HubPresenceFence; !got.SameConnection(newFence.toData()) || !got.IsAuthoritative() {
+	if got := repo.store[42].HubPresenceFence; !got.Equal(newFence.toData()) {
 		t.Fatalf("大序号排序后当前 fence 错误: got=%+v want=%+v", got, newFence)
 	}
 }
@@ -271,7 +269,7 @@ func TestReportDisconnect_重连夹在两步之间旧Meta写仍被拒(t *testing
 		t.Fatalf("前置 location exact 守卫应通过: accepted=%v err=%v", accepted, err)
 	}
 	if err := uc.SetLocation(ctx, LocationInput{
-		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: newFence,
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubPresenceFence: newFence,
 	}); err != nil {
 		t.Fatalf("两步之间的新连接 SetLocation 失败: %v", err)
 	}
@@ -304,9 +302,8 @@ func TestHubPresenceFence_Legacy安全降级且不能覆盖Fenced当前代(t *te
 	}
 
 	currentFence := testHubFence(2)
-	setTestOwner(uc, "assignment-42", 7)
 	if err := uc.SetLocation(ctx, LocationInput{
-		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubInstanceUID: "uid-1", HubInstanceEpoch: 2, HubPresenceFence: currentFence,
+		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", HubPresenceFence: currentFence,
 	}); err != nil {
 		t.Fatalf("fenced 新连接接管 legacy 失败: %v", err)
 	}
@@ -315,7 +312,7 @@ func TestHubPresenceFence_Legacy安全降级且不能覆盖Fenced当前代(t *te
 	}); err == nil {
 		t.Fatal("legacy SetLocation 不得降级覆盖 fenced 当前代")
 	}
-	if got := repo.store[42].HubPresenceFence; !got.SameConnection(currentFence.toData()) || !got.IsAuthoritative() {
+	if got := repo.store[42].HubPresenceFence; !got.Equal(currentFence.toData()) {
 		t.Fatalf("legacy 写污染 fenced 位置: got=%+v want=%+v", got, currentFence)
 	}
 }
@@ -366,7 +363,7 @@ func TestSetLocation_回到Hub必须清掉上一次的离开时刻(t *testing.T)
 	// 秒重连:PostLogin 重新写 HUB 位置。
 	if err := uc.SetLocation(ctx, LocationInput{
 		PlayerID: 42, State: LocationStateHub, HubPod: "hub-1",
-		HubInstanceUID: "uid-1", HubInstanceEpoch: 2,
+
 		HubPresenceFence: testHubFence(2),
 	}); err != nil {
 		t.Fatalf("重连写 HUB 失败: %v", err)

@@ -2485,3 +2485,20 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   不可逆重构、需要先拍板要不要在这条线上开那个工作;连接三元组比较那一层是必要的,保留。
 - **仍未验证**:全部为 build + 单测层面。未连真 Redis Cluster / 真 kafka,未端到端跑过
   「真掉线 → 真被移出队伍」。UE 侧改动待用户编译。
+- **同日五修:H2(Hub DS 整台崩溃 → 离线成员永远清不掉)闭环**。
+  症状:Hub 崩溃 / OOM kill / 网络分区时 locator 收不到任何 `ReportDisconnect`,写不出
+  `left_at_ms` → `BatchGetLastSeen` 返回缺席(UNKNOWN)→ 消费方按 §9.22 一律不动作 →
+  那一批玩家永远挂在队伍里(只能等 team `active_ttl` 60 分钟回收整支队伍)。
+  **刻意没走「hub_allocator 判死时按名册补发离场事件」**:①判死点 `sweepOnce` 只拿得到 pod 名,
+  名册要另存一份「pod → player_ids」,那是 §9.22 的重复影子状态(名册权威在 Hub DS 自己),
+  且每 5s 每 pod 写 500 个 id;②hub_allocator 有多次 P0 事故史,为这个需求动它性价比不对。
+  **实际改法(不碰 hub_allocator 一行)**:心跳续期 meta 时顺手把 `last_alive_ms` 推到当前时刻
+  ——「最后一次被观测在线」就是崩溃场景下唯一能留下的时间线索,精度 ±一个心跳周期(5s),
+  对 180s 级阈值绰绰有余。`BatchGetLastSeen` 改成两级来源:`left_at_ms`(显式离开,更精确)
+  优先,缺失才回退 `last_alive_ms`。在线玩家的 `last_alive_ms` 一直在刷新、看起来像「刚离开 5 秒」,
+  但不会误伤:`offlinewatch.classify` 永远先判「此刻是否在线」,只有确认查不到位置才用到时刻。
+  **两个坑**:①心跳写 meta 必须 `EXISTS` 守卫 —— HSET 会凭空建 key,而「有内容但没有 mode 字段」
+  的 meta 会被 `hubPresenceScript` 判为损坏并 fail-closed,等于给 legacy 玩家造出永远无法接受
+  HUB 写的毒 key(已补回归测试);②pipeline 里必须用 `Script.Eval`(全文)而非 `Run` ——
+  `Run` 只发 EVALSHA,脚本未被本连接加载过就整批 `NOSCRIPT` 失败,而 pipeline 内拿不到
+  单命令的自动 fallback(实测踩到,测试先红后绿)。
