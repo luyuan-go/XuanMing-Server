@@ -14,9 +14,9 @@
 //
 // 三个信号按灵敏度排序(排查时从上往下走,这就是标准 runbook):
 //
-//	1. AVG_ROW_LENGTH 突增   → 单行普遍变胖 = 设计性问题(某个 repeated 字段在全体玩家身上涨)
-//	2. MAX(LENGTH(col)) 超标 → 个别行畸形 = 个体问题(某个玩家的数据被刷/被 bug 撑爆)
-//	3. Top-N 大行的主键      → 定位到"是谁",再 dump 反序列化定位到"哪个字段"
+//  1. AVG_ROW_LENGTH 突增   → 单行普遍变胖 = 设计性问题(某个 repeated 字段在全体玩家身上涨)
+//  2. MAX(LENGTH(col)) 超标 → 个别行畸形 = 个体问题(某个玩家的数据被刷/被 bug 撑爆)
+//  3. Top-N 大行的主键      → 定位到"是谁",再 dump 反序列化定位到"哪个字段"
 //
 // 只看 MAX 会把"全体普遍变胖"误判成"个别异常";只看 AVG 会漏掉"单个玩家被刷爆"。
 // 因此本工具同时输出 AVG / MAX / 超阈值行数三个维度。
@@ -82,13 +82,19 @@ var bigFields = []fieldBudget{
 	},
 	{
 		DB: "pandora_trade", Table: "player_item_instance", Column: "attributes", PK: "instance_id",
-		MaxBytes: 4 * 1024,
-		Why:      "JSON 词条数组,由鉴定 roll 写入,条数受 identify_rules.attr_count 约束(通常个位数)。超 4KB 说明鉴定规则配置失控或有人直写",
+		MaxBytes: 768,
+		Why: "列是 VARBINARY(1024),装 pb ItemInstanceAttributesStorageRecord。词条由鉴定 roll 写入," +
+			"条数受 identify_rules.attr_count 约束(通常个位数 ≈ 几十字节)。超 768(75%)即逼近列上限——查鉴定规则配置是否失控或有人直写",
 	},
 	{
-		DB: "pandora_leaderboard", Table: "leaderboard_reward_log", Column: "reward_json", PK: "id",
+		DB: "pandora_trade", Table: "mail_transfer_escrow", Column: "attributes", PK: "instance_id",
+		MaxBytes: 768,
+		Why:      "托管行原样搬运 player_item_instance.attributes(同为 VARBINARY(1024) 存 pb),阀值与源表一致;超限先查源表",
+	},
+	{
+		DB: "pandora_leaderboard", Table: "leaderboard_reward_log", Column: "reward_pb", PK: "id",
 		MaxBytes: 1536,
-		Why:      "列是 VARCHAR(2048),装单档奖励明细。超 1536(75%)即逼近列上限,再涨会被 MySQL 拒写整条发奖记录——查 RewardTier.items 条数是否有上限",
+		Why:      "列是 VARBINARY(2048),装 pb RewardGrantStorageRecord(单档奖励明细 + 补发重放入参)。超 1536(75%)即逼近列上限,再涨会拒写整条发奖记录——查 RewardTier.items 条数是否有上限",
 	},
 	{
 		DB: "pandora_battle", Table: "match_release_outbox", Column: "payload", PK: "id",

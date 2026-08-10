@@ -95,6 +95,16 @@ message RewardTable {
   repeated RewardTier tiers = 1;
 }
 
+// RewardGrantStorageRecord 是逐名次发奖明细的服务端存储快照
+// (§5.8 四类中的“服务端存储快照”)。
+//
+// 落地:MySQL `leaderboard_reward_log.reward_pb`(VARBINARY 列,存 proto 二进制)。
+// 它既是审计明细,也是 RetryUngrantedRewards 补发时重放的权威入参——重放路径不得
+// 因编码格式漂移而解不出奖励,故用 proto 二进制而非 JSON。
+message RewardGrantStorageRecord {
+  repeated RewardItem items = 1;
+}
+
 // LeaderboardSettleEvent 是结算事件(kafka pandora.leaderboard.settle,key=settlement_id;
 // 供工会 / 活动服务消费分发(尤其 GUILD 榜)+ 风控对账;服务内部消息,非客户端推送)。
 message LeaderboardSettleEvent {

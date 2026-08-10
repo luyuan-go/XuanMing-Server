@@ -49,15 +49,19 @@ type SnapshotRow struct {
 }
 
 // RewardLogRecord 是 leaderboard_reward_log 一行的存储视图。
+//
+// RewardPayload 是 pb `RewardGrantStorageRecord` 二进制(列 reward_pb VARBINARY)。
+// 它既是审计明细,也是 RetryUngrantedRewards 补发时重放的权威入参——重放路径不得
+// 因编码漂移解不出奖励,故用 proto 二进制而非 JSON(§5.8/§9.17)。
 type RewardLogRecord struct {
-	SettlementID uint64
-	EntityID     uint64
-	Rank         int64
-	GrantIdemKey string
-	Status       int8
-	RewardJSON   string
-	CreatedAtMs  int64
-	UpdatedAtMs  int64
+	SettlementID  uint64
+	EntityID      uint64
+	Rank          int64
+	GrantIdemKey  string
+	Status        int8
+	RewardPayload []byte
+	CreatedAtMs   int64
+	UpdatedAtMs   int64
 }
 
 // LeaderboardRepo 是结算归档库抽象。biz 只依赖此接口,不依赖 *sql.DB。
@@ -172,9 +176,9 @@ func (r *MySQLLeaderboardRepo) LoadSnapshot(ctx context.Context, settlementID ui
 }
 
 func (r *MySQLLeaderboardRepo) ClaimReward(ctx context.Context, rec *RewardLogRecord) (bool, error) {
-	const ins = "INSERT INTO leaderboard_reward_log (settlement_id, entity_id, `rank`, grant_idempotency_key, status, reward_json, created_at_ms, updated_at_ms) VALUES (?,?,?,?,?,?,?,?)"
+	const ins = "INSERT INTO leaderboard_reward_log (settlement_id, entity_id, `rank`, grant_idempotency_key, status, reward_pb, created_at_ms, updated_at_ms) VALUES (?,?,?,?,?,?,?,?)"
 	_, err := r.db.ExecContext(ctx, ins,
-		rec.SettlementID, rec.EntityID, rec.Rank, rec.GrantIdemKey, rec.Status, rec.RewardJSON, rec.CreatedAtMs, rec.UpdatedAtMs)
+		rec.SettlementID, rec.EntityID, rec.Rank, rec.GrantIdemKey, rec.Status, rec.RewardPayload, rec.CreatedAtMs, rec.UpdatedAtMs)
 	if err == nil {
 		return false, nil
 	}
@@ -196,7 +200,7 @@ func (r *MySQLLeaderboardRepo) ListUngrantedRewards(ctx context.Context, olderTh
 	if limit <= 0 {
 		limit = 100
 	}
-	const q = "SELECT settlement_id, entity_id, `rank`, grant_idempotency_key, status, reward_json, created_at_ms, updated_at_ms" +
+	const q = "SELECT settlement_id, entity_id, `rank`, grant_idempotency_key, status, reward_pb, created_at_ms, updated_at_ms" +
 		" FROM leaderboard_reward_log WHERE status <> ? AND updated_at_ms < ? ORDER BY updated_at_ms ASC LIMIT ?"
 	rows, err := r.db.QueryContext(ctx, q, RewardGranted, olderThanMs, limit)
 	if err != nil {
@@ -207,7 +211,7 @@ func (r *MySQLLeaderboardRepo) ListUngrantedRewards(ctx context.Context, olderTh
 	for rows.Next() {
 		var rec RewardLogRecord
 		if err := rows.Scan(&rec.SettlementID, &rec.EntityID, &rec.Rank, &rec.GrantIdemKey,
-			&rec.Status, &rec.RewardJSON, &rec.CreatedAtMs, &rec.UpdatedAtMs); err != nil {
+			&rec.Status, &rec.RewardPayload, &rec.CreatedAtMs, &rec.UpdatedAtMs); err != nil {
 			return nil, errcode.New(errcode.ErrInternal, "scan reward_log: %v", err)
 		}
 		out = append(out, rec)

@@ -12,10 +12,12 @@ package biz
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	leaderboardv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/leaderboard/v1"
@@ -361,16 +363,22 @@ func (u *LeaderboardUsecase) grantRewards(ctx context.Context, settlementID uint
 		}
 		grantKey := fmt.Sprintf("lb:%d:%d", settlementID, w.EntityID)
 		now := nowMs()
-		rewardJSON, _ := json.Marshal(items)
+		payload, eerr := encodeRewardGrants(ctx, items)
+		if eerr != nil {
+			// 编码不出来就不能 Claim:留下一条解不开的补发入参比不发更糟(补扫会永远标 FAILED)。
+			plog.With(ctx).Errorw("msg", "lb_reward_encode_failed",
+				"settlement_id", settlementID, "entity", w.EntityID, "items", len(items), "err", eerr)
+			continue
+		}
 		log := &data.RewardLogRecord{
-			SettlementID: settlementID,
-			EntityID:     w.EntityID,
-			Rank:         w.Rank,
-			GrantIdemKey: grantKey,
-			Status:       data.RewardPending,
-			RewardJSON:   string(rewardJSON),
-			CreatedAtMs:  now,
-			UpdatedAtMs:  now,
+			SettlementID:  settlementID,
+			EntityID:      w.EntityID,
+			Rank:          w.Rank,
+			GrantIdemKey:  grantKey,
+			Status:        data.RewardPending,
+			RewardPayload: payload,
+			CreatedAtMs:   now,
+			UpdatedAtMs:   now,
 		}
 		already, err := u.repo.ClaimReward(ctx, log)
 		if err != nil {
@@ -409,11 +417,11 @@ func (u *LeaderboardUsecase) RetryUngrantedRewards(ctx context.Context, olderTha
 		return 0, 0
 	}
 	for _, rec := range rows {
-		var items []data.RewardGrant
-		if uerr := json.Unmarshal([]byte(rec.RewardJSON), &items); uerr != nil || len(items) == 0 {
+		items, uerr := decodeRewardGrants(rec.RewardPayload)
+		if uerr != nil || len(items) == 0 {
 			// 脏数据:标 FAILED 不再重扫死循环,靠 Errorw 告警人工介入。
-			plog.With(ctx).Errorw("msg", "lb_reward_retry_bad_json",
-				"key", rec.GrantIdemKey, "json", rec.RewardJSON, "err", uerr)
+			plog.With(ctx).Errorw("msg", "lb_reward_retry_bad_payload",
+				"key", rec.GrantIdemKey, "payload_bytes", len(rec.RewardPayload), "err", uerr)
 			_ = u.repo.MarkReward(ctx, rec.GrantIdemKey, data.RewardFailed, nowMs())
 			failed++
 			continue
@@ -435,6 +443,46 @@ func (u *LeaderboardUsecase) RetryUngrantedRewards(ctx context.Context, olderTha
 		plog.With(ctx).Infow("msg", "lb_reward_retry_done", "granted", granted, "failed", failed)
 	}
 	return granted, failed
+}
+
+// rewardPayloadMaxBytes 是 reward_pb 写入侧字节上限。
+// 列是 VARBINARY(2048),这里取 75% 预警线:单条 RewardItem 编码 ≤ 16 字节,
+// 1536 字节已能装下上百件奖励——达到即 RewardTier.items 条数失控。
+const rewardPayloadMaxBytes = 1536
+
+// encodeRewardGrants 把发奖明细编成 pb 二进制(列 reward_pb),落库前过写入侧字节闸(§9.24)。
+func encodeRewardGrants(ctx context.Context, items []data.RewardGrant) ([]byte, error) {
+	rec := &leaderboardv1.RewardGrantStorageRecord{
+		Items: make([]*leaderboardv1.RewardItem, 0, len(items)),
+	}
+	for _, it := range items {
+		rec.Items = append(rec.Items, &leaderboardv1.RewardItem{ItemConfigId: it.ItemConfigID, Count: it.Count})
+	}
+	raw, err := proto.Marshal(rec)
+	if err != nil {
+		return nil, err
+	}
+	if cerr := dbguard.CheckPayload(ctx, dbguard.PayloadLimit{
+		DB: "pandora_leaderboard", Table: "leaderboard_reward_log", Column: "reward_pb",
+		Max:  rewardPayloadMaxBytes,
+		Hint: "发奖明细超设计上限:查 RewardTable 里该名次区间的 items 条数",
+	}, raw); cerr != nil {
+		return nil, cerr
+	}
+	return raw, nil
+}
+
+// decodeRewardGrants 从 pb 二进制解出发奖明细(补发重放入参)。
+func decodeRewardGrants(raw []byte) ([]data.RewardGrant, error) {
+	var rec leaderboardv1.RewardGrantStorageRecord
+	if err := proto.Unmarshal(raw, &rec); err != nil {
+		return nil, err
+	}
+	out := make([]data.RewardGrant, 0, len(rec.GetItems()))
+	for _, it := range rec.GetItems() {
+		out = append(out, data.RewardGrant{ItemConfigID: it.GetItemConfigId(), Count: it.GetCount()})
+	}
+	return out, nil
 }
 
 // rewardsForRank 返回某名次命中的奖励(取第一个匹配区间)。

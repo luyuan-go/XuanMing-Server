@@ -199,13 +199,21 @@ func TestRetryUngrantedRewards_RegrantsFailed(t *testing.T) {
 
 	old := nowMs() - 10*60_000 // 10 分钟前:超出 grace,应被补扫
 	fresh := nowMs()           // 刚失败:在 grace 内,本轮不碰
+	// 补发入参是 pb 二进制(reward_pb 列),用与生产同一条编码路径造种子。
+	pay := func(itemID uint32, count int64) []byte {
+		raw, err := encodeRewardGrants(context.Background(), []data.RewardGrant{{ItemConfigID: itemID, Count: count}})
+		if err != nil {
+			t.Fatalf("encode reward payload: %v", err)
+		}
+		return raw
+	}
 	seed := []*data.RewardLogRecord{
 		{SettlementID: 1, EntityID: 11, Rank: 1, GrantIdemKey: "lb:1:11",
-			Status: data.RewardFailed, RewardJSON: `[{"ItemConfigID":1001,"Count":100}]`, UpdatedAtMs: old},
+			Status: data.RewardFailed, RewardPayload: pay(1001, 100), UpdatedAtMs: old},
 		{SettlementID: 1, EntityID: 12, Rank: 2, GrantIdemKey: "lb:1:12",
-			Status: data.RewardPending, RewardJSON: `[{"ItemConfigID":1002,"Count":50}]`, UpdatedAtMs: old},
+			Status: data.RewardPending, RewardPayload: pay(1002, 50), UpdatedAtMs: old},
 		{SettlementID: 2, EntityID: 13, Rank: 1, GrantIdemKey: "lb:2:13",
-			Status: data.RewardFailed, RewardJSON: `[{"ItemConfigID":1001,"Count":100}]`, UpdatedAtMs: fresh},
+			Status: data.RewardFailed, RewardPayload: pay(1001, 100), UpdatedAtMs: fresh},
 	}
 	for _, rec := range seed {
 		if already, err := repo.ClaimReward(ctx, rec); err != nil || already {

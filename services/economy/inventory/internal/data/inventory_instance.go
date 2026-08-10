@@ -8,25 +8,81 @@
 //     发放前锁玩家实例行校验容量,给每件分配最低空闲格(SELECT ... FOR UPDATE 防并发超发/占同格)。
 //   - IdentifyInstance 天然幂等:SELECT ... FOR UPDATE,identified=1 后不再 roll(回放已落定属性)。
 //   - MoveInstance 目标格唯一(uk_player_slot),被占 → ErrInventorySlotOccupied。
+//
+// 词条列编码(2026-08-07):`attributes` 是 VARBINARY,存
+// pb `ItemInstanceAttributesStorageRecord` 二进制——MySQL 里的非基础类型一律
+// proto 二进制序列化,不用 JSON(§5.8/§9.17:字段编号语义 + unknown fields 保留)。
 package data
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"sort"
 	"strconv"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	inventoryv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/inventory/v1"
 )
+
+// instanceAttrsMaxBytes 是词条 pb 写入侧字节上限,取列容量 VARBINARY(1024)。
+// 鉴定词条数由 identify_rules.attr_count 约束(个位数),单条 pb 编码 ≤ 16 字节,
+// 即使配成 32 条也不到 600 字节——达到 1024 说明配置失控或有人直写。
+const instanceAttrsMaxBytes = 1024
 
 // ItemAttribute 是装备实例鉴定后的一条随机属性。
 type ItemAttribute struct {
-	AttrID uint32 `json:"attr_id"`
-	Value  int64  `json:"value"`
+	AttrID uint32
+	Value  int64
+}
+
+// encodeInstanceAttrs 把词条编成 pb 二进制(空词条 → nil,列写 NULL)。
+// 落库前过写入侧字节闸(§9.24):超限 fail-closed 拒写,逼近上限 WARN。
+func encodeInstanceAttrs(ctx context.Context, table string, attrs []ItemAttribute) ([]byte, error) {
+	if len(attrs) == 0 {
+		return nil, nil
+	}
+	rec := &inventoryv1.ItemInstanceAttributesStorageRecord{
+		Attributes: make([]*inventoryv1.ItemAttribute, 0, len(attrs)),
+	}
+	for _, a := range attrs {
+		rec.Attributes = append(rec.Attributes, &inventoryv1.ItemAttribute{AttrId: a.AttrID, Value: a.Value})
+	}
+	raw, err := proto.Marshal(rec)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "encode instance attrs: %v", err)
+	}
+	if cerr := dbguard.CheckPayload(ctx, dbguard.PayloadLimit{
+		DB: "pandora_trade", Table: table, Column: "attributes", Max: instanceAttrsMaxBytes,
+		Hint: "鉴定词条超设计上限:查 identify_rules.attr_count 配置是否失控",
+	}, raw); cerr != nil {
+		return nil, errcode.New(errcode.ErrInternal, "instance attrs payload too large: %v", cerr)
+	}
+	return raw, nil
+}
+
+// decodeInstanceAttrs 从 pb 二进制解出词条(NULL / 空 → nil)。
+func decodeInstanceAttrs(raw []byte) ([]ItemAttribute, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var rec inventoryv1.ItemInstanceAttributesStorageRecord
+	if err := proto.Unmarshal(raw, &rec); err != nil {
+		return nil, err
+	}
+	if len(rec.GetAttributes()) == 0 {
+		return nil, nil
+	}
+	out := make([]ItemAttribute, 0, len(rec.GetAttributes()))
+	for _, a := range rec.GetAttributes() {
+		out = append(out, ItemAttribute{AttrID: a.GetAttrId(), Value: a.GetValue()})
+	}
+	return out, nil
 }
 
 // ItemInstance 是一件装备类道具的唯一实例(不可堆叠)。
@@ -85,13 +141,13 @@ func decodeInstanceIDs(detail string) []uint64 {
 	return out
 }
 
-// scanInstance 从一行 SELECT 结果扫出 ItemInstance(attributes JSON / slot NULL 兜底)。
+// scanInstance 从一行 SELECT 结果扫出 ItemInstance(attributes pb 二进制 / slot NULL 兜底)。
 func scanInstance(scan func(dest ...any) error) (ItemInstance, error) {
 	var (
 		inst       ItemInstance
 		identified int8
 		bound      int8
-		attrsRaw   sql.NullString
+		attrsRaw   []byte
 		slot       sql.NullInt32
 	)
 	if err := scan(&inst.InstanceID, &inst.ItemConfigID, &identified, &attrsRaw, &slot, &bound); err != nil {
@@ -104,11 +160,11 @@ func scanInstance(scan func(dest ...any) error) (ItemInstance, error) {
 	} else {
 		inst.SlotIndex = -1
 	}
-	if attrsRaw.Valid && attrsRaw.String != "" {
-		if uerr := json.Unmarshal([]byte(attrsRaw.String), &inst.Attributes); uerr != nil {
-			return ItemInstance{}, errcode.New(errcode.ErrInternal, "decode instance attrs id=%d: %v", inst.InstanceID, uerr)
-		}
+	attrs, derr := decodeInstanceAttrs(attrsRaw)
+	if derr != nil {
+		return ItemInstance{}, errcode.New(errcode.ErrInternal, "decode instance attrs id=%d: %v", inst.InstanceID, derr)
 	}
+	inst.Attributes = attrs
 	return inst, nil
 }
 
@@ -310,17 +366,17 @@ func (r *MySQLInventoryRepo) IdentifyInstance(ctx context.Context, playerID, ins
 		}
 		return inst, true, nil
 	}
-	var attrsJSON any
+	var attrsPayload any
 	if len(attrs) > 0 {
-		raw, merr := json.Marshal(attrs)
+		raw, merr := encodeInstanceAttrs(ctx, "player_item_instance", attrs)
 		if merr != nil {
-			return ItemInstance{}, false, errcode.New(errcode.ErrInternal, "encode attrs player=%d id=%d: %v", playerID, instanceID, merr)
+			return ItemInstance{}, false, merr
 		}
-		attrsJSON = string(raw)
+		attrsPayload = raw
 	}
 	if _, uerr := tx.ExecContext(ctx,
 		`UPDATE player_item_instance SET identified = 1, attributes = ? WHERE instance_id = ? AND player_id = ?`,
-		attrsJSON, instanceID, playerID); uerr != nil {
+		attrsPayload, instanceID, playerID); uerr != nil {
 		return ItemInstance{}, false, errcode.New(errcode.ErrInternal, "identify instance player=%d id=%d: %v", playerID, instanceID, uerr)
 	}
 	if cerr := tx.Commit(); cerr != nil {

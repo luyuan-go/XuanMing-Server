@@ -24,7 +24,7 @@ func Budgets() []dbguard.TableBudget {
 		{
 			Table: "leaderboard_reward_log", MaxRows: 100 * 100 * 90 * 3, MaxAvgRowBytes: 1024,
 			Note: "GRANTED 行保留 90 天,PENDING/FAILED 永不清(补发工作集);" +
-				"avg_row 超 1KB 查 reward_json 的 items 条数(列 VARCHAR(2048),无条数上限)",
+				"avg_row 超 1KB 查 reward_pb 的 items 条数(列 VARBINARY(2048),无条数上限)",
 		},
 	}
 }
@@ -32,7 +32,7 @@ func Budgets() []dbguard.TableBudget {
 // BigFields 是列级字节预算。
 func BigFields() []dbguard.ColumnBudget {
 	return []dbguard.ColumnBudget{
-		{Table: "leaderboard_reward_log", Column: "reward_json", MaxBytes: 1536,
-			Note: "列是 VARCHAR(2048);1536=75% 预警线。超限说明 RewardTier.items 条数失控,再涨会让整条发奖记录写失败"},
+		{Table: "leaderboard_reward_log", Column: "reward_pb", MaxBytes: 1536,
+			Note: "列是 VARBINARY(2048) 存 pb RewardGrantStorageRecord;1536=75% 预警线且是写入侧硬阀。超限说明 RewardTier.items 条数失控"},
 	}
 }

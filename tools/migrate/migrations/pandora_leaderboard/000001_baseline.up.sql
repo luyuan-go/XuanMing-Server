@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS `leaderboard_reward_log` (
     `rank`                  BIGINT          NOT NULL COMMENT '获奖名次',
     `grant_idempotency_key` VARCHAR(96)     NOT NULL COMMENT '发奖幂等键 lb:<settlement_id>:<entity_id>(不变量 §9.7)',
     `status`                TINYINT         NOT NULL DEFAULT 0 COMMENT '0 PENDING 1 GRANTED 2 FAILED',
-    `reward_json`           VARCHAR(2048)   NOT NULL DEFAULT '' COMMENT '发放道具明细(审计;[{item_config_id,count}])',
+    `reward_pb`             VARBINARY(2048) NOT NULL DEFAULT '' COMMENT '发放道具明细(审计 + 补发重放入参;pb RewardGrantStorageRecord)',
     `created_at_ms`         BIGINT          NOT NULL COMMENT '创建时间(毫秒)',
     `updated_at_ms`         BIGINT          NOT NULL COMMENT '最后更新时间(毫秒)',
     PRIMARY KEY (`id`),

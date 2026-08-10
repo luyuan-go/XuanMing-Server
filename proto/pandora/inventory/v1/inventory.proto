@@ -187,6 +187,17 @@ message ItemAttribute {
   int64  value   = 2;
 }
 
+// ItemInstanceAttributesStorageRecord 是装备实例词条的服务端存储快照
+// (§5.8 四类中的“服务端存储快照”)。
+//
+// 落地:MySQL `player_item_instance.attributes` / `mail_transfer_escrow.attributes`
+// (VARBINARY 列,存 proto 二进制)。非基础类型一律 proto 二进制序列化,不用 JSON:
+// JSON 不带字段编号语义,改名 / 加字段靠手写 tag 对齐,且无法保留 unknown fields
+// (新旧副本 read-modify-write 会静默丢新字段,违反 §9.17)。
+message ItemInstanceAttributesStorageRecord {
+  repeated ItemAttribute attributes = 1;
+}
+
 // ItemInstance 是一件装备类道具的唯一实例(不可堆叠;客户端可见结构,不下发存储字段 §14)。
 //
 //   instance_id  雪花唯一 ID(uint64,§11),背包内定位 / 移动 / 丢弃 / 鉴定的键;

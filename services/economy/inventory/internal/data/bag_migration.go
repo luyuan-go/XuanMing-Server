@@ -18,7 +18,6 @@ package data
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"math"
 
@@ -58,7 +57,7 @@ SELECT player_id FROM (
 }
 
 // LoadLegacyBagStock 读取单玩家 legacy 存量快照(堆叠 + 实例),转成 bag 域 BagItem 形状。
-// bound=1 实例 fail-closed 拒(见文件头);attributes JSON 解码失败同样拒(不静默丢词条)。
+// bound=1 实例 fail-closed 拒(见文件头);attributes pb 解码失败同样拒(不静默丢词条)。
 func (r *MySQLInventoryRepo) LoadLegacyBagStock(ctx context.Context, playerID uint64) ([]*bagv1.BagItem, error) {
 	var items []*bagv1.BagItem
 
@@ -102,10 +101,10 @@ FROM player_item_instance WHERE player_id = ? ORDER BY instance_id`, playerID)
 			instanceID uint64
 			configID   uint32
 			identified bool
-			attrsJSON  sql.NullString
+			attrsRaw   []byte
 			bound      bool
 		)
-		if serr := instRows.Scan(&instanceID, &configID, &identified, &attrsJSON, &bound); serr != nil {
+		if serr := instRows.Scan(&instanceID, &configID, &identified, &attrsRaw, &bound); serr != nil {
 			return nil, errcode.New(errcode.ErrInternal, "scan legacy instance player=%d: %v", playerID, serr)
 		}
 		if bound {
@@ -119,18 +118,13 @@ FROM player_item_instance WHERE player_id = ? ORDER BY instance_id`, playerID)
 			InstanceId:   instanceID,
 			Identified:   identified,
 		}
-		if attrsJSON.Valid && attrsJSON.String != "" && attrsJSON.String != "null" {
-			var raw []struct {
-				AttrID uint32 `json:"attr_id"`
-				Value  int64  `json:"value"`
-			}
-			if jerr := json.Unmarshal([]byte(attrsJSON.String), &raw); jerr != nil {
-				return nil, errcode.New(errcode.ErrInternal,
-					"decode legacy instance attrs player=%d instance=%d: %v", playerID, instanceID, jerr)
-			}
-			for _, a := range raw {
-				item.Attrs = append(item.Attrs, &bagv1.BagItemAttribute{AttrId: a.AttrID, Value: a.Value})
-			}
+		attrs, derr := decodeInstanceAttrs(attrsRaw)
+		if derr != nil {
+			return nil, errcode.New(errcode.ErrInternal,
+				"decode legacy instance attrs player=%d instance=%d: %v", playerID, instanceID, derr)
+		}
+		for _, a := range attrs {
+			item.Attrs = append(item.Attrs, &bagv1.BagItemAttribute{AttrId: a.AttrID, Value: a.Value})
 		}
 		items = append(items, item)
 	}

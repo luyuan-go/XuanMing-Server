@@ -16,11 +16,12 @@ import (
 )
 
 // seedInstanceRow 直插一行装备实例(identified/attrs/bound 全字段,slot 可为 NULL)。
-func seedInstanceRow(t *testing.T, db *sql.DB, playerID, instanceID uint64, configID uint32, identified bool, attrsJSON string, slot any, bound bool) {
+// attrs 传 pb 二进制(列 VARBINARY),空切片 → 写 NULL。
+func seedInstanceRow(t *testing.T, db *sql.DB, playerID, instanceID uint64, configID uint32, identified bool, attrsPB []byte, slot any, bound bool) {
 	t.Helper()
 	var attrs any
-	if attrsJSON != "" {
-		attrs = attrsJSON
+	if len(attrsPB) > 0 {
+		attrs = attrsPB
 	}
 	if _, err := db.Exec(
 		`INSERT INTO player_item_instance (instance_id, player_id, item_config_id, identified, attributes, slot_index, bound)
@@ -55,7 +56,7 @@ func queryEscrowExists(t *testing.T, db *sql.DB, instanceID uint64) bool {
 }
 
 // queryInstanceFull 读实例全字段(领取后逐字段核对用)。
-func queryInstanceFull(t *testing.T, db *sql.DB, instanceID uint64) (owner uint64, identified bool, attrs sql.NullString, slot sql.NullInt32, bound bool) {
+func queryInstanceFull(t *testing.T, db *sql.DB, instanceID uint64) (owner uint64, identified bool, attrs []byte, slot sql.NullInt32, bound bool) {
 	t.Helper()
 	var identifiedI8, boundI8 int8
 	if err := db.QueryRow(
@@ -71,10 +72,13 @@ func TestMailTransferEscrow_MySQL(t *testing.T) {
 	repo := NewMySQLInventoryRepo(f.db)
 	ctx := context.Background()
 
-	const attrsJSON = `[{"attr_id": 1, "value": 42}, {"attr_id": 7, "value": -3}]`
+	attrsPB, err := encodeInstanceAttrs(ctx, "player_item_instance", []ItemAttribute{{AttrID: 1, Value: 42}, {AttrID: 7, Value: -3}})
+	if err != nil {
+		t.Fatalf("encode seed attrs: %v", err)
+	}
 
 	t.Run("EscrowOutMovesRowAtomically", func(t *testing.T) {
-		seedInstanceRow(t, f.db, 201, 9001, 5001, true, attrsJSON, 0, false)
+		seedInstanceRow(t, f.db, 201, 9001, 5001, true, attrsPB, 0, false)
 		rows, already, err := repo.EscrowOutInstances(ctx, 201, 202, []uint64{9001}, "gift:1", "d")
 		if err != nil {
 			t.Fatalf("escrow out: %v", err)
@@ -107,7 +111,7 @@ func TestMailTransferEscrow_MySQL(t *testing.T) {
 	})
 
 	t.Run("EscrowOutRejectsBoundAndMissing", func(t *testing.T) {
-		seedInstanceRow(t, f.db, 204, 9002, 5001, false, "", nil, true) // bound
+		seedInstanceRow(t, f.db, 204, 9002, 5001, false, nil, nil, true) // bound
 		if _, _, err := repo.EscrowOutInstances(ctx, 204, 205, []uint64{9002}, "gift:2", "d"); asCode(err) != errcode.ErrInventoryInstanceBound {
 			t.Fatalf("绑定实例应拒, got %v", err)
 		}
@@ -121,7 +125,7 @@ func TestMailTransferEscrow_MySQL(t *testing.T) {
 	})
 
 	t.Run("ClaimOnlyTrustsEscrowRow", func(t *testing.T) {
-		seedInstanceRow(t, f.db, 206, 9003, 5002, true, attrsJSON, 1, false)
+		seedInstanceRow(t, f.db, 206, 9003, 5002, true, attrsPB, 1, false)
 		if _, _, err := repo.EscrowOutInstances(ctx, 206, 207, []uint64{9003}, "gift:4", "d"); err != nil {
 			t.Fatalf("escrow out: %v", err)
 		}
@@ -153,8 +157,8 @@ func TestMailTransferEscrow_MySQL(t *testing.T) {
 			t.Fatalf("claim: already=%v err=%v", already, err)
 		}
 		owner, identified, attrs, slot, bound := queryInstanceFull(t, f.db, 9003)
-		if owner != 207 || !identified || bound || !attrs.Valid || !slot.Valid {
-			t.Fatalf("领取后字段错: owner=%d identified=%v attrs=%v slot=%v bound=%v", owner, identified, attrs, slot, bound)
+		if owner != 207 || !identified || bound || len(attrs) == 0 || !slot.Valid {
+			t.Fatalf("领取后字段错: owner=%d identified=%v attrs=%d bytes slot=%v bound=%v", owner, identified, len(attrs), slot, bound)
 		}
 		if queryEscrowExists(t, f.db, 9003) {
 			t.Fatal("领取后托管行应删除")
@@ -172,7 +176,7 @@ func TestMailTransferEscrow_MySQL(t *testing.T) {
 	})
 
 	t.Run("ReleaseReturnsToSourceUnconditionally", func(t *testing.T) {
-		seedInstanceRow(t, f.db, 209, 9004, 5003, false, "", 0, false)
+		seedInstanceRow(t, f.db, 209, 9004, 5003, false, nil, 0, false)
 		if _, _, err := repo.EscrowOutInstances(ctx, 209, 210, []uint64{9004}, "gift:5", "d"); err != nil {
 			t.Fatalf("escrow out: %v", err)
 		}

@@ -216,7 +216,7 @@ SELECT player_id, LENGTH(section) FROM pandora_bag.bag_section WHERE player_id =
 | `BagItem.attrs` | 单个格子的词条数全仓零校验 | **未修**,现网 `attrs` 恒空(`identify_rules` 未配置)+ 背包域功能默认关,故为 P2;启用前必须补 `MaxAttrsPerItem` |
 | `bag_migration.SeedLegacyWarehouse` | 容量参数显式传 `math.MaxUint32`,绕过容量闸;且拆堆是 O(N²) | **未修**,`LegacyMigrationEnabled` 默认关,contract 阶段前必须处理 |
 | `match_release_outbox.payload` | `VARBINARY(1024)` 装含 `repeated player_ids` 的 record,队伍规模变大(5v5→10v10)会逼近上限 | **未修**,当前规模安全;已登记 dbcheck 预算 768(75% 预警线) |
-| `leaderboard_reward_log.reward_json` | `VARCHAR(2048)` 装奖励明细,`RewardTier.items` 条数无上限 | **未修**,已登记预算 1536(75%) |
+| `leaderboard_reward_log.reward_pb` | `VARBINARY(2048)` 装奖励明细,`RewardTier.items` 条数无上限 | **已修写入侧**(2026-08-07 JSON→pb 时补 `dbguard.CheckPayload` Max=1536 硬闸,超限拒 Claim 不留解不开的补发入参);条目数上限仍未加,靠字节闸兜住 |
 | `player_data.nickname/avatar` | proto2mysql 生成 `MEDIUMTEXT(16MB)`,写入侧无长度校验 | **未修**,P2 |
 
 **根治方向**(比加上限更好):`rewardclaim.ClaimPermanentByID` + `BitIndexMap` 白名单

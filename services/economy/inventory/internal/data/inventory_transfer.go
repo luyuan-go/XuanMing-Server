@@ -16,7 +16,6 @@ package data
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"sort"
 	"strconv"
 	"strings"
@@ -79,22 +78,22 @@ func sortedIDs(ids []uint64) []uint64 {
 
 const escrowCols = `instance_id, item_config_id, identified, attributes, source_player_id, to_player_id`
 
-// scanEscrowRow 从一行 SELECT 结果扫出 EscrowedInstance(attributes JSON 兜底)。
+// scanEscrowRow 从一行 SELECT 结果扫出 EscrowedInstance(attributes pb 二进制兜底)。
 func scanEscrowRow(scan func(dest ...any) error) (EscrowedInstance, error) {
 	var (
 		row        EscrowedInstance
 		identified int8
-		attrsRaw   sql.NullString
+		attrsRaw   []byte
 	)
 	if err := scan(&row.InstanceID, &row.ItemConfigID, &identified, &attrsRaw, &row.SourcePlayerID, &row.ToPlayerID); err != nil {
 		return EscrowedInstance{}, err
 	}
 	row.Identified = identified != 0
-	if attrsRaw.Valid && attrsRaw.String != "" {
-		if err := json.Unmarshal([]byte(attrsRaw.String), &row.Attributes); err != nil {
-			return EscrowedInstance{}, errcode.New(errcode.ErrInternal, "decode escrow attrs id=%d: %v", row.InstanceID, err)
-		}
+	attrs, derr := decodeInstanceAttrs(attrsRaw)
+	if derr != nil {
+		return EscrowedInstance{}, errcode.New(errcode.ErrInternal, "decode escrow attrs id=%d: %v", row.InstanceID, derr)
 	}
+	row.Attributes = attrs
 	return row, nil
 }
 

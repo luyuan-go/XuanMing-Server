@@ -34,7 +34,7 @@ func TradeBudgets() []dbguard.TableBudget {
 		},
 		{
 			Table: "player_item_instance", MaxRows: planPlayers * 200 * 3, MaxAvgRowBytes: 512,
-			Note: "行数 ≈ 玩家数 × 背包容量;avg_row 超限查 attributes JSON 词条数(应受 identify_rules.attr_count 约束)",
+			Note: "行数 ≈ 玩家数 × 背包容量;avg_row 超限查 attributes(pb)词条数(应受 identify_rules.attr_count 约束)",
 		},
 		{
 			// 保留期 90 天;按日活 1 万 × 每人每天 20 笔 × 90 天 × 3 ≈ 5400 万。
@@ -73,8 +73,10 @@ func BagBudgets() []dbguard.TableBudget {
 // 由 dbcheck -size-check 或表级 avg_row_bytes 告警后人工触发)。
 func TradeBigFields() []dbguard.ColumnBudget {
 	return []dbguard.ColumnBudget{
-		{Table: "player_item_instance", Column: "attributes", MaxBytes: 4 * 1024,
-			Note: "鉴定词条 JSON;超限查 identify_rules.attr_count 配置"},
+		{Table: "player_item_instance", Column: "attributes", MaxBytes: 768,
+			Note: "鉴定词条(pb ItemInstanceAttributesStorageRecord,列 VARBINARY(1024));768=75% 预警线,超限查 identify_rules.attr_count 配置"},
+		{Table: "mail_transfer_escrow", Column: "attributes", MaxBytes: 768,
+			Note: "托管行原样搬运源表词条,阈值与 player_item_instance.attributes 一致"},
 	}
 }
 
