@@ -2670,44 +2670,82 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
    未实测「DS 报 ready → 客户端完成 Admission」的 P99 来复核 150s、未给出「单次进场占用 Pod·分钟」前后对比。
    在这些补齐前,§6 第 0 项不算验收完成。
 
-
 ---
 
 ## 2026-08-07 配置表表头漂移同步工具(configtable-sync)
 
-**起因**:策划把 技能/j_技能_方位类型_圆形.xlsx 的 D 列「圆形集合」改名为「范围内圆形集合」
+**起因**:策划把 `技能/j_技能_方位类型_圆形.xlsx` 的 D 列「圆形集合」改名为「范围内圆形集合」
 并新增 E 列「范围外圆形集合」,一键导表整批失败。手工修完之后暴露两个更值得修的问题:
 ① 这类「列改名 / 加列 → 手改 proto 注解」本来就该是工具干的;
-② configtable_gen.ps1 优先用预编译 exe,而 exe 内嵌的是**编译时**的 proto 描述符——
+② `configtable_gen.ps1` 优先用预编译 exe,而 exe 内嵌的是**编译时**的 proto 描述符——
 改完 proto 只跑 proto_gen 而忘了重建 exe,导表会报一字不差的旧错,极难想到原因。
 
-**用户指令**:「不应该手写,而是用工具去生成这些表的 Proto」(参照 D:\luyuan\mmorpg\tools\data_table_exporter)。
+**用户指令**:「不应该手写,而是用工具去生成这些表的 Proto」(参照旧项目 data_table_exporter)。
 
 **调查结论(实测,非推测)**:旧项目能生成 proto 的前提是它的 xlsx **自带 schema 元数据行**
 (类型 / map 角色 / owner / 外键)。Pandora 的策划表**一行元数据都没有**,而唯一像 schema 的
-客户端列登记是严格子集(ole_level 登记 10 列而服务端要 12 列、缺的正是击杀经验唯一权威
-kill_exp;z_专精.xlsx 客户端根本没登记)。加上字段编号必须跨版本稳定、equired /
-prefix / k / enum / 上限全是服务端决策、proto 注释是这些决策的唯一存档 —— 四条阻塞。
-详见 docs/design/decision-revisit-configtable-proto-generation.md。
+客户端列登记是严格子集(`role_level` 登记 10 列而服务端要 12 列、缺的正是击杀经验唯一权威
+`kill_exp`;`z_专精.xlsx` 客户端根本没登记)。加上字段编号必须跨版本稳定、`required` /
+`prefix` / `fk` / enum / 上限全是服务端决策、proto 注释是这些决策的唯一存档 —— 四条阻塞。
+详见 `docs/design/decision-revisit-configtable-proto-generation.md`。
 
-**落地(方案 B,自主决策)**:proto 仍是单一事实源,新增 configtable-sync 只做机械那一半。
-这是加法不是推翻旧决策,故未走 AGENTS.md §7 拍板门禁;全量生成 proto(方案 A)跨两仓、
+**落地(方案 B,自主决策)**:proto 仍是单一事实源,新增 `configtable-sync` 只做机械那一半。
+这是加法不是推翻旧决策,故未走 `AGENTS.md §7` 拍板门禁;全量生成 proto(方案 A)跨两仓、
 跨策划/客户端/服务端三方,**仍待人拍板**。
 
-- 新增 	ools/configtable-gen 的 -sync / -sync-write / -client-registry / -sync-col;
-  internal/protosync(diff / registry / apply)+ internal/tablegen/view.go 只读视图。
-- 新增 	ools/scripts/configtable_sync.ps1:报差异 →(-Write)改 proto → 重生 pb →
+- 新增 `tools/configtable-gen` 的 `-sync` / `-sync-write` / `-client-registry` / `-sync-col`;
+  `internal/protosync`(diff / registry / apply)+ `internal/tablegen/view.go` 只读视图。
+- 新增 `tools/scripts/configtable_sync.ps1`:报差异 →(`-Write`)改 proto → 重生 pb →
   重建 exe → 重跑导表,一条命令走完。
-- 	ools/scripts/configtable_gen.ps1:exe 比源码 / pb 旧时自动重建;表头改名报错不再误导到
+- `tools/scripts/configtable_gen.ps1`:exe 比源码 / pb 旧时自动重建;表头改名报错不再误导到
   「文件被 Excel 打开」,改为指向 configtable_sync.ps1。
 
-**守住的红线**:改名只替换 (excel_col) 字面量且要求全文件恰好命中一次;挪位 / 删列 / 重名
+**守住的红线**:改名只替换 `(excel_col)` 字面量且要求全文件恰好命中一次;挪位 / 删列 / 重名
 一律只报告(改名与挪位从表头看不出区别,猜错会让整批数据错列);字段编号取「已用 + reserved
 上界」之后,不回填空洞(§5.4);不自动写 required / prefix / fk / bit_index / enum。
 
-**验证**:protosync 单测 11 组全绿;端到端把 skill_circle.circles 的注解改回旧列名制造真实
-漂移,-Write 自动改回并跑完全链,23 张表全过且**批次号未变**(v20260807001,内容完全相同),
-证明改写语义等价;go test ./tools/configtable-gen/... 与 pkg/configtable 全绿。
+**验证**:protosync 单测 11 组全绿;端到端把 `skill_circle.circles` 的注解改回旧列名制造真实
+漂移,`-Write` 自动改回并跑完全链,23 张表全过且**批次号未变**(v20260807001,内容完全相同),
+证明改写语义等价;`go test ./tools/configtable-gen/...` 与 `pkg/configtable` 全绿。
 
 **剩余风险**:本次未遇到真实的「新增列」漂移,追加字段路径只有单测覆盖,下次策划真加列时
 需人确认一次追加位置与注释格式。
+- **同日八修:补上「只跑过 miniredis / 没跑过真依赖」这个空白(用户已编译 UE 后继续)**。
+  拉起真 Redis + Kafka,把此前一直列为「未验证」的两类语义补了回归:
+  - `location_realredis_test.go`(4 条):`PEXPIRE ... LT` 只缩不涨、hubPresence Lua 的同 assignment
+    定序 / 跨 assignment 接受 / 同序 ABA、`RecordLastSeen` 幂等不后移、心跳 `last_alive_ms` 兜底
+    且不给无 meta 玩家凭空建毒 key。
+  - `pkg/offlinewatch/realredis_test.go`(4 条):`ZADD GT` 只后推不前拉、Sweep 判定与出队、
+    依赖不可用零动作、出队后不复活。
+  - `pkg/offlinewatch/realkafka_test.go`(1 条):producer→consumer→Enqueue 真往返。
+  三份都用环境变量守卫(`PANDORA_TEST_REDIS_ADDR` / `PANDORA_TEST_KAFKA_BROKERS`),不设即 skip,
+  不影响 CI 与离线开发。**理由**:miniredis 是 Go 仿真件,`PEXPIRE LT` / `ZADD GT|XX` 这类修饰符
+  语义不保证与真 Redis 一致,而判错的后果是「把在线玩家踢出队伍」——仿真件绿灯不能当真 Redis 绿灯。
+  跑测过程中的两处真实发现:①`ZADD GT` / Lua 在真 Redis 上行为与预期一致(**没有**分叉,
+  但这是验出来的、不是假设的);②**`pandora.player.presence` 漏建 topic 会静默降级** ——
+  producer 是 best-effort,发送失败只打 Warn,表现为「功能看起来在跑,但离线成员要等有人打开
+  组队面板才被清掉」,无任何 Error。本地首次 Send 就撞了 `topic does not exist`,靠 broker
+  auto-create 才在第二次通;已把该 topic 连同这条警告登记进 `docs/design/infra.md` topic 表,
+  生产禁用 auto-create 的集群必须列进建表清单。
+  同时把 dev 两个开关打开(`locator.departure_event.enabled` / `team.offline_leave.enabled`)并
+  更新了 team-dev.yaml 里那段「必须保持 false、会 fail-fast」的过期注释;prod 模板仍默认关闭。
+- **MySQL 里的复合类型全部改 proto 二进制,清掉最后 3 处 JSON 列(2026-08-07,用户指令)**。
+  口径:`§5.8` 四类里「服务端存储快照」落 MySQL blob 列时必须是 pb 二进制,不用 JSON ——
+  JSON 没有字段编号语义(改名/加字段靠手写 tag 对齐)、不保留 unknown fields,新旧副本
+  read-modify-write 会静默丢新字段(违反 `§9.17` 不停服更新)。
+  改的三列:`player_item_instance.attributes` / `mail_transfer_escrow.attributes`
+  (JSON → `VARBINARY(1024)`,存 `ItemInstanceAttributesStorageRecord`)、
+  `leaderboard_reward_log.reward_json` → `reward_pb`(`VARCHAR(2048)` → `VARBINARY(2048)`,
+  存 `RewardGrantStorageRecord`)。后者不只是审计:`RetryUngrantedRewards` 补发要把它解回
+  奖励列表重放,编码漂移会让整条发奖记录变成永远补不出来的脏数据。
+  **存量数据:干净切换(人拍板,未上线)** —— 新迁移 `pandora_trade/000004`、
+  `pandora_leaderboard/000003` 用 `information_schema` 守卫做 DROP + ADD,旧 JSON 值**不保留**
+  (两种编码不同构,原地 MODIFY 会让 `proto.Unmarshal` 读到 JSON 文本字节)。leaderboard 那条
+  迁移前须确认无 PENDING/FAILED 待补发行,否则补发入参会一起丢。
+  顺手把两列的写入侧字节闸补齐(`dbguard.CheckPayload`,attributes Max=768、reward_pb Max=1536),
+  之前 `grantRewards` 是 `json.Marshal` 忽略错误直接落库,现在编码/超限即拒 Claim,不留解不开的行。
+  budgets.go ×2 与 `dbcheck/bigfield.go` 同步改名并新登记 `mail_transfer_escrow.attributes`。
+  **验证**:`go build` / `go vet` / `go test -count=1` 全绿(inventory、leaderboard、tools/migrate);
+  真 MySQL 集成测试 `inventory_transfer_mysql_test.go` 的种子改成走生产同一条编码路径。
+  **剩余风险**:真 MySQL 迁移未在本机执行(需 dev 库重跑 migrate);dev 库里已有的鉴定词条
+  与发奖明细会被清空。
