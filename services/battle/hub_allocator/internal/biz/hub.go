@@ -476,62 +476,24 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 			u.compensateReservedSeat(ctx, target.HubPodName, playerID, assignmentID, seat)
 			return nil, signErr
 		}
-		// Model B(authRepo 注入)下换分片必须走 owner-cleanup saga:先登记旧 owner 的
-		// 精确清理(index-first ref + 阶段字段),CAS 落盘后由 resumeAssignmentCleanup
-		// 驱逐旧物理席位;legacy 路径仍是 CAS 后立即释放旧席位。
-		cleanupRegistered := false
-		if found && u.authRepo != nil {
-			if cleanupErr := u.registerTransferCleanup(ctx, assignment, existing); cleanupErr != nil {
-				u.compensateReservedSeat(ctx, target.HubPodName, playerID, assignmentID, seat)
-				return nil, cleanupErr
-			}
-			cleanupRegistered = true
-		}
 		var expected *hubv1.HubAssignmentStorageRecord
 		if found {
 			expected = existing
 		}
-		swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, expected, assignment, u.assignmentSagaTTL())
-		if serr != nil {
-			// The CAS result may be unknown. Keep the index-first ref and exact
-			// reservation; restart reconciliation distinguishes a committed saga
-			// from an orphan without risking the new owner.
-			if !cleanupRegistered {
-				u.compensateReservedSeat(ctx, target.HubPodName, playerID, assignmentID, seat)
-			}
-			return nil, serr
+		retrySaga, sagaErr := u.replaceAssignmentSaga(ctx, playerID, expected, assignment, seat,
+			func() {
+				if teamID != 0 {
+					if terr := u.repo.SetTeamShard(ctx, teamID, target.HubPodName, u.assignTTL()); terr != nil {
+						plog.With(ctx).Warnw("msg", "set_team_shard_failed", "team_id", teamID, "err", terr)
+					}
+				}
+			},
+			"Hub replacement assignment disappeared during cleanup")
+		if sagaErr != nil {
+			return nil, sagaErr
 		}
-		if !swapped {
-			if cleanupRegistered {
-				u.removeTransferCleanupRef(ctx, existing.GetHubPodName(), transferCleanupRef(assignment))
-			}
-			u.compensateReservedSeat(ctx, target.HubPodName, playerID, assignmentID, seat)
+		if retrySaga {
 			continue
-		}
-
-		u.addShardMember(ctx, target.HubPodName, playerID)
-		if teamID != 0 {
-			if terr := u.repo.SetTeamShard(ctx, teamID, target.HubPodName, u.assignTTL()); terr != nil {
-				plog.With(ctx).Warnw("msg", "set_team_shard_failed", "team_id", teamID, "err", terr)
-			}
-		}
-		if cleanupRegistered {
-			// 旧 owner 驱逐是显式 saga:源席位物理未离场时返回 ErrUnavailable,
-			// 保留持久化的新 assignment 供 Login/reconcile 恢复,绝不双 owner。
-			_, stillFound, resumeErr := u.resumeAssignmentCleanup(ctx, playerID, assignmentID)
-			if resumeErr != nil {
-				return nil, resumeErr
-			}
-			if !stillFound {
-				return nil, errcode.New(errcode.ErrInvalidState,
-					"Hub replacement assignment disappeared during cleanup")
-			}
-		} else if found {
-			u.releaseAssignmentSeat(ctx, existing)
-			u.removeShardMember(ctx, existing.HubPodName, playerID)
-		}
-		if werr := u.confirmWriterForTicket(ctx, playerID); werr != nil {
-			return nil, werr
 		}
 		plog.With(ctx).Infow("msg", "hub_assigned",
 			"player_id", playerID, "pod", target.HubPodName, "shard_id", target.ShardId,
@@ -759,44 +721,13 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 			u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
 			return nil, signErr
 		}
-		cleanupRegistered := false
-		if u.authRepo != nil {
-			if cleanupErr := u.registerTransferCleanup(ctx, newAssignment, assignment); cleanupErr != nil {
-				u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
-				return nil, cleanupErr
-			}
-			cleanupRegistered = true
+		retrySaga, sagaErr := u.replaceAssignmentSaga(ctx, playerID, assignment, newAssignment, seat,
+			nil, "Hub transfer assignment disappeared during cleanup")
+		if sagaErr != nil {
+			return nil, sagaErr
 		}
-		swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, newAssignment, u.assignmentSagaTTL())
-		if serr != nil {
-			if !cleanupRegistered {
-				u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
-			}
-			return nil, serr
-		}
-		if !swapped {
-			if cleanupRegistered {
-				u.removeTransferCleanupRef(ctx, assignment.GetHubPodName(), transferCleanupRef(newAssignment))
-			}
-			u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
+		if retrySaga {
 			continue
-		}
-		u.addShardMember(ctx, target.HubPodName, playerID)
-		if cleanupRegistered {
-			_, stillFound, cleanupErr := u.resumeAssignmentCleanup(ctx, playerID, newAssignmentID)
-			if cleanupErr != nil {
-				return nil, cleanupErr
-			}
-			if !stillFound {
-				return nil, errcode.New(errcode.ErrInvalidState,
-					"Hub transfer assignment disappeared during cleanup")
-			}
-		} else {
-			u.releaseAssignmentSeat(ctx, assignment)
-			u.removeShardMember(ctx, assignment.HubPodName, playerID)
-		}
-		if werr := u.confirmWriterForTicket(ctx, playerID); werr != nil {
-			return nil, werr
 		}
 		plog.With(ctx).Infow("msg", "hub_transferred",
 			"player_id", playerID, "from", assignment.HubPodName, "to", target.HubPodName)
@@ -2582,6 +2513,75 @@ func assignmentInstanceIdentity(a *hubv1.HubAssignmentStorageRecord) data.Assign
 	}
 	return data.AssignmentInstanceIdentity{PlayerID: a.GetPlayerId(), AssignmentID: a.GetAssignmentId(),
 		InstanceUID: a.GetHubInstanceUid(), ProtocolEpoch: a.GetAuthEpoch(), WriterEpoch: a.GetAuthWriterEpoch()}
+}
+
+// replaceAssignmentSaga 是「把玩家归属置换为 next」的唯一 saga 实现,AssignHub 的置换路径与
+// TransferHub 共用(此前是两份人工镜像的拷贝,补偿规则漂移即座位泄漏 / 提前释放已提交的新 owner)。
+//
+// 调用前提:新座位已占(seat)、票已签成功;old == nil 表示新建(无旧 owner)。
+// 返回 (retry=true, nil) 表示 CAS 输给并发写者、已补偿干净,调用方 continue 重试;
+// 返回 err 时调用方原样上抛(补偿责任已在本方法内履行完毕,或刻意不补偿交重启对账)。
+//
+// ⚠️ migratePlayer(本文件下方的 drain 迁移)是本 saga 的**变体而非拷贝**:它签票在
+// registerTransferCleanup 之后(与这里相反,签票失败会留孤儿 ref 靠重启对账兜底)、
+// CAS 输者不重试、resume 失败走「回加源 member 索引」而非上抛、且无写者复核。
+// 并入前须先补 drain 侧故障注入测试,不得机械合并。
+func (u *HubUsecase) replaceAssignmentSaga(
+	ctx context.Context,
+	playerID uint64,
+	old, next *hubv1.HubAssignmentStorageRecord,
+	seat *data.ReserveResult,
+	onSwapped func(),
+	disappearedMsg string,
+) (retry bool, err error) {
+	// Model B(authRepo 注入)下换分片必须走 owner-cleanup saga:先登记旧 owner 的
+	// 精确清理(index-first ref + 阶段字段),CAS 落盘后由 resumeAssignmentCleanup
+	// 驱逐旧物理席位;legacy 路径仍是 CAS 后立即释放旧席位。
+	cleanupRegistered := false
+	if old != nil && u.authRepo != nil {
+		if cleanupErr := u.registerTransferCleanup(ctx, next, old); cleanupErr != nil {
+			u.compensateReservedSeat(ctx, next.GetHubPodName(), playerID, next.GetAssignmentId(), seat)
+			return false, cleanupErr
+		}
+		cleanupRegistered = true
+	}
+	swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, old, next, u.assignmentSagaTTL())
+	if serr != nil {
+		// The CAS result may be unknown. Keep the index-first ref and exact
+		// reservation; restart reconciliation distinguishes a committed saga
+		// from an orphan without risking the new owner.
+		if !cleanupRegistered {
+			u.compensateReservedSeat(ctx, next.GetHubPodName(), playerID, next.GetAssignmentId(), seat)
+		}
+		return false, serr
+	}
+	if !swapped {
+		if cleanupRegistered {
+			u.removeTransferCleanupRef(ctx, old.GetHubPodName(), transferCleanupRef(next))
+		}
+		u.compensateReservedSeat(ctx, next.GetHubPodName(), playerID, next.GetAssignmentId(), seat)
+		return true, nil
+	}
+
+	u.addShardMember(ctx, next.GetHubPodName(), playerID)
+	if onSwapped != nil {
+		onSwapped()
+	}
+	if cleanupRegistered {
+		// 旧 owner 驱逐是显式 saga:源席位物理未离场时返回 ErrUnavailable,
+		// 保留持久化的新 assignment 供 Login/reconcile 恢复,绝不双 owner。
+		_, stillFound, resumeErr := u.resumeAssignmentCleanup(ctx, playerID, next.GetAssignmentId())
+		if resumeErr != nil {
+			return false, resumeErr
+		}
+		if !stillFound {
+			return false, errcode.New(errcode.ErrInvalidState, disappearedMsg)
+		}
+	} else if old != nil {
+		u.releaseAssignmentSeat(ctx, old)
+		u.removeShardMember(ctx, old.GetHubPodName(), playerID)
+	}
+	return false, u.confirmWriterForTicket(ctx, playerID)
 }
 
 func (u *HubUsecase) registerTransferCleanup(ctx context.Context, target,

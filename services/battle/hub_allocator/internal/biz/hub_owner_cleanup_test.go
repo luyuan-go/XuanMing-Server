@@ -316,3 +316,147 @@ func TestCleanupAssignmentCASComparisonIncludesNewPhaseFields(t *testing.T) {
 		t.Fatal("cleanup phase field was not part of protobuf equality")
 	}
 }
+
+// casInterceptorRepo 在首次匹配的 CompareAndSwapAssignment **执行前**注入一个并发写者,
+// 模拟"registerTransferCleanup 与 CAS 之间 assignment 被别的写者改写"的窗口。
+type casInterceptorRepo struct {
+	data.HubRepo
+	match  func(expected, next *hubv1.HubAssignmentStorageRecord) bool
+	before func()
+	fired  bool
+}
+
+func (r *casInterceptorRepo) CompareAndSwapAssignment(ctx context.Context, playerID uint64,
+	expected, next *hubv1.HubAssignmentStorageRecord, ttl time.Duration,
+) (bool, error) {
+	if !r.fired && r.match != nil && r.match(expected, next) {
+		r.fired = true
+		if r.before != nil {
+			r.before()
+		}
+	}
+	return r.HubRepo.CompareAndSwapAssignment(ctx, playerID, expected, next, ttl)
+}
+
+// AssignHub 的置换路径与 TransferHub 共用同一条 owner 置换 saga。此前该 saga 在两个入口
+// 各有一份拷贝、补偿规则靠人工镜像;本用例把 Assign 侧此前**无直驱用例**的
+// "CAS 已提交但响应丢失"分支钉成行为快照:响应丢失时必须保留 durable pending 记录与
+// 新座位(交给重启对账区分已提交/孤儿),绝不能因为响应丢了就把已提交的新 owner 拆掉。
+func TestAssignHubReplacementResponseLossNeverReleasesNewOwner(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+
+	// DS 实例漂移:pod1 复位回 warming 并以新 uid 激活 → 旧归属元组不可复用,
+	// AssignHub 走"置换"路径(新 assignmentID + 旧 owner cleanup saga)。
+	now := time.Now().UnixMilli()
+	seedResetWarming(t, f.repo, f.source.GetHubPodName(), now)
+	activate(t, f.uc, f.authRepo, f.source.GetHubPodName(), "uid-C", 77, "j77", now)
+
+	f.uc.repo = &commitThenErrorAssignmentRepo{HubRepo: f.repo,
+		shouldFail: func(expected, next *hubv1.HubAssignmentStorageRecord) bool {
+			return expected != nil && next != nil && next.GetTransferCleanupPending() &&
+				expected.GetAssignmentId() != next.GetAssignmentId()
+		}}
+
+	if got, err := f.uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); errcode.As(err) != errcode.ErrUnavailable || got != nil {
+		t.Fatalf("faulted replacement assign=%+v err=%v", got, err)
+	}
+
+	// CAS 实际已提交:durable 记录必须还在、带 cleanup pending、指向新 assignmentID。
+	target, found, err := f.repo.GetAssignment(ctx, 1001)
+	if err != nil || !found || !target.GetTransferCleanupPending() ||
+		target.GetAssignmentId() == f.source.GetAssignmentId() {
+		t.Fatalf("durable target=%+v found=%v err=%v", target, found, err)
+	}
+	// 新座位绝不能被补偿掉——它属于已提交的新 owner。
+	if reservations, _ := f.mr.HKeys("pandora:hub:reservations:{" + target.GetHubPodName() + "}"); len(reservations) != 1 || reservations[0] != target.GetAssignmentId() {
+		t.Fatalf("committed replacement seat was released: %v", reservations)
+	}
+	// 重启对账。与 Transfer 版不同:这里源实例已整体换代(seedResetWarming 清了物理残留),
+	// 没有要等的物理离场,reconcile 允许直接完成 —— 但完成后必须**保留 exact 新 owner**:
+	// pending 清掉、assignmentID 不变、新座位仍在、cleanup 索引清空。
+	restarted := f.restart(nil, nil)
+	if err := restarted.reconcileOwnerCleanups(ctx); err != nil {
+		t.Fatalf("reconcile after committed response loss: %v", err)
+	}
+	target2, found2, err2 := f.repo.GetAssignment(ctx, 1001)
+	if err2 != nil || !found2 || target2.GetTransferCleanupPending() ||
+		target2.GetAssignmentId() != target.GetAssignmentId() {
+		t.Fatalf("reconcile damaged committed target: %+v found=%v err=%v", target2, found2, err2)
+	}
+	if reservations, _ := f.mr.HKeys("pandora:hub:reservations:{" + target.GetHubPodName() + "}"); len(reservations) != 1 || reservations[0] != target.GetAssignmentId() {
+		t.Fatalf("reconcile released the committed seat: %v", reservations)
+	}
+	if refs, _ := f.repo.ListTransferCleanups(ctx, f.source.GetHubPodName()); len(refs) != 0 {
+		t.Fatalf("cleanup index survived completion: %+v", refs)
+	}
+}
+
+// 钉住 CAS 输者的补偿顺序:并发写者在 register 与 CAS 之间改写 assignment 时,
+// 输者必须**先删 cleanup ref、再补偿新座位**、然后重试收敛;绝不能留下孤儿 ref 或泄漏座位。
+// Assign 与 Transfer 两个入口此前均无该分支的直驱用例。
+func TestReplacementCASLoserRemovesRefBeforeSeat(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		drive func(t *testing.T, f *ownerCleanupFixture)
+	}{
+		{name: "assign", drive: func(t *testing.T, f *ownerCleanupFixture) {
+			now := time.Now().UnixMilli()
+			seedResetWarming(t, f.repo, f.source.GetHubPodName(), now)
+			activate(t, f.uc, f.authRepo, f.source.GetHubPodName(), "uid-C", 77, "j77", now)
+			if _, err := f.uc.AssignHub(context.Background(), 1001, "global", 0, 0, 0, ""); err != nil {
+				t.Fatalf("assign with concurrent writer must converge: %v", err)
+			}
+		}},
+		{name: "transfer", drive: func(t *testing.T, f *ownerCleanupFixture) {
+			// 源席位仍 admitted:置换的第二轮会推进到 cleanup 阶段,并因源未物理离场
+			// 以错误返回(保留 durable 新 owner 交给驱逐/对账续跑)——这是既有语义,
+			// 本快照只要求它不 panic 且满足下方的 ref/座位不变量。
+			if _, err := f.uc.TransferHub(context.Background(), 1001, 2); err == nil {
+				t.Fatalf("transfer with admitted source should not complete synchronously")
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newOwnerCleanupFixture(t)
+			ctx := context.Background()
+			// 并发写者:在 saga 的 CAS 执行前把 assignment 改一版(AssignedAtMs+1),
+			// 让 saga 第一轮 CAS 必输、第二轮以新快照重试。
+			f.uc.repo = &casInterceptorRepo{HubRepo: f.repo,
+				match: func(expected, next *hubv1.HubAssignmentStorageRecord) bool {
+					return expected != nil && next != nil && next.GetTransferCleanupPending() &&
+						expected.GetAssignmentId() != next.GetAssignmentId()
+				},
+				before: func() {
+					current, found, err := f.repo.GetAssignment(ctx, 1001)
+					if err != nil || !found {
+						t.Fatalf("concurrent writer read: found=%v err=%v", found, err)
+					}
+					bumped := proto.Clone(current).(*hubv1.HubAssignmentStorageRecord)
+					bumped.AssignedAtMs = current.GetAssignedAtMs() + 1
+					if swapped, err := f.repo.CompareAndSwapAssignment(ctx, 1001, current, bumped, modelBAuthTTL); err != nil || !swapped {
+						t.Fatalf("concurrent writer swap=%v err=%v", swapped, err)
+					}
+				}}
+
+			tc.drive(t, f)
+
+			// 输的那一轮登记过的 cleanup ref 不得残留成孤儿
+			// (第二轮成功会登记并消费自己的 ref;这里断言最终态没有多余的)。
+			final, found, err := f.repo.GetAssignment(ctx, 1001)
+			if err != nil || !found {
+				t.Fatalf("final assignment found=%v err=%v", found, err)
+			}
+			refs, _ := f.repo.ListTransferCleanups(ctx, f.source.GetHubPodName())
+			for _, ref := range refs {
+				if ref != transferCleanupRef(final) {
+					t.Fatalf("orphan cleanup ref from the losing round survived: %v (final=%v)", refs, transferCleanupRef(final))
+				}
+			}
+			// 输的那一轮占的座位必须已补偿:新 pod 的 reservations 里只允许最终 assignmentID。
+			if reservations, _ := f.mr.HKeys("pandora:hub:reservations:{" + final.GetHubPodName() + "}"); len(reservations) > 1 {
+				t.Fatalf("losing round leaked a seat reservation: %v", reservations)
+			}
+		})
+	}
+}
