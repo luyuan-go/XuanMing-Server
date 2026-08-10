@@ -237,9 +237,27 @@ COMMIT;                                                           -- 回滚则�
   与「NULL=待补号」对应,天然满足 proto3 零值语义)。仅当策划三问②选「客户端可见」时
   才加进客户端可见结构并同步 UE。
 
-**红线**:`register_no` 是**纯展示字段**。任何服务不得将其作身份键、外键、路由键或
-幂等键——身份永远是 `player_id`(§9.11)。review 见到 `WHERE register_no =` 出现在
-非展示查询里直接拒。
+**红线**(2026-08-10 精确化:原表述「见到 `WHERE register_no =` 直接拒」过粗,会误伤
+客服反查这一**预期用法**):`register_no` 是**纯展示字段**,身份永远是 `player_id`(§9.11)。
+边界按「翻译」与「当键」划分:
+
+| | 允许 | 禁止 |
+|---|---|---|
+| 形态 | **一次性翻译**:`register_no` → `player_id`,结果只在本次请求内用,不落库、不传给下游当参数 | **当键使用**:业务表存 `register_no` 列、拿它做 JOIN / 外键 / 幂等键 / 路由键 / 缓存键 |
+| 典型 | 客服工单:玩家报编号 → 运营工具反查 `player_id` → 用 `player_id` 查各业务库流水(§3.6) | 订单表存 `register_no`、按 `register_no` 分片、用它做发放幂等键 |
+| 为何 | 一次索引点查(`uk_register_no`),等价于「查号码簿」;下游只见 `player_id`,零传播 | 见下方四条 |
+
+**禁止「当键」的四条理由**(任一条都足以致命):
+1. **有未分配窗口**:新注册后约 15s 内 `register_no` 为 NULL/0(补号周期 + 水位滞后),
+   业务逻辑依赖它会在这个窗口静默失败;`player_id` 注册瞬间即有。
+2. **可重编**:迁移回滚、账号库拆分/region 化都可能重分配编号(§1.3 前瞻);
+   `player_id` 是 snowflake,永久不变。
+3. **展示语义可能改**:产品若要加号段前缀、按 region 切,存进业务表的旧值就改不动了。
+4. **跨库**:编号在 `pandora_account`,流水在 inventory / trade / battle / social 各库
+   (全部以 `player_id` 为键且有索引,已核)——业务库根本不该知道这个字段存在。
+
+review 判据改为:**`register_no` 出现在 `pandora_account` 以外的任何表定义、或出现在
+非运营工具的服务间参数里,直接拒**;运营工具里的 `WHERE register_no = ?` 是正当用法。
 
 ### 3.4 变体评估:独立 ID 服务 + 逐个异步申请 + 映射表(2026-08-09 用户提案)
 
@@ -277,6 +295,54 @@ COMMIT;                                                           -- 回滚则�
 | 5 | 容量/清单登记 | dbcheck registry + login budgets.go + CLAUDE.md §9.24 豁免段:`register_no_counter` 恒 1 行权威闸 | ✅ |
 | 6 | 展示链路(A② 已拍板 2026-08-10:**客户端玩家可见**) | 服务端已落码:proto `LoginResponse.register_no = 13`、`AccountRepo.GetRegisterNo`(**fail-soft**:独立 250ms 查询预算,失败/超时置 0 且不取消登录父 ctx;刻意不并进 FindByAccount——列缺失不能打挂登录整链)、biz 主路径与 battle 重连路径都带出、service 组装 `RegisterNo`。0 = 补号中,客户端显示「生成中」 | ✅ 服务端 |
 | 7 | UE 展示与交付验证(Codex,2026-08-10) | 服务端 C++ pb 以 `[proto]` 提交 `bea78b83`,客户端通过官方 `GenClientProto.ps1 -UpdateLock` 同步并以 `-VerifyOnly` 复验;登录解码→会话态→RoleInfo 全链带出 `register_no`,0 显示「生成中」;login `go build/vet/test`、`Pandora` 与 `PandoraEditor` Development 编译全绿 | ✅ 生成/编译;PIE 与真实登录 E2E 未跑 |
+
+### 3.6 客服/运营按编号反查玩家(2026-08-10 用户提出,**待落地**)
+
+**场景**:玩家报工单只会说自己的编号(界面上就显示这个),客服要据此查该玩家的背包流水、
+交易订单、战报、邮件。这是编号「给玩家看」之后必然跟来的用法,也是 §3.3 红线明确
+**允许**的一次性翻译。
+
+**链路形状**(三跳,全部是索引点查):
+
+```
+玩家报编号 → ① accounts WHERE register_no=?  → player_id   (uk_register_no,pandora_account)
+           → ② 各业务库 WHERE player_id=?     → 流水/订单/战报/邮件
+           → ③ 结果只回显给客服,player_id 不落进任何新表
+```
+
+第 ② 跳已全通:玩家相关表**全部**以 `player_id` 为键且有索引(逐库核过:
+`inventory_ledger` uk(player_id,idem)、`player_items` uk(player_id,item_config_id)、
+`battle_player_stats` idx(player_id,match_id)、`player_mail` idx(player_id,status)、
+`player_mail_claim` PK(player_id,mail_id)、`friendships` uk(player_id,friend_id)、
+`blocks` uk(player_id,blocked_id) 等),分布在 inventory / trade / battle / social 各库;
+各服务也已有按 player_id 的查询 RPC(如 `ListPlayerHistory` / `ListMyOrders` /
+player `GetProfile`)。
+
+**今天的缺口(两个,都不大)**:
+
+1. **反查方法不存在**:`AccountRepo` 只有 `GetRegisterNo(player_id) → register_no`
+   (正向,给登录下发用);没有 `FindByRegisterNo(register_no) → player_id`。
+   索引 `uk_register_no` 已经建好,补一个方法即可,**不需要任何 schema 改动**。
+2. **没有「查询类」运营接口**——但**运维通道本身已存在**,别重复造:
+   - `GmService`(`proto/pandora/gm/v1/gm.proto`,2026-07-07,与 ds_allocator 同进程):
+     已有的 GM / 运维指令通道,**内部接口不经 Envoy 暴露给玩家客户端**。但它是**写向**的
+     (SendCommand 下发指令 → DS 队列 → PollCommands 拉取 → AckCommand 回报),
+     且定位靠 `match_id` + `player_id`,**只覆盖战斗内玩家**,不是玩家数据查询接口。
+   - `ConfigTableAdminService`、`gm_command` 配置表:GM 指令的配置侧,同样非查询。
+   - login.proto 文件头既有约定:「**HTTP endpoint 给运营后台 / 第三方 webhook 用,
+     玩家客户端不直连**」——即运营后台走各业务服 HTTP 面的路子**早有定调**,只是还没有
+     「按编号/按玩家查数据」这一类接口。
+   - 客户端面隔离的现成模式:owner 服务那样在 Envoy 客户端入口
+     `direct_response: 403` 挡掉(deploy/envoy/envoy.yaml「内部系统接口,不对客户端开放」)。
+
+   即缺的不是「通道」而是「查询接口 + 前端」;`FindByRegisterNo` 应挂 login(账号库权威
+   在此),按上述既有约定以内部/运营面暴露,不要塞进 `GmService`(那是战斗内写指令通道,
+   职责与生命周期都不同)。
+
+**落地建议**(等运营后台立项时一并做,§15.3 不提前建):`FindByRegisterNo` 放 login
+(账号库权威在此),作内部 RPC 暴露,鉴权 + 脱敏 + 不经 Envoy 对客户端开放(CLAUDE.md §5.11
+对「运维/调试 RPC」的既有要求)。**注意查不到的两种情形要分开回话**:编号不存在(打错了)
+vs 编号存在但玩家刚注册还没补号——后者客服看到的是玩家界面显示「生成中」,不是查询故障。
 
 ---
 
