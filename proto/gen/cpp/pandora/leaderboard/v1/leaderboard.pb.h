@@ -174,6 +174,14 @@ extern const ::google::protobuf::internal::ClassDataFull RemoveEntryResponse_cla
 #else
 extern const RemoveEntryResponseGlobalsTypeInternal RemoveEntryResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class RewardGrantStorageRecord;
+struct RewardGrantStorageRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RewardGrantStorageRecordGlobalsTypeInternal RewardGrantStorageRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RewardGrantStorageRecord_class_data_;
+#else
+extern const RewardGrantStorageRecordGlobalsTypeInternal RewardGrantStorageRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class RewardItem;
 struct RewardItemGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -396,7 +404,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubmitScoreResponse final : public 
   [[nodiscard]] static const SubmitScoreResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubmitScoreResponse>(&SubmitScoreResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(SubmitScoreResponse& a, SubmitScoreResponse& b) { a.Swap(&b); }
   inline void Swap(SubmitScoreResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -834,7 +842,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemoveEntryResponse final : public 
   [[nodiscard]] static const RemoveEntryResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RemoveEntryResponse>(&RemoveEntryResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(RemoveEntryResponse& a, RemoveEntryResponse& b) { a.Swap(&b); }
   inline void Swap(RemoveEntryResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1272,7 +1280,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBoardResponse final : public 
   [[nodiscard]] static const DeleteBoardResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteBoardResponse>(&DeleteBoardResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(DeleteBoardResponse& a, DeleteBoardResponse& b) { a.Swap(&b); }
   inline void Swap(DeleteBoardResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1964,7 +1972,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubmitScoreRequest final : public :
   [[nodiscard]] static const SubmitScoreRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubmitScoreRequest>(&SubmitScoreRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(SubmitScoreRequest& a, SubmitScoreRequest& b) { a.Swap(&b); }
   inline void Swap(SubmitScoreRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2225,7 +2233,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleBoardResponse final : public 
   [[nodiscard]] static const SettleBoardResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SettleBoardResponse>(&SettleBoardResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(SettleBoardResponse& a, SettleBoardResponse& b) { a.Swap(&b); }
   inline void Swap(SettleBoardResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2665,6 +2673,218 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardTier final : public ::google:
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardGrantStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.leaderboard.v1.RewardGrantStorageRecord) */ {
+ public:
+  inline RewardGrantStorageRecord() : RewardGrantStorageRecord(nullptr) {}
+  ~RewardGrantStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RewardGrantStorageRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RewardGrantStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RewardGrantStorageRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RewardGrantStorageRecord(const RewardGrantStorageRecord& from) : RewardGrantStorageRecord(nullptr, from) {}
+  inline RewardGrantStorageRecord(RewardGrantStorageRecord&& from) noexcept : RewardGrantStorageRecord(nullptr, ::std::move(from)) {}
+  inline RewardGrantStorageRecord& operator=(const RewardGrantStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RewardGrantStorageRecord& operator=(RewardGrantStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RewardGrantStorageRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RewardGrantStorageRecord>(&RewardGrantStorageRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 6;
+  friend void swap(RewardGrantStorageRecord& a, RewardGrantStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(RewardGrantStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RewardGrantStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RewardGrantStorageRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RewardGrantStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RewardGrantStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RewardGrantStorageRecord& from) { RewardGrantStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RewardGrantStorageRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.leaderboard.v1.RewardGrantStorageRecord"; }
+
+  explicit RewardGrantStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RewardGrantStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RewardGrantStorageRecord& from);
+  RewardGrantStorageRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RewardGrantStorageRecord&& from) noexcept
+      : RewardGrantStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemsFieldNumber = 1,
+  };
+  // repeated .pandora.leaderboard.v1.RewardItem items = 1 [json_name = "items"];
+  [[nodiscard]] int items_size()
+      const;
+  private:
+  int _internal_items_size() const;
+
+  public:
+  void clear_items() ;
+  [[nodiscard]] const ::pandora::leaderboard::v1::RewardItem& items(int index) const;
+  [[nodiscard]] ::pandora::leaderboard::v1::RewardItem* PROTOBUF_NONNULL mutable_items(int index);
+  ::pandora::leaderboard::v1::RewardItem* PROTOBUF_NONNULL add_items();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::leaderboard::v1::RewardItem>&
+  items() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::leaderboard::v1::RewardItem>* PROTOBUF_NONNULL
+  mutable_items();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::leaderboard::v1::RewardItem>& _internal_items() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::leaderboard::v1::RewardItem>* PROTOBUF_NONNULL _internal_mutable_items();
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.leaderboard.v1.RewardGrantStorageRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RewardGrantStorageRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::leaderboard::v1::RewardItem > items_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemoveEntryRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.leaderboard.v1.RemoveEntryRequest) */ {
  public:
@@ -2721,7 +2941,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemoveEntryRequest final : public :
   [[nodiscard]] static const RemoveEntryRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RemoveEntryRequest>(&RemoveEntryRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(RemoveEntryRequest& a, RemoveEntryRequest& b) { a.Swap(&b); }
   inline void Swap(RemoveEntryRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2940,7 +3160,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaderboardSettleEvent final : publ
   [[nodiscard]] static const LeaderboardSettleEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LeaderboardSettleEvent>(&LeaderboardSettleEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(LeaderboardSettleEvent& a, LeaderboardSettleEvent& b) { a.Swap(&b); }
   inline void Swap(LeaderboardSettleEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3194,7 +3414,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankResponse final : public ::go
   [[nodiscard]] static const GetRankResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRankResponse>(&GetRankResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(GetRankResponse& a, GetRankResponse& b) { a.Swap(&b); }
   inline void Swap(GetRankResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3449,7 +3669,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankRequest final : public ::goo
   [[nodiscard]] static const GetRankRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRankRequest>(&GetRankRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(GetRankRequest& a, GetRankRequest& b) { a.Swap(&b); }
   inline void Swap(GetRankRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3668,7 +3888,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRangeResponse final : public ::g
   [[nodiscard]] static const GetRangeResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRangeResponse>(&GetRangeResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(GetRangeResponse& a, GetRangeResponse& b) { a.Swap(&b); }
   inline void Swap(GetRangeResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3904,7 +4124,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRangeRequest final : public ::go
   [[nodiscard]] static const GetRangeRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRangeRequest>(&GetRangeRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(GetRangeRequest& a, GetRangeRequest& b) { a.Swap(&b); }
   inline void Swap(GetRangeRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4135,7 +4355,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetAroundResponse final : public ::
   [[nodiscard]] static const GetAroundResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetAroundResponse>(&GetAroundResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(GetAroundResponse& a, GetAroundResponse& b) { a.Swap(&b); }
   inline void Swap(GetAroundResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4371,7 +4591,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetAroundRequest final : public ::g
   [[nodiscard]] static const GetAroundRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetAroundRequest>(&GetAroundRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(GetAroundRequest& a, GetAroundRequest& b) { a.Swap(&b); }
   inline void Swap(GetAroundRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4602,7 +4822,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBoardRequest final : public :
   [[nodiscard]] static const DeleteBoardRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteBoardRequest>(&DeleteBoardRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(DeleteBoardRequest& a, DeleteBoardRequest& b) { a.Swap(&b); }
   inline void Swap(DeleteBoardRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5021,7 +5241,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleBoardRequest final : public :
   [[nodiscard]] static const SettleBoardRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SettleBoardRequest>(&SettleBoardRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(SettleBoardRequest& a, SettleBoardRequest& b) { a.Swap(&b); }
   inline void Swap(SettleBoardRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5822,6 +6042,65 @@ inline ::google::protobuf::RepeatedPtrField<::pandora::leaderboard::v1::RewardTi
 RewardTable::_internal_mutable_tiers() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.tiers_;
+}
+
+// -------------------------------------------------------------------
+
+// RewardGrantStorageRecord
+
+// repeated .pandora.leaderboard.v1.RewardItem items = 1 [json_name = "items"];
+inline int RewardGrantStorageRecord::_internal_items_size() const {
+  return _internal_items().size();
+}
+inline int RewardGrantStorageRecord::items_size() const {
+  return _internal_items_size();
+}
+inline void RewardGrantStorageRecord::clear_items() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.items_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::leaderboard::v1::RewardItem& RewardGrantStorageRecord::items(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.leaderboard.v1.RewardGrantStorageRecord.items)
+  return _internal_items().Get(index);
+}
+inline ::pandora::leaderboard::v1::RewardItem* PROTOBUF_NONNULL RewardGrantStorageRecord::mutable_items(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.leaderboard.v1.RewardGrantStorageRecord.items)
+  return _internal_mutable_items()->Mutable(index);
+}
+inline ::pandora::leaderboard::v1::RewardItem* PROTOBUF_NONNULL RewardGrantStorageRecord::add_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::leaderboard::v1::RewardItem* _add =
+      _internal_mutable_items()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.leaderboard.v1.RewardGrantStorageRecord.items)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::leaderboard::v1::RewardItem>& RewardGrantStorageRecord::items() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.leaderboard.v1.RewardGrantStorageRecord.items)
+  return _internal_items();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::leaderboard::v1::RewardItem>* PROTOBUF_NONNULL
+RewardGrantStorageRecord::mutable_items() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.leaderboard.v1.RewardGrantStorageRecord.items)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_items();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::leaderboard::v1::RewardItem>&
+RewardGrantStorageRecord::_internal_items() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.items_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::leaderboard::v1::RewardItem>* PROTOBUF_NONNULL
+RewardGrantStorageRecord::_internal_mutable_items() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.items_;
 }
 
 // -------------------------------------------------------------------

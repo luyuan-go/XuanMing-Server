@@ -51,11 +51,11 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
     {
       PROTOBUF_FIELD_OFFSET(SkillRow, _impl_._has_bits_),
       0, // no _extensions_
-      22, 248,  // max_field_number, fast_idx_mask
+      24, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4290772992,  // skipmap
+      4278190080,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      22,  // num_field_entries
+      24,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -154,8 +154,14 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
       {::_pbi::TcParser::FastUS2,
        {434, 4, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.apply_buffs_to_self_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
+      {::_pbi::TcParser::FastF32S2,
+       {445, 22, 0,
+        PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.correction_rate_)}},
+      // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
+      {::_pbi::TcParser::FastV32S2,
+       {448, 23, 0,
+        PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_count_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -210,10 +216,14 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
       {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_value_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // string apply_buffs_to_self = 22 [json_name = "applyBuffsToSelf", (.pandora.config.v1.excel_col) = "\345\257\271\350\207\252\350\272\253\345\272\224\347\224\250Buff"];
       {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.apply_buffs_to_self_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.correction_rate_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_count_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\32\0\6\4\4\0\0\0\0\0\14\0\0\0\0\0\0\0\0\0\0\0\23\0"
+      "\32\0\6\4\4\0\0\0\0\0\14\0\0\0\0\0\0\0\0\0\0\0\23\0\0\0\0\0\0\0\0\0"
       "pandora.config.v1.SkillRow"
       "remark"
       "name"
@@ -260,7 +270,9 @@ inline constexpr SkillRow::Impl_::Impl_(
         hate_to_enemy_{0},
         rot_mode_{0u},
         damage_rate_{0},
-        damage_value_{0} {}
+        damage_value_{0},
+        correction_rate_{0},
+        effect_count_{0u} {}
 
 template <typename>
 constexpr SkillRow::SkillRow(::_pbi::ConstantInitialized,
@@ -517,7 +529,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_._has_bits_),
-        25, // hasbit index offset
+        27, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.remark_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.name_),
@@ -540,6 +552,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.damage_rate_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.damage_value_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.apply_buffs_to_self_),
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.correction_rate_),
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.effect_count_),
         5,
         0,
         1,
@@ -562,6 +576,8 @@ const ::uint32_t
         20,
         21,
         4,
+        22,
+        23,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -572,7 +588,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::config::v1::SkillRow)},
-        {47, sizeof(::pandora::config::v1::SkillTableData)},
+        {51, sizeof(::pandora::config::v1::SkillTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -583,7 +599,7 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_2eproto[] ABS
     protodesc_cold) = {
     "\n\035pandora/config/v1/skill.proto\022\021pandora"
     ".config.v1\032\035pandora/config/v1/excel.prot"
-    "o\"\227\t\n\010SkillRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
+    "o\"\207\n\n\010SkillRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
     "id\022\"\n\006remark\030\002 \001(\tB\n\362\222\031\006\345\244\207\346\263\250R\006remark\022\036"
     "\n\004name\030\003 \001(\tB\n\362\222\031\006\345\220\215\347\247\260R\004name\022#\n\004icon\030\004"
     " \001(\tB\017\362\222\031\006\345\233\276\346\240\207\212\223\031\001/R\004icon\022$\n\007segment\030\005"
@@ -612,10 +628,12 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_2eproto[] ABS
     "eRate\022<\n\014damage_value\030\025 \001(\002B\031\362\222\031\025\346\212\200\350\203\275\344"
     "\274\244\345\256\263\345\233\272\345\256\232\345\200\274R\013damageValue\022F\n\023apply_buf"
     "fs_to_self\030\026 \001(\tB\027\362\222\031\023\345\257\271\350\207\252\350\272\253\345\272\224\347\224\250Buf"
-    "fR\020applyBuffsToSelf\"_\n\016SkillTableData\022/\n"
-    "\004rows\030\001 \003(\0132\033.pandora.config.v1.SkillRow"
-    "R\004rows:\034\352\222\031\024\346\212\200\350\203\275/j_\346\212\200\350\203\275.xlsx\260\223\031\007b\006pr"
-    "oto3"
+    "fR\020applyBuffsToSelf\0229\n\017correction_rate\030\027"
+    " \001(\002B\020\362\222\031\014\344\277\256\346\255\243\347\263\273\346\225\260R\016correctionRate\0223"
+    "\n\014effect_count\030\030 \001(\rB\020\362\222\031\014\347\224\237\346\225\210\346\254\241\346\225\260R\013"
+    "effectCount\"_\n\016SkillTableData\022/\n\004rows\030\001 "
+    "\003(\0132\033.pandora.config.v1.SkillRowR\004rows:\034"
+    "\352\222\031\024\346\212\200\350\203\275/j_\346\212\200\350\203\275.xlsx\260\223\031\007b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto_deps[1] = {
@@ -625,7 +643,7 @@ static ::absl::once_flag descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto = {
     false,
     false,
-    1364,
+    1476,
     descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_2eproto,
     "pandora/config/v1/skill.proto",
     &descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto_once,
@@ -682,9 +700,9 @@ SkillRow::SkillRow(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, damage_value_) -
+           offsetof(Impl_, effect_count_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::damage_value_));
+               sizeof(Impl_::effect_count_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.config.v1.SkillRow)
 }
@@ -703,9 +721,9 @@ inline void SkillRow::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, damage_value_) -
+           offsetof(Impl_, effect_count_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::damage_value_));
+               sizeof(Impl_::effect_count_));
 }
 SkillRow::~SkillRow() {
   // @@protoc_insertion_point(destructor:pandora.config.v1.SkillRow)
@@ -787,10 +805,10 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
         reinterpret_cast<char*>(&_impl_.target_camp_) -
         reinterpret_cast<char*>(&_impl_.cd_timing_)) + sizeof(_impl_.target_camp_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     ::memset(&_impl_.use_distance_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.damage_value_) -
-        reinterpret_cast<char*>(&_impl_.use_distance_)) + sizeof(_impl_.damage_value_));
+        reinterpret_cast<char*>(&_impl_.effect_count_) -
+        reinterpret_cast<char*>(&_impl_.use_distance_)) + sizeof(_impl_.effect_count_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1018,6 +1036,24 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
     }
   }
 
+  // float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (::absl::bit_cast<::uint32_t>(this_._internal_correction_rate()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteFloatToArray(
+          23, this_._internal_correction_rate(), target);
+    }
+  }
+
+  // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_effect_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_effect_count(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1156,7 +1192,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // float use_distance = 15 [json_name = "useDistance", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\346\226\275\346\224\276\350\214\203\345\233\264"];
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_use_distance()) != 0) {
@@ -1192,6 +1228,19 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_damage_value()) != 0) {
         total_size += 6;
+      }
+    }
+    // float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (::absl::bit_cast<::uint32_t>(this_._internal_correction_rate()) != 0) {
+        total_size += 6;
+      }
+    }
+    // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_effect_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_effect_count());
       }
     }
   }
@@ -1316,7 +1365,7 @@ void SkillRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_use_distance()) != 0) {
         _this->_impl_.use_distance_ = from._impl_.use_distance_;
@@ -1347,6 +1396,16 @@ void SkillRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.damage_value_ = from._impl_.damage_value_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (::absl::bit_cast<::uint32_t>(from._internal_correction_rate()) != 0) {
+        _this->_impl_.correction_rate_ = from._impl_.correction_rate_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_effect_count() != 0) {
+        _this->_impl_.effect_count_ = from._impl_.effect_count_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1373,8 +1432,8 @@ void SkillRow::InternalSwap(SkillRow* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ability_path_, &other->_impl_.ability_path_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.apply_buffs_to_self_, &other->_impl_.apply_buffs_to_self_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_value_)
-      + sizeof(SkillRow::_impl_.damage_value_)
+      PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_count_)
+      + sizeof(SkillRow::_impl_.effect_count_)
       - PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

@@ -3810,6 +3810,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     kCellIdFieldNumber = 7,
     kSelectedRoleIdFieldNumber = 11,
     kMatchIdFieldNumber = 10,
+    kRegisterNoFieldNumber = 13,
   };
   // string session_token = 3 [json_name = "sessionToken"];
   void clear_session_token() ;
@@ -3962,11 +3963,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
   void _internal_set_match_id(::uint64_t value);
 
   public:
+  // uint64 register_no = 13 [json_name = "registerNo"];
+  void clear_register_no() ;
+  [[nodiscard]] ::uint64_t register_no() const;
+  void set_register_no(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_register_no() const;
+  void _internal_set_register_no(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.LoginResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
+      ::google::protobuf::internal::TcParseTable<4, 13,
                           1, 108,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4007,6 +4018,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     ::uint32_t cell_id_;
     ::uint32_t selected_role_id_;
     ::uint64_t match_id_;
+    ::uint64_t register_no_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5196,6 +5208,30 @@ inline void LoginResponse::set_allocated_resume_context(::pandora::login::v1::Re
 
   _impl_.resume_context_ = reinterpret_cast<::pandora::login::v1::ResumeContext*>(value);
   // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.LoginResponse.resume_context)
+}
+
+// uint64 register_no = 13 [json_name = "registerNo"];
+inline void LoginResponse::clear_register_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.register_no_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint64_t LoginResponse::register_no() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.register_no)
+  return _internal_register_no();
+}
+inline void LoginResponse::set_register_no(::uint64_t value) {
+  _internal_set_register_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.register_no)
+}
+inline ::uint64_t LoginResponse::_internal_register_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.register_no_;
+}
+inline void LoginResponse::_internal_set_register_no(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.register_no_ = value;
 }
 
 // -------------------------------------------------------------------

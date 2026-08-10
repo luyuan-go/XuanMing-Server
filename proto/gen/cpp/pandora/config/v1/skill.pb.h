@@ -260,6 +260,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
     kRotModeFieldNumber = 19,
     kDamageRateFieldNumber = 20,
     kDamageValueFieldNumber = 21,
+    kCorrectionRateFieldNumber = 23,
+    kEffectCountFieldNumber = 24,
   };
   // string remark = 2 [json_name = "remark", (.pandora.config.v1.excel_col) = "\345\244\207\346\263\250"];
   void clear_remark() ;
@@ -506,12 +508,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
   void _internal_set_damage_value(float value);
 
   public:
+  // float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
+  void clear_correction_rate() ;
+  [[nodiscard]] float correction_rate() const;
+  void set_correction_rate(float value);
+
+  private:
+  float _internal_correction_rate() const;
+  void _internal_set_correction_rate(float value);
+
+  public:
+  // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
+  void clear_effect_count() ;
+  [[nodiscard]] ::uint32_t effect_count() const;
+  void set_effect_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_effect_count() const;
+  void _internal_set_effect_count(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.SkillRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 22,
-                          0, 96,
+      ::google::protobuf::internal::TcParseTable<5, 24,
+                          0, 104,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -561,6 +583,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
     ::uint32_t rot_mode_;
     float damage_rate_;
     float damage_value_;
+    float correction_rate_;
+    ::uint32_t effect_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1521,6 +1545,54 @@ inline void SkillRow::set_allocated_apply_buffs_to_self(::std::string* PROTOBUF_
     _impl_.apply_buffs_to_self_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.SkillRow.apply_buffs_to_self)
+}
+
+// float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
+inline void SkillRow::clear_correction_rate() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.correction_rate_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline float SkillRow::correction_rate() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.correction_rate)
+  return _internal_correction_rate();
+}
+inline void SkillRow::set_correction_rate(float value) {
+  _internal_set_correction_rate(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.correction_rate)
+}
+inline float SkillRow::_internal_correction_rate() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.correction_rate_;
+}
+inline void SkillRow::_internal_set_correction_rate(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.correction_rate_ = value;
+}
+
+// uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
+inline void SkillRow::clear_effect_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t SkillRow::effect_count() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.effect_count)
+  return _internal_effect_count();
+}
+inline void SkillRow::set_effect_count(::uint32_t value) {
+  _internal_set_effect_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.effect_count)
+}
+inline ::uint32_t SkillRow::_internal_effect_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effect_count_;
+}
+inline void SkillRow::_internal_set_effect_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_count_ = value;
 }
 
 // -------------------------------------------------------------------

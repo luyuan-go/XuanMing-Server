@@ -31,6 +31,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
         // ::pandora::locator::v1::Location
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::HubPresenceFence
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
         // ::pandora::locator::v1::SetLocationRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
         // ::pandora::locator::v1::SetLocationResponse
@@ -56,6 +58,14 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         // ::pandora::locator::v1::ReportDisconnectRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
         // ::pandora::locator::v1::ReportDisconnectResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::BatchGetLastSeenRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::BatchGetLastSeenResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::PlayerLeftHubEvent
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
         // ::pandora::locator::v1::PlayerPlacementStorageRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
@@ -197,7 +207,7 @@ constexpr auto UnsubscribePresenceResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[33],
+      &file_reflection_data[38],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -338,7 +348,7 @@ constexpr auto UnsubscribePresenceRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[32],
+      &file_reflection_data[37],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -479,7 +489,7 @@ constexpr auto SubscribePresenceResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[31],
+      &file_reflection_data[36],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -632,7 +642,7 @@ constexpr auto SubscribePresenceRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[30],
+      &file_reflection_data[35],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -773,7 +783,7 @@ constexpr auto SetLocationResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[2],
+      &file_reflection_data[3],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -921,7 +931,7 @@ constexpr auto ReportDisconnectResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -968,159 +978,6 @@ const ::_pbi::ClassData* ReportDisconnectResponse_get_class_data() {
   return ReportDisconnectResponse_globals_.GetClassData();
 #else
   return ReportDisconnectResponse_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
-class ReportDisconnectRequest::_Internal {
- public:
-  using HasBits = decltype(::std::declval<ReportDisconnectRequest>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_._has_bits_);
-};
-
-constexpr ReportDisconnectRequest::ParseTableT_ ReportDisconnectRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_._has_bits_),
-      0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
-      0,  // num_aux_entries
-      offsetof(ParseTableT_, field_names),  // no aux_entries
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::pandora::locator::v1::ReportDisconnectRequest>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      // uint64 player_id = 2 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReportDisconnectRequest, _impl_.player_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.player_id_)}},
-      // string hub_pod = 1 [json_name = "hubPod"];
-      {::_pbi::TcParser::FastUS1,
-       {10, 0, 0,
-        PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.hub_pod_)}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // string hub_pod = 1 [json_name = "hubPod"];
-      {PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.hub_pod_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // uint64 player_id = 2 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-    }},
-    // no aux_entries
-    {{
-      "\52\7\0\0\0\0\0\0"
-      "pandora.locator.v1.ReportDisconnectRequest"
-      "hub_pod"
-    }},
-  };
-}
-
-
-inline constexpr ReportDisconnectRequest::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        hub_pod_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        player_id_{::uint64_t{0u}} {}
-
-template <typename>
-constexpr ReportDisconnectRequest::ReportDisconnectRequest(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL ReportDisconnectRequest::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) ReportDisconnectRequest(arena);
-}
-constexpr auto ReportDisconnectRequest::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ReportDisconnectRequest), alignof(ReportDisconnectRequest));
-}
-constexpr auto ReportDisconnectRequest::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &ReportDisconnectRequest::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<ReportDisconnectRequest>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &ReportDisconnectRequest::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<ReportDisconnectRequest>(), &ReportDisconnectRequest::ByteSizeLong,
-              &ReportDisconnectRequest::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct ReportDisconnectRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr ReportDisconnectRequestGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 ReportDisconnectRequest_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(ReportDisconnectRequest::InternalGenerateClassData_(
-            _default, &ReportDisconnectRequest_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<ReportDisconnectRequest>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~ReportDisconnectRequestGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) ReportDisconnectRequest _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<ReportDisconnectRequest>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(ReportDisconnectRequestGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ReportDisconnectRequestGlobalsTypeInternal ReportDisconnectRequest_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* ReportDisconnectRequest_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return ReportDisconnectRequest_globals_.GetClassData();
-#else
-  return ReportDisconnectRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1222,7 +1079,7 @@ constexpr auto RefreshHubLocationsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -1380,7 +1237,7 @@ constexpr auto RefreshHubLocationsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -1536,7 +1393,7 @@ constexpr auto PresenceChange::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[34],
+      &file_reflection_data[39],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -1967,7 +1824,7 @@ constexpr auto PlayerPlacementStorageRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -2014,6 +1871,167 @@ const ::_pbi::ClassData* PlayerPlacementStorageRecord_get_class_data() {
   return PlayerPlacementStorageRecord_globals_.GetClassData();
 #else
   return PlayerPlacementStorageRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class PlayerLeftHubEvent::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PlayerLeftHubEvent>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_._has_bits_);
+};
+
+constexpr PlayerLeftHubEvent::ParseTableT_ PlayerLeftHubEvent::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::PlayerLeftHubEvent>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerLeftHubEvent, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_.player_id_)}},
+      // int64 left_at_ms = 2 [json_name = "leftAtMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerLeftHubEvent, _impl_.left_at_ms_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_.left_at_ms_)}},
+      // string hub_pod = 3 [json_name = "hubPod"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_.hub_pod_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // int64 left_at_ms = 2 [json_name = "leftAtMs"];
+      {PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_.left_at_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // string hub_pod = 3 [json_name = "hubPod"];
+      {PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_.hub_pod_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\45\0\0\7\0\0\0\0"
+      "pandora.locator.v1.PlayerLeftHubEvent"
+      "hub_pod"
+    }},
+  };
+}
+
+
+inline constexpr PlayerLeftHubEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        hub_pod_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        left_at_ms_{::int64_t{0}} {}
+
+template <typename>
+constexpr PlayerLeftHubEvent::PlayerLeftHubEvent(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PlayerLeftHubEvent::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PlayerLeftHubEvent(arena);
+}
+constexpr auto PlayerLeftHubEvent::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PlayerLeftHubEvent), alignof(PlayerLeftHubEvent));
+}
+constexpr auto PlayerLeftHubEvent::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PlayerLeftHubEvent::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PlayerLeftHubEvent>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PlayerLeftHubEvent::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PlayerLeftHubEvent>(), &PlayerLeftHubEvent::ByteSizeLong,
+              &PlayerLeftHubEvent::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[18],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PlayerLeftHubEventGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PlayerLeftHubEventGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PlayerLeftHubEvent_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PlayerLeftHubEvent::InternalGenerateClassData_(
+            _default, &PlayerLeftHubEvent_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PlayerLeftHubEvent>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PlayerLeftHubEventGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PlayerLeftHubEvent _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PlayerLeftHubEvent>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PlayerLeftHubEventGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PlayerLeftHubEventGlobalsTypeInternal PlayerLeftHubEvent_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PlayerLeftHubEvent_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PlayerLeftHubEvent_globals_.GetClassData();
+#else
+  return PlayerLeftHubEvent_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -2162,7 +2180,7 @@ constexpr auto PlacementTargetIdentity::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[26],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -2399,6 +2417,170 @@ const ::_pbi::ClassData* Location_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class HubPresenceFence::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<HubPresenceFence>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(HubPresenceFence, _impl_._has_bits_);
+};
+
+constexpr HubPresenceFence::ParseTableT_ HubPresenceFence::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(HubPresenceFence, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::HubPresenceFence>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // string assignment_id = 1 [json_name = "assignmentId"];
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(HubPresenceFence, _impl_.assignment_id_)}},
+      // string admission_id = 2 [json_name = "admissionId"];
+      {::_pbi::TcParser::FastUS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(HubPresenceFence, _impl_.admission_id_)}},
+      // uint64 admission_seq = 3 [json_name = "admissionSeq"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubPresenceFence, _impl_.admission_seq_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(HubPresenceFence, _impl_.admission_seq_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string assignment_id = 1 [json_name = "assignmentId"];
+      {PROTOBUF_FIELD_OFFSET(HubPresenceFence, _impl_.assignment_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string admission_id = 2 [json_name = "admissionId"];
+      {PROTOBUF_FIELD_OFFSET(HubPresenceFence, _impl_.admission_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 admission_seq = 3 [json_name = "admissionSeq"];
+      {PROTOBUF_FIELD_OFFSET(HubPresenceFence, _impl_.admission_seq_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\43\15\14\0\0\0\0\0"
+      "pandora.locator.v1.HubPresenceFence"
+      "assignment_id"
+      "admission_id"
+    }},
+  };
+}
+
+
+inline constexpr HubPresenceFence::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        assignment_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        admission_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        admission_seq_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr HubPresenceFence::HubPresenceFence(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL HubPresenceFence::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) HubPresenceFence(arena);
+}
+constexpr auto HubPresenceFence::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(HubPresenceFence), alignof(HubPresenceFence));
+}
+constexpr auto HubPresenceFence::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &HubPresenceFence::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<HubPresenceFence>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &HubPresenceFence::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<HubPresenceFence>(), &HubPresenceFence::ByteSizeLong,
+              &HubPresenceFence::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(HubPresenceFence, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct HubPresenceFenceGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr HubPresenceFenceGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 HubPresenceFence_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(HubPresenceFence::InternalGenerateClassData_(
+            _default, &HubPresenceFence_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<HubPresenceFence>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~HubPresenceFenceGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) HubPresenceFence _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<HubPresenceFence>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(HubPresenceFenceGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST HubPresenceFenceGlobalsTypeInternal HubPresenceFence_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* HubPresenceFence_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return HubPresenceFence_globals_.GetClassData();
+#else
+  return HubPresenceFence_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetPlacementRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetPlacementRequest>()._impl_._has_bits_);
@@ -2489,7 +2671,7 @@ constexpr auto GetPlacementRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -2630,7 +2812,7 @@ constexpr auto GetLocationRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[3],
+      &file_reflection_data[4],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -2875,7 +3057,7 @@ constexpr auto CommitPlacementAdmissionRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[26],
+      &file_reflection_data[31],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -3016,7 +3198,7 @@ constexpr auto ClearLocationResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -3157,7 +3339,7 @@ constexpr auto ClearLocationRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -3340,7 +3522,7 @@ constexpr auto BootstrapPlacementRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[28],
+      &file_reflection_data[33],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -3582,7 +3764,7 @@ constexpr auto BindPlacementTargetRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -3803,7 +3985,7 @@ constexpr auto BeginPlacementTransitionRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[22],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -3949,7 +4131,7 @@ constexpr auto BatchGetLocationRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -4000,6 +4182,285 @@ const ::_pbi::ClassData* BatchGetLocationRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+constexpr BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::ParseTableT_ BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // int64 value = 2 [json_name = "value"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_.value_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_.value_)}},
+      // uint64 key = 1 [json_name = "key"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_.key_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_.key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 key = 1 [json_name = "key"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // int64 value = 2 [json_name = "value"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::MapEntry(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse(arena);
+}
+constexpr auto BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse), alignof(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse));
+}
+constexpr auto BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[16],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUseGlobalsTypeInternal BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_.GetClassData();
+#else
+  return BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BatchGetLastSeenRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BatchGetLastSeenRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BatchGetLastSeenRequest, _impl_._has_bits_);
+};
+
+constexpr BatchGetLastSeenRequest::ParseTableT_ BatchGetLastSeenRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchGetLastSeenRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::BatchGetLastSeenRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+      {::_pbi::TcParser::FastV64P1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchGetLastSeenRequest, _impl_.player_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLastSeenRequest, _impl_.player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BatchGetLastSeenRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::BatchGetLastSeenRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+template <typename>
+constexpr BatchGetLastSeenRequest::BatchGetLastSeenRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BatchGetLastSeenRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchGetLastSeenRequest(arena);
+}
+constexpr auto BatchGetLastSeenRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BatchGetLastSeenRequest), alignof(BatchGetLastSeenRequest));
+}
+constexpr auto BatchGetLastSeenRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchGetLastSeenRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchGetLastSeenRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchGetLastSeenRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BatchGetLastSeenRequest>(), &BatchGetLastSeenRequest::ByteSizeLong,
+              &BatchGetLastSeenRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchGetLastSeenRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[15],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchGetLastSeenRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchGetLastSeenRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchGetLastSeenRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchGetLastSeenRequest::InternalGenerateClassData_(
+            _default, &BatchGetLastSeenRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLastSeenRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchGetLastSeenRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchGetLastSeenRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLastSeenRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchGetLastSeenRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchGetLastSeenRequestGlobalsTypeInternal BatchGetLastSeenRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchGetLastSeenRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchGetLastSeenRequest_globals_.GetClassData();
+#else
+  return BatchGetLastSeenRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class SetLocationRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<SetLocationRequest>()._impl_._has_bits_);
@@ -4012,12 +4473,12 @@ constexpr SetLocationRequest::ParseTableT_ SetLocationRequest::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(SetLocationRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
-      1,  // num_aux_entries
+      3,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -4026,27 +4487,39 @@ constexpr SetLocationRequest::ParseTableT_ SetLocationRequest::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::locator::v1::SetLocationRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetLocationRequest, _impl_.player_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SetLocationRequest, _impl_.player_id_)}},
       // .pandora.locator.v1.Location location = 2 [json_name = "location"];
       {::_pbi::TcParser::FastMtS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(SetLocationRequest, _impl_.location_)}},
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetLocationRequest, _impl_.player_id_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(SetLocationRequest, _impl_.player_id_)}},
+      // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+      {::_pbi::TcParser::FastMtS1,
+       {26, 1, 1,
+        PROTOBUF_FIELD_OFFSET(SetLocationRequest, _impl_.hub_presence_fence_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(SetLocationRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SetLocationRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .pandora.locator.v1.Location location = 2 [json_name = "location"];
       {PROTOBUF_FIELD_OFFSET(SetLocationRequest, _impl_.location_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+      {PROTOBUF_FIELD_OFFSET(SetLocationRequest, _impl_.hub_presence_fence_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::pandora::locator::v1::Location>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::pandora::locator::v1::Location_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::locator::v1::HubPresenceFence>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::locator::v1::HubPresenceFence_globals_},
         #endif
     }},
     {{
@@ -4060,6 +4533,7 @@ inline constexpr SetLocationRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         location_{nullptr},
+        hub_presence_fence_{nullptr},
         player_id_{::uint64_t{0u}} {}
 
 template <typename>
@@ -4103,7 +4577,7 @@ constexpr auto SetLocationRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[2],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -4257,7 +4731,7 @@ constexpr auto RetargetPlacementTargetResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[23],
+      &file_reflection_data[28],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -4516,7 +4990,7 @@ constexpr auto RetargetPlacementTargetRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[27],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -4563,6 +5037,173 @@ const ::_pbi::ClassData* RetargetPlacementTargetRequest_get_class_data() {
   return RetargetPlacementTargetRequest_globals_.GetClassData();
 #else
   return RetargetPlacementTargetRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ReportDisconnectRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ReportDisconnectRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_._has_bits_);
+};
+
+constexpr ReportDisconnectRequest::ParseTableT_ ReportDisconnectRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::ReportDisconnectRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // string hub_pod = 1 [json_name = "hubPod"];
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.hub_pod_)}},
+      // uint64 player_id = 2 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReportDisconnectRequest, _impl_.player_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.player_id_)}},
+      // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+      {::_pbi::TcParser::FastMtS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.hub_presence_fence_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string hub_pod = 1 [json_name = "hubPod"];
+      {PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.hub_pod_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 player_id = 2 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+      {PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.hub_presence_fence_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::locator::v1::HubPresenceFence>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::locator::v1::HubPresenceFence_globals_},
+        #endif
+    }},
+    {{
+      "\52\7\0\0\0\0\0\0"
+      "pandora.locator.v1.ReportDisconnectRequest"
+      "hub_pod"
+    }},
+  };
+}
+
+
+inline constexpr ReportDisconnectRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        hub_pod_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_presence_fence_{nullptr},
+        player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr ReportDisconnectRequest::ReportDisconnectRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ReportDisconnectRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ReportDisconnectRequest(arena);
+}
+constexpr auto ReportDisconnectRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ReportDisconnectRequest), alignof(ReportDisconnectRequest));
+}
+constexpr auto ReportDisconnectRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ReportDisconnectRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ReportDisconnectRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ReportDisconnectRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ReportDisconnectRequest>(), &ReportDisconnectRequest::ByteSizeLong,
+              &ReportDisconnectRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[13],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ReportDisconnectRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ReportDisconnectRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ReportDisconnectRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ReportDisconnectRequest::InternalGenerateClassData_(
+            _default, &ReportDisconnectRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ReportDisconnectRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ReportDisconnectRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ReportDisconnectRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ReportDisconnectRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ReportDisconnectRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ReportDisconnectRequestGlobalsTypeInternal ReportDisconnectRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ReportDisconnectRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ReportDisconnectRequest_globals_.GetClassData();
+#else
+  return ReportDisconnectRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4667,7 +5308,7 @@ constexpr auto PresenceBatchEvent::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[35],
+      &file_reflection_data[40],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -4829,7 +5470,7 @@ constexpr auto GetPlacementResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -4983,7 +5624,7 @@ constexpr auto GetLocationResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -5145,7 +5786,7 @@ constexpr auto ConfirmPlacementSourceDepartureResponse::InternalGenerateClassDat
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[25],
+      &file_reflection_data[30],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -5393,7 +6034,7 @@ constexpr auto ConfirmPlacementSourceDepartureRequest::InternalGenerateClassData
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[29],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -5555,7 +6196,7 @@ constexpr auto CommitPlacementAdmissionResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[27],
+      &file_reflection_data[32],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -5709,7 +6350,7 @@ constexpr auto BootstrapPlacementResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[29],
+      &file_reflection_data[34],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -5863,7 +6504,7 @@ constexpr auto BindPlacementTargetResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[25],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -6017,7 +6658,7 @@ constexpr auto BeginPlacementTransitionResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -6156,7 +6797,7 @@ constexpr auto BatchGetLocationResponse_LocationsEntry_DoNotUse::InternalGenerat
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -6203,6 +6844,157 @@ const ::_pbi::ClassData* BatchGetLocationResponse_LocationsEntry_DoNotUse_get_cl
   return BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_.GetClassData();
 #else
   return BatchGetLocationResponse_LocationsEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BatchGetLastSeenResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BatchGetLastSeenResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse, _impl_._has_bits_);
+};
+
+constexpr BatchGetLastSeenResponse::ParseTableT_ BatchGetLastSeenResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::BatchGetLastSeenResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BatchGetLastSeenResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // map<uint64, int64> last_seen_ms = 2 [json_name = "lastSeenMs"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse, _impl_.last_seen_ms_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+    }},
+    {{
+        {::_pbi::TcParser::GetMapAuxInfo(
+            0, 0, 4, 3, 0)},
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BatchGetLastSeenResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
+        last_seen_ms_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::BatchGetLastSeenResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenResponse, _impl_.last_seen_ms_)>()
+         }
+     {}
+
+template <typename>
+constexpr BatchGetLastSeenResponse::BatchGetLastSeenResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BatchGetLastSeenResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchGetLastSeenResponse(arena);
+}
+constexpr auto BatchGetLastSeenResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BatchGetLastSeenResponse), alignof(BatchGetLastSeenResponse));
+}
+constexpr auto BatchGetLastSeenResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchGetLastSeenResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchGetLastSeenResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchGetLastSeenResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BatchGetLastSeenResponse>(), &BatchGetLastSeenResponse::ByteSizeLong,
+              &BatchGetLastSeenResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[17],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchGetLastSeenResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchGetLastSeenResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchGetLastSeenResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchGetLastSeenResponse::InternalGenerateClassData_(
+            _default, &BatchGetLastSeenResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLastSeenResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchGetLastSeenResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchGetLastSeenResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLastSeenResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchGetLastSeenResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchGetLastSeenResponseGlobalsTypeInternal BatchGetLastSeenResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchGetLastSeenResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchGetLastSeenResponse_globals_.GetClassData();
+#else
+  return BatchGetLastSeenResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -6312,7 +7104,7 @@ constexpr auto BatchGetLocationResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -6389,12 +7181,23 @@ const ::uint32_t
         1,
         5,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::HubPresenceFence, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::HubPresenceFence, _impl_.assignment_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::HubPresenceFence, _impl_.admission_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::HubPresenceFence, _impl_.admission_seq_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SetLocationRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SetLocationRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SetLocationRequest, _impl_.location_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SetLocationRequest, _impl_.hub_presence_fence_),
+        2,
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SetLocationResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -6457,10 +7260,12 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ReportDisconnectRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ReportDisconnectRequest, _impl_.hub_pod_),
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ReportDisconnectRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ReportDisconnectRequest, _impl_.hub_presence_fence_),
         0,
+        2,
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ReportDisconnectResponse, _impl_._has_bits_),
@@ -6469,6 +7274,34 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ReportDisconnectResponse, _impl_.shrunk_),
         0,
         1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenRequest, _impl_.player_ids_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenResponse, _impl_.last_seen_ms_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PlayerLeftHubEvent, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PlayerLeftHubEvent, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PlayerLeftHubEvent, _impl_.left_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PlayerLeftHubEvent, _impl_.hub_pod_),
+        1,
+        2,
+        0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PlayerPlacementStorageRecord, _impl_._has_bits_),
         41, // hasbit index offset
@@ -6814,45 +7647,51 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::locator::v1::Location)},
-        {15, sizeof(::pandora::locator::v1::SetLocationRequest)},
-        {22, sizeof(::pandora::locator::v1::SetLocationResponse)},
-        {27, sizeof(::pandora::locator::v1::GetLocationRequest)},
-        {32, sizeof(::pandora::locator::v1::GetLocationResponse)},
-        {39, sizeof(::pandora::locator::v1::BatchGetLocationRequest)},
-        {44, sizeof(::pandora::locator::v1::BatchGetLocationResponse_LocationsEntry_DoNotUse)},
-        {51, sizeof(::pandora::locator::v1::BatchGetLocationResponse)},
-        {58, sizeof(::pandora::locator::v1::ClearLocationRequest)},
-        {63, sizeof(::pandora::locator::v1::ClearLocationResponse)},
-        {68, sizeof(::pandora::locator::v1::RefreshHubLocationsRequest)},
-        {75, sizeof(::pandora::locator::v1::RefreshHubLocationsResponse)},
-        {82, sizeof(::pandora::locator::v1::ReportDisconnectRequest)},
-        {89, sizeof(::pandora::locator::v1::ReportDisconnectResponse)},
-        {96, sizeof(::pandora::locator::v1::PlayerPlacementStorageRecord)},
-        {175, sizeof(::pandora::locator::v1::GetPlacementRequest)},
-        {180, sizeof(::pandora::locator::v1::GetPlacementResponse)},
-        {189, sizeof(::pandora::locator::v1::BeginPlacementTransitionRequest)},
-        {212, sizeof(::pandora::locator::v1::BeginPlacementTransitionResponse)},
-        {219, sizeof(::pandora::locator::v1::BindPlacementTargetRequest)},
-        {246, sizeof(::pandora::locator::v1::BindPlacementTargetResponse)},
-        {253, sizeof(::pandora::locator::v1::PlacementTargetIdentity)},
-        {268, sizeof(::pandora::locator::v1::RetargetPlacementTargetRequest)},
-        {299, sizeof(::pandora::locator::v1::RetargetPlacementTargetResponse)},
-        {306, sizeof(::pandora::locator::v1::ConfirmPlacementSourceDepartureRequest)},
-        {335, sizeof(::pandora::locator::v1::ConfirmPlacementSourceDepartureResponse)},
-        {344, sizeof(::pandora::locator::v1::CommitPlacementAdmissionRequest)},
-        {371, sizeof(::pandora::locator::v1::CommitPlacementAdmissionResponse)},
-        {380, sizeof(::pandora::locator::v1::BootstrapPlacementRequest)},
-        {393, sizeof(::pandora::locator::v1::BootstrapPlacementResponse)},
-        {400, sizeof(::pandora::locator::v1::SubscribePresenceRequest)},
-        {407, sizeof(::pandora::locator::v1::SubscribePresenceResponse)},
-        {412, sizeof(::pandora::locator::v1::UnsubscribePresenceRequest)},
-        {417, sizeof(::pandora::locator::v1::UnsubscribePresenceResponse)},
-        {422, sizeof(::pandora::locator::v1::PresenceChange)},
-        {431, sizeof(::pandora::locator::v1::PresenceBatchEvent)},
+        {15, sizeof(::pandora::locator::v1::HubPresenceFence)},
+        {24, sizeof(::pandora::locator::v1::SetLocationRequest)},
+        {33, sizeof(::pandora::locator::v1::SetLocationResponse)},
+        {38, sizeof(::pandora::locator::v1::GetLocationRequest)},
+        {43, sizeof(::pandora::locator::v1::GetLocationResponse)},
+        {50, sizeof(::pandora::locator::v1::BatchGetLocationRequest)},
+        {55, sizeof(::pandora::locator::v1::BatchGetLocationResponse_LocationsEntry_DoNotUse)},
+        {62, sizeof(::pandora::locator::v1::BatchGetLocationResponse)},
+        {69, sizeof(::pandora::locator::v1::ClearLocationRequest)},
+        {74, sizeof(::pandora::locator::v1::ClearLocationResponse)},
+        {79, sizeof(::pandora::locator::v1::RefreshHubLocationsRequest)},
+        {86, sizeof(::pandora::locator::v1::RefreshHubLocationsResponse)},
+        {93, sizeof(::pandora::locator::v1::ReportDisconnectRequest)},
+        {102, sizeof(::pandora::locator::v1::ReportDisconnectResponse)},
+        {109, sizeof(::pandora::locator::v1::BatchGetLastSeenRequest)},
+        {114, sizeof(::pandora::locator::v1::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse)},
+        {121, sizeof(::pandora::locator::v1::BatchGetLastSeenResponse)},
+        {128, sizeof(::pandora::locator::v1::PlayerLeftHubEvent)},
+        {137, sizeof(::pandora::locator::v1::PlayerPlacementStorageRecord)},
+        {216, sizeof(::pandora::locator::v1::GetPlacementRequest)},
+        {221, sizeof(::pandora::locator::v1::GetPlacementResponse)},
+        {230, sizeof(::pandora::locator::v1::BeginPlacementTransitionRequest)},
+        {253, sizeof(::pandora::locator::v1::BeginPlacementTransitionResponse)},
+        {260, sizeof(::pandora::locator::v1::BindPlacementTargetRequest)},
+        {287, sizeof(::pandora::locator::v1::BindPlacementTargetResponse)},
+        {294, sizeof(::pandora::locator::v1::PlacementTargetIdentity)},
+        {309, sizeof(::pandora::locator::v1::RetargetPlacementTargetRequest)},
+        {340, sizeof(::pandora::locator::v1::RetargetPlacementTargetResponse)},
+        {347, sizeof(::pandora::locator::v1::ConfirmPlacementSourceDepartureRequest)},
+        {376, sizeof(::pandora::locator::v1::ConfirmPlacementSourceDepartureResponse)},
+        {385, sizeof(::pandora::locator::v1::CommitPlacementAdmissionRequest)},
+        {412, sizeof(::pandora::locator::v1::CommitPlacementAdmissionResponse)},
+        {421, sizeof(::pandora::locator::v1::BootstrapPlacementRequest)},
+        {434, sizeof(::pandora::locator::v1::BootstrapPlacementResponse)},
+        {441, sizeof(::pandora::locator::v1::SubscribePresenceRequest)},
+        {448, sizeof(::pandora::locator::v1::SubscribePresenceResponse)},
+        {453, sizeof(::pandora::locator::v1::UnsubscribePresenceRequest)},
+        {458, sizeof(::pandora::locator::v1::UnsubscribePresenceResponse)},
+        {463, sizeof(::pandora::locator::v1::PresenceChange)},
+        {472, sizeof(::pandora::locator::v1::PresenceBatchEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::pandora::locator::v1::Location_globals_,
+        &::pandora::locator::v1::HubPresenceFence_globals_,
         &::pandora::locator::v1::SetLocationRequest_globals_,
         &::pandora::locator::v1::SetLocationResponse_globals_,
         &::pandora::locator::v1::GetLocationRequest_globals_,
@@ -6866,6 +7705,10 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::locator::v1::RefreshHubLocationsResponse_globals_,
         &::pandora::locator::v1::ReportDisconnectRequest_globals_,
         &::pandora::locator::v1::ReportDisconnectResponse_globals_,
+        &::pandora::locator::v1::BatchGetLastSeenRequest_globals_,
+        &::pandora::locator::v1::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_,
+        &::pandora::locator::v1::BatchGetLastSeenResponse_globals_,
+        &::pandora::locator::v1::PlayerLeftHubEvent_globals_,
         &::pandora::locator::v1::PlayerPlacementStorageRecord_globals_,
         &::pandora::locator::v1::GetPlacementRequest_globals_,
         &::pandora::locator::v1::GetPlacementResponse_globals_,
@@ -6898,302 +7741,322 @@ const char descriptor_table_protodef_pandora_2flocator_2fv1_2flocator_2eproto[] 
     "\007hub_pod\030\002 \001(\tR\006hubPod\022\031\n\010shard_id\030\003 \001(\r"
     "R\007shardId\022\031\n\010match_id\030\004 \001(\004R\007matchId\022\035\n\n"
     "battle_pod\030\005 \001(\tR\tbattlePod\022\"\n\rupdated_a"
-    "t_ms\030\006 \001(\003R\013updatedAtMsJ\004\010\007\020\n\"k\n\022SetLoca"
-    "tionRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId"
-    "\0228\n\010location\030\002 \001(\0132\034.pandora.locator.v1."
-    "LocationR\010location\"E\n\023SetLocationRespons"
-    "e\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrC"
-    "odeR\004code\"1\n\022GetLocationRequest\022\033\n\tplaye"
-    "r_id\030\001 \001(\004R\010playerId\"\177\n\023GetLocationRespo"
-    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
-    "rCodeR\004code\0228\n\010location\030\002 \001(\0132\034.pandora."
-    "locator.v1.LocationR\010location\"8\n\027BatchGe"
-    "tLocationRequest\022\035\n\nplayer_ids\030\001 \003(\004R\tpl"
-    "ayerIds\"\201\002\n\030BatchGetLocationResponse\022.\n\004"
-    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
-    "code\022Y\n\tlocations\030\002 \003(\0132;.pandora.locato"
-    "r.v1.BatchGetLocationResponse.LocationsE"
-    "ntryR\tlocations\032Z\n\016LocationsEntry\022\020\n\003key"
-    "\030\001 \001(\004R\003key\0222\n\005value\030\002 \001(\0132\034.pandora.loc"
-    "ator.v1.LocationR\005value:\0028\001\"3\n\024ClearLoca"
-    "tionRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId"
-    "\"G\n\025ClearLocationResponse\022.\n\004code\030\001 \001(\0162"
-    "\032.pandora.common.v1.ErrCodeR\004code\"T\n\032Ref"
-    "reshHubLocationsRequest\022\027\n\007hub_pod\030\001 \001(\t"
-    "R\006hubPod\022\035\n\nplayer_ids\030\002 \003(\004R\tplayerIds\""
-    "k\n\033RefreshHubLocationsResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022\034"
-    "\n\trefreshed\030\002 \001(\005R\trefreshed\"O\n\027ReportDi"
-    "sconnectRequest\022\027\n\007hub_pod\030\001 \001(\tR\006hubPod"
-    "\022\033\n\tplayer_id\030\002 \001(\004R\010playerId\"b\n\030ReportD"
-    "isconnectResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
-    "a.common.v1.ErrCodeR\004code\022\026\n\006shrunk\030\002 \001("
-    "\010R\006shrunk\"\305\020\n\034PlayerPlacementStorageReco"
-    "rd\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022G\n\rcurre"
-    "nt_route\030\002 \001(\0162\".pandora.locator.v1.Plac"
-    "ementRouteR\014currentRoute\022E\n\014target_route"
-    "\030\003 \001(\0162\".pandora.locator.v1.PlacementRou"
-    "teR\013targetRoute\022W\n\020transition_state\030\004 \001("
-    "\0162,.pandora.locator.v1.PlacementTransiti"
-    "onStateR\017transitionState\022\030\n\007version\030\005 \001("
-    "\004R\007version\022!\n\014operation_id\030\006 \001(\tR\013operat"
-    "ionId\022\031\n\010match_id\030\007 \001(\004R\007matchId\022&\n\017sour"
-    "ce_match_id\030\010 \001(\004R\rsourceMatchId\022\036\n\013ds_p"
-    "od_name\030\t \001(\tR\tdsPodName\022&\n\017ds_instance_"
-    "uid\030\n \001(\tR\rdsInstanceUid\022*\n\021hub_assignme"
-    "nt_id\030\013 \001(\tR\017hubAssignmentId\022\"\n\rupdated_"
-    "at_ms\030\014 \001(\003R\013updatedAtMs\022*\n\021lease_deadli"
-    "ne_ms\030\r \001(\003R\017leaseDeadlineMs\022E\n\nproof_ty"
-    "pe\030\016 \001(\0162&.pandora.locator.v1.PlacementP"
-    "roofTypeR\tproofType\022\031\n\010proof_id\030\017 \001(\tR\007p"
-    "roofId\022!\n\014admission_id\030\020 \001(\tR\013admissionI"
-    "d\022&\n\017target_match_id\030\021 \001(\004R\rtargetMatchI"
-    "d\022*\n\021ds_instance_epoch\030\022 \001(\rR\017dsInstance"
-    "Epoch\022#\n\rallocation_id\030\023 \001(\tR\014allocation"
-    "Id\022#\n\rrelease_track\030\024 \001(\tR\014releaseTrack\022"
-    "%\n\016retarget_count\030\025 \001(\rR\rretargetCount\0223"
-    "\n\026last_retarget_proof_id\030\026 \001(\tR\023lastReta"
-    "rgetProofId\022f\n\024last_retarget_reason\030\027 \001("
-    "\01624.pandora.locator.v1.PlacementTargetUn"
-    "availableReasonR\022lastRetargetReason\0228\n\030s"
-    "ource_placement_version\030\030 \001(\004R\026sourcePla"
-    "cementVersion\022.\n\023source_operation_id\030\031 \001"
-    "(\tR\021sourceOperationId\022+\n\022source_ds_pod_n"
-    "ame\030\032 \001(\tR\017sourceDsPodName\0223\n\026source_ds_"
-    "instance_uid\030\033 \001(\tR\023sourceDsInstanceUid\022"
-    "7\n\030source_ds_instance_epoch\030\034 \001(\rR\025sourc"
-    "eDsInstanceEpoch\0227\n\030source_hub_assignmen"
-    "t_id\030\035 \001(\tR\025sourceHubAssignmentId\0220\n\024sou"
-    "rce_allocation_id\030\036 \001(\tR\022sourceAllocatio"
-    "nId\0220\n\024source_release_track\030\037 \001(\tR\022sourc"
-    "eReleaseTrack\022<\n\032source_departure_confir"
-    "med\030  \001(\010R\030sourceDepartureConfirmed\022t\n\033s"
-    "ource_departure_proof_type\030! \001(\01625.pando"
-    "ra.locator.v1.PlacementSourceDeparturePr"
-    "oofTypeR\030sourceDepartureProofType\0229\n\031sou"
-    "rce_departure_proof_id\030\" \001(\tR\026sourceDepa"
-    "rtureProofId\022}\n last_source_departure_pr"
-    "oof_type\030# \001(\01625.pandora.locator.v1.Plac"
-    "ementSourceDepartureProofTypeR\034lastSourc"
-    "eDepartureProofType\022B\n\036last_source_depar"
-    "ture_proof_id\030$ \001(\tR\032lastSourceDeparture"
-    "ProofId\022T\n\'last_source_departure_placeme"
-    "nt_version\030% \001(\004R#lastSourceDeparturePla"
-    "cementVersion\022J\n\"last_source_departure_o"
-    "peration_id\030& \001(\tR\036lastSourceDepartureOp"
-    "erationId\"2\n\023GetPlacementRequest\022\033\n\tplay"
-    "er_id\030\001 \001(\004R\010playerId\"\254\001\n\024GetPlacementRe"
-    "sponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1"
-    ".ErrCodeR\004code\022\024\n\005found\030\002 \001(\010R\005found\022N\n\t"
-    "placement\030\003 \001(\01320.pandora.locator.v1.Pla"
-    "yerPlacementStorageRecordR\tplacement\"\332\003\n"
-    "\037BeginPlacementTransitionRequest\022\033\n\tplay"
-    "er_id\030\001 \001(\004R\010playerId\022)\n\020expected_versio"
-    "n\030\002 \001(\004R\017expectedVersion\022E\n\014target_route"
-    "\030\003 \001(\0162\".pandora.locator.v1.PlacementRou"
-    "teR\013targetRoute\022!\n\014operation_id\030\004 \001(\tR\013o"
-    "perationId\022&\n\017source_match_id\030\005 \001(\004R\rsou"
-    "rceMatchId\022E\n\nproof_type\030\006 \001(\0162&.pandora"
-    ".locator.v1.PlacementProofTypeR\tproofTyp"
-    "e\022\031\n\010proof_id\030\007 \001(\tR\007proofId\022*\n\021lease_de"
-    "adline_ms\030\010 \001(\003R\017leaseDeadlineMs\022&\n\017targ"
-    "et_match_id\030\t \001(\004R\rtargetMatchId\022\'\n\017proo"
-    "f_signature\030\n \001(\tR\016proofSignature\"\242\001\n Be"
-    "ginPlacementTransitionResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022N"
-    "\n\tplacement\030\002 \001(\01320.pandora.locator.v1.P"
-    "layerPlacementStorageRecordR\tplacement\"\216"
-    "\004\n\032BindPlacementTargetRequest\022\033\n\tplayer_"
-    "id\030\001 \001(\004R\010playerId\022+\n\021placement_version\030"
-    "\002 \001(\004R\020placementVersion\022!\n\014operation_id\030"
-    "\003 \001(\tR\013operationId\022E\n\014target_route\030\004 \001(\016"
-    "2\".pandora.locator.v1.PlacementRouteR\013ta"
-    "rgetRoute\022\036\n\013ds_pod_name\030\005 \001(\tR\tdsPodNam"
-    "e\022&\n\017ds_instance_uid\030\006 \001(\tR\rdsInstanceUi"
-    "d\022*\n\021hub_assignment_id\030\007 \001(\tR\017hubAssignm"
-    "entId\022&\n\017target_match_id\030\010 \001(\004R\rtargetMa"
-    "tchId\022*\n\021ds_instance_epoch\030\t \001(\rR\017dsInst"
-    "anceEpoch\022#\n\rallocation_id\030\n \001(\tR\014alloca"
-    "tionId\022#\n\rrelease_track\030\013 \001(\tR\014releaseTr"
-    "ack\022*\n\021lease_deadline_ms\030\014 \001(\003R\017leaseDea"
-    "dlineMs\"\235\001\n\033BindPlacementTargetResponse\022"
+    "t_ms\030\006 \001(\003R\013updatedAtMsJ\004\010\007\020\n\"\177\n\020HubPres"
+    "enceFence\022#\n\rassignment_id\030\001 \001(\tR\014assign"
+    "mentId\022!\n\014admission_id\030\002 \001(\tR\013admissionI"
+    "d\022#\n\radmission_seq\030\003 \001(\004R\014admissionSeq\"\277"
+    "\001\n\022SetLocationRequest\022\033\n\tplayer_id\030\001 \001(\004"
+    "R\010playerId\0228\n\010location\030\002 \001(\0132\034.pandora.l"
+    "ocator.v1.LocationR\010location\022R\n\022hub_pres"
+    "ence_fence\030\003 \001(\0132$.pandora.locator.v1.Hu"
+    "bPresenceFenceR\020hubPresenceFence\"E\n\023SetL"
+    "ocationResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\"1\n\022GetLocationRe"
+    "quest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"\177\n\023Ge"
+    "tLocationResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
+    "a.common.v1.ErrCodeR\004code\0228\n\010location\030\002 "
+    "\001(\0132\034.pandora.locator.v1.LocationR\010locat"
+    "ion\"8\n\027BatchGetLocationRequest\022\035\n\nplayer"
+    "_ids\030\001 \003(\004R\tplayerIds\"\201\002\n\030BatchGetLocati"
+    "onResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
+    "n.v1.ErrCodeR\004code\022Y\n\tlocations\030\002 \003(\0132;."
+    "pandora.locator.v1.BatchGetLocationRespo"
+    "nse.LocationsEntryR\tlocations\032Z\n\016Locatio"
+    "nsEntry\022\020\n\003key\030\001 \001(\004R\003key\0222\n\005value\030\002 \001(\013"
+    "2\034.pandora.locator.v1.LocationR\005value:\0028"
+    "\001\"3\n\024ClearLocationRequest\022\033\n\tplayer_id\030\001"
+    " \001(\004R\010playerId\"G\n\025ClearLocationResponse\022"
     ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
-    "eR\004code\022N\n\tplacement\030\002 \001(\01320.pandora.loc"
-    "ator.v1.PlayerPlacementStorageRecordR\tpl"
-    "acement\"\203\002\n\027PlacementTargetIdentity\022\036\n\013d"
-    "s_pod_name\030\001 \001(\tR\tdsPodName\022&\n\017ds_instan"
-    "ce_uid\030\002 \001(\tR\rdsInstanceUid\022*\n\021hub_assig"
-    "nment_id\030\003 \001(\tR\017hubAssignmentId\022*\n\021ds_in"
-    "stance_epoch\030\004 \001(\rR\017dsInstanceEpoch\022#\n\ra"
-    "llocation_id\030\005 \001(\tR\014allocationId\022#\n\rrele"
-    "ase_track\030\006 \001(\tR\014releaseTrack\"\236\006\n\036Retarg"
-    "etPlacementTargetRequest\022\033\n\tplayer_id\030\001 "
-    "\001(\004R\010playerId\022+\n\021placement_version\030\002 \001(\004"
-    "R\020placementVersion\022!\n\014operation_id\030\003 \001(\t"
-    "R\013operationId\022E\n\014target_route\030\004 \001(\0162\".pa"
-    "ndora.locator.v1.PlacementRouteR\013targetR"
-    "oute\022&\n\017target_match_id\030\005 \001(\004R\rtargetMat"
-    "chId\022T\n\017expected_target\030\006 \001(\0132+.pandora."
-    "locator.v1.PlacementTargetIdentityR\016expe"
-    "ctedTarget\022/\n\023replacement_version\030\007 \001(\004R"
-    "\022replacementVersion\0228\n\030replacement_opera"
-    "tion_id\030\010 \001(\tR\026replacementOperationId\022Z\n"
-    "\022replacement_target\030\t \001(\0132+.pandora.loca"
-    "tor.v1.PlacementTargetIdentityR\021replacem"
-    "entTarget\022E\n\nproof_type\030\n \001(\0162&.pandora."
-    "locator.v1.PlacementProofTypeR\tproofType"
-    "\022L\n\006reason\030\013 \001(\01624.pandora.locator.v1.Pl"
-    "acementTargetUnavailableReasonR\006reason\022\031"
-    "\n\010proof_id\030\014 \001(\tR\007proofId\022\'\n\017proof_signa"
-    "ture\030\r \001(\tR\016proofSignature\022*\n\021lease_dead"
-    "line_ms\030\016 \001(\003R\017leaseDeadlineMs\"\241\001\n\037Retar"
-    "getPlacementTargetResponse\022.\n\004code\030\001 \001(\016"
-    "2\032.pandora.common.v1.ErrCodeR\004code\022N\n\tpl"
-    "acement\030\002 \001(\01320.pandora.locator.v1.Playe"
-    "rPlacementStorageRecordR\tplacement\"\311\005\n&C"
-    "onfirmPlacementSourceDepartureRequest\022\033\n"
-    "\tplayer_id\030\001 \001(\004R\010playerId\022+\n\021placement_"
-    "version\030\002 \001(\004R\020placementVersion\022!\n\014opera"
-    "tion_id\030\003 \001(\tR\013operationId\022E\n\014target_rou"
-    "te\030\004 \001(\0162\".pandora.locator.v1.PlacementR"
-    "outeR\013targetRoute\022&\n\017target_match_id\030\005 \001"
-    "(\004R\rtargetMatchId\0228\n\030source_placement_ve"
-    "rsion\030\006 \001(\004R\026sourcePlacementVersion\022.\n\023s"
-    "ource_operation_id\030\007 \001(\tR\021sourceOperatio"
-    "nId\022E\n\014source_route\030\010 \001(\0162\".pandora.loca"
-    "tor.v1.PlacementRouteR\013sourceRoute\022&\n\017so"
-    "urce_match_id\030\t \001(\004R\rsourceMatchId\022P\n\rso"
-    "urce_target\030\n \001(\0132+.pandora.locator.v1.P"
-    "lacementTargetIdentityR\014sourceTarget\022T\n\n"
-    "proof_type\030\013 \001(\01625.pandora.locator.v1.Pl"
-    "acementSourceDepartureProofTypeR\tproofTy"
-    "pe\022\031\n\010proof_id\030\014 \001(\tR\007proofId\022\'\n\017proof_s"
-    "ignature\030\r \001(\tR\016proofSignature\"\307\001\n\'Confi"
-    "rmPlacementSourceDepartureResponse\022.\n\004co"
-    "de\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004co"
-    "de\022\034\n\tconfirmed\030\002 \001(\010R\tconfirmed\022N\n\tplac"
-    "ement\030\003 \001(\01320.pandora.locator.v1.PlayerP"
-    "lacementStorageRecordR\tplacement\"\212\004\n\037Com"
-    "mitPlacementAdmissionRequest\022\033\n\tplayer_i"
-    "d\030\001 \001(\004R\010playerId\022+\n\021placement_version\030\002"
-    " \001(\004R\020placementVersion\022!\n\014operation_id\030\003"
-    " \001(\tR\013operationId\022E\n\014target_route\030\004 \001(\0162"
-    "\".pandora.locator.v1.PlacementRouteR\013tar"
-    "getRoute\022\036\n\013ds_pod_name\030\005 \001(\tR\tdsPodName"
-    "\022&\n\017ds_instance_uid\030\006 \001(\tR\rdsInstanceUid"
-    "\022*\n\021hub_assignment_id\030\007 \001(\tR\017hubAssignme"
-    "ntId\022!\n\014admission_id\030\010 \001(\tR\013admissionId\022"
-    "&\n\017target_match_id\030\t \001(\004R\rtargetMatchId\022"
-    "*\n\021ds_instance_epoch\030\n \001(\rR\017dsInstanceEp"
-    "och\022#\n\rallocation_id\030\013 \001(\tR\014allocationId"
-    "\022#\n\rrelease_track\030\014 \001(\tR\014releaseTrack\"\300\001"
-    "\n CommitPlacementAdmissionResponse\022.\n\004co"
-    "de\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004co"
-    "de\022\034\n\tcommitted\030\002 \001(\010R\tcommitted\022N\n\tplac"
-    "ement\030\003 \001(\01320.pandora.locator.v1.PlayerP"
-    "lacementStorageRecordR\tplacement\"\313\001\n\031Boo"
-    "tstrapPlacementRequest\022\033\n\tplayer_id\030\001 \001("
-    "\004R\010playerId\022!\n\014operation_id\030\002 \001(\tR\013opera"
-    "tionId\022\031\n\010proof_id\030\003 \001(\tR\007proofId\022\'\n\017pro"
-    "of_signature\030\004 \001(\tR\016proofSignature\022*\n\021le"
-    "ase_deadline_ms\030\005 \001(\003R\017leaseDeadlineMs\"\234"
-    "\001\n\032BootstrapPlacementResponse\022.\n\004code\030\001 "
-    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\022N\n"
-    "\tplacement\030\002 \001(\01320.pandora.locator.v1.Pl"
-    "ayerPlacementStorageRecordR\tplacement\"m\n"
-    "\030SubscribePresenceRequest\022#\n\rsubscriber_"
-    "id\030\001 \001(\004R\014subscriberId\022,\n\022watched_player"
-    "_ids\030\002 \003(\004R\020watchedPlayerIds\"K\n\031Subscrib"
-    "ePresenceResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
-    "a.common.v1.ErrCodeR\004code\"A\n\032Unsubscribe"
-    "PresenceRequest\022#\n\rsubscriber_id\030\001 \001(\004R\014"
-    "subscriberId\"M\n\033UnsubscribePresenceRespo"
-    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
-    "rCodeR\004code\"~\n\016PresenceChange\022\033\n\tplayer_"
-    "id\030\001 \001(\004R\010playerId\022:\n\006status\030\002 \001(\0162\".pan"
-    "dora.locator.v1.PresenceStatusR\006status\022\023"
-    "\n\005ts_ms\030\003 \001(\003R\004tsMs\"R\n\022PresenceBatchEven"
-    "t\022<\n\007changes\030\001 \003(\0132\".pandora.locator.v1."
-    "PresenceChangeR\007changes*\275\001\n\rLocationStat"
-    "e\022\036\n\032LOCATION_STATE_UNSPECIFIED\020\000\022\032\n\026LOC"
-    "ATION_STATE_OFFLINE\020\001\022 \n\034LOCATION_STATE_"
-    "LOGIN_PENDING\020\002\022\026\n\022LOCATION_STATE_HUB\020\003\022"
-    "\033\n\027LOCATION_STATE_MATCHING\020\004\022\031\n\025LOCATION"
-    "_STATE_BATTLE\020\005*f\n\016PlacementRoute\022\037\n\033PLA"
-    "CEMENT_ROUTE_UNSPECIFIED\020\000\022\027\n\023PLACEMENT_"
-    "ROUTE_HUB\020\001\022\032\n\026PLACEMENT_ROUTE_BATTLE\020\002*"
-    "\225\001\n\030PlacementTransitionState\022*\n&PLACEMEN"
-    "T_TRANSITION_STATE_UNSPECIFIED\020\000\022%\n!PLAC"
-    "EMENT_TRANSITION_STATE_STABLE\020\001\022&\n\"PLACE"
-    "MENT_TRANSITION_STATE_PENDING\020\002*\203\002\n\022Plac"
-    "ementProofType\022$\n PLACEMENT_PROOF_TYPE_U"
-    "NSPECIFIED\020\000\022\'\n#PLACEMENT_PROOF_TYPE_MAT"
-    "CH_TERMINAL\020\001\022%\n!PLACEMENT_PROOF_TYPE_PL"
-    "AYER_LEAVE\020\002\022*\n&PLACEMENT_PROOF_TYPE_ACC"
-    "OUNT_BOOTSTRAP\020\003\022$\n PLACEMENT_PROOF_TYPE"
-    "_MATCH_START\020\004\022%\n!PLACEMENT_PROOF_TYPE_H"
-    "UB_TRANSFER\020\005*\224\002\n PlacementTargetUnavail"
-    "ableReason\0223\n/PLACEMENT_TARGET_UNAVAILAB"
-    "LE_REASON_UNSPECIFIED\020\000\022;\n7PLACEMENT_TAR"
-    "GET_UNAVAILABLE_REASON_INSTANCE_TERMINAT"
-    "ED\020\001\022B\n>PLACEMENT_TARGET_UNAVAILABLE_REA"
-    "SON_RESERVATION_EXPIRED_UNUSED\020\002\022:\n6PLAC"
-    "EMENT_TARGET_UNAVAILABLE_REASON_ALLOCATI"
-    "ON_REVOKED\020\003*\317\001\n!PlacementSourceDepartur"
-    "eProofType\0225\n1PLACEMENT_SOURCE_DEPARTURE"
-    "_PROOF_TYPE_UNSPECIFIED\020\000\0227\n3PLACEMENT_S"
-    "OURCE_DEPARTURE_PROOF_TYPE_HUB_DEPARTURE"
-    "\020e\022:\n6PLACEMENT_SOURCE_DEPARTURE_PROOF_T"
-    "YPE_BATTLE_DEPARTURE\020f*\207\001\n\016PresenceStatu"
-    "s\022\037\n\033PRESENCE_STATUS_UNSPECIFIED\020\000\022\033\n\027PR"
-    "ESENCE_STATUS_OFFLINE\020\001\022\032\n\026PRESENCE_STAT"
-    "US_ONLINE\020\002\022\033\n\027PRESENCE_STATUS_IN_GAME\020\003"
-    "2\376\r\n\024PlayerLocatorService\022^\n\013SetLocation"
-    "\022&.pandora.locator.v1.SetLocationRequest"
-    "\032\'.pandora.locator.v1.SetLocationRespons"
-    "e\022^\n\013GetLocation\022&.pandora.locator.v1.Ge"
-    "tLocationRequest\032\'.pandora.locator.v1.Ge"
-    "tLocationResponse\022m\n\020BatchGetLocation\022+."
-    "pandora.locator.v1.BatchGetLocationReque"
-    "st\032,.pandora.locator.v1.BatchGetLocation"
-    "Response\022p\n\021SubscribePresence\022,.pandora."
-    "locator.v1.SubscribePresenceRequest\032-.pa"
-    "ndora.locator.v1.SubscribePresenceRespon"
-    "se\022v\n\023UnsubscribePresence\022..pandora.loca"
-    "tor.v1.UnsubscribePresenceRequest\032/.pand"
-    "ora.locator.v1.UnsubscribePresenceRespon"
-    "se\022d\n\rClearLocation\022(.pandora.locator.v1"
-    ".ClearLocationRequest\032).pandora.locator."
-    "v1.ClearLocationResponse\022v\n\023RefreshHubLo"
-    "cations\022..pandora.locator.v1.RefreshHubL"
-    "ocationsRequest\032/.pandora.locator.v1.Ref"
-    "reshHubLocationsResponse\022m\n\020ReportDiscon"
-    "nect\022+.pandora.locator.v1.ReportDisconne"
-    "ctRequest\032,.pandora.locator.v1.ReportDis"
-    "connectResponse\022a\n\014GetPlacement\022\'.pandor"
-    "a.locator.v1.GetPlacementRequest\032(.pando"
-    "ra.locator.v1.GetPlacementResponse\022\205\001\n\030B"
-    "eginPlacementTransition\0223.pandora.locato"
-    "r.v1.BeginPlacementTransitionRequest\0324.p"
-    "andora.locator.v1.BeginPlacementTransiti"
-    "onResponse\022v\n\023BindPlacementTarget\022..pand"
-    "ora.locator.v1.BindPlacementTargetReques"
-    "t\032/.pandora.locator.v1.BindPlacementTarg"
-    "etResponse\022\202\001\n\027RetargetPlacementTarget\0222"
-    ".pandora.locator.v1.RetargetPlacementTar"
-    "getRequest\0323.pandora.locator.v1.Retarget"
-    "PlacementTargetResponse\022\232\001\n\037ConfirmPlace"
-    "mentSourceDeparture\022:.pandora.locator.v1"
-    ".ConfirmPlacementSourceDepartureRequest\032"
-    ";.pandora.locator.v1.ConfirmPlacementSou"
-    "rceDepartureResponse\022\205\001\n\030CommitPlacement"
-    "Admission\0223.pandora.locator.v1.CommitPla"
-    "cementAdmissionRequest\0324.pandora.locator"
-    ".v1.CommitPlacementAdmissionResponse\022s\n\022"
-    "BootstrapPlacement\022-.pandora.locator.v1."
-    "BootstrapPlacementRequest\032..pandora.loca"
-    "tor.v1.BootstrapPlacementResponseb\006proto"
-    "3"
+    "eR\004code\"T\n\032RefreshHubLocationsRequest\022\027\n"
+    "\007hub_pod\030\001 \001(\tR\006hubPod\022\035\n\nplayer_ids\030\002 \003"
+    "(\004R\tplayerIds\"k\n\033RefreshHubLocationsResp"
+    "onse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.E"
+    "rrCodeR\004code\022\034\n\trefreshed\030\002 \001(\005R\trefresh"
+    "ed\"\243\001\n\027ReportDisconnectRequest\022\027\n\007hub_po"
+    "d\030\001 \001(\tR\006hubPod\022\033\n\tplayer_id\030\002 \001(\004R\010play"
+    "erId\022R\n\022hub_presence_fence\030\003 \001(\0132$.pando"
+    "ra.locator.v1.HubPresenceFenceR\020hubPrese"
+    "nceFence\"b\n\030ReportDisconnectResponse\022.\n\004"
+    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
+    "code\022\026\n\006shrunk\030\002 \001(\010R\006shrunk\"8\n\027BatchGet"
+    "LastSeenRequest\022\035\n\nplayer_ids\030\001 \003(\004R\tpla"
+    "yerIds\"\351\001\n\030BatchGetLastSeenResponse\022.\n\004c"
+    "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004c"
+    "ode\022^\n\014last_seen_ms\030\002 \003(\0132<.pandora.loca"
+    "tor.v1.BatchGetLastSeenResponse.LastSeen"
+    "MsEntryR\nlastSeenMs\032=\n\017LastSeenMsEntry\022\020"
+    "\n\003key\030\001 \001(\004R\003key\022\024\n\005value\030\002 \001(\003R\005value:\002"
+    "8\001\"n\n\022PlayerLeftHubEvent\022\033\n\tplayer_id\030\001 "
+    "\001(\004R\010playerId\022\034\n\nleft_at_ms\030\002 \001(\003R\010leftA"
+    "tMs\022\027\n\007hub_pod\030\003 \001(\tR\006hubPodJ\004\010\004\020\n\"\305\020\n\034P"
+    "layerPlacementStorageRecord\022\033\n\tplayer_id"
+    "\030\001 \001(\004R\010playerId\022G\n\rcurrent_route\030\002 \001(\0162"
+    "\".pandora.locator.v1.PlacementRouteR\014cur"
+    "rentRoute\022E\n\014target_route\030\003 \001(\0162\".pandor"
+    "a.locator.v1.PlacementRouteR\013targetRoute"
+    "\022W\n\020transition_state\030\004 \001(\0162,.pandora.loc"
+    "ator.v1.PlacementTransitionStateR\017transi"
+    "tionState\022\030\n\007version\030\005 \001(\004R\007version\022!\n\014o"
+    "peration_id\030\006 \001(\tR\013operationId\022\031\n\010match_"
+    "id\030\007 \001(\004R\007matchId\022&\n\017source_match_id\030\010 \001"
+    "(\004R\rsourceMatchId\022\036\n\013ds_pod_name\030\t \001(\tR\t"
+    "dsPodName\022&\n\017ds_instance_uid\030\n \001(\tR\rdsIn"
+    "stanceUid\022*\n\021hub_assignment_id\030\013 \001(\tR\017hu"
+    "bAssignmentId\022\"\n\rupdated_at_ms\030\014 \001(\003R\013up"
+    "datedAtMs\022*\n\021lease_deadline_ms\030\r \001(\003R\017le"
+    "aseDeadlineMs\022E\n\nproof_type\030\016 \001(\0162&.pand"
+    "ora.locator.v1.PlacementProofTypeR\tproof"
+    "Type\022\031\n\010proof_id\030\017 \001(\tR\007proofId\022!\n\014admis"
+    "sion_id\030\020 \001(\tR\013admissionId\022&\n\017target_mat"
+    "ch_id\030\021 \001(\004R\rtargetMatchId\022*\n\021ds_instanc"
+    "e_epoch\030\022 \001(\rR\017dsInstanceEpoch\022#\n\ralloca"
+    "tion_id\030\023 \001(\tR\014allocationId\022#\n\rrelease_t"
+    "rack\030\024 \001(\tR\014releaseTrack\022%\n\016retarget_cou"
+    "nt\030\025 \001(\rR\rretargetCount\0223\n\026last_retarget"
+    "_proof_id\030\026 \001(\tR\023lastRetargetProofId\022f\n\024"
+    "last_retarget_reason\030\027 \001(\01624.pandora.loc"
+    "ator.v1.PlacementTargetUnavailableReason"
+    "R\022lastRetargetReason\0228\n\030source_placement"
+    "_version\030\030 \001(\004R\026sourcePlacementVersion\022."
+    "\n\023source_operation_id\030\031 \001(\tR\021sourceOpera"
+    "tionId\022+\n\022source_ds_pod_name\030\032 \001(\tR\017sour"
+    "ceDsPodName\0223\n\026source_ds_instance_uid\030\033 "
+    "\001(\tR\023sourceDsInstanceUid\0227\n\030source_ds_in"
+    "stance_epoch\030\034 \001(\rR\025sourceDsInstanceEpoc"
+    "h\0227\n\030source_hub_assignment_id\030\035 \001(\tR\025sou"
+    "rceHubAssignmentId\0220\n\024source_allocation_"
+    "id\030\036 \001(\tR\022sourceAllocationId\0220\n\024source_r"
+    "elease_track\030\037 \001(\tR\022sourceReleaseTrack\022<"
+    "\n\032source_departure_confirmed\030  \001(\010R\030sour"
+    "ceDepartureConfirmed\022t\n\033source_departure"
+    "_proof_type\030! \001(\01625.pandora.locator.v1.P"
+    "lacementSourceDepartureProofTypeR\030source"
+    "DepartureProofType\0229\n\031source_departure_p"
+    "roof_id\030\" \001(\tR\026sourceDepartureProofId\022}\n"
+    " last_source_departure_proof_type\030# \001(\0162"
+    "5.pandora.locator.v1.PlacementSourceDepa"
+    "rtureProofTypeR\034lastSourceDepartureProof"
+    "Type\022B\n\036last_source_departure_proof_id\030$"
+    " \001(\tR\032lastSourceDepartureProofId\022T\n\'last"
+    "_source_departure_placement_version\030% \001("
+    "\004R#lastSourceDeparturePlacementVersion\022J"
+    "\n\"last_source_departure_operation_id\030& \001"
+    "(\tR\036lastSourceDepartureOperationId\"2\n\023Ge"
+    "tPlacementRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pl"
+    "ayerId\"\254\001\n\024GetPlacementResponse\022.\n\004code\030"
+    "\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022"
+    "\024\n\005found\030\002 \001(\010R\005found\022N\n\tplacement\030\003 \001(\013"
+    "20.pandora.locator.v1.PlayerPlacementSto"
+    "rageRecordR\tplacement\"\332\003\n\037BeginPlacement"
+    "TransitionRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pl"
+    "ayerId\022)\n\020expected_version\030\002 \001(\004R\017expect"
+    "edVersion\022E\n\014target_route\030\003 \001(\0162\".pandor"
+    "a.locator.v1.PlacementRouteR\013targetRoute"
+    "\022!\n\014operation_id\030\004 \001(\tR\013operationId\022&\n\017s"
+    "ource_match_id\030\005 \001(\004R\rsourceMatchId\022E\n\np"
+    "roof_type\030\006 \001(\0162&.pandora.locator.v1.Pla"
+    "cementProofTypeR\tproofType\022\031\n\010proof_id\030\007"
+    " \001(\tR\007proofId\022*\n\021lease_deadline_ms\030\010 \001(\003"
+    "R\017leaseDeadlineMs\022&\n\017target_match_id\030\t \001"
+    "(\004R\rtargetMatchId\022\'\n\017proof_signature\030\n \001"
+    "(\tR\016proofSignature\"\242\001\n BeginPlacementTra"
+    "nsitionResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\022N\n\tplacement\030\002 \001"
+    "(\01320.pandora.locator.v1.PlayerPlacementS"
+    "torageRecordR\tplacement\"\216\004\n\032BindPlacemen"
+    "tTargetRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
+    "rId\022+\n\021placement_version\030\002 \001(\004R\020placemen"
+    "tVersion\022!\n\014operation_id\030\003 \001(\tR\013operatio"
+    "nId\022E\n\014target_route\030\004 \001(\0162\".pandora.loca"
+    "tor.v1.PlacementRouteR\013targetRoute\022\036\n\013ds"
+    "_pod_name\030\005 \001(\tR\tdsPodName\022&\n\017ds_instanc"
+    "e_uid\030\006 \001(\tR\rdsInstanceUid\022*\n\021hub_assign"
+    "ment_id\030\007 \001(\tR\017hubAssignmentId\022&\n\017target"
+    "_match_id\030\010 \001(\004R\rtargetMatchId\022*\n\021ds_ins"
+    "tance_epoch\030\t \001(\rR\017dsInstanceEpoch\022#\n\ral"
+    "location_id\030\n \001(\tR\014allocationId\022#\n\rrelea"
+    "se_track\030\013 \001(\tR\014releaseTrack\022*\n\021lease_de"
+    "adline_ms\030\014 \001(\003R\017leaseDeadlineMs\"\235\001\n\033Bin"
+    "dPlacementTargetResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\022N\n\tplac"
+    "ement\030\002 \001(\01320.pandora.locator.v1.PlayerP"
+    "lacementStorageRecordR\tplacement\"\203\002\n\027Pla"
+    "cementTargetIdentity\022\036\n\013ds_pod_name\030\001 \001("
+    "\tR\tdsPodName\022&\n\017ds_instance_uid\030\002 \001(\tR\rd"
+    "sInstanceUid\022*\n\021hub_assignment_id\030\003 \001(\tR"
+    "\017hubAssignmentId\022*\n\021ds_instance_epoch\030\004 "
+    "\001(\rR\017dsInstanceEpoch\022#\n\rallocation_id\030\005 "
+    "\001(\tR\014allocationId\022#\n\rrelease_track\030\006 \001(\t"
+    "R\014releaseTrack\"\236\006\n\036RetargetPlacementTarg"
+    "etRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022+"
+    "\n\021placement_version\030\002 \001(\004R\020placementVers"
+    "ion\022!\n\014operation_id\030\003 \001(\tR\013operationId\022E"
+    "\n\014target_route\030\004 \001(\0162\".pandora.locator.v"
+    "1.PlacementRouteR\013targetRoute\022&\n\017target_"
+    "match_id\030\005 \001(\004R\rtargetMatchId\022T\n\017expecte"
+    "d_target\030\006 \001(\0132+.pandora.locator.v1.Plac"
+    "ementTargetIdentityR\016expectedTarget\022/\n\023r"
+    "eplacement_version\030\007 \001(\004R\022replacementVer"
+    "sion\0228\n\030replacement_operation_id\030\010 \001(\tR\026"
+    "replacementOperationId\022Z\n\022replacement_ta"
+    "rget\030\t \001(\0132+.pandora.locator.v1.Placemen"
+    "tTargetIdentityR\021replacementTarget\022E\n\npr"
+    "oof_type\030\n \001(\0162&.pandora.locator.v1.Plac"
+    "ementProofTypeR\tproofType\022L\n\006reason\030\013 \001("
+    "\01624.pandora.locator.v1.PlacementTargetUn"
+    "availableReasonR\006reason\022\031\n\010proof_id\030\014 \001("
+    "\tR\007proofId\022\'\n\017proof_signature\030\r \001(\tR\016pro"
+    "ofSignature\022*\n\021lease_deadline_ms\030\016 \001(\003R\017"
+    "leaseDeadlineMs\"\241\001\n\037RetargetPlacementTar"
+    "getResponse\022.\n\004code\030\001 \001(\0162\032.pandora.comm"
+    "on.v1.ErrCodeR\004code\022N\n\tplacement\030\002 \001(\01320"
+    ".pandora.locator.v1.PlayerPlacementStora"
+    "geRecordR\tplacement\"\311\005\n&ConfirmPlacement"
+    "SourceDepartureRequest\022\033\n\tplayer_id\030\001 \001("
+    "\004R\010playerId\022+\n\021placement_version\030\002 \001(\004R\020"
+    "placementVersion\022!\n\014operation_id\030\003 \001(\tR\013"
+    "operationId\022E\n\014target_route\030\004 \001(\0162\".pand"
+    "ora.locator.v1.PlacementRouteR\013targetRou"
+    "te\022&\n\017target_match_id\030\005 \001(\004R\rtargetMatch"
+    "Id\0228\n\030source_placement_version\030\006 \001(\004R\026so"
+    "urcePlacementVersion\022.\n\023source_operation"
+    "_id\030\007 \001(\tR\021sourceOperationId\022E\n\014source_r"
+    "oute\030\010 \001(\0162\".pandora.locator.v1.Placemen"
+    "tRouteR\013sourceRoute\022&\n\017source_match_id\030\t"
+    " \001(\004R\rsourceMatchId\022P\n\rsource_target\030\n \001"
+    "(\0132+.pandora.locator.v1.PlacementTargetI"
+    "dentityR\014sourceTarget\022T\n\nproof_type\030\013 \001("
+    "\01625.pandora.locator.v1.PlacementSourceDe"
+    "partureProofTypeR\tproofType\022\031\n\010proof_id\030"
+    "\014 \001(\tR\007proofId\022\'\n\017proof_signature\030\r \001(\tR"
+    "\016proofSignature\"\307\001\n\'ConfirmPlacementSour"
+    "ceDepartureResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\022\034\n\tconfirmed"
+    "\030\002 \001(\010R\tconfirmed\022N\n\tplacement\030\003 \001(\01320.p"
+    "andora.locator.v1.PlayerPlacementStorage"
+    "RecordR\tplacement\"\212\004\n\037CommitPlacementAdm"
+    "issionRequest\022\033\n\tplayer_id\030\001 \001(\004R\010player"
+    "Id\022+\n\021placement_version\030\002 \001(\004R\020placement"
+    "Version\022!\n\014operation_id\030\003 \001(\tR\013operation"
+    "Id\022E\n\014target_route\030\004 \001(\0162\".pandora.locat"
+    "or.v1.PlacementRouteR\013targetRoute\022\036\n\013ds_"
+    "pod_name\030\005 \001(\tR\tdsPodName\022&\n\017ds_instance"
+    "_uid\030\006 \001(\tR\rdsInstanceUid\022*\n\021hub_assignm"
+    "ent_id\030\007 \001(\tR\017hubAssignmentId\022!\n\014admissi"
+    "on_id\030\010 \001(\tR\013admissionId\022&\n\017target_match"
+    "_id\030\t \001(\004R\rtargetMatchId\022*\n\021ds_instance_"
+    "epoch\030\n \001(\rR\017dsInstanceEpoch\022#\n\rallocati"
+    "on_id\030\013 \001(\tR\014allocationId\022#\n\rrelease_tra"
+    "ck\030\014 \001(\tR\014releaseTrack\"\300\001\n CommitPlaceme"
+    "ntAdmissionResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\022\034\n\tcommitted"
+    "\030\002 \001(\010R\tcommitted\022N\n\tplacement\030\003 \001(\01320.p"
+    "andora.locator.v1.PlayerPlacementStorage"
+    "RecordR\tplacement\"\313\001\n\031BootstrapPlacement"
+    "Request\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022!\n\014"
+    "operation_id\030\002 \001(\tR\013operationId\022\031\n\010proof"
+    "_id\030\003 \001(\tR\007proofId\022\'\n\017proof_signature\030\004 "
+    "\001(\tR\016proofSignature\022*\n\021lease_deadline_ms"
+    "\030\005 \001(\003R\017leaseDeadlineMs\"\234\001\n\032BootstrapPla"
+    "cementResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
+    "ommon.v1.ErrCodeR\004code\022N\n\tplacement\030\002 \001("
+    "\01320.pandora.locator.v1.PlayerPlacementSt"
+    "orageRecordR\tplacement\"m\n\030SubscribePrese"
+    "nceRequest\022#\n\rsubscriber_id\030\001 \001(\004R\014subsc"
+    "riberId\022,\n\022watched_player_ids\030\002 \003(\004R\020wat"
+    "chedPlayerIds\"K\n\031SubscribePresenceRespon"
+    "se\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
+    "CodeR\004code\"A\n\032UnsubscribePresenceRequest"
+    "\022#\n\rsubscriber_id\030\001 \001(\004R\014subscriberId\"M\n"
+    "\033UnsubscribePresenceResponse\022.\n\004code\030\001 \001"
+    "(\0162\032.pandora.common.v1.ErrCodeR\004code\"~\n\016"
+    "PresenceChange\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
+    "rId\022:\n\006status\030\002 \001(\0162\".pandora.locator.v1"
+    ".PresenceStatusR\006status\022\023\n\005ts_ms\030\003 \001(\003R\004"
+    "tsMs\"R\n\022PresenceBatchEvent\022<\n\007changes\030\001 "
+    "\003(\0132\".pandora.locator.v1.PresenceChangeR"
+    "\007changes*\275\001\n\rLocationState\022\036\n\032LOCATION_S"
+    "TATE_UNSPECIFIED\020\000\022\032\n\026LOCATION_STATE_OFF"
+    "LINE\020\001\022 \n\034LOCATION_STATE_LOGIN_PENDING\020\002"
+    "\022\026\n\022LOCATION_STATE_HUB\020\003\022\033\n\027LOCATION_STA"
+    "TE_MATCHING\020\004\022\031\n\025LOCATION_STATE_BATTLE\020\005"
+    "*f\n\016PlacementRoute\022\037\n\033PLACEMENT_ROUTE_UN"
+    "SPECIFIED\020\000\022\027\n\023PLACEMENT_ROUTE_HUB\020\001\022\032\n\026"
+    "PLACEMENT_ROUTE_BATTLE\020\002*\225\001\n\030PlacementTr"
+    "ansitionState\022*\n&PLACEMENT_TRANSITION_ST"
+    "ATE_UNSPECIFIED\020\000\022%\n!PLACEMENT_TRANSITIO"
+    "N_STATE_STABLE\020\001\022&\n\"PLACEMENT_TRANSITION"
+    "_STATE_PENDING\020\002*\203\002\n\022PlacementProofType\022"
+    "$\n PLACEMENT_PROOF_TYPE_UNSPECIFIED\020\000\022\'\n"
+    "#PLACEMENT_PROOF_TYPE_MATCH_TERMINAL\020\001\022%"
+    "\n!PLACEMENT_PROOF_TYPE_PLAYER_LEAVE\020\002\022*\n"
+    "&PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP\020"
+    "\003\022$\n PLACEMENT_PROOF_TYPE_MATCH_START\020\004\022"
+    "%\n!PLACEMENT_PROOF_TYPE_HUB_TRANSFER\020\005*\224"
+    "\002\n PlacementTargetUnavailableReason\0223\n/P"
+    "LACEMENT_TARGET_UNAVAILABLE_REASON_UNSPE"
+    "CIFIED\020\000\022;\n7PLACEMENT_TARGET_UNAVAILABLE"
+    "_REASON_INSTANCE_TERMINATED\020\001\022B\n>PLACEME"
+    "NT_TARGET_UNAVAILABLE_REASON_RESERVATION"
+    "_EXPIRED_UNUSED\020\002\022:\n6PLACEMENT_TARGET_UN"
+    "AVAILABLE_REASON_ALLOCATION_REVOKED\020\003*\317\001"
+    "\n!PlacementSourceDepartureProofType\0225\n1P"
+    "LACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNS"
+    "PECIFIED\020\000\0227\n3PLACEMENT_SOURCE_DEPARTURE"
+    "_PROOF_TYPE_HUB_DEPARTURE\020e\022:\n6PLACEMENT"
+    "_SOURCE_DEPARTURE_PROOF_TYPE_BATTLE_DEPA"
+    "RTURE\020f*\207\001\n\016PresenceStatus\022\037\n\033PRESENCE_S"
+    "TATUS_UNSPECIFIED\020\000\022\033\n\027PRESENCE_STATUS_O"
+    "FFLINE\020\001\022\032\n\026PRESENCE_STATUS_ONLINE\020\002\022\033\n\027"
+    "PRESENCE_STATUS_IN_GAME\020\0032\355\016\n\024PlayerLoca"
+    "torService\022^\n\013SetLocation\022&.pandora.loca"
+    "tor.v1.SetLocationRequest\032\'.pandora.loca"
+    "tor.v1.SetLocationResponse\022^\n\013GetLocatio"
+    "n\022&.pandora.locator.v1.GetLocationReques"
+    "t\032\'.pandora.locator.v1.GetLocationRespon"
+    "se\022m\n\020BatchGetLocation\022+.pandora.locator"
+    ".v1.BatchGetLocationRequest\032,.pandora.lo"
+    "cator.v1.BatchGetLocationResponse\022p\n\021Sub"
+    "scribePresence\022,.pandora.locator.v1.Subs"
+    "cribePresenceRequest\032-.pandora.locator.v"
+    "1.SubscribePresenceResponse\022v\n\023Unsubscri"
+    "bePresence\022..pandora.locator.v1.Unsubscr"
+    "ibePresenceRequest\032/.pandora.locator.v1."
+    "UnsubscribePresenceResponse\022d\n\rClearLoca"
+    "tion\022(.pandora.locator.v1.ClearLocationR"
+    "equest\032).pandora.locator.v1.ClearLocatio"
+    "nResponse\022v\n\023RefreshHubLocations\022..pando"
+    "ra.locator.v1.RefreshHubLocationsRequest"
+    "\032/.pandora.locator.v1.RefreshHubLocation"
+    "sResponse\022m\n\020BatchGetLastSeen\022+.pandora."
+    "locator.v1.BatchGetLastSeenRequest\032,.pan"
+    "dora.locator.v1.BatchGetLastSeenResponse"
+    "\022m\n\020ReportDisconnect\022+.pandora.locator.v"
+    "1.ReportDisconnectRequest\032,.pandora.loca"
+    "tor.v1.ReportDisconnectResponse\022a\n\014GetPl"
+    "acement\022\'.pandora.locator.v1.GetPlacemen"
+    "tRequest\032(.pandora.locator.v1.GetPlaceme"
+    "ntResponse\022\205\001\n\030BeginPlacementTransition\022"
+    "3.pandora.locator.v1.BeginPlacementTrans"
+    "itionRequest\0324.pandora.locator.v1.BeginP"
+    "lacementTransitionResponse\022v\n\023BindPlacem"
+    "entTarget\022..pandora.locator.v1.BindPlace"
+    "mentTargetRequest\032/.pandora.locator.v1.B"
+    "indPlacementTargetResponse\022\202\001\n\027RetargetP"
+    "lacementTarget\0222.pandora.locator.v1.Reta"
+    "rgetPlacementTargetRequest\0323.pandora.loc"
+    "ator.v1.RetargetPlacementTargetResponse\022"
+    "\232\001\n\037ConfirmPlacementSourceDeparture\022:.pa"
+    "ndora.locator.v1.ConfirmPlacementSourceD"
+    "epartureRequest\032;.pandora.locator.v1.Con"
+    "firmPlacementSourceDepartureResponse\022\205\001\n"
+    "\030CommitPlacementAdmission\0223.pandora.loca"
+    "tor.v1.CommitPlacementAdmissionRequest\0324"
+    ".pandora.locator.v1.CommitPlacementAdmis"
+    "sionResponse\022s\n\022BootstrapPlacement\022-.pan"
+    "dora.locator.v1.BootstrapPlacementReques"
+    "t\032..pandora.locator.v1.BootstrapPlacemen"
+    "tResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto_deps[1] = {
@@ -7203,13 +8066,13 @@ static ::absl::once_flag descriptor_table_pandora_2flocator_2fv1_2flocator_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto = {
     false,
     false,
-    12081,
+    12897,
     descriptor_table_protodef_pandora_2flocator_2fv1_2flocator_2eproto,
     "pandora/locator/v1/locator.proto",
     &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto_once,
     descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto_deps,
     1,
-    36,
+    41,
     schemas,
     file_message_globals,
     TableStruct_pandora_2flocator_2fv1_2flocator_2eproto::offsets,
@@ -7630,6 +8493,283 @@ void Location::InternalSwap(Location* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
 }
 // ===================================================================
 
+HubPresenceFence::HubPresenceFence(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, HubPresenceFence_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.HubPresenceFence)
+}
+PROTOBUF_NDEBUG_INLINE HubPresenceFence::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::locator::v1::HubPresenceFence& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        assignment_id_(arena, from.assignment_id_),
+        admission_id_(arena, from.admission_id_) {}
+
+HubPresenceFence::HubPresenceFence(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const HubPresenceFence& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, HubPresenceFence_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  HubPresenceFence* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.admission_seq_ = from._impl_.admission_seq_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.HubPresenceFence)
+}
+PROTOBUF_NDEBUG_INLINE HubPresenceFence::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        assignment_id_(arena),
+        admission_id_(arena) {}
+
+inline void HubPresenceFence::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.admission_seq_ = {};
+}
+HubPresenceFence::~HubPresenceFence() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.HubPresenceFence)
+  SharedDtor(*this);
+}
+inline void HubPresenceFence::SharedDtor(MessageLite& self) {
+  HubPresenceFence& this_ = static_cast<HubPresenceFence&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.assignment_id_.Destroy();
+  this_._impl_.admission_id_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull HubPresenceFence_class_data_ =
+        HubPresenceFence::InternalGenerateClassData_(HubPresenceFence_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+HubPresenceFence::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&HubPresenceFence_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(HubPresenceFence_class_data_.tc_table);
+  return HubPresenceFence_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+HubPresenceFence::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&HubPresenceFence_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&HubPresenceFence_globals_));
+  return HubPresenceFence_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const HubPresenceFence::ParseTableT_
+    HubPresenceFence::_table_ =
+        HubPresenceFence::InternalGenerateParseTable_(HubPresenceFence_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void HubPresenceFence::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.HubPresenceFence)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.assignment_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.admission_id_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_.admission_seq_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL HubPresenceFence::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const HubPresenceFence& this_ = static_cast<const HubPresenceFence&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL HubPresenceFence::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const HubPresenceFence& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.HubPresenceFence)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string assignment_id = 1 [json_name = "assignmentId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_assignment_id().empty()) {
+      const ::std::string& _s = this_._internal_assignment_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.locator.v1.HubPresenceFence.assignment_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // string admission_id = 2 [json_name = "admissionId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_admission_id().empty()) {
+      const ::std::string& _s = this_._internal_admission_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.locator.v1.HubPresenceFence.admission_id");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint64 admission_seq = 3 [json_name = "admissionSeq"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_admission_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_admission_seq(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.HubPresenceFence)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t HubPresenceFence::ByteSizeLong(const MessageLite& base) {
+  const HubPresenceFence& this_ = static_cast<const HubPresenceFence&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t HubPresenceFence::ByteSizeLong() const {
+  const HubPresenceFence& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.HubPresenceFence)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string assignment_id = 1 [json_name = "assignmentId"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_assignment_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_assignment_id());
+      }
+    }
+    // string admission_id = 2 [json_name = "admissionId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_admission_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_admission_id());
+      }
+    }
+    // uint64 admission_seq = 3 [json_name = "admissionSeq"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_admission_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_admission_seq());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void HubPresenceFence::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<HubPresenceFence*>(&to_msg);
+  auto& from = static_cast<const HubPresenceFence&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.HubPresenceFence)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_assignment_id().empty()) {
+        _this->_internal_set_assignment_id(from._internal_assignment_id());
+      } else {
+        if (_this->_impl_.assignment_id_.IsDefault()) {
+          _this->_internal_set_assignment_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_admission_id().empty()) {
+        _this->_internal_set_admission_id(from._internal_admission_id());
+      } else {
+        if (_this->_impl_.admission_id_.IsDefault()) {
+          _this->_internal_set_admission_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_admission_seq() != 0) {
+        _this->_impl_.admission_seq_ = from._impl_.admission_seq_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void HubPresenceFence::CopyFrom(const HubPresenceFence& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.HubPresenceFence)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void HubPresenceFence::InternalSwap(HubPresenceFence* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.assignment_id_, &other->_impl_.assignment_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.admission_id_, &other->_impl_.admission_id_, arena);
+  swap(_impl_.admission_seq_, other->_impl_.admission_seq_);
+}
+
+::google::protobuf::Metadata HubPresenceFence::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 SetLocationRequest::SetLocationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, SetLocationRequest_get_class_data()) {
@@ -7664,6 +8804,9 @@ SetLocationRequest::SetLocationRequest(
   _impl_.location_ = (CheckHasBit(cached_has_bits, 0x00000001U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.location_)
                 : nullptr;
+  _impl_.hub_presence_fence_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.hub_presence_fence_)
+                : nullptr;
   _impl_.player_id_ = from._impl_.player_id_;
 
   // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.SetLocationRequest)
@@ -7694,6 +8837,7 @@ inline void SetLocationRequest::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.location_;
+  delete this_._impl_.hub_presence_fence_;
   this_._impl_.~Impl_();
 }
 
@@ -7731,9 +8875,15 @@ PROTOBUF_NOINLINE void SetLocationRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(_impl_.location_ != nullptr);
-    _impl_.location_->Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.location_ != nullptr);
+      _impl_.location_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.hub_presence_fence_ != nullptr);
+      _impl_.hub_presence_fence_->Clear();
+    }
   }
   _impl_.player_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
@@ -7760,7 +8910,7 @@ PROTOBUF_NOINLINE void SetLocationRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -7772,6 +8922,13 @@ PROTOBUF_NOINLINE void SetLocationRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.location_, this_._impl_.location_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.hub_presence_fence_, this_._impl_.hub_presence_fence_->GetCachedSize(), target,
         stream);
   }
 
@@ -7800,14 +8957,19 @@ PROTOBUF_NOINLINE void SetLocationRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // .pandora.locator.v1.Location location = 2 [json_name = "location"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.location_);
     }
-    // uint64 player_id = 1 [json_name = "playerId"];
+    // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.hub_presence_fence_);
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
@@ -7832,7 +8994,7 @@ void SetLocationRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.location_ != nullptr);
       if (_this->_impl_.location_ == nullptr) {
@@ -7842,6 +9004,14 @@ void SetLocationRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.hub_presence_fence_ != nullptr);
+      if (_this->_impl_.hub_presence_fence_ == nullptr) {
+        _this->_impl_.hub_presence_fence_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.hub_presence_fence_);
+      } else {
+        _this->_impl_.hub_presence_fence_->MergeFrom(*from._impl_.hub_presence_fence_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
@@ -9915,6 +11085,10 @@ ReportDisconnectRequest::ReportDisconnectRequest(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.hub_presence_fence_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.hub_presence_fence_)
+                : nullptr;
   _impl_.player_id_ = from._impl_.player_id_;
 
   // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.ReportDisconnectRequest)
@@ -9927,7 +11101,12 @@ PROTOBUF_NDEBUG_INLINE ReportDisconnectRequest::Impl_::Impl_(
 
 inline void ReportDisconnectRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.player_id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, hub_presence_fence_),
+           0,
+           offsetof(Impl_, player_id_) -
+               offsetof(Impl_, hub_presence_fence_) +
+               sizeof(Impl_::player_id_));
 }
 ReportDisconnectRequest::~ReportDisconnectRequest() {
   // @@protoc_insertion_point(destructor:pandora.locator.v1.ReportDisconnectRequest)
@@ -9941,6 +11120,7 @@ inline void ReportDisconnectRequest::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.hub_pod_.Destroy();
+  delete this_._impl_.hub_presence_fence_;
   this_._impl_.~Impl_();
 }
 
@@ -9978,8 +11158,14 @@ PROTOBUF_NOINLINE void ReportDisconnectRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.hub_pod_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.hub_pod_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.hub_presence_fence_ != nullptr);
+      _impl_.hub_presence_fence_->Clear();
+    }
   }
   _impl_.player_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
@@ -10016,12 +11202,19 @@ PROTOBUF_NOINLINE void ReportDisconnectRequest::Clear() {
   }
 
   // uint64 player_id = 2 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           2, this_._internal_player_id(), target);
     }
+  }
+
+  // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.hub_presence_fence_, this_._impl_.hub_presence_fence_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -10049,7 +11242,7 @@ PROTOBUF_NOINLINE void ReportDisconnectRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // string hub_pod = 1 [json_name = "hubPod"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_hub_pod().empty()) {
@@ -10057,8 +11250,13 @@ PROTOBUF_NOINLINE void ReportDisconnectRequest::Clear() {
                                         this_._internal_hub_pod());
       }
     }
-    // uint64 player_id = 2 [json_name = "playerId"];
+    // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.hub_presence_fence_);
+    }
+    // uint64 player_id = 2 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
@@ -10076,13 +11274,14 @@ void ReportDisconnectRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     from.CheckHasBitConsistency();
   }
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.ReportDisconnectRequest)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_hub_pod().empty()) {
         _this->_internal_set_hub_pod(from._internal_hub_pod());
@@ -10093,6 +11292,14 @@ void ReportDisconnectRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.hub_presence_fence_ != nullptr);
+      if (_this->_impl_.hub_presence_fence_ == nullptr) {
+        _this->_impl_.hub_presence_fence_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.hub_presence_fence_);
+      } else {
+        _this->_impl_.hub_presence_fence_->MergeFrom(*from._impl_.hub_presence_fence_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
@@ -10118,7 +11325,12 @@ void ReportDisconnectRequest::InternalSwap(ReportDisconnectRequest* PROTOBUF_RES
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_, &other->_impl_.hub_pod_, arena);
-  swap(_impl_.player_id_, other->_impl_.player_id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.player_id_)
+      + sizeof(ReportDisconnectRequest::_impl_.player_id_)
+      - PROTOBUF_FIELD_OFFSET(ReportDisconnectRequest, _impl_.hub_presence_fence_)>(
+          reinterpret_cast<char*>(&_impl_.hub_presence_fence_),
+          reinterpret_cast<char*>(&other->_impl_.hub_presence_fence_));
 }
 
 ::google::protobuf::Metadata ReportDisconnectRequest::GetMetadata() const {
@@ -10349,6 +11561,807 @@ void ReportDisconnectResponse::InternalSwap(ReportDisconnectResponse* PROTOBUF_R
 }
 
 ::google::protobuf::Metadata ReportDisconnectResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+BatchGetLastSeenRequest::BatchGetLastSeenRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchGetLastSeenRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.BatchGetLastSeenRequest)
+}
+PROTOBUF_NDEBUG_INLINE BatchGetLastSeenRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::locator::v1::BatchGetLastSeenRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        player_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::locator::v1::BatchGetLastSeenRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenRequest, _impl_.player_ids_)>()
+          , from.player_ids_
+        }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+BatchGetLastSeenRequest::BatchGetLastSeenRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BatchGetLastSeenRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchGetLastSeenRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BatchGetLastSeenRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.BatchGetLastSeenRequest)
+}
+PROTOBUF_NDEBUG_INLINE BatchGetLastSeenRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::BatchGetLastSeenRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+inline void BatchGetLastSeenRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+BatchGetLastSeenRequest::~BatchGetLastSeenRequest() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.BatchGetLastSeenRequest)
+  SharedDtor(*this);
+}
+inline void BatchGetLastSeenRequest::SharedDtor(MessageLite& self) {
+  BatchGetLastSeenRequest& this_ = static_cast<BatchGetLastSeenRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchGetLastSeenRequest_class_data_ =
+        BatchGetLastSeenRequest::InternalGenerateClassData_(BatchGetLastSeenRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLastSeenRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLastSeenRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchGetLastSeenRequest_class_data_.tc_table);
+  return BatchGetLastSeenRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLastSeenRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLastSeenRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchGetLastSeenRequest_globals_));
+  return BatchGetLastSeenRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchGetLastSeenRequest::ParseTableT_
+    BatchGetLastSeenRequest::_table_ =
+        BatchGetLastSeenRequest::InternalGenerateParseTable_(BatchGetLastSeenRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BatchGetLastSeenRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.BatchGetLastSeenRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.player_ids_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BatchGetLastSeenRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BatchGetLastSeenRequest& this_ = static_cast<const BatchGetLastSeenRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BatchGetLastSeenRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BatchGetLastSeenRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.BatchGetLastSeenRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._player_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            1, this_._internal_player_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.BatchGetLastSeenRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BatchGetLastSeenRequest::ByteSizeLong(const MessageLite& base) {
+  const BatchGetLastSeenRequest& this_ = static_cast<const BatchGetLastSeenRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BatchGetLastSeenRequest::ByteSizeLong() const {
+  const BatchGetLastSeenRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.BatchGetLastSeenRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_player_ids(), 1,
+              this_._impl_._player_ids_cached_byte_size_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BatchGetLastSeenRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BatchGetLastSeenRequest*>(&to_msg);
+  auto& from = static_cast<const BatchGetLastSeenRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.BatchGetLastSeenRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BatchGetLastSeenRequest::CopyFrom(const BatchGetLastSeenRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.BatchGetLastSeenRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BatchGetLastSeenRequest::InternalSwap(BatchGetLastSeenRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
+}
+
+::google::protobuf::Metadata BatchGetLastSeenRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse() : SuperType(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_get_class_data()) {}
+BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse() : SuperType() {}
+BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_class_data_ =
+        BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::InternalGenerateClassData_(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_class_data_.tc_table);
+  return BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_));
+  return BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::ParseTableT_
+    BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::_table_ =
+        BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse::InternalGenerateParseTable_(BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
+BatchGetLastSeenResponse::BatchGetLastSeenResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchGetLastSeenResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.BatchGetLastSeenResponse)
+}
+PROTOBUF_NDEBUG_INLINE BatchGetLastSeenResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::locator::v1::BatchGetLastSeenResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        last_seen_ms_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::locator::v1::BatchGetLastSeenResponse,
+              PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenResponse, _impl_.last_seen_ms_)>()
+          , from.last_seen_ms_
+        }
+     {}
+
+BatchGetLastSeenResponse::BatchGetLastSeenResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BatchGetLastSeenResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchGetLastSeenResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BatchGetLastSeenResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.code_ = from._impl_.code_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.BatchGetLastSeenResponse)
+}
+PROTOBUF_NDEBUG_INLINE BatchGetLastSeenResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        last_seen_ms_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::BatchGetLastSeenResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLastSeenResponse, _impl_.last_seen_ms_)>()
+         }
+     {}
+
+inline void BatchGetLastSeenResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+BatchGetLastSeenResponse::~BatchGetLastSeenResponse() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.BatchGetLastSeenResponse)
+  SharedDtor(*this);
+}
+inline void BatchGetLastSeenResponse::SharedDtor(MessageLite& self) {
+  BatchGetLastSeenResponse& this_ = static_cast<BatchGetLastSeenResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchGetLastSeenResponse_class_data_ =
+        BatchGetLastSeenResponse::InternalGenerateClassData_(BatchGetLastSeenResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLastSeenResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLastSeenResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchGetLastSeenResponse_class_data_.tc_table);
+  return BatchGetLastSeenResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLastSeenResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLastSeenResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchGetLastSeenResponse_globals_));
+  return BatchGetLastSeenResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchGetLastSeenResponse::ParseTableT_
+    BatchGetLastSeenResponse::_table_ =
+        BatchGetLastSeenResponse::InternalGenerateParseTable_(BatchGetLastSeenResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BatchGetLastSeenResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.BatchGetLastSeenResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    _impl_.code_ = 0;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.last_seen_ms_.Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BatchGetLastSeenResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BatchGetLastSeenResponse& this_ = static_cast<const BatchGetLastSeenResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BatchGetLastSeenResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BatchGetLastSeenResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.BatchGetLastSeenResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // map<uint64, int64> last_seen_ms = 2 [json_name = "lastSeenMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_last_seen_ms().empty()) {
+      using MapType = ::google::protobuf::Map<::uint64_t, ::int64_t>;
+      using WireHelper = _pbi::MapEntryFuncs<::uint64_t, ::int64_t,
+                                     _pbi::WireFormatLite::TYPE_UINT64,
+                                     _pbi::WireFormatLite::TYPE_INT64>;
+      const auto& field = this_._internal_last_seen_ms();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterFlat<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              2, entry.first, entry.second, target, stream);
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              2, entry.first, entry.second, target, stream);
+        }
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.BatchGetLastSeenResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BatchGetLastSeenResponse::ByteSizeLong(const MessageLite& base) {
+  const BatchGetLastSeenResponse& this_ = static_cast<const BatchGetLastSeenResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BatchGetLastSeenResponse::ByteSizeLong() const {
+  const BatchGetLastSeenResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.BatchGetLastSeenResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+    // map<uint64, int64> last_seen_ms = 2 [json_name = "lastSeenMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_last_seen_ms_size());
+      for (const auto& entry : this_._internal_last_seen_ms()) {
+        total_size += _pbi::MapEntryFuncs<::uint64_t, ::int64_t,
+                                       _pbi::WireFormatLite::TYPE_UINT64,
+                                       _pbi::WireFormatLite::TYPE_INT64>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BatchGetLastSeenResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BatchGetLastSeenResponse*>(&to_msg);
+  auto& from = static_cast<const BatchGetLastSeenResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.BatchGetLastSeenResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_impl_.last_seen_ms_.MergeFrom(from._impl_.last_seen_ms_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BatchGetLastSeenResponse::CopyFrom(const BatchGetLastSeenResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.BatchGetLastSeenResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BatchGetLastSeenResponse::InternalSwap(BatchGetLastSeenResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.code_, other->_impl_.code_);
+  _impl_.last_seen_ms_.InternalSwap(&other->_impl_.last_seen_ms_);
+}
+
+::google::protobuf::Metadata BatchGetLastSeenResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+PlayerLeftHubEvent::PlayerLeftHubEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerLeftHubEvent_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.PlayerLeftHubEvent)
+}
+PROTOBUF_NDEBUG_INLINE PlayerLeftHubEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::locator::v1::PlayerLeftHubEvent& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        hub_pod_(arena, from.hub_pod_) {}
+
+PlayerLeftHubEvent::PlayerLeftHubEvent(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PlayerLeftHubEvent& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerLeftHubEvent_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PlayerLeftHubEvent* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, left_at_ms_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::left_at_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.PlayerLeftHubEvent)
+}
+PROTOBUF_NDEBUG_INLINE PlayerLeftHubEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        hub_pod_(arena) {}
+
+inline void PlayerLeftHubEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, left_at_ms_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::left_at_ms_));
+}
+PlayerLeftHubEvent::~PlayerLeftHubEvent() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.PlayerLeftHubEvent)
+  SharedDtor(*this);
+}
+inline void PlayerLeftHubEvent::SharedDtor(MessageLite& self) {
+  PlayerLeftHubEvent& this_ = static_cast<PlayerLeftHubEvent&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.hub_pod_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PlayerLeftHubEvent_class_data_ =
+        PlayerLeftHubEvent::InternalGenerateClassData_(PlayerLeftHubEvent_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerLeftHubEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerLeftHubEvent_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PlayerLeftHubEvent_class_data_.tc_table);
+  return PlayerLeftHubEvent_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerLeftHubEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerLeftHubEvent_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PlayerLeftHubEvent_globals_));
+  return PlayerLeftHubEvent_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PlayerLeftHubEvent::ParseTableT_
+    PlayerLeftHubEvent::_table_ =
+        PlayerLeftHubEvent::InternalGenerateParseTable_(PlayerLeftHubEvent_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PlayerLeftHubEvent::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.PlayerLeftHubEvent)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.hub_pod_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.left_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.left_at_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PlayerLeftHubEvent::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PlayerLeftHubEvent& this_ = static_cast<const PlayerLeftHubEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PlayerLeftHubEvent::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PlayerLeftHubEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.PlayerLeftHubEvent)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // int64 left_at_ms = 2 [json_name = "leftAtMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_left_at_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<2>(
+              stream, this_._internal_left_at_ms(), target);
+    }
+  }
+
+  // string hub_pod = 3 [json_name = "hubPod"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_hub_pod().empty()) {
+      const ::std::string& _s = this_._internal_hub_pod();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.locator.v1.PlayerLeftHubEvent.hub_pod");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.PlayerLeftHubEvent)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PlayerLeftHubEvent::ByteSizeLong(const MessageLite& base) {
+  const PlayerLeftHubEvent& this_ = static_cast<const PlayerLeftHubEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PlayerLeftHubEvent::ByteSizeLong() const {
+  const PlayerLeftHubEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.PlayerLeftHubEvent)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string hub_pod = 3 [json_name = "hubPod"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_hub_pod().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_pod());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // int64 left_at_ms = 2 [json_name = "leftAtMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_left_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_left_at_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PlayerLeftHubEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PlayerLeftHubEvent*>(&to_msg);
+  auto& from = static_cast<const PlayerLeftHubEvent&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.PlayerLeftHubEvent)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_hub_pod().empty()) {
+        _this->_internal_set_hub_pod(from._internal_hub_pod());
+      } else {
+        if (_this->_impl_.hub_pod_.IsDefault()) {
+          _this->_internal_set_hub_pod("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_left_at_ms() != 0) {
+        _this->_impl_.left_at_ms_ = from._impl_.left_at_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PlayerLeftHubEvent::CopyFrom(const PlayerLeftHubEvent& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.PlayerLeftHubEvent)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PlayerLeftHubEvent::InternalSwap(PlayerLeftHubEvent* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_, &other->_impl_.hub_pod_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_.left_at_ms_)
+      + sizeof(PlayerLeftHubEvent::_impl_.left_at_ms_)
+      - PROTOBUF_FIELD_OFFSET(PlayerLeftHubEvent, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata PlayerLeftHubEvent::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

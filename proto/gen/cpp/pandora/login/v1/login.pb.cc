@@ -2280,11 +2280,11 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_._has_bits_),
       0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
+      13, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
+      4294959104,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
+      13,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2343,7 +2343,10 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
       {::_pbi::TcParser::FastMtS1,
        {98, 5, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.resume_context_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 register_no = 13 [json_name = "registerNo"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LoginResponse, _impl_.register_no_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.register_no_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -2373,6 +2376,8 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
       {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.selected_role_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .pandora.login.v1.ResumeContext resume_context = 12 [json_name = "resumeContext"];
       {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.resume_context_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 register_no = 13 [json_name = "registerNo"];
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.register_no_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2419,7 +2424,8 @@ inline constexpr LoginResponse::Impl_::Impl_(
         region_id_{0u},
         cell_id_{0u},
         selected_role_id_{0u},
-        match_id_{::uint64_t{0u}} {}
+        match_id_{::uint64_t{0u}},
+        register_no_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr LoginResponse::LoginResponse(::_pbi::ConstantInitialized,
@@ -2694,7 +2700,7 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_._has_bits_),
-        15, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.session_token_),
@@ -2707,6 +2713,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.selected_role_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.resume_context_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.register_no_),
         7,
         6,
         0,
@@ -2719,6 +2726,7 @@ const ::uint32_t
         11,
         10,
         5,
+        12,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::ResumeContext, _impl_._has_bits_),
         21, // hasbit index offset
@@ -2883,18 +2891,18 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::login::v1::LoginRequest)},
         {15, sizeof(::pandora::login::v1::LoginResponse)},
-        {42, sizeof(::pandora::login::v1::ResumeContext)},
-        {81, sizeof(::pandora::login::v1::GetResumeContextRequest)},
-        {86, sizeof(::pandora::login::v1::GetResumeContextResponse)},
-        {93, sizeof(::pandora::login::v1::LogoutRequest)},
-        {98, sizeof(::pandora::login::v1::LogoutResponse)},
-        {103, sizeof(::pandora::login::v1::DSTicket)},
-        {152, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
-        {161, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
-        {170, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
-        {179, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
-        {186, sizeof(::pandora::login::v1::SelectRoleRequest)},
-        {191, sizeof(::pandora::login::v1::SelectRoleResponse)},
+        {44, sizeof(::pandora::login::v1::ResumeContext)},
+        {83, sizeof(::pandora::login::v1::GetResumeContextRequest)},
+        {88, sizeof(::pandora::login::v1::GetResumeContextResponse)},
+        {95, sizeof(::pandora::login::v1::LogoutRequest)},
+        {100, sizeof(::pandora::login::v1::LogoutResponse)},
+        {105, sizeof(::pandora::login::v1::DSTicket)},
+        {154, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
+        {163, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
+        {172, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
+        {181, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
+        {188, sizeof(::pandora::login::v1::SelectRoleRequest)},
+        {193, sizeof(::pandora::login::v1::SelectRoleResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2923,7 +2931,7 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "e_id\030\003 \001(\tR\010deviceId\022%\n\016client_version\030\004"
     " \001(\tR\rclientVersion\022\026\n\006region\030\n \001(\tR\006reg"
     "ion\022\026\n\006locale\030\013 \001(\tR\006localeJ\004\010\005\020\nJ\004\010\014\0202\""
-    "\316\003\n\rLoginResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
+    "\357\003\n\rLoginResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
     "a.common.v1.ErrCodeR\004code\022\033\n\tplayer_id\030\002"
     " \001(\004R\010playerId\022#\n\rsession_token\030\003 \001(\tR\014s"
     "essionToken\022\036\n\013hub_ds_addr\030\004 \001(\tR\thubDsA"
@@ -2934,116 +2942,117 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "ket\022\031\n\010match_id\030\n \001(\004R\007matchId\022(\n\020select"
     "ed_role_id\030\013 \001(\rR\016selectedRoleId\022F\n\016resu"
     "me_context\030\014 \001(\0132\037.pandora.login.v1.Resu"
-    "meContextR\rresumeContext\"\264\006\n\rResumeConte"
-    "xt\0223\n\005route\030\001 \001(\0162\035.pandora.login.v1.Res"
-    "umeRouteR\005route\022\031\n\010match_id\030\002 \001(\004R\007match"
-    "Id\022C\n\013match_stage\030\003 \001(\0162\".pandora.login."
-    "v1.ResumeMatchStageR\nmatchStage\022+\n\021place"
-    "ment_version\030\004 \001(\004R\020placementVersion\022!\n\014"
-    "operation_id\030\005 \001(\tR\013operationId\022O\n\017place"
-    "ment_state\030\006 \001(\0162&.pandora.login.v1.Resu"
-    "mePlacementStateR\016placementState\022\036\n\013ds_p"
-    "od_name\030\007 \001(\tR\tdsPodName\022&\n\017ds_instance_"
-    "uid\030\010 \001(\tR\rdsInstanceUid\022*\n\021hub_assignme"
-    "nt_id\030\t \001(\tR\017hubAssignmentId\022*\n\021ds_insta"
-    "nce_epoch\030\n \001(\rR\017dsInstanceEpoch\022#\n\rallo"
-    "cation_id\030\013 \001(\tR\014allocationId\022#\n\rrelease"
-    "_track\030\014 \001(\tR\014releaseTrack\022\033\n\tgame_mode\030"
-    "\r \001(\tR\010gameMode\022\025\n\006map_id\030\016 \001(\rR\005mapId\022\037"
-    "\n\013owner_epoch\030\017 \001(\004R\nownerEpoch\022$\n\016retry"
-    "_after_ms\030\020 \001(\rR\014retryAfterMs\022C\n\013entry_s"
-    "tate\030\021 \001(\0162\".pandora.login.v1.ResumeEntr"
-    "yStateR\nentryState\022C\n\013wait_reason\030\022 \001(\0162"
-    "\".pandora.login.v1.ResumeWaitReasonR\nwai"
-    "tReason\">\n\027GetResumeContextRequest\022#\n\rse"
-    "ssion_token\030\001 \001(\tR\014sessionToken\"\205\001\n\030GetR"
-    "esumeContextResponse\022.\n\004code\030\001 \001(\0162\032.pan"
-    "dora.common.v1.ErrCodeR\004code\0229\n\007context\030"
-    "\002 \001(\0132\037.pandora.login.v1.ResumeContextR\007"
-    "context\"4\n\rLogoutRequest\022#\n\rsession_toke"
-    "n\030\001 \001(\tR\014sessionToken\"@\n\016LogoutResponse\022"
-    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
-    "eR\004code\"\302\006\n\010DSTicket\022\033\n\tplayer_id\030\001 \001(\004R"
-    "\010playerId\022\031\n\010match_id\030\002 \001(\004R\007matchId\022 \n\014"
-    "issued_at_ms\030\003 \001(\003R\nissuedAtMs\022\"\n\rexpire"
-    "s_at_ms\030\004 \001(\003R\013expiresAtMs\022\027\n\007ds_type\030\005 "
-    "\001(\tR\006dsType\022\020\n\003jti\030\006 \001(\tR\003jti\022\033\n\tregion_"
-    "id\030\007 \001(\rR\010regionId\022\027\n\007cell_id\030\010 \001(\rR\006cel"
-    "lId\022\027\n\007role_id\030\n \001(\rR\006roleId\022\036\n\013ds_pod_n"
-    "ame\030\013 \001(\tR\tdsPodName\022&\n\017ds_instance_uid\030"
-    "\014 \001(\tR\rdsInstanceUid\022*\n\021ds_protocol_epoc"
-    "h\030\r \001(\rR\017dsProtocolEpoch\022*\n\021ds_credentia"
-    "l_gen\030\016 \001(\004R\017dsCredentialGen\022*\n\021ds_crede"
-    "ntial_jti\030\017 \001(\tR\017dsCredentialJti\022*\n\021hub_"
-    "assignment_id\030\020 \001(\tR\017hubAssignmentId\022&\n\017"
-    "ds_writer_epoch\030\021 \001(\rR\rdsWriterEpoch\022\027\n\007"
-    "dst_ver\030\022 \001(\rR\006dstVer\022*\n\021ds_instance_epo"
-    "ch\030\023 \001(\rR\017dsInstanceEpoch\022#\n\rallocation_"
-    "id\030\024 \001(\tR\014allocationId\022#\n\rrelease_track\030"
-    "\025 \001(\tR\014releaseTrack\022+\n\021placement_version"
-    "\030\026 \001(\004R\020placementVersion\0224\n\026placement_op"
-    "eration_id\030\027 \001(\tR\024placementOperationId\022&"
-    "\n\017source_match_id\030\030 \001(\004R\rsourceMatchIdJ\004"
-    "\010\t\020\n\"q\n\024IssueDSTicketRequest\022#\n\rsession_"
-    "token\030\001 \001(\tR\014sessionToken\022\027\n\007ds_type\030\002 \001"
-    "(\tR\006dsType\022\033\n\ttarget_id\030\003 \001(\004R\010targetId\""
-    "\177\n\025IssueDSTicketResponse\022.\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCodeR\004code\022\026\n\006tick"
-    "et\030\002 \001(\tR\006ticket\022\036\n\013hub_ds_addr\030\003 \001(\tR\th"
-    "ubDsAddr\"r\n\025VerifyDSTicketRequest\022\026\n\006tic"
-    "ket\030\001 \001(\tR\006ticket\022\036\n\013ds_pod_name\030\002 \001(\tR\t"
-    "dsPodName\022!\n\014admission_id\030\003 \001(\tR\013admissi"
-    "onId\"|\n\026VerifyDSTicketResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\0222"
-    "\n\006claims\030\002 \001(\0132\032.pandora.login.v1.DSTick"
-    "etR\006claims\",\n\021SelectRoleRequest\022\027\n\007role_"
-    "id\030\001 \001(\rR\006roleId\"\203\001\n\022SelectRoleResponse\022"
-    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
-    "eR\004code\022\036\n\013hub_ds_addr\030\002 \001(\tR\thubDsAddr\022"
-    "\035\n\nhub_ticket\030\003 \001(\tR\thubTicket*t\n\013Resume"
-    "Route\022\034\n\030RESUME_ROUTE_UNSPECIFIED\020\000\022\024\n\020R"
-    "ESUME_ROUTE_HUB\020\001\022\027\n\023RESUME_ROUTE_BATTLE"
-    "\020\002\022\030\n\024RESUME_ROUTE_UNKNOWN\020\003*\366\001\n\020ResumeM"
-    "atchStage\022\"\n\036RESUME_MATCH_STAGE_UNSPECIF"
-    "IED\020\000\022\033\n\027RESUME_MATCH_STAGE_NONE\020\001\022\035\n\031RE"
-    "SUME_MATCH_STAGE_QUEUED\020\002\022!\n\035RESUME_MATC"
-    "H_STAGE_CONFIRMING\020\003\022!\n\035RESUME_MATCH_STA"
-    "GE_ALLOCATING\020\004\022\034\n\030RESUME_MATCH_STAGE_RE"
-    "ADY\020\005\022\036\n\032RESUME_MATCH_STAGE_RUNNING\020\006*\205\001"
-    "\n\024ResumePlacementState\022&\n\"RESUME_PLACEME"
-    "NT_STATE_UNSPECIFIED\020\000\022\"\n\036RESUME_PLACEME"
-    "NT_STATE_PENDING\020\001\022!\n\035RESUME_PLACEMENT_S"
-    "TATE_STABLE\020\002*\330\001\n\020ResumeEntryState\022\"\n\036RE"
-    "SUME_ENTRY_STATE_UNSPECIFIED\020\000\022$\n RESUME"
-    "_ENTRY_STATE_ROLE_REQUIRED\020\001\022\033\n\027RESUME_E"
-    "NTRY_STATE_WAIT\020\002\022\035\n\031RESUME_ENTRY_STATE_"
-    "TARGET\020\003\022\035\n\031RESUME_ENTRY_STATE_REAUTH\020\004\022"
-    "\037\n\033RESUME_ENTRY_STATE_TERMINAL\020\005*\354\001\n\020Res"
-    "umeWaitReason\022\"\n\036RESUME_WAIT_REASON_UNSP"
-    "ECIFIED\020\000\022$\n RESUME_WAIT_REASON_OWNER_UN"
-    "KNOWN\020\001\022$\n RESUME_WAIT_REASON_ADMIT_BARR"
-    "IER\020\002\022\037\n\033RESUME_WAIT_REASON_MATCHING\020\003\022#"
-    "\n\037RESUME_WAIT_REASON_ROLE_UNKNOWN\020\004\022\"\n\036R"
-    "ESUME_WAIT_REASON_NO_CAPACITY\020\0052\334\005\n\014Logi"
-    "nService\022^\n\005Login\022\036.pandora.login.v1.Log"
-    "inRequest\032\037.pandora.login.v1.LoginRespon"
-    "se\"\024\202\323\344\223\002\016\"\t/v1/login:\001*\022b\n\006Logout\022\037.pan"
-    "dora.login.v1.LogoutRequest\032 .pandora.lo"
-    "gin.v1.LogoutResponse\"\025\202\323\344\223\002\017\"\n/v1/logou"
-    "t:\001*\022\200\001\n\rIssueDSTicket\022&.pandora.login.v"
-    "1.IssueDSTicketRequest\032\'.pandora.login.v"
-    "1.IssueDSTicketResponse\"\036\202\323\344\223\002\030\"\023/v1/ds/"
-    "ticket/issue:\001*\022s\n\nSelectRole\022#.pandora."
-    "login.v1.SelectRoleRequest\032$.pandora.log"
-    "in.v1.SelectRoleResponse\"\032\202\323\344\223\002\024\"\017/v1/ro"
-    "le/select:\001*\022\204\001\n\016VerifyDSTicket\022\'.pandor"
-    "a.login.v1.VerifyDSTicketRequest\032(.pando"
-    "ra.login.v1.VerifyDSTicketResponse\"\037\202\323\344\223"
-    "\002\031\"\024/v1/ds/ticket/verify:\001*\022\210\001\n\020GetResum"
-    "eContext\022).pandora.login.v1.GetResumeCon"
-    "textRequest\032*.pandora.login.v1.GetResume"
-    "ContextResponse\"\035\202\323\344\223\002\027\"\022/v1/resume/cont"
-    "ext:\001*b\006proto3"
+    "meContextR\rresumeContext\022\037\n\013register_no\030"
+    "\r \001(\004R\nregisterNo\"\264\006\n\rResumeContext\0223\n\005r"
+    "oute\030\001 \001(\0162\035.pandora.login.v1.ResumeRout"
+    "eR\005route\022\031\n\010match_id\030\002 \001(\004R\007matchId\022C\n\013m"
+    "atch_stage\030\003 \001(\0162\".pandora.login.v1.Resu"
+    "meMatchStageR\nmatchStage\022+\n\021placement_ve"
+    "rsion\030\004 \001(\004R\020placementVersion\022!\n\014operati"
+    "on_id\030\005 \001(\tR\013operationId\022O\n\017placement_st"
+    "ate\030\006 \001(\0162&.pandora.login.v1.ResumePlace"
+    "mentStateR\016placementState\022\036\n\013ds_pod_name"
+    "\030\007 \001(\tR\tdsPodName\022&\n\017ds_instance_uid\030\010 \001"
+    "(\tR\rdsInstanceUid\022*\n\021hub_assignment_id\030\t"
+    " \001(\tR\017hubAssignmentId\022*\n\021ds_instance_epo"
+    "ch\030\n \001(\rR\017dsInstanceEpoch\022#\n\rallocation_"
+    "id\030\013 \001(\tR\014allocationId\022#\n\rrelease_track\030"
+    "\014 \001(\tR\014releaseTrack\022\033\n\tgame_mode\030\r \001(\tR\010"
+    "gameMode\022\025\n\006map_id\030\016 \001(\rR\005mapId\022\037\n\013owner"
+    "_epoch\030\017 \001(\004R\nownerEpoch\022$\n\016retry_after_"
+    "ms\030\020 \001(\rR\014retryAfterMs\022C\n\013entry_state\030\021 "
+    "\001(\0162\".pandora.login.v1.ResumeEntryStateR"
+    "\nentryState\022C\n\013wait_reason\030\022 \001(\0162\".pando"
+    "ra.login.v1.ResumeWaitReasonR\nwaitReason"
+    "\">\n\027GetResumeContextRequest\022#\n\rsession_t"
+    "oken\030\001 \001(\tR\014sessionToken\"\205\001\n\030GetResumeCo"
+    "ntextResponse\022.\n\004code\030\001 \001(\0162\032.pandora.co"
+    "mmon.v1.ErrCodeR\004code\0229\n\007context\030\002 \001(\0132\037"
+    ".pandora.login.v1.ResumeContextR\007context"
+    "\"4\n\rLogoutRequest\022#\n\rsession_token\030\001 \001(\t"
+    "R\014sessionToken\"@\n\016LogoutResponse\022.\n\004code"
+    "\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code"
+    "\"\302\006\n\010DSTicket\022\033\n\tplayer_id\030\001 \001(\004R\010player"
+    "Id\022\031\n\010match_id\030\002 \001(\004R\007matchId\022 \n\014issued_"
+    "at_ms\030\003 \001(\003R\nissuedAtMs\022\"\n\rexpires_at_ms"
+    "\030\004 \001(\003R\013expiresAtMs\022\027\n\007ds_type\030\005 \001(\tR\006ds"
+    "Type\022\020\n\003jti\030\006 \001(\tR\003jti\022\033\n\tregion_id\030\007 \001("
+    "\rR\010regionId\022\027\n\007cell_id\030\010 \001(\rR\006cellId\022\027\n\007"
+    "role_id\030\n \001(\rR\006roleId\022\036\n\013ds_pod_name\030\013 \001"
+    "(\tR\tdsPodName\022&\n\017ds_instance_uid\030\014 \001(\tR\r"
+    "dsInstanceUid\022*\n\021ds_protocol_epoch\030\r \001(\r"
+    "R\017dsProtocolEpoch\022*\n\021ds_credential_gen\030\016"
+    " \001(\004R\017dsCredentialGen\022*\n\021ds_credential_j"
+    "ti\030\017 \001(\tR\017dsCredentialJti\022*\n\021hub_assignm"
+    "ent_id\030\020 \001(\tR\017hubAssignmentId\022&\n\017ds_writ"
+    "er_epoch\030\021 \001(\rR\rdsWriterEpoch\022\027\n\007dst_ver"
+    "\030\022 \001(\rR\006dstVer\022*\n\021ds_instance_epoch\030\023 \001("
+    "\rR\017dsInstanceEpoch\022#\n\rallocation_id\030\024 \001("
+    "\tR\014allocationId\022#\n\rrelease_track\030\025 \001(\tR\014"
+    "releaseTrack\022+\n\021placement_version\030\026 \001(\004R"
+    "\020placementVersion\0224\n\026placement_operation"
+    "_id\030\027 \001(\tR\024placementOperationId\022&\n\017sourc"
+    "e_match_id\030\030 \001(\004R\rsourceMatchIdJ\004\010\t\020\n\"q\n"
+    "\024IssueDSTicketRequest\022#\n\rsession_token\030\001"
+    " \001(\tR\014sessionToken\022\027\n\007ds_type\030\002 \001(\tR\006dsT"
+    "ype\022\033\n\ttarget_id\030\003 \001(\004R\010targetId\"\177\n\025Issu"
+    "eDSTicketResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
+    "a.common.v1.ErrCodeR\004code\022\026\n\006ticket\030\002 \001("
+    "\tR\006ticket\022\036\n\013hub_ds_addr\030\003 \001(\tR\thubDsAdd"
+    "r\"r\n\025VerifyDSTicketRequest\022\026\n\006ticket\030\001 \001"
+    "(\tR\006ticket\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodNa"
+    "me\022!\n\014admission_id\030\003 \001(\tR\013admissionId\"|\n"
+    "\026VerifyDSTicketResponse\022.\n\004code\030\001 \001(\0162\032."
+    "pandora.common.v1.ErrCodeR\004code\0222\n\006claim"
+    "s\030\002 \001(\0132\032.pandora.login.v1.DSTicketR\006cla"
+    "ims\",\n\021SelectRoleRequest\022\027\n\007role_id\030\001 \001("
+    "\rR\006roleId\"\203\001\n\022SelectRoleResponse\022.\n\004code"
+    "\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code"
+    "\022\036\n\013hub_ds_addr\030\002 \001(\tR\thubDsAddr\022\035\n\nhub_"
+    "ticket\030\003 \001(\tR\thubTicket*t\n\013ResumeRoute\022\034"
+    "\n\030RESUME_ROUTE_UNSPECIFIED\020\000\022\024\n\020RESUME_R"
+    "OUTE_HUB\020\001\022\027\n\023RESUME_ROUTE_BATTLE\020\002\022\030\n\024R"
+    "ESUME_ROUTE_UNKNOWN\020\003*\366\001\n\020ResumeMatchSta"
+    "ge\022\"\n\036RESUME_MATCH_STAGE_UNSPECIFIED\020\000\022\033"
+    "\n\027RESUME_MATCH_STAGE_NONE\020\001\022\035\n\031RESUME_MA"
+    "TCH_STAGE_QUEUED\020\002\022!\n\035RESUME_MATCH_STAGE"
+    "_CONFIRMING\020\003\022!\n\035RESUME_MATCH_STAGE_ALLO"
+    "CATING\020\004\022\034\n\030RESUME_MATCH_STAGE_READY\020\005\022\036"
+    "\n\032RESUME_MATCH_STAGE_RUNNING\020\006*\205\001\n\024Resum"
+    "ePlacementState\022&\n\"RESUME_PLACEMENT_STAT"
+    "E_UNSPECIFIED\020\000\022\"\n\036RESUME_PLACEMENT_STAT"
+    "E_PENDING\020\001\022!\n\035RESUME_PLACEMENT_STATE_ST"
+    "ABLE\020\002*\330\001\n\020ResumeEntryState\022\"\n\036RESUME_EN"
+    "TRY_STATE_UNSPECIFIED\020\000\022$\n RESUME_ENTRY_"
+    "STATE_ROLE_REQUIRED\020\001\022\033\n\027RESUME_ENTRY_ST"
+    "ATE_WAIT\020\002\022\035\n\031RESUME_ENTRY_STATE_TARGET\020"
+    "\003\022\035\n\031RESUME_ENTRY_STATE_REAUTH\020\004\022\037\n\033RESU"
+    "ME_ENTRY_STATE_TERMINAL\020\005*\354\001\n\020ResumeWait"
+    "Reason\022\"\n\036RESUME_WAIT_REASON_UNSPECIFIED"
+    "\020\000\022$\n RESUME_WAIT_REASON_OWNER_UNKNOWN\020\001"
+    "\022$\n RESUME_WAIT_REASON_ADMIT_BARRIER\020\002\022\037"
+    "\n\033RESUME_WAIT_REASON_MATCHING\020\003\022#\n\037RESUM"
+    "E_WAIT_REASON_ROLE_UNKNOWN\020\004\022\"\n\036RESUME_W"
+    "AIT_REASON_NO_CAPACITY\020\0052\334\005\n\014LoginServic"
+    "e\022^\n\005Login\022\036.pandora.login.v1.LoginReque"
+    "st\032\037.pandora.login.v1.LoginResponse\"\024\202\323\344"
+    "\223\002\016\"\t/v1/login:\001*\022b\n\006Logout\022\037.pandora.lo"
+    "gin.v1.LogoutRequest\032 .pandora.login.v1."
+    "LogoutResponse\"\025\202\323\344\223\002\017\"\n/v1/logout:\001*\022\200\001"
+    "\n\rIssueDSTicket\022&.pandora.login.v1.Issue"
+    "DSTicketRequest\032\'.pandora.login.v1.Issue"
+    "DSTicketResponse\"\036\202\323\344\223\002\030\"\023/v1/ds/ticket/"
+    "issue:\001*\022s\n\nSelectRole\022#.pandora.login.v"
+    "1.SelectRoleRequest\032$.pandora.login.v1.S"
+    "electRoleResponse\"\032\202\323\344\223\002\024\"\017/v1/role/sele"
+    "ct:\001*\022\204\001\n\016VerifyDSTicket\022\'.pandora.login"
+    ".v1.VerifyDSTicketRequest\032(.pandora.logi"
+    "n.v1.VerifyDSTicketResponse\"\037\202\323\344\223\002\031\"\024/v1"
+    "/ds/ticket/verify:\001*\022\210\001\n\020GetResumeContex"
+    "t\022).pandora.login.v1.GetResumeContextReq"
+    "uest\032*.pandora.login.v1.GetResumeContext"
+    "Response\"\035\202\323\344\223\002\027\"\022/v1/resume/context:\001*b"
+    "\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_deps[2] = {
@@ -3054,7 +3063,7 @@ static ::absl::once_flag descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto = {
     false,
     false,
-    5134,
+    5167,
     descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto,
     "pandora/login/v1/login.proto",
     &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_once,
@@ -3534,9 +3543,9 @@ LoginResponse::LoginResponse(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, match_id_) -
+           offsetof(Impl_, register_no_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::match_id_));
+               sizeof(Impl_::register_no_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.login.v1.LoginResponse)
 }
@@ -3555,9 +3564,9 @@ inline void LoginResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, resume_context_),
            0,
-           offsetof(Impl_, match_id_) -
+           offsetof(Impl_, register_no_) -
                offsetof(Impl_, resume_context_) +
-               sizeof(Impl_::match_id_));
+               sizeof(Impl_::register_no_));
 }
 LoginResponse::~LoginResponse() {
   // @@protoc_insertion_point(destructor:pandora.login.v1.LoginResponse)
@@ -3639,10 +3648,10 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
         reinterpret_cast<char*>(&_impl_.code_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.code_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     ::memset(&_impl_.region_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.match_id_) -
-        reinterpret_cast<char*>(&_impl_.region_id_)) + sizeof(_impl_.match_id_));
+        reinterpret_cast<char*>(&_impl_.register_no_) -
+        reinterpret_cast<char*>(&_impl_.region_id_)) + sizeof(_impl_.register_no_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3778,6 +3787,15 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
         stream);
   }
 
+  // uint64 register_no = 13 [json_name = "registerNo"];
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_register_no() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          13, this_._internal_register_no(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3859,7 +3877,7 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     // uint32 region_id = 6 [json_name = "regionId"];
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_region_id() != 0) {
@@ -3886,6 +3904,13 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
       if (this_._internal_match_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_match_id());
+      }
+    }
+    // uint64 register_no = 13 [json_name = "registerNo"];
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_register_no() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_register_no());
       }
     }
   }
@@ -3972,7 +3997,7 @@ void LoginResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_region_id() != 0) {
         _this->_impl_.region_id_ = from._impl_.region_id_;
@@ -3991,6 +4016,11 @@ void LoginResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_match_id() != 0) {
         _this->_impl_.match_id_ = from._impl_.match_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_register_no() != 0) {
+        _this->_impl_.register_no_ = from._impl_.register_no_;
       }
     }
   }
@@ -4019,8 +4049,8 @@ void LoginResponse::InternalSwap(LoginResponse* PROTOBUF_RESTRICT PROTOBUF_NONNU
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ds_addr_, &other->_impl_.battle_ds_addr_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ticket_, &other->_impl_.battle_ticket_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.match_id_)
-      + sizeof(LoginResponse::_impl_.match_id_)
+      PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.register_no_)
+      + sizeof(LoginResponse::_impl_.register_no_)
       - PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.resume_context_)>(
           reinterpret_cast<char*>(&_impl_.resume_context_),
           reinterpret_cast<char*>(&other->_impl_.resume_context_));

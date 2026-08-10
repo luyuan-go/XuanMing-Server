@@ -76,6 +76,30 @@ enum PlacementTransitionState : int;
 extern const uint32_t PlacementTransitionState_internal_data_[];
 enum PresenceStatus : int;
 extern const uint32_t PresenceStatus_internal_data_[];
+class BatchGetLastSeenRequest;
+struct BatchGetLastSeenRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BatchGetLastSeenRequestGlobalsTypeInternal BatchGetLastSeenRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BatchGetLastSeenRequest_class_data_;
+#else
+extern const BatchGetLastSeenRequestGlobalsTypeInternal BatchGetLastSeenRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BatchGetLastSeenResponse;
+struct BatchGetLastSeenResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BatchGetLastSeenResponseGlobalsTypeInternal BatchGetLastSeenResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BatchGetLastSeenResponse_class_data_;
+#else
+extern const BatchGetLastSeenResponseGlobalsTypeInternal BatchGetLastSeenResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse;
+struct BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUseGlobalsTypeInternal BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_class_data_;
+#else
+extern const BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUseGlobalsTypeInternal BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class BatchGetLocationRequest;
 struct BatchGetLocationRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -228,6 +252,14 @@ extern const ::google::protobuf::internal::ClassDataFull GetPlacementResponse_cl
 #else
 extern const GetPlacementResponseGlobalsTypeInternal GetPlacementResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class HubPresenceFence;
+struct HubPresenceFenceGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern HubPresenceFenceGlobalsTypeInternal HubPresenceFence_globals_;
+extern const ::google::protobuf::internal::ClassDataFull HubPresenceFence_class_data_;
+#else
+extern const HubPresenceFenceGlobalsTypeInternal HubPresenceFence_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class Location;
 struct LocationGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -243,6 +275,14 @@ extern PlacementTargetIdentityGlobalsTypeInternal PlacementTargetIdentity_global
 extern const ::google::protobuf::internal::ClassDataFull PlacementTargetIdentity_class_data_;
 #else
 extern const PlacementTargetIdentityGlobalsTypeInternal PlacementTargetIdentity_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PlayerLeftHubEvent;
+struct PlayerLeftHubEventGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PlayerLeftHubEventGlobalsTypeInternal PlayerLeftHubEvent_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PlayerLeftHubEvent_class_data_;
+#else
+extern const PlayerLeftHubEventGlobalsTypeInternal PlayerLeftHubEvent_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class PlayerPlacementStorageRecord;
 struct PlayerPlacementStorageRecordGlobalsTypeInternal;
@@ -750,7 +790,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsubscribePresenceResponse final :
   [[nodiscard]] static const UnsubscribePresenceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsubscribePresenceResponse>(&UnsubscribePresenceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 38;
   friend void swap(UnsubscribePresenceResponse& a, UnsubscribePresenceResponse& b) { a.Swap(&b); }
   inline void Swap(UnsubscribePresenceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -951,7 +991,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsubscribePresenceRequest final : 
   [[nodiscard]] static const UnsubscribePresenceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsubscribePresenceRequest>(&UnsubscribePresenceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 37;
   friend void swap(UnsubscribePresenceRequest& a, UnsubscribePresenceRequest& b) { a.Swap(&b); }
   inline void Swap(UnsubscribePresenceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1152,7 +1192,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribePresenceResponse final : p
   [[nodiscard]] static const SubscribePresenceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubscribePresenceResponse>(&SubscribePresenceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 36;
   friend void swap(SubscribePresenceResponse& a, SubscribePresenceResponse& b) { a.Swap(&b); }
   inline void Swap(SubscribePresenceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1353,7 +1393,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribePresenceRequest final : pu
   [[nodiscard]] static const SubscribePresenceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubscribePresenceRequest>(&SubscribePresenceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(SubscribePresenceRequest& a, SubscribePresenceRequest& b) { a.Swap(&b); }
   inline void Swap(SubscribePresenceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1577,7 +1617,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetLocationResponse final : public 
   [[nodiscard]] static const SetLocationResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetLocationResponse>(&SetLocationResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(SetLocationResponse& a, SetLocationResponse& b) { a.Swap(&b); }
   inline void Swap(SetLocationResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1778,7 +1818,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportDisconnectResponse final : pu
   [[nodiscard]] static const ReportDisconnectResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReportDisconnectResponse>(&ReportDisconnectResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(ReportDisconnectResponse& a, ReportDisconnectResponse& b) { a.Swap(&b); }
   inline void Swap(ReportDisconnectResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1935,224 +1975,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportDisconnectResponse final : pu
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportDisconnectRequest final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:pandora.locator.v1.ReportDisconnectRequest) */ {
- public:
-  inline ReportDisconnectRequest() : ReportDisconnectRequest(nullptr) {}
-  ~ReportDisconnectRequest() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(ReportDisconnectRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReportDisconnectRequest));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr ReportDisconnectRequest(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline ReportDisconnectRequest(const ReportDisconnectRequest& from) : ReportDisconnectRequest(nullptr, from) {}
-  inline ReportDisconnectRequest(ReportDisconnectRequest&& from) noexcept : ReportDisconnectRequest(nullptr, ::std::move(from)) {}
-  inline ReportDisconnectRequest& operator=(const ReportDisconnectRequest& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline ReportDisconnectRequest& operator=(ReportDisconnectRequest&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const ReportDisconnectRequest& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReportDisconnectRequest>(&ReportDisconnectRequest_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 12;
-  friend void swap(ReportDisconnectRequest& a, ReportDisconnectRequest& b) { a.Swap(&b); }
-  inline void Swap(ReportDisconnectRequest* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(ReportDisconnectRequest* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] ReportDisconnectRequest* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<ReportDisconnectRequest>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const ReportDisconnectRequest& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const ReportDisconnectRequest& from) { ReportDisconnectRequest::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(ReportDisconnectRequest* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.ReportDisconnectRequest"; }
-
-  explicit ReportDisconnectRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  ReportDisconnectRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReportDisconnectRequest& from);
-  ReportDisconnectRequest(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReportDisconnectRequest&& from) noexcept
-      : ReportDisconnectRequest(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kHubPodFieldNumber = 1,
-    kPlayerIdFieldNumber = 2,
-  };
-  // string hub_pod = 1 [json_name = "hubPod"];
-  void clear_hub_pod() ;
-  [[nodiscard]] const ::std::string& hub_pod() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_hub_pod(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_hub_pod();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_pod();
-  void set_allocated_hub_pod(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_hub_pod() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_pod(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_pod();
-
-  public:
-  // uint64 player_id = 2 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:pandora.locator.v1.ReportDisconnectRequest)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          0, 58,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const ReportDisconnectRequest& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr hub_pod_;
-    ::uint64_t player_id_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
-};
-// -------------------------------------------------------------------
-
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RefreshHubLocationsResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.RefreshHubLocationsResponse) */ {
  public:
@@ -2209,7 +2031,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RefreshHubLocationsResponse final :
   [[nodiscard]] static const RefreshHubLocationsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RefreshHubLocationsResponse>(&RefreshHubLocationsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(RefreshHubLocationsResponse& a, RefreshHubLocationsResponse& b) { a.Swap(&b); }
   inline void Swap(RefreshHubLocationsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2422,7 +2244,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RefreshHubLocationsRequest final : 
   [[nodiscard]] static const RefreshHubLocationsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RefreshHubLocationsRequest>(&RefreshHubLocationsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(RefreshHubLocationsRequest& a, RefreshHubLocationsRequest& b) { a.Swap(&b); }
   inline void Swap(RefreshHubLocationsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2651,7 +2473,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceChange final : public ::goo
   [[nodiscard]] static const PresenceChange& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PresenceChange>(&PresenceChange_globals_);
   }
-  static constexpr int kIndexInFileMessages = 34;
+  static constexpr int kIndexInFileMessages = 39;
   friend void swap(PresenceChange& a, PresenceChange& b) { a.Swap(&b); }
   inline void Swap(PresenceChange* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2876,7 +2698,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
   [[nodiscard]] static const PlayerPlacementStorageRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerPlacementStorageRecord>(&PlayerPlacementStorageRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(PlayerPlacementStorageRecord& a, PlayerPlacementStorageRecord& b) { a.Swap(&b); }
   inline void Swap(PlayerPlacementStorageRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3555,6 +3377,236 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLeftHubEvent final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.PlayerLeftHubEvent) */ {
+ public:
+  inline PlayerLeftHubEvent() : PlayerLeftHubEvent(nullptr) {}
+  ~PlayerLeftHubEvent() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PlayerLeftHubEvent* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlayerLeftHubEvent));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PlayerLeftHubEvent(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PlayerLeftHubEvent(const PlayerLeftHubEvent& from) : PlayerLeftHubEvent(nullptr, from) {}
+  inline PlayerLeftHubEvent(PlayerLeftHubEvent&& from) noexcept : PlayerLeftHubEvent(nullptr, ::std::move(from)) {}
+  inline PlayerLeftHubEvent& operator=(const PlayerLeftHubEvent& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PlayerLeftHubEvent& operator=(PlayerLeftHubEvent&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PlayerLeftHubEvent& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerLeftHubEvent>(&PlayerLeftHubEvent_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(PlayerLeftHubEvent& a, PlayerLeftHubEvent& b) { a.Swap(&b); }
+  inline void Swap(PlayerLeftHubEvent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PlayerLeftHubEvent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PlayerLeftHubEvent* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PlayerLeftHubEvent>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PlayerLeftHubEvent& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PlayerLeftHubEvent& from) { PlayerLeftHubEvent::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PlayerLeftHubEvent* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.PlayerLeftHubEvent"; }
+
+  explicit PlayerLeftHubEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PlayerLeftHubEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayerLeftHubEvent& from);
+  PlayerLeftHubEvent(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlayerLeftHubEvent&& from) noexcept
+      : PlayerLeftHubEvent(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kHubPodFieldNumber = 3,
+    kPlayerIdFieldNumber = 1,
+    kLeftAtMsFieldNumber = 2,
+  };
+  // string hub_pod = 3 [json_name = "hubPod"];
+  void clear_hub_pod() ;
+  [[nodiscard]] const ::std::string& hub_pod() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_pod(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_pod();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_pod();
+  void set_allocated_hub_pod(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_pod() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_pod(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_pod();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // int64 left_at_ms = 2 [json_name = "leftAtMs"];
+  void clear_left_at_ms() ;
+  [[nodiscard]] ::int64_t left_at_ms() const;
+  void set_left_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_left_at_ms() const;
+  void _internal_set_left_at_ms(::int64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.PlayerLeftHubEvent)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 53,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PlayerLeftHubEvent& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr hub_pod_;
+    ::uint64_t player_id_;
+    ::int64_t left_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlacementTargetIdentity final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.PlacementTargetIdentity) */ {
  public:
@@ -3611,7 +3663,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlacementTargetIdentity final : pub
   [[nodiscard]] static const PlacementTargetIdentity& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlacementTargetIdentity>(&PlacementTargetIdentity_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(PlacementTargetIdentity& a, PlacementTargetIdentity& b) { a.Swap(&b); }
   inline void Swap(PlacementTargetIdentity* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4112,6 +4164,241 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Location final : public ::google::p
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubPresenceFence final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.HubPresenceFence) */ {
+ public:
+  inline HubPresenceFence() : HubPresenceFence(nullptr) {}
+  ~HubPresenceFence() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HubPresenceFence* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HubPresenceFence));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr HubPresenceFence(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline HubPresenceFence(const HubPresenceFence& from) : HubPresenceFence(nullptr, from) {}
+  inline HubPresenceFence(HubPresenceFence&& from) noexcept : HubPresenceFence(nullptr, ::std::move(from)) {}
+  inline HubPresenceFence& operator=(const HubPresenceFence& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HubPresenceFence& operator=(HubPresenceFence&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const HubPresenceFence& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<HubPresenceFence>(&HubPresenceFence_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(HubPresenceFence& a, HubPresenceFence& b) { a.Swap(&b); }
+  inline void Swap(HubPresenceFence* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HubPresenceFence* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] HubPresenceFence* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HubPresenceFence>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HubPresenceFence& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HubPresenceFence& from) { HubPresenceFence::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HubPresenceFence* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.HubPresenceFence"; }
+
+  explicit HubPresenceFence(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HubPresenceFence(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HubPresenceFence& from);
+  HubPresenceFence(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HubPresenceFence&& from) noexcept
+      : HubPresenceFence(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAssignmentIdFieldNumber = 1,
+    kAdmissionIdFieldNumber = 2,
+    kAdmissionSeqFieldNumber = 3,
+  };
+  // string assignment_id = 1 [json_name = "assignmentId"];
+  void clear_assignment_id() ;
+  [[nodiscard]] const ::std::string& assignment_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_assignment_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_assignment_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_assignment_id();
+  void set_allocated_assignment_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_assignment_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_assignment_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_assignment_id();
+
+  public:
+  // string admission_id = 2 [json_name = "admissionId"];
+  void clear_admission_id() ;
+  [[nodiscard]] const ::std::string& admission_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_admission_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_admission_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_admission_id();
+  void set_allocated_admission_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_admission_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_admission_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_admission_id();
+
+  public:
+  // uint64 admission_seq = 3 [json_name = "admissionSeq"];
+  void clear_admission_seq() ;
+  [[nodiscard]] ::uint64_t admission_seq() const;
+  void set_admission_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_admission_seq() const;
+  void _internal_set_admission_seq(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.HubPresenceFence)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 69,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HubPresenceFence& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr assignment_id_;
+    ::google::protobuf::internal::ArenaStringPtr admission_id_;
+    ::uint64_t admission_seq_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlacementRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.GetPlacementRequest) */ {
  public:
@@ -4168,7 +4455,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlacementRequest final : public 
   [[nodiscard]] static const GetPlacementRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlacementRequest>(&GetPlacementRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(GetPlacementRequest& a, GetPlacementRequest& b) { a.Swap(&b); }
   inline void Swap(GetPlacementRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4369,7 +4656,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetLocationRequest final : public :
   [[nodiscard]] static const GetLocationRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetLocationRequest>(&GetLocationRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(GetLocationRequest& a, GetLocationRequest& b) { a.Swap(&b); }
   inline void Swap(GetLocationRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4570,7 +4857,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitPlacementAdmissionRequest fin
   [[nodiscard]] static const CommitPlacementAdmissionRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CommitPlacementAdmissionRequest>(&CommitPlacementAdmissionRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(CommitPlacementAdmissionRequest& a, CommitPlacementAdmissionRequest& b) { a.Swap(&b); }
   inline void Swap(CommitPlacementAdmissionRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4938,7 +5225,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClearLocationResponse final : publi
   [[nodiscard]] static const ClearLocationResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClearLocationResponse>(&ClearLocationResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(ClearLocationResponse& a, ClearLocationResponse& b) { a.Swap(&b); }
   inline void Swap(ClearLocationResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5139,7 +5426,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClearLocationRequest final : public
   [[nodiscard]] static const ClearLocationRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClearLocationRequest>(&ClearLocationRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(ClearLocationRequest& a, ClearLocationRequest& b) { a.Swap(&b); }
   inline void Swap(ClearLocationRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5340,7 +5627,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BootstrapPlacementRequest final : p
   [[nodiscard]] static const BootstrapPlacementRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BootstrapPlacementRequest>(&BootstrapPlacementRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(BootstrapPlacementRequest& a, BootstrapPlacementRequest& b) { a.Swap(&b); }
   inline void Swap(BootstrapPlacementRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5604,7 +5891,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BindPlacementTargetRequest final : 
   [[nodiscard]] static const BindPlacementTargetRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BindPlacementTargetRequest>(&BindPlacementTargetRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(BindPlacementTargetRequest& a, BindPlacementTargetRequest& b) { a.Swap(&b); }
   inline void Swap(BindPlacementTargetRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5967,7 +6254,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginPlacementTransitionRequest fin
   [[nodiscard]] static const BeginPlacementTransitionRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BeginPlacementTransitionRequest>(&BeginPlacementTransitionRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(BeginPlacementTransitionRequest& a, BeginPlacementTransitionRequest& b) { a.Swap(&b); }
   inline void Swap(BeginPlacementTransitionRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6291,7 +6578,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchGetLocationRequest final : pub
   [[nodiscard]] static const BatchGetLocationRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BatchGetLocationRequest>(&BatchGetLocationRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(BatchGetLocationRequest& a, BatchGetLocationRequest& b) { a.Swap(&b); }
   inline void Swap(BatchGetLocationRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6447,6 +6734,267 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchGetLocationRequest final : pub
 };
 // -------------------------------------------------------------------
 
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint64_t, ::int64_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT64,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_INT64> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint64_t, ::int64_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT64,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_INT64>;
+  BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchGetLastSeenRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.BatchGetLastSeenRequest) */ {
+ public:
+  inline BatchGetLastSeenRequest() : BatchGetLastSeenRequest(nullptr) {}
+  ~BatchGetLastSeenRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BatchGetLastSeenRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BatchGetLastSeenRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BatchGetLastSeenRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BatchGetLastSeenRequest(const BatchGetLastSeenRequest& from) : BatchGetLastSeenRequest(nullptr, from) {}
+  inline BatchGetLastSeenRequest(BatchGetLastSeenRequest&& from) noexcept : BatchGetLastSeenRequest(nullptr, ::std::move(from)) {}
+  inline BatchGetLastSeenRequest& operator=(const BatchGetLastSeenRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BatchGetLastSeenRequest& operator=(BatchGetLastSeenRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BatchGetLastSeenRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BatchGetLastSeenRequest>(&BatchGetLastSeenRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(BatchGetLastSeenRequest& a, BatchGetLastSeenRequest& b) { a.Swap(&b); }
+  inline void Swap(BatchGetLastSeenRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BatchGetLastSeenRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BatchGetLastSeenRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BatchGetLastSeenRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BatchGetLastSeenRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BatchGetLastSeenRequest& from) { BatchGetLastSeenRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BatchGetLastSeenRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.BatchGetLastSeenRequest"; }
+
+  explicit BatchGetLastSeenRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BatchGetLastSeenRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BatchGetLastSeenRequest& from);
+  BatchGetLastSeenRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BatchGetLastSeenRequest&& from) noexcept
+      : BatchGetLastSeenRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdsFieldNumber = 1,
+  };
+  // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+  [[nodiscard]] int player_ids_size()
+      const;
+  private:
+  int _internal_player_ids_size() const;
+
+  public:
+  void clear_player_ids() ;
+  [[nodiscard]] ::uint64_t player_ids(int index) const;
+  void set_player_ids(int index, ::uint64_t value);
+  void add_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_ids();
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.BatchGetLastSeenRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BatchGetLastSeenRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
+    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetLocationRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.SetLocationRequest) */ {
  public:
@@ -6503,7 +7051,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetLocationRequest final : public :
   [[nodiscard]] static const SetLocationRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetLocationRequest>(&SetLocationRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(SetLocationRequest& a, SetLocationRequest& b) { a.Swap(&b); }
   inline void Swap(SetLocationRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6596,6 +7144,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetLocationRequest final : public :
   // accessors -------------------------------------------------------
   enum : int {
     kLocationFieldNumber = 2,
+    kHubPresenceFenceFieldNumber = 3,
     kPlayerIdFieldNumber = 1,
   };
   // .pandora.locator.v1.Location location = 2 [json_name = "location"];
@@ -6614,6 +7163,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetLocationRequest final : public :
   ::pandora::locator::v1::Location* PROTOBUF_NONNULL _internal_mutable_location();
 
   public:
+  // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+  [[nodiscard]] bool has_hub_presence_fence()
+      const;
+  void clear_hub_presence_fence() ;
+  [[nodiscard]] const ::pandora::locator::v1::HubPresenceFence& hub_presence_fence() const;
+  [[nodiscard]] ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE release_hub_presence_fence();
+  ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NONNULL mutable_hub_presence_fence();
+  void set_allocated_hub_presence_fence(::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_hub_presence_fence(::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE unsafe_arena_release_hub_presence_fence();
+
+  private:
+  const ::pandora::locator::v1::HubPresenceFence& _internal_hub_presence_fence() const;
+  ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NONNULL _internal_mutable_hub_presence_fence();
+
+  public:
   // uint64 player_id = 1 [json_name = "playerId"];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -6628,8 +7193,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetLocationRequest final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -6658,6 +7223,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetLocationRequest final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::pandora::locator::v1::Location* PROTOBUF_NULLABLE location_;
+    ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE hub_presence_fence_;
     ::uint64_t player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -6722,7 +7288,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RetargetPlacementTargetResponse fin
   [[nodiscard]] static const RetargetPlacementTargetResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RetargetPlacementTargetResponse>(&RetargetPlacementTargetResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(RetargetPlacementTargetResponse& a, RetargetPlacementTargetResponse& b) { a.Swap(&b); }
   inline void Swap(RetargetPlacementTargetResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6941,7 +7507,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RetargetPlacementTargetRequest fina
   [[nodiscard]] static const RetargetPlacementTargetRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RetargetPlacementTargetRequest>(&RetargetPlacementTargetRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(RetargetPlacementTargetRequest& a, RetargetPlacementTargetRequest& b) { a.Swap(&b); }
   inline void Swap(RetargetPlacementTargetRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7274,6 +7840,242 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RetargetPlacementTargetRequest fina
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportDisconnectRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.ReportDisconnectRequest) */ {
+ public:
+  inline ReportDisconnectRequest() : ReportDisconnectRequest(nullptr) {}
+  ~ReportDisconnectRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ReportDisconnectRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReportDisconnectRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ReportDisconnectRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ReportDisconnectRequest(const ReportDisconnectRequest& from) : ReportDisconnectRequest(nullptr, from) {}
+  inline ReportDisconnectRequest(ReportDisconnectRequest&& from) noexcept : ReportDisconnectRequest(nullptr, ::std::move(from)) {}
+  inline ReportDisconnectRequest& operator=(const ReportDisconnectRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReportDisconnectRequest& operator=(ReportDisconnectRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ReportDisconnectRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReportDisconnectRequest>(&ReportDisconnectRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(ReportDisconnectRequest& a, ReportDisconnectRequest& b) { a.Swap(&b); }
+  inline void Swap(ReportDisconnectRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReportDisconnectRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ReportDisconnectRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ReportDisconnectRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ReportDisconnectRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ReportDisconnectRequest& from) { ReportDisconnectRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ReportDisconnectRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.ReportDisconnectRequest"; }
+
+  explicit ReportDisconnectRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ReportDisconnectRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReportDisconnectRequest& from);
+  ReportDisconnectRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReportDisconnectRequest&& from) noexcept
+      : ReportDisconnectRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kHubPodFieldNumber = 1,
+    kHubPresenceFenceFieldNumber = 3,
+    kPlayerIdFieldNumber = 2,
+  };
+  // string hub_pod = 1 [json_name = "hubPod"];
+  void clear_hub_pod() ;
+  [[nodiscard]] const ::std::string& hub_pod() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_pod(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_pod();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_pod();
+  void set_allocated_hub_pod(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_pod() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_pod(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_pod();
+
+  public:
+  // .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+  [[nodiscard]] bool has_hub_presence_fence()
+      const;
+  void clear_hub_presence_fence() ;
+  [[nodiscard]] const ::pandora::locator::v1::HubPresenceFence& hub_presence_fence() const;
+  [[nodiscard]] ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE release_hub_presence_fence();
+  ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NONNULL mutable_hub_presence_fence();
+  void set_allocated_hub_presence_fence(::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_hub_presence_fence(::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE unsafe_arena_release_hub_presence_fence();
+
+  private:
+  const ::pandora::locator::v1::HubPresenceFence& _internal_hub_presence_fence() const;
+  ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NONNULL _internal_mutable_hub_presence_fence();
+
+  public:
+  // uint64 player_id = 2 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.ReportDisconnectRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 58,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ReportDisconnectRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr hub_pod_;
+    ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE hub_presence_fence_;
+    ::uint64_t player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceBatchEvent final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.PresenceBatchEvent) */ {
  public:
@@ -7330,7 +8132,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceBatchEvent final : public :
   [[nodiscard]] static const PresenceBatchEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PresenceBatchEvent>(&PresenceBatchEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 35;
+  static constexpr int kIndexInFileMessages = 40;
   friend void swap(PresenceBatchEvent& a, PresenceBatchEvent& b) { a.Swap(&b); }
   inline void Swap(PresenceBatchEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7542,7 +8344,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlacementResponse final : public
   [[nodiscard]] static const GetPlacementResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlacementResponse>(&GetPlacementResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(GetPlacementResponse& a, GetPlacementResponse& b) { a.Swap(&b); }
   inline void Swap(GetPlacementResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7773,7 +8575,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetLocationResponse final : public 
   [[nodiscard]] static const GetLocationResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetLocationResponse>(&GetLocationResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(GetLocationResponse& a, GetLocationResponse& b) { a.Swap(&b); }
   inline void Swap(GetLocationResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7992,7 +8794,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfirmPlacementSourceDepartureResp
   [[nodiscard]] static const ConfirmPlacementSourceDepartureResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ConfirmPlacementSourceDepartureResponse>(&ConfirmPlacementSourceDepartureResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(ConfirmPlacementSourceDepartureResponse& a, ConfirmPlacementSourceDepartureResponse& b) { a.Swap(&b); }
   inline void Swap(ConfirmPlacementSourceDepartureResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8223,7 +9025,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfirmPlacementSourceDepartureRequ
   [[nodiscard]] static const ConfirmPlacementSourceDepartureRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ConfirmPlacementSourceDepartureRequest>(&ConfirmPlacementSourceDepartureRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(ConfirmPlacementSourceDepartureRequest& a, ConfirmPlacementSourceDepartureRequest& b) { a.Swap(&b); }
   inline void Swap(ConfirmPlacementSourceDepartureRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8594,7 +9396,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitPlacementAdmissionResponse fi
   [[nodiscard]] static const CommitPlacementAdmissionResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CommitPlacementAdmissionResponse>(&CommitPlacementAdmissionResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(CommitPlacementAdmissionResponse& a, CommitPlacementAdmissionResponse& b) { a.Swap(&b); }
   inline void Swap(CommitPlacementAdmissionResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8825,7 +9627,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BootstrapPlacementResponse final : 
   [[nodiscard]] static const BootstrapPlacementResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BootstrapPlacementResponse>(&BootstrapPlacementResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(BootstrapPlacementResponse& a, BootstrapPlacementResponse& b) { a.Swap(&b); }
   inline void Swap(BootstrapPlacementResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9044,7 +9846,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BindPlacementTargetResponse final :
   [[nodiscard]] static const BindPlacementTargetResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BindPlacementTargetResponse>(&BindPlacementTargetResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(BindPlacementTargetResponse& a, BindPlacementTargetResponse& b) { a.Swap(&b); }
   inline void Swap(BindPlacementTargetResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9263,7 +10065,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginPlacementTransitionResponse fi
   [[nodiscard]] static const BeginPlacementTransitionResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BeginPlacementTransitionResponse>(&BeginPlacementTransitionResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(BeginPlacementTransitionResponse& a, BeginPlacementTransitionResponse& b) { a.Swap(&b); }
   inline void Swap(BeginPlacementTransitionResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9475,6 +10277,225 @@ class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchGetLocationResponse_LocationsEn
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchGetLastSeenResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.BatchGetLastSeenResponse) */ {
+ public:
+  inline BatchGetLastSeenResponse() : BatchGetLastSeenResponse(nullptr) {}
+  ~BatchGetLastSeenResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BatchGetLastSeenResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BatchGetLastSeenResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BatchGetLastSeenResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BatchGetLastSeenResponse(const BatchGetLastSeenResponse& from) : BatchGetLastSeenResponse(nullptr, from) {}
+  inline BatchGetLastSeenResponse(BatchGetLastSeenResponse&& from) noexcept : BatchGetLastSeenResponse(nullptr, ::std::move(from)) {}
+  inline BatchGetLastSeenResponse& operator=(const BatchGetLastSeenResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BatchGetLastSeenResponse& operator=(BatchGetLastSeenResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BatchGetLastSeenResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BatchGetLastSeenResponse>(&BatchGetLastSeenResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(BatchGetLastSeenResponse& a, BatchGetLastSeenResponse& b) { a.Swap(&b); }
+  inline void Swap(BatchGetLastSeenResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BatchGetLastSeenResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BatchGetLastSeenResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BatchGetLastSeenResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BatchGetLastSeenResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BatchGetLastSeenResponse& from) { BatchGetLastSeenResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BatchGetLastSeenResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.BatchGetLastSeenResponse"; }
+
+  explicit BatchGetLastSeenResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BatchGetLastSeenResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BatchGetLastSeenResponse& from);
+  BatchGetLastSeenResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BatchGetLastSeenResponse&& from) noexcept
+      : BatchGetLastSeenResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+    kLastSeenMsFieldNumber = 2,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // map<uint64, int64> last_seen_ms = 2 [json_name = "lastSeenMs"];
+  [[nodiscard]] int last_seen_ms_size()
+      const;
+  private:
+  int _internal_last_seen_ms_size() const;
+
+  public:
+  void clear_last_seen_ms() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint64_t, ::int64_t>& last_seen_ms() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint64_t, ::int64_t>* PROTOBUF_NONNULL mutable_last_seen_ms();
+
+  private:
+  const ::google::protobuf::Map<::uint64_t, ::int64_t>& _internal_last_seen_ms() const;
+  ::google::protobuf::Map<::uint64_t, ::int64_t>* PROTOBUF_NONNULL _internal_mutable_last_seen_ms();
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.BatchGetLastSeenResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BatchGetLastSeenResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    ::google::protobuf::internal::MapField<BatchGetLastSeenResponse_LastSeenMsEntry_DoNotUse, ::uint64_t, ::int64_t> last_seen_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchGetLocationResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.BatchGetLocationResponse) */ {
  public:
@@ -9531,7 +10552,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchGetLocationResponse final : pu
   [[nodiscard]] static const BatchGetLocationResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BatchGetLocationResponse>(&BatchGetLocationResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(BatchGetLocationResponse& a, BatchGetLocationResponse& b) { a.Swap(&b); }
   inline void Swap(BatchGetLocationResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9935,13 +10956,169 @@ inline void Location::_internal_set_updated_at_ms(::int64_t value) {
 
 // -------------------------------------------------------------------
 
+// HubPresenceFence
+
+// string assignment_id = 1 [json_name = "assignmentId"];
+inline void HubPresenceFence::clear_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.assignment_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& HubPresenceFence::assignment_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.HubPresenceFence.assignment_id)
+  return _internal_assignment_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubPresenceFence::set_assignment_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.assignment_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.HubPresenceFence.assignment_id)
+}
+inline ::std::string* PROTOBUF_NONNULL HubPresenceFence::mutable_assignment_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_assignment_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.HubPresenceFence.assignment_id)
+  return _s;
+}
+inline const ::std::string& HubPresenceFence::_internal_assignment_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.assignment_id_.Get();
+}
+inline void HubPresenceFence::_internal_set_assignment_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.assignment_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubPresenceFence::_internal_mutable_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.assignment_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubPresenceFence::release_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.HubPresenceFence.assignment_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.assignment_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.assignment_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubPresenceFence::set_allocated_assignment_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.assignment_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.assignment_id_.IsDefault()) {
+    _impl_.assignment_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.HubPresenceFence.assignment_id)
+}
+
+// string admission_id = 2 [json_name = "admissionId"];
+inline void HubPresenceFence::clear_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& HubPresenceFence::admission_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.HubPresenceFence.admission_id)
+  return _internal_admission_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubPresenceFence::set_admission_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.admission_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.HubPresenceFence.admission_id)
+}
+inline ::std::string* PROTOBUF_NONNULL HubPresenceFence::mutable_admission_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_admission_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.HubPresenceFence.admission_id)
+  return _s;
+}
+inline const ::std::string& HubPresenceFence::_internal_admission_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.admission_id_.Get();
+}
+inline void HubPresenceFence::_internal_set_admission_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubPresenceFence::_internal_mutable_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.admission_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubPresenceFence::release_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.HubPresenceFence.admission_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.admission_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.admission_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubPresenceFence::set_allocated_admission_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.admission_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.admission_id_.IsDefault()) {
+    _impl_.admission_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.HubPresenceFence.admission_id)
+}
+
+// uint64 admission_seq = 3 [json_name = "admissionSeq"];
+inline void HubPresenceFence::clear_admission_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t HubPresenceFence::admission_seq() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.HubPresenceFence.admission_seq)
+  return _internal_admission_seq();
+}
+inline void HubPresenceFence::set_admission_seq(::uint64_t value) {
+  _internal_set_admission_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.HubPresenceFence.admission_seq)
+}
+inline ::uint64_t HubPresenceFence::_internal_admission_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.admission_seq_;
+}
+inline void HubPresenceFence::_internal_set_admission_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_seq_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // SetLocationRequest
 
 // uint64 player_id = 1 [json_name = "playerId"];
 inline void SetLocationRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t SetLocationRequest::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.SetLocationRequest.player_id)
@@ -9949,7 +11126,7 @@ inline ::uint64_t SetLocationRequest::player_id() const {
 }
 inline void SetLocationRequest::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.SetLocationRequest.player_id)
 }
 inline ::uint64_t SetLocationRequest::_internal_player_id() const {
@@ -10057,6 +11234,104 @@ inline void SetLocationRequest::set_allocated_location(::pandora::locator::v1::L
 
   _impl_.location_ = reinterpret_cast<::pandora::locator::v1::Location*>(value);
   // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.SetLocationRequest.location)
+}
+
+// .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+inline bool SetLocationRequest::has_hub_presence_fence() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.hub_presence_fence_ != nullptr);
+  return value;
+}
+inline void SetLocationRequest::clear_hub_presence_fence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.hub_presence_fence_ != nullptr) _impl_.hub_presence_fence_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::pandora::locator::v1::HubPresenceFence& SetLocationRequest::_internal_hub_presence_fence() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::HubPresenceFence* p = _impl_.hub_presence_fence_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::HubPresenceFence>(&::pandora::locator::v1::HubPresenceFence_globals_);
+}
+inline const ::pandora::locator::v1::HubPresenceFence& SetLocationRequest::hub_presence_fence() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.SetLocationRequest.hub_presence_fence)
+  return _internal_hub_presence_fence();
+}
+inline void SetLocationRequest::unsafe_arena_set_allocated_hub_presence_fence(
+    ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.hub_presence_fence_);
+  }
+  _impl_.hub_presence_fence_ = reinterpret_cast<::pandora::locator::v1::HubPresenceFence*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.SetLocationRequest.hub_presence_fence)
+}
+inline ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE SetLocationRequest::release_hub_presence_fence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::pandora::locator::v1::HubPresenceFence* released = _impl_.hub_presence_fence_;
+  _impl_.hub_presence_fence_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE SetLocationRequest::unsafe_arena_release_hub_presence_fence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.SetLocationRequest.hub_presence_fence)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::pandora::locator::v1::HubPresenceFence* temp = _impl_.hub_presence_fence_;
+  _impl_.hub_presence_fence_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NONNULL SetLocationRequest::_internal_mutable_hub_presence_fence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.hub_presence_fence_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::HubPresenceFence>(GetArena());
+    _impl_.hub_presence_fence_ = reinterpret_cast<::pandora::locator::v1::HubPresenceFence*>(p);
+  }
+  return _impl_.hub_presence_fence_;
+}
+inline ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NONNULL SetLocationRequest::mutable_hub_presence_fence()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::pandora::locator::v1::HubPresenceFence* _msg = _internal_mutable_hub_presence_fence();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.SetLocationRequest.hub_presence_fence)
+  return _msg;
+}
+inline void SetLocationRequest::set_allocated_hub_presence_fence(::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.hub_presence_fence_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.hub_presence_fence_ = reinterpret_cast<::pandora::locator::v1::HubPresenceFence*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.SetLocationRequest.hub_presence_fence)
 }
 
 // -------------------------------------------------------------------
@@ -10656,7 +11931,7 @@ inline void ReportDisconnectRequest::set_allocated_hub_pod(::std::string* PROTOB
 inline void ReportDisconnectRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t ReportDisconnectRequest::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.ReportDisconnectRequest.player_id)
@@ -10664,7 +11939,7 @@ inline ::uint64_t ReportDisconnectRequest::player_id() const {
 }
 inline void ReportDisconnectRequest::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.ReportDisconnectRequest.player_id)
 }
 inline ::uint64_t ReportDisconnectRequest::_internal_player_id() const {
@@ -10674,6 +11949,104 @@ inline ::uint64_t ReportDisconnectRequest::_internal_player_id() const {
 inline void ReportDisconnectRequest::_internal_set_player_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = value;
+}
+
+// .pandora.locator.v1.HubPresenceFence hub_presence_fence = 3 [json_name = "hubPresenceFence"];
+inline bool ReportDisconnectRequest::has_hub_presence_fence() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.hub_presence_fence_ != nullptr);
+  return value;
+}
+inline void ReportDisconnectRequest::clear_hub_presence_fence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.hub_presence_fence_ != nullptr) _impl_.hub_presence_fence_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::pandora::locator::v1::HubPresenceFence& ReportDisconnectRequest::_internal_hub_presence_fence() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::HubPresenceFence* p = _impl_.hub_presence_fence_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::HubPresenceFence>(&::pandora::locator::v1::HubPresenceFence_globals_);
+}
+inline const ::pandora::locator::v1::HubPresenceFence& ReportDisconnectRequest::hub_presence_fence() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ReportDisconnectRequest.hub_presence_fence)
+  return _internal_hub_presence_fence();
+}
+inline void ReportDisconnectRequest::unsafe_arena_set_allocated_hub_presence_fence(
+    ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.hub_presence_fence_);
+  }
+  _impl_.hub_presence_fence_ = reinterpret_cast<::pandora::locator::v1::HubPresenceFence*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.ReportDisconnectRequest.hub_presence_fence)
+}
+inline ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE ReportDisconnectRequest::release_hub_presence_fence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::pandora::locator::v1::HubPresenceFence* released = _impl_.hub_presence_fence_;
+  _impl_.hub_presence_fence_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE ReportDisconnectRequest::unsafe_arena_release_hub_presence_fence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.ReportDisconnectRequest.hub_presence_fence)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::pandora::locator::v1::HubPresenceFence* temp = _impl_.hub_presence_fence_;
+  _impl_.hub_presence_fence_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NONNULL ReportDisconnectRequest::_internal_mutable_hub_presence_fence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.hub_presence_fence_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::HubPresenceFence>(GetArena());
+    _impl_.hub_presence_fence_ = reinterpret_cast<::pandora::locator::v1::HubPresenceFence*>(p);
+  }
+  return _impl_.hub_presence_fence_;
+}
+inline ::pandora::locator::v1::HubPresenceFence* PROTOBUF_NONNULL ReportDisconnectRequest::mutable_hub_presence_fence()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::pandora::locator::v1::HubPresenceFence* _msg = _internal_mutable_hub_presence_fence();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.ReportDisconnectRequest.hub_presence_fence)
+  return _msg;
+}
+inline void ReportDisconnectRequest::set_allocated_hub_presence_fence(::pandora::locator::v1::HubPresenceFence* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.hub_presence_fence_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.hub_presence_fence_ = reinterpret_cast<::pandora::locator::v1::HubPresenceFence*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.ReportDisconnectRequest.hub_presence_fence)
 }
 
 // -------------------------------------------------------------------
@@ -10726,6 +12099,238 @@ inline bool ReportDisconnectResponse::_internal_shrunk() const {
 inline void ReportDisconnectResponse::_internal_set_shrunk(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shrunk_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BatchGetLastSeenRequest
+
+// repeated uint64 player_ids = 1 [json_name = "playerIds"];
+inline int BatchGetLastSeenRequest::_internal_player_ids_size() const {
+  return _internal_player_ids().size();
+}
+inline int BatchGetLastSeenRequest::player_ids_size() const {
+  return _internal_player_ids_size();
+}
+inline void BatchGetLastSeenRequest::clear_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t BatchGetLastSeenRequest::player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BatchGetLastSeenRequest.player_ids)
+  return _internal_player_ids().Get(index);
+}
+inline void BatchGetLastSeenRequest::set_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BatchGetLastSeenRequest.player_ids)
+}
+inline void BatchGetLastSeenRequest::add_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.locator.v1.BatchGetLastSeenRequest.player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& BatchGetLastSeenRequest::player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.locator.v1.BatchGetLastSeenRequest.player_ids)
+  return _internal_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL BatchGetLastSeenRequest::mutable_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.locator.v1.BatchGetLastSeenRequest.player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+BatchGetLastSeenRequest::_internal_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+BatchGetLastSeenRequest::_internal_mutable_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// BatchGetLastSeenResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void BatchGetLastSeenResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode BatchGetLastSeenResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BatchGetLastSeenResponse.code)
+  return _internal_code();
+}
+inline void BatchGetLastSeenResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BatchGetLastSeenResponse.code)
+}
+inline ::pandora::common::v1::ErrCode BatchGetLastSeenResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void BatchGetLastSeenResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// map<uint64, int64> last_seen_ms = 2 [json_name = "lastSeenMs"];
+inline int BatchGetLastSeenResponse::_internal_last_seen_ms_size() const {
+  return _internal_last_seen_ms().size();
+}
+inline int BatchGetLastSeenResponse::last_seen_ms_size() const {
+  return _internal_last_seen_ms_size();
+}
+inline void BatchGetLastSeenResponse::clear_last_seen_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_seen_ms_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::google::protobuf::Map<::uint64_t, ::int64_t>& BatchGetLastSeenResponse::_internal_last_seen_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_seen_ms_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint64_t, ::int64_t>& BatchGetLastSeenResponse::last_seen_ms() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:pandora.locator.v1.BatchGetLastSeenResponse.last_seen_ms)
+  return _internal_last_seen_ms();
+}
+inline ::google::protobuf::Map<::uint64_t, ::int64_t>* PROTOBUF_NONNULL BatchGetLastSeenResponse::_internal_mutable_last_seen_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.last_seen_ms_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint64_t, ::int64_t>* PROTOBUF_NONNULL BatchGetLastSeenResponse::mutable_last_seen_ms()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_map:pandora.locator.v1.BatchGetLastSeenResponse.last_seen_ms)
+  return _internal_mutable_last_seen_ms();
+}
+
+// -------------------------------------------------------------------
+
+// PlayerLeftHubEvent
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void PlayerLeftHubEvent::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t PlayerLeftHubEvent::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerLeftHubEvent.player_id)
+  return _internal_player_id();
+}
+inline void PlayerLeftHubEvent::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerLeftHubEvent.player_id)
+}
+inline ::uint64_t PlayerLeftHubEvent::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void PlayerLeftHubEvent::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// int64 left_at_ms = 2 [json_name = "leftAtMs"];
+inline void PlayerLeftHubEvent::clear_left_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.left_at_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::int64_t PlayerLeftHubEvent::left_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerLeftHubEvent.left_at_ms)
+  return _internal_left_at_ms();
+}
+inline void PlayerLeftHubEvent::set_left_at_ms(::int64_t value) {
+  _internal_set_left_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerLeftHubEvent.left_at_ms)
+}
+inline ::int64_t PlayerLeftHubEvent::_internal_left_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.left_at_ms_;
+}
+inline void PlayerLeftHubEvent::_internal_set_left_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.left_at_ms_ = value;
+}
+
+// string hub_pod = 3 [json_name = "hubPod"];
+inline void PlayerLeftHubEvent::clear_hub_pod() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& PlayerLeftHubEvent::hub_pod() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerLeftHubEvent.hub_pod)
+  return _internal_hub_pod();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerLeftHubEvent::set_hub_pod(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.hub_pod_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerLeftHubEvent.hub_pod)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerLeftHubEvent::mutable_hub_pod()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_hub_pod();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerLeftHubEvent.hub_pod)
+  return _s;
+}
+inline const ::std::string& PlayerLeftHubEvent::_internal_hub_pod() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_pod_.Get();
+}
+inline void PlayerLeftHubEvent::_internal_set_hub_pod(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerLeftHubEvent::_internal_mutable_hub_pod() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_pod_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerLeftHubEvent::release_hub_pod() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerLeftHubEvent.hub_pod)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.hub_pod_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_pod_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerLeftHubEvent::set_allocated_hub_pod(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.hub_pod_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_pod_.IsDefault()) {
+    _impl_.hub_pod_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerLeftHubEvent.hub_pod)
 }
 
 // -------------------------------------------------------------------

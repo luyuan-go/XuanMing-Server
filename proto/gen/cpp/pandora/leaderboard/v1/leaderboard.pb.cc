@@ -41,6 +41,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto, /* tracker*/ nullptr,},
         // ::pandora::leaderboard::v1::RewardTable
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::leaderboard::v1::RewardGrantStorageRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto, /* tracker*/ nullptr,},
         // ::pandora::leaderboard::v1::LeaderboardSettleEvent
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto, /* tracker*/ nullptr,},
         // ::pandora::leaderboard::v1::SubmitScoreRequest
@@ -182,7 +184,7 @@ constexpr auto SubmitScoreResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -471,7 +473,7 @@ constexpr auto RemoveEntryResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -774,7 +776,7 @@ constexpr auto DeleteBoardResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -1296,7 +1298,7 @@ constexpr auto SubmitScoreRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -1478,7 +1480,7 @@ constexpr auto SettleBoardResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -1695,6 +1697,157 @@ const ::_pbi::ClassData* RewardTier_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class RewardGrantStorageRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RewardGrantStorageRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RewardGrantStorageRecord, _impl_._has_bits_);
+};
+
+constexpr RewardGrantStorageRecord::ParseTableT_ RewardGrantStorageRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RewardGrantStorageRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::leaderboard::v1::RewardGrantStorageRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated .pandora.leaderboard.v1.RewardItem items = 1 [json_name = "items"];
+      {::_pbi::TcParser::FastMtR1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RewardGrantStorageRecord, _impl_.items_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated .pandora.leaderboard.v1.RewardItem items = 1 [json_name = "items"];
+      {PROTOBUF_FIELD_OFFSET(RewardGrantStorageRecord, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::leaderboard::v1::RewardItem>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::leaderboard::v1::RewardItem_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr RewardGrantStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::leaderboard::v1::RewardGrantStorageRecord,
+            PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::RewardGrantStorageRecord, _impl_.items_)>()
+         }
+     {}
+
+template <typename>
+constexpr RewardGrantStorageRecord::RewardGrantStorageRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RewardGrantStorageRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RewardGrantStorageRecord(arena);
+}
+constexpr auto RewardGrantStorageRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RewardGrantStorageRecord), alignof(RewardGrantStorageRecord));
+}
+constexpr auto RewardGrantStorageRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RewardGrantStorageRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RewardGrantStorageRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RewardGrantStorageRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RewardGrantStorageRecord>(), &RewardGrantStorageRecord::ByteSizeLong,
+              &RewardGrantStorageRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RewardGrantStorageRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[6],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RewardGrantStorageRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RewardGrantStorageRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RewardGrantStorageRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RewardGrantStorageRecord::InternalGenerateClassData_(
+            _default, &RewardGrantStorageRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RewardGrantStorageRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RewardGrantStorageRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RewardGrantStorageRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RewardGrantStorageRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RewardGrantStorageRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RewardGrantStorageRecordGlobalsTypeInternal RewardGrantStorageRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RewardGrantStorageRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RewardGrantStorageRecord_globals_.GetClassData();
+#else
+  return RewardGrantStorageRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RemoveEntryRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<RemoveEntryRequest>()._impl_._has_bits_);
@@ -1798,7 +1951,7 @@ constexpr auto RemoveEntryRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -1975,7 +2128,7 @@ constexpr auto LeaderboardSettleEvent::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -2153,7 +2306,7 @@ constexpr auto GetRankResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -2307,7 +2460,7 @@ constexpr auto GetRankRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -2473,7 +2626,7 @@ constexpr auto GetRangeResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -2635,7 +2788,7 @@ constexpr auto GetRangeRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -2801,7 +2954,7 @@ constexpr auto GetAroundResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -2963,7 +3116,7 @@ constexpr auto GetAroundRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -3110,7 +3263,7 @@ constexpr auto DeleteBoardRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -3449,7 +3602,7 @@ constexpr auto SettleBoardRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
@@ -3565,6 +3718,11 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::RewardTable, _impl_._has_bits_),
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::RewardTable, _impl_.tiers_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::RewardGrantStorageRecord, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::RewardGrantStorageRecord, _impl_.items_),
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::LeaderboardSettleEvent, _impl_._has_bits_),
@@ -3713,21 +3871,22 @@ static const ::_pbi::MigrationSchema
         {35, sizeof(::pandora::leaderboard::v1::RewardItem)},
         {42, sizeof(::pandora::leaderboard::v1::RewardTier)},
         {51, sizeof(::pandora::leaderboard::v1::RewardTable)},
-        {56, sizeof(::pandora::leaderboard::v1::LeaderboardSettleEvent)},
-        {67, sizeof(::pandora::leaderboard::v1::SubmitScoreRequest)},
-        {80, sizeof(::pandora::leaderboard::v1::SubmitScoreResponse)},
-        {89, sizeof(::pandora::leaderboard::v1::GetRankRequest)},
-        {96, sizeof(::pandora::leaderboard::v1::GetRankResponse)},
-        {109, sizeof(::pandora::leaderboard::v1::GetRangeRequest)},
-        {118, sizeof(::pandora::leaderboard::v1::GetRangeResponse)},
-        {127, sizeof(::pandora::leaderboard::v1::GetAroundRequest)},
-        {136, sizeof(::pandora::leaderboard::v1::GetAroundResponse)},
-        {145, sizeof(::pandora::leaderboard::v1::RemoveEntryRequest)},
-        {152, sizeof(::pandora::leaderboard::v1::RemoveEntryResponse)},
-        {157, sizeof(::pandora::leaderboard::v1::SettleBoardRequest)},
-        {170, sizeof(::pandora::leaderboard::v1::SettleBoardResponse)},
-        {183, sizeof(::pandora::leaderboard::v1::DeleteBoardRequest)},
-        {188, sizeof(::pandora::leaderboard::v1::DeleteBoardResponse)},
+        {56, sizeof(::pandora::leaderboard::v1::RewardGrantStorageRecord)},
+        {61, sizeof(::pandora::leaderboard::v1::LeaderboardSettleEvent)},
+        {72, sizeof(::pandora::leaderboard::v1::SubmitScoreRequest)},
+        {85, sizeof(::pandora::leaderboard::v1::SubmitScoreResponse)},
+        {94, sizeof(::pandora::leaderboard::v1::GetRankRequest)},
+        {101, sizeof(::pandora::leaderboard::v1::GetRankResponse)},
+        {114, sizeof(::pandora::leaderboard::v1::GetRangeRequest)},
+        {123, sizeof(::pandora::leaderboard::v1::GetRangeResponse)},
+        {132, sizeof(::pandora::leaderboard::v1::GetAroundRequest)},
+        {141, sizeof(::pandora::leaderboard::v1::GetAroundResponse)},
+        {150, sizeof(::pandora::leaderboard::v1::RemoveEntryRequest)},
+        {157, sizeof(::pandora::leaderboard::v1::RemoveEntryResponse)},
+        {162, sizeof(::pandora::leaderboard::v1::SettleBoardRequest)},
+        {175, sizeof(::pandora::leaderboard::v1::SettleBoardResponse)},
+        {188, sizeof(::pandora::leaderboard::v1::DeleteBoardRequest)},
+        {193, sizeof(::pandora::leaderboard::v1::DeleteBoardResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3737,6 +3896,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::leaderboard::v1::RewardItem_globals_,
         &::pandora::leaderboard::v1::RewardTier_globals_,
         &::pandora::leaderboard::v1::RewardTable_globals_,
+        &::pandora::leaderboard::v1::RewardGrantStorageRecord_globals_,
         &::pandora::leaderboard::v1::LeaderboardSettleEvent_globals_,
         &::pandora::leaderboard::v1::SubmitScoreRequest_globals_,
         &::pandora::leaderboard::v1::SubmitScoreResponse_globals_,
@@ -3776,91 +3936,93 @@ const char descriptor_table_protodef_pandora_2fleaderboard_2fv1_2fleaderboard_2e
     "\003R\006rankTo\0228\n\005items\030\003 \003(\0132\".pandora.leade"
     "rboard.v1.RewardItemR\005items\"G\n\013RewardTab"
     "le\0228\n\005tiers\030\001 \003(\0132\".pandora.leaderboard."
-    "v1.RewardTierR\005tiers\"\335\001\n\026LeaderboardSett"
-    "leEvent\022#\n\rsettlement_id\030\001 \001(\004R\014settleme"
-    "ntId\0226\n\005board\030\002 \001(\0132 .pandora.leaderboar"
-    "d.v1.BoardKeyR\005board\022B\n\007winners\030\003 \003(\0132(."
-    "pandora.leaderboard.v1.LeaderboardEntryR"
-    "\007winners\022\"\n\rsettled_at_ms\030\004 \001(\003R\013settled"
-    "AtMs\"\367\001\n\022SubmitScoreRequest\0226\n\005board\030\001 \001"
-    "(\0132 .pandora.leaderboard.v1.BoardKeyR\005bo"
-    "ard\022\033\n\tentity_id\030\002 \001(\004R\010entityId\022\024\n\005scor"
-    "e\030\003 \001(\003R\005score\0226\n\004mode\030\004 \001(\0162\".pandora.l"
-    "eaderboard.v1.SubmitModeR\004mode\022>\n\007option"
-    "s\030\005 \001(\0132$.pandora.leaderboard.v1.BoardOp"
-    "tionsR\007options\"v\n\023SubmitScoreResponse\022.\n"
-    "\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR"
-    "\004code\022\033\n\tnew_score\030\002 \001(\003R\010newScore\022\022\n\004ra"
-    "nk\030\003 \001(\003R\004rank\"e\n\016GetRankRequest\0226\n\005boar"
-    "d\030\001 \001(\0132 .pandora.leaderboard.v1.BoardKe"
-    "yR\005board\022\033\n\tentity_id\030\002 \001(\004R\010entityId\"\340\001"
-    "\n\017GetRankResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
-    "a.common.v1.ErrCodeR\004code\022\024\n\005found\030\002 \001(\010"
-    "R\005found\022>\n\005entry\030\003 \001(\0132(.pandora.leaderb"
-    "oard.v1.LeaderboardEntryR\005entry\022\034\n\testim"
-    "ated\030\004 \001(\010R\testimated\022)\n\020total_submitter"
-    "s\030\005 \001(\003R\017totalSubmitters\"w\n\017GetRangeRequ"
-    "est\0226\n\005board\030\001 \001(\0132 .pandora.leaderboard"
-    ".v1.BoardKeyR\005board\022\026\n\006offset\030\002 \001(\003R\006off"
-    "set\022\024\n\005limit\030\003 \001(\005R\005limit\"\234\001\n\020GetRangeRe"
-    "sponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1"
-    ".ErrCodeR\004code\022B\n\007entries\030\002 \003(\0132(.pandor"
-    "a.leaderboard.v1.LeaderboardEntryR\007entri"
-    "es\022\024\n\005total\030\003 \001(\003R\005total\"\177\n\020GetAroundReq"
-    "uest\0226\n\005board\030\001 \001(\0132 .pandora.leaderboar"
-    "d.v1.BoardKeyR\005board\022\033\n\tentity_id\030\002 \001(\004R"
-    "\010entityId\022\026\n\006radius\030\003 \001(\005R\006radius\"\235\001\n\021Ge"
-    "tAroundResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
-    "common.v1.ErrCodeR\004code\022B\n\007entries\030\002 \003(\013"
-    "2(.pandora.leaderboard.v1.LeaderboardEnt"
-    "ryR\007entries\022\024\n\005found\030\003 \001(\010R\005found\"i\n\022Rem"
-    "oveEntryRequest\0226\n\005board\030\001 \001(\0132 .pandora"
-    ".leaderboard.v1.BoardKeyR\005board\022\033\n\tentit"
-    "y_id\030\002 \001(\004R\010entityId\"E\n\023RemoveEntryRespo"
+    "v1.RewardTierR\005tiers\"T\n\030RewardGrantStora"
+    "geRecord\0228\n\005items\030\001 \003(\0132\".pandora.leader"
+    "board.v1.RewardItemR\005items\"\335\001\n\026Leaderboa"
+    "rdSettleEvent\022#\n\rsettlement_id\030\001 \001(\004R\014se"
+    "ttlementId\0226\n\005board\030\002 \001(\0132 .pandora.lead"
+    "erboard.v1.BoardKeyR\005board\022B\n\007winners\030\003 "
+    "\003(\0132(.pandora.leaderboard.v1.Leaderboard"
+    "EntryR\007winners\022\"\n\rsettled_at_ms\030\004 \001(\003R\013s"
+    "ettledAtMs\"\367\001\n\022SubmitScoreRequest\0226\n\005boa"
+    "rd\030\001 \001(\0132 .pandora.leaderboard.v1.BoardK"
+    "eyR\005board\022\033\n\tentity_id\030\002 \001(\004R\010entityId\022\024"
+    "\n\005score\030\003 \001(\003R\005score\0226\n\004mode\030\004 \001(\0162\".pan"
+    "dora.leaderboard.v1.SubmitModeR\004mode\022>\n\007"
+    "options\030\005 \001(\0132$.pandora.leaderboard.v1.B"
+    "oardOptionsR\007options\"v\n\023SubmitScoreRespo"
     "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
-    "rCodeR\004code\"\200\002\n\022SettleBoardRequest\0226\n\005bo"
-    "ard\030\001 \001(\0132 .pandora.leaderboard.v1.Board"
-    "KeyR\005board\022\023\n\005top_n\030\002 \001(\005R\004topN\022F\n\014rewar"
-    "d_table\030\003 \001(\0132#.pandora.leaderboard.v1.R"
-    "ewardTableR\013rewardTable\022\037\n\013reset_after\030\004"
-    " \001(\010R\nresetAfter\0224\n\026settle_idempotency_k"
-    "ey\030\005 \001(\tR\024settleIdempotencyKey\"\374\001\n\023Settl"
-    "eBoardResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
-    "ommon.v1.ErrCodeR\004code\022#\n\rsettlement_id\030"
-    "\002 \001(\004R\014settlementId\022#\n\rsettled_count\030\003 \001"
-    "(\003R\014settledCount\022\'\n\017already_settled\030\004 \001("
-    "\010R\016alreadySettled\022B\n\007winners\030\005 \003(\0132(.pan"
-    "dora.leaderboard.v1.LeaderboardEntryR\007wi"
-    "nners\"L\n\022DeleteBoardRequest\0226\n\005board\030\001 \001"
-    "(\0132 .pandora.leaderboard.v1.BoardKeyR\005bo"
-    "ard\"E\n\023DeleteBoardResponse\022.\n\004code\030\001 \001(\016"
-    "2\032.pandora.common.v1.ErrCodeR\004code*\256\001\n\020L"
-    "eaderboardScope\022!\n\035LEADERBOARD_SCOPE_UNS"
-    "PECIFIED\020\000\022\034\n\030LEADERBOARD_SCOPE_GLOBAL\020\001"
-    "\022\033\n\027LEADERBOARD_SCOPE_GUILD\020\002\022\036\n\032LEADERB"
-    "OARD_SCOPE_INSTANCE\020\003\022\034\n\030LEADERBOARD_SCO"
-    "PE_CUSTOM\020\004*x\n\nSubmitMode\022\033\n\027SUBMIT_MODE"
-    "_UNSPECIFIED\020\000\022\035\n\031SUBMIT_MODE_SET_IF_HIG"
-    "HER\020\001\022\023\n\017SUBMIT_MODE_SET\020\002\022\031\n\025SUBMIT_MOD"
-    "E_INCREMENT\020\0032\321\005\n\022LeaderboardService\022f\n\013"
-    "SubmitScore\022*.pandora.leaderboard.v1.Sub"
-    "mitScoreRequest\032+.pandora.leaderboard.v1"
-    ".SubmitScoreResponse\022Z\n\007GetRank\022&.pandor"
-    "a.leaderboard.v1.GetRankRequest\032\'.pandor"
-    "a.leaderboard.v1.GetRankResponse\022]\n\010GetR"
-    "ange\022\'.pandora.leaderboard.v1.GetRangeRe"
-    "quest\032(.pandora.leaderboard.v1.GetRangeR"
-    "esponse\022`\n\tGetAround\022(.pandora.leaderboa"
-    "rd.v1.GetAroundRequest\032).pandora.leaderb"
-    "oard.v1.GetAroundResponse\022f\n\013RemoveEntry"
-    "\022*.pandora.leaderboard.v1.RemoveEntryReq"
-    "uest\032+.pandora.leaderboard.v1.RemoveEntr"
-    "yResponse\022f\n\013SettleBoard\022*.pandora.leade"
-    "rboard.v1.SettleBoardRequest\032+.pandora.l"
-    "eaderboard.v1.SettleBoardResponse\022f\n\013Del"
-    "eteBoard\022*.pandora.leaderboard.v1.Delete"
-    "BoardRequest\032+.pandora.leaderboard.v1.De"
-    "leteBoardResponseb\006proto3"
+    "rCodeR\004code\022\033\n\tnew_score\030\002 \001(\003R\010newScore"
+    "\022\022\n\004rank\030\003 \001(\003R\004rank\"e\n\016GetRankRequest\0226"
+    "\n\005board\030\001 \001(\0132 .pandora.leaderboard.v1.B"
+    "oardKeyR\005board\022\033\n\tentity_id\030\002 \001(\004R\010entit"
+    "yId\"\340\001\n\017GetRankResponse\022.\n\004code\030\001 \001(\0162\032."
+    "pandora.common.v1.ErrCodeR\004code\022\024\n\005found"
+    "\030\002 \001(\010R\005found\022>\n\005entry\030\003 \001(\0132(.pandora.l"
+    "eaderboard.v1.LeaderboardEntryR\005entry\022\034\n"
+    "\testimated\030\004 \001(\010R\testimated\022)\n\020total_sub"
+    "mitters\030\005 \001(\003R\017totalSubmitters\"w\n\017GetRan"
+    "geRequest\0226\n\005board\030\001 \001(\0132 .pandora.leade"
+    "rboard.v1.BoardKeyR\005board\022\026\n\006offset\030\002 \001("
+    "\003R\006offset\022\024\n\005limit\030\003 \001(\005R\005limit\"\234\001\n\020GetR"
+    "angeResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
+    "mon.v1.ErrCodeR\004code\022B\n\007entries\030\002 \003(\0132(."
+    "pandora.leaderboard.v1.LeaderboardEntryR"
+    "\007entries\022\024\n\005total\030\003 \001(\003R\005total\"\177\n\020GetAro"
+    "undRequest\0226\n\005board\030\001 \001(\0132 .pandora.lead"
+    "erboard.v1.BoardKeyR\005board\022\033\n\tentity_id\030"
+    "\002 \001(\004R\010entityId\022\026\n\006radius\030\003 \001(\005R\006radius\""
+    "\235\001\n\021GetAroundResponse\022.\n\004code\030\001 \001(\0162\032.pa"
+    "ndora.common.v1.ErrCodeR\004code\022B\n\007entries"
+    "\030\002 \003(\0132(.pandora.leaderboard.v1.Leaderbo"
+    "ardEntryR\007entries\022\024\n\005found\030\003 \001(\010R\005found\""
+    "i\n\022RemoveEntryRequest\0226\n\005board\030\001 \001(\0132 .p"
+    "andora.leaderboard.v1.BoardKeyR\005board\022\033\n"
+    "\tentity_id\030\002 \001(\004R\010entityId\"E\n\023RemoveEntr"
+    "yResponse\022.\n\004code\030\001 \001(\0162\032.pandora.common"
+    ".v1.ErrCodeR\004code\"\200\002\n\022SettleBoardRequest"
+    "\0226\n\005board\030\001 \001(\0132 .pandora.leaderboard.v1"
+    ".BoardKeyR\005board\022\023\n\005top_n\030\002 \001(\005R\004topN\022F\n"
+    "\014reward_table\030\003 \001(\0132#.pandora.leaderboar"
+    "d.v1.RewardTableR\013rewardTable\022\037\n\013reset_a"
+    "fter\030\004 \001(\010R\nresetAfter\0224\n\026settle_idempot"
+    "ency_key\030\005 \001(\tR\024settleIdempotencyKey\"\374\001\n"
+    "\023SettleBoardResponse\022.\n\004code\030\001 \001(\0162\032.pan"
+    "dora.common.v1.ErrCodeR\004code\022#\n\rsettleme"
+    "nt_id\030\002 \001(\004R\014settlementId\022#\n\rsettled_cou"
+    "nt\030\003 \001(\003R\014settledCount\022\'\n\017already_settle"
+    "d\030\004 \001(\010R\016alreadySettled\022B\n\007winners\030\005 \003(\013"
+    "2(.pandora.leaderboard.v1.LeaderboardEnt"
+    "ryR\007winners\"L\n\022DeleteBoardRequest\0226\n\005boa"
+    "rd\030\001 \001(\0132 .pandora.leaderboard.v1.BoardK"
+    "eyR\005board\"E\n\023DeleteBoardResponse\022.\n\004code"
+    "\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code"
+    "*\256\001\n\020LeaderboardScope\022!\n\035LEADERBOARD_SCO"
+    "PE_UNSPECIFIED\020\000\022\034\n\030LEADERBOARD_SCOPE_GL"
+    "OBAL\020\001\022\033\n\027LEADERBOARD_SCOPE_GUILD\020\002\022\036\n\032L"
+    "EADERBOARD_SCOPE_INSTANCE\020\003\022\034\n\030LEADERBOA"
+    "RD_SCOPE_CUSTOM\020\004*x\n\nSubmitMode\022\033\n\027SUBMI"
+    "T_MODE_UNSPECIFIED\020\000\022\035\n\031SUBMIT_MODE_SET_"
+    "IF_HIGHER\020\001\022\023\n\017SUBMIT_MODE_SET\020\002\022\031\n\025SUBM"
+    "IT_MODE_INCREMENT\020\0032\321\005\n\022LeaderboardServi"
+    "ce\022f\n\013SubmitScore\022*.pandora.leaderboard."
+    "v1.SubmitScoreRequest\032+.pandora.leaderbo"
+    "ard.v1.SubmitScoreResponse\022Z\n\007GetRank\022&."
+    "pandora.leaderboard.v1.GetRankRequest\032\'."
+    "pandora.leaderboard.v1.GetRankResponse\022]"
+    "\n\010GetRange\022\'.pandora.leaderboard.v1.GetR"
+    "angeRequest\032(.pandora.leaderboard.v1.Get"
+    "RangeResponse\022`\n\tGetAround\022(.pandora.lea"
+    "derboard.v1.GetAroundRequest\032).pandora.l"
+    "eaderboard.v1.GetAroundResponse\022f\n\013Remov"
+    "eEntry\022*.pandora.leaderboard.v1.RemoveEn"
+    "tryRequest\032+.pandora.leaderboard.v1.Remo"
+    "veEntryResponse\022f\n\013SettleBoard\022*.pandora"
+    ".leaderboard.v1.SettleBoardRequest\032+.pan"
+    "dora.leaderboard.v1.SettleBoardResponse\022"
+    "f\n\013DeleteBoard\022*.pandora.leaderboard.v1."
+    "DeleteBoardRequest\032+.pandora.leaderboard"
+    ".v1.DeleteBoardResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto_deps[1] = {
@@ -3870,13 +4032,13 @@ static ::absl::once_flag descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboa
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto = {
     false,
     false,
-    4225,
+    4311,
     descriptor_table_protodef_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
     "pandora/leaderboard/v1/leaderboard.proto",
     &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto_once,
     descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto_deps,
     1,
-    21,
+    22,
     schemas,
     file_message_globals,
     TableStruct_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto::offsets,
@@ -5501,6 +5663,228 @@ void RewardTable::InternalSwap(RewardTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
 }
 
 ::google::protobuf::Metadata RewardTable::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+RewardGrantStorageRecord::RewardGrantStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RewardGrantStorageRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.leaderboard.v1.RewardGrantStorageRecord)
+}
+PROTOBUF_NDEBUG_INLINE RewardGrantStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::leaderboard::v1::RewardGrantStorageRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        items_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::leaderboard::v1::RewardGrantStorageRecord,
+              PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::RewardGrantStorageRecord, _impl_.items_)>()
+          , from.items_
+        }
+     {}
+
+RewardGrantStorageRecord::RewardGrantStorageRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RewardGrantStorageRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RewardGrantStorageRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RewardGrantStorageRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:pandora.leaderboard.v1.RewardGrantStorageRecord)
+}
+PROTOBUF_NDEBUG_INLINE RewardGrantStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::leaderboard::v1::RewardGrantStorageRecord,
+            PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::RewardGrantStorageRecord, _impl_.items_)>()
+         }
+     {}
+
+inline void RewardGrantStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+RewardGrantStorageRecord::~RewardGrantStorageRecord() {
+  // @@protoc_insertion_point(destructor:pandora.leaderboard.v1.RewardGrantStorageRecord)
+  SharedDtor(*this);
+}
+inline void RewardGrantStorageRecord::SharedDtor(MessageLite& self) {
+  RewardGrantStorageRecord& this_ = static_cast<RewardGrantStorageRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RewardGrantStorageRecord_class_data_ =
+        RewardGrantStorageRecord::InternalGenerateClassData_(RewardGrantStorageRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardGrantStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardGrantStorageRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RewardGrantStorageRecord_class_data_.tc_table);
+  return RewardGrantStorageRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardGrantStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardGrantStorageRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RewardGrantStorageRecord_globals_));
+  return RewardGrantStorageRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RewardGrantStorageRecord::ParseTableT_
+    RewardGrantStorageRecord::_table_ =
+        RewardGrantStorageRecord::InternalGenerateParseTable_(RewardGrantStorageRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RewardGrantStorageRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.leaderboard.v1.RewardGrantStorageRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.items_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RewardGrantStorageRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RewardGrantStorageRecord& this_ = static_cast<const RewardGrantStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RewardGrantStorageRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RewardGrantStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.leaderboard.v1.RewardGrantStorageRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated .pandora.leaderboard.v1.RewardItem items = 1 [json_name = "items"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_items_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_items().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              1, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.leaderboard.v1.RewardGrantStorageRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RewardGrantStorageRecord::ByteSizeLong(const MessageLite& base) {
+  const RewardGrantStorageRecord& this_ = static_cast<const RewardGrantStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RewardGrantStorageRecord::ByteSizeLong() const {
+  const RewardGrantStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.leaderboard.v1.RewardGrantStorageRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated .pandora.leaderboard.v1.RewardItem items = 1 [json_name = "items"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_items_size();
+      for (const auto& msg : this_._internal_items()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RewardGrantStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RewardGrantStorageRecord*>(&to_msg);
+  auto& from = static_cast<const RewardGrantStorageRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.leaderboard.v1.RewardGrantStorageRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _this->_internal_mutable_items()->InternalMergeFromWithArena(
+        ::google::protobuf::MessageLite::internal_visibility(), arena,
+        from._internal_items());
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RewardGrantStorageRecord::CopyFrom(const RewardGrantStorageRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.leaderboard.v1.RewardGrantStorageRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RewardGrantStorageRecord::InternalSwap(RewardGrantStorageRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.items_.InternalSwap(&other->_impl_.items_);
+}
+
+::google::protobuf::Metadata RewardGrantStorageRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

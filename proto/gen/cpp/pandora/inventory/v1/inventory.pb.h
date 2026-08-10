@@ -271,6 +271,14 @@ extern const ::google::protobuf::internal::ClassDataFull ItemInstance_class_data
 #else
 extern const ItemInstanceGlobalsTypeInternal ItemInstance_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ItemInstanceAttributesStorageRecord;
+struct ItemInstanceAttributesStorageRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ItemInstanceAttributesStorageRecordGlobalsTypeInternal ItemInstanceAttributesStorageRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ItemInstanceAttributesStorageRecord_class_data_;
+#else
+extern const ItemInstanceAttributesStorageRecordGlobalsTypeInternal ItemInstanceAttributesStorageRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class ItemStack;
 struct ItemStackGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -561,7 +569,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UseItemResponse final : public ::go
   [[nodiscard]] static const UseItemResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UseItemResponse>(&UseItemResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(UseItemResponse& a, UseItemResponse& b) { a.Swap(&b); }
   inline void Swap(UseItemResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -774,7 +782,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UseItemRequest final : public ::goo
   [[nodiscard]] static const UseItemRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UseItemRequest>(&UseItemRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(UseItemRequest& a, UseItemRequest& b) { a.Swap(&b); }
   inline void Swap(UseItemRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1016,7 +1024,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferClaimItem final : public ::
   [[nodiscard]] static const TransferClaimItem& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TransferClaimItem>(&TransferClaimItem_globals_);
   }
-  static constexpr int kIndexInFileMessages = 35;
+  static constexpr int kIndexInFileMessages = 36;
   friend void swap(TransferClaimItem& a, TransferClaimItem& b) { a.Swap(&b); }
   inline void Swap(TransferClaimItem* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1229,7 +1237,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeResponse final : p
   [[nodiscard]] static const SettlePlayerTradeResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SettlePlayerTradeResponse>(&SettlePlayerTradeResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(SettlePlayerTradeResponse& a, SettlePlayerTradeResponse& b) { a.Swap(&b); }
   inline void Swap(SettlePlayerTradeResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1430,7 +1438,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchResponse final : 
   [[nodiscard]] static const SettleAuctionMatchResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SettleAuctionMatchResponse>(&SettleAuctionMatchResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(SettleAuctionMatchResponse& a, SettleAuctionMatchResponse& b) { a.Swap(&b); }
   inline void Swap(SettleAuctionMatchResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1631,7 +1639,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchRequest final : p
   [[nodiscard]] static const SettleAuctionMatchRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SettleAuctionMatchRequest>(&SettleAuctionMatchRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(SettleAuctionMatchRequest& a, SettleAuctionMatchRequest& b) { a.Swap(&b); }
   inline void Swap(SettleAuctionMatchRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1916,7 +1924,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemResponse final : public ::g
   [[nodiscard]] static const SellItemResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SellItemResponse>(&SellItemResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(SellItemResponse& a, SellItemResponse& b) { a.Swap(&b); }
   inline void Swap(SellItemResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2141,7 +2149,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemRequest final : public ::go
   [[nodiscard]] static const SellItemRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SellItemRequest>(&SellItemRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(SellItemRequest& a, SellItemRequest& b) { a.Swap(&b); }
   inline void Swap(SellItemRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2383,7 +2391,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseTransferEscrowResponse final
   [[nodiscard]] static const ReleaseTransferEscrowResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseTransferEscrowResponse>(&ReleaseTransferEscrowResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 39;
+  static constexpr int kIndexInFileMessages = 40;
   friend void swap(ReleaseTransferEscrowResponse& a, ReleaseTransferEscrowResponse& b) { a.Swap(&b); }
   inline void Swap(ReleaseTransferEscrowResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2584,7 +2592,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseTransferEscrowRequest final 
   [[nodiscard]] static const ReleaseTransferEscrowRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseTransferEscrowRequest>(&ReleaseTransferEscrowRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 38;
+  static constexpr int kIndexInFileMessages = 39;
   friend void swap(ReleaseTransferEscrowRequest& a, ReleaseTransferEscrowRequest& b) { a.Swap(&b); }
   inline void Swap(ReleaseTransferEscrowRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2796,7 +2804,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseEscrowResponse final : publi
   [[nodiscard]] static const ReleaseEscrowResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseEscrowResponse>(&ReleaseEscrowResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(ReleaseEscrowResponse& a, ReleaseEscrowResponse& b) { a.Swap(&b); }
   inline void Swap(ReleaseEscrowResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2997,7 +3005,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseEscrowRequest final : public
   [[nodiscard]] static const ReleaseEscrowRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseEscrowRequest>(&ReleaseEscrowRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(ReleaseEscrowRequest& a, ReleaseEscrowRequest& b) { a.Swap(&b); }
   inline void Swap(ReleaseEscrowRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3210,7 +3218,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MoveInstanceResponse final : public
   [[nodiscard]] static const MoveInstanceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MoveInstanceResponse>(&MoveInstanceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(MoveInstanceResponse& a, MoveInstanceResponse& b) { a.Swap(&b); }
   inline void Swap(MoveInstanceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3411,7 +3419,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MoveInstanceRequest final : public 
   [[nodiscard]] static const MoveInstanceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MoveInstanceRequest>(&MoveInstanceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(MoveInstanceRequest& a, MoveInstanceRequest& b) { a.Swap(&b); }
   inline void Swap(MoveInstanceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4275,7 +4283,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdentifyItemRequest final : public 
   [[nodiscard]] static const IdentifyItemRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IdentifyItemRequest>(&IdentifyItemRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(IdentifyItemRequest& a, IdentifyItemRequest& b) { a.Swap(&b); }
   inline void Swap(IdentifyItemRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4488,7 +4496,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantItemsResponse final : public :
   [[nodiscard]] static const GrantItemsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GrantItemsResponse>(&GrantItemsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(GrantItemsResponse& a, GrantItemsResponse& b) { a.Swap(&b); }
   inline void Swap(GrantItemsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4701,7 +4709,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesRequest final : publi
   [[nodiscard]] static const GrantInstancesRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GrantInstancesRequest>(&GrantInstancesRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(GrantInstancesRequest& a, GrantInstancesRequest& b) { a.Swap(&b); }
   inline void Swap(GrantInstancesRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4942,7 +4950,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetInventoryRequest final : public 
   [[nodiscard]] static const GetInventoryRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetInventoryRequest>(&GetInventoryRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(GetInventoryRequest& a, GetInventoryRequest& b) { a.Swap(&b); }
   inline void Swap(GetInventoryRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5143,7 +5151,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderResponse final : publ
   [[nodiscard]] static const FreezeForOrderResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FreezeForOrderResponse>(&FreezeForOrderResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(FreezeForOrderResponse& a, FreezeForOrderResponse& b) { a.Swap(&b); }
   inline void Swap(FreezeForOrderResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5344,7 +5352,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderRequest final : publi
   [[nodiscard]] static const FreezeForOrderRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FreezeForOrderRequest>(&FreezeForOrderRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(FreezeForOrderRequest& a, FreezeForOrderRequest& b) { a.Swap(&b); }
   inline void Swap(FreezeForOrderRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5605,7 +5613,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesRequest final : p
   [[nodiscard]] static const EscrowOutInstancesRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EscrowOutInstancesRequest>(&EscrowOutInstancesRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(EscrowOutInstancesRequest& a, EscrowOutInstancesRequest& b) { a.Swap(&b); }
   inline void Swap(EscrowOutInstancesRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5858,7 +5866,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowResponse final :
   [[nodiscard]] static const EnsureAuctionEscrowResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EnsureAuctionEscrowResponse>(&EnsureAuctionEscrowResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(EnsureAuctionEscrowResponse& a, EnsureAuctionEscrowResponse& b) { a.Swap(&b); }
   inline void Swap(EnsureAuctionEscrowResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6059,7 +6067,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowRequest final : 
   [[nodiscard]] static const EnsureAuctionEscrowRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EnsureAuctionEscrowRequest>(&EnsureAuctionEscrowRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(EnsureAuctionEscrowRequest& a, EnsureAuctionEscrowRequest& b) { a.Swap(&b); }
   inline void Swap(EnsureAuctionEscrowRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6320,7 +6328,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardInstanceResponse final : pub
   [[nodiscard]] static const DiscardInstanceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DiscardInstanceResponse>(&DiscardInstanceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(DiscardInstanceResponse& a, DiscardInstanceResponse& b) { a.Swap(&b); }
   inline void Swap(DiscardInstanceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6521,7 +6529,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardInstanceRequest final : publ
   [[nodiscard]] static const DiscardInstanceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DiscardInstanceRequest>(&DiscardInstanceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(DiscardInstanceRequest& a, DiscardInstanceRequest& b) { a.Swap(&b); }
   inline void Swap(DiscardInstanceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6734,7 +6742,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeTransferEscrowResponse final
   [[nodiscard]] static const ConsumeTransferEscrowResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ConsumeTransferEscrowResponse>(&ConsumeTransferEscrowResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 41;
+  static constexpr int kIndexInFileMessages = 42;
   friend void swap(ConsumeTransferEscrowResponse& a, ConsumeTransferEscrowResponse& b) { a.Swap(&b); }
   inline void Swap(ConsumeTransferEscrowResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6935,7 +6943,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeTransferEscrowRequest final 
   [[nodiscard]] static const ConsumeTransferEscrowRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ConsumeTransferEscrowRequest>(&ConsumeTransferEscrowRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 40;
+  static constexpr int kIndexInFileMessages = 41;
   friend void swap(ConsumeTransferEscrowRequest& a, ConsumeTransferEscrowRequest& b) { a.Swap(&b); }
   inline void Swap(ConsumeTransferEscrowRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7159,7 +7167,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTransferInstancesResponse fina
   [[nodiscard]] static const ClaimTransferInstancesResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimTransferInstancesResponse>(&ClaimTransferInstancesResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 37;
+  static constexpr int kIndexInFileMessages = 38;
   friend void swap(ClaimTransferInstancesResponse& a, ClaimTransferInstancesResponse& b) { a.Swap(&b); }
   inline void Swap(ClaimTransferInstancesResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7360,7 +7368,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckItemsOwnedResponse final : pub
   [[nodiscard]] static const CheckItemsOwnedResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CheckItemsOwnedResponse>(&CheckItemsOwnedResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(CheckItemsOwnedResponse& a, CheckItemsOwnedResponse& b) { a.Swap(&b); }
   inline void Swap(CheckItemsOwnedResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7584,7 +7592,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckItemsOwnedRequest final : publ
   [[nodiscard]] static const CheckItemsOwnedRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CheckItemsOwnedRequest>(&CheckItemsOwnedRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(CheckItemsOwnedRequest& a, CheckItemsOwnedRequest& b) { a.Swap(&b); }
   inline void Swap(CheckItemsOwnedRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7808,7 +7816,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeRequest final : pu
   [[nodiscard]] static const SettlePlayerTradeRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SettlePlayerTradeRequest>(&SettlePlayerTradeRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(SettlePlayerTradeRequest& a, SettlePlayerTradeRequest& b) { a.Swap(&b); }
   inline void Swap(SettlePlayerTradeRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8035,6 +8043,218 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeRequest final : pu
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstanceAttributesStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.ItemInstanceAttributesStorageRecord) */ {
+ public:
+  inline ItemInstanceAttributesStorageRecord() : ItemInstanceAttributesStorageRecord(nullptr) {}
+  ~ItemInstanceAttributesStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ItemInstanceAttributesStorageRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ItemInstanceAttributesStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ItemInstanceAttributesStorageRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ItemInstanceAttributesStorageRecord(const ItemInstanceAttributesStorageRecord& from) : ItemInstanceAttributesStorageRecord(nullptr, from) {}
+  inline ItemInstanceAttributesStorageRecord(ItemInstanceAttributesStorageRecord&& from) noexcept : ItemInstanceAttributesStorageRecord(nullptr, ::std::move(from)) {}
+  inline ItemInstanceAttributesStorageRecord& operator=(const ItemInstanceAttributesStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ItemInstanceAttributesStorageRecord& operator=(ItemInstanceAttributesStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ItemInstanceAttributesStorageRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ItemInstanceAttributesStorageRecord>(&ItemInstanceAttributesStorageRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(ItemInstanceAttributesStorageRecord& a, ItemInstanceAttributesStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(ItemInstanceAttributesStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ItemInstanceAttributesStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ItemInstanceAttributesStorageRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ItemInstanceAttributesStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ItemInstanceAttributesStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ItemInstanceAttributesStorageRecord& from) { ItemInstanceAttributesStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ItemInstanceAttributesStorageRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.ItemInstanceAttributesStorageRecord"; }
+
+  explicit ItemInstanceAttributesStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ItemInstanceAttributesStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ItemInstanceAttributesStorageRecord& from);
+  ItemInstanceAttributesStorageRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ItemInstanceAttributesStorageRecord&& from) noexcept
+      : ItemInstanceAttributesStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAttributesFieldNumber = 1,
+  };
+  // repeated .pandora.inventory.v1.ItemAttribute attributes = 1 [json_name = "attributes"];
+  [[nodiscard]] int attributes_size()
+      const;
+  private:
+  int _internal_attributes_size() const;
+
+  public:
+  void clear_attributes() ;
+  [[nodiscard]] const ::pandora::inventory::v1::ItemAttribute& attributes(int index) const;
+  [[nodiscard]] ::pandora::inventory::v1::ItemAttribute* PROTOBUF_NONNULL mutable_attributes(int index);
+  ::pandora::inventory::v1::ItemAttribute* PROTOBUF_NONNULL add_attributes();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemAttribute>&
+  attributes() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemAttribute>* PROTOBUF_NONNULL
+  mutable_attributes();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemAttribute>& _internal_attributes() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemAttribute>* PROTOBUF_NONNULL _internal_mutable_attributes();
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.ItemInstanceAttributesStorageRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ItemInstanceAttributesStorageRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::inventory::v1::ItemAttribute > attributes_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstance final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.inventory.v1.ItemInstance) */ {
  public:
@@ -8091,7 +8311,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstance final : public ::googl
   [[nodiscard]] static const ItemInstance& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ItemInstance>(&ItemInstance_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(ItemInstance& a, ItemInstance& b) { a.Swap(&b); }
   inline void Swap(ItemInstance* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8363,7 +8583,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantItemsRequest final : public ::
   [[nodiscard]] static const GrantItemsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GrantItemsRequest>(&GrantItemsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(GrantItemsRequest& a, GrantItemsRequest& b) { a.Swap(&b); }
   inline void Swap(GrantItemsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8616,7 +8836,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTransferInstancesRequest final
   [[nodiscard]] static const ClaimTransferInstancesRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimTransferInstancesRequest>(&ClaimTransferInstancesRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 36;
+  static constexpr int kIndexInFileMessages = 37;
   friend void swap(ClaimTransferInstancesRequest& a, ClaimTransferInstancesRequest& b) { a.Swap(&b); }
   inline void Swap(ClaimTransferInstancesRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9128,7 +9348,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdentifyItemResponse final : public
   [[nodiscard]] static const IdentifyItemResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IdentifyItemResponse>(&IdentifyItemResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(IdentifyItemResponse& a, IdentifyItemResponse& b) { a.Swap(&b); }
   inline void Swap(IdentifyItemResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9347,7 +9567,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesResponse final : publ
   [[nodiscard]] static const GrantInstancesResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GrantInstancesResponse>(&GrantInstancesResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(GrantInstancesResponse& a, GrantInstancesResponse& b) { a.Swap(&b); }
   inline void Swap(GrantInstancesResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9571,7 +9791,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesResponse final : 
   [[nodiscard]] static const EscrowOutInstancesResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EscrowOutInstancesResponse>(&EscrowOutInstancesResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 34;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(EscrowOutInstancesResponse& a, EscrowOutInstancesResponse& b) { a.Swap(&b); }
   inline void Swap(EscrowOutInstancesResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9795,7 +10015,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetInventoryResponse final : public
   [[nodiscard]] static const GetInventoryResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetInventoryResponse>(&GetInventoryResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(GetInventoryResponse& a, GetInventoryResponse& b) { a.Swap(&b); }
   inline void Swap(GetInventoryResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10309,6 +10529,65 @@ inline ::int64_t ItemAttribute::_internal_value() const {
 inline void ItemAttribute::_internal_set_value(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.value_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ItemInstanceAttributesStorageRecord
+
+// repeated .pandora.inventory.v1.ItemAttribute attributes = 1 [json_name = "attributes"];
+inline int ItemInstanceAttributesStorageRecord::_internal_attributes_size() const {
+  return _internal_attributes().size();
+}
+inline int ItemInstanceAttributesStorageRecord::attributes_size() const {
+  return _internal_attributes_size();
+}
+inline void ItemInstanceAttributesStorageRecord::clear_attributes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attributes_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::inventory::v1::ItemAttribute& ItemInstanceAttributesStorageRecord::attributes(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ItemInstanceAttributesStorageRecord.attributes)
+  return _internal_attributes().Get(index);
+}
+inline ::pandora::inventory::v1::ItemAttribute* PROTOBUF_NONNULL ItemInstanceAttributesStorageRecord::mutable_attributes(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.inventory.v1.ItemInstanceAttributesStorageRecord.attributes)
+  return _internal_mutable_attributes()->Mutable(index);
+}
+inline ::pandora::inventory::v1::ItemAttribute* PROTOBUF_NONNULL ItemInstanceAttributesStorageRecord::add_attributes()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::inventory::v1::ItemAttribute* _add =
+      _internal_mutable_attributes()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.inventory.v1.ItemInstanceAttributesStorageRecord.attributes)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemAttribute>& ItemInstanceAttributesStorageRecord::attributes() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.inventory.v1.ItemInstanceAttributesStorageRecord.attributes)
+  return _internal_attributes();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemAttribute>* PROTOBUF_NONNULL
+ItemInstanceAttributesStorageRecord::mutable_attributes() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.inventory.v1.ItemInstanceAttributesStorageRecord.attributes)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_attributes();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemAttribute>&
+ItemInstanceAttributesStorageRecord::_internal_attributes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attributes_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemAttribute>* PROTOBUF_NONNULL
+ItemInstanceAttributesStorageRecord::_internal_mutable_attributes() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.attributes_;
 }
 
 // -------------------------------------------------------------------

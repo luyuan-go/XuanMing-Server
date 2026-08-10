@@ -51,11 +51,11 @@ constexpr SpawnPointRow::ParseTableT_ SpawnPointRow::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(SpawnPointRow, _impl_._has_bits_),
       0, // no _extensions_
-      26, 248,  // max_field_number, fast_idx_mask
+      27, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4227858432,  // skipmap
+      4160749568,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      26,  // num_field_entries
+      27,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -170,7 +170,10 @@ constexpr SpawnPointRow::ParseTableT_ SpawnPointRow::InternalGenerateParseTable_
       {::_pbi::TcParser::FastV32S2,
        {464, 25, 0,
         PROTOBUF_FIELD_OFFSET(SpawnPointRow, _impl_.monster_level_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 camp = 27 [json_name = "camp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
+      {::_pbi::TcParser::FastV32S2,
+       {472, 26, 0,
+        PROTOBUF_FIELD_OFFSET(SpawnPointRow, _impl_.camp_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -230,6 +233,8 @@ constexpr SpawnPointRow::ParseTableT_ SpawnPointRow::InternalGenerateParseTable_
       {PROTOBUF_FIELD_OFFSET(SpawnPointRow, _impl_.always_tick_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 monster_level = 26 [json_name = "monsterLevel", (.pandora.config.v1.excel_col) = "\346\200\252\347\211\251\347\255\211\347\272\247", (.pandora.config.v1.excel_default) = "1"];
       {PROTOBUF_FIELD_OFFSET(SpawnPointRow, _impl_.monster_level_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 camp = 27 [json_name = "camp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
+      {PROTOBUF_FIELD_OFFSET(SpawnPointRow, _impl_.camp_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -278,7 +283,8 @@ inline constexpr SpawnPointRow::Impl_::Impl_(
         always_tick_{false},
         patrol_route_id_{0u},
         weight_{0u},
-        monster_level_{0u} {}
+        monster_level_{0u},
+        camp_{0u} {}
 
 template <typename>
 constexpr SpawnPointRow::SpawnPointRow(::_pbi::ConstantInitialized,
@@ -535,7 +541,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SpawnPointRow, _impl_._has_bits_),
-        29, // hasbit index offset
+        30, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SpawnPointRow, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SpawnPointRow, _impl_.spawn_group_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SpawnPointRow, _impl_.level_id_),
@@ -562,6 +568,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SpawnPointRow, _impl_.weight_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SpawnPointRow, _impl_.always_tick_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SpawnPointRow, _impl_.monster_level_),
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SpawnPointRow, _impl_.camp_),
         3,
         4,
         5,
@@ -588,6 +595,7 @@ const ::uint32_t
         24,
         22,
         25,
+        26,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SpawnPointTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -598,7 +606,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::config::v1::SpawnPointRow)},
-        {55, sizeof(::pandora::config::v1::SpawnPointTableData)},
+        {57, sizeof(::pandora::config::v1::SpawnPointTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -609,7 +617,7 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fspawn_5fpoint_2epro
     protodesc_cold) = {
     "\n#pandora/config/v1/spawn_point.proto\022\021p"
     "andora.config.v1\032\035pandora/config/v1/exce"
-    "l.proto\"\222\n\n\rSpawnPointRow\022\032\n\002id\030\001 \001(\rB\n\362"
+    "l.proto\"\262\n\n\rSpawnPointRow\022\032\n\002id\030\001 \001(\rB\n\362"
     "\222\031\002ID\370\222\031\001R\002id\022H\n\016spawn_group_id\030\002 \001(\rB\"\362"
     "\222\031\013\345\210\267\346\200\252\347\273\204Id\370\222\031\001\252\223\031\013spawn_groupR\014spawn"
     "GroupId\0224\n\010level_id\030\003 \001(\rB\031\362\222\031\010\345\205\263\345\215\241Id\370"
@@ -641,10 +649,11 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fspawn_5fpoint_2epro
     "eId\022\"\n\006weight\030\030 \001(\rB\n\362\222\031\006\346\235\203\351\207\215R\006weight\022"
     "/\n\013always_tick\030\031 \001(\010B\016\362\222\031\n\345\270\270\351\251\273TickR\nal"
     "waysTick\022:\n\rmonster_level\030\032 \001(\rB\025\362\222\031\014\346\200\252"
-    "\347\211\251\347\255\211\347\272\247\202\223\031\0011R\014monsterLevel\"l\n\023SpawnPoi"
-    "ntTableData\0224\n\004rows\030\001 \003(\0132 .pandora.conf"
-    "ig.v1.SpawnPointRowR\004rows:\037\352\222\031\027\345\205\263\345\215\241/s_"
-    "\345\210\267\346\200\252\347\202\271.xlsx\260\223\031\003b\006proto3"
+    "\347\211\251\347\255\211\347\272\247\202\223\031\0011R\014monsterLevel\022\036\n\004camp\030\033 \001"
+    "(\rB\n\362\222\031\006\351\230\265\350\220\245R\004camp\"l\n\023SpawnPointTableD"
+    "ata\0224\n\004rows\030\001 \003(\0132 .pandora.config.v1.Sp"
+    "awnPointRowR\004rows:\037\352\222\031\027\345\205\263\345\215\241/s_\345\210\267\346\200\252\347\202"
+    "\271.xlsx\260\223\031\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fconfig_2fv1_2fspawn_5fpoint_2eproto_deps[1] = {
@@ -654,7 +663,7 @@ static ::absl::once_flag descriptor_table_pandora_2fconfig_2fv1_2fspawn_5fpoint_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fconfig_2fv1_2fspawn_5fpoint_2eproto = {
     false,
     false,
-    1506,
+    1538,
     descriptor_table_protodef_pandora_2fconfig_2fv1_2fspawn_5fpoint_2eproto,
     "pandora/config/v1/spawn_point.proto",
     &descriptor_table_pandora_2fconfig_2fv1_2fspawn_5fpoint_2eproto_once,
@@ -709,9 +718,9 @@ SpawnPointRow::SpawnPointRow(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, monster_level_) -
+           offsetof(Impl_, camp_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::monster_level_));
+               sizeof(Impl_::camp_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.config.v1.SpawnPointRow)
 }
@@ -728,9 +737,9 @@ inline void SpawnPointRow::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, monster_level_) -
+           offsetof(Impl_, camp_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::monster_level_));
+               sizeof(Impl_::camp_));
 }
 SpawnPointRow::~SpawnPointRow() {
   // @@protoc_insertion_point(destructor:pandora.config.v1.SpawnPointRow)
@@ -809,10 +818,10 @@ PROTOBUF_NOINLINE void SpawnPointRow::Clear() {
         reinterpret_cast<char*>(&_impl_.patrol_route_id_) -
         reinterpret_cast<char*>(&_impl_.scale_z_)) + sizeof(_impl_.patrol_route_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
     ::memset(&_impl_.weight_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.monster_level_) -
-        reinterpret_cast<char*>(&_impl_.weight_)) + sizeof(_impl_.monster_level_));
+        reinterpret_cast<char*>(&_impl_.camp_) -
+        reinterpret_cast<char*>(&_impl_.weight_)) + sizeof(_impl_.camp_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1074,6 +1083,15 @@ PROTOBUF_NOINLINE void SpawnPointRow::Clear() {
     }
   }
 
+  // uint32 camp = 27 [json_name = "camp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (this_._internal_camp() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          27, this_._internal_camp(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1260,7 +1278,7 @@ PROTOBUF_NOINLINE void SpawnPointRow::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
     // uint32 weight = 24 [json_name = "weight", (.pandora.config.v1.excel_col) = "\346\235\203\351\207\215"];
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (this_._internal_weight() != 0) {
@@ -1273,6 +1291,13 @@ PROTOBUF_NOINLINE void SpawnPointRow::Clear() {
       if (this_._internal_monster_level() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_monster_level());
+      }
+    }
+    // uint32 camp = 27 [json_name = "camp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (this_._internal_camp() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_camp());
       }
     }
   }
@@ -1431,7 +1456,7 @@ void SpawnPointRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (from._internal_weight() != 0) {
         _this->_impl_.weight_ = from._impl_.weight_;
@@ -1440,6 +1465,11 @@ void SpawnPointRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x02000000U)) {
       if (from._internal_monster_level() != 0) {
         _this->_impl_.monster_level_ = from._impl_.monster_level_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (from._internal_camp() != 0) {
+        _this->_impl_.camp_ = from._impl_.camp_;
       }
     }
   }
@@ -1466,8 +1496,8 @@ void SpawnPointRow::InternalSwap(SpawnPointRow* PROTOBUF_RESTRICT PROTOBUF_NONNU
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.monster_blueprint_, &other->_impl_.monster_blueprint_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.skeletal_mesh_, &other->_impl_.skeletal_mesh_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SpawnPointRow, _impl_.monster_level_)
-      + sizeof(SpawnPointRow::_impl_.monster_level_)
+      PROTOBUF_FIELD_OFFSET(SpawnPointRow, _impl_.camp_)
+      + sizeof(SpawnPointRow::_impl_.camp_)
       - PROTOBUF_FIELD_OFFSET(SpawnPointRow, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

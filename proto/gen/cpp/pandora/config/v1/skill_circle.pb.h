@@ -240,6 +240,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCircleRow final : public ::goo
   enum : int {
     kRemarkFieldNumber = 2,
     kCirclesFieldNumber = 4,
+    kOutRangeCirclesFieldNumber = 5,
     kIdFieldNumber = 1,
     kPosOptionFieldNumber = 3,
   };
@@ -258,7 +259,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCircleRow final : public ::goo
   ::std::string* PROTOBUF_NONNULL _internal_mutable_remark();
 
   public:
-  // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\345\234\206\345\275\242\351\233\206\345\220\210"];
+  // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\206\205\345\234\206\345\275\242\351\233\206\345\220\210"];
   void clear_circles() ;
   [[nodiscard]] const ::std::string& circles() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -271,6 +272,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCircleRow final : public ::goo
   const ::std::string& _internal_circles() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_circles(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_circles();
+
+  public:
+  // string out_range_circles = 5 [json_name = "outRangeCircles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\244\226\345\234\206\345\275\242\351\233\206\345\220\210"];
+  void clear_out_range_circles() ;
+  [[nodiscard]] const ::std::string& out_range_circles() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_out_range_circles(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_out_range_circles();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_out_range_circles();
+  void set_allocated_out_range_circles(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_out_range_circles() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_out_range_circles(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_out_range_circles();
 
   public:
   // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
@@ -297,8 +313,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCircleRow final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          0, 54,
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 71,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -328,6 +344,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCircleRow final : public ::goo
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr remark_;
     ::google::protobuf::internal::ArenaStringPtr circles_;
+    ::google::protobuf::internal::ArenaStringPtr out_range_circles_;
     ::uint32_t id_;
     ::uint32_t pos_option_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -568,7 +585,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCircleTableData final : public
 inline void SkillCircleRow::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t SkillCircleRow::id() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillCircleRow.id)
@@ -576,7 +593,7 @@ inline ::uint32_t SkillCircleRow::id() const {
 }
 inline void SkillCircleRow::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillCircleRow.id)
 }
 inline ::uint32_t SkillCircleRow::_internal_id() const {
@@ -656,7 +673,7 @@ inline void SkillCircleRow::set_allocated_remark(::std::string* PROTOBUF_NULLABL
 inline void SkillCircleRow::clear_pos_option() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pos_option_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t SkillCircleRow::pos_option() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillCircleRow.pos_option)
@@ -664,7 +681,7 @@ inline ::uint32_t SkillCircleRow::pos_option() const {
 }
 inline void SkillCircleRow::set_pos_option(::uint32_t value) {
   _internal_set_pos_option(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillCircleRow.pos_option)
 }
 inline ::uint32_t SkillCircleRow::_internal_pos_option() const {
@@ -676,7 +693,7 @@ inline void SkillCircleRow::_internal_set_pos_option(::uint32_t value) {
   _impl_.pos_option_ = value;
 }
 
-// string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\345\234\206\345\275\242\351\233\206\345\220\210"];
+// string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\206\205\345\234\206\345\275\242\351\233\206\345\220\210"];
 inline void SkillCircleRow::clear_circles() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.circles_.ClearToEmpty();
@@ -738,6 +755,70 @@ inline void SkillCircleRow::set_allocated_circles(::std::string* PROTOBUF_NULLAB
     _impl_.circles_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.SkillCircleRow.circles)
+}
+
+// string out_range_circles = 5 [json_name = "outRangeCircles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\244\226\345\234\206\345\275\242\351\233\206\345\220\210"];
+inline void SkillCircleRow::clear_out_range_circles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.out_range_circles_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& SkillCircleRow::out_range_circles() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.SkillCircleRow.out_range_circles)
+  return _internal_out_range_circles();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SkillCircleRow::set_out_range_circles(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.out_range_circles_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.config.v1.SkillCircleRow.out_range_circles)
+}
+inline ::std::string* PROTOBUF_NONNULL SkillCircleRow::mutable_out_range_circles()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_out_range_circles();
+  // @@protoc_insertion_point(field_mutable:pandora.config.v1.SkillCircleRow.out_range_circles)
+  return _s;
+}
+inline const ::std::string& SkillCircleRow::_internal_out_range_circles() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.out_range_circles_.Get();
+}
+inline void SkillCircleRow::_internal_set_out_range_circles(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.out_range_circles_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SkillCircleRow::_internal_mutable_out_range_circles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.out_range_circles_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SkillCircleRow::release_out_range_circles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.config.v1.SkillCircleRow.out_range_circles)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.out_range_circles_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.out_range_circles_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SkillCircleRow::set_allocated_out_range_circles(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.out_range_circles_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.out_range_circles_.IsDefault()) {
+    _impl_.out_range_circles_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.SkillCircleRow.out_range_circles)
 }
 
 // -------------------------------------------------------------------

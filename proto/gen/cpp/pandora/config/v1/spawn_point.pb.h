@@ -264,6 +264,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpawnPointRow final : public ::goog
     kPatrolRouteIdFieldNumber = 23,
     kWeightFieldNumber = 24,
     kMonsterLevelFieldNumber = 26,
+    kCampFieldNumber = 27,
   };
   // string remark = 4 [json_name = "remark", (.pandora.config.v1.excel_col) = "\345\244\207\346\263\250"];
   void clear_remark() ;
@@ -540,11 +541,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpawnPointRow final : public ::goog
   void _internal_set_monster_level(::uint32_t value);
 
   public:
+  // uint32 camp = 27 [json_name = "camp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
+  void clear_camp() ;
+  [[nodiscard]] ::uint32_t camp() const;
+  void set_camp(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_camp() const;
+  void _internal_set_camp(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.SpawnPointRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 26,
+      ::google::protobuf::internal::TcParseTable<5, 27,
                           0, 100,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -599,6 +610,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpawnPointRow final : public ::goog
     ::uint32_t patrol_route_id_;
     ::uint32_t weight_;
     ::uint32_t monster_level_;
+    ::uint32_t camp_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1575,6 +1587,30 @@ inline ::uint32_t SpawnPointRow::_internal_monster_level() const {
 inline void SpawnPointRow::_internal_set_monster_level(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.monster_level_ = value;
+}
+
+// uint32 camp = 27 [json_name = "camp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
+inline void SpawnPointRow::clear_camp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.camp_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+}
+inline ::uint32_t SpawnPointRow::camp() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.SpawnPointRow.camp)
+  return _internal_camp();
+}
+inline void SpawnPointRow::set_camp(::uint32_t value) {
+  _internal_set_camp(value);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.SpawnPointRow.camp)
+}
+inline ::uint32_t SpawnPointRow::_internal_camp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.camp_;
+}
+inline void SpawnPointRow::_internal_set_camp(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.camp_ = value;
 }
 
 // -------------------------------------------------------------------

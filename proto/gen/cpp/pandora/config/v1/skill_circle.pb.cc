@@ -51,11 +51,11 @@ constexpr SkillCircleRow::ParseTableT_ SkillCircleRow::InternalGenerateParseTabl
     {
       PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -65,40 +65,50 @@ constexpr SkillCircleRow::ParseTableT_ SkillCircleRow::InternalGenerateParseTabl
       ::_pbi::TcParser::GetTable<::pandora::config::v1::SkillCircleRow>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\345\234\206\345\275\242\351\233\206\345\220\210"];
-      {::_pbi::TcParser::FastUS1,
-       {34, 1, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.circles_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCircleRow, _impl_.id_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCircleRow, _impl_.id_), 3>(),
+       {8, 3, 0,
         PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.id_)}},
       // string remark = 2 [json_name = "remark", (.pandora.config.v1.excel_col) = "\345\244\207\346\263\250"];
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.remark_)}},
       // uint32 pos_option = 3 [json_name = "posOption", (.pandora.config.v1.excel_col) = "\344\275\215\347\275\256\351\200\211\351\241\271", (.pandora.config.v1.excel_default) = "1"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCircleRow, _impl_.pos_option_), 3>(),
-       {24, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCircleRow, _impl_.pos_option_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.pos_option_)}},
+      // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\206\205\345\234\206\345\275\242\351\233\206\345\220\210"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.circles_)}},
+      // string out_range_circles = 5 [json_name = "outRangeCircles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\244\226\345\234\206\345\275\242\351\233\206\345\220\210"];
+      {::_pbi::TcParser::FastUS1,
+       {42, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.out_range_circles_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
-      {PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string remark = 2 [json_name = "remark", (.pandora.config.v1.excel_col) = "\345\244\207\346\263\250"];
       {PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.remark_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 pos_option = 3 [json_name = "posOption", (.pandora.config.v1.excel_col) = "\344\275\215\347\275\256\351\200\211\351\241\271", (.pandora.config.v1.excel_default) = "1"];
-      {PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.pos_option_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\345\234\206\345\275\242\351\233\206\345\220\210"];
+      {PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.pos_option_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\206\205\345\234\206\345\275\242\351\233\206\345\220\210"];
       {PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.circles_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string out_range_circles = 5 [json_name = "outRangeCircles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\244\226\345\234\206\345\275\242\351\233\206\345\220\210"];
+      {PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.out_range_circles_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\40\0\6\0\7\0\0\0"
+      "\40\0\6\0\7\21\0\0"
       "pandora.config.v1.SkillCircleRow"
       "remark"
       "circles"
+      "out_range_circles"
     }},
   };
 }
@@ -112,6 +122,9 @@ inline constexpr SkillCircleRow::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         circles_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        out_range_circles_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         id_{0u},
@@ -372,15 +385,17 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillCircleRow, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillCircleRow, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillCircleRow, _impl_.remark_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillCircleRow, _impl_.pos_option_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillCircleRow, _impl_.circles_),
-        2,
-        0,
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillCircleRow, _impl_.out_range_circles_),
         3,
+        0,
+        4,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillCircleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -391,7 +406,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::config::v1::SkillCircleRow)},
-        {11, sizeof(::pandora::config::v1::SkillCircleTableData)},
+        {13, sizeof(::pandora::config::v1::SkillCircleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -402,11 +417,13 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_5fcircle_2epr
     protodesc_cold) = {
     "\n$pandora/config/v1/skill_circle.proto\022\021"
     "pandora.config.v1\032\035pandora/config/v1/exc"
-    "el.proto\"\262\001\n\016SkillCircleRow\022\032\n\002id\030\001 \001(\rB"
+    "el.proto\"\202\002\n\016SkillCircleRow\022\032\n\002id\030\001 \001(\rB"
     "\n\362\222\031\002ID\370\222\031\001R\002id\022\"\n\006remark\030\002 \001(\tB\n\362\222\031\006\345\244\207"
     "\346\263\250R\006remark\0224\n\npos_option\030\003 \001(\rB\025\362\222\031\014\344\275\215"
-    "\347\275\256\351\200\211\351\241\271\202\223\031\0011R\tposOption\022*\n\007circles\030\004 \001"
-    "(\tB\020\362\222\031\014\345\234\206\345\275\242\351\233\206\345\220\210R\007circles\"\177\n\024SkillCi"
+    "\347\275\256\351\200\211\351\241\271\202\223\031\0011R\tposOption\0223\n\007circles\030\004 \001"
+    "(\tB\031\362\222\031\025\350\214\203\345\233\264\345\206\205\345\234\206\345\275\242\351\233\206\345\220\210R\007circles\022E"
+    "\n\021out_range_circles\030\005 \001(\tB\031\362\222\031\025\350\214\203\345\233\264\345\244\226"
+    "\345\234\206\345\275\242\351\233\206\345\220\210R\017outRangeCircles\"\177\n\024SkillCi"
     "rcleTableData\0225\n\004rows\030\001 \003(\0132!.pandora.co"
     "nfig.v1.SkillCircleRowR\004rows:0\352\222\031(\346\212\200\350\203\275"
     "/j_\346\212\200\350\203\275_\346\226\271\344\275\215\347\261\273\345\236\213_\345\234\206\345\275\242.xlsx\260\223\031\007b\006"
@@ -420,7 +437,7 @@ static ::absl::once_flag descriptor_table_pandora_2fconfig_2fv1_2fskill_5fcircle
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fconfig_2fv1_2fskill_5fcircle_2eproto = {
     false,
     false,
-    406,
+    486,
     descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_5fcircle_2eproto,
     "pandora/config/v1/skill_circle.proto",
     &descriptor_table_pandora_2fconfig_2fv1_2fskill_5fcircle_2eproto_once,
@@ -454,7 +471,8 @@ PROTOBUF_NDEBUG_INLINE SkillCircleRow::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         remark_(arena, from.remark_),
-        circles_(arena, from.circles_) {}
+        circles_(arena, from.circles_),
+        out_range_circles_(arena, from.out_range_circles_) {}
 
 SkillCircleRow::SkillCircleRow(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -485,7 +503,8 @@ PROTOBUF_NDEBUG_INLINE SkillCircleRow::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         remark_(arena),
-        circles_(arena) {}
+        circles_(arena),
+        out_range_circles_(arena) {}
 
 inline void SkillCircleRow::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -509,6 +528,7 @@ inline void SkillCircleRow::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.remark_.Destroy();
   this_._impl_.circles_.Destroy();
+  this_._impl_.out_range_circles_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -546,15 +566,18 @@ PROTOBUF_NOINLINE void SkillCircleRow::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.remark_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.circles_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.out_range_circles_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.pos_option_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.pos_option_));
@@ -583,7 +606,7 @@ PROTOBUF_NOINLINE void SkillCircleRow::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -602,7 +625,7 @@ PROTOBUF_NOINLINE void SkillCircleRow::Clear() {
   }
 
   // uint32 pos_option = 3 [json_name = "posOption", (.pandora.config.v1.excel_col) = "\344\275\215\347\275\256\351\200\211\351\241\271", (.pandora.config.v1.excel_default) = "1"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_pos_option() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -610,13 +633,23 @@ PROTOBUF_NOINLINE void SkillCircleRow::Clear() {
     }
   }
 
-  // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\345\234\206\345\275\242\351\233\206\345\220\210"];
+  // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\206\205\345\234\206\345\275\242\351\233\206\345\220\210"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_circles().empty()) {
       const ::std::string& _s = this_._internal_circles();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.config.v1.SkillCircleRow.circles");
       target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // string out_range_circles = 5 [json_name = "outRangeCircles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\244\226\345\234\206\345\275\242\351\233\206\345\220\210"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_out_range_circles().empty()) {
+      const ::std::string& _s = this_._internal_out_range_circles();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.config.v1.SkillCircleRow.out_range_circles");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
     }
   }
 
@@ -645,7 +678,7 @@ PROTOBUF_NOINLINE void SkillCircleRow::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string remark = 2 [json_name = "remark", (.pandora.config.v1.excel_col) = "\345\244\207\346\263\250"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_remark().empty()) {
@@ -653,22 +686,29 @@ PROTOBUF_NOINLINE void SkillCircleRow::Clear() {
                                         this_._internal_remark());
       }
     }
-    // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\345\234\206\345\275\242\351\233\206\345\220\210"];
+    // string circles = 4 [json_name = "circles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\206\205\345\234\206\345\275\242\351\233\206\345\220\210"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_circles().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_circles());
       }
     }
-    // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+    // string out_range_circles = 5 [json_name = "outRangeCircles", (.pandora.config.v1.excel_col) = "\350\214\203\345\233\264\345\244\226\345\234\206\345\275\242\351\233\206\345\220\210"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_out_range_circles().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_out_range_circles());
+      }
+    }
+    // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // uint32 pos_option = 3 [json_name = "posOption", (.pandora.config.v1.excel_col) = "\344\275\215\347\275\256\351\200\211\351\241\271", (.pandora.config.v1.excel_default) = "1"];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_pos_option() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pos_option());
@@ -692,7 +732,7 @@ void SkillCircleRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_remark().empty()) {
         _this->_internal_set_remark(from._internal_remark());
@@ -712,11 +752,20 @@ void SkillCircleRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_out_range_circles().empty()) {
+        _this->_internal_set_out_range_circles(from._internal_out_range_circles());
+      } else {
+        if (_this->_impl_.out_range_circles_.IsDefault()) {
+          _this->_internal_set_out_range_circles("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_pos_option() != 0) {
         _this->_impl_.pos_option_ = from._impl_.pos_option_;
       }
@@ -743,6 +792,7 @@ void SkillCircleRow::InternalSwap(SkillCircleRow* PROTOBUF_RESTRICT PROTOBUF_NON
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.remark_, &other->_impl_.remark_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.circles_, &other->_impl_.circles_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.out_range_circles_, &other->_impl_.out_range_circles_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(SkillCircleRow, _impl_.pos_option_)
       + sizeof(SkillCircleRow::_impl_.pos_option_)

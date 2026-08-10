@@ -6943,6 +6943,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     kLastVerifiedGenFieldNumber = 14,
     kInstanceEpochFieldNumber = 13,
     kLastVerifiedWriterEpochFieldNumber = 16,
+    kEverHadPlayersFieldNumber = 21,
   };
   // repeated uint64 player_ids = 5 [json_name = "playerIds"];
   [[nodiscard]] int player_ids_size()
@@ -7210,11 +7211,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
   void _internal_set_last_verified_writer_epoch(::uint32_t value);
 
   public:
+  // bool ever_had_players = 21 [json_name = "everHadPlayers"];
+  void clear_ever_had_players() ;
+  [[nodiscard]] bool ever_had_players() const;
+  void set_ever_had_players(bool value);
+
+  private:
+  bool _internal_ever_had_players() const;
+  void _internal_set_ever_had_players(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 20,
+      ::google::protobuf::internal::TcParseTable<5, 21,
                           1, 154,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7264,6 +7275,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     ::uint64_t last_verified_gen_;
     ::uint32_t instance_epoch_;
     ::uint32_t last_verified_writer_epoch_;
+    bool ever_had_players_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -13354,6 +13366,30 @@ inline ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerComba
 BattleStorageRecord::_internal_mutable_player_combat_factions() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.player_combat_factions_;
+}
+
+// bool ever_had_players = 21 [json_name = "everHadPlayers"];
+inline void BattleStorageRecord::clear_ever_had_players() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ever_had_players_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline bool BattleStorageRecord::ever_had_players() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.ever_had_players)
+  return _internal_ever_had_players();
+}
+inline void BattleStorageRecord::set_ever_had_players(bool value) {
+  _internal_set_ever_had_players(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.ever_had_players)
+}
+inline bool BattleStorageRecord::_internal_ever_had_players() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ever_had_players_;
+}
+inline void BattleStorageRecord::_internal_set_ever_had_players(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ever_had_players_ = value;
 }
 
 // -------------------------------------------------------------------
