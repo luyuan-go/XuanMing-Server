@@ -129,8 +129,8 @@ if (-not $UseExe -and $null -eq $GoCmd) {
     Write-Host '        go build -o run\artifacts\windows\bin\configtable-gen.exe .\tools\configtable-gen'
     exit 1
 }
-# exe 里内嵌的是**编译时**的 proto 描述符。程序改完 .proto 只跑 proto_gen 而忘了重建 exe 时，
-# 导表会报一字不差的旧错，很难想到是 exe 陈旧——在这里机械地挡掉。
+# exe 里内嵌的是**编译时**的 proto 描述符。程序改完 .proto 只跑 proto_gen 而忘了重建 exe 时,
+# 导表会报一字不差的旧错,很难想到是 exe 陈旧——在这里机械地挡掉。
 function Get-NewestWrite([string[]]$Paths) {
     $newest = [datetime]::MinValue
     foreach ($p in $Paths) {
@@ -148,24 +148,28 @@ if ($UseExe) {
     )
     $exeTime = (Get-Item -LiteralPath $GenExe).LastWriteTimeUtc
     if ($srcNewest -gt $exeTime) {
-        if ($null -ne $GoCmd) {
-            Write-Info '检测到 configtable-gen.exe 比生成器源码 / pb 旧，先重建…'
+        if ($Check) {
+            Write-Warn2 'configtable-gen.exe 比生成器源码 / pb 旧(-Check 模式不重建,真正导表时会自动重建)。'
+        } elseif ($null -ne $GoCmd) {
+            Write-Info '检测到 configtable-gen.exe 比生成器源码 / pb 旧,先重建…'
             Push-Location $ProjectRoot
             try {
                 & go build -o run\artifacts\windows\bin\configtable-gen.exe .\tools\configtable-gen
                 $buildExit = $LASTEXITCODE
             } finally { Pop-Location }
             if ($buildExit -ne 0) {
-                Write-Err '重建 configtable-gen.exe 失败，不继续导表(陈旧 exe 会报已修好的旧错)。'
+                Write-Err '重建 configtable-gen.exe 失败,不继续导表(陈旧 exe 会报已修好的旧错)。'
                 exit 1
             }
             Write-Ok '已重建 configtable-gen.exe'
         } else {
-            Write-Warn2 'configtable-gen.exe 比生成器源码 / pb 旧，且本机没装 Go 无法重建。'
-            Write-Host '      如果程序刚改过 proto 却仍报同一个错，就是这个原因，找程序重新出一份 exe。'
+            Write-Warn2 'configtable-gen.exe 比生成器源码 / pb 旧,且本机没装 Go 无法重建。'
+            Write-Host '      如果程序刚改过 proto 却仍报同一个错,就是这个原因,找程序重新出一份 exe。'
         }
     }
-}Write-Ok $(if ($UseExe) { "生成器: 预编译 exe($GenExe)" } else { "生成器: go run ./tools/configtable-gen(本机有 Go)" })
+}
+
+Write-Ok $(if ($UseExe) { "生成器: 预编译 exe($GenExe)" } else { "生成器: go run ./tools/configtable-gen(本机有 Go)" })
 
 if ($Check) {
     Write-Info '-Check 模式:环境探测通过,未执行生成。'
@@ -276,8 +280,8 @@ if ($genExit -ne 0) {
         Write-Host '      **不要**自己删或改 bitindex_state 下的文件——那会让已存档的玩家进度位图整体错位。'
     } elseif ($outText -match '表头第\s*(\S+)\s*列:\s*期望\s*"([^"]*)"\s*实为\s*"([^"]*)"') {
         $col = $Matches[1]; $expect = $Matches[2]; $actual = $Matches[3]
-        Write-Warn2 "原因:第 $col 列的列名变了——proto 登记的是「$expect」，xlsx 里现在是「$actual」。"
-        Write-Host '      这**不是文件被 Excel 占用**，也不是 SVN 没更新，是服务端 proto 注解需要同步。'
+        Write-Warn2 "原因:第 $col 列的列名变了——proto 登记的是「$expect」,xlsx 里现在是「$actual」。"
+        Write-Host '      这**不是文件被 Excel 占用**,也不是 SVN 没更新,是服务端 proto 注解需要同步。'
         Write-Host '      找程序跑一条命令就能自动同步(改名 / 末尾加列都能自动处理):'
         Write-Host '        pwsh tools\scripts\configtable_sync.ps1          # 先看差异'
         Write-Host '        pwsh tools\scripts\configtable_sync.ps1 -Write   # 确认后自动改 proto 并重跑导表'
