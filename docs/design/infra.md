@@ -234,6 +234,14 @@ pandora.dlq.<original_topic>     # 死信队列
 | `pandora.auction.audit` | 4 | 90d | auction | 审计、风控 | 拍卖挂单流转(key=order_id,append-only) |
 | `pandora.leaderboard.settle` | 4 | 90d | leaderboard | 工会 / 活动服务、对账 | 排行榜结算事件(key=settlement_id,含 Top-N;尤其 GUILD 榜由工会服务消费分发) |
 | `pandora.locator.update` | 8 | 1h | hub DS / battle DS | player_locator | 玩家位置变更 |
+| `pandora.player.presence` | 3 | 1h | player_locator | `pkg/offlinewatch` 消费方(当前:team) | 「玩家离开 Hub」服务间事件(key=player_id;**非推送 topic,push 不订阅**)。语义是「离开了 Hub」不是「下线」——travel 去战斗、秒重连都会产生,消费方必须回查 locator 权威再动作 |
+
+⚠️ **`pandora.player.presence` 是「加速器」而非权威通道,但漏建 topic 会静默降级**:producer 在
+locator 侧是 best-effort(发送失败只打 Warn,不阻断 ReportDisconnect),所以**部署时忘了建这个
+topic,表现是「功能看起来在跑、但离线成员要等到有人打开组队面板才被清掉」**,没有任何 Error。
+2026-08-06 本地验证时就先踩了一次(首次 Send 报 `topic does not exist`,靠 broker 的 auto-create
+才在第二次通)。生产禁用 auto-create 的集群必须把它列进建表清单;开启 `locator.departure_event.enabled`
+前请先确认 topic 已存在。
 
 ⭐ = 推送 topic(2026-06-03 起陆续新增),推送架构见 `gateway-decision.md` §6。所有标 ⭐ 的 topic 都被 **pandora-push** 服务消费,经 Envoy 以 **gRPC-Web server stream** 推给客户端(push **不是** WebSocket 服务)。
 

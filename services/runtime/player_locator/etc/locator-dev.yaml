@@ -43,7 +43,7 @@ locator:
   # 默认 false:关闭时 last-seen 照常记录,消费方退化为「读到该实体时顺手复查」的兜底。
   # 开启后 kafka.brokers 是启动强依赖(producer 静默不可用会让整条链看起来在跑却永不触发)。
   departure_event:
-    enabled: false
+    enabled: true
 
 # 好友在线态订阅推送 fan-out(docs/design/friend-distributed-scaling.md §13.4 / §13.5)。
 # 2026-06-19:默认 enabled=false(§13.7「先拉后推」)。开启需配 kafka.brokers(往

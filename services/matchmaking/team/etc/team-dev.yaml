@@ -61,8 +61,13 @@ team:
 
   # offline_leave: 队员离线超时自动移出队伍。
   #
-  # ⚠️ 当前必须保持 enabled=false。team 成员写与 StartMatch 尚无共用 roster
-  # fence，设为 true 会在启动时 fail-fast；只打开 locator 离场事件不能消除 TOCTOU。
+  # 2026-08-06 起可以打开:matchmaker 组票已改走 TeamService.BeginTeamMatch,在 team
+  # 自己的乐观锁内冻结名单,摘人在同一把锁内看到租约即推迟 —— 与 StartMatch 的共用
+  # roster fence 已就位,TOCTOU 已消除(不是收敛)。dev 开启用于端到端验证;
+  # prod 模板仍默认关闭,由部署方按启用清单显式打开。
+  #
+  # 要有秒级时效还需同时开 locator 的 departure_event.enabled(见 locator-dev.yaml);
+  # 只开这一个会退化成「有人打开组队面板才复查」的纯兜底档(启动时会打 WARN)。
   #
   # threshold 为什么是 180s(别随手调小,推导见 conf.go OfflineLeaveConf 注释):
   #   一个会回来的玩家,从信号恢复到重新出现在 locator 里,保守要 30~60s
@@ -70,7 +75,7 @@ team:
   #   本来能回来的人。再叠上要容忍的弱网失联时长(地铁/隧道 ~2 分钟)得到 180s。
   #   另外还要记得:静默掉线本身要 60~90s 才被观测到,玩家实际被容忍 ≈ 阈值 + 60~90s。
   offline_leave:
-    enabled: false
+    enabled: true
     threshold: "180s"
     check_interval: "15s"
     budget: 200
