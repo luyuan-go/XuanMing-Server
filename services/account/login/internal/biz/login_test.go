@@ -24,7 +24,10 @@ import (
 	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
 
-const testSecret = "pandora-dev-jwt-secret-change-me-32!" // 36 字节,满足 HS256 ≥32
+const (
+	testSecret     = "pandora-dev-jwt-secret-change-me-32!" // 36 字节,满足 HS256 ≥32
+	testRegisterNo = uint64(100001)
+)
 
 // mustBcrypt 用 DevCost 哈希明文密码,失败 fatal。
 func mustBcrypt(t *testing.T, plain string) string {
@@ -42,6 +45,8 @@ type fakeAccountRepo struct {
 	playerID     uint64
 	passwordHash string
 	banned       bool
+	registerNo   uint64
+	registerNoFn func(context.Context) (uint64, error)
 }
 
 func (f *fakeAccountRepo) FindByAccount(_ context.Context, _ string) (uint64, string, error) {
@@ -52,6 +57,12 @@ func (f *fakeAccountRepo) CheckBanned(_ context.Context, _ uint64, _ string) (bo
 	return f.banned, nil
 }
 func (f *fakeAccountRepo) TouchDevice(_ context.Context, _ uint64, _ string) error { return nil }
+func (f *fakeAccountRepo) GetRegisterNo(ctx context.Context, _ uint64) (uint64, error) {
+	if f.registerNoFn != nil {
+		return f.registerNoFn(ctx)
+	}
+	return f.registerNo, nil
+}
 
 // fakeSessionRepo 记住 Set 写入的 jti 并在 GetJTI 返回真实值:R5 复审 P0-5 起 Login
 // 在交付前复核本次写入的 jti 仍是当前一代,无状态假件会被终检误判为"会话已消失"。
@@ -253,7 +264,7 @@ func newTestUsecaseWithNotifier(t *testing.T, hub data.HubAssigner, notifier dat
 	}
 	// bcrypt 哈希一个固定密码 "pw",让 passwd.Verify 通过。
 	hash := mustBcrypt(t, "pw")
-	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash}
+	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash, registerNo: testRegisterNo}
 	sf := snowflake.NewNode(1)
 	uc := NewLoginUsecase(repo, newFakeSessionRepo(), notifier, hub, &fakeRoleRepo{roleID: 7}, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, nil, false)
 	ticketUC := NewTicketUsecase(signer, verifier, nil)
@@ -379,8 +390,37 @@ func TestLogin_HubAssignerSuccess(t *testing.T) {
 	if res.HubTicketExpMs <= 0 {
 		t.Errorf("HubTicketExpMs = %d, want >0 (parsed from ticket)", res.HubTicketExpMs)
 	}
+	if res.RegisterNo != testRegisterNo {
+		t.Errorf("RegisterNo = %d, want %d", res.RegisterNo, testRegisterNo)
+	}
 	if hub.gotPlayerID != 42 || hub.gotRegion != "cn" || hub.gotTeamID != 0 {
 		t.Errorf("AssignHub args = (%d,%q,%d), want (42,\"cn\",0)", hub.gotPlayerID, hub.gotRegion, hub.gotTeamID)
+	}
+}
+
+func TestLogin_RegisterNoTimeoutDoesNotCancelParentLogin(t *testing.T) {
+	uc := newTestUsecase(t, nil)
+	repo := uc.repo.(*fakeAccountRepo)
+	repo.registerNoFn = func(ctx context.Context) (uint64, error) {
+		<-ctx.Done()
+		return 0, ctx.Err()
+	}
+
+	parent, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	started := time.Now()
+	res, err := uc.Login(parent, "acc", "pw", "dev-1")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if parent.Err() != nil {
+		t.Fatalf("展示查询超时不得取消父登录 ctx: %v", parent.Err())
+	}
+	if elapsed := time.Since(started); elapsed >= time.Second {
+		t.Fatalf("展示查询未在短预算内降级: elapsed=%v", elapsed)
+	}
+	if res.RegisterNo != 0 {
+		t.Fatalf("RegisterNo = %d, want 0 after timeout", res.RegisterNo)
 	}
 }
 
@@ -589,6 +629,9 @@ func (r *devFakeRepo) CheckBanned(_ context.Context, _ uint64, _ string) (bool, 
 	return false, nil
 }
 func (r *devFakeRepo) TouchDevice(_ context.Context, _ uint64, _ string) error { return nil }
+func (r *devFakeRepo) GetRegisterNo(_ context.Context, _ uint64) (uint64, error) {
+	return 0, nil // 展示字段:单测不关心编号,0=未分配即可
+}
 
 func newDevSkipUsecase(t *testing.T, repo data.AccountRepo) *LoginUsecase {
 	t.Helper()
@@ -779,6 +822,9 @@ func TestLogin_BattleReconnect_ReturnsBattleAndSkipsHub(t *testing.T) {
 	}
 	if res.MatchID != 9001 {
 		t.Errorf("MatchID = %d, want 9001", res.MatchID)
+	}
+	if res.RegisterNo != testRegisterNo {
+		t.Errorf("RegisterNo = %d, want %d", res.RegisterNo, testRegisterNo)
 	}
 	if res.HubDSAddr != "" || res.HubTicket != "" {
 		t.Errorf("battle reconnect should skip hub, got addr=%q ticket_len=%d", res.HubDSAddr, len(res.HubTicket))

@@ -13,7 +13,8 @@
 ## 职责与边界
 
 - **职责**:账号登录 / 登出;签发 Session Token + Hub DS 票据;断线重连回原 Battle DS;选角落库(`player_roles` 权威);
-  DS 票据签发 / 校验(JWT + Redis JTI 防重放)。
+  DS 票据签发 / 校验(JWT + Redis JTI 防重放);注册编号异步补号(`accounts.register_no`,
+  纯展示字段,`docs/design/register-no-and-login-surge.md` §3.3)。
 - **权威态**:login 是**账号数据 + 会话代际 + 已选角色**的权威(MySQL `pandora_account`);会话现行性(顶号 fencing)
   权威在 **Redis session**(`pandora:sess:<player_id>`)+ MySQL 单调 `generation`(登录定序)。
 - **不是权威、只查询**(不变量 §22):玩家当前位置查 player_locator(presence 投影,30s TTL,不复制);玩家是否在活跃对局

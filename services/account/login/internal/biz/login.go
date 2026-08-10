@@ -61,7 +61,11 @@ type LoginResult struct {
 	// SelectedRoleID 是玩家当前已选角色(player_roles 表,选角权威化 2026-07-08)。
 	// 0 = 从未选过角。客户端登录后进选角界面用此值预选中;确认后调 SelectRole。
 	SelectedRoleID uint32
-	Resume         ResumeContextResult
+
+	// RegisterNo 注册编号(展示专用,register-no-and-login-surge.md §3)。
+	// 0 = 补号任务尚未分配(客户端显示「生成中」);读取 fail-soft,失败也是 0。
+	RegisterNo uint64
+	Resume     ResumeContextResult
 }
 
 type ResumeContextResult struct {
@@ -322,6 +326,12 @@ func (u *LoginUsecase) strictBattleGateProfile() bool {
 // 客户端仍会叠加自己的退避 + jitter,这里只是下界提示。
 const loginWaitRetryAfterMs uint32 = 1000
 
+// registerNoReadTimeout 是登录主链上纯展示 PK 点查的独立短预算。
+// 同服务单语句 MySQL 记账的健康 P99 只有毫秒级(touchDeviceTimeout 注释),
+// 250ms 已给跨节点 TiDB 点查留出数十倍余量，同时只占 prod 5s 登录预算的 5%。
+// 超时只取消子 ctx、降级为 0，不得取消父登录 ctx；真实 P99 待洪峰压测复核。
+const registerNoReadTimeout = 250 * time.Millisecond
+
 // waitLogin 把**会话已建立之后**的暂时性失败收敛成携带新 session 的 WAIT。
 //
 // §9.23:「路由、匹配、分配、签票、Travel、Admission 的暂时失败不得清空会话、要求重新
@@ -439,12 +449,23 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// hubFenceMatchID:tryBattleReconnect 判定「终局后 TTL 残留」继续走 Hub 时带回的
 	// 原对局 match_id(Battle→Hub 回流 fence),签进 hub 票据 source_match_id claim。
 	// 会话已是当前一代:此后的每一步暂时失败都必须带着它返回 WAIT,而不是丢弃(§9.23)。
+	// 注册编号(展示专用):fail-soft——查失败只打日志置 0(客户端显示「生成中」),
+	// 绝不因展示字段拒登录;存量库未跑 pandora_account 000004 迁移时同样落此分支。
+	registerNoCtx, registerNoCancel := context.WithTimeout(ctx, registerNoReadTimeout)
+	registerNo, rnErr := u.repo.GetRegisterNo(registerNoCtx, playerID)
+	registerNoCancel()
+	if rnErr != nil {
+		h.Warnw("msg", "register_no_read_failed", "err", rnErr, "player_id", playerID)
+		registerNo = 0
+	}
+
 	base := &LoginResult{
 		PlayerID:     playerID,
 		SessionToken: sessionToken,
 		SessionExpMs: sessExpMs,
 		RegionID:     regionID,
 		CellID:       cellID,
+		RegisterNo:   registerNo,
 	}
 	// 交付前置终检:凭 base 交付 session 同样要过 fenceLoginDelivery(见下方 R5 复审 P0-5
 	// 注释)。抽成闭包,WAIT 与正常返回共用同一道门,避免 WAIT 路径成为绕过终检的后门。
@@ -473,6 +494,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 			if ferr := u.fenceLoginDelivery(ctx, playerID, sessJTI); ferr != nil {
 				return nil, ferr
 			}
+			res.RegisterNo = registerNo // 重连路径同样带出注册编号(展示字段,与路由无关)
 			return res, nil
 		}
 		hubFenceMatchID = terminalFence

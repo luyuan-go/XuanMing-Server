@@ -152,6 +152,50 @@ func main() {
 		}(sdb, cfg.Login.DeviceRetentionDays)
 	}
 
+	// 注册编号补号任务(docs/design/register-no-and-login-surge.md §3.3):异步批量,
+	// 注册/登录关键路径零参与;事务先锁 register_no_counter 单行即全局互斥,多副本
+	// 各自跑安全,无需 leader election。mock 模式(非 MySQL 库)不跑。
+	if sdb, ok := db.(*sql.DB); ok && sdb != nil {
+		regSweepCtx, regSweepCancel := context.WithCancel(context.Background())
+		defer regSweepCancel()
+		// 启动探针 + 计数器幂等初始化。失败(典型:存量库 000004 迁移未跑)只停用补号:
+		// 编号是展示功能,fail-soft 不拦 login 启动;ERROR 让缺迁移在部署当天可见。
+		if err := data.EnsureRegisterNoCounter(regSweepCtx, sdb, cfg.Login.RegisterNoStart); err != nil {
+			helper.Errorw("msg", "register_no_sweeper_disabled", "err", err)
+		} else {
+			go func(sdb *sql.DB) {
+				// 5s 周期:编号可见延迟 ≈ 周期 + 10s 水位滞后,展示场景无感。
+				ticker := time.NewTicker(5 * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-regSweepCtx.Done():
+						return
+					case <-ticker.C:
+						// panic 兜底(同 device sweep 点位):单轮 panic 只丢本轮,下轮继续。
+						safego.Run(regSweepCtx, "login_register_no_sweep", func() {
+							// 单轮 drain 上限 20 批(1 万行):存量追平期不长期霸占,下轮继续
+							// (§16.10:复用同一 ticker,不新建第二套状态机)。
+							for i := 0; i < 20; i++ {
+								n, err := data.SweepRegisterNo(regSweepCtx, sdb, data.RegisterNoBatchSize)
+								if err != nil {
+									helper.Warnw("msg", "register_no_sweep_failed", "err", err)
+									return
+								}
+								if n > 0 {
+									helper.Infow("msg", "register_no_assigned", "rows", n)
+								}
+								if n < data.RegisterNoBatchSize {
+									return
+								}
+							}
+						})
+					}
+				}
+			}(sdb)
+		}
+	}
+
 	sessionRepo, jtiRepo, rdb := mustBuildRedisRepos(&cfg, helper)
 	defer func() {
 		if rdb != nil {

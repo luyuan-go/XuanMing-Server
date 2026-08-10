@@ -48,13 +48,27 @@ CREATE TABLE IF NOT EXISTS `accounts` (
     `account`       VARCHAR(64)      NOT NULL,
     `password_hash` VARCHAR(80)      NOT NULL COMMENT 'bcrypt(client_digest),含 cost 前缀,固定 60 字节',
     `status`        TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=normal,1=banned,2=disabled',
+    `register_no`   BIGINT UNSIGNED       NULL COMMENT '注册编号(展示专用,禁作身份键/外键;NULL=待补号,login 补号任务异步分配,register-no-and-login-surge.md §3.3)',
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */,
-    UNIQUE KEY `uk_account` (`account`)
+    UNIQUE KEY `uk_account` (`account`),
+    UNIQUE KEY `uk_register_no` (`register_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   SHARD_ROW_ID_BITS = 4 PRE_SPLIT_REGIONS = 4
   COMMENT='Pandora 账号身份表(uk_account 必须大小写不敏感,见文件头)';
+-- uk_register_no 是补号任务的顺序追加写(索引尾部),但写速率 = 补号批量节奏(每 5s 若干批),
+-- 远低于登录 QPS,不构成需要打散的热点;不比照雪花 PK 做 SHARD 处理。
+
+-- register_no_counter:注册编号全局发号计数器,恒 1 行(id=1)。
+-- 补号事务先 FOR UPDATE 锁本行再批量编号:行锁即全局互斥,多 login 副本并发安全。
+-- 单行表无热点/无分布可言,不做任何 SHARD/AUTO_RANDOM 处理;§9.24 登记豁免(权威闸,不清理)。
+CREATE TABLE IF NOT EXISTS `register_no_counter` (
+    `id`      TINYINT UNSIGNED NOT NULL,
+    `next_no` BIGINT UNSIGNED  NOT NULL COMMENT '下一个待发注册编号',
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 注册编号全局发号计数器(单行 id=1;发号权威闸)';
 
 -- account_devices:每次登录一次 upsert(TouchDevice),写 QPS = 全服登录 QPS。
 -- 真实写路径走 uk_player_device(按 player_id 天然打散,无尾部热点);代理主键仅占位 → AUTO_RANDOM。

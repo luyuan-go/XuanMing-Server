@@ -188,11 +188,14 @@ CREATE TABLE IF NOT EXISTS register_no_counter (
 第二套 timer 状态机;周期建议 5s,批大小默认 500 对齐仓库 `DELETE..LIMIT 500` 惯例):
 
 ```
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;                   -- ⓪ 正确性要求,见要点
 BEGIN;
 SELECT next_no FROM register_no_counter WHERE id=1 FOR UPDATE;   -- ① 锁计数器 = 全局互斥
 SELECT player_id FROM accounts WHERE register_no IS NULL
-    ORDER BY created_at, player_id LIMIT 500 FOR UPDATE;          -- ② 稳定顺序取批
-UPDATE accounts SET register_no = <next_no + rank> WHERE ...;     -- ③ 批内按序编号
+    AND created_at < NOW() - INTERVAL 10 SECOND                   -- ② 水位安全滞后(见要点)
+    ORDER BY created_at, player_id LIMIT 500;                     --    + 稳定顺序取批(不加行锁,见要点)
+UPDATE accounts SET register_no = <next_no + rank>
+    WHERE player_id = ? AND register_no IS NULL;                  -- ③ 批内按序编号(复核仍为 NULL)
 UPDATE register_no_counter SET next_no = next_no + <批大小>;      -- ④ 推进计数器
 COMMIT;                                                           -- 回滚则①-④一起消失,无空洞
 ```
@@ -202,10 +205,34 @@ COMMIT;                                                           -- 回滚则�
   (§15.1 标准能力优先;同 guild counter 先例)。事务原子保证崩溃无空洞、无双号。
 - **排序键 `created_at + player_id`**:created_at 秒级、跨 TiDB 节点毫秒级时钟差下,
   编号先后与真实提交序可能差一两位——展示编号要的是**确定性**,不是物理精确序,可接受。
+- **水位安全滞后 10s(2026-08-10 补,封死迟可见错序)**:INSERT 的 `created_at` 在语句
+  执行时打戳,行对其它事务**可见**要等提交——若兜底贴着「现在」编号,一条打了早戳、
+  晚几百毫秒才可见的行会被越过,补号时拿到更大的号(created_at 更早但编号更大的**可观测
+  反例**)。加滞后后,任何行从打戳到被编号至少有 10s 可见窗口:只要它在窗口内可见,
+  兜底扫到它的 created_at 位置时它必然在场,按序拿号。反例只剩「单语句 autocommit INSERT
+  打戳后 >10s 才可见」——被语句/gRPC 超时(prod 5s)排除:超时即失败无行,玩家重试拿新戳。
+  即:**编号全序与 created_at 全序严格一致,零反例**;10s = 5s 超时上界 ×2 保守,待实测复核。
+  代价仅是编号可见延迟从 ~5s 变 ~15s,展示场景无感。
+- **事务隔离必须 READ COMMITTED(落码修正 2026-08-10,真 TiDB 并发测试抓获)**:计数器
+  行锁只串行化「写」,② 取批 SELECT 的可见性由隔离级别决定。TiDB 悲观事务在默认 RR 下用
+  `BEGIN` 时刻的 start_ts 快照服务普通 SELECT——后到的 sweeper 在计数器锁上等前一批提交,
+  拿到锁后 ① 的 `FOR UPDATE`(当前读)能读到推进后的 next_no,但 ② 仍按旧快照重扫刚被
+  编号的同一批行,③ 的复核(当前读)恒 affected=0,把**正常并发**误判成"第二写者"整批
+  回滚——两副本互相打回,fail-closed 护栏成了误报源。InnoDB RR 无症状纯属侥幸:read view
+  迟到首个一致性读(② 在拿锁之后)才建。RC 下两端都是逐语句新快照,② 发生在拿锁之后即
+  必然包含锁前驱批次的提交,affected=0 恢复「真第二写者」语义。刻意不用「给 ② 加
+  `FOR UPDATE`」的修法:InnoDB 下会在 `uk_register_no` 的 NULL 范围产生间隙锁,正是下条
+  要规避的(RC 还顺带免除该间隙锁)。回归:register_no_mysql_test.go ③(修复前 TiDB 必炸)。
+- **不锁账号行(落码修正,2026-08-10)**:取批 SELECT 不加 `FOR UPDATE`——register_no
+  只有本事务(已被计数器锁串行化)写,行锁冗余;且 InnoDB 下扫 `uk_register_no` 的 NULL
+  范围会产生间隙锁,反向阻塞并发注册 INSERT。以 ③ 的 `AND register_no IS NULL` +
+  RowsAffected==1 复核兜底,复核失败说明计数器锁外存在第二写者,整批回滚 fail-closed。
 - **积压语义**:洪峰下任务落后只表现为「新玩家编号晚几秒~几分钟可见」;查询侧对
   `register_no IS NULL` 显示「分配中」。
-- **回填**:存量账号一次性 migration 按同一排序编号,`next_no` 初始化为
-  `起始号 + 存量数`;起始号即策划三问③。
+- **回填不需要独立步骤(落码简化,2026-08-10)**:存量账号就是「待编号行」,补号任务
+  首轮按同一全序自然追平(单轮 drain 上限 20 批 = 1 万行,大存量分多轮);`next_no` 由
+  login 启动期 `INSERT IGNORE` 初始化为配置 `register_no_start`(= 策划三问③,默认 1,
+  计数器已存在后改配置无效)。单一代码路径,无迁移/在线双实现(§15.2)。
 - **查询/下发**:pb 字段 `uint64 register_no`(§5.12 非负默认无符号;0=未分配,
   与「NULL=待补号」对应,天然满足 proto3 零值语义)。仅当策划三问②选「客户端可见」时
   才加进客户端可见结构并同步 UE。
@@ -239,15 +266,17 @@ COMMIT;                                                           -- 回滚则�
 先不建,纯兜底起步**;将来真出现「编号必须秒级可见」的产品需求,或第二个编号类需求
 (公会号、靓号池),再以真实需求重议叠加 push / 服务化。
 
-### 3.5 落地清单
+### 3.5 落地清单(2026-08-10 落码)
 
-| # | 事项 | 落点 |
-|---|---|---|
-| 1 | DDL:加列 + 计数器表 | deploy/mysql-init/02、deploy/tidb-init/03(TiDB 版 `uk_register_no` 尾部热点在补号 QPS 量级下无碍,不需打散)、tools/migrate pandora_account 新迁移 |
-| 2 | 回填 migration(含 next_no 初始化) | tools/migrate(参照 guild_counter backfill 写法) |
-| 3 | 补号任务 | login `internal/biz`(挂既有后台循环)+ `internal/data`(上述事务) |
-| 4 | 查询接口(运营/GM 侧带出 register_no) | 待策划三问②;客户端可见则 [proto] 标注同步 UE |
-| 5 | dbcheck 登记 | `register_no_counter` 登记为豁免(单行,权威闸,不清理)(§9.24) |
+| # | 事项 | 落点 | 状态 |
+|---|---|---|---|
+| 1 | DDL:加列 + uk + 计数器表 | deploy/mysql-init/02、deploy/tidb-init/03(TiDB 版 `uk_register_no` 尾部热点在补号 QPS 量级下无碍,不需打散)、tools/migrate pandora_account `000004_register_no`(条件幂等,含 down) | ✅ |
+| 2 | 回填 | **无独立步骤**:补号任务首轮自然追平(§3.3 要点);`next_no` 起始由 login 启动期初始化 | ✅(简化) |
+| 3 | 补号任务 | login `internal/data/register_no.go`(事务)+ `cmd/login/main.go`(5s ticker,drain 上限 20 批,启动探针 fail-soft)+ conf `register_no_start` | ✅ |
+| 4 | 真 MySQL / 真 TiDB 双后端测试 | `internal/data/register_no_mysql_test.go`:全序/跨批连续、水位滞后、双 sweeper 并发无重号无空洞(= TiDB start_ts 快照缺陷回归,见 §3.3 隔离级别要点)、起始号幂等、缺迁移探针失败(PANDORA_TEST_MYSQL_DSN / PANDORA_TEST_TIDB_DSN 双门控,friend/guild 同款) | ✅ |
+| 5 | 容量/清单登记 | dbcheck registry + login budgets.go + CLAUDE.md §9.24 豁免段:`register_no_counter` 恒 1 行权威闸 | ✅ |
+| 6 | 展示链路(A② 已拍板 2026-08-10:**客户端玩家可见**) | 服务端已落码:proto `LoginResponse.register_no = 13`(go pb 已重生成,`proto_gen.ps1` 默认档)、`AccountRepo.GetRegisterNo`(**fail-soft**:读失败置 0 只记日志不拒登录;刻意不并进 FindByAccount——列缺失不能打挂登录整链)、biz 主路径与 battle 重连路径都带出、service 组装 `RegisterNo`。0 = 补号中,客户端显示「生成中」 | ✅ 服务端 |
+| 7 | UE 侧(交 Codex,2026-08-10 用户指令) | ① `proto_gen.ps1 -Cpp` 生成 cpp pb 同步 UE 仓库(commit 标 [proto]);② UE 登录态存 register_no,WBP_RoleInfo 属性界面(现显示 PlayerId/账号名处)加一行,0 显示「生成中」;③ go build / go test 编译验证也归 Codex(用户指令) | ⏳ Codex |
 
 ---
 
@@ -319,7 +348,7 @@ bcrypt/DB 之前挡住流量的层。
 
 | # | 待拍板 | 责任方 | 依赖 |
 |---|---|---|---|
-| A | 策划三问:①严格连续(建议是)②给谁看 ③起始号;追加④存储形态:accounts 加列(默认)vs 独立映射表(§3.4) | 策划/用户 | 无——定了 §3 即可动工 |
+| A | 策划三问:①严格连续 ②给谁看 ③起始号;④存储形态 | 策划/用户 | **全部已定**(2026-08-10):①严格连续+④加列已落码;②用户拍板=客户端玩家可见,服务端链路已落码、UE 侧交 Codex(§3.5 第 6/7 项);③= login 配置 `register_no_start`(默认 1,计数器初始化前可改) |
 | B | bcrypt cost:维持 4(明示接受弱点)或升 10(账单进容量口径,存量懒升级) | 用户 | 与 C 联动 |
 | C | 登录排队/放量立项 + Envoy local_ratelimit 优先级提级 | 用户 | §5.4 洪峰压测数据 |
 | D | 洪峰压测专项排期 | 用户 | robot/stress 现有能力即可开跑 |

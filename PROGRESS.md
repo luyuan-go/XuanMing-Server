@@ -2749,3 +2749,66 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   真 MySQL 集成测试 `inventory_transfer_mysql_test.go` 的种子改成走生产同一条编码路径。
   **剩余风险**:真 MySQL 迁移未在本机执行(需 dev 库重跑 migrate);dev 库里已有的鉴定词条
   与发奖明细会被清空。
+
+## 2026-08-10:注册编号(register_no)全链落码 + 开服登录洪峰设计落档
+
+- **需求**:策划要自增注册编号(对标梦幻西游)。讨论全程与拍板记录见
+  `docs/design/register-no-and-login-surge.md`(新):架构定性(全区全服,账号命名空间
+  全局一套;玩家库与账号库扩容路线刻意相反)、方案对比(同步取号/AUTO_INCREMENT/独立
+  ID 服务+push 均否决,理由与反例齐)、开服洪峰四层对策与现状缺口(Envoy 零速率闸、
+  无登录排队、bcrypt 实为 cost=4、压测无洪峰场景)。
+- **方案**:`accounts.register_no` 列(NULL=待补)+ `register_no_counter` 单行计数器 +
+  login 异步批量补号(5s ticker,单事务「锁计数器行→按 created_at+player_id 取批(带
+  10s 水位安全滞后,封死迟可见错序)→逐行复核编号→推进计数器」;计数器行锁即全局
+  互斥,多副本安全无需 leader;不锁账号行,避开 InnoDB 间隙锁挡注册 INSERT)。
+  严格连续无空洞;编号全序=created_at 全序零反例。**红线:纯展示字段,禁作身份键/外键**。
+- **落码**:mysql-init/02 + tidb-init/03 DDL、`pandora_account/000004_register_no`
+  条件幂等迁移(含 down)、`login/internal/data/register_no.go`、main.go 接线(启动探针
+  fail-soft:缺迁移只停用补号不拦启动)、conf `register_no_start`(起始号,仅首次初始化
+  生效)、dbcheck registry + budgets.go + CLAUDE.md §9.24 豁免登记(`register_no_counter`
+  恒 1 行权威闸)、login README 职责行。
+- **测试**:`register_no_mysql_test.go` 真 MySQL 套件(PANDORA_TEST_MYSQL_DSN 门控,
+  沿用 session_generation 临时库惯例):跨批全序连续、水位滞后、双 sweeper 并发无重号
+  无空洞、起始号幂等、缺迁移探针失败。
+- **验证**:`go build` / `go vet` / `go test -run RegisterNo_MySQL`(skip 档)全绿;
+  dbcheck 构建绿。**剩余风险**:真 MySQL 套件未跑(本机 3306/3307 无监听,栈未起);
+  存量 dev 库需跑 000004 迁移,否则启动 ERROR `register_no_sweeper_disabled`(login 照常)。
+- **待拍板**(文档 §6):A②给谁看(阻塞查询接口/proto/UE 展示)、B bcrypt cost、
+  C 登录排队立项 + Envoy local_ratelimit 提级、D 洪峰压测专项。
+
+### 同日补充:A② 拍板「客户端玩家可见」,展示链路服务端落码(编译验证交 Codex)
+
+- proto:`LoginResponse.register_no = 13`(uint64,0=补号中;注释含红线),go pb 已用
+  `proto_gen.ps1` 默认档重生成(lint OK);**cpp pb 未生成**——`-Cpp` 档 + UE 仓库同步交 Codex,
+  commit 须标 [proto]。
+- 服务端:`AccountRepo.GetRegisterNo`(接口 + MySQL 实现;**fail-soft**:读失败/存量库缺列
+  只 Warn 置 0,绝不拒登录——刻意不并进 FindByAccount,展示字段必须失败隔离)、
+  biz `LoginResult.RegisterNo`(主路径 + battle 重连路径都带出)、service 组装;
+  两个测试 fake(fakeAccountRepo/devFakeRepo)已补方法。
+- **交 Codex**(用户指令:客户端 + 编译都归 Codex):① `proto_gen.ps1 -Cpp` + UE 仓库
+  cpp pb 同步;② UE 登录态存 register_no,WBP_RoleInfo 属性界面加一行(0=「生成中」);
+  ③ login 服务 go build / go vet / go test 编译验证(本次 proto 字段后未在本机编译)。
+
+### 同日修复:真 TiDB 并发测试抓获补号事务快照错序(提交前阻断,已修)
+
+- **症状**:`ConcurrentSweepersSerialize` 在真 TiDB(v8.5.1,悲观模式)必现
+  `register_no assign affected=0(计数器锁外存在第二写者)`——两个并发 sweeper 互相
+  把对方打成 fail-closed 整批回滚;真 MySQL 全绿。
+- **根因**:TiDB 悲观事务在默认 RR 下用 `BEGIN` 时刻的 start_ts 快照服务**普通 SELECT**;
+  后到的 sweeper 在计数器行锁上等前一批提交,拿锁后 `FOR UPDATE`(当前读)读到推进后的
+  next_no,但取批扫描仍按旧快照重扫刚被编号的同一批行,复核 UPDATE(当前读)恒 affected=0
+  → 正常并发被误判成"第二写者"。InnoDB RR 无症状是侥幸:read view 迟到首个一致性读
+  (取批在拿锁后)才建。即**计数器行锁只串行化了写,没串行化取批读的可见性**。
+- **修复**:补号事务改 `READ COMMITTED`(`BeginTx` 显式 Isolation;register_no.go)——
+  两端 RC 都是逐语句新快照,取批发生在拿锁之后必然包含锁前驱批次的提交;affected=0 恢复
+  「真第二写者」语义。刻意不用「取批加 FOR UPDATE」修法:InnoDB 下会在 uk_register_no
+  的 NULL 范围产生间隙锁挡注册 INSERT(原设计规避点,RC 顺带免除)。设计文档 §3.3 新增
+  「事务隔离必须 READ COMMITTED」要点,伪代码补 ⓪。
+- **测试升级**:`register_no_mysql_test.go` 升为 MySQL/TiDB 双后端门控
+  (`PANDORA_TEST_MYSQL_DSN`/`PANDORA_TEST_TIDB_DSN`,friend/guild 同款 forEach;
+  用例更名 `RegisterNo_MySQLAndTiDB_*`),并发用例即该缺陷针对性回归(修复前 TiDB 必炸
+  已复现,修复后两端全绿)。
+- **验证**:真 TiDB(本地 4000)+ 真 MySQL(k8s port-forward 13306)双后端全套 ×1、
+  并发用例 ×5 全绿;login 模块 build/vet/全包 test(含集成)全绿。
+- **同类扫描**:friend/guild/mail 的锁内权威读全部已是 `FOR UPDATE` 当前读(friend README
+  「读侧防陈旧快照」条款先例),register_no 是全仓唯一「锁后普通读」例外,已闭环。

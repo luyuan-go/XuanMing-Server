@@ -78,6 +78,8 @@ func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*l
 		// 选角权威化(2026-07-08):玩家当前已选角色(0=从未选过),客户端选角界面预选中用。
 		SelectedRoleId: res.SelectedRoleID,
 		ResumeContext:  resumeContextToProto(res.Resume),
+		// 注册编号(展示专用,register-no-and-login-surge.md §3):0=补号中,客户端显示「生成中」。
+		RegisterNo: res.RegisterNo,
 	}, nil
 }
 

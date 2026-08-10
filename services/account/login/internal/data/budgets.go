@@ -21,5 +21,7 @@ func Budgets() []dbguard.TableBudget {
 		},
 		{Table: "account_bans", MaxRows: 1_000_000, MaxAvgRowBytes: 512,
 			Note: "§9.24 登记豁免(运营合规审计,不清理);超限说明封禁量异常,需人工评估归档"},
+		{Table: "register_no_counter", MaxRows: 8, MaxAvgRowBytes: 64,
+			Note: "注册编号全局发号计数器,恒 1 行(§9.24 登记豁免:发号权威闸,不清理);上限留余量防 information_schema 估算抖动误报"},
 	}
 }

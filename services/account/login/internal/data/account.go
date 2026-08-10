@@ -38,6 +38,12 @@ type AccountRepo interface {
 
 	// TouchDevice 记录最近一次登录设备(account_devices upsert)。失败由 biz 层只记日志。
 	TouchDevice(ctx context.Context, playerID uint64, deviceID string) error
+
+	// GetRegisterNo 读玩家注册编号(展示专用,register-no-and-login-surge.md §3)。
+	// 0 = 补号任务尚未分配(客户端显示「生成中」)。调用方必须 fail-soft:失败置 0
+	// 只记日志,绝不因展示字段拒登录——存量库未跑 000004 迁移时本方法报错,靠该
+	// 口径兜住(刻意不合并进 FindByAccount:列缺失会把登录整链打挂,展示字段必须失败隔离)。
+	GetRegisterNo(ctx context.Context, playerID uint64) (uint64, error)
 }
 
 // =====================================================================
@@ -92,6 +98,24 @@ WHERE (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
 		return false, errcode.New(errcode.ErrInternal, "mysql check banned: %v", err)
 	}
 	return cnt > 0, nil
+}
+
+// GetRegisterNo PK 点查注册编号(登录路径 +1 次毫秒级往返,不进 5s 预算的服务扇出账,
+// 压测审核【必修-1】口径不受影响)。NULL / 行不存在均返回 0(未分配)。
+func (r *MySQLAccountRepo) GetRegisterNo(ctx context.Context, playerID uint64) (uint64, error) {
+	var no sql.NullInt64
+	err := r.db.QueryRowContext(ctx,
+		`SELECT register_no FROM accounts WHERE player_id = ? LIMIT 1`, playerID).Scan(&no)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "mysql get register_no: %v", err)
+	}
+	if !no.Valid {
+		return 0, nil
+	}
+	return uint64(no.Int64), nil
 }
 
 func (r *MySQLAccountRepo) TouchDevice(ctx context.Context, playerID uint64, deviceID string) error {
