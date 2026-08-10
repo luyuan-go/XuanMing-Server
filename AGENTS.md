@@ -121,3 +121,17 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 - 入口 `Pandora.uproject`、主模块 `Source/Pandora/`、类前缀 `Pandora*`
 - 新建 UE 文件 / 类 / 模块不准再用 `Xuanming` / `Xm`;历史路径名仅作记录,不进代码
 - 细则见 `CLAUDE.md §11`、`§13`
+
+## Agent skills
+
+### Issue tracker
+
+问题与规格记录在 `luyuan-go/XuanMing-Server` 的 GitHub Issues 中。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+问题分流使用 mattpocock/skills 的默认标签词汇。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+本仓库使用单上下文领域文档布局。详见 `docs/agents/domain.md`。

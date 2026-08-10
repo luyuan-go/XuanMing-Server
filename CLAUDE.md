@@ -358,3 +358,17 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 - **关卡表是跨仓共享事实**：DS 侧只有自己那份表，"同 `map_id` 在两仓指向不同地图"的漂移无法自检（历史事故：松林镇 4002 镜像关卡表漂移）。改表必须双仓同步发布，并遵守 `§9.15` 配置表热更流水线。
 
 客户端侧对应条款见 `Pandora-Client-SVN/CLAUDE.md「进入场景 / 副本的客户端纪律」`。
+
+## Agent skills
+
+### Issue tracker
+
+问题与规格记录在 `luyuan-go/XuanMing-Server` 的 GitHub Issues 中。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+问题分流使用 mattpocock/skills 的默认标签词汇。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+本仓库使用单上下文领域文档布局。详见 `docs/agents/domain.md`。
