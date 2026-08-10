@@ -6,6 +6,7 @@
 > 本 README 是**模块级说明**(职责 / 端口 / RPC / 存储 / 调用链 / 起动)。**设计判断 / 决策记录**见 `docs/design`
 > 的 [`go-services.md §2.1`](../../../docs/design/go-services.md)、[`battle-reconnect.md`](../../../docs/design/battle-reconnect.md)、
 > [`session-generation-rollout.md`](../../../docs/design/session-generation-rollout.md)、
+> [`register-no-and-login-surge.md`](../../../docs/design/register-no-and-login-surge.md)、
 > [`decision-revisit-ds-callback-auth.md`](../../../docs/design/decision-revisit-ds-callback-auth.md)。
 >
 > 代码行号锚点截至当前 HEAD,以**函数名**为准(行号会随改动漂移)。
@@ -44,15 +45,16 @@ proto 见 `proto/pandora/login/v1/login.proto`。
 | RPC | 调用方 | 语义 | 鉴权 |
 |---|---|---|---|
 | `Login(account, password_hash, device_id)` | 客户端 | 校验密码 → 签 session + 解析 Hub/Battle 落点 + resume;**立即完成型**,response 含完整进场数据 | 账号密码自证(Envoy 对本 path 不强制 JWT) |
+| `GetRegisterNo()` | 客户端(登录响应编号为 0 时补拉) | 空请求;只查当前 JWT 玩家自己的展示编号。`code=OK, register_no=0`=仍在补号窗口,非错误 | Envoy JWT `player_id`;刻意不做 sjti 现行性复核(只读、零副作用、不发凭据) |
 | `GetResumeContext(session_token)` | 客户端(冷启动 / 前台恢复) | 纯读当前应进 HUB / BATTLE 路由(不做任何 placement mutation) | session_token 验签 + 会话现行性门 |
 | `SelectRole(role_id)` | 客户端 | 选角落库(`player_roles` 覆盖式)+ 重签当前有效 Hub 票 | Envoy JWT `player_id` + payload jti 现行性门 |
 | `Logout(session_token)` | 客户端 | CAS 删本代 Redis session + MySQL 墓碑 + 弱释放 owner;容错(验签失败也返 OK) | session_token(容错) |
 | `IssueDSTicket(ds_type, target_id, session_token)` | 客户端(结算回大厅 / 断线重连) | `hub`=复用 AssignHub 拿当前有效大厅地址 + 新票;`battle`=经 roster 权威门现签重连票 | Envoy JWT `player_id` + session token 现行性门 |
 | `VerifyDSTicket(ticket, ds_pod_name, admission_id)` | UE DS(经 `:8444`) | 验签 + exp + JTI 防重放 +(redis authority)active/binding/admission 门 | off/legacy=内部信任;redis=DS Bearer Guard + Redis active |
 
-> **立即完成型(协议原则 1,见 [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md))**:`Login` / `SelectRole` /
+> **立即完成型(协议原则 1,见 [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md))**:`Login` / `GetRegisterNo` / `SelectRole` /
 > `IssueDSTicket` 的 response 必须携带完整业务数据(session / 票据 / 直连地址 / resume),客户端**不等任何后续 push**。
-> 错误一律翻译成 `LoginResponse.code`(`errcode.*` → proto enum,不抛 gRPC error),客户端永远看 `code` 字段。
+> 错误一律翻译成各 RPC response 的 `code`(`errcode.*` → proto enum,不抛 gRPC error),客户端永远看 `code` 字段。
 
 ## 目录结构(Kratos 标准分层,对齐 matchmaker)
 
@@ -122,7 +124,20 @@ Login(account, password_hash, device_id)
   滚动兼容期被清理，不再参与恢复。失败 RPC 返回可重试错误；下一次 Login 用更高
   generation 原子推进两处权威自愈。
 
-### 2. IssueDSTicket —— 结算回大厅 / 断线重连补票
+### 2. GetRegisterNo —— 首次会话异步补号后的只读补拉
+
+`LoginService.GetRegisterNo`(`service/login.go`)→ 从 ctx 读取 Envoy 由 JWT `sub` 注入的
+`player_id` → `LoginUsecase.GetRegisterNo` → `AccountRepo.GetRegisterNo` PK 点查。
+
+- 请求 message 刻意为空,不接受客户端自报 `player_id`;玩家只能查自己的编号。
+- 该 full path 必须同时进入 Envoy `jwt_authn.rules`;只加 route 不加 rule 会默认放行但不验签,
+  上游拿不到 `x-pandora-player-id`,最终一律 `ERR_UNAUTHORIZED`。
+- `code=OK, register_no=0` 是补号尚未完成的正常态;客户端保持“生成中”并稍后重试,
+  拿到非 0 后立即停止。仓储查询错误返回非 OK,客户端不得把错误写回成 0。
+- 刻意不做 sjti 现行性复核:它只读、只能读自己、零副作用且不签发任何凭据;
+  对比 `SelectRole` 会签发 Hub 票据,所以后者必须复核。
+
+### 3. IssueDSTicket —— 结算回大厅 / 断线重连补票
 
 `LoginService.IssueDSTicket`(`service/login.go:152`)→ 先 `RequireCurrentSessionToken`(会话现行性门)→ 按 `ds_type` 分流:
 
@@ -137,7 +152,7 @@ ds_type == 其它     → TicketUsecase.IssueDSTicket        (biz/ticket.go:211,
 
 每条分支签票后再过一次 `fenceTicketDelivery`(交付终检,同 Login):检查与签票之间被顶号则扣留票据(票据从未离开服务端 = 未取得)。
 
-### 3. SelectRole —— 选角落库 + 重签 Hub 票
+### 4. SelectRole —— 选角落库 + 重签 Hub 票
 
 `LoginService.SelectRole`(`service/login.go:101`)→ ctx 取 `player_id` + payload jti → `RequireCurrentSessionJTI` 预检 →
 `LoginUsecase.SelectRole`(`biz/login.go:1087`):
@@ -152,7 +167,7 @@ SelectRole(player_id, role_id, sessJTI)
 
 落库后 service 层再做一次 `RequireCurrentSessionJTI` 交付终检(`service/login.go:125`)。
 
-### 4. VerifyDSTicket —— UE DS 在线入场(redis authority 门链)
+### 5. VerifyDSTicket —— UE DS 在线入场(redis authority 门链)
 
 `LoginService.VerifyDSTicket`(`service/login.go:227`):
 
@@ -168,7 +183,7 @@ off/legacy:ticketUC.VerifyDSTicket → 验签 + 单次 JTI SETNX 防重放(保�
 `TicketUsecase.verifyDSTicket`(`biz/ticket.go:403`)内部固定顺序:验签(`verifyDSTicketSignature`)→ admission binding 严格 /
 重试校验 → **会话现行性门前置到 replay marker 之前**(R7 P2-1,被顶旧票不消耗 jti 名额)→ 写 replay marker。
 
-### 5. Logout —— CAS 删本代会话
+### 6. Logout —— CAS 删本代会话
 
 `LoginUsecase.Logout`(`biz/login.go:1233`):验签拿 `player_id` → `sessions.DeleteIfJTI`(仅删本 jti 那一代,顶号后旧设备迟到
 Logout CAS 不命中 → no-op)→ `sessionGen.TombstoneSessionJTI`(MySQL 墓碑,弱)→ `ownerReleaser` Query+Release(弱)。

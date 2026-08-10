@@ -31,6 +31,11 @@ type TradeConf struct {
 	// MaxItemsPerOrder 单订单最大物品条目数(默认 20)。
 	MaxItemsPerOrder int `yaml:"max_items_per_order,omitempty" json:"max_items_per_order,omitempty"`
 
+	// RateQuotaPerMin 下单/撤单的 per-player 每分钟频率配额(anti-abuse §6 第 6 项;
+	// 默认 20;负值 = 关闭)。与 MaxOrdersPerPlayer 总量闸正交:总量限「同时挂多少」,
+	// 本值限「刷多快」,挡「下单-撤单-再下单」的托管写 + 流水行放大循环。窗口固定 1 分钟。
+	RateQuotaPerMin int `yaml:"rate_quota_per_min,omitempty" json:"rate_quota_per_min,omitempty"`
+
 	// MaxOrdersPerPlayer 单玩家同时参与(买方或卖方)的订单总数上限(默认 200,不变量 §18)。
 	// 写入侧硬上限:CreateOrder 用 Lua 原子预留双方反查索引名额,满 → 先清理已过期/已终态
 	// 的死成员重试一次,仍满返 ERR_TRADE_ORDER_LIMIT(7006)。同时把 ListMyOrders 的 SMEMBERS
@@ -61,6 +66,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Trade.MaxItemsPerOrder <= 0 {
 		c.Trade.MaxItemsPerOrder = 20
+	}
+	if c.Trade.RateQuotaPerMin == 0 {
+		c.Trade.RateQuotaPerMin = 20
 	}
 	if c.Trade.MaxOrdersPerPlayer <= 0 {
 		c.Trade.MaxOrdersPerPlayer = 200

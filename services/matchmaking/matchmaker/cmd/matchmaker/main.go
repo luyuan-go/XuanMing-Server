@@ -279,6 +279,13 @@ func main() {
 	if ctStore != nil {
 		uc.SetConfigTables(ctStore)
 	}
+	// 进场侧限流(anti-abuse §6 第 2/3/7/8 项):StartMatch 冷却 + 成局级冷却 +
+	// 容量耗尽静默窗 + no-show 退避执行。复用共享 rdb;背压非权威门,故障 fail-open。
+	uc.SetEntryLimiter(data.NewRedisEntryLimiter(rdb))
+	helper.Infow("msg", "entry_ratelimiter_ready",
+		"start_match_cooldown", cfg.Match.StartMatchCooldown.Std().String(),
+		"match_form_cooldown", cfg.Match.MatchFormCooldown.Std().String(),
+		"no_capacity_requeue_delay", cfg.Match.NoCapacityRequeueDelay.Std().String())
 
 	// 蜂窝扩容:按 cfg.CellRoute 装配确定性 region/cell 路由(off/static/etcd 统一口）。
 	// 单 Cell(mode 空）→ router=nil,行为不变;多 Cell → 两级撮合 + battle 放置感知 region。

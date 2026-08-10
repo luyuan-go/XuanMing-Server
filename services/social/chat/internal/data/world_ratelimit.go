@@ -14,15 +14,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/redis/go-redis/v9"
 )
 
 // worldCooldownKey returns "pandora:chat:world:cd:{playerID}"。
+// (历史 key,先于 pandora:rl:* 规范存在;保留原样避免滚动升级窗口双键并行,
+// 新增的非世界频道 key 一律走 redisx.RLKey 规范。)
 func worldCooldownKey(playerID uint64) string {
 	return fmt.Sprintf("pandora:chat:world:cd:%d", playerID)
 }
 
-// RedisWorldRateLimiter 是基于 go-redis 的 biz.WorldRateLimiter 实现。
+// RedisWorldRateLimiter 是基于 go-redis 的 biz.WorldRateLimiter + biz.ChannelRateLimiter
+// 实现(同一结构体,main 一次构造、两处注入)。
 type RedisWorldRateLimiter struct {
 	rdb redis.UniversalClient
 }
@@ -32,8 +36,15 @@ func NewRedisWorldRateLimiter(rdb redis.UniversalClient) *RedisWorldRateLimiter 
 	return &RedisWorldRateLimiter{rdb: rdb}
 }
 
-// AllowWorld 尝试占用 playerID 的世界频道冷却窗口。
-// SETNX 成功 → 本次允许并开启新窗口;key 已存在 → 冷却期内,拒绝。
+// AllowWorld 尝试占用 playerID 的世界频道冷却窗口(委托 pkg/redisx.Cooldown,
+// 2026-08-10 起与 hub 切线冷却共用同一原语,不再各写一份 SETNX)。
+// 注意 redisx 契约:Redis 故障返回 (true, err) —— biz 层本就按 err fail-open,语义不变。
 func (l *RedisWorldRateLimiter) AllowWorld(ctx context.Context, playerID uint64, cooldown time.Duration) (bool, error) {
-	return l.rdb.SetNX(ctx, worldCooldownKey(playerID), 1, cooldown).Result()
+	return redisx.Cooldown(ctx, l.rdb, worldCooldownKey(playerID), cooldown)
+}
+
+// AllowChannel 非世界频道(private/team/guild/group)按频道独立占窗
+// (anti-abuse §6 第 6 项;key = pandora:rl:chat:<channel>:<player_id>)。
+func (l *RedisWorldRateLimiter) AllowChannel(ctx context.Context, channel string, playerID uint64, cooldown time.Duration) (bool, error) {
+	return redisx.Cooldown(ctx, l.rdb, redisx.RLKey("chat", channel, playerID), cooldown)
 }

@@ -144,6 +144,12 @@ func main() {
 	// 7. 装配链
 	repo := data.NewRedisTradeRepo(rdb)
 	uc := biz.NewTradeUsecase(repo, ledger, audit, sf, cfg.Trade)
+	// 下单/撤单频率配额(anti-abuse §6 第 6 项):复用共享 rdb,窗口固定 1 分钟。
+	uc.SetRateQuota(&redisx.ActionQuota{
+		RDB: rdb, Domain: "trade",
+		Limit: int64(cfg.Trade.RateQuotaPerMin), Window: time.Minute,
+	})
+	helper.Infow("msg", "trade_rate_quota_ready", "per_min", cfg.Trade.RateQuotaPerMin)
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)

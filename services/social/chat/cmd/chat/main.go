@@ -164,10 +164,15 @@ func main() {
 	if cfg.Node.RedisClient.Host != "" {
 		rdb := redisx.NewClient(cfg.Node.RedisClient)
 		defer func() { _ = rdb.Close() }()
-		uc.SetWorldRateLimiter(data.NewRedisWorldRateLimiter(rdb))
-		helper.Infow("msg", "world_ratelimit_ready", "cooldown", cfg.Chat.WorldCooldown.Std().String())
+		limiter := data.NewRedisWorldRateLimiter(rdb)
+		uc.SetWorldRateLimiter(limiter)
+		// 非世界频道冷却(anti-abuse §6 第 6 项):同一 limiter 实例,按频道独立占窗。
+		uc.SetChannelRateLimiter(limiter)
+		helper.Infow("msg", "world_ratelimit_ready",
+			"cooldown", cfg.Chat.WorldCooldown.Std().String(),
+			"non_world_cooldown", cfg.Chat.NonWorldCooldown.Std().String())
 	} else {
-		helper.Warnw("msg", "world_ratelimit_disabled", "hint", "node.redis_client.host empty, world channel unthrottled")
+		helper.Warnw("msg", "world_ratelimit_disabled", "hint", "node.redis_client.host empty, all channels unthrottled")
 	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)

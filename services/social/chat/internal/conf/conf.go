@@ -43,6 +43,13 @@ type ChatConf struct {
 	// group,单 Pod 自限无效)。3s 取自常见世界频道口径,待实测复核。
 	WorldCooldown config.Duration `yaml:"world_cooldown,omitempty" json:"world_cooldown,omitempty"`
 
+	// NonWorldCooldown 非世界频道(私聊/队伍/公会/群聊)单玩家发送冷却
+	// (默认 500ms;0 用默认,负值显式关闭)。anti-abuse §4.2/§6 第 6 项:这四路无广播
+	// 扇出,冷却远松于世界频道,主要挡 D 类存储膨胀(chat_private_messages 是登记在册的
+	// 只增表)与推送刷量。500ms 低于人类打字节奏,正常玩家无感;待实测复核。
+	// key 按频道独立(pandora:rl:chat:<channel>:<pid>),队聊不占私聊的窗。
+	NonWorldCooldown config.Duration `yaml:"non_world_cooldown,omitempty" json:"non_world_cooldown,omitempty"`
+
 	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
 
 	// HistoryRetentionDays 私聊历史(chat_private_messages)保留天数(默认 90)。
@@ -91,6 +98,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Chat.WorldCooldown <= 0 {
 		c.Chat.WorldCooldown = config.Duration(3 * time.Second)
+	}
+	if c.Chat.NonWorldCooldown == 0 {
+		c.Chat.NonWorldCooldown = config.Duration(500 * time.Millisecond)
 	}
 	if c.Chat.HistoryRetentionDays <= 0 {
 		c.Chat.HistoryRetentionDays = 90

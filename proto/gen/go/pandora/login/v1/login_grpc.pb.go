@@ -35,6 +35,7 @@ const (
 	LoginService_Login_FullMethodName            = "/pandora.login.v1.LoginService/Login"
 	LoginService_Logout_FullMethodName           = "/pandora.login.v1.LoginService/Logout"
 	LoginService_IssueDSTicket_FullMethodName    = "/pandora.login.v1.LoginService/IssueDSTicket"
+	LoginService_GetRegisterNo_FullMethodName    = "/pandora.login.v1.LoginService/GetRegisterNo"
 	LoginService_SelectRole_FullMethodName       = "/pandora.login.v1.LoginService/SelectRole"
 	LoginService_VerifyDSTicket_FullMethodName   = "/pandora.login.v1.LoginService/VerifyDSTicket"
 	LoginService_GetResumeContext_FullMethodName = "/pandora.login.v1.LoginService/GetResumeContext"
@@ -51,6 +52,17 @@ type LoginServiceClient interface {
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	// IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据
 	IssueDSTicket(ctx context.Context, in *IssueDSTicketRequest, opts ...grpc.CallOption) (*IssueDSTicketResponse, error)
+	// GetRegisterNo 立即完成型,查本人注册编号(展示专用,2026-08-10)。
+	//
+	// 为什么需要它:编号由 login 补号任务**异步**分配(register-no-and-login-surge.md §3),
+	// 而本项目「首登即注册」——注册与登录是同一个请求,登录响应里的 register_no 必然是 0。
+	// 若只靠 Login 下发,新玩家整个首次会话都只能看到「生成中」(编号约 15s 后才落库,
+	// 客户端却已无处可取)。本 RPC 让客户端在拿到 0 时补拉,是异步生成的标准配套。
+	//
+	// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含
+	// player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
+	// 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
+	GetRegisterNo(ctx context.Context, in *GetRegisterNoRequest, opts ...grpc.CallOption) (*GetRegisterNoResponse, error)
 	// SelectRole 立即完成型,选角(2026-07-08)。
 	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
 	//
@@ -107,6 +119,16 @@ func (c *loginServiceClient) IssueDSTicket(ctx context.Context, in *IssueDSTicke
 	return out, nil
 }
 
+func (c *loginServiceClient) GetRegisterNo(ctx context.Context, in *GetRegisterNoRequest, opts ...grpc.CallOption) (*GetRegisterNoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRegisterNoResponse)
+	err := c.cc.Invoke(ctx, LoginService_GetRegisterNo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *loginServiceClient) SelectRole(ctx context.Context, in *SelectRoleRequest, opts ...grpc.CallOption) (*SelectRoleResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SelectRoleResponse)
@@ -148,6 +170,17 @@ type LoginServiceServer interface {
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	// IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据
 	IssueDSTicket(context.Context, *IssueDSTicketRequest) (*IssueDSTicketResponse, error)
+	// GetRegisterNo 立即完成型,查本人注册编号(展示专用,2026-08-10)。
+	//
+	// 为什么需要它:编号由 login 补号任务**异步**分配(register-no-and-login-surge.md §3),
+	// 而本项目「首登即注册」——注册与登录是同一个请求,登录响应里的 register_no 必然是 0。
+	// 若只靠 Login 下发,新玩家整个首次会话都只能看到「生成中」(编号约 15s 后才落库,
+	// 客户端却已无处可取)。本 RPC 让客户端在拿到 0 时补拉,是异步生成的标准配套。
+	//
+	// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含
+	// player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
+	// 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
+	GetRegisterNo(context.Context, *GetRegisterNoRequest) (*GetRegisterNoResponse, error)
 	// SelectRole 立即完成型,选角(2026-07-08)。
 	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
 	//
@@ -181,6 +214,9 @@ func (UnimplementedLoginServiceServer) Logout(context.Context, *LogoutRequest) (
 }
 func (UnimplementedLoginServiceServer) IssueDSTicket(context.Context, *IssueDSTicketRequest) (*IssueDSTicketResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IssueDSTicket not implemented")
+}
+func (UnimplementedLoginServiceServer) GetRegisterNo(context.Context, *GetRegisterNoRequest) (*GetRegisterNoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRegisterNo not implemented")
 }
 func (UnimplementedLoginServiceServer) SelectRole(context.Context, *SelectRoleRequest) (*SelectRoleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SelectRole not implemented")
@@ -265,6 +301,24 @@ func _LoginService_IssueDSTicket_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LoginService_GetRegisterNo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRegisterNoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LoginServiceServer).GetRegisterNo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LoginService_GetRegisterNo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LoginServiceServer).GetRegisterNo(ctx, req.(*GetRegisterNoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LoginService_SelectRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SelectRoleRequest)
 	if err := dec(in); err != nil {
@@ -337,6 +391,10 @@ var LoginService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IssueDSTicket",
 			Handler:    _LoginService_IssueDSTicket_Handler,
+		},
+		{
+			MethodName: "GetRegisterNo",
+			Handler:    _LoginService_GetRegisterNo_Handler,
 		},
 		{
 			MethodName: "SelectRole",

@@ -353,6 +353,14 @@ func main() {
 	uc := biz.NewAllocatorUsecase(repo, allocator, cfg.Allocator)
 	lifecycleRequired := cfg.RequiresReliableLifecyclePublication()
 	uc.SetLifecyclePusherRequired(lifecycleRequired)
+	// no-show 记账 → 进入侧退避(anti-abuse §6 第 8 项):空场判弃 reason=no_show 时
+	// 对 roster 记账并布退避窗,matchmaker StartMatch 读取执行。共享 rdb;fail-open。
+	uc.SetNoShowRecorder(data.NewRedisNoShowRecorder(rdb))
+	helper.Infow("msg", "noshow_recorder_ready",
+		"ledger_window", cfg.Allocator.NoShowLedgerWindow.Std().String(),
+		"penalty_base", cfg.Allocator.NoShowPenaltyBase.Std().String(),
+		"penalty_cap", cfg.Allocator.NoShowPenaltyCap.Std().String(),
+		"penalty_free", cfg.Allocator.NoShowPenaltyFree)
 
 	// owner 权威实例租约双写(owner-authority.md migrate ⑥):owner_addr 空 = 不启用。
 	// 弱/强依赖语义见 conf.OwnerLeaseRequired 注释。

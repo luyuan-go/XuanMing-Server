@@ -796,8 +796,17 @@ func (r *RedisMatchRepo) CreateMatch(ctx context.Context, match *matchv1.MatchSt
 	// FOUND/CONFIRM/ALLOCATING/READY are authoritative business states. Their
 	// lifetime cannot be encoded by Redis TTL: explicit FAILED/ReleaseMatch owns
 	// terminal cleanup.
-	if err := r.rdb.Set(ctx, matchKey(match.MatchId), payload, 0).Err(); err != nil {
+	// SETNX(2026-08-10,anti-abuse §6 第 7 项):match_id 一律新雪花,权威 match 记录
+	// 绝不允许被同 ID 后来者覆盖——旧「无 NX 的 SET」在 solo 复用 ticket_id 做 match_id
+	// 的年代会静默清掉既有 match(decision-revisit-allocating-bounded-terminal.md §2.3
+	// requeue 风暴的放大器)。冲突 = ID 生成/复用 bug,fail-fast 交上游按错误处理
+	// (票据未动仍在队列,下轮换新 ID 重试)。
+	ok, err := r.rdb.SetNX(ctx, matchKey(match.MatchId), payload, 0).Result()
+	if err != nil {
 		return err
+	}
+	if !ok {
+		return errcode.New(errcode.ErrAlreadyExists, "match %d already exists", match.MatchId)
 	}
 	// ZADD 幂等,先有界重试吸收 Redis 瞬时抖动。canonical match 已持久化后绝不能
 	// 因派生 active 索引失败而删除；全-master reconciler 会重建索引。

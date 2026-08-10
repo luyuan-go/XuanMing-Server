@@ -144,6 +144,9 @@ type AllocatorUsecase struct {
 	// 当作已恢复并 Expire 掉 Battle fence。
 	lifecycleRequired bool
 
+	// noShowRecorder no-show 记账 → 进入侧退避(anti-abuse §6 第 8 项)。可为 nil(不记罚)。
+	noShowRecorder NoShowRecorder
+
 	// ownerLease / ownerLeaseRequired:owner 权威实例租约双写(owner-authority.md
 	// migrate ⑥;nil = 未启用;required 语义见 biz/owner_lease.go renewOwnerLeaseGate)。
 	ownerLease         OwnerLeaseRenewer
@@ -246,6 +249,18 @@ func (u *AllocatorUsecase) ValidateLifecyclePusherReady() error {
 
 // SetLocationRefresher 注入 BATTLE 位置续期器(main 在 locator_addr 已配时调用,弱依赖)。
 func (u *AllocatorUsecase) SetLocationRefresher(r LocationRefresher) { u.locator = r }
+
+// NoShowRecorder no-show 记账 → 进入侧退避的写者(实现:data.RedisNoShowRecorder)。
+// 背压非权威门:错误只 Warn,绝不阻断判弃收尾(anti-abuse §2 铁律)。
+type NoShowRecorder interface {
+	// RecordNoShow 记一次 no-show,返回窗口内累计次数(含本次)。
+	RecordNoShow(ctx context.Context, playerID uint64, window time.Duration) (int64, error)
+	// ArmPenalty 布设进入侧退避窗(matchmaker StartMatch 读取执行)。
+	ArmPenalty(ctx context.Context, playerID uint64, d time.Duration) error
+}
+
+// SetNoShowRecorder 注入 no-show 记罚器(可选;不注入 = 不记罚,dev 联调兼容)。
+func (u *AllocatorUsecase) SetNoShowRecorder(r NoShowRecorder) { u.noShowRecorder = r }
 
 // SetReleaseTrackPolicy 在启动期注入 match 级确定性 cohort 策略。
 func (u *AllocatorUsecase) SetReleaseTrackPolicy(p releasetrack.Policy) { u.releasePolicy = p }
@@ -2403,6 +2418,56 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 	return &HeartbeatResult{Command: commandNone}, nil
 }
 
+// recordNoShowPenalties 对 no-show 判弃的 roster 全员记账,并按温和档指数退避布罚:
+// 记账窗口(默认 10min)内首 NoShowPenaltyFree(默认 1)次免罚,之后 base×2^k 封顶 cap
+// (默认 30s→60s→120s→240s→5min)。全程 fail-open:任何 Redis 错误只 Warn,
+// 绝不阻断判弃收尾(记罚是背压,判弃回收才是正确性)。
+// 惩罚的执行点在 matchmaker StartMatch(读 noshowcd 键拒绝 + 可见倒计时)。
+func (u *AllocatorUsecase) recordNoShowPenalties(ctx context.Context, matchID uint64, playerIDs []uint64) {
+	if u.noShowRecorder == nil {
+		return
+	}
+	window := u.cfg.NoShowLedgerWindow.Std()
+	base := u.cfg.NoShowPenaltyBase.Std()
+	if window <= 0 || base <= 0 {
+		return
+	}
+	penaltyCap := u.cfg.NoShowPenaltyCap.Std()
+	free := int64(u.cfg.NoShowPenaltyFree)
+	if free < 0 {
+		free = 0 // 负值 = 严格档:首次即罚(conf 注释契约)
+	}
+	for _, pid := range playerIDs {
+		count, err := u.noShowRecorder.RecordNoShow(ctx, pid, window)
+		if err != nil {
+			plog.With(ctx).Warnw("msg", "noshow_ledger_record_failed",
+				"match_id", matchID, "player_id", pid, "err", err)
+			continue
+		}
+		over := count - free
+		if over <= 0 {
+			continue // 免罚额度内(偶发一次不惩罚,温和档核心)
+		}
+		// base << (over-1),指数移位钳到 62 位内防溢出;cap 兜底。
+		shift := over - 1
+		if shift > 8 {
+			shift = 8 // 30s<<8 = 128min,远超任何合理 cap,再大没有意义
+		}
+		penalty := base << shift
+		if penaltyCap > 0 && penalty > penaltyCap {
+			penalty = penaltyCap
+		}
+		if err := u.noShowRecorder.ArmPenalty(ctx, pid, penalty); err != nil {
+			plog.With(ctx).Warnw("msg", "noshow_penalty_arm_failed",
+				"match_id", matchID, "player_id", pid, "err", err)
+			continue
+		}
+		// 拒绝与惩罚走日志定位玩家(§4.4:player_id 绝不能进 metrics label)。
+		plog.With(ctx).Warnw("msg", "noshow_penalty_armed",
+			"match_id", matchID, "player_id", pid, "window_count", count, "penalty", penalty.String())
+	}
+}
+
 // finishEmptyAbandon 完成空场超时判弃的收尾(abandoned 已在心跳 CAS 内写入镜像):
 // 回收 pod + 投递 ds.lifecycle{ABANDONED} 补偿事件 + 移出 active,并令 DS 停机。
 //
@@ -2428,6 +2493,12 @@ func (u *AllocatorUsecase) finishEmptyAbandon(
 	}
 	plog.With(ctx).Warnw("msg", "battle_abandoned_empty_timeout",
 		"match_id", matchID, "pod", podName, "reason", reason, "empty_timeout", timeout.String())
+	if noShow {
+		// no-show 记账 → 进入侧退避(§6 第 8 项)。放在判弃 CAS 已提交之后的收口点:
+		// FirstAbandon/emptyAbandoned 保证每局至多进入一次,天然不重复记账。
+		// 只罚 no_show——all_disconnected 是「打过但掉线」,可能是网络问题,不记。
+		u.recordNoShowPenalties(ctx, matchID, playerIDs)
+	}
 	var expected *data.AuthoritativeGameServerAllocation
 	if u.modelB {
 		fence := data.BattleExpectedInstance{

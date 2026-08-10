@@ -181,6 +181,33 @@ pandora:<domain>:<entity>:<id>[:<field>]
 
 `<board>` = `<board_type>:<scope>:<scope_id>:<period>`(period 空用 `-`)。hashtag `{<board>}` 把同一榜的 z/t/m 锁到同一 Cluster slot,SubmitScore 的 Lua 原子碰三 key 不触发 CROSSSLOT。临时榜(副本局内 / 活动)靠 TTL 自动回收,实时排名权威在 Redis,MySQL 只兜结算。
 
+#### RateLimit(per-player 限流,anti-abuse-scene-entry.md §4.2,2026-08-10)
+
+统一规范 `pandora:rl:<域>:<动作>:<主体id>`(动作段是本命名空间的刻意例外,豁免 §3.1
+「不准用动词」——限流键的语义主体就是动作本身;经 `pkg/redisx.RLKey` 构造,不准手拼)。
+全部 PX 自过期、无后台清理;**背压非权威门**:判定 error 一律 fail-open。
+
+| Key | 类型 | TTL | 用途 |
+|---|---|---|---|
+| `pandora:rl:match:start:<player_id>` | string(NX PX) | `start_match_cooldown` 3s | StartMatch per-队长冷却(matchmaker) |
+| `pandora:rl:match:startteam:<team_id>` | string(NX PX) | 同上 | StartMatch per-队伍冷却 |
+| `pandora:rl:match:form:<ticket_id>` | string(PX) | `match_form_cooldown` 5s / 容量耗尽 `no_capacity_requeue_delay` 10s | 成局级冷却(压 requeue 风暴与满载空转) |
+| `pandora:rl:match:noshow:<player_id>` | string(INCR PX) | `no_show_ledger_window` 10m | no-show 记账计数(**写者 ds_allocator**) |
+| `pandora:rl:match:noshowcd:<player_id>` | string(PX) | 退避档位 30s~5m | no-show 进入侧退避(写者 ds_allocator,**读者 matchmaker**) |
+| `pandora:rl:login:failacct:<sha256_16>` | string(INCR PX) | `login_fail_window` 15m | 登录凭据失败计数(账号维度,键为账号 sha256 前 16 hex) |
+| `pandora:rl:login:failip:<ip>` | string(INCR PX) | 同上 | 登录凭据失败计数(IP 维度,IP 来自 Envoy 受信头) |
+| `pandora:rl:login:lockacct:<sha256_16>` | string(PX) | `login_fail_lock` 5m | 登录失败锁(账号) |
+| `pandora:rl:login:lockip:<ip>` | string(PX) | 同上 | 登录失败锁(IP) |
+| `pandora:rl:chat:<channel>:<player_id>` | string(NX PX) | `non_world_cooldown` 500ms | 非世界频道冷却(channel ∈ private/team/guild/group;世界频道沿用历史键 `pandora:chat:world:cd:*`) |
+| `pandora:rl:team:apply:<player_id>` / `pandora:rl:team:invite:<player_id>` | string(INCR PX) | 1m 窗口,`rate_quota_per_min` 12 | 入队申请 / 邀请频率配额 |
+| `pandora:rl:friend:request:<player_id>` | string(INCR PX) | 1m 窗口,`rate_quota_per_min` 10 | 好友申请频率配额 |
+| `pandora:rl:guild:apply:<player_id>` | string(INCR PX) | 1m 窗口,`rate_quota_per_min` 10 | 入会申请频率配额 |
+| `pandora:rl:trade:order:<player_id>` / `pandora:rl:trade:cancel:<player_id>` | string(INCR PX) | 1m 窗口,`rate_quota_per_min` 20 | 交易下单 / 撤单频率配额 |
+| `pandora:rl:auction:order:<player_id>` / `pandora:rl:auction:cancel:<player_id>` | string(INCR PX) | 1m 窗口,`rate_quota_per_min` 20 | 拍卖挂单·出价 / 撤单频率配额 |
+
+另:hub 切线冷却沿用历史键 `pandora:hub:transfer_cd:<player_id>`(先于本规范存在,
+滚动升级不换键;新增限流点一律走 `pandora:rl:*`)。
+
 #### Lock / Cache
 | Key | 类型 | TTL | 用途 |
 |---|---|---|---|

@@ -96,6 +96,9 @@ type TeamUsecase struct {
 	// matchmaker_addr / 骨架联调)→ 不联动,行为与历史一致。nil-safe。
 	matchCanceler MatchCanceler
 
+	// rateQuota 申请/邀请频率配额(anti-abuse §6 第 6 项)。可为 nil(不限)。
+	rateQuota ActionRateQuota
+
 	// matchCommitment 是“入队闸门”:队伍已提交对局时拒绝新人进来。可为 nil(未配
 	// matchmaker_addr / 骨架联调)→ 跳过闸门;那种部署下根本没有匹配链路,不存在
 	// 被对局占住的队伍,与 matchCanceler 的弱依赖口径一致。nil-safe。
@@ -129,6 +132,39 @@ func NewTeamUsecase(repo data.TeamRepo, pusher TeamEventPusher, cfg conf.TeamCon
 // battle_result / friend / chat / trade / dialogue / inventory / locator / push 一致)。Router 内部读路径无锁,并发安全。
 func (u *TeamUsecase) SetCellRouter(r *cellroute.Router) {
 	u.router = r
+}
+
+// ActionRateQuota 申请/邀请的 per-player 频率配额(anti-abuse §6 第 6 项;
+// 实现 pkg/redisx.ActionQuota)。总量闸(§9.18 pending 上限)只限「同时挂多少」,
+// 挡不住「加满 → 全撤 → 再加满」的写放大循环,频率配额补这一维。
+// 背压非权威门:判定 error 由调用方 fail-open 放行。
+type ActionRateQuota interface {
+	Allow(ctx context.Context, action string, subject uint64) (bool, error)
+}
+
+// SetRateQuota 注入频率配额(可选;不注入 = 不限,dev 联调兼容)。
+func (u *TeamUsecase) SetRateQuota(q ActionRateQuota) {
+	u.rateQuota = q
+}
+
+// allowAction 频率配额门:窗内超额返回 ErrRateLimited(先于一切副作用);
+// quota 未注入 / 判定失败(Redis 抖动)一律放行(fail-open,anti-abuse §2 铁律)。
+func (u *TeamUsecase) allowAction(ctx context.Context, action string, playerID uint64) error {
+	if u.rateQuota == nil {
+		return nil
+	}
+	ok, err := u.rateQuota.Allow(ctx, action, playerID)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_rate_quota_check_failed",
+			"action", action, "player_id", playerID, "err", err)
+		return nil
+	}
+	if !ok {
+		plog.With(ctx).Warnw("msg", "team_rate_quota_rejected",
+			"action", action, "player_id", playerID)
+		return errcode.New(errcode.ErrRateLimited, "team %s rate limited, retry later", action)
+	}
+	return nil
 }
 
 // SetMatchCanceler 注入“离队/踢人 → 撤销 matchmaker 匹配票据”联动。
@@ -261,6 +297,10 @@ func (u *TeamUsecase) CreateTeam(ctx context.Context, teamID, playerID uint64) (
 
 // Invite 邀请目标玩家加入队伍。inviterID 必须在该队伍中。
 func (u *TeamUsecase) Invite(ctx context.Context, inviteID, teamID, inviterID, targetPlayerID uint64) (*teamv1.TeamStorageRecord, error) {
+	// 频率配额(anti-abuse §6 第 6 项):按发起方计,先于一切读写。
+	if err := u.allowAction(ctx, "invite", inviterID); err != nil {
+		return nil, err
+	}
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
 		return nil, err
@@ -955,6 +995,10 @@ func (u *TeamUsecase) ListOpenTeams(ctx context.Context, mapID uint32, limit int
 // approval 路径的上限校验与占位在 data 层 Lua 内原子完成,无 TOCTOU;重复申请同一队伍
 // 幂等(只刷新自己那条的过期时间,不再占新名额)。
 func (u *TeamUsecase) ApplyToTeam(ctx context.Context, teamID, applicantID uint64) (bool, *teamv1.TeamStorageRecord, int64, error) {
+	// 频率配额(anti-abuse §6 第 6 项):按申请人计,先于一切读写。
+	if err := u.allowAction(ctx, "apply", applicantID); err != nil {
+		return false, nil, 0, err
+	}
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
 		return false, nil, 0, err

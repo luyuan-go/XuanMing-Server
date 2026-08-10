@@ -41,6 +41,9 @@ type GuildUsecase struct {
 	cfg      conf.GuildConf
 	cacheTTL time.Duration
 
+	// rateQuota 入会申请频率配额(anti-abuse §6 第 6 项)。可为 nil(不限)。
+	rateQuota ActionRateQuota
+
 	// 缓存降级日志限流(模式 C):GetGuild / GetMyGuild 是「全服共享热 key」的高 QPS 只读
 	// 入口,Redis 一抖就按请求量刷屏,且一次请求可能叠 get + 回填 set 两条。缓存是显式弱
 	// 依赖(失败只掉命中率,权威读走 MySQL),但仍是 Redis 健康度的信号 → 不删、限流。
@@ -56,6 +59,37 @@ const guildCacheLogWindowMs = 5000
 // NewGuildUsecase 构造。cache / pusher 均允许为 nil(弱依赖未配置时降级)。
 func NewGuildUsecase(repo data.GuildRepo, cache data.GuildCache, pusher GuildEventPusher, cfg conf.GuildConf) *GuildUsecase {
 	return &GuildUsecase{repo: repo, cache: cache, pusher: pusher, cfg: cfg, cacheTTL: cfg.CacheTTL.Std()}
+}
+
+// ActionRateQuota 申请类写入的 per-player 频率配额(anti-abuse §6 第 6 项;
+// 实现 pkg/redisx.ActionQuota)。总量闸(每公会 pending 200)只限「同时挂多少」,
+// 频率配额补「刷多快」。背压非权威门:判定 error 由调用方 fail-open 放行。
+type ActionRateQuota interface {
+	Allow(ctx context.Context, action string, subject uint64) (bool, error)
+}
+
+// SetRateQuota 注入频率配额(可选;不注入 = 不限,dev 无 Redis 联调兼容)。
+func (u *GuildUsecase) SetRateQuota(q ActionRateQuota) {
+	u.rateQuota = q
+}
+
+// allowAction 频率配额门:窗内超额返回 ErrRateLimited(先于一切副作用);fail-open。
+func (u *GuildUsecase) allowAction(ctx context.Context, action string, playerID uint64) error {
+	if u.rateQuota == nil {
+		return nil
+	}
+	ok, err := u.rateQuota.Allow(ctx, action, playerID)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "guild_rate_quota_check_failed",
+			"action", action, "player_id", playerID, "err", err)
+		return nil
+	}
+	if !ok {
+		plog.With(ctx).Warnw("msg", "guild_rate_quota_rejected",
+			"action", action, "player_id", playerID)
+		return errcode.New(errcode.ErrRateLimited, "guild %s rate limited, retry later", action)
+	}
+	return nil
 }
 
 // CreateGuild 创建公会,创建者成为会长。newGuildID 由 service 用 snowflake 预生成。
@@ -81,6 +115,10 @@ func (u *GuildUsecase) CreateGuild(ctx context.Context, playerID uint64, name st
 func (u *GuildUsecase) ApplyJoin(ctx context.Context, playerID, guildID, newRequestID uint64) (uint64, error) {
 	if guildID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "guild_id required")
+	}
+	// 频率配额(anti-abuse §6 第 6 项):按申请人计,先于一切读写。
+	if err := u.allowAction(ctx, "apply", playerID); err != nil {
+		return 0, err
 	}
 	// 申请人不能已在任何公会(单归属)。
 	if m, ok, err := u.repo.GetMember(ctx, playerID); err != nil {

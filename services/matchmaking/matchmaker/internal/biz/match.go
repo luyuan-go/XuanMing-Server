@@ -171,6 +171,10 @@ type MatchUsecase struct {
 	// 本结构每次经 Tables() 取当前批次,天然读到热更后的表。
 	tables *configtable.Store
 
+	// entryLimiter 进场侧限流(anti-abuse §6 第 2/3/7/8 项)。可为 nil(dev 无 Redis /
+	// 联调不限流,与 chat worldLimiter 同型弱依赖);nil-safe,所有判定 error fail-open。
+	entryLimiter EntryRateLimiter
+
 	// lastLivenessSweep 是队列在线扫除(livenessSweepOnce)的上次执行时刻。
 	// 只在 RunMatchLoop 单 goroutine 里读写,无需加锁。
 	lastLivenessSweep  time.Time
@@ -221,6 +225,29 @@ func (u *MatchUsecase) SetRegionPolicy(p RegionMatchPolicy) {
 // 用 setter 而非构造参数,与 SetCellRouter 一致,避免未启用的调用点被迫改签名。
 func (u *MatchUsecase) SetConfigTables(s *configtable.Store) {
 	u.tables = s
+}
+
+// EntryRateLimiter 进场侧限流(实现:data.RedisEntryLimiter,委托 pkg/redisx 原语)。
+// 背压非权威门(anti-abuse §2 铁律):所有方法 error 时调用方 fail-open + Warn,
+// 一人一票 / 一人一 DS 的正确性仍由 durable operation、claim、locator BATTLE 门兜底。
+type EntryRateLimiter interface {
+	// TryStartCooldown 占用 StartMatch 的队长 + 队伍冷却窗(SETNX;false=窗内拒绝)。
+	TryStartCooldown(ctx context.Context, captainID, teamID uint64, window time.Duration) (bool, error)
+	// ClearStartCooldown 业务失败时释放冷却(先占坑→干活→失败释放,§9.20)。
+	ClearStartCooldown(ctx context.Context, captainID, teamID uint64) error
+	// TryFormCooldown 成局提交前占用票据成局冷却窗(首次零延迟)。
+	TryFormCooldown(ctx context.Context, ticketID uint64, window time.Duration) (bool, error)
+	// InFormCooldown 只读探测票据是否在成局冷却窗内(撮合组队路径)。
+	InFormCooldown(ctx context.Context, ticketID uint64) (bool, error)
+	// ArmFormCooldown 无条件布设成局冷却窗(容量耗尽退票的静默窗)。
+	ArmFormCooldown(ctx context.Context, ticketID uint64, window time.Duration) error
+	// NoShowPenaltyRemaining 读 no-show 进入侧退避剩余时长(写者 ds_allocator)。
+	NoShowPenaltyRemaining(ctx context.Context, playerID uint64) (time.Duration, error)
+}
+
+// SetEntryLimiter 注入进场侧限流器(可选;不注入 = 不限流,dev 无 Redis 联调兼容)。
+func (u *MatchUsecase) SetEntryLimiter(l EntryRateLimiter) {
+	u.entryLimiter = l
 }
 
 // validateMapID StartMatch 入口的 map_id 关卡表准入门(配置表未启用时放行,历史行为)。
@@ -550,8 +577,33 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 		}
 	}
 
+	// per-队长/per-队伍冷却(anti-abuse §6 第 2 项):挡外挂 RPC 速率的 StartMatch↔Cancel
+	// 循环。占窗在一切副作用之前;之后任何失败都释放冷却(见函数尾),玩家可立即重试。
+	// 背压非权威门:limiter 未注入 / 窗口 <=0 / Redis 故障均放行。
+	if !u.tryStartCooldown(ctx, captainID, teamID) {
+		return 0, errcode.New(errcode.ErrRateLimited,
+			"start match cooldown, retry in %s", u.cfg.StartMatchCooldown.Std())
+	}
+	id, err := u.startMatchAdmitted(ctx, ticketID, teamID, captainID, mapID)
+	if err != nil {
+		// 先占坑→干活→失败释放(hub transferToLineInner 同模板,§9.20):
+		// 冷却只约束成功受理的频率,业务失败不得让玩家白等一个冷却窗。
+		u.releaseStartCooldown(ctx, captainID, teamID)
+	}
+	return id, err
+}
+
+// startMatchAdmitted 是 StartMatch 过冷却门之后的主体(拆出以便失败路径统一释放冷却)。
+func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32) (uint64, error) {
 	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID, mapID)
 	if err != nil {
+		return 0, err
+	}
+
+	// no-show 进入侧退避执行点(anti-abuse §6 第 8 项,温和档):ds_allocator 在空场判弃
+	// reason=no_show 时对 roster 记罚(10min 窗内首次免罚,第 2 次起指数退避),这里只读执行。
+	// 只有 no_show 记罚——正常结算、断线重连、主动取消都不计,正常玩家无感。
+	if err := u.checkNoShowPenalty(ctx, members); err != nil {
 		return 0, err
 	}
 
@@ -590,6 +642,108 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 	plog.With(ctx).Debugw("msg", "match_start_accepted", "ticket_id", ticketID, "operation_id", op.OperationId, "team_id", teamID,
 		"captain_id", captainID, "members", len(members), "avg_mmr", avgMMR, "map_id", mapID)
 	return ticketID, nil
+}
+
+// tryStartCooldown 占用 StartMatch 冷却窗。false = 窗口内重复请求(拒绝)。
+// limiter 未注入 / 窗口 <=0 / Redis 故障均放行(背压非权威门,§2 铁律)。
+func (u *MatchUsecase) tryStartCooldown(ctx context.Context, captainID, teamID uint64) bool {
+	if u.entryLimiter == nil {
+		return true
+	}
+	window := u.cfg.StartMatchCooldown.Std()
+	if window <= 0 {
+		return true
+	}
+	ok, err := u.entryLimiter.TryStartCooldown(ctx, captainID, teamID, window)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "start_cooldown_check_failed",
+			"captain_id", captainID, "team_id", teamID, "err", err)
+		return true
+	}
+	if !ok {
+		// 拒绝走日志不走 metrics 定位到玩家(§4.4:player_id 绝不能做 label)。
+		plog.With(ctx).Warnw("msg", "start_cooldown_rejected",
+			"captain_id", captainID, "team_id", teamID, "window", window.String())
+	}
+	return ok
+}
+
+// releaseStartCooldown 释放 StartMatch 冷却窗(业务失败路径)。best-effort:释放失败仅
+// Warn——最坏后果是玩家多等一个冷却窗(秒级),TTL 自愈,不值得为它引入重试链。
+func (u *MatchUsecase) releaseStartCooldown(ctx context.Context, captainID, teamID uint64) {
+	if u.entryLimiter == nil || u.cfg.StartMatchCooldown.Std() <= 0 {
+		return
+	}
+	if err := u.entryLimiter.ClearStartCooldown(ctx, captainID, teamID); err != nil {
+		plog.With(ctx).Warnw("msg", "start_cooldown_release_failed",
+			"captain_id", captainID, "team_id", teamID, "err", err)
+	}
+}
+
+// checkNoShowPenalty 逐成员读 no-show 退避窗;任一成员在罚 → ErrRateLimited(带可见的
+// 剩余秒数,客户端按可重试展示倒计时,不静默卡住)。读失败整批 fail-open。
+func (u *MatchUsecase) checkNoShowPenalty(ctx context.Context, members []*matchv1.MatchMemberStorageRecord) error {
+	if u.entryLimiter == nil {
+		return nil
+	}
+	for _, m := range members {
+		remain, err := u.entryLimiter.NoShowPenaltyRemaining(ctx, m.GetPlayerId())
+		if err != nil {
+			plog.With(ctx).Warnw("msg", "noshow_penalty_check_failed",
+				"player_id", m.GetPlayerId(), "err", err)
+			return nil
+		}
+		if remain > 0 {
+			retrySec := int64((remain + time.Second - 1) / time.Second)
+			plog.With(ctx).Warnw("msg", "noshow_penalty_rejected",
+				"player_id", m.GetPlayerId(), "retry_after_sec", retrySec)
+			return errcode.New(errcode.ErrRateLimited,
+				"player %d no-show cooldown, retry after %ds", m.GetPlayerId(), retrySec)
+		}
+	}
+	return nil
+}
+
+// tryFormCooldown 成局提交前占用票据的成局冷却窗。窗内返回 ErrRateLimited(调用方按
+// 静默节流处理,票据留在队列等下轮)。limiter 未注入 / 窗口 <=0 / Redis 故障放行。
+func (u *MatchUsecase) tryFormCooldown(ctx context.Context, ticketID uint64) error {
+	if u.entryLimiter == nil {
+		return nil
+	}
+	window := u.cfg.MatchFormCooldown.Std()
+	if window <= 0 {
+		return nil
+	}
+	ok, err := u.entryLimiter.TryFormCooldown(ctx, ticketID, window)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "form_cooldown_check_failed", "ticket_id", ticketID, "err", err)
+		return nil
+	}
+	if !ok {
+		return errcode.New(errcode.ErrRateLimited, "ticket %d in form cooldown", ticketID)
+	}
+	return nil
+}
+
+// anyTicketInFormCooldown 撮合组队路径的只读探测:组内任一票据仍在成局冷却窗内则
+// 本轮放弃该组合(票据留队,窗过自然重组)。探测失败 fail-open 按不在窗内。
+func (u *MatchUsecase) anyTicketInFormCooldown(ctx context.Context, sides [][]*matchv1.MatchTicketStorageRecord) bool {
+	if u.entryLimiter == nil || u.cfg.MatchFormCooldown.Std() <= 0 {
+		return false
+	}
+	for _, side := range sides {
+		for _, t := range side {
+			in, err := u.entryLimiter.InFormCooldown(ctx, t.GetTicketId())
+			if err != nil {
+				plog.With(ctx).Warnw("msg", "form_cooldown_probe_failed", "ticket_id", t.GetTicketId(), "err", err)
+				continue
+			}
+			if in {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // preflightStartClaims 提前拒绝明确的 live claim，并 CAS 清掉明确不存在票据的僵尸 claim。
@@ -1526,6 +1680,35 @@ func (u *MatchUsecase) onMatchFailed(ctx context.Context, m *matchv1.MatchStorag
 	return err
 }
 
+// onMatchNoCapacity 容量耗尽(allocator 确定性 5001/5002)的失败收尾(anti-abuse §6
+// 第 3 项)。与 onMatchFailed 的区别是玩家视角**不是失败**:票据自动退回队列、撮合循环
+// 稍后自动重试,客户端只看到带 estimated_wait_seconds 倒计时的 QUEUEING,不闪 FAILED。
+// 同时给每张票布设 no_capacity_requeue_delay 静默窗:满载期把「重成局→分配→再 5001」
+// 的空转节拍从 match_interval(2s)压到静默窗,免得撮合循环持续打爆 allocator。
+// match 记录本身仍 CAS 成 FAILED(内部终态,调用方已完成)——玩家可见语义与内部终态
+// 解耦,新一轮成局会换新 match_id(见 formSoloMatch/formMatch)。
+func (u *MatchUsecase) onMatchNoCapacity(ctx context.Context, m *matchv1.MatchStorageRecord) error {
+	delay := u.cfg.NoCapacityRequeueDelay.Std()
+	if delay <= 0 {
+		delay = u.cfg.MatchFormCooldown.Std() // 显式关闭时退化为普通成局节拍
+	}
+	if u.entryLimiter != nil && delay > 0 {
+		for _, tid := range m.GetTicketIds() {
+			if err := u.entryLimiter.ArmFormCooldown(ctx, tid, delay); err != nil {
+				plog.With(ctx).Warnw("msg", "no_capacity_form_cooldown_arm_failed",
+					"ticket_id", tid, "err", err)
+			}
+		}
+	}
+	waitSec := int32((delay + time.Second - 1) / time.Second)
+	err := u.failMatchOpts(ctx, m,
+		func(uint64, *matchv1.MatchTicketStorageRecord) bool { return false }, // 无人有过错,全票退队
+		failMatchPushOpts{skipFailedPush: true, requeueWaitSec: waitSec})
+	plog.With(ctx).Infow("msg", "match_no_capacity_requeued",
+		"match_id", m.GetMatchId(), "tickets", len(m.GetTicketIds()), "retry_after_sec", waitSec)
+	return err
+}
+
 // failMatch 是失败收尾的公共骨架(onMatchFailed / 成局前在线校验共用):
 // 推 FAILED 给全体 → 逐票按 isFaulty 判责(过错删除释放归属 / 无过错退回队列并续 claim
 // 补推 QUEUEING) → 移出 active → match 缩短 TTL。
@@ -1534,8 +1717,25 @@ func (u *MatchUsecase) onMatchFailed(ctx context.Context, m *matchv1.MatchStorag
 // 守卫:只处理仍归属本 match 的票据(match_id 相等),并发退回/归属他局的票据盲写
 // 会把他局在进票据抽回队列(违反不变量 §1),一律跳过;也使本函数可幂等重跑。
 func (u *MatchUsecase) failMatch(ctx context.Context, m *matchv1.MatchStorageRecord, isFaulty func(tid uint64, ticket *matchv1.MatchTicketStorageRecord) bool) error {
-	// 推 FAILED 给全体(含过错方)
-	u.pushProgress(ctx, m.MatchId, stageFailed, m.Members, "", m.MapId)
+	return u.failMatchOpts(ctx, m, isFaulty, failMatchPushOpts{})
+}
+
+// failMatchPushOpts 控制失败收尾的客户端可见形态(容量耗尽走「排队非失败」语义)。
+type failMatchPushOpts struct {
+	// skipFailedPush 不推 FAILED:容量耗尽时玩家没有做错任何事、票据会自动重排,
+	// 推 FAILED 会让客户端闪一次「匹配失败」UI(§6 第 3 项要修的硬失败体验)。
+	skipFailedPush bool
+	// requeueWaitSec >0 时,退队补推的 QUEUEING 携带 estimated_wait_seconds,
+	// 客户端据此显示「容量排队,约 N 秒后重试」倒计时(§9.23 WAIT 语义,复用既有字段
+	// 不加 proto)。
+	requeueWaitSec int32
+}
+
+func (u *MatchUsecase) failMatchOpts(ctx context.Context, m *matchv1.MatchStorageRecord, isFaulty func(tid uint64, ticket *matchv1.MatchTicketStorageRecord) bool, opts failMatchPushOpts) error {
+	// 推 FAILED 给全体(含过错方);容量耗尽路径除外(见 failMatchPushOpts)。
+	if !opts.skipFailedPush {
+		u.pushProgress(ctx, m.MatchId, stageFailed, m.Members, "", m.MapId)
+	}
 
 	var joined error
 	for _, tid := range m.TicketIds {
@@ -1590,7 +1790,12 @@ func (u *MatchUsecase) failMatch(ctx context.Context, m *matchv1.MatchStorageRec
 		}
 		// 补推 QUEUEING:客户端刚收到 FAILED,若不告知"你已自动回到队列",其再点匹配
 		// 会撞 ErrMatchAlreadyMatching(4002) 卡死在"匹配不了"。句柄仍是 ticket_id。
-		u.pushProgress(ctx, ticket.TicketId, stageQueueing, ticket.Members, "", ticket.MapId)
+		// 容量耗尽路径额外携带 estimated_wait_seconds(排队倒计时)。
+		if opts.requeueWaitSec > 0 {
+			u.pushQueueingWait(ctx, ticket, opts.requeueWaitSec)
+		} else {
+			u.pushProgress(ctx, ticket.TicketId, stageQueueing, ticket.Members, "", ticket.MapId)
+		}
 	}
 	if joined != nil {
 		return joined // active index remains; durable worker retries deterministic cleanup
@@ -1950,7 +2155,9 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 			if werr != nil {
 				return errors.Join(err, werr)
 			}
-			return errors.Join(err, u.onMatchFailed(ctx, failed, 0))
+			// 容量耗尽对玩家不是失败:静默窗 + QUEUEING(带倒计时)退队,不推 FAILED
+			// (anti-abuse §6 第 3 项)。返回值仍带 err 保留调用方的失败观测。
+			return errors.Join(err, u.onMatchNoCapacity(ctx, failed))
 		}
 		if allocation == nil || allocation.Address == "" || !allocation.Target.CompleteBattle() {
 			return errcode.New(errcode.ErrDSAllocationFailed, "allocator returned incomplete battle target for match %d", job.MatchId)
@@ -2835,7 +3042,12 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 			continue
 		}
 		if err := u.formSoloMatch(ctx, t); err != nil {
-			plog.With(ctx).Warnw("msg", "form_solo_match_failed", "ticket_id", t.TicketId, "err", err)
+			if errcode.As(err) == errcode.ErrRateLimited {
+				// 成局冷却窗内的静默节流:票据留队等下轮,不是异常。
+				plog.With(ctx).Debugw("msg", "form_solo_match_throttled", "ticket_id", t.TicketId)
+			} else {
+				plog.With(ctx).Warnw("msg", "form_solo_match_failed", "ticket_id", t.TicketId, "err", err)
+			}
 		}
 	}
 	if len(pending) == 0 {
@@ -2997,7 +3209,11 @@ func (u *MatchUsecase) greedyFormMatches(
 			continue // 跨 region 比例超上限等约束未过,放弃该组合
 		}
 		if err := u.formMatch(ctx, sides); err != nil {
-			plog.With(ctx).Warnw("msg", "form_match_failed", "err", err)
+			if errcode.As(err) == errcode.ErrRateLimited {
+				plog.With(ctx).Debugw("msg", "form_match_throttled")
+			} else {
+				plog.With(ctx).Warnw("msg", "form_match_failed", "err", err)
+			}
 			continue
 		}
 		for _, t := range group {
@@ -3017,9 +3233,19 @@ func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchT
 	if err := u.requireLocalGameMode(ticket.GetGameMode()); err != nil {
 		return err
 	}
-	// StartMatch 返回 ticket_id 作为客户端进度句柄。单人联调复用它做 match_id,
-	// 让轮询和 push 驱动的进战流程使用同一个 ID。
-	matchID := ticket.TicketId
+	// 成局级冷却(anti-abuse §6 第 7 项):首次成局 SETNX 占窗零延迟;退票重排队后的
+	// 重成局在窗内被压到冷却节拍,替代原「每 match_interval(2s)重成局」风暴
+	// (decision-revisit-allocating-bounded-terminal.md §2.3)。fail-open。
+	if err := u.tryFormCooldown(ctx, ticket.TicketId); err != nil {
+		return err
+	}
+	// 每次成局用新雪花 match_id,与 formMatch(撮合路径)同型。此前 solo 复用
+	// ticket_id 做 match_id:退票重排队不换 ticket_id ⇒ 同一 match_id 反复成局,
+	// 会撞 ds_allocator 侧保留 2h 的 uncertain/abandoned claim(同上决策文档 §2.3,
+	// 2026-08-10 拍板修复)。客户端句柄不变:QUEUEING 阶段句柄仍是 ticket_id,
+	// 成局后经 MATCHING/READY 推送与 GetMatchProgress 的票据→match 间接解析拿到
+	// match_id——撮合路径二者本就不同,客户端契约早已覆盖。
+	matchID := u.idGen.Generate()
 	now := time.Now().UnixMilli()
 
 	members := make([]*matchv1.MatchMemberStorageRecord, 0, len(ticket.Members))
@@ -3084,6 +3310,11 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTi
 				return err
 			}
 		}
+	}
+	// 成局级冷却探测(anti-abuse §6 第 7 项):容量耗尽退票布设的静默窗对撮合路径同样
+	// 生效,否则同一批票据每 tick 重新组局→分配→再失败,与 solo 是同一个风暴。
+	if u.anyTicketInFormCooldown(ctx, sides) {
+		return errcode.New(errcode.ErrRateLimited, "tickets in form cooldown")
 	}
 	matchID := u.idGen.Generate()
 	now := time.Now().UnixMilli()
@@ -3382,6 +3613,20 @@ func (u *MatchUsecase) pushProgress(ctx context.Context, matchID uint64, stage m
 	for _, m := range members {
 		prog := buildProgress(matchID, stage, members, dsAddr, "", mapID)
 		u.pushOneProgress(ctx, m.PlayerId, prog, now)
+	}
+}
+
+// pushQueueingWait 推带 estimated_wait_seconds 的 QUEUEING(容量耗尽静默窗,§6 第 3 项)。
+// 句柄仍是 ticket_id;复用 MatchProgress 既有字段,不加 proto(§9.21 加字段留给真实需求)。
+func (u *MatchUsecase) pushQueueingWait(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, waitSec int32) {
+	if u.pusher == nil || len(ticket.GetMembers()) == 0 {
+		return
+	}
+	now := time.Now().UnixMilli()
+	for _, m := range ticket.GetMembers() {
+		prog := buildProgress(ticket.GetTicketId(), stageQueueing, ticket.GetMembers(), "", "", ticket.GetMapId())
+		prog.EstimatedWaitSeconds = waitSec
+		u.pushOneProgress(ctx, m.GetPlayerId(), prog, now)
 	}
 }
 

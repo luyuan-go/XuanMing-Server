@@ -255,6 +255,18 @@ func main() {
 	// SetRole 的 MySQL 代际强制复核由 session_generation_enforce 分阶段激活(默认只 emit)。
 	loginUC.SetSessionGenerationRepo(sessionGenRepo)
 	loginUC.SetSessionGenerationEnforce(cfg.Login.SessionGenerationEnforce)
+	// 登录失败 Quota(anti-abuse §6 第 4 项):账号 + IP 双维度,只对凭据失败计数。
+	// Redis 未配(dev 无会话权威)时不启用——与会话仓储同一个弱依赖边界。
+	if rdb != nil {
+		loginUC.SetLoginRateLimiter(data.NewRedisLoginRateLimiter(
+			rdb, cfg.Login.LoginFailLimit, cfg.Login.LoginFailWindow.Std(), cfg.Login.LoginFailLock.Std()))
+		helper.Infow("msg", "login_fail_quota_ready",
+			"limit", cfg.Login.LoginFailLimit,
+			"window", cfg.Login.LoginFailWindow.Std().String(),
+			"lock", cfg.Login.LoginFailLock.Std().String())
+	} else {
+		helper.Warnw("msg", "login_fail_quota_disabled", "reason", "redis not configured")
+	}
 	// R9 复审 P1(开关依赖门禁):两个强制门都以「Redis 会话权威存在」为前提——
 	// enforce 的 SetRole 复核对象与 sjti 强制门的现行性判定都来自会话仓储。缺 Redis
 	// 时开关只会静默变形为"永不强制",安全开关必须 fail-fast 而不是装饰性存在。

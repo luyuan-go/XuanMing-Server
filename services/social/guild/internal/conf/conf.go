@@ -28,6 +28,11 @@ type GuildConf struct {
 	// 防公会申请列表被刷爆(客户端可写入的累积列表须有写入侧总量上限)。
 	MaxPendingRequestsPerGuild int `yaml:"max_pending_requests_per_guild,omitempty" json:"max_pending_requests_per_guild,omitempty"`
 
+	// RateQuotaPerMin 入会申请的 per-player 每分钟频率配额(anti-abuse §6 第 6 项;
+	// 默认 10;负值 = 关闭)。与 pending 总量闸正交,挡「申满 → 撤 → 再申」写放大循环。
+	// 窗口固定 1 分钟。
+	RateQuotaPerMin int `yaml:"rate_quota_per_min,omitempty" json:"rate_quota_per_min,omitempty"`
+
 	// MaxGroupsPerPlayer 单玩家可同时加入的临时群数量上限(默认 50,不变量 §9.18)。
 	// 建群 / AddMember 时在事务内校验目标玩家所在群数,超限回 ErrGroupJoinLimit,
 	// 防「我所在的群」列表无界堆积。
@@ -66,6 +71,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Guild.MaxGroupMembers <= 0 {
 		c.Guild.MaxGroupMembers = 50
+	}
+	if c.Guild.RateQuotaPerMin == 0 {
+		c.Guild.RateQuotaPerMin = 10
 	}
 	if c.Guild.MaxPendingRequestsPerGuild <= 0 {
 		c.Guild.MaxPendingRequestsPerGuild = 200

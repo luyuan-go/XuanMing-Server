@@ -413,6 +413,27 @@ type AllocatorConf struct {
 	// 上限保证 no-show 不会比普通空场还晚回收)。
 	NoShowBattleTimeout config.Duration `yaml:"no_show_battle_timeout,omitempty" json:"no_show_battle_timeout,omitempty"`
 
+	// ── no-show 记账 → 进入侧退避(anti-abuse §4.3③/§6 第 8 项,2026-08-10 拍板温和档)──
+	// 只有 reason=no_show 的空场判弃才记账(正常结算 / 断线重连 / 主动取消都不计);
+	// 记账在本服务(判弃权威),执行在 matchmaker StartMatch(读 pandora:rl:match:noshowcd)。
+	// 背压非权威门:Redis 故障只 Warn 不阻断判弃收尾。
+
+	// NoShowLedgerWindow 记账窗口(默认 10min;<=0 关闭整个记罚)。窗口内累计 no-show 次数,
+	// 决定退避档位;PX 自过期,无后台清理。
+	NoShowLedgerWindow config.Duration `yaml:"no_show_ledger_window,omitempty" json:"no_show_ledger_window,omitempty"`
+
+	// NoShowPenaltyBase 首个受罚档位的退避时长(默认 30s;<=0 关闭记罚)。
+	// 之后每多一次翻倍:30s→60s→120s→…,封顶 NoShowPenaltyCap。
+	NoShowPenaltyBase config.Duration `yaml:"no_show_penalty_base,omitempty" json:"no_show_penalty_base,omitempty"`
+
+	// NoShowPenaltyCap 退避封顶(默认 5min)。温和档取值:网络差偶发 no-show 的正常玩家
+	// 最多也就等 5 分钟,而占位刷子的有效频率被压到 12 次/小时/号。
+	NoShowPenaltyCap config.Duration `yaml:"no_show_penalty_cap,omitempty" json:"no_show_penalty_cap,omitempty"`
+
+	// NoShowPenaltyFree 记账窗口内的免罚次数(0 = 用默认 1,即首次免罚;负值 = 0 次免罚
+	// 「首次即罚」严格档)。温和档默认 1:偶发一次(客户端崩溃 / 网络抖动)不惩罚。
+	NoShowPenaltyFree int `yaml:"no_show_penalty_free,omitempty" json:"no_show_penalty_free,omitempty"`
+
 	// OrphanGsReclaimAfter 孤儿 Allocated GameServer(处于 Allocated 却无任何权威分配
 	// 记录引用)连续观察超过该时长后,由 sweep 的对账清扫按 UID+resourceVersion
 	// precondition 精确回收(biz/orphan_gameserver.go;2026-08-03)。
@@ -566,6 +587,18 @@ func (c *Config) Defaults() {
 	}
 	if c.Allocator.EmptyBattleTimeout == 0 {
 		c.Allocator.EmptyBattleTimeout = config.Duration(5 * time.Minute)
+	}
+	if c.Allocator.NoShowLedgerWindow == 0 {
+		c.Allocator.NoShowLedgerWindow = config.Duration(10 * time.Minute)
+	}
+	if c.Allocator.NoShowPenaltyBase == 0 {
+		c.Allocator.NoShowPenaltyBase = config.Duration(30 * time.Second)
+	}
+	if c.Allocator.NoShowPenaltyCap == 0 {
+		c.Allocator.NoShowPenaltyCap = config.Duration(5 * time.Minute)
+	}
+	if c.Allocator.NoShowPenaltyFree == 0 {
+		c.Allocator.NoShowPenaltyFree = 1
 	}
 	if c.Allocator.MockDSAddrHost == "" {
 		c.Allocator.MockDSAddrHost = "127.0.0.1"

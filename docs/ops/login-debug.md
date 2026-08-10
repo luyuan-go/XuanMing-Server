@@ -108,6 +108,37 @@ curl.exe -X POST "http://127.0.0.1:21001/v1/login" `
 
 ## 3. 账号数据
 
+### 3.1 先确认 login 真正连接的账号库
+
+本机可能同时运行 K8s MySQL、Docker MySQL 与 Docker TiDB。查账号或迁移前先核对**当前
+login 的生效配置**,不要凭端口猜数据库:
+
+| 运行方式 | 配置来源 | `pandora_account` DSN |
+|---|---|---|
+| K8s dev | 生成档 `run/cluster/etc/login.yaml` 经 `pandora-config` Secret 挂入 Pod | `mysql:3306` |
+| 宿主 dev | `services/account/login/etc/login-dev.yaml` | `127.0.0.1:3307`(Docker MySQL) |
+| 宿主 TiDB 显式档 | `services/account/login/etc/login-dev-tidb.yaml` | `127.0.0.1:4000`(Docker TiDB) |
+
+`*-dev-tidb.yaml` 是显式 opt-in;dev 默认不会因为本机 TiDB 正在监听 `4000` 就自动切过去。
+先看启动参数与生效配置,再在目标连接执行 `SELECT VERSION(), DATABASE()` 和列检查。例如当前
+K8s dev 档应查集群里的 MySQL:
+
+```powershell
+rg -n "dsn:|require_tidb:" run/cluster/etc/login.yaml `
+  services/account/login/etc/login-dev.yaml `
+  services/account/login/etc/login-dev-tidb.yaml
+
+kubectl -n pandora exec deploy/mysql -- `
+  mysql -upandora -ppandora_dev_pwd -D pandora_account -N `
+  -e "SELECT VERSION(), DATABASE(); SHOW COLUMNS FROM accounts LIKE 'register_no'; SELECT account, player_id, register_no FROM accounts WHERE account='test123';"
+```
+
+若在 `:4000` 的 TiDB 里看到“没有 `register_no` 列”,但运行中的 K8s login 实际连
+`mysql:3306`,这只是查错了并存数据库,不能据此判定迁移缺失。反过来要验证 TiDB 时,必须用
+`login-dev-tidb.yaml` 启 login,并把检查与集成测试 DSN 一起切到 TiDB。
+
+### 3.2 种子账号与数据检查
+
 开发配置会在 login 启动时确认 / 创建种子账号:
 
 - 账号:`test`

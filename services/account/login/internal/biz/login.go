@@ -118,6 +118,8 @@ type LoginUsecase struct {
 	roleRepo    data.PlayerRoleRepo // 选角权威化(2026-07-08):player_roles 仓储,可为 nil(降级无选角)
 	// ownerReleaser:owner 迁移登出释放(owner-authority.md migrate ⑤;弱依赖,nil=未启用)。
 	ownerReleaser OwnerReleaser
+	// loginLimiter 登录失败 Quota(anti-abuse §6 第 4 项;弱依赖,nil=不限)。
+	loginLimiter LoginRateLimiter
 	// ownerPlacement:§9.23 query-first 的 owner 权威查询器。**唯一路由权威**,不再有开关,
 	// 也不再有 locator-first 旧基线可回落;nil(owner_addr 未配)时进场按 WAIT 处理。
 	ownerPlacement OwnerPlacementQuerier
@@ -355,10 +357,22 @@ func waitLogin(base *LoginResult, reason loginv1.ResumeWaitReason) *LoginResult 
 func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceID string) (*LoginResult, error) {
 	h := plog.With(ctx)
 
+	// 登录失败 Quota(anti-abuse §6 第 4 项):锁窗内直接拒,连 bcrypt 都不算——
+	// 撞库/爆破在入口被吸收。fail-open:limiter 未注入 / Redis 故障放行。
+	clientIP := clientIPFrom(ctx)
+	if lerr := u.checkLoginFailLock(ctx, account, clientIP); lerr != nil {
+		return nil, lerr
+	}
+
 	playerID, expected, err := u.repo.FindByAccount(ctx, account)
 	if err != nil {
 		// 账号不存在:开发期“假注册” / 免密任一开关打开 → 首登自动注册(不阻断登录)。
 		if errcode.As(err) != errcode.ErrLoginAccountNotFound || !(u.devAutoRegister || u.devSkipPassword) {
+			// 只有「明确不存在」记凭据失败(账号枚举/撞库面);DB 故障绝不计——
+			// 否则故障风暴会把全服玩家锁死(§2 fail-open 方向)。
+			if errcode.As(err) == errcode.ErrLoginAccountNotFound {
+				u.recordLoginFailure(ctx, account, clientIP)
+			}
 			h.Debugw("msg", "login_account_not_found", "account", account)
 			return nil, err
 		}
@@ -373,6 +387,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		// 账号已存在 + 免密模式 → 跳过密码校验。
 		h.Warnw("msg", "login_dev_skip_password", "account", account, "player_id", playerID)
 	} else if verr := passwd.Verify(expected, passwordHash); verr != nil {
+		u.recordLoginFailure(ctx, account, clientIP)
 		h.Debugw("msg", "login_password_mismatch", "account", account, "player_id", playerID)
 		return nil, errcode.New(errcode.ErrLoginPasswordMismatch, "password mismatch")
 	}
@@ -1788,4 +1803,22 @@ func (u *LoginUsecase) RequireCurrentSessionJTI(ctx context.Context, playerID ui
 	}
 	// 非空 jti 复用统一现行性门，确保 SelectRole 与 IssueDSTicket 的顶号 fencing 语义一致。
 	return u.requireCurrentSession(ctx, playerID, jti)
+}
+
+// GetRegisterNo 查玩家注册编号(展示专用,register-no-and-login-surge.md §3)。
+//
+// 存在理由:编号由补号任务异步分配,而「首登即注册」使 Login 响应里的编号必然是 0;
+// 没有本查询,新玩家整个首次会话都停在「生成中」。客户端拿到 0 时补拉即可。
+//
+// 返回 0 不是错误,是「仍在补号窗口内」(约 15s = 5s 补号周期 + 10s 水位滞后)的正常态,
+// 与 repo 层「NULL / 行不存在 → 0」同一口径。查询失败才返回 error(客户端可重试)。
+//
+// 刻意不做会话现行性(sjti)复核:本 RPC 只读且只能读自己,零副作用、不发凭据、不改归属,
+// 顶号场景下旧设备读到自己的展示编号无任何安全含义。加 fencing 只会让「被顶号后界面
+// 显示异常」多一种表现,不增加任何保护(对比 SelectRole 必须复核——它签发 hub 票据)。
+func (u *LoginUsecase) GetRegisterNo(ctx context.Context, playerID uint64) (uint64, error) {
+	if playerID == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	return u.repo.GetRegisterNo(ctx, playerID)
 }

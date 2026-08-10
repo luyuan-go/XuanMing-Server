@@ -445,3 +445,78 @@ go run ./cmd/gmctl additem --match <matchID> --player <playerID> --config <真�
 - 未做故障注入验证真实断线玩家在重连窗内不被误判
 - 未实测「DS 报 ready → 客户端完成 Admission」P99 来复核 150s 默认值(该值目前是**有推导依据的保守初值**,不是实测值)
 - 未给出「单次进场占用 Pod·分钟」前后对比表
+
+---
+
+## §11 注册编号首次会话补拉交接(2026-08-10)
+
+### 11.1 服务端状态
+
+- 新增 `LoginService.GetRegisterNo`:空请求,玩家身份只取 JWT `sub` 经 Envoy 注入的
+  `x-pandora-player-id`;请求体不接受自报身份。
+- `code=OK, register_no=0` 是约 15s 补号窗口内的正常态;仓储查询错误返回非 OK,
+  客户端不得把错误覆盖成 0。服务端刻意不做 sjti 现行性复核,因为该接口只读、只能读自己、
+  零副作用且不签发凭据。
+- `deploy/envoy/envoy.yaml` 已加入 `/pandora.login.v1.LoginService/GetRegisterNo` exact JWT rule。
+  `jwt_authn.rules` 未命中的 path 默认放行但不注入玩家头,漏配会让接口一律未授权。
+- `register_no_counter` 保留 `MaxRows: 8`,取消 `MaxAvgRowBytes`:单行 InnoDB 表的
+  `information_schema` 平均行长受 16KiB 页分配影响,不代表两列约 9B 的逻辑载荷,此前会恒刷
+  `db_capacity_budget_exceeded actual=16384` 噪声。
+- 实现方报告 login `go build` / `go vet` / `go test ./... -count=1` 全绿;本次文档交接
+  **未独立复跑**。设计见 `docs/design/register-no-and-login-surge.md` §3.7,进度见
+  `PROGRESS.md` 2026-08-10 同日补充。
+
+### 11.2 当前快照与提交边界
+
+- 本轮新 RPC、Go pb、Envoy、业务实现和新测试仍在未暂存工作树;新文件
+  `services/account/login/internal/service/login_register_no_rpc_test.go` 尚未跟踪。
+- 当前旧 `[proto]` 提交 `bea78b83` 只加入 `LoginResponse.register_no=13`,**不包含**
+  `GetRegisterNoRequest/Response`。提交本次协议时标题仍须标 `[proto]`。
+- 工作树混有反滥用与其他并行改动,不能 `git add -A`;尤其 `envoy.yaml`、login biz/service、
+  `PROGRESS.md` 是共享文件,提交前按路径和 diff 确认主题。
+
+### 11.3 Codex 跨仓待办(按顺序)
+
+1. 先把服务端新 RPC 与对应 Go 生成物形成稳定 `[proto]` 提交。客户端生成脚本会拒绝脏的
+   服务端 `proto/`,不能在未提交快照上推进协议锁。
+2. 先处理客户端当前已修改、仍锁在 `bea78b83` 的 `Tool/Protobuf/ClientProto.lock.json`,
+   不得直接覆盖并行修改。边界干净后执行官方流程:
+
+   ```powershell
+   & 'F:\work\Pandora-Client-SVN\Tool\Protobuf\GenClientProto.ps1' `
+     -ServerRoot 'F:\work\XuanMing-Server' `
+     -BufPath 'C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Links\buf.exe' `
+     -ProtocPath 'C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe' `
+     -UpdateLock
+
+   & 'F:\work\Pandora-Client-SVN\Tool\Protobuf\GenClientProto.ps1' `
+     -ServerRoot 'F:\work\XuanMing-Server' `
+     -BufPath 'C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Links\buf.exe' `
+     -ProtocPath 'C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe' `
+     -VerifyOnly
+   ```
+
+   预计触及 login 的 `.pb.h/.pb.cc` 与协议锁,以实际 SVN diff 为准;脚本的
+   `Unreal build: not run` 必须如实保留。
+3. UE 增加 `/pandora.login.v1.LoginService/GetRegisterNo` 空请求(`bWithAuth=true`)与响应解码。
+   编号为 0 时几秒后单飞补拉,或接现有角色界面刷新按钮;拿到非 0 立即停止。业务/传输失败
+   不得写 0。迟到响应必须校验发起时的 `SessionGeneration + PlayerId`,登出、切号或界面销毁后
+   零副作用;不要复用 `SetSession` 更新编号,否则会无故推进会话世代。
+4. 至少验证:请求 path/空 body/Authorization、`OK+0`、非 0 停轮询、错误不伪装、切号迟到
+   回调、UE 客户端目标编译、真实 Envoy/JWT 新账号 E2E(“生成中”无需重登收敛为非 0)。
+
+### 11.4 部署与排障口径
+
+- 当前 K8s dev 生成档 `run/cluster/etc/login.yaml` 连接集群 `mysql:3306/pandora_account`,
+  不是本机 Docker TiDB `:4000`。宿主 `login-dev.yaml` 走 Docker MySQL `:3307`;
+  只有显式使用 `login-dev-tidb.yaml` 才走 TiDB `:4000`。
+- 查列或账号前先核对生效配置并执行 `SELECT VERSION(), DATABASE()`。实现方现场记录账号
+  `test123` 在实际 MySQL 中 `register_no=1`;该值是排障样本,不是本轮重新验证的运行态断言。
+- Envoy 源码 rule 已加,但仍需 `envoy --mode validate -c deploy/envoy/envoy.yaml`、重启/灌入
+  ConfigMap 与真实 JWT 请求验收;Go 全绿不能证明网关运行态生效。
+
+### 11.5 已知待复核边界
+
+`AccountRepo.GetRegisterNo` 当前把 `sql.ErrNoRows` 和 `register_no IS NULL` 都映射成
+`0,nil`。在“有效 JWT 对应账号行必然存在”的现有不变量下不影响正常路径;若账号行异常缺失,
+客户端仍会 `OK+0` 空等。未来允许删号或排查到缺行时,必须把 no-row 改为非 OK,不能继续冒充补号中。

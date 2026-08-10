@@ -21,6 +21,11 @@ type AuctionConf struct {
 	// MaxPrice 单价上限(默认 1_000_000_000)。防溢出 / 异常价。
 	MaxPrice int64 `yaml:"max_price,omitempty" json:"max_price,omitempty"`
 
+	// RateQuotaPerMin 挂单/出价/撤单的 per-player 每分钟频率配额(anti-abuse §6 第 6 项;
+	// 默认 20;负值 = 关闭)。与 MaxActiveOrdersPerPlayer 总量闸正交:总量限「同时挂多少」,
+	// 本值限「刷多快」,挡「下单-撤单」写放大循环。窗口固定 1 分钟。
+	RateQuotaPerMin int `yaml:"rate_quota_per_min,omitempty" json:"rate_quota_per_min,omitempty"`
+
 	// MaxActiveOrdersPerPlayer 单玩家 PENDING+OPEN+PARTIALLY_FILLED 订单硬上限(默认 200)。
 	// 跨 market/分片由 Redis Lua SCARD+SADD 原子预留。
 	MaxActiveOrdersPerPlayer int `yaml:"max_active_orders_per_player,omitempty" json:"max_active_orders_per_player,omitempty"`
@@ -120,6 +125,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Auction.MaxActiveOrdersPerPlayer <= 0 {
 		c.Auction.MaxActiveOrdersPerPlayer = 200
+	}
+	if c.Auction.RateQuotaPerMin == 0 {
+		c.Auction.RateQuotaPerMin = 20
 	}
 	if c.Auction.DefaultListLimit <= 0 {
 		c.Auction.DefaultListLimit = 50

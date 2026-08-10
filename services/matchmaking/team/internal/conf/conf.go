@@ -91,6 +91,12 @@ type TeamConf struct {
 	// 也按此值截断(写入侧硬上限已兜住总量,无需分页)。默认 10。
 	MaxApplicationsPerTeam int `yaml:"max_applications_per_team,omitempty" json:"max_applications_per_team,omitempty"`
 
+	// RateQuotaPerMin 申请/邀请的 per-player 每分钟频率配额(anti-abuse §6 第 6 项;
+	// 默认 12,即人均 5s 一次,远高于人类点按、远低于外挂速率;负值 = 关闭)。
+	// 与 §9.18 的 pending 总量上限正交:总量限「同时挂多少」,本值限「刷多快」,
+	// 专挡「加满 → 全撤 → 再加满」的 D 类写放大循环。窗口固定 1 分钟(少一个可配错的旋钮)。
+	RateQuotaPerMin int `yaml:"rate_quota_per_min,omitempty" json:"rate_quota_per_min,omitempty"`
+
 	// LocatorAddr player_locator 服务 gRPC 直连地址(host:port,内网 insecure)。
 	// 当前仅保留配置结构；离线自动退队在获得与 StartMatch 共用的 roster fence 前禁止开启，
 	// 见 ValidateOfflineLeave。
@@ -233,6 +239,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Team.MaxApplicationsPerTeam == 0 {
 		c.Team.MaxApplicationsPerTeam = 10
+	}
+	if c.Team.RateQuotaPerMin == 0 {
+		c.Team.RateQuotaPerMin = 12
 	}
 	if c.Team.ApplyTTL == 0 {
 		c.Team.ApplyTTL = config.Duration(120 * time.Second)

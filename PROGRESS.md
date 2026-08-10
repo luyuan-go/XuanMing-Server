@@ -2845,3 +2845,67 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   (默认 5min / 512 帧)再回前台,期间用其它端刷经验,确认回前台后等级与经验条收敛到权威值。
 - **仍待确认(与上一条同)**:`Pandora-Client-SVN/CLAUDE.md` 与 `F:\work\CLAUDE.md` 在当前工作副本
   中都不存在,客户端侧对应条款无处可加。
+
+## 2026-08-10:防滥用清单 §6 全量落地(第 1–9 项,拍板 7/8/9 后一次收口)
+
+- **拍板**(用户,2026-08-10):第 7 项「成局级冷却 + 换 match_id」现在做;第 8 项 no-show
+  退避取**温和档**(10min 窗首次免罚,第 2 次起 30s→60s→…封顶 5min);第 9 项账号成本
+  采「配置开关」——核查后发现 `dev_auto_register` 默认 false + `-Prod` 机械强制关 +
+  契约测试三件套**早已存在**,第 9 项定谳为已覆盖,零代码。
+- **第 1 项** `pkg/redisx/ratelimit.go`:Cooldown/ClearCooldown/Quota/IncrWindow/
+  ArmPenalty/PenaltyRemaining 六原语 + 通用 ActionQuota + RLKey 统一构造;契约测试 13 个。
+  fail-open 内建在原语里(error 时 allow=true + err 上抛),调用方想写错都难。
+- **第 2 项** matchmaker StartMatch:per-队长 + per-队伍冷却(`start_match_cooldown` 3s),
+  占窗在一切副作用前、业务失败即释放(hub transfer_cooldown 同模板)。
+- **第 3 项** 容量耗尽:确定性 5001/5002 不再推 FAILED,改推 QUEUEING +
+  `estimated_wait_seconds`(复用既有字段,**零 proto 改动**),票据退队 + 10s 静默窗,
+  后端自动重试;客户端零改动可用(QUEUEING 是既有状态)。
+- **第 4 项** login 失败 Quota:账号(sha256 键)+ IP 双维度,5 次/15min 窗,锁 5min;
+  只对凭据失败计数(DB 故障/封禁不计),锁窗在 bcrypt 之前拒。IP 来自 Envoy 注入的
+  受信 `x-pandora-client-ip`(入站同名头剥离防伪造;经 LB 多层代理部署时需重新评估)。
+- **第 5 项** Envoy local_ratelimit:filter 默认关,仅 login.Login exact 路由启用
+  token bucket(100 突发/50rps,初值待压测),映射 RESOURCE_EXHAUSTED;
+  新契约测试 `envoy_edge_ratelimit_contract_test.ps1` 锁结构(含「退出路径不受波及」)。
+- **第 6 项** 六个面:chat 非世界频道 500ms/频道独立;team 申请+邀请 12/min;
+  friend 申请 10/min;guild 申请 10/min;trade 下单/撤单 20/min;auction 挂单·出价/撤单
+  20/min。统一 ActionQuota,各服务单测同第 2 项口径。
+- **第 7 项**(兼正确性修复):formSoloMatch 换新雪花 match_id(旧复用 ticket_id 会撞
+  ds_allocator 侧保留 2h 的 abandoned claim,decision-revisit-allocating-bounded-terminal.md
+  §2.3);CreateMatch 改 SETNX;成局级冷却 `match_form_cooldown` 5s 压 2s requeue 风暴。
+  注意:该决策文档 §3 的「ALLOCATING 有界终态 A–D」**仍未拍板**,本轮只落了 §2.3 前置。
+- **第 8 项**:ds_allocator 在 `finishEmptyAbandon` 的 reason=no_show 分支对 roster 记账
+  (单一收口点,legacy 与 Model B 共用,CAS 保证每局至多一次);matchmaker StartMatch
+  读罚窗执行拒绝(明确错误码 + 剩余秒数)。all_disconnected **不记**(网络差不受罚);
+  CancelMatch 惩罚期内可用(测试锁定)。
+- **key 登记**:infra.md §3.2 新增「RateLimit」小节(pandora:rl:* 全清单,含跨服务
+  noshow 键的写者/读者标注);动作段豁免「不准用动词」已注明。
+- **验证**:pkg/redisx + matchmaker + team + ds_allocator + login + chat + friend +
+  guild + trade + auction 十模块 `go build` + `go test -count=1` 全绿(40 个包),
+  新增测试 40+;两个 envoy 契约测试(新 + 存量)PASS;go vet 干净;gofmt 已归位
+  (仅本轮文件,历史漂移文件未动)。
+- **未验证 / 遗留**:①压测断言(§6 底线 5/6:限流前后 QPS·分配次数·Pod·分钟对比表)
+  未跑;②Envoy 需 Codex `envoy --mode validate` + 重启生效;③故障注入(真实 Redis
+  故障下的 fail-open)只有 miniredis 级验证;④初值(3s/5s/10s/各 per-min/桶值)全部
+  待压测复核;⑤设备维度配额与 UE「容量排队」专属文案未做。
+
+### 同日补充:首登必见「生成中」缺陷修复 —— GetRegisterNo 补拉 RPC
+
+- **dev 实测暴露**(账号 test123):界面恒显示「生成中」,而库里 register_no=1 早已落好。
+  根因非补号任务(它 12:08:57 建号 → 12:09:12 编号成功,恰好 15s=5s 周期+10s 水位滞后),
+  而是**编号只在 Login 响应下发一次**:首登=注册同一请求,响应必然是 0,之后客户端无处再取。
+  **100% 必现**——每个新玩家首次会话都看不到自己的编号,产品不可接受。
+- **修法**:加 `LoginService.GetRegisterNo` 补拉 RPC(异步生成+客户端补拉的标准配套,
+  而非把发号塞回登录路径)。入参为空,player_id 只从 JWT sub 取(同 SelectRole 纪律);
+  **envoy.yaml jwt_authn rules 已加该 path**——未列到的 path 默认放行不验签,上游拿不到
+  player_id 会一律 ErrUnauthorized。0=code OK 的正常态(补号窗口),查询失败才返回错误码,
+  不得伪装成「编号 0」(§9.22)。刻意不做 sjti 复核(只读+只能读自己+零副作用)。
+- **落码**:proto `GetRegisterNo` RPC + 两个 message(go pb 已重生成,lint OK)、
+  biz `LoginUsecase.GetRegisterNo`、service 实现、envoy rules、
+  测试 `internal/service/login_register_no_rpc_test.go` 四条。
+- **顺手修**:`register_no_counter` 的 budget `MaxAvgRowBytes: 64` 每轮巡检刷一条 ERROR
+  `db_capacity_budget_exceeded actual=16384`——单行表 avg_row_length 由 information_schema
+  按 data_length/rows 估算,InnoDB 最小分配 16KB 页,恒报 16384 与真实行长(≈9B)无关,
+  设任何按 schema 推算的值都必然误报。改为留 0(不检查),行数仍由 MaxRows=8 兜住。
+- **验证**:login `go build` / `go vet` / `go test ./... -count=1` 全绿。
+- **待 Codex**:① cpp pb 同步(新 RPC,标 [proto]);② 客户端拿到 0 时补拉(建议几秒一次、
+  拿到非 0 即停;或挂在「刷新」按钮上),脱离「生成中」。

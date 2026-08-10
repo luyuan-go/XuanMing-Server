@@ -295,6 +295,7 @@ review 判据改为:**`register_no` 出现在 `pandora_account` 以外的任何�
 | 5 | 容量/清单登记 | dbcheck registry + login budgets.go + CLAUDE.md §9.24 豁免段:`register_no_counter` 恒 1 行权威闸 | ✅ |
 | 6 | 展示链路(A② 已拍板 2026-08-10:**客户端玩家可见**) | 服务端已落码:proto `LoginResponse.register_no = 13`、`AccountRepo.GetRegisterNo`(**fail-soft**:独立 250ms 查询预算,失败/超时置 0 且不取消登录父 ctx;刻意不并进 FindByAccount——列缺失不能打挂登录整链)、biz 主路径与 battle 重连路径都带出、service 组装 `RegisterNo`。0 = 补号中,客户端显示「生成中」 | ✅ 服务端 |
 | 7 | UE 展示与交付验证(Codex,2026-08-10) | 服务端 C++ pb 以 `[proto]` 提交 `bea78b83`,客户端通过官方 `GenClientProto.ps1 -UpdateLock` 同步并以 `-VerifyOnly` 复验;登录解码→会话态→RoleInfo 全链带出 `register_no`,0 显示「生成中」;login `go build/vet/test`、`Pandora` 与 `PandoraEditor` Development 编译全绿 | ✅ 生成/编译;PIE 与真实登录 E2E 未跑 |
+| 8 | 首次会话补拉闭环(2026-08-10 实测后补) | 服务端新增空请求 `LoginService.GetRegisterNo`、JWT 身份与 Envoy exact rule、`0/OK` 和错误分流;见 §3.7。旧 `bea78b83` 只覆盖 LoginResponse 字段,不含本次 RPC | 🟡 服务端已落码并由实现方报告 Go build/vet/test 全绿;新 C++ pb、UE 补拉、UE 编译、Envoy 运行态与真实登录 E2E 待完成 |
 
 ### 3.6 客服/运营按编号反查玩家(2026-08-10 用户提出,**待落地**)
 
@@ -343,6 +344,46 @@ player `GetProfile`)。
 (账号库权威在此),作内部 RPC 暴露,鉴权 + 脱敏 + 不经 Envoy 对客户端开放(CLAUDE.md §5.11
 对「运维/调试 RPC」的既有要求)。**注意查不到的两种情形要分开回话**:编号不存在(打错了)
 vs 编号存在但玩家刚注册还没补号——后者客服看到的是玩家界面显示「生成中」,不是查询故障。
+
+### 3.7 首登必见「生成中」缺陷与补拉 RPC(2026-08-10 实测暴露,已修)
+
+**现象**:dev 实测(账号 `test123`)客户端角色界面恒显示「注册编号 生成中」,而库里
+`register_no=1` 早已落好。
+
+**根因**(不是 bug 在补号任务,任务完全按设计工作):
+
+| 时刻 | 事件 |
+|---|---|
+| 12:08:57 | 首登=注册,`accounts` 落行;此刻 `register_no` 尚为 NULL → `LoginResponse.register_no=0` |
+| 12:09:12 | 补号任务编号成功(`register_no_assigned rows=1`),恰好 15s = 5s 周期 + 10s 水位滞后 |
+| 之后 | 客户端**无处再取**:编号只在 Login 响应里下发一次,界面「刷新」按钮刷的是角色数据 |
+
+**这不是边缘情况,是 100% 必现**:本项目「首登即注册」(§2.1),注册与登录是同一个请求,
+**任何新玩家的首次会话里 `register_no` 必然是 0**。原设计注释写的「0=未分配,下次登录
+即有值」低估了它——等于「每个新玩家第一次进游戏都看不到自己的编号」,产品上不可接受。
+
+**修法(已落码)**:加 `LoginService.GetRegisterNo` 补拉 RPC——异步生成 + 客户端补拉是
+标准配套,而不是把发号塞回登录路径(那正是 §3.2 否决的方案 A)。要点:
+- **入参为空**:`player_id` 只从 JWT sub 取(Envoy 注入 `x-pandora-player-id`,同 SelectRole
+  纪律),玩家只能查自己;该 path **必须**列进 `envoy.yaml` 的 `jwt_authn rules`
+  ——未列到的 path 默认放行不验签,上游拿不到 player_id 会一律 `ErrUnauthorized`(已加)。
+- **0 是 code=OK 的正常态**,不是错误:客户端据此继续显示「生成中」并稍后重试;
+  拿到非 0 后编号永不再变,停止轮询。查询失败才返回错误码,**不得伪装成「编号 0」**
+  (§9.22 不得冒充默认态),否则客户端会一直空等。
+- **刻意不做会话现行性(sjti)复核**:只读、只能读自己、零副作用、不发凭据;顶号后旧
+  设备读到自己的展示编号无安全含义。对比 SelectRole 必须复核——它签发 hub 票据。
+
+**测试**:`internal/service/login_register_no_rpc_test.go` 四条(正常补拉 / 0 是 OK 非错误 /
+无 player_id 硬拒 / repo 故障透传);`login_register_no_test.go`(Codex)覆盖 Login 响应带出。
+
+**当前交付边界**:服务端源码链与 Go 生成物已落在工作树,但旧客户端协议锁
+`bea78b83` 只覆盖 `LoginResponse.register_no`,尚不含本 RPC。须先形成新的服务端 `[proto]`
+稳定提交,再同步客户端 C++ pb 并接 UE 补拉;生成成功也不能代替 UE 编译和“首登生成中 →
+无需重登变为非 0”的真实 Envoy/JWT E2E。
+
+**待复核边界**:当前 `AccountRepo.GetRegisterNo` 把 `sql.ErrNoRows` 与 `register_no IS NULL`
+都映射为 `0,nil`。在“有效 JWT 的账号行必然存在”不变量下,正常补号窗口语义成立;若未来允许
+账号行删除或出现数据损坏,缺行也会表现为 `OK+0`。届时必须把缺行改成非 OK,不能让客户端永久空等。
 
 ---
 

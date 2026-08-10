@@ -135,6 +135,26 @@ type MatchConf struct {
 	// 待实测复核。<=0 = 不限(不推荐,仅联调)。
 	MaxQueueTickets int `yaml:"max_queue_tickets,omitempty" json:"max_queue_tickets,omitempty"`
 
+	// StartMatchCooldown StartMatch 的 per-队长 + per-队伍冷却窗(默认 3s;<=0 关闭)。
+	// 防外挂以 RPC 极限速率反复 StartMatch→CancelMatch(anti-abuse-scene-entry.md §4.2,
+	// §6 第 2 项)。取值贴人类点击「开始匹配」的物理下限:取消后立即重开是合法行为,
+	// 小值只削机器速率不伤真人。背压非权威门:Redis 故障 fail-open 放行;
+	// 业务失败(含被其它门拒绝)立即释放冷却,玩家可原速重试(hub transfer_cooldown 同模板)。
+	StartMatchCooldown config.Duration `yaml:"start_match_cooldown,omitempty" json:"start_match_cooldown,omitempty"`
+
+	// MatchFormCooldown 成局级冷却:同一票据两次「成局提交」之间的最小间隔
+	// (默认 5s;<=0 关闭)。压制 decision-revisit-allocating-bounded-terminal.md §2.3
+	// 记录的 requeue 风暴——退票重排队后每 match_interval(2s)重成局。
+	// 首次成局占窗零延迟(SETNX 成功即放行),只有窗口内的**重**成局被压到本节拍。
+	MatchFormCooldown config.Duration `yaml:"match_form_cooldown,omitempty" json:"match_form_cooldown,omitempty"`
+
+	// NoCapacityRequeueDelay 容量耗尽(ErrDSNoAvailable/ErrDSAllocationFailed 确定性失败)
+	// 退票后的重成局静默窗(默认 10s;<=0 退化为 MatchFormCooldown 节拍)。
+	// 同时作为推给客户端的 estimated_wait_seconds:满载时玩家看到「排队中,约 N 秒后重试」
+	// 而非 FAILED 硬失败(anti-abuse-scene-entry.md §4.3③/§6 第 3 项,§9.23 WAIT 语义)。
+	// 后端撮合循环自动重试,客户端无须重新 StartMatch;CancelMatch 全程可用(§9.20)。
+	NoCapacityRequeueDelay config.Duration `yaml:"no_capacity_requeue_delay,omitempty" json:"no_capacity_requeue_delay,omitempty"`
+
 	// TicketTTL 排队票据 Redis key 的 TTL(默认 30min,防僵尸票据)。
 	TicketTTL config.Duration `yaml:"ticket_ttl,omitempty" json:"ticket_ttl,omitempty"`
 
@@ -225,6 +245,15 @@ func (c *Config) Defaults() {
 	}
 	if c.Match.AllocationWorkers == 0 {
 		c.Match.AllocationWorkers = 16
+	}
+	if c.Match.StartMatchCooldown == 0 {
+		c.Match.StartMatchCooldown = config.Duration(3 * time.Second)
+	}
+	if c.Match.MatchFormCooldown == 0 {
+		c.Match.MatchFormCooldown = config.Duration(5 * time.Second)
+	}
+	if c.Match.NoCapacityRequeueDelay == 0 {
+		c.Match.NoCapacityRequeueDelay = config.Duration(10 * time.Second)
 	}
 	if c.Match.TicketTTL == 0 {
 		c.Match.TicketTTL = config.Duration(30 * time.Minute)

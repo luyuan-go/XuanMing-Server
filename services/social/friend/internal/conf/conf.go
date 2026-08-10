@@ -26,6 +26,11 @@ type FriendConf struct {
 	// 防止被恶意刷爆好友申请收件箱(客户端可写入的累积列表须有写入侧总量上限)。
 	MaxIncomingRequests int `yaml:"max_incoming_requests,omitempty" json:"max_incoming_requests,omitempty"`
 
+	// RateQuotaPerMin 好友申请的 per-player 每分钟频率配额(anti-abuse §6 第 6 项;
+	// 默认 10;负值 = 关闭)。与 MaxIncomingRequests 总量闸正交:总量限「同时挂多少」,
+	// 本值限「刷多快」,挡「加满 → 全撤 → 再加满」写放大循环。窗口固定 1 分钟。
+	RateQuotaPerMin int `yaml:"rate_quota_per_min,omitempty" json:"rate_quota_per_min,omitempty"`
+
 	// MaxBlocks 单玩家黑名单上限(默认 200,不变量 §9.18)。
 	// Block 时在事务内校验拉黑数量,超限回 ErrFriendBlockLimit。
 	MaxBlocks int `yaml:"max_blocks,omitempty" json:"max_blocks,omitempty"`
@@ -76,6 +81,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Friend.MaxBlocks <= 0 {
 		c.Friend.MaxBlocks = 200
+	}
+	if c.Friend.RateQuotaPerMin == 0 {
+		c.Friend.RateQuotaPerMin = 10
 	}
 	if c.Friend.RecommendLimit <= 0 {
 		c.Friend.RecommendLimit = 10

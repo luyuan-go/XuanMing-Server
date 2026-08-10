@@ -366,15 +366,15 @@ per-player 配额都可以用换号绕过**。因此必须把分配配额绑到�
 | 序 | 项 | 涉及 | 验收 |
 |---|---|---|---|
 | **0** | **no-show / 全员掉线双阈值空场回收**(§4.3①) | ds_allocator + proto | ✅ **代码已实现(2026-08-07)**,单测已锁定 no-show 走短阈值 / 有人连过走长阈值 / EverHadPlayers 粘滞 / 禁用差异化后仍会回收 / 解析结果绝不为 0。2026-08-10 复检:proto 已重生(`9e07b875`),`go build` + 全套件 `go test -count=1` 全绿。**未完成**:未做故障注入验证真实断线玩家不被误判、未实测 Admission P99 复核 150s 初值、未给出「单次进场占用 Pod·分钟」前后对比 |
-| 1 | `pkg/redisx/ratelimit.go` 两原语 + 契约测试 | pkg | 单测锁定:窗口内拒第二次、窗口后放行、error 时 fail-open 返回 allow |
-| 2 | `StartMatch` per-队长/队伍 Cooldown | matchmaker | 单测:冷却内返回 `ErrRateLimited` 且**零副作用**(不创建 operation、不占 claim);Redis 故障时放行 |
-| 3 | 容量耗尽改 `WAIT + retry_after`(§4.3③) | ds_allocator + matchmaker + 客户端 | 满载时玩家看到排队而非硬失败;必须并入 §9.23 同一恢复协调器,**不新建第二套状态机** |
-| 4 | 登录失败 Quota(账号 + IP) | login | 单测:连续失败触发,成功登录不计数,锁定期过后自动恢复 |
-| 5 | Envoy local_ratelimit(未鉴权路径) | envoy.yaml | 压测:登录洪峰下 429 生效、后端 QPS 削平 |
-| 6 | 聊天非世界频道 + 社交/交易类 Quota | chat / friend / guild / team / trade / auction | 各自单测同 2 |
-| 7 | 成局级冷却 + 换 match_id | matchmaker | 需先按 §7 拍板 `decision-revisit-allocating-bounded-terminal.md` |
-| 8 | no-show 记账 → 进入侧指数退避 | matchmaker + ds_allocator | 产品决策,人拍板后再做 |
-| 9 | 账号成本(关自动注册 / 设备·IP 维度配额) | login | 产品与运营决策,见 §7 |
+| 1 | `pkg/redisx/ratelimit.go` 两原语 + 契约测试 | pkg | ✅ **已落码(2026-08-10)**:`Cooldown/ClearCooldown/Quota/IncrWindow/ArmPenalty/PenaltyRemaining` + 通用 `ActionQuota` + 统一 `RLKey` 构造;契约测试锁定窗口内拒第二次、窗口后放行、error fail-open 返回 allow、计数键必带 TTL |
+| 2 | `StartMatch` per-队长/队伍 Cooldown | matchmaker | ✅ **已落码(2026-08-10)**:`start_match_cooldown` 默认 3s,占窗在一切副作用前、业务失败即释放(hub 模板);单测锁定冷却内 `ErrRateLimited` 零副作用、失败释放可立即重试、Redis 故障放行 |
+| 3 | 容量耗尽改「排队 + 倒计时」(§4.3③) | ds_allocator + matchmaker | ✅ **后端已落码(2026-08-10)**:确定性 5001/5002 不再推 FAILED,改推 `QUEUEING + estimated_wait_seconds`(复用既有字段,零 proto 改动),票据自动退队 + `no_capacity_requeue_delay`(10s)静默窗,后端撮合循环自动重试——并入既有 push/poll 通道,未新建状态机;单测锁定无 FAILED 推送、带倒计时、票据退队、静默窗布设。**客户端零改动可用**(QUEUEING 是既有状态);UE 侧「容量排队」专属文案属体验增强,未做 |
+| 4 | 登录失败 Quota(账号 + IP) | login + envoy | ✅ **已落码(2026-08-10)**:`login_fail_limit` 5 次 / `login_fail_window` 15m / `login_fail_lock` 5m;只对凭据失败计数(DB 故障与封禁不计),锁窗内 bcrypt 之前拒;IP 维度走 Envoy 注入的受信 `x-pandora-client-ip`(入站同名头剥离防伪造),未经 Envoy 自动退化为仅账号维度;单测锁定连续失败触发、成功不计数、锁期自动恢复、IP 跨账号生效、fail-open |
+| 5 | Envoy local_ratelimit(未鉴权路径) | envoy.yaml | ✅ **配置已落(2026-08-10)**:filter 默认关、仅 `login.Login` exact 路由启用 token bucket(100 突发/50 rps,**初值待压测复核**),映射 gRPC RESOURCE_EXHAUSTED;Logout/IssueDSTicket/SelectRole/push 明确不受波及;契约测试 `envoy_edge_ratelimit_contract_test.ps1` 锁定结构。**未完成**:压测断言登录洪峰削平(§6 底线 5) |
+| 6 | 聊天非世界频道 + 社交/交易类 Quota | chat / friend / guild / team / trade / auction | ✅ **六面已落码(2026-08-10)**:chat 非世界频道 500ms 冷却(按频道独立);team 申请/邀请 12/min、friend 申请 10/min、guild 申请 10/min、trade 下单/撤单 20/min、auction 挂单·出价/撤单 20/min(全部 per-player,统一 `redisx.ActionQuota`);各服务单测同第 2 项口径(拒绝零副作用 / fail-open / 未注入不限) |
+| 7 | 成局级冷却 + 换 match_id | matchmaker | ✅ **已落码(2026-08-10 拍板)**:solo 成局改用新雪花 match_id(不再复用 ticket_id,消除撞 2h abandoned claim 的隐患)、`CreateMatch` 改 SETNX(权威记录不可被覆盖)、`match_form_cooldown`(5s)压 requeue 风暴;单测锁定新 ID、NX 拒覆盖、冷却压重成局。注意:decision-revisit-allocating-bounded-terminal.md §3 的「ALLOCATING 有界终态 A–D」**仍未拍板**,本项只落了它的 §2.3 前置修复 |
+| 8 | no-show 记账 → 进入侧指数退避 | matchmaker + ds_allocator | ✅ **已落码(2026-08-10 拍板温和档)**:ds_allocator 在 reason=no_show 判弃时对 roster 记账(10min 窗),首次免罚、第 2 次起 30s→60s→…封顶 5min;matchmaker StartMatch 执行拒绝(明确错误码 + 可见剩余秒数);正常结算/断线(all_disconnected)/主动取消**不计**;CancelMatch 惩罚期内可用;单测锁定档位曲线、免罚、不误伤断线、fail-open |
+| 9 | 账号成本(关自动注册 / 设备·IP 维度配额) | login | ✅ **已由既有机制覆盖(2026-08-10 拍板定谳)**:`dev_auto_register` 默认 false,dev yaml 显式开,`gen_cluster_config -Prod` 机械强制关(gen_cluster_config.ps1:1620)且有契约测试 `gen_cluster_prod_account_contract_test.ps1` 锁定——生产无免费账号;IP 维度配额由第 4 项落地。设备维度配额与「首次进战斗门槛」未做(需运营定义设备指纹口径后再议) |
 
 **通用验收底线**(每项都必须验,缺一不算完成):
 1. **零副作用拒绝**:被限流的请求不得留下任何持久化痕迹(不占坑、不创 operation、不写流水)。

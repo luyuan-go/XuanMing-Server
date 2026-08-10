@@ -47,6 +47,40 @@ type FriendUsecase struct {
 	// 分片部署时由 main 经 SetCellRouter 注入,AcceptFriend 成功后额外打一条好友边分片
 	// 落点观测(跨 region 好友 → 走 §4.4 最小跨 region 通道)。nil-safe。
 	router *cellroute.Router
+
+	// rateQuota 好友申请频率配额(anti-abuse §6 第 6 项)。可为 nil(不限)。
+	rateQuota ActionRateQuota
+}
+
+// ActionRateQuota 申请类写入的 per-player 频率配额(实现 pkg/redisx.ActionQuota)。
+// 总量闸(max_incoming_requests 200)只限「同时挂多少」,挡不住「加满 → 全撤 → 再加满」
+// 的写放大循环,频率配额补这一维。背压非权威门:判定 error 由调用方 fail-open 放行。
+type ActionRateQuota interface {
+	Allow(ctx context.Context, action string, subject uint64) (bool, error)
+}
+
+// SetRateQuota 注入频率配额(可选;不注入 = 不限,dev 无 Redis 联调兼容)。
+func (u *FriendUsecase) SetRateQuota(q ActionRateQuota) {
+	u.rateQuota = q
+}
+
+// allowAction 频率配额门:窗内超额返回 ErrRateLimited(先于一切副作用);fail-open。
+func (u *FriendUsecase) allowAction(ctx context.Context, action string, playerID uint64) error {
+	if u.rateQuota == nil {
+		return nil
+	}
+	ok, err := u.rateQuota.Allow(ctx, action, playerID)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "friend_rate_quota_check_failed",
+			"action", action, "player_id", playerID, "err", err)
+		return nil
+	}
+	if !ok {
+		plog.With(ctx).Warnw("msg", "friend_rate_quota_rejected",
+			"action", action, "player_id", playerID)
+		return errcode.New(errcode.ErrRateLimited, "friend %s rate limited, retry later", action)
+	}
+	return nil
 }
 
 // NewFriendUsecase 构造。pusher / online 允许为 nil(弱依赖未配置时降级)。
@@ -92,6 +126,11 @@ func (u *FriendUsecase) AddFriend(ctx context.Context, requesterID, targetID, ne
 	}
 	if requesterID == targetID {
 		return 0, errcode.New(errcode.ErrInvalidArg, "cannot add self as friend")
+	}
+
+	// 频率配额(anti-abuse §6 第 6 项):按发起方计,先于一切读写。
+	if err := u.allowAction(ctx, "request", requesterID); err != nil {
+		return 0, err
 	}
 
 	// 互相拉黑则不能加好友(fail-fast 预检,非权威:权威复核在 CreateRequest 事务内的

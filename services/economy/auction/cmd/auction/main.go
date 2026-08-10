@@ -251,6 +251,12 @@ func main() {
 	book := data.NewRedisBookStore(rdb)
 	ownerSlots := data.NewRedisOwnerSlotLimiter(rdb)
 	uc := biz.NewAuctionUsecase(repo, book, ownerSlots, ledger, events, orderSF, matchSF, cfg.Auction)
+	// 挂单/出价/撤单频率配额(anti-abuse §6 第 6 项):复用共享 rdb,窗口固定 1 分钟。
+	uc.SetRateQuota(&redisx.ActionQuota{
+		RDB: rdb, Domain: "auction",
+		Limit: int64(cfg.Auction.RateQuotaPerMin), Window: time.Minute,
+	})
+	helper.Infow("msg", "auction_rate_quota_ready", "per_min", cfg.Auction.RateQuotaPerMin)
 	defer uc.Close() // 必须先停 audit worker，再由更早注册的 defer 关闭 Kafka producer。
 	if mr, ok := biz.NewMarketRouter(cfg.CellRoute.MarketSelf, cfg.CellRoute.MarketPeerList()); ok {
 		uc.SetMarketRouter(mr)

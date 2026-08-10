@@ -86,6 +86,41 @@ type TradeUsecase struct {
 	// 分片部署时由 main 经 SetCellRouter 注入,ConfirmOrder 结算成功后额外打一条结算跨分片
 	// 落点观测(买卖双方跨 region → 走最小跨 region 通道)。nil-safe。
 	router *cellroute.Router
+
+	// rateQuota 下单/撤单频率配额(anti-abuse §6 第 6 项)。可为 nil(不限)。
+	rateQuota ActionRateQuota
+}
+
+// ActionRateQuota 下单/撤单的 per-player 频率配额(实现 pkg/redisx.ActionQuota)。
+// 总量闸(max_orders_per_player 200)只限「同时挂多少」,挡不住「下单-撤单-再下单」的
+// D 类循环(每轮产生托管写 + 流水行),频率配额补这一维。
+// 背压非权威门:判定 error 由调用方 fail-open 放行。
+type ActionRateQuota interface {
+	Allow(ctx context.Context, action string, subject uint64) (bool, error)
+}
+
+// SetRateQuota 注入频率配额(可选;不注入 = 不限,dev 联调兼容)。
+func (u *TradeUsecase) SetRateQuota(q ActionRateQuota) {
+	u.rateQuota = q
+}
+
+// allowAction 频率配额门:窗内超额返回 ErrRateLimited(先于一切副作用);fail-open。
+func (u *TradeUsecase) allowAction(ctx context.Context, action string, playerID uint64) error {
+	if u.rateQuota == nil {
+		return nil
+	}
+	ok, err := u.rateQuota.Allow(ctx, action, playerID)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "trade_rate_quota_check_failed",
+			"action", action, "player_id", playerID, "err", err)
+		return nil
+	}
+	if !ok {
+		plog.With(ctx).Warnw("msg", "trade_rate_quota_rejected",
+			"action", action, "player_id", playerID)
+		return errcode.New(errcode.ErrRateLimited, "trade %s rate limited, retry later", action)
+	}
+	return nil
 }
 
 // NewTradeUsecase 构造。ledger 为 nil 时退化为 NoopResourceLedger;audit 允许 nil。
@@ -124,6 +159,10 @@ func (u *TradeUsecase) CreateOrder(ctx context.Context, sellerID, buyerID uint64
 	}
 	if sellerID == buyerID {
 		return 0, errcode.New(errcode.ErrInvalidArg, "cannot trade with self")
+	}
+	// 频率配额(anti-abuse §6 第 6 项):按发起方(卖方)计,先于一切副作用。
+	if err := u.allowAction(ctx, "order", sellerID); err != nil {
+		return 0, err
 	}
 	if len(items) == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "items required")
@@ -399,6 +438,10 @@ func (u *TradeUsecase) driveSettlement(ctx context.Context, order *tradev1.Order
 func (u *TradeUsecase) CancelOrder(ctx context.Context, playerID, orderID uint64) error {
 	if playerID == 0 || orderID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "player / order required")
+	}
+	// 频率配额(anti-abuse §6 第 6 项):下撤循环两端都限,单限下单会把刷子逼到撤单侧。
+	if err := u.allowAction(ctx, "cancel", playerID); err != nil {
+		return err
 	}
 	err := u.repo.UpdateWithLock(ctx, orderID, u.cfg.OptimisticRetry, func(o *tradev1.Order) error {
 		if playerID != o.GetSellerId() && playerID != o.GetBuyerId() {

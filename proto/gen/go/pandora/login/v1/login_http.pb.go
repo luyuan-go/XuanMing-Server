@@ -19,6 +19,7 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
+const OperationLoginServiceGetRegisterNo = "/pandora.login.v1.LoginService/GetRegisterNo"
 const OperationLoginServiceGetResumeContext = "/pandora.login.v1.LoginService/GetResumeContext"
 const OperationLoginServiceIssueDSTicket = "/pandora.login.v1.LoginService/IssueDSTicket"
 const OperationLoginServiceLogin = "/pandora.login.v1.LoginService/Login"
@@ -27,6 +28,17 @@ const OperationLoginServiceSelectRole = "/pandora.login.v1.LoginService/SelectRo
 const OperationLoginServiceVerifyDSTicket = "/pandora.login.v1.LoginService/VerifyDSTicket"
 
 type LoginServiceHTTPServer interface {
+	// GetRegisterNo GetRegisterNo 立即完成型,查本人注册编号(展示专用,2026-08-10)。
+	//
+	// 为什么需要它:编号由 login 补号任务**异步**分配(register-no-and-login-surge.md §3),
+	// 而本项目「首登即注册」——注册与登录是同一个请求,登录响应里的 register_no 必然是 0。
+	// 若只靠 Login 下发,新玩家整个首次会话都只能看到「生成中」(编号约 15s 后才落库,
+	// 客户端却已无处可取)。本 RPC 让客户端在拿到 0 时补拉,是异步生成的标准配套。
+	//
+	// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含
+	// player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
+	// 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
+	GetRegisterNo(context.Context, *GetRegisterNoRequest) (*GetRegisterNoResponse, error)
 	// GetResumeContext GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
 	// 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
 	GetResumeContext(context.Context, *GetResumeContextRequest) (*GetResumeContextResponse, error)
@@ -55,6 +67,7 @@ func RegisterLoginServiceHTTPServer(s *http.Server, srv LoginServiceHTTPServer) 
 	r.POST("/v1/login", _LoginService_Login0_HTTP_Handler(srv))
 	r.POST("/v1/logout", _LoginService_Logout0_HTTP_Handler(srv))
 	r.POST("/v1/ds/ticket/issue", _LoginService_IssueDSTicket0_HTTP_Handler(srv))
+	r.POST("/v1/register-no/get", _LoginService_GetRegisterNo0_HTTP_Handler(srv))
 	r.POST("/v1/role/select", _LoginService_SelectRole0_HTTP_Handler(srv))
 	r.POST("/v1/ds/ticket/verify", _LoginService_VerifyDSTicket0_HTTP_Handler(srv))
 	r.POST("/v1/resume/context", _LoginService_GetResumeContext0_HTTP_Handler(srv))
@@ -126,6 +139,28 @@ func _LoginService_IssueDSTicket0_HTTP_Handler(srv LoginServiceHTTPServer) func(
 	}
 }
 
+func _LoginService_GetRegisterNo0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetRegisterNoRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationLoginServiceGetRegisterNo)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetRegisterNo(ctx, req.(*GetRegisterNoRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetRegisterNoResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _LoginService_SelectRole0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in SelectRoleRequest
@@ -193,6 +228,17 @@ func _LoginService_GetResumeContext0_HTTP_Handler(srv LoginServiceHTTPServer) fu
 }
 
 type LoginServiceHTTPClient interface {
+	// GetRegisterNo GetRegisterNo 立即完成型,查本人注册编号(展示专用,2026-08-10)。
+	//
+	// 为什么需要它:编号由 login 补号任务**异步**分配(register-no-and-login-surge.md §3),
+	// 而本项目「首登即注册」——注册与登录是同一个请求,登录响应里的 register_no 必然是 0。
+	// 若只靠 Login 下发,新玩家整个首次会话都只能看到「生成中」(编号约 15s 后才落库,
+	// 客户端却已无处可取)。本 RPC 让客户端在拿到 0 时补拉,是异步生成的标准配套。
+	//
+	// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含
+	// player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
+	// 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
+	GetRegisterNo(ctx context.Context, req *GetRegisterNoRequest, opts ...http.CallOption) (rsp *GetRegisterNoResponse, err error)
 	// GetResumeContext GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
 	// 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
 	GetResumeContext(ctx context.Context, req *GetResumeContextRequest, opts ...http.CallOption) (rsp *GetResumeContextResponse, err error)
@@ -222,6 +268,29 @@ type LoginServiceHTTPClientImpl struct {
 
 func NewLoginServiceHTTPClient(client *http.Client) LoginServiceHTTPClient {
 	return &LoginServiceHTTPClientImpl{client}
+}
+
+// GetRegisterNo GetRegisterNo 立即完成型,查本人注册编号(展示专用,2026-08-10)。
+//
+// 为什么需要它:编号由 login 补号任务**异步**分配(register-no-and-login-surge.md §3),
+// 而本项目「首登即注册」——注册与登录是同一个请求,登录响应里的 register_no 必然是 0。
+// 若只靠 Login 下发,新玩家整个首次会话都只能看到「生成中」(编号约 15s 后才落库,
+// 客户端却已无处可取)。本 RPC 让客户端在拿到 0 时补拉,是异步生成的标准配套。
+//
+// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含
+// player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
+// 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
+func (c *LoginServiceHTTPClientImpl) GetRegisterNo(ctx context.Context, in *GetRegisterNoRequest, opts ...http.CallOption) (*GetRegisterNoResponse, error) {
+	var out GetRegisterNoResponse
+	pattern := "/v1/register-no/get"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationLoginServiceGetRegisterNo))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // GetResumeContext GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信

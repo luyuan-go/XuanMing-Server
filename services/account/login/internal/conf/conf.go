@@ -131,6 +131,21 @@ type LoginConf struct {
 	//   - 两者都开:任意账号名 + 任意密码都能进(最宽松 dev 模式)
 	DevAutoRegister bool `yaml:"dev_auto_register,omitempty" json:"dev_auto_register,omitempty"`
 
+	// ── 登录失败 Quota(账号 + IP,anti-abuse §4.2/§6 第 4 项)────────────────────
+	// 只对**凭据失败**计数(密码错 / 自动注册关闭下的账号不存在):成功登录不计数、
+	// 封禁与 DB 故障不计数,正常重连玩家零感知。达限后布锁,锁窗内 Login 直接拒
+	// (ErrRateLimited + 可见剩余秒数),锁 PX 自过期无需人工解。
+	// IP 维度依赖 Envoy 注入的受信 x-pandora-client-ip 头(入站同名头被剥离防伪造);
+	// 未经 Envoy 的直连(本机 dev)拿不到 IP → 自动退化为仅账号维度(fail-open 方向)。
+	// 背压非权威门:Redis 故障一律放行只 Warn(§2 铁律)。
+
+	// LoginFailLimit 失败窗口内允许的凭据失败次数(默认 5;<=0 关闭整个失败配额)。
+	LoginFailLimit int `yaml:"login_fail_limit,omitempty" json:"login_fail_limit,omitempty"`
+	// LoginFailWindow 失败计数窗口(默认 15min)。
+	LoginFailWindow config.Duration `yaml:"login_fail_window,omitempty" json:"login_fail_window,omitempty"`
+	// LoginFailLock 达限后的锁定时长(默认 5min)。
+	LoginFailLock config.Duration `yaml:"login_fail_lock,omitempty" json:"login_fail_lock,omitempty"`
+
 	// JWT 设置(W3 ①,2026-06-05)。
 	// dev/prod 都走 HS256,secret 要跟 deploy/envoy/envoy.yaml 的 jwt_authn provider 保持一致。
 	JWT JWTConf `yaml:"jwt,omitempty" json:"jwt,omitempty"`
@@ -237,6 +252,15 @@ func (c *Config) Defaults() {
 	}
 	if c.Login.MockHubDSAddr == "" {
 		c.Login.MockHubDSAddr = "127.0.0.1:7777"
+	}
+	if c.Login.LoginFailLimit == 0 {
+		c.Login.LoginFailLimit = 5
+	}
+	if c.Login.LoginFailWindow == 0 {
+		c.Login.LoginFailWindow = config.Duration(15 * time.Minute)
+	}
+	if c.Login.LoginFailLock == 0 {
+		c.Login.LoginFailLock = config.Duration(5 * time.Minute)
 	}
 	// JWT(W3 ① 默认)
 	if c.Login.JWT.Issuer == "" {

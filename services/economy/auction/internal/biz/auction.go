@@ -100,6 +100,9 @@ type AuctionUsecase struct {
 	events AuctionEventPusher // 弱依赖,可为 nil
 	cfg    conf.AuctionConf
 
+	// rateQuota 挂单/出价/撤单频率配额(anti-abuse §6 第 6 项)。可为 nil(不限)。
+	rateQuota ActionRateQuota
+
 	// order_id 与 match_id 是两个互不相干的 ID 空间(各自独立的表与主键:
 	// auction_orders.order_id / auction_matches.match_id),各持一个独立发号器。
 	// 拆开的实际收益在撮合链:一笔大单跨越 N 档对手盘会在 matchOnce 的循环里
@@ -165,6 +168,37 @@ const auditDispatchTimeout = 5 * time.Second
 // orderSF / matchSF 是 order_id 与 match_id 两个独立 ID 空间的发号器,由 main.go 经
 // etcdnode.MustProvideSnowflakeN 取得(共用 nodeID、各自独立 step 池)。两者可以传同一个
 // 实例(测试常这么做),但生产接线必须分开,否则失去拆分带来的容量隔离。
+// ActionRateQuota 挂单/出价/撤单的 per-player 频率配额(实现 pkg/redisx.ActionQuota)。
+// 总量闸(max_active_orders_per_player 200)只限「同时挂多少」,挡不住「下单-撤单」
+// 循环(每轮产生托管/流水写),频率配额补这一维。背压非权威门:error 时 fail-open。
+type ActionRateQuota interface {
+	Allow(ctx context.Context, action string, subject uint64) (bool, error)
+}
+
+// SetRateQuota 注入频率配额(可选;不注入 = 不限,dev 联调兼容)。
+func (u *AuctionUsecase) SetRateQuota(q ActionRateQuota) {
+	u.rateQuota = q
+}
+
+// allowAction 频率配额门:窗内超额返回 ErrRateLimited(先于一切副作用);fail-open。
+func (u *AuctionUsecase) allowAction(ctx context.Context, action string, playerID uint64) error {
+	if u.rateQuota == nil {
+		return nil
+	}
+	ok, err := u.rateQuota.Allow(ctx, action, playerID)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "auction_rate_quota_check_failed",
+			"action", action, "player_id", playerID, "err", err)
+		return nil
+	}
+	if !ok {
+		plog.With(ctx).Warnw("msg", "auction_rate_quota_rejected",
+			"action", action, "player_id", playerID)
+		return errcode.New(errcode.ErrRateLimited, "auction %s rate limited, retry later", action)
+	}
+	return nil
+}
+
 func NewAuctionUsecase(repo data.AuctionRepo, book data.BookStore, slots data.OwnerSlotLimiter, ledger SettlementLedger, events AuctionEventPusher, orderSF, matchSF snowflakeGen, cfg conf.AuctionConf) *AuctionUsecase {
 	if ledger == nil {
 		ledger = NoopSettlementLedger{}
@@ -315,6 +349,11 @@ func (u *AuctionUsecase) submit(ctx context.Context, ownerID uint64, side data.S
 	}
 	if ownerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "owner required")
+	}
+	// 频率配额(anti-abuse §6 第 6 项):按发起方计,先于 PENDING 登记等一切副作用。
+	// 同 idem 的合法重试也计数——20/min 的额度下无感,不为它开豁免通道(豁免即绕过面)。
+	if err := u.allowAction(ctx, "order", ownerID); err != nil {
+		return nil, err
 	}
 	if marketID == 0 || itemConfigID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "market_id / item_config_id required")
@@ -653,6 +692,10 @@ func (u *AuctionUsecase) CancelOrder(ctx context.Context, ownerID uint64, market
 	}
 	if ownerID == 0 || marketID == 0 || orderID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "owner / market / order required")
+	}
+	// 频率配额(anti-abuse §6 第 6 项):下撤循环两端都限。
+	if err := u.allowAction(ctx, "cancel", ownerID); err != nil {
+		return err
 	}
 	release, err := u.guardMarket(ctx, marketID)
 	if err != nil {

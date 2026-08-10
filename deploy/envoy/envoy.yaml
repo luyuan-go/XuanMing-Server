@@ -78,6 +78,20 @@ static_resources:
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
 
+          # ⭐ 边缘粗闸:未鉴权路径的 local token bucket(anti-abuse-scene-entry.md §4.1/§6 第 5 项)。
+          # filter 级只声明 stat_prefix、不配桶 = 默认对所有 route 不限流;
+          # 只有显式带 typed_per_filter_config 的 route(下方 login.Login exact 路由)才启用。
+          # 必须排在 jwt_authn 之前:目的就是在 HS256 验签计算之前丢弃未鉴权洪水。
+          # 为什么不用全局 RLS(ratelimit service):额外有状态服务 + Redis 依赖,§15.3 拒绝;
+          # 精确按玩家的配额在业务层(login_fail_quota / per-player 冷却)用已有 Redis 做,
+          # 边缘只负责挡「连 session 都没有的洪水」。local bucket 是每 Envoy 进程独立的,
+          # 多副本部署时总额 = 桶值 × 副本数,调参须计入(当前单副本)。
+          # ⚠️ 改动后部署前由 Codex 跑 `envoy --mode validate -c envoy.yaml`(local_ratelimit 在 v1.38 GA)。
+          - name: envoy.filters.http.local_ratelimit
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+              stat_prefix: edge_rl
+
           # ⭐ 安全:剥离客户端伪造的身份头(必须排在 jwt_authn 之前)。
           # jwt_authn 的 claim_to_headers 只在「命中 rules 的鉴权 path」上覆写 x-pandora-player-id;
           # 对 bypass / allow_missing 的 path(login.Login / reflection),jwt_authn
@@ -96,6 +110,10 @@ static_resources:
                 # DS 网关标记头只属于 :8444 DS 面;客户端面无条件剥离,防公网客户端伪造
                 # “我是 DS 面流量”干扰后端 DSCallbackGuard 判定(纵深防御)。
                 - remove: "x-pandora-ds-gateway"
+                # 受信客户端 IP 头(anti-abuse §6 第 4 项 IP 维度):入站无条件剥离,
+                # 随后由 virtual_host 的 request_headers_to_add 用 Envoy 直接观测的
+                # 下游地址重写 → 后端看到的值只可能出自 Envoy,客户端不可伪造。
+                - remove: "x-pandora-client-ip"
 
           # ⭐ W3 ①:JWT 鉴权(HS256 + local_jwks)
           # provider pandora_session 用 login 服务签发的 SessionToken,issuer / audience
@@ -139,6 +157,14 @@ static_resources:
               # player_id 从 sub claim 注入 x-pandora-player-id,请求体不信任自报 player_id
               - match:
                   path: "/pandora.login.v1.LoginService/SelectRole"
+                requires:
+                  provider_name: "pandora_session"
+              # login.GetRegisterNo 查本人注册编号(2026-08-10):需要 SessionToken,
+              # player_id 从 sub claim 注入 x-pandora-player-id,请求体为空不含自报身份。
+              # 必须列在此处——rules 未列到的 path 默认放行(不验签),那样上游拿不到
+              # x-pandora-player-id,服务端会一律 ErrUnauthorized。
+              - match:
+                  path: "/pandora.login.v1.LoginService/GetRegisterNo"
                 requires:
                   provider_name: "pandora_session"
               # push.Subscribe 必须带 SessionToken(玩家长连接订阅,W3 ④ kafka 路由依赖 player_id)
@@ -228,6 +254,15 @@ static_resources:
             - name: pandora_vh
               domains: [ "*" ]
 
+              # 受信客户端 IP:Envoy 直连观测的下游地址(TLS socket 对端),配合上方
+              # header_mutation 的入站剥离构成不可伪造链。login 的失败配额按它做 IP 维度;
+              # 经 LB/多层代理部署时此值是最后一跳地址,需换 proxy_protocol / XFF 可信链再评估。
+              request_headers_to_add:
+              - header:
+                  key: "x-pandora-client-ip"
+                  value: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+                append_action: OVERWRITE_IF_EXISTS_OR_ADD
+
               # virtual_host 级 CORS 策略(联调宽松,生产收紧)
               typed_per_filter_config:
                 envoy.filters.http.cors:
@@ -248,6 +283,37 @@ static_resources:
                   status: 403
                   body:
                     inline_string: "DS-only method; use isolated :8444"
+              # ----- login.Login:唯一未鉴权入口,挂边缘 token bucket(必须排在 login prefix 前)-----
+              # anti-abuse §6 第 5 项:登录(含 dev 自动注册)是未鉴权路径,洪峰会在 jwt 验签
+              # 与后端 bcrypt 之前被这里按桶丢弃。桶值推导:正常登录洪峰 = 开服重连风暴,
+              # 单 Envoy 50 rps 持续 + 100 突发已高于压测观测的合法峰值一个量级,
+              # ⚠️ 初值待压测复核(stress-discipline.md 口径:限流前后 login QPS 对比表)。
+              # 只限 Login 一个方法:Logout / IssueDSTicket / SelectRole 已鉴权且是退出/进场
+              # 关键路径,绝不能被边缘限流波及(验收底线 4)。
+              - match:
+                  path: "/pandora.login.v1.LoginService/Login"
+                route:
+                  cluster: login_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+                typed_per_filter_config:
+                  envoy.filters.http.local_ratelimit:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                    stat_prefix: edge_rl_login
+                    token_bucket:
+                      max_tokens: 100
+                      tokens_per_fill: 50
+                      fill_interval: 1s
+                    filter_enabled:
+                      runtime_key: edge_rl_login_enabled
+                      default_value: { numerator: 100, denominator: HUNDRED }
+                    filter_enforced:
+                      runtime_key: edge_rl_login_enforced
+                      default_value: { numerator: 100, denominator: HUNDRED }
+                    # gRPC 客户端拿 RESOURCE_EXHAUSTED(与 errcode.ErrRateLimited 的 gRPC 映射
+                    # 一致,UE 侧按可重试处理),而不是裸 429。
+                    rate_limited_as_resource_exhausted: true
+
               # ----- login 其余方法(unary,立即完成型,demo 15s 超时)-----
               - match:
                   prefix: "/pandora.login.v1.LoginService/"

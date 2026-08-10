@@ -148,6 +148,12 @@ func main() {
 	// 6. 装配链
 	repo := data.NewRedisTeamRepo(rdb)
 	uc := biz.NewTeamUsecase(repo, pusher, cfg.Team)
+	// 申请/邀请频率配额(anti-abuse §6 第 6 项):复用共享 rdb,窗口固定 1 分钟。
+	uc.SetRateQuota(&redisx.ActionQuota{
+		RDB: rdb, Domain: "team",
+		Limit: int64(cfg.Team.RateQuotaPerMin), Window: time.Minute,
+	})
+	helper.Infow("msg", "team_rate_quota_ready", "per_min", cfg.Team.RateQuotaPerMin)
 	// matchmaker 联动(弱依赖:matchmaker_addr 留空 → 离队/踢人不撤匹配票据,
 	// 且入队闸门跳过 —— 没有匹配链路的部署本就不存在"被对局占住的队伍")
 	if cfg.Team.MatchmakerAddr != "" {

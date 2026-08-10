@@ -11,6 +11,9 @@ package service
 
 import (
 	"context"
+	"strings"
+
+	"github.com/go-kratos/kratos/v2/transport"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
@@ -47,6 +50,18 @@ func NewLoginService(loginUC *biz.LoginUsecase, ticketUC *biz.TicketUsecase) *Lo
 	return &LoginService{loginUC: loginUC, ticketUC: ticketUC}
 }
 
+// clientIPFromHeader 读 Envoy 注入的受信客户端 IP 头(x-pandora-client-ip)。
+// 与 pkg/middleware/auth.go 读 x-pandora-player-id 同模式;入站同名头由 Envoy
+// header_mutation 无条件剥离,后端看到的值只可能出自 Envoy 自己(不可伪造)。
+// 未经 Envoy 的直连(本机 dev / 测试)返回空,登录失败 Quota 的 IP 维度自动关闭。
+func clientIPFromHeader(ctx context.Context) string {
+	tr, ok := transport.FromServerContext(ctx)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(tr.RequestHeader().Get("x-pandora-client-ip"))
+}
+
 // SetRedisDSAdmissionAuthority 启用 VerifyDSTicket 的 DS 在线 active 权威门。
 func (s *LoginService) SetRedisDSAdmissionAuthority(guard *middleware.DSCallbackGuard, checker data.DSAdmissionChecker) {
 	s.redisDSAdmission = true
@@ -56,6 +71,9 @@ func (s *LoginService) SetRedisDSAdmissionAuthority(guard *middleware.DSCallback
 
 // Login 立即完成型(参考 proto/pandora/login/v1/login.proto 注释)。
 func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*loginv1.LoginResponse, error) {
+	// 受信客户端 IP(Envoy 注入 x-pandora-client-ip,入站同名头已被剥离防伪造)挂到
+	// 请求 ctx,供登录失败 Quota 的 IP 维度使用;未经 Envoy(dev 直连)为空 = 该维度关闭。
+	ctx = biz.WithClientIP(ctx, clientIPFromHeader(ctx))
 	res, err := s.loginUC.Login(ctx, req.GetAccount(), req.GetPasswordHash(), req.GetDeviceId())
 	if err != nil {
 		return &loginv1.LoginResponse{
@@ -110,6 +128,28 @@ func resumeContextToProto(in biz.ResumeContextResult) *loginv1.ResumeContext {
 		EntryState:   in.EntryState,
 		WaitReason:   in.WaitReason,
 	}
+}
+
+// GetRegisterNo 立即完成型:查本人注册编号(展示专用,register-no-and-login-surge.md §3)。
+//
+// player_id 从 ctx 读(Envoy jwt_authn 验 session 后注入 x-pandora-player-id,
+// 与 SelectRole 同纪律),请求体为空、不信任自报身份——玩家只能查自己的编号。
+// ⚠️ 该 path 必须列在 envoy.yaml 的 jwt_authn rules 里:未列到的 path 默认放行不验签,
+// 上游拿不到 x-pandora-player-id,这里会一律 ErrUnauthorized。
+//
+// code=OK 且 register_no=0 表示「仍在补号窗口内」(约 15s),不是错误:客户端继续显示
+// 「生成中」并稍后重试;拿到非 0 后编号永不再变,应停止轮询。
+func (s *LoginService) GetRegisterNo(ctx context.Context, _ *loginv1.GetRegisterNoRequest) (*loginv1.GetRegisterNoResponse, error) {
+	playerID, _ := ctx.Value(plog.CtxKeyPlayerID).(uint64)
+	if playerID == 0 {
+		plog.With(ctx).Warnw("msg", "get_register_no_no_player_id")
+		return &loginv1.GetRegisterNoResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+	no, err := s.loginUC.GetRegisterNo(ctx, playerID)
+	if err != nil {
+		return &loginv1.GetRegisterNoResponse{Code: toProtoCode(err)}, nil
+	}
+	return &loginv1.GetRegisterNoResponse{Code: commonv1.ErrCode_OK, RegisterNo: no}, nil
 }
 
 // SelectRole 立即完成型(选角权威化 2026-07-08,见 login.proto SelectRole 注释)。

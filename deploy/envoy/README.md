@@ -60,6 +60,10 @@ NetworkPolicy 只是可达性收敛，生产仍须补 mTLS/ACL 信任根（见 a
 后续客户端业务服上线时可复制 cluster 块并按鉴权契约增加 route；DS 面新增方法必须逐个增加
 **精确 `path`**，禁止用 service `prefix` 扩大未鉴权攻击面。
 
+> **客户端鉴权 RPC 不是只加 route 就完成**:`jwt_authn.rules` 未命中的 path 默认放行且不验签,
+> 因而也不会把 JWT `sub` 注入 `x-pandora-player-id`。凡上游从该头取玩家身份的新 RPC,必须把
+> exact path 同步加入 `jwt_authn.rules`;漏配时应明确返回未授权,不得把缺身份伪装成业务默认态。
+
 ---
 
 ## 1. 证书生成(由 **ChatGPT / Codex** 执行,Claude 不动)

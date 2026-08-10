@@ -34,6 +34,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
@@ -161,6 +162,19 @@ func main() {
 	// 7. 装配链
 	repo := data.NewMySQLFriendRepo(db)
 	uc := biz.NewFriendUsecase(repo, pusher, online, cfg.Friend)
+	// 好友申请频率配额(anti-abuse §6 第 6 项):复用 node.redis_client。
+	// 未配 Redis(纯 MySQL 骨架联调)不限流,与 chat 的弱依赖边界一致。
+	if rc := cfg.Node.RedisClient; rc.Host != "" || len(rc.Addrs) > 0 {
+		quotaRdb := redisx.NewUniversalClient(rc)
+		defer func() { _ = quotaRdb.Close() }()
+		uc.SetRateQuota(&redisx.ActionQuota{
+			RDB: quotaRdb, Domain: "friend",
+			Limit: int64(cfg.Friend.RateQuotaPerMin), Window: time.Minute,
+		})
+		helper.Infow("msg", "friend_rate_quota_ready", "per_min", cfg.Friend.RateQuotaPerMin)
+	} else {
+		helper.Warnw("msg", "friend_rate_quota_disabled", "reason", "redis not configured")
+	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)

@@ -65,6 +65,13 @@ type WorldRateLimiter interface {
 	AllowWorld(ctx context.Context, playerID uint64, cooldown time.Duration) (bool, error)
 }
 
+// ChannelRateLimiter 非世界频道(private/team/guild/group)的 per-player per-频道冷却
+// (anti-abuse §6 第 6 项)。语义同 WorldRateLimiter:背压非权威门,判定 error 由调用方
+// fail-open 放行;实现 data.RedisWorldRateLimiter 同一结构体同时提供两个接口。
+type ChannelRateLimiter interface {
+	AllowChannel(ctx context.Context, channel string, playerID uint64, cooldown time.Duration) (bool, error)
+}
+
 // ChatUsecase 是 chat 服务业务逻辑核心。
 type ChatUsecase struct {
 	repo   data.PrivateRepo
@@ -83,6 +90,9 @@ type ChatUsecase struct {
 	// worldLimiter 世界频道 per-player 冷却(压测审核【必修-5】)。可为 nil:
 	// 未配 Redis 的骨架联调不限流,行为与历史一致;生产 main 必接线。
 	worldLimiter WorldRateLimiter
+
+	// channelLimiter 非世界频道冷却(anti-abuse §6 第 6 项)。可为 nil(不限流)。
+	channelLimiter ChannelRateLimiter
 }
 
 // NewChatUsecase 构造。pusher / team / guild / group 允许为 nil(弱依赖未配置时降级)。
@@ -109,6 +119,34 @@ func (u *ChatUsecase) SetCellRouter(r *cellroute.Router) {
 // nil-safe:不调用时世界频道不限流(骨架联调),与历史行为一致。
 func (u *ChatUsecase) SetWorldRateLimiter(l WorldRateLimiter) {
 	u.worldLimiter = l
+}
+
+// SetChannelRateLimiter 注入非世界频道冷却判定(main 与 world limiter 同一实例装配)。
+// nil-safe:不调用时非世界频道不限流,与历史行为一致。
+func (u *ChatUsecase) SetChannelRateLimiter(l ChannelRateLimiter) {
+	u.channelLimiter = l
+}
+
+// allowChannel 非世界频道冷却门:窗内拒绝返回 ErrRateLimited(零副作用,先于落库/推送);
+// limiter 未注入 / 冷却 <=0 / 判定失败(Redis 抖动)一律放行(fail-open,§2 铁律)。
+func (u *ChatUsecase) allowChannel(ctx context.Context, channel string, senderID uint64) error {
+	if u.channelLimiter == nil {
+		return nil
+	}
+	cooldown := u.cfg.NonWorldCooldown.Std()
+	if cooldown <= 0 {
+		return nil
+	}
+	allowed, err := u.channelLimiter.AllowChannel(ctx, channel, senderID, cooldown)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "chat_channel_ratelimit_check_failed",
+			"channel", channel, "sender_id", senderID, "err", err)
+		return nil
+	}
+	if !allowed {
+		return errcode.New(errcode.ErrRateLimited, "%s chat cooldown, retry after %s", channel, cooldown)
+	}
+	return nil
 }
 
 // SendMessage 发一条聊天消息。senderID 由 service 从 JWT ctx 得到(R5)。
@@ -157,14 +195,28 @@ func (u *ChatUsecase) SendMessage(
 		// SenderNickname 留空,客户端按 sender_id 解析(最小数据单位)。
 	}
 
+	// 非世界频道冷却(anti-abuse §6 第 6 项):统一在分发点、一切副作用之前判定,
+	// 按频道独立占窗(队聊不占私聊的窗);世界频道另有更严的 sendWorld 冷却。
 	switch channel {
 	case chatv1.ChatChannel_CHAT_CHANNEL_PRIVATE:
+		if err := u.allowChannel(ctx, "private", senderID); err != nil {
+			return 0, err
+		}
 		return u.sendPrivate(ctx, msg)
 	case chatv1.ChatChannel_CHAT_CHANNEL_TEAM:
+		if err := u.allowChannel(ctx, "team", senderID); err != nil {
+			return 0, err
+		}
 		return u.sendTeam(ctx, senderID, msg)
 	case chatv1.ChatChannel_CHAT_CHANNEL_GUILD:
+		if err := u.allowChannel(ctx, "guild", senderID); err != nil {
+			return 0, err
+		}
 		return u.sendGuild(ctx, senderID, msg)
 	case chatv1.ChatChannel_CHAT_CHANNEL_GROUP:
+		if err := u.allowChannel(ctx, "group", senderID); err != nil {
+			return 0, err
+		}
 		return u.sendGroup(ctx, senderID, msg)
 	default: // WORLD
 		return u.sendWorld(ctx, msg)

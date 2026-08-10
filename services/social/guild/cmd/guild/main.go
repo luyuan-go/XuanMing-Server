@@ -37,6 +37,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	guildv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/guild/v1"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/luyuancpp/pandora/services/social/guild/internal/biz"
 	"github.com/luyuancpp/pandora/services/social/guild/internal/conf"
@@ -135,6 +136,7 @@ func main() {
 	// 5. Redis(弱依赖:公会资料读缓存 cache-aside;Ping 失败降级直连 MySQL,cache=nil)。
 	//    单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
 	var guildCache data.GuildCache
+	var quotaRdb redis.UniversalClient // 申请频率配额与读缓存共用同一 Redis(健康时才启用)
 	if rc := cfg.Node.RedisClient; rc.Host != "" || len(rc.Addrs) > 0 {
 		rdb := redisx.NewUniversalClient(rc)
 		pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -147,6 +149,7 @@ func main() {
 			cancel()
 			defer func() { _ = rdb.Close() }()
 			guildCache = data.NewRedisGuildCache(rdb)
+			quotaRdb = rdb
 			helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs, "cache_ttl", cfg.Guild.CacheTTL.String())
 		}
 	} else {
@@ -173,6 +176,16 @@ func main() {
 	guildRepo := data.NewMySQLGuildRepo(db)
 	groupRepo := data.NewMySQLGroupRepo(db)
 	guildUC := biz.NewGuildUsecase(guildRepo, guildCache, pusher, cfg.Guild)
+	// 入会申请频率配额(anti-abuse §6 第 6 项):Redis 健康时启用,否则不限(fail-open 边界)。
+	if quotaRdb != nil {
+		guildUC.SetRateQuota(&redisx.ActionQuota{
+			RDB: quotaRdb, Domain: "guild",
+			Limit: int64(cfg.Guild.RateQuotaPerMin), Window: time.Minute,
+		})
+		helper.Infow("msg", "guild_rate_quota_ready", "per_min", cfg.Guild.RateQuotaPerMin)
+	} else {
+		helper.Warnw("msg", "guild_rate_quota_disabled", "reason", "redis not available")
+	}
 	groupUC := biz.NewGroupUsecase(groupRepo, cfg.Guild)
 	guildSvc := service.NewGuildService(guildUC, guildSF, requestSF)
 	groupSvc := service.NewGroupService(groupUC, groupSF)
