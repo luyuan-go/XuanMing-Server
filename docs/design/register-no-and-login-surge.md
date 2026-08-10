@@ -59,10 +59,28 @@ uint64,无业务含义)并存,不替代。
 | 账号库 | 全服共享单点(TiDB),「全国所有玩家的登录都写同一实例」 | 03-account-tidb.sql:3 |
 | login 配置里的 Region | hub_allocator 的大厅分片参数(空=选最空分片),与玩家选服无关 | login conf.go `HubAllocatorConf.Region` |
 
-注意一个**前瞻不确定点**:cell 化方案(scale-cellular-20m.md)把 login 描述为「全局/区域薄层」,
-§4.3 按 region 拆了 social TiDB/总线/matchmaker 但**未点名账号库落点**。若未来账号库按 region
-切分,本方案的全局计数器需保留全局一份(或改号段方案——那时编号语义也该重新拍板)。
-现状(2026-07-27 拍板)账号库是全服单点 TiDB,本方案按此设计。
+**两库的扩容路线刻意相反,编号必须挂对边**(2026-08-10 补):
+
+- **玩家库 pandora_player**:今天单机 MySQL(deploy/tidb-init 只有 social/owner/account
+  三个,无 player 版);扩容路线是**应用层按玩家分片**——代码已预埋分片键口径
+  `ProfileShardKey = player_id`(player biz/profile_sharding.go,档案锚定玩家 owner cell),
+  cell 化后进 Cell 内 `MySQL ShardSet(player_id % N)`。它能这么切是因为访问天生单键:
+  全服务 grep 无任何跨玩家查询(players 表的 `idx_mmr` 在 Go 代码中零引用,疑似闲置)。
+- **账号库 pandora_account**:「全服单点」指**逻辑命名空间单一**(一个 schema、一套
+  `uk_account`),不是一台机器——TiDB 物理上本就是多节点,加 TiKV 节点即扩容;
+  2026-07-27 选 TiDB 而非应用层分库,买的正是「业务 SQL/Go 零改动」。逻辑上真拆多库
+  技术可行(已核:accounts 只按账号名访问,session/roles/devices 只按 player_id 访问,
+  accounts 与 player_session_generations **从不共事务**——可按不同键各自分片,同名账号
+  必落同片故唯一性仍成立),但那是重新捡回 TiDB 已消掉的复杂度,§15.3 无真实需求不做。
+- **编号挂账号库**的原因:注册是账号事件;玩家库的宿命是按 player_id 切开,而全局连续
+  计数需要「宿命是全局一份」的落点。
+
+**前瞻不确定点**:cell 化方案把 login 描述为「全局/区域薄层」,§4.3 按 region 拆了
+social TiDB/总线/matchmaker 但**未点名账号库落点**。若未来按 region 切账号库(国服/海外),
+要同时新解:①账号名唯一性跨 region(全局唯一性层或账号名带 region 命名空间);
+②编号计数器落点——**那才是「独立编号权威(服务/小库)」的真实需求出现点**(§3.4 用户
+提案在该终态是对的形状),迁移路径干净:计数器+补号任务整体搬走,消费方只认 `register_no`
+字段。现状账号库是全服单点 TiDB,本方案按此设计。
 
 ---
 

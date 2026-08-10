@@ -1,8 +1,8 @@
 {
-  "version": 20260807001,
-  "generated_at_ms": 1786082796888,
+  "version": 20260810001,
+  "generated_at_ms": 1786342475703,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-r1872",
+  "source_rev": "svn-r1945",
   "tables": [
     {
       "name": "chest_drop",
@@ -113,7 +113,7 @@
       "name": "skill_circle",
       "file": "skill_circle.json",
       "proto": "pandora.config.v1.SkillCircleTableData",
-      "checksum": "sha256:87512af923de6f32f6578110acb97073490fbb502ed3c9fe5821c8a14d34653a",
+      "checksum": "sha256:8f064a88acc612acf06c95cba92ff48c36140e4d5c3eb69dce289f3310213728",
       "rows": 11
     },
     {
