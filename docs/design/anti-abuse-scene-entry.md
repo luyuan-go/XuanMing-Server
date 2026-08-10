@@ -365,7 +365,7 @@ per-player 配额都可以用换号绕过**。因此必须把分配配额绑到�
 
 | 序 | 项 | 涉及 | 验收 |
 |---|---|---|---|
-| **0** | **no-show / 全员掉线双阈值空场回收**(§4.3①) | ds_allocator + proto | ✅ **代码已实现(2026-08-07)**,单测已锁定 no-show 走短阈值 / 有人连过走长阈值 / EverHadPlayers 粘滞 / 禁用差异化后仍会回收 / 解析结果绝不为 0。**未完成**:未编译验证(需先跑 proto 生成)、未做故障注入验证真实断线玩家不被误判、未给出「单次进场占用 Pod·分钟」前后对比 |
+| **0** | **no-show / 全员掉线双阈值空场回收**(§4.3①) | ds_allocator + proto | ✅ **代码已实现(2026-08-07)**,单测已锁定 no-show 走短阈值 / 有人连过走长阈值 / EverHadPlayers 粘滞 / 禁用差异化后仍会回收 / 解析结果绝不为 0。2026-08-10 复检:proto 已重生(`9e07b875`),`go build` + 全套件 `go test -count=1` 全绿。**未完成**:未做故障注入验证真实断线玩家不被误判、未实测 Admission P99 复核 150s 初值、未给出「单次进场占用 Pod·分钟」前后对比 |
 | 1 | `pkg/redisx/ratelimit.go` 两原语 + 契约测试 | pkg | 单测锁定:窗口内拒第二次、窗口后放行、error 时 fail-open 返回 allow |
 | 2 | `StartMatch` per-队长/队伍 Cooldown | matchmaker | 单测:冷却内返回 `ErrRateLimited` 且**零副作用**(不创建 operation、不占 claim);Redis 故障时放行 |
 | 3 | 容量耗尽改 `WAIT + retry_after`(§4.3③) | ds_allocator + matchmaker + 客户端 | 满载时玩家看到排队而非硬失败;必须并入 §9.23 同一恢复协调器,**不新建第二套状态机** |

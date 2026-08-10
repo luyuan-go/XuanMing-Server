@@ -409,7 +409,7 @@ go run ./cmd/gmctl additem --match <matchID> --player <playerID> --config <真�
 **任何频率闸都拦不住**。同一处还有个 §9.20 卡玩家 bug:正常玩家强退后被 `ensureNoneInBattle`
 锁最多 5 分钟,只看到 `ErrMatchInBattle(4007)`。缩短「从未连入」局的持有时间**一个修同时解决两件事**。
 
-### 10.2 已完成代码范围(Claude,**未编译、未跑测试**)
+### 10.2 已完成代码范围(Claude;2026-08-10 复检:`go build` + `go test ./services/battle/ds_allocator/... -count=1` 全绿)
 
 把空场回收拆成两档:`ever_had_players=false`(no-show)走短阈值,其余走原 `empty_battle_timeout`。
 
@@ -422,8 +422,8 @@ go run ./cmd/gmctl additem --match <matchID> --player <playerID> --config <真�
 
 ### 10.3 Codex 待办(阻塞本模块编译)
 
-1. ⚠️ **跑 `pwsh tools/scripts/proto_gen.ps1` 重生 ds pb** —— 代码引用的
-   `EverHadPlayers` / `GetEverHadPlayers()` 目前在 `proto/gen` 里**还不存在**,不跑必然 build 红。
+1. ~~跑 `pwsh tools/scripts/proto_gen.ps1` 重生 ds pb~~ ✅ Codex 已重生并提交(`9e07b875`,
+   `EverHadPlayers` / `GetEverHadPlayers()` 已在 gen/go),build 已验证不红。
 2. 无需 `go mod tidy`(未引入新依赖)。
 3. cpp pb 无需同步(存储侧字段,UE 不可见)。
 
@@ -440,7 +440,8 @@ go run ./cmd/gmctl additem --match <matchID> --player <playerID> --config <真�
 
 ### 10.5 仍未验证(§6 第 0 项不算验收完成)
 
-- 未编译、未跑测试(用户自行编译)
+- ~~未编译、未跑测试~~ ✅ 2026-08-10 复检:ds_allocator 全包 build 绿,全套件测试绿,
+  新增 6 个单测(biz 4 + conf 2,含 `StickyAcrossDisconnect` 防误伤护栏)逐个 PASS
 - 未做故障注入验证真实断线玩家在重连窗内不被误判
 - 未实测「DS 报 ready → 客户端完成 Admission」P99 来复核 150s 默认值(该值目前是**有推导依据的保守初值**,不是实测值)
 - 未给出「单次进场占用 Pod·分钟」前后对比表
