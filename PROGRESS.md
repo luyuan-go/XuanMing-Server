@@ -2776,18 +2776,25 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
 - **待拍板**(文档 §6):A②给谁看(阻塞查询接口/proto/UE 展示)、B bcrypt cost、
   C 登录排队立项 + Envoy local_ratelimit 提级、D 洪峰压测专项。
 
-### 同日补充:A② 拍板「客户端玩家可见」,展示链路服务端落码(编译验证交 Codex)
+### 同日补充:A② 拍板「客户端玩家可见」,展示链路全链落码(Codex 已完成生成与编译)
 
-- proto:`LoginResponse.register_no = 13`(uint64,0=补号中;注释含红线),go pb 已用
-  `proto_gen.ps1` 默认档重生成(lint OK);**cpp pb 未生成**——`-Cpp` 档 + UE 仓库同步交 Codex,
-  commit 须标 [proto]。
-- 服务端:`AccountRepo.GetRegisterNo`(接口 + MySQL 实现;**fail-soft**:读失败/存量库缺列
-  只 Warn 置 0,绝不拒登录——刻意不并进 FindByAccount,展示字段必须失败隔离)、
+- proto:`LoginResponse.register_no = 13`(uint64,0=补号中;注释含红线),go/cpp pb 已生成;
+  服务端协议基线以 `[proto]` 提交 `bea78b83`,客户端使用官方 `GenClientProto.ps1 -UpdateLock`
+  同步并以 `-VerifyOnly` 复验通过。锁后累计协议变化涉及 7 组 pb(14 个 `.h/.cc`),不是仅
+  login 一对;`ClientProto.lock.json` 锁定实际引入协议的 `bea78b83`。
+- 服务端:`AccountRepo.GetRegisterNo`(接口 + MySQL 实现;**fail-soft**:独立 250ms 查询预算,
+  读失败/超时/存量库缺列只 Warn 置 0,不取消登录父 ctx——刻意不并进 FindByAccount)、
   biz `LoginResult.RegisterNo`(主路径 + battle 重连路径都带出)、service 组装;
-  两个测试 fake(fakeAccountRepo/devFakeRepo)已补方法。
-- **交 Codex**(用户指令:客户端 + 编译都归 Codex):① `proto_gen.ps1 -Cpp` + UE 仓库
-  cpp pb 同步;② UE 登录态存 register_no,WBP_RoleInfo 属性界面加一行(0=「生成中」);
-  ③ login 服务 go build / go vet / go test 编译验证(本次 proto 字段后未在本机编译)。
+  两个测试 fake(fakeAccountRepo/devFakeRepo)已补方法;新增主登录、慢查询降级、battle 重连、
+  service proto 四类非零传播回归。
+- UE:Wire decode→LoginResult→Backend 会话态→AccountModel→RoleInfo 已贯通;无会话时折叠,
+  非零显示「注册编号 N」,登录态 0 显示「注册编号 生成中」。未改 `WBP_RoleInfo.uasset`,
+  沿用界面现有的运行时补建控件机制;当前 0 不主动轮询,要等下一次完整登录响应刷新。
+- **Codex 验证**:login `go build ./...`、`go vet ./...`、`go test ./... -count=1` 全绿;
+  CodecGen Python 15/15、官方协议 `-VerifyOnly` 全绿;UE `Pandora Win64 Development`
+  (659/659 actions)与 `PandoraEditor Win64 Development`(866/866 actions)均编译成功。
+  未执行 PIE 视觉检查或大厅/战斗重连真实登录 E2E;本次双后端测试因 DSN 未设置均 SKIP,
+  真 MySQL/TiDB 的先前实跑记录见下节。客户端 SVN 未 commit/push。
 
 ### 同日修复:真 TiDB 并发测试抓获补号事务快照错序(提交前阻断,已修)
 
@@ -2812,3 +2819,29 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   并发用例 ×5 全绿;login 模块 build/vet/全包 test(含集成)全绿。
 - **同类扫描**:friend/guild/mail 的锁内权威读全部已是 `FOR UPDATE` 当前读(friend README
   「读侧防陈旧快照」条款先例),register_no 是全仓唯一「锁后普通读」例外,已闭环。
+
+## 2026-08-05(续):经验域接入 resync 回源 + 逐域覆盖矩阵核完
+
+- **接着上一条的 §12.4 待办做**。逐域核对推送消费域 × 兜底手段后,`MyPlayerProgressionModel`
+  是唯一三项(resync / 切前台 / 常驻兜底)全缺的域;Team / Friend / Guild 早已是
+  「resync + 有限重试 + 前台恢复 + 会话切换」四件套,Match 靠有界轮询 + standby watchdog。
+  Match 域**刻意**不接前台回调(轮询与 watchdog 前台后自然继续驱动,
+  `UMyDsRecoveryCoordinator` 另有前台恢复覆盖进场链),不是缺口。
+- **落码**(`Pandora-Client-SVN/.../Module/Player/Model/MyPlayerProgressionModel.{h,cpp}`):
+  ①`HandlePushFrame` 增加 `pandora.push.resync` 分支 → `BeginAuthoritativeRepull()`;
+  ②原本裸调 `RequestProfile()` 的另两条兜底路径(未知 `event_type`、payload 解析失败)
+  一并收编到同一 helper —— 它们此前同样「回源失败就没了」;③`HandlePlayerProfile` 成功清脏、
+  失败在预算内 `ScheduleResyncRepullRetry()`(3 次 / 2s,与好友域同口径);④新增前台恢复兜底
+  (仅当仍脏**且**预算已耗尽才补满重来,预算 >0 说明已有在途请求/定时器在驱动);
+  ⑤`DispatchRepull()` 兜住「RPC 客户端未就绪」窗口 —— 此时 `RequestProfile` 只打警告返回、
+  **不会有结果回调**驱动重试,脏标记会挂着无人驱动(违反 §9.19),故自行接着排一次,
+  预算递减保证收敛。定时器与前台委托均在 `Deinitialize` 成对解除。
+- **修正上一条的一处不准确**:`ApplyExperienceSnapshot` **本来就是** pull 与 push 共用的同一个
+  apply 函数且带 `(Level, ExpInLevel)` 单调守卫,已经是原则 5-A 模型 B 的标准形态,不需要改造;
+  上一条把「走同一 apply 路径」写成待办是低估了现状。真缺口只有 resync 那一处。
+- **文档**:`protocol-ordering-rules.md` §12.4 由「缺口清单」改写为**逐域覆盖矩阵** +
+  本次修复说明 + 「仍未接入」三项(聊天域 / presence / system.notify,接入前不算缺口)。
+- **未验证**:UE 未编译、未真机(§11.6 编译归用户)。验收建议:登录后挂后台超过 push 缓冲窗口
+  (默认 5min / 512 帧)再回前台,期间用其它端刷经验,确认回前台后等级与经验条收敛到权威值。
+- **仍待确认(与上一条同)**:`Pandora-Client-SVN/CLAUDE.md` 与 `F:\work\CLAUDE.md` 在当前工作副本
+  中都不存在,客户端侧对应条款无处可加。

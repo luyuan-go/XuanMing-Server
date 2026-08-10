@@ -594,8 +594,8 @@ func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []ui
 | 档 | 漏帧后果 | 必须做到 | 现有域 | 现状 |
 |---|---|---|---|---|
 | **A 流程态** | 玩家卡住 / 进不去场景 | 权威查询 + §5.4 五触发点 + **有界 watchdog** | `pandora.match.progress`、`pandora.hub.migrate`(DS 恢复 / 进场链) | 已全套(`MyMatchModel` / `UMyDsRecoveryCoordinator`) |
-| **B 状态 / 列表态** | 只显示旧值,重进界面即自愈 | 权威查询 + 入口点刷新 + resync;**不需要常驻 watchdog** | `pandora.team.update`、`pandora.friend.event`、`pandora.guild.event`、`pandora.player.experience` | 前三个已接 resync;**经验域缺**(§12.4 #1) |
-| **C 事件流** | 少一条消息,不影响状态正确性 | 回源**拉历史**(不是拉快照)+ 按业务 ID 判重 | `pandora.chat.private / .team / .guild / .group` | 客户端尚无消费者(§12.4 #3) |
+| **B 状态 / 列表态** | 只显示旧值,重进界面即自愈 | 权威查询 + 入口点刷新 + resync;**不需要常驻 watchdog** | `pandora.team.update`、`pandora.friend.event`、`pandora.guild.event`、`pandora.player.experience` | 四个域均已接 resync(经验域 2026-08-05 补齐,见 §12.4) |
+| **C 事件流** | 少一条消息,不影响状态正确性 | 回源**拉历史**(不是拉快照)+ 按业务 ID 判重 | `pandora.chat.private / .team / .guild / .group` | 客户端尚无消费者(§12.4「仍未接入」#1) |
 
 **A 档是合规项不是选择题**:凡推进玩家进场 / 换场景的状态,`CLAUDE.md §9.19 / §9.20 / §9.23` 明写"任何阶段不允许无人驱动的静默等待",watchdog 必须有。反过来 **B 档不准上常驻轮询**——那违反 `§16.10`(禁止用定时器掩盖时序问题)。
 
@@ -639,13 +639,41 @@ matchmaker-pve 启动时 Kafka 未就绪,producer 一次性初始化失败后 pu
 
 配套:`UMyDsRecoveryCoordinator::TryDriveTravel` 的**幂等 no-op 守卫**(目标为 Battle 且当前 live connection 端点精确一致时不重复 `ClientTravel`)是 at-least-once 补推的前提 —— 否则战斗内重复收到 READY 会把玩家拽回去重载地图。这个缺口先于补推存在,补推使之常态化后才被发现。
 
-### 12.4 缺口清单(待办)
+### 12.4 逐域覆盖矩阵(2026-08-05 核查)
 
-| # | 缺口 | 位置 | 修法 |
+推送消费域 × 兜底手段。**"—"表示该域不需要**,不是缺口。
+
+| 域(客户端 Model) | resync | 切前台 | 会话切换 | 常驻兜底 | 备注 |
+|---|---|---|---|---|---|
+| Match(`MyMatchModel`) | ✅ | — | — | ✅ 有界轮询 + standby watchdog | §12.3 参考实现;轮询在拿到 `battle_ds_addr` 或无 match 时停表 |
+| Team(`MyTeamModel`) | ✅ | ✅ | ✅ | — | resync + 有限重试 |
+| Friend(`MyFriendModel`) | ✅ | ✅ | ✅ | — | 重试预算 3 次 / 2s,前台恢复补满预算;本域是重试实现的范本 |
+| Guild(`MyGuildModel`) | ✅ | ✅ | ✅ | — | 同上 |
+| DS 恢复(`MyDsRecoveryCoordinator`) | ✅ | ✅ | — | ✅ 共享 phase watchdog | `pandora.hub.migrate`;受 `CLAUDE.md §9.19` 有界驱动约束 |
+| **Progression(`MyPlayerProgressionModel`)** | ✅ **本次补** | ✅ **本次补** | — | — | 详见下方"本次修复" |
+
+Match 域没接切前台是**刻意的**:它的常驻有界轮询与 standby watchdog 在前台恢复后自然继续驱动,`UMyDsRecoveryCoordinator` 另有前台恢复覆盖进场链,再加一个前台回调只会重复触发。
+
+#### 本次修复:经验域接入 resync 与前台兜底
+
+**修复前**:`HandlePushFrame` 只认 `pandora.player.experience`,`pandora.push.resync` 落到"其余 topic 原样忽略"分支 → 缺口里若含经验帧,等级与经验条会一直停在漏帧前的旧值,直到下次登录拉起点快照才自愈。
+
+**已落码**(`Private/Module/Player/Model/MyPlayerProgressionModel.cpp` + 同名 `.h`):
+
+- `HandlePushFrame` 增加 resync 分支 → `BeginAuthoritativeRepull()`(置脏 + 充满重试预算 + 回源拉 `GetProfile`);
+- 原本裸调 `RequestProfile()` 的另两条兜底路径(未知 `event_type`、payload 解析失败)一并收编到同一 helper —— 它们此前同样"回源失败就没了";
+- `HandlePlayerProfile` 成功清脏、失败在预算内 `ScheduleResyncRepullRetry()`(3 次 / 2s,与好友域同口径);
+- 新增前台恢复兜底:仅当**仍脏且预算已耗尽**时补满预算重新回源(预算 >0 说明已有在途请求或待触发定时器在驱动,不重复触发);
+- `DispatchRepull()` 兜住"RPC 客户端未就绪"窗口 —— 此时 `RequestProfile` 只打警告返回、**不会有结果回调**来驱动重试,脏标记会挂着无人驱动(违反 `CLAUDE.md §9.19`),故自行接着排一次;预算递减保证收敛。
+
+**本来就是对的,没动**:`ApplyExperienceSnapshot` 已经是 pull 与 push 共用的**同一个 apply 函数**且带 `(Level, ExpInLevel)` 单调守卫 —— 这正是 §3 原则 5-A 模型 B 的标准形态,不需要改造。
+
+#### 仍未接入(接入前不算缺口)
+
+| # | 域 | 现状 | 接入时必须做 |
 |---|---|---|---|
-| 1 | **经验域没接 resync** | `MyPlayerProgressionModel::HandlePushFrame` 只认 `pandora.player.experience`,其余 topic 原样忽略 | 收到 resync 时回源拉一次经验快照(`GetProfile` 的经验字段与推送共用同一形态),走与推送**同一个** apply 路径。漏帧现症:等级 / 经验条停在旧值,直到下次登录拉快照 |
-| 2 | **五个触发点未逐域核对** | 目前只确证匹配域有(有界)常驻轮询兜底;Team / Friend / Guild 是 resync + 有限重试 | 按 §5.4 表格逐域过「界面进入 / push 重连 / 切前台」三点是否真的接了刷新,缺哪个补哪个 |
-| 3 | **聊天域尚无客户端 push 消费者** | 本次核查未在客户端发现 `pandora.chat.*` 的消费者(仅注释提及) | 接入时必须同时接 resync + `PullHistory` 回源,并按 `message_id` 判重(chat 是最典型的"重投即重复"域) |
-| 4 | **presence / system.notify 未接** | `pandora.presence.update` 客户端无消费者;`pandora.system.notify` 后端无 proto、无 producer(push.proto 注释已写明) | 接入前不算缺口;接入时照 §8.3 客户端清单全过一遍 |
+| 1 | 聊天 `pandora.chat.*` | 本次核查未在客户端发现消费者(仅注释提及) | resync + `PullHistory` 回源,并按 `message_id` 判重(chat 是最典型的"重投即重复"域) |
+| 2 | `pandora.presence.update` | 客户端无消费者 | 按 `CLAUDE.md §9.22` 它本就是 presence 投影、按需查询,大概率属 §5.4 "不需要"那一类 |
+| 3 | `pandora.system.notify` | 后端无 proto、无 producer(push.proto 注释已写明) | 照 §8.3 客户端清单全过一遍 |
 
-⚠️ 本节是 2026-08-05 对 HEAD 的**静态核查**结论,未经编译与真机验证(UE 编译归用户,见 `CLAUDE.md §11.6`)。动手前先复核对应文件的当前状态。
+⚠️ 覆盖矩阵与修复均为 2026-08-05 对 HEAD 的**静态核查 / 静态改动**,**未经编译与真机验证**(UE 编译归用户,见 `CLAUDE.md §11.6`)。验收建议:登录后挂后台超过 push 缓冲窗口(默认 5min / 512 帧)再回前台,期间用其它端刷经验,确认回前台后等级与经验条收敛到权威值。

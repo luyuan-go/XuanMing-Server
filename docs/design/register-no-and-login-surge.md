@@ -275,8 +275,8 @@ COMMIT;                                                           -- 回滚则�
 | 3 | 补号任务 | login `internal/data/register_no.go`(事务)+ `cmd/login/main.go`(5s ticker,drain 上限 20 批,启动探针 fail-soft)+ conf `register_no_start` | ✅ |
 | 4 | 真 MySQL / 真 TiDB 双后端测试 | `internal/data/register_no_mysql_test.go`:全序/跨批连续、水位滞后、双 sweeper 并发无重号无空洞(= TiDB start_ts 快照缺陷回归,见 §3.3 隔离级别要点)、起始号幂等、缺迁移探针失败(PANDORA_TEST_MYSQL_DSN / PANDORA_TEST_TIDB_DSN 双门控,friend/guild 同款) | ✅ |
 | 5 | 容量/清单登记 | dbcheck registry + login budgets.go + CLAUDE.md §9.24 豁免段:`register_no_counter` 恒 1 行权威闸 | ✅ |
-| 6 | 展示链路(A② 已拍板 2026-08-10:**客户端玩家可见**) | 服务端已落码:proto `LoginResponse.register_no = 13`(go pb 已重生成,`proto_gen.ps1` 默认档)、`AccountRepo.GetRegisterNo`(**fail-soft**:读失败置 0 只记日志不拒登录;刻意不并进 FindByAccount——列缺失不能打挂登录整链)、biz 主路径与 battle 重连路径都带出、service 组装 `RegisterNo`。0 = 补号中,客户端显示「生成中」 | ✅ 服务端 |
-| 7 | UE 侧(交 Codex,2026-08-10 用户指令) | ① `proto_gen.ps1 -Cpp` 生成 cpp pb 同步 UE 仓库(commit 标 [proto]);② UE 登录态存 register_no,WBP_RoleInfo 属性界面(现显示 PlayerId/账号名处)加一行,0 显示「生成中」;③ go build / go test 编译验证也归 Codex(用户指令) | ⏳ Codex |
+| 6 | 展示链路(A② 已拍板 2026-08-10:**客户端玩家可见**) | 服务端已落码:proto `LoginResponse.register_no = 13`、`AccountRepo.GetRegisterNo`(**fail-soft**:独立 250ms 查询预算,失败/超时置 0 且不取消登录父 ctx;刻意不并进 FindByAccount——列缺失不能打挂登录整链)、biz 主路径与 battle 重连路径都带出、service 组装 `RegisterNo`。0 = 补号中,客户端显示「生成中」 | ✅ 服务端 |
+| 7 | UE 展示与交付验证(Codex,2026-08-10) | 服务端 C++ pb 以 `[proto]` 提交 `bea78b83`,客户端通过官方 `GenClientProto.ps1 -UpdateLock` 同步并以 `-VerifyOnly` 复验;登录解码→会话态→RoleInfo 全链带出 `register_no`,0 显示「生成中」;login `go build/vet/test`、`Pandora` 与 `PandoraEditor` Development 编译全绿 | ✅ 生成/编译;PIE 与真实登录 E2E 未跑 |
 
 ---
 
