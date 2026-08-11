@@ -1,0 +1,60 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "name": "斩风",
+      "skill_id": 100111,
+      "rarity": 1,
+      "max_level": 5
+    },
+    {
+      "id": 2,
+      "name": "裂地",
+      "skill_id": 100121,
+      "rarity": 2,
+      "max_level": 5
+    },
+    {
+      "id": 3,
+      "name": "怒吼",
+      "skill_id": 100131,
+      "rarity": 3,
+      "max_level": 5
+    },
+    {
+      "id": 4,
+      "name": "冰锥",
+      "skill_id": 100211,
+      "rarity": 1,
+      "max_level": 5
+    },
+    {
+      "id": 5,
+      "name": "霜环",
+      "skill_id": 100221,
+      "rarity": 2,
+      "max_level": 5
+    },
+    {
+      "id": 6,
+      "name": "极寒",
+      "skill_id": 100231,
+      "rarity": 3,
+      "max_level": 5
+    },
+    {
+      "id": 7,
+      "name": "疾影",
+      "skill_id": 100311,
+      "rarity": 2,
+      "max_level": 5
+    },
+    {
+      "id": 8,
+      "name": "影袭",
+      "skill_id": 100331,
+      "rarity": 4,
+      "max_level": 5
+    }
+  ]
+}

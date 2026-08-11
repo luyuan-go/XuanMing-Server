@@ -62,6 +62,12 @@ type Tables struct {
 	// SkillBullet 配置表 skill_bullet(技能/j_技能_方位类型_子弹.xlsx)
 	SkillBullet *SkillBulletTable
 
+	// SkillCard 配置表 skill_card(技能/j_技能卡.xlsx)
+	SkillCard *SkillCardTable
+
+	// SkillCardUpgrade 配置表 skill_card_upgrade(技能/j_技能卡升级.xlsx)
+	SkillCardUpgrade *SkillCardUpgradeTable
+
 	// SkillCircle 配置表 skill_circle(技能/j_技能_方位类型_圆形.xlsx)
 	SkillCircle *SkillCircleTable
 
@@ -107,6 +113,8 @@ var specByName = map[string]tableSpec{
 	"role_level":          {protoName: "pandora.config.v1.RoleLevelTableData", build: buildRoleLevelTable},
 	"role":                {protoName: "pandora.config.v1.RoleTableData", build: buildRoleTable},
 	"skill_bullet":        {protoName: "pandora.config.v1.SkillBulletTableData", build: buildSkillBulletTable},
+	"skill_card":          {protoName: "pandora.config.v1.SkillCardTableData", build: buildSkillCardTable},
+	"skill_card_upgrade":  {protoName: "pandora.config.v1.SkillCardUpgradeTableData", build: buildSkillCardUpgradeTable},
 	"skill_circle":        {protoName: "pandora.config.v1.SkillCircleTableData", build: buildSkillCircleTable},
 	"skill_rect":          {protoName: "pandora.config.v1.SkillRectTableData", build: buildSkillRectTable},
 	"skill_sector":        {protoName: "pandora.config.v1.SkillSectorTableData", build: buildSkillSectorTable},
@@ -173,6 +181,15 @@ func validateCrossTables(dst *Tables) error {
 		}
 		if !dst.Role.Exists(v) {
 			return fmt.Errorf("表 role_level 主键 %d 的 角色ID(%d)在表 role 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.SkillCard.All() {
+		v := row.GetSkillId()
+		if v == 0 {
+			return fmt.Errorf("表 skill_card 主键 %d 的 技能ID 为 0(必填外键)", row.GetId())
+		}
+		if !dst.Skill.Exists(v) {
+			return fmt.Errorf("表 skill_card 主键 %d 的 技能ID(%d)在表 skill 中不存在", row.GetId(), v)
 		}
 	}
 	for _, row := range dst.SpawnGroup.All() {
@@ -296,6 +313,20 @@ func (tb *Tables) RoleLevelRoleIdRowByID(id uint32) (*configpb.RoleRow, bool) {
 		return nil, false
 	}
 	return tb.RoleLevelRoleIdRow(row)
+}
+
+// SkillCardSkillIdRow 解析 skill_card.技能ID → skill 行(外键正查)。
+func (tb *Tables) SkillCardSkillIdRow(row *configpb.SkillCardRow) (*configpb.SkillRow, bool) {
+	return tb.Skill.ByID(row.GetSkillId())
+}
+
+// SkillCardSkillIdRowByID 按 skill_card 主键取行再解析 技能ID → skill 行。
+func (tb *Tables) SkillCardSkillIdRowByID(id uint32) (*configpb.SkillRow, bool) {
+	row, ok := tb.SkillCard.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.SkillCardSkillIdRow(row)
 }
 
 // SpawnGroupLevelIdRow 解析 spawn_group.关卡Id → level 行(外键正查)。
@@ -591,6 +622,38 @@ func buildSkillBulletTable(raw []byte, mt ManifestTable, dst *Tables) error {
 		return err
 	}
 	dst.SkillBullet = t
+	return nil
+}
+
+func buildSkillCardTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.SkillCardTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 skill_card 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 skill_card 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newSkillCardTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.SkillCard = t
+	return nil
+}
+
+func buildSkillCardUpgradeTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.SkillCardUpgradeTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 skill_card_upgrade 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 skill_card_upgrade 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newSkillCardUpgradeTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.SkillCardUpgrade = t
 	return nil
 }
 

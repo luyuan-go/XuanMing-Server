@@ -1,0 +1,64 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "talent_id": 1,
+      "attr_key": "Atk",
+      "value_per_level": 3
+    },
+    {
+      "id": 2,
+      "talent_id": 2,
+      "attr_key": "Hp",
+      "value_per_level": 20
+    },
+    {
+      "id": 3,
+      "talent_id": 3,
+      "attr_key": "MoveSpeedRate",
+      "value_per_level": 0.02
+    },
+    {
+      "id": 4,
+      "talent_id": 4,
+      "attr_key": "CritChance",
+      "value_per_level": 0.02
+    },
+    {
+      "id": 5,
+      "talent_id": 5,
+      "attr_key": "CritDamage",
+      "value_per_level": 0.05
+    },
+    {
+      "id": 6,
+      "talent_id": 6,
+      "attr_key": "Defense",
+      "value_per_level": 2
+    },
+    {
+      "id": 7,
+      "talent_id": 7,
+      "attr_key": "AtkSpeedRate",
+      "value_per_level": 0.04
+    },
+    {
+      "id": 8,
+      "talent_id": 8,
+      "attr_key": "Atk",
+      "value_per_level": 2
+    },
+    {
+      "id": 9,
+      "talent_id": 8,
+      "attr_key": "Hp",
+      "value_per_level": 15
+    },
+    {
+      "id": 10,
+      "talent_id": 8,
+      "attr_key": "Defense",
+      "value_per_level": 2
+    }
+  ]
+}

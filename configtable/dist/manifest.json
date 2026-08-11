@@ -1,6 +1,6 @@
 {
-  "version": 20260810001,
-  "generated_at_ms": 1786342475703,
+  "version": 20260810007,
+  "generated_at_ms": 1786416345904,
   "generator": "configtable-gen@0.1.0",
   "source_rev": "svn-r1945",
   "tables": [
@@ -110,6 +110,20 @@
       "rows": 3
     },
     {
+      "name": "skill_card",
+      "file": "skill_card.json",
+      "proto": "pandora.config.v1.SkillCardTableData",
+      "checksum": "sha256:cc48ff4ae89595a22fe60e5d08e631d546d7ec710351745e22c7e973279aee1a",
+      "rows": 8
+    },
+    {
+      "name": "skill_card_upgrade",
+      "file": "skill_card_upgrade.json",
+      "proto": "pandora.config.v1.SkillCardUpgradeTableData",
+      "checksum": "sha256:45cf22159cb490723e206ec95be1304ec63279bfa6f0f5406ded40d1eac07886",
+      "rows": 16
+    },
+    {
       "name": "skill_circle",
       "file": "skill_circle.json",
       "proto": "pandora.config.v1.SkillCircleTableData",
@@ -150,6 +164,13 @@
       "proto": "pandora.config.v1.SpawnPointTableData",
       "checksum": "sha256:81c6209cb766ecff0a3c0a83eab05077ee3281d7b6209cda33d1b17caa64e578",
       "rows": 402
+    },
+    {
+      "name": "talent_effect",
+      "file": "talent_effect.json",
+      "proto": "pandora.config.v1.TalentEffectTableData",
+      "checksum": "sha256:23eaa6b6bad7d463a79293b1fa16dd32bae33a6da36ac4d6f8592cbe3814d229",
+      "rows": 10
     },
     {
       "name": "talent",

@@ -101,6 +101,40 @@ func TestLoadRealDistIfPresent(t *testing.T) {
 	if _, _, err := tb.Talent.ValidateAllocation(map[uint32]uint32{1: 99}); err == nil {
 		t.Fatal("超等级上限的分配应被拒")
 	}
+
+	// 专精效果表(z_专精_效果.xlsx):跨行校验必须过,且分配能换算出加成。
+	// 效果表缺失会让天赋"点了没数值",是静默失败,必须在真实产物上钉住。
+	if tb.TalentEffect == nil || tb.TalentEffect.Count() == 0 {
+		t.Fatal("专精效果表为空:天赋将不产生任何战斗加成")
+	}
+	if err := tb.TalentEffect.ValidateEffects(); err != nil {
+		t.Fatalf("真实专精效果表校验不过: %v", err)
+	}
+	// 每个有效果行的专精都必须真的在专精表里(外键由生成器校验,这里确认方向反过来也成立:
+	// 专精表里的节点不一定都有效果行——纯解锁型节点合法,所以只断言"有加成能算出来")。
+	if bonuses := tb.TalentEffect.ResolveBonuses(map[uint32]uint32{1: 3}); len(bonuses) == 0 {
+		t.Fatal("专精 1 点 3 级应能换算出属性加成")
+	}
+
+	// 技能卡两张表(j_技能卡.xlsx / j_技能卡升级.xlsx):曲线断档会让卡升到某级后
+	// 按钮没反应且不报错,必须在真实产物上整表校验。
+	if tb.SkillCard == nil || tb.SkillCard.Count() == 0 {
+		t.Fatal("技能卡表为空")
+	}
+	if tb.SkillCardUpgrade == nil || tb.SkillCardUpgrade.Count() == 0 {
+		t.Fatal("技能卡升级表为空")
+	}
+	if err := tb.SkillCardUpgrade.ValidateCurves(tb.SkillCard); err != nil {
+		t.Fatalf("真实技能卡升级曲线校验不过: %v", err)
+	}
+	// 每张卡都必须能一路升到自己的上限:逐级查一遍,缺任何一级都算断档。
+	for _, card := range tb.SkillCard.All() {
+		for level := uint32(2); level <= card.GetMaxLevel(); level++ {
+			if _, ok := tb.SkillCardUpgrade.ShardCost(card.GetRarity(), level); !ok {
+				t.Fatalf("卡 %d(稀有度 %d)升到 %d 级缺消耗配置", card.GetId(), card.GetRarity(), level)
+			}
+		}
+	}
 }
 
 // TestRealDistMonsterKillExp 用真实 dist 产物钉住怪物击杀经验。
