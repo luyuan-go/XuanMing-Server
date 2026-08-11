@@ -75,7 +75,18 @@ func (uc *MissionUsecase) deliver(ctx context.Context, row *RewardLogRow) error 
 		if it.GetCount() == 0 {
 			continue
 		}
-		if uc.catalog.IsEquipment(it.GetItemConfigId()) {
+		// 路由形态优先用快照里的冻结位(见 mission.proto MissionRewardItem.equipment):
+		// 补扫重放永远走当初那条路由,配置热更 / 滚动升级期的批次差异都不会让同一条奖励
+		// 换到另一个幂等键上重发一次。缺省 = 冻结位上线前写的旧行,回退读配置表(旧行为)。
+		equipment := it.Equipment != nil && it.GetEquipment()
+		if it.Equipment == nil {
+			equipment = uc.catalog.IsEquipment(it.GetItemConfigId())
+			uc.log.Warnw("msg", "mission_reward_route_unfrozen",
+				"id", row.ID, "player_id", row.PlayerID, "mission", row.MissionConfigID,
+				"item", it.GetItemConfigId(), "equipment", equipment,
+				"hint", "冻结位上线前的历史快照,按当前道具表路由;这类行清空后本分支可删")
+		}
+		if equipment {
 			// 装备按件展开:数量**就是**切片长度。加载期
 			// (ValidateMissionCrossTables)已按同一上限拒批次,这里仍必须自带闸——
 			// reward_pb 是历史快照,可能来自早于该上限的批次,也可能是道具在热更里
@@ -172,6 +183,16 @@ func (uc *MissionUsecase) retryUngrantedOnce(ctx context.Context) {
 
 // RunPushPublisher 推送出箱发布 worker(FIFO 按 id 序;成功即删行,失败中断本轮保序;
 // pusher 未接线时直接退化为清扫禁用——出箱行会堆积,由 dbcheck outbox 检查揭示)。
+//
+// **已知代价,刻意不在本服务单点改**(2026-08-11 对抗式复核确认后归档):这里是**全局**
+// FIFO,不是每玩家 FIFO。某个 kafka 分区 leader 不可用时,队首行恰好哈希到该分区就会
+// 卡住整轮,期间**其它分区健康的玩家**推送同样延迟,出箱按全服写入速率堆积。分区恢复后
+// 按原序自动排空,无丢失无重复;窗口内客户端仍可靠 ListMissions / push.resync 拿到正确态,
+// 故不是正确性问题。
+//
+// 不单改的理由:battle_result 的 `player_update_outbox` 与 player 的 `player_push_outbox`
+// 是同一套写法,只把 mission 改成逐行退避会在三条同类链路上留下两套纪律。要收敛就三处
+// 一起改,并按 §15.4 先拿出真实压测 / 故障证据(通用最佳实践不构成改的理由)。
 func (uc *MissionUsecase) RunPushPublisher(ctx context.Context) {
 	if uc.pusher == nil {
 		uc.log.Warnw("msg", "mission_push_publisher_disabled",

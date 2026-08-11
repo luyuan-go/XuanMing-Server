@@ -17,12 +17,15 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/battleabort"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/dsmetadata"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -44,11 +47,47 @@ type GrpcDSAllocator struct {
 	// READY 批签的每张 battle 票都携带该玩家当前会话 jti(sjti claim),Login 兑换点
 	// 复核现行性——被新登录顶掉的旧设备即使还留着 READY 推送的票也无法入场。
 	sessGate sessiongate.Gate
+	// tables 配置表快照容器(SetConfigTables 注入,可为 nil = 未启用配置表的 dev 口径)。
+	// 本层只读一列:关卡表 rating_mode —— 本局「算不算段位」在**发出 AllocateBattle 那一刻**
+	// 按 map_id 定格进请求,此后由 allocator 存进 canonical BattleStorageRecord。
+	// 与 biz.SetConfigTables 同型:每次经 Tables() 取当前批次,天然读到热更后的表。
+	tables *configtable.Store
 }
 
 // SetSessionGate 注入会话现行性权威(启动期、撮合循环开跑前调用;nil = dev 无权威)。
 func (g *GrpcDSAllocator) SetSessionGate(gate sessiongate.Gate) {
 	g.sessGate = gate
+}
+
+// SetConfigTables 注入配置表容器(启动期,可选)。与 biz.MatchUsecase.SetConfigTables 同型:
+// 用 setter 而非构造参数,避免未启用配置表的调用点被迫改签名。
+func (g *GrpcDSAllocator) SetConfigTables(s *configtable.Store) {
+	g.tables = s
+}
+
+// ratingModeForMap 取本局计分模式(关卡表 rating_mode 列)。
+//
+// 这是「算不算段位」的定格点:结果写进 AllocateBattleRequest → canonical
+// BattleStorageRecord,battle_result 结算只认那个定格值,不在结算那一刻重查表
+// (热更改本列会改写正在打的那一局的规则)。
+//
+// **拿不到就返回 UNSPECIFIED(0),绝不猜 ELO**:未启用配置表 / 表未加载 / 行不存在时,
+// 0 让 battle_result 回落到本列上线前的旧口径(canonical pve_coop 不计分、其余算 Elo),
+// 与不带本字段的旧 matchmaker 行为逐字节一致(§9.21 共存窗口双向兼容)。
+// 猜 ELO 会给合作副本玩家扣段位,而改段位不可逆——方向必须偏向"少算",不能偏向"乱算"。
+func (g *GrpcDSAllocator) ratingModeForMap(mapID uint32) configpb.LevelRatingMode {
+	if g.tables == nil {
+		return configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED
+	}
+	tb := g.tables.Tables()
+	if tb == nil {
+		return configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED
+	}
+	row, ok := tb.Level.ByID(mapID)
+	if !ok {
+		return configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED
+	}
+	return row.GetRatingMode()
 }
 
 // NewGrpcDSAllocator 直连 ds_allocator 服务 endpoint(host:port,内网 insecure)。
@@ -160,12 +199,23 @@ func (g *GrpcDSAllocator) allocateBattle(
 	if effectiveMapID == 0 {
 		effectiveMapID = g.mapID
 	}
+	// 计分模式按 effectiveMapID 定格(与 game_mode / map_id 同一时刻、同一请求)。
+	ratingMode := g.ratingModeForMap(effectiveMapID)
+	if ratingMode == configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED {
+		// 战斗类关卡的本列应当显式填。落到这里只有两种情况:滚动升级期还在用旧批次表,
+		// 或策划漏填这一列——两者都会让本局回落旧口径(pve_coop 不计分 / 其余算 Elo)。
+		// 是"要去查表"的信号,不是错误:分配照常继续(§15.2 不为观测新增失败模式)。
+		plog.With(ctx).Warnw("msg", "battle_rating_mode_unconfigured",
+			"match_id", matchID, "map_id", effectiveMapID, "game_mode", g.gameMode,
+			"hint", "关卡表 g_关卡.xlsx「计分模式」列未填,本局按旧口径结算(pve_coop 不计分 / 其余算 Elo)")
+	}
 	resp, err := g.cli.AllocateBattle(ctx, &dsv1.AllocateBattleRequest{
 		MatchId:              matchID,
 		PlayerIds:            playerIDs,
 		MapId:                effectiveMapID,
 		GameMode:             g.gameMode,
 		PlayerCombatFactions: combatFactions,
+		RatingMode:           ratingMode,
 	})
 	if err != nil {
 		return nil, err

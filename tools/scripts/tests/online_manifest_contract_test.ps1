@@ -355,7 +355,7 @@ function Assert-OnlineHmacGateOrdering([string]$OnlineSource) {
         'HMAC 连续性门禁必须早于 runtime overlay 与集群配置写入'
 }
 
-function Get-TestContractRows([string]$Manifest, [switch]$Fleet, [switch]$DSTicket, [switch]$PlacementPreflight,
+function Get-TestContractRows([string]$Manifest, [switch]$Fleet, [switch]$DSTicket,
     [switch]$HubAllocatorSingleWriter) {
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-contract-test-' + [guid]::NewGuid().ToString('N') + '.yaml')
     try {
@@ -371,8 +371,6 @@ function Get-TestContractRows([string]$Manifest, [switch]$Fleet, [switch]$DSTick
             '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.template.spec.containers[*].name}{"\t"}{.spec.template.spec.template.spec.containers[*].image}{"\t"}{.spec.template.spec.template.spec.containers[*].imagePullPolicy}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.spec.template.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/release-track}{"\t"}{.spec.template.spec.template.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.spec.template.metadata.annotations.pandora\.dev/release-track}{"\n"}'
         } elseif ($DSTicket) {
             '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.volumes[?(@.name=="dsticket")].secret.secretName}{"\t"}{.spec.template.spec.volumes[?(@.name=="dsticket-jwks")].configMap.name}{"\n"}'
-        } elseif ($PlacementPreflight) {
-            '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.strategy.type}{"\t"}{.spec.template.spec.containers[?(@.name=="player-locator")].image}{"\t"}{.spec.template.spec.initContainers[*].name}{"\t"}{.spec.template.spec.initContainers[*].image}{"\t"}{.spec.template.spec.initContainers[*].imagePullPolicy}{"\t"}{.spec.template.spec.initContainers[*].args[*]}{"\t"}{.spec.template.spec.initContainers[*].command[*]}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].name}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].mountPath}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].subPath}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].readOnly}{"\n"}'
         } elseif ($HubAllocatorSingleWriter) {
             '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.replicas}{"\t"}{.spec.strategy.type}{"\t"}{.spec.strategy.rollingUpdate}{"\n"}'
         } else {
@@ -931,9 +929,6 @@ try {
     foreach ($name in $services) { $pins[$name] = "registry.example.com:5000/pandora/$name@$($digests[$name])" }
     $contractRows = Get-TestContractRows -Manifest $rendered
     Assert-PandoraRenderedOnlineContract -ContractRows $contractRows -Pins $pins -Digests $digests -ServiceNames $services -WriterServices $writers
-    $placementPreflightRows = Get-TestContractRows -Manifest $rendered -PlacementPreflight
-    Assert-PandoraPlacementPreflightContract -ContractRows $placementPreflightRows `
-        -PinnedImage ([string]$pins['player-locator'])
     $hubSingleWriterRows = Get-TestContractRows -Manifest $rendered -HubAllocatorSingleWriter
     Assert-PandoraHubAllocatorSingleWriterContract -ContractRows $hubSingleWriterRows
     $dsticketRows = Get-TestContractRows -Manifest $rendered -DSTicket
@@ -966,31 +961,6 @@ try {
         Assert-PandoraRenderedOnlineContract -ContractRows $rows -Pins $pins -Digests $digests -ServiceNames $services -WriterServices $writers
     } '期望 digest 只在 initContainer 不能掩护 mutable 主容器'
 
-    $preflightIndex = -1
-    for ($i = 0; $i -lt $placementPreflightRows.Count; $i++) {
-        if ($placementPreflightRows[$i] -cmatch '^Deployment\tplayer-locator\t') {
-            $preflightIndex = $i
-            break
-        }
-    }
-    Assert-True ($preflightIndex -ge 0) 'placement preflight 结构行必须存在'
-    foreach ($mutation in @(
-        @{ Name = 'RollingUpdate writer overlap'; Field = 2; Value = 'RollingUpdate' },
-        @{ Name = 'missing preflight init'; Field = 4; Value = '' },
-        @{ Name = 'different preflight digest'; Field = 5; Value = 'registry.example.com:5000/pandora/player-locator@sha256:' + ('f' * 64) },
-        @{ Name = 'preflight mode omitted'; Field = 7; Value = '-conf etc/cluster.yaml' },
-        @{ Name = 'alternate entrypoint'; Field = 8; Value = '/bin/sh' },
-        @{ Name = 'writable config mount'; Field = 12; Value = 'false' }
-    )) {
-        $mutantRows = @($placementPreflightRows)
-        $mutantFields = @([regex]::Split($mutantRows[$preflightIndex], "`t"))
-        $mutantFields[[int]$mutation.Field] = [string]$mutation.Value
-        $mutantRows[$preflightIndex] = $mutantFields -join "`t"
-        Assert-Throws {
-            Assert-PandoraPlacementPreflightContract -ContractRows $mutantRows `
-                -PinnedImage ([string]$pins['player-locator'])
-        } ([string]$mutation.Name)
-    }
     $hubSingleWriterIndex = -1
     for ($i = 0; $i -lt $hubSingleWriterRows.Count; $i++) {
         if ($hubSingleWriterRows[$i] -cmatch '^Deployment\thub-allocator\t') {
@@ -999,10 +969,15 @@ try {
         }
     }
     Assert-True ($hubSingleWriterIndex -ge 0) 'hub-allocator single-writer 结构行必须存在'
+    # 变异矩阵对齐当前权威设计(R9 P0-7:单写者由 writerlease 保证,部署策略是
+    # RollingUpdate{maxSurge:1,maxUnavailable:0};见 online_manifest_contract.ps1 里
+    # Assert-PandoraHubAllocatorSingleWriterContract 的说明)。此前三条变异押的是
+    # 已被审计否决的 Recreate 形态,manifest 早已不长那样。
     foreach ($mutation in @(
         @{ Name = 'hub multi-replica writer'; Field = 2; Value = '2' },
-        @{ Name = 'hub rolling writer overlap'; Field = 3; Value = 'RollingUpdate' },
-        @{ Name = 'hub Recreate carries rollingUpdate'; Field = 4; Value = 'map[maxSurge:1 maxUnavailable:0]' }
+        @{ Name = 'hub 回退 Recreate(全量断流,违反不停服)'; Field = 3; Value = 'Recreate' },
+        @{ Name = 'hub maxUnavailable 放开(升级期可能零副本在服务)'; Field = 4; Value = 'map[maxSurge:1 maxUnavailable:1]' },
+        @{ Name = 'hub maxSurge 放开(重叠窗口超两副本)'; Field = 4; Value = 'map[maxSurge:2 maxUnavailable:0]' }
     )) {
         $mutantRows = @($hubSingleWriterRows)
         $mutantFields = @([regex]::Split($mutantRows[$hubSingleWriterIndex], "`t"))

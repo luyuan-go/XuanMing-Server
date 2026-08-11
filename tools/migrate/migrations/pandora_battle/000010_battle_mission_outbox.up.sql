@@ -9,7 +9,12 @@
 --    的 idx 与 FetchMissionOutbox 的 NOT EXISTS 谓词收口:任务链上前后两环的条件类别
 --    通常不同(「杀 5 只狼」→「收集 3 张狼皮」)。后环任务在前环完成时才被自动接取,
 --    此前到达的「狼皮」事实匹配不上任何活跃任务,会被收据吸收后**静默丢弃且永不重放**。
---    因此同一 (match_id, player_id) 必须按 seq 严格 FIFO 投递,失败行退避时后续行一起等。
+--    因此同一 **player_id** 必须按 id(插入序)严格 FIFO 投递,失败行退避时后续行一起等。
+--    分组维度是玩家不是对局:任务链跨对局延续,按 (match_id, player_id) 分组时 A 局卡住的
+--    队首挡不住 B 局的行,玩家打完 A 再打 B 照样能让 B 的事实抢在 A 前面落地。
+--    排序键用 id 而非 seq:seq 每对局自增、跨对局不可比;id 是插入序,对局内等价于 seq 序
+--    (ApplyProgress 一事务一批、批内按 seq 升序插),跨对局等价于对局发生序
+--    (§9.1 保证玩家同一时刻只在一个可操作 DS,不存在两局并行产事实)。
 --
 -- pending_action:USE_ITEM 类事实的「扣除未落定」闸。局内消费(battle_progress_action)
 --   可能以业务失败终态收场(道具不足等),此时 inventory 一件没扣。若任务事实照发,
@@ -36,8 +41,9 @@ CREATE TABLE IF NOT EXISTS `battle_mission_outbox` (
     `created_at_ms`      BIGINT          NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_match_seq_player` (`match_id`, `seq`, `player_id`),
-    -- 每玩家 FIFO 队首查询(NOT EXISTS 子查询按 (match_id, player_id, seq, id) 找前驱)
-    KEY `idx_mission_player_fifo` (`match_id`, `player_id`, `seq`, `id`),
+    -- 每玩家 FIFO 队首查询(NOT EXISTS 子查询按 (player_id, id) 找前驱;分组是**玩家**维度
+    -- 而非对局维度 —— 任务链跨对局延续,按对局分组时 A 局卡住的队首挡不住 B 局的行)
+    KEY `idx_mission_player_fifo` (`player_id`, `id`),
     KEY `idx_mission_due` (`next_attempt_at_ms`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 战斗任务事实转发出箱(每玩家 FIFO + at-least-once + mission 侧收据幂等 + 失败退避)';

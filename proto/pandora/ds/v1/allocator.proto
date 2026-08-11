@@ -13,6 +13,7 @@ syntax = "proto3";
 package pandora.ds.v1;
 
 import "pandora/common/v1/errcode.proto";
+import "pandora/config/v1/level.proto";
 
 service DSAllocatorService {
   rpc AllocateBattle(AllocateBattleRequest) returns (AllocateBattleResponse);
@@ -55,13 +56,21 @@ message AllocateBattleRequest {
   uint64 match_id  = 1;
   repeated uint64 player_ids = 2;
   uint32 map_id    = 3;
-  string game_mode = 4;  // "ranked_5v5" | "casual_5v5" | "custom"
+  // 撮合池 / 部署标识(canonical game_mode,如 "5v5_ranked" | "pve_coop" | 未来的 "custom")。
+  // ⚠️ 只表达"这一局归哪个池",**不表达人数、方数、是否排位**:人数看关卡表
+  // team_size × side_count,算不算段位看下方 rating_mode。历史上这里的字符串被
+  // battle_result 用排除法当过计分判据,新增池会静默按排位改段位,已由 rating_mode 取代。
+  string game_mode = 4;
   // match-local 战斗阵营。它独立于组队/公会：多个 team_id 可映射到同一阵营，
   // 同一局也可有两个以上阵营。新调用方必须对 roster 每名玩家精确提供一条；
   // 空列表仅用于滚动升级期间兼容旧 matchmaker。
   // 5-9 是既有保留号，不能复用；新增字段从 10 开始。
   reserved 5 to 9;
   repeated BattlePlayerCombatFaction player_combat_factions = 10;
+  // 本局计分模式,由 matchmaker 在成局那一刻按 map_id 读关卡表 rating_mode 列定格后传入
+  // (§17.1 差异进表)。allocator 只原样存进 BattleStorageRecord,不解释、不下发 DS。
+  // 未设置(0=UNSPECIFIED)= 旧 matchmaker 或旧批次表,battle_result 按旧口径兜底(§9.21)。
+  pandora.config.v1.LevelRatingMode rating_mode = 11;
 }
 
 message AllocateBattleResponse {
@@ -276,6 +285,14 @@ message BattleStorageRecord {
   // 滚动升级:旧副本不写本字段,因此「旧副本见过玩家 → 新副本判定」的窗口内,
   // 一局全员掉线的对局可能按 no-show 短阈值回收。仍远大于重连窗,可接受(见 §9.17)。
   bool ever_had_players = 21;
+  // 本局计分模式(canonical):分配时从 AllocateBattleRequest 定格,此后只读。
+  //
+  // 这是「算不算段位」的**唯一权威**:battle_result 在 AuthorizeResult 时与 roster /
+  // game_mode / map_id 同源复制本字段,结算按它决定是否走 Elo,绝不用 DS 请求体、
+  // 也不在结算那一刻重查关卡表(热更会改写正在打的那一局的规则)。
+  // 0=UNSPECIFIED:旧 matchmaker 或本字段上线前的旧记录,battle_result 保守回落旧口径
+  // (canonical game_mode=="pve_coop" 不计分,其余算 Elo),不得据此跳过或强开计分(§9.21)。
+  pandora.config.v1.LevelRatingMode rating_mode = 22;
 }
 
 // ===== Model B Battle DS 回调授权状态机 =====

@@ -255,6 +255,11 @@ func main() {
 		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, legacySigner, v2Signer, abortSigner,
 			cfg.Match.MapId, cfg.Match.GameMode, cfg.Match.DSAllocateTimeout.Std())
 		ga.SetSessionGate(sessGate) // R7 P0-2:READY 批签票据绑定当前会话代际
+		if ctStore != nil {
+			// 本局计分模式(关卡表 rating_mode)在发出 AllocateBattle 那一刻定格,
+			// 与 game_mode / map_id 同源同时刻;未注入时回落旧口径(见 ratingModeForMap)。
+			ga.SetConfigTables(ctStore)
+		}
 		defer func() { _ = ga.Close() }()
 		allocator = ga
 		helper.Infow("msg", "ds_allocator_grpc_ready", "ds_allocator_addr", cfg.Match.DSAllocatorAddr,

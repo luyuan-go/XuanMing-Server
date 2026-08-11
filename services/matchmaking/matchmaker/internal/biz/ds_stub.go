@@ -42,6 +42,30 @@ func (s *StubDSAllocator) AllocateBattle(_ context.Context, matchID uint64, play
 	}, nil
 }
 
+// AllocateBattleWithCombatFactions 实现 CombatFactionDSAllocator。
+//
+// 桩不需要真的把阵营投递到任何地方，但**必须**实现这个接口:阵营已是对局定义的必填部分，
+// 分配器不具备承载能力时 MatchUsecase 会定性失败。若本桩不实现它，无 ds_allocator_addr
+// 的本地开发链路会在每次分配时硬失败。
+// 同样按 fail-closed 校验:空阵营映射在这里就拒绝，让本地环境和生产暴露同一类错误。
+func (s *StubDSAllocator) AllocateBattleWithCombatFactions(
+	ctx context.Context,
+	matchID uint64,
+	playerIDs []uint64,
+	combatFactionByPlayer map[uint64]uint32,
+	mapID uint32,
+) (*model.BattleAllocation, error) {
+	if len(combatFactionByPlayer) == 0 {
+		return nil, fmt.Errorf("stub allocator: combat factions required for match %d", matchID)
+	}
+	for _, playerID := range playerIDs {
+		if _, ok := combatFactionByPlayer[playerID]; !ok {
+			return nil, fmt.Errorf("stub allocator: player %d missing combat faction", playerID)
+		}
+	}
+	return s.AllocateBattle(ctx, matchID, playerIDs, mapID)
+}
+
 func (s *StubDSAllocator) AbortBattleAllocation(context.Context, uint64, string, *model.BattleAllocation) error {
 	return nil
 }

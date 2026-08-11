@@ -43,13 +43,31 @@
 | 链自动接取撞上限/已完成 → 跳过不阻断 | TestFanoutChainSkip |
 | 扇出 16 轮上限断链(人造环配置) | TestFanoutBounded |
 | 事实幂等:同键同内容 already / 同键不同内容 fail-closed | ApplyFactsTx(repo 层,集成环境验证;biz 假件覆盖调用约定) |
+| **并发接取不突破活跃上限 / 类型互斥**(TiDB 无 gap 锁,守卫行串行化) | TestMissionPlayerGuard_*(**真库**,见下方"真实数据库用例") |
+| 装备奖励数量上限:加载期拒批次 + 运行期坏快照 fail-closed(防按数量展开切片 OOM) | TestDeliverRejectsOversizedEquipmentCount / configtable TestValidateMissionCrossTables_EquipmentRewardCountBound |
 | 领奖:可领→已领 CAS / 重复领 / 无奖任务领 | TestClaim* |
 | 发放路由:堆叠/装备/经验分流,满包转邮件同键,任一类失败整条留 PENDING | TestDeliver* |
 | 溢出:进度 uint32 饱和 / 推送 payload 分片 ≤2048 | TestSaturate / TestPushChunks |
 
-**未在本地验证(交接为集成项)**:MySQL 事务/FOR UPDATE 真实并发(需 dev 库跑
-`go test -tags integration` 或压测环境);`go test -race` 需 CGO Linux 环境(CI);
-push→客户端全链路;battle_result 转发端到端。
+### 真实数据库用例(**裸 `go test` 会 Skip,不是"通过"**)
+
+`internal/data/mission_repo_mysql_test.go` 是玩家级写守卫的双后端回归,验证的是引擎加锁
+语义(TiDB 没有 gap 锁),fake 替代不了。**两个 DSN 都不设时逐后端 Skip** —— CI 与发布
+门禁必须显式注入,否则这层等于没跑:
+
+```bash
+PANDORA_TEST_MYSQL_DSN='root:<pw>@tcp(127.0.0.1:13306)/?parseTime=true&loc=UTC&charset=utf8mb4' PANDORA_TEST_TIDB_DSN='root:@tcp(127.0.0.1:4000)/?parseTime=true&loc=UTC&charset=utf8mb4' go test ./services/social/mission/internal/data/ -count=1 -run MissionPlayerGuard -v
+```
+
+DSN **必须不带库名**:用例自建随机临时库(`pandora_mission_it_*`)并在结束时删掉,
+重放的是 `deploy/mysql-init/16-mission-tables.sql` 本身(杜绝测试内另抄一份 DDL 的漂移)。
+上游 battle 侧的任务出箱 FIFO / USE_ITEM 扣除闸同款门控,见
+`services/battle/battle_result/internal/data/mission_outbox_mysql_test.go`(`-run MissionOutbox`)。
+
+**未在本地验证(交接为集成项)**:`go test -race` 需 CGO Linux 环境(CI);
+push→客户端全链路;battle_result 转发端到端;真实 MySQL 8.4(本机只起了 TiDB,
+InnoDB 侧的间隙锁行为尚未实跑 —— 该方向恰好是"有 gap 锁所以恰好无症状"的一侧,
+补跑主要为防回归而非发现缺陷)。
 
 ## 运行
 

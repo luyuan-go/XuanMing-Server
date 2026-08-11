@@ -19,6 +19,10 @@ spec:
       to: [{ operation: { methods: ["POST"], paths: ["/pandora.inventory.v1.InventoryService/GrantItems", "/pandora.inventory.v1.InventoryService/GrantInstances"] } }]
     - from: [{ source: { principals: ["cluster.local/ns/pandora/sa/pandora-leaderboard"] } }]
       to: [{ operation: { methods: ["POST"], paths: ["/pandora.inventory.v1.InventoryService/GrantItems"] } }]
+    # mission:任务完成/领奖发放(堆叠道具走 GrantItems、装备实例走 GrantInstances;
+    # 满包溢出转邮件由 mail 侧领取时再入包,不需要 mission 直连更多方法)。
+    - from: [{ source: { principals: ["cluster.local/ns/pandora/sa/pandora-mission"] } }]
+      to: [{ operation: { methods: ["POST"], paths: ["/pandora.inventory.v1.InventoryService/GrantItems", "/pandora.inventory.v1.InventoryService/GrantInstances"] } }]
     - from: [{ source: { principals: ["cluster.local/ns/pandora/sa/pandora-battle-result"] } }]
       to: [{ operation: { methods: ["POST"], paths: ["/pandora.inventory.v1.InventoryService/GrantItems", "/pandora.inventory.v1.InventoryService/GrantInstances", "/pandora.inventory.v1.InventoryService/ConsumeBattleItem", "/pandora.inventory.v1.InventoryService/DiscardBattleItem"] } }]
     - from: [{ source: { principals: ["cluster.local/ns/pandora-ingress/sa/pandora-edge-envoy"] } }]

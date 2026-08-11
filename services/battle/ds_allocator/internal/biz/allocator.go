@@ -32,6 +32,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	"github.com/luyuancpp/pandora/pkg/safego"
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
@@ -403,12 +404,20 @@ func (u *AllocatorUsecase) ResolveBattleTarget(
 //
 // 幂等:同 match_id 已有镜像时——ready/running 且有有效心跳 → 直接回;warming → 继续等 ready;
 // 终态/不可用 → 返回分配失败(绝不把 ds_addr 回给 matchmaker)。
+// AllocateBattle 是不带阵营快照 / 不带计分模式的旧口径入口(dev / 单测 / 兼容路径)。
+// ratingMode 留 UNSPECIFIED = battle_result 按旧口径结算,见 BattleStorageRecord.rating_mode。
 func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32, gameMode string) (*AllocateResult, error) {
-	return u.AllocateBattleWithCombatFactions(ctx, matchID, playerIDs, nil, mapID, gameMode)
+	return u.AllocateBattleWithCombatFactions(ctx, matchID, playerIDs, nil, mapID, gameMode,
+		configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED)
 }
 
 // AllocateBattleWithCombatFactions 为 match 申请战斗 DS，并持久化完整的 match-local
 // 玩家阵营快照。空映射仅兼容滚动升级中的旧 matchmaker；非空映射必须精确覆盖 roster。
+//
+// ratingMode 是 matchmaker 成局时按 map_id 从关卡表定格的「本局算不算段位」。本服务
+// **只原样存进 canonical BattleStorageRecord,不解释、不校验、不下发 DS**:判定权在
+// battle_result(§9.6 数值不信 DS,派生数值只在结算服务算)。0=UNSPECIFIED 是合法值
+// (旧 matchmaker / 旧批次表),结算侧按旧口径兜底(§9.21)。
 func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 	ctx context.Context,
 	matchID uint64,
@@ -416,6 +425,7 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 	combatFactionByPlayer map[uint64]uint32,
 	mapID uint32,
 	gameMode string,
+	ratingMode configpb.LevelRatingMode,
 ) (*AllocateResult, error) {
 	if matchID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id required")
@@ -454,6 +464,7 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		PlayerIds:            append([]uint64(nil), playerIDs...),
 		MapId:                mapID,
 		GameMode:             gameMode,
+		RatingMode:           ratingMode,
 		AllocatedAtMs:        claimAt,
 		LastHeartbeatMs:      claimAt,
 		PlayerCount:          int32(len(playerIDs)),
@@ -555,6 +566,7 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		PlayerIds:            playerIDs,
 		MapId:                mapID,
 		GameMode:             gameMode,
+		RatingMode:           ratingMode,
 		AllocatedAtMs:        now,
 		LastHeartbeatMs:      now, // 仅作 sweep 宽限基准;ready 判定要求 LastHeartbeatMs 严格大于此(即真实心跳)
 		PlayerCount:          int32(len(playerIDs)),
@@ -720,6 +732,13 @@ func combatFactionMapFromRecords(
 	return factions, nil
 }
 
+// sameBattleAllocationRequest 判定「同 match 的重试请求与已落定的 claim 是否同一次分配」。
+//
+// 刻意**不比 rating_mode**:①它不是身份/安全字段(身份是 roster + map_id + game_mode,
+// 三者都比了),而是随 map_id 确定的本局元数据;②共存窗口里旧 matchmaker 不带本字段、
+// 新 matchmaker 带,同一 match 的 ACK-loss 重试会让该值从 0 变成显式值——把它纳入比对
+// 会把正常重试判成"快照冲突"直接分配失败,玩家进不去场景(§9.21 / §9.20)。
+// 落定口径按 claim 赢家:后到的重试不改已定格的值。
 func sameBattleAllocationRequest(existing, expected *dsv1.BattleStorageRecord) bool {
 	if existing == nil || expected == nil || existing.GetMatchId() != expected.GetMatchId() ||
 		existing.GetMapId() != expected.GetMapId() || existing.GetGameMode() != expected.GetGameMode() ||

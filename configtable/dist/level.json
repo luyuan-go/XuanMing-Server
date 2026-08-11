@@ -31,7 +31,8 @@
       "entry_mode": 1,
       "side_count": 2,
       "exp_share_mode": 1,
-      "battle_duration_seconds": 1800
+      "battle_duration_seconds": 1800,
+      "rating_mode": 2
     },
     {
       "id": 5,
@@ -43,7 +44,8 @@
       "entry_mode": 1,
       "side_count": 2,
       "exp_share_mode": 1,
-      "battle_duration_seconds": 1800
+      "battle_duration_seconds": 1800,
+      "rating_mode": 2
     },
     {
       "id": 6,
@@ -57,7 +59,8 @@
       "entry_mode": 1,
       "side_count": 2,
       "exp_share_mode": 1,
-      "battle_duration_seconds": 1800
+      "battle_duration_seconds": 1800,
+      "rating_mode": 2
     },
     {
       "id": 7,
@@ -73,7 +76,8 @@
       "entry_mode": 2,
       "side_count": 1,
       "exp_share_mode": 2,
-      "battle_duration_seconds": 1200
+      "battle_duration_seconds": 1200,
+      "rating_mode": 1
     },
     {
       "id": 8,
@@ -89,7 +93,8 @@
       "entry_mode": 2,
       "side_count": 1,
       "exp_share_mode": 2,
-      "battle_duration_seconds": 1200
+      "battle_duration_seconds": 1200,
+      "rating_mode": 1
     },
     {
       "id": 9,
@@ -103,7 +108,8 @@
       "entry_mode": 1,
       "side_count": 2,
       "exp_share_mode": 1,
-      "battle_duration_seconds": 1800
+      "battle_duration_seconds": 1800,
+      "rating_mode": 2
     },
     {
       "id": 10,
@@ -118,7 +124,8 @@
       "entry_mode": 2,
       "side_count": 1,
       "exp_share_mode": 2,
-      "battle_duration_seconds": 1200
+      "battle_duration_seconds": 1200,
+      "rating_mode": 1
     },
     {
       "id": 11,
@@ -133,7 +140,8 @@
       "entry_mode": 2,
       "side_count": 1,
       "exp_share_mode": 2,
-      "battle_duration_seconds": 1200
+      "battle_duration_seconds": 1200,
+      "rating_mode": 1
     }
   ]
 }

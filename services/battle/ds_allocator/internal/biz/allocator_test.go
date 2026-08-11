@@ -20,6 +20,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/placement"
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
@@ -124,7 +125,8 @@ func TestAllocateBattleRejectsCombatFactionDriftForExistingMatch(t *testing.T) {
 		t.Fatalf("seed claim: claimed=%t err=%v", claimed, err)
 	}
 	_, err := uc.AllocateBattleWithCombatFactions(
-		t.Context(), matchID, []uint64{22, 11}, map[uint64]uint32{11: 3, 22: 9}, 8, "custom")
+		t.Context(), matchID, []uint64{22, 11}, map[uint64]uint32{11: 3, 22: 9}, 8, "custom",
+		configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED)
 	if errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("faction drift err=%v code=%v want unavailable", err, errcode.As(err))
 	}
@@ -146,7 +148,8 @@ func TestAllocateBattlePersistsCanonicalCombatFactions(t *testing.T) {
 	go func() {
 		value, err := uc.AllocateBattleWithCombatFactions(
 			context.Background(), matchID, []uint64{22, 11},
-			map[uint64]uint32{11: 3, 22: 9}, 8, "custom")
+			map[uint64]uint32{11: 3, 22: 9}, 8, "custom",
+			configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO)
 		done <- result{value: value, err: err}
 	}()
 	feedReadyHeartbeat(t, uc, repo, matchID, 2)
@@ -162,6 +165,11 @@ func TestAllocateBattlePersistsCanonicalCombatFactions(t *testing.T) {
 	if len(got) != 2 || got[0].GetPlayerId() != 11 || got[0].GetCombatFactionId() != 3 ||
 		got[1].GetPlayerId() != 22 || got[1].GetCombatFactionId() != 9 {
 		t.Fatalf("stored combat factions=%v", got)
+	}
+	// 计分模式必须与 roster / map_id / game_mode 同源定格进 canonical 记录:
+	// battle_result 结算只认这一份,丢了它就会回落旧口径(game_mode="custom" → 静默算 Elo)。
+	if stored.GetRatingMode() != configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO {
+		t.Fatalf("stored rating_mode=%v, want ELO(成局定格值必须落进 BattleStorageRecord)", stored.GetRatingMode())
 	}
 }
 

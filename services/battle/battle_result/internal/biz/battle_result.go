@@ -32,6 +32,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/safego"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 	"google.golang.org/protobuf/proto"
 
@@ -285,7 +286,39 @@ func validateAuthorizedResultRoster(result *battlev1.BattleResult, authoritative
 // (decision-dungeon-entry-modes.md §4:matchmaker-pve game_mode: "pve_coop")。
 // 只允许与 TerminalReleaseRecord.GameMode(canonical BattleStorageRecord 来源)比较,
 // 绝不与 DS 请求体 result.game_mode 比较(§9.6 DS 请求字段不可作 MMR 安全依据)。
+//
+// ⚠️ 2026-08-11 起本常量**只作旧局兜底**,不再是计分判据。
+// 原因:它把「算不算段位」挂在**撮合池标识**上,并且是排除法(`!= "pve_coop"` 即算 Elo)。
+// game_mode 是会新增取值的部署标识(ds/v1 AllocateBattleRequest 注释里就写着未来的
+// "casual_5v5" / "custom"),任何新池在旧口径下都会**静默按排位改玩家段位**——改段位
+// 不可逆,是最坏的失败方向。现在的权威判据是关卡表 rating_mode 列定格进 canonical
+// BattleStorageRecord 的 TerminalReleaseRecord.RatingMode(§17.1 差异进表)。
 const canonicalGameModePVECoop = "pve_coop"
+
+// settlementRunsElo 判定本局正常结算要不要算 Elo,并给出判据来源(用于日志观测)。
+//
+// 优先级:①canonical rating_mode(权威,成局定格) → ②旧口径兜底(canonical game_mode)
+// → ③无 canonical 可用的 legacy/内部路径(保持历史行为)。
+// 三条都只读**权威**字段,绝不读 DS 请求体(§9.6)。
+func settlementRunsElo(terminalRelease *data.TerminalReleaseRecord) (bool, string) {
+	if terminalRelease == nil {
+		// legacy kafka / 内部直调:本就没有 canonical 快照可用,保持历史行为照算 Elo。
+		// 该路径不受 canonical 保护,行为与本列上线前逐字节一致。
+		return true, "legacy_no_canonical"
+	}
+	switch terminalRelease.RatingMode {
+	case configpb.LevelRatingMode_LEVEL_RATING_MODE_NONE:
+		return false, "rating_mode_none"
+	case configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO:
+		return true, "rating_mode_elo"
+	}
+	// rating_mode 未定格:滚动升级期的旧 matchmaker / 旧批次表(§9.21)。保守回落旧口径,
+	// 既不因缺字段就跳过计分(排位局白打),也不因缺字段就强开计分。
+	if terminalRelease.GameMode == canonicalGameModePVECoop {
+		return false, "legacy_canonical_pve_coop"
+	}
+	return true, "legacy_canonical_game_mode"
+}
 
 func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1.BattleResult, terminalRelease *data.TerminalReleaseRecord, finalProgressSeq uint64) (bool, error) {
 	if result == nil || result.GetMatchId() == 0 {
@@ -316,21 +349,32 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 	// 此处兜底:若 battle.result 误报 / 伪造 Outcome=ABANDONED,强制 delta 全 0,
 	// 防止 DS 不可信地通过 abandoned 改玩家段位(不变量 §4/§6)。
 	//
-	// canonical pve_coop(仅授权路径可判定)永不算 Elo:PVE 副本没有对手结构,
-	// 成功/失败/平局的 NORMAL 结算一律 mmr_delta=0,且不触碰 MMR reader。
-	// 判定依据只能是 terminalRelease.GameMode(canonical);canonical 为空(旧局)
-	// 保持保守旧行为照算 Elo,绝不用 DS 请求 game_mode 降级跳过 MMR。
+	// 正常结算是否算 Elo 由 settlementRunsElo 按**权威**判定:关卡表 rating_mode 成局定格
+	// 优先,旧局回落旧口径。不计分的局一律 mmr_delta=0 且**完全不触碰 MMR reader**。
 	switch {
 	case result.GetOutcome() == battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED:
 		for _, s := range result.GetStats() {
 			s.MmrDelta = 0
 		}
-	case terminalRelease != nil && terminalRelease.GameMode == canonicalGameModePVECoop:
-		for _, s := range result.GetStats() {
-			s.MmrDelta = 0
-		}
 	default:
-		u.assignMMR(ctx, result)
+		runElo, basis := settlementRunsElo(terminalRelease)
+		if !runElo {
+			for _, s := range result.GetStats() {
+				s.MmrDelta = 0
+			}
+		} else {
+			u.assignMMR(ctx, result)
+		}
+		// 判据可观测:一局到底按什么算的分,事后必须能查(尤其是回落旧口径的局)。
+		if basis == "legacy_canonical_pve_coop" || basis == "legacy_canonical_game_mode" {
+			plog.With(ctx).Warnw("msg", "battle_rating_basis_legacy_fallback",
+				"match_id", result.GetMatchId(), "map_id", result.GetMapId(),
+				"game_mode", result.GetGameMode(), "run_elo", runElo, "basis", basis,
+				"hint", "本局 canonical rating_mode 未定格(旧 matchmaker / 旧批次表),按旧口径结算")
+		} else {
+			plog.With(ctx).Debugw("msg", "battle_rating_basis",
+				"match_id", result.GetMatchId(), "run_elo", runElo, "basis", basis)
+		}
 	}
 
 	// MMR 算完才组装出箱(携带最终 mmr_delta);与落库同事务原子提交(不变量 §4)。

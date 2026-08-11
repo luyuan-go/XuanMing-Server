@@ -217,6 +217,11 @@ type noCapacityAllocator struct{}
 func (noCapacityAllocator) AllocateBattle(context.Context, uint64, []uint64, uint32) (*model.BattleAllocation, error) {
 	return nil, errcode.New(errcode.ErrDSNoAvailable, "no gameserver")
 }
+func (noCapacityAllocator) AllocateBattleWithCombatFactions(
+	context.Context, uint64, []uint64, map[uint64]uint32, uint32,
+) (*model.BattleAllocation, error) {
+	return nil, errcode.New(errcode.ErrDSNoAvailable, "no gameserver")
+}
 func (noCapacityAllocator) AbortBattleAllocation(context.Context, uint64, string, *model.BattleAllocation) error {
 	return nil
 }

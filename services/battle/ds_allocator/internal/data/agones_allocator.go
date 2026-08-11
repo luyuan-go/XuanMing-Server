@@ -328,15 +328,21 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 	if rosterErr != nil || len(canonicalPlayers) == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "agones: invalid battle roster: %v", rosterErr)
 	}
-	combatFactions := ""
-	if len(combatFactionByPlayer) > 0 {
-		var factionErr error
-		canonicalPlayers, combatFactions, factionErr = dsmetadata.CanonicalCombatFactions(
-			canonicalPlayers, combatFactionByPlayer)
-		if factionErr != nil {
-			return nil, errcode.New(errcode.ErrInvalidArg,
-				"agones: invalid battle combat factions: %v", factionErr)
-		}
+	// 阵营与名单是同一份对局定义的两半,不可分割:一场对局就是「谁在场 + 每人属于哪一方」。
+	// 此前阵营是可选的,于是"名单齐了但阵营缺失"的分配能成功下发,DS 拿到后只能退化成
+	// 每人一个独立阵营的混战——队友互相能打,而且看起来一切正常(能进图、能打、能结算),
+	// 错误被玩成了功能。缺阵营现在与缺名单同级,一律在写 annotation 前拒绝。
+	if len(combatFactionByPlayer) == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg,
+			"agones: battle combat factions required for match %d", matchID)
+	}
+	var combatFactions string
+	var factionErr error
+	canonicalPlayers, combatFactions, factionErr = dsmetadata.CanonicalCombatFactions(
+		canonicalPlayers, combatFactionByPlayer)
+	if factionErr != nil {
+		return nil, errcode.New(errcode.ErrInvalidArg,
+			"agones: invalid battle combat factions: %v", factionErr)
 	}
 	partial := &AuthoritativeGameServerAllocation{AllocationID: allocationID}
 	meta := &gsaMetadata{Labels: map[string]string{
@@ -345,12 +351,10 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 		"pandora.dev/game-mode":     sanitizeLabelValue(gameMode),
 		battleAllocationMetadataKey: sanitizeLabelValue(allocationID),
 	}, Annotations: map[string]string{
-		battleRosterAnnotationKey:   roster,
-		battleAllocationMetadataKey: allocationID,
+		battleRosterAnnotationKey:         roster,
+		battleCombatFactionsAnnotationKey: combatFactions,
+		battleAllocationMetadataKey:       allocationID,
 	}}
-	if combatFactions != "" {
-		meta.Annotations[battleCombatFactionsAnnotationKey] = combatFactions
-	}
 	podName, addr, selectedTrack, err := a.allocateWithMetadata(ctx, matchID, mapID, releaseTrack, meta)
 	if err != nil {
 		// 即使 POST 没有可解析响应，也必须把 allocation_id 交还调用方。它是未知结果
@@ -369,7 +373,9 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 		gs.Metadata.Labels[battleAllocationMetadataKey] != sanitizeLabelValue(allocationID) ||
 		gs.Metadata.Annotations[battleAllocationMetadataKey] != allocationID ||
 		gs.Metadata.Annotations[battleRosterAnnotationKey] != roster ||
-		!exactOptionalAnnotation(gs.Metadata.Annotations, battleCombatFactionsAnnotationKey, combatFactions) ||
+		// 阵营与名单同级精确比对：投递后回读必须逐字节一致，PATCH 丢字段或被别的写者覆盖
+		// 都要在这里判定为分配失败，而不是放行一台"名单对、阵营缺"的 DS。
+		gs.Metadata.Annotations[battleCombatFactionsAnnotationKey] != combatFactions ||
 		!releasetrack.Valid(actualReleaseTrack) || actualReleaseTrack != selectedTrack ||
 		gs.Metadata.Annotations[releaseTrackMetadataKey] != actualReleaseTrack {
 		return partial, errcode.New(errcode.ErrDSAllocationFailed,
@@ -471,7 +477,11 @@ func (a *AgonesGameServerAllocator) ResolveAllocationByID(
 		gs.Metadata.Labels[battleAllocationMetadataKey] != sanitizeLabelValue(allocationID) ||
 		gs.Metadata.Annotations[battleAllocationMetadataKey] != allocationID ||
 		gs.Metadata.Annotations[battleRosterAnnotationKey] != roster ||
-		!exactOptionalAnnotation(gs.Metadata.Annotations, battleCombatFactionsAnnotationKey, combatFactions) ||
+		// 与分配路径同级的精确比对。这里刻意**不**额外要求"必须非空":本方法是不确定认领的
+		// 只读对账入口，若某条历史认领没带阵营，硬拒会让它永远解析不出对应 GameServer，
+		// 从而把一台 Allocated 的 Pod 变成查不到出身的孤儿(参见"绝不删 Allocated GameServer")。
+		// 让它按空值匹配上、进入正常回收链，比把它悬空更安全；新分配已在写入侧强制非空。
+		gs.Metadata.Annotations[battleCombatFactionsAnnotationKey] != combatFactions ||
 		!releasetrack.Valid(actualTrack) || gs.Metadata.Annotations[releaseTrackMetadataKey] != actualTrack {
 		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: allocation_id %s resolved GameServer binding is incomplete or conflicting",
@@ -495,16 +505,6 @@ func (a *AgonesGameServerAllocator) ResolveAllocationByID(
 		ReleaseTrack:       actualTrack,
 		AnnotationsPresent: gs.Metadata.Annotations != nil,
 	}, true, nil
-}
-
-// exactOptionalAnnotation 区分 legacy 缺席与新协议精确值：期望空串时 key 必须不存在，
-// 不能把意外的空值/旧分配残留当作同一权威快照。
-func exactOptionalAnnotation(annotations map[string]string, key, expected string) bool {
-	value, found := annotations[key]
-	if expected == "" {
-		return !found
-	}
-	return found && value == expected
 }
 
 func (a *AgonesGameServerAllocator) allocateWithMetadata(
@@ -809,6 +809,7 @@ func (a *AgonesGameServerAllocator) ResolveExpectedPodUID(
 //     SDK health ping(DS 侧独立线程 pinger)断流判死,该实例不可能再服务本局;
 //   - 同 UID 且非 Unhealthy → (false, nil):实例存活(可能仍在冷加载);
 //   - 任何读失败/不确定 → (false, err):调用方必须回退时间界,不得据此回收。
+//
 // 零写副作用;判弃权威仍是 Redis 事务(AbandonIfStale 的 WATCH 单赢家)。
 func (a *AgonesGameServerAllocator) ProbeExpectedInstanceGone(
 	ctx context.Context,

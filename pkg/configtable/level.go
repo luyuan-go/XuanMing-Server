@@ -47,6 +47,13 @@ func validateLevelRow(row *configpb.LevelRow) error {
 			return fmt.Errorf("队伍人数下限(min_team_size=%d)大于队伍人数上限(team_size=%d)", minTS, ts)
 		}
 	}
+	// 计分模式与对局结构的一致性:Elo 是「双方对抗的相对分」,单方合作副本没有对手结构,
+	// 算给谁都说不通。填成 ELO 属于配置错配,挡在加载边界(整批不切换、保留旧表,§9.15),
+	// 而不是等打完一局才在结算里给一群合作玩家互相扣分。
+	// side_count==0 是"未配置沿用服务端默认 2 方",按 2 方对待,合法。
+	if row.GetRatingMode() == configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO && row.GetSideCount() == 1 {
+		return fmt.Errorf("计分模式(rating_mode)=ELO 但对局方数(side_count)=1(单方合作副本没有对手结构,无法算 Elo);要么改 1=不计分,要么把方数填成实际对抗方数")
+	}
 	return nil
 }
 

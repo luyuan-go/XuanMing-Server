@@ -293,6 +293,19 @@ builds:
       - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
       - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
 
+  - id: mission
+    dir: services/social/mission
+    main: ./cmd/mission
+    binary: mission
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/luyuancpp/pandora/pkg/version.Version={{.Version}}
+      - -X github.com/luyuancpp/pandora/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/luyuancpp/pandora/pkg/version.BuildTime={{.Date}}
+
   - id: friend
     dir: services/social/friend
     main: ./cmd/friend

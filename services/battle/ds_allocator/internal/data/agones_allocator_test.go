@@ -447,7 +447,7 @@ func TestProbeExpectedInstanceGone(t *testing.T) {
 }
 
 // TestReleaseExpectedDeletionGraceContract:exact 回收对 deletionTimestamp 的三态契约
-//(INC-20260727-001 复审 P1-2)。已受理删除不重复 DELETE、宽限内快速返回 pending 哨兵、
+// (INC-20260727-001 复审 P1-2)。已受理删除不重复 DELETE、宽限内快速返回 pending 哨兵、
 // 双对象物理消失才 nil(teardown proof 门),同名新 UID 零删除。
 func TestReleaseExpectedDeletionGraceContract(t *testing.T) {
 	const podName = "battle-grace-1"
@@ -458,7 +458,7 @@ func TestReleaseExpectedDeletionGraceContract(t *testing.T) {
 		}
 	}
 	type objectState struct {
-		status   int    // 0=200
+		status   int // 0=200
 		uid      string
 		deleting bool
 	}
@@ -636,8 +636,31 @@ func TestAllocateAuthoritative_StrictGETRejectsMissingIdentity(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := newTestAllocator(t, srv.URL)
-	if _, err := a.AllocateAuthoritative(context.Background(), 42, "11111111-1111-4111-8111-111111111111", []uint64{1}, nil, 1, "ranked", "stable"); err == nil {
+	// 必须传阵营:否则本用例会因"缺阵营"这个更早的校验而失败，看起来仍然通过，
+	// 但它想验证的"缺 UID/RV 必须 fail-closed"根本没被执行到。
+	if _, err := a.AllocateAuthoritative(context.Background(), 42, "11111111-1111-4111-8111-111111111111",
+		[]uint64{1}, map[uint64]uint32{1: 0}, 1, "ranked", "stable"); err == nil {
 		t.Fatal("missing UID/RV must fail closed")
+	}
+}
+
+// 阵营与名单同为对局定义的必填部分:缺阵营必须在写 annotation 前就被拒绝，
+// 绝不允许下发一台"有名单、无阵营"的 DS——那会让 DS 退化成每人独立阵营的混战。
+func TestAllocateAuthoritative_MissingCombatFactionsRejected(t *testing.T) {
+	a := newTestAllocator(t, "http://127.0.0.1:1")
+	const allocationID = "44444444-4444-4444-8444-444444444444"
+	_, err := a.AllocateAuthoritative(context.Background(), 42, allocationID,
+		[]uint64{1, 2}, nil, 1, "ranked", "stable")
+	if err == nil {
+		t.Fatal("allocation without combat factions must be rejected")
+	}
+	if code := errcode.As(err); code != errcode.ErrInvalidArg {
+		t.Fatalf("want ErrInvalidArg for missing combat factions, got code=%v err=%v", code, err)
+	}
+	// 名单齐但只覆盖部分玩家同样非法:canonical 化会拒绝不完整映射。
+	if _, err := a.AllocateAuthoritative(context.Background(), 42, allocationID,
+		[]uint64{1, 2}, map[uint64]uint32{1: 0}, 1, "ranked", "stable"); err == nil {
+		t.Fatal("partial combat faction coverage must be rejected")
 	}
 }
 
@@ -646,7 +669,10 @@ func TestAllocateAuthoritative_POSTUnknownReturnsAllocationFence(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	const allocationID = "22222222-2222-4222-8222-222222222222"
-	got, err := a.AllocateAuthoritative(ctx, 42, allocationID, []uint64{1}, nil, 1, "ranked", "stable")
+	// 阵营是分配的必填输入，这里必须传:本用例要验证的是 POST 结果未知时仍交还
+	// allocation_id 作为 fencing token，不能被"缺阵营"这个更早的参数校验挡在门外。
+	got, err := a.AllocateAuthoritative(ctx, 42, allocationID, []uint64{1},
+		map[uint64]uint32{1: 0}, 1, "ranked", "stable")
 	if err == nil || got == nil || got.AllocationID != allocationID || got.InstanceUID != "" {
 		t.Fatalf("partial=%+v err=%v", got, err)
 	}
@@ -804,7 +830,10 @@ func TestAllocateAuthoritative_CanaryNoCapacityFallsBackAndPersistsGETTrack(t *t
 				},
 				"annotations": map[string]string{
 					battleAllocationMetadataKey: allocationID, battleRosterAnnotationKey: "10,20",
-					releaseTrackMetadataKey: "stable",
+					// 阵营现在与名单同为必填并逐字节回读比对，伪造的 GameServer 必须一并回显，
+					// 否则会被判定为"投递后绑定不完整"。顺序跟 canonical roster 一致。
+					battleCombatFactionsAnnotationKey: "10=0,20=1",
+					releaseTrackMetadataKey:           "stable",
 				},
 			}})
 		default:
@@ -820,7 +849,7 @@ func TestAllocateAuthoritative_CanaryNoCapacityFallsBackAndPersistsGETTrack(t *t
 		t.Fatal(err)
 	}
 	got, err := a.AllocateAuthoritative(context.Background(), 77, allocationID,
-		[]uint64{20, 10}, nil, 1, "ranked", "canary")
+		[]uint64{20, 10}, map[uint64]uint32{10: 0, 20: 1}, 1, "ranked", "canary")
 	if err != nil || got == nil || got.ReleaseTrack != "stable" || got.PodName != "battle-stable-1" {
 		t.Fatalf("fallback allocation=%+v err=%v", got, err)
 	}

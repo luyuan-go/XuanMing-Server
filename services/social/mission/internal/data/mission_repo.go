@@ -334,14 +334,28 @@ func (r *MySQLMissionRepo) ListUngrantedRewards(ctx context.Context, olderThanMs
 }
 
 // MarkReward 见 biz.MissionRepo(1 GRANTED / 2 FAILED)。
+//
+// **GRANTED 是终态,任何副本都不得把它改回 FAILED**(§16.1/§16.4 多副本)。多副本补扫是
+// 刻意允许的(正确性由下游幂等键保证,不引入 claim/lease —— §15.3 不为此加一套锁),
+// 但那意味着两个副本可能同时处理同一行:A 发放成功正要写 GRANTED,B 因下游瞬时不可用
+// 写 FAILED。若无条件覆盖,已发放的行会被打回补发工作集,然后:
+//   - 每轮补扫都重放它(下游幂等键吸收,但白烧配额与日志);
+//   - `status <> 1 AND updated_at_ms 超期` 的行永不收敛,"陈年 FAILED = 发放链有 bug"
+//     这个审计信号被噪声淹没;
+//   - 保留期把下游幂等记录清掉之后(90 天),再一次重放就是**真的重复发放**。
+//
+// 因此失败标记带 `status <> 1` 条件更新;成功标记无条件(终态推进,重复写同值幂等)。
+// 命中 0 行是正常并发结果(行已被别的副本置 GRANTED),不算错误。
 func (r *MySQLMissionRepo) MarkReward(ctx context.Context, id uint64, granted bool, nowMs int64) error {
-	status := 2
 	if granted {
-		status = 1
+		_, err := r.db.ExecContext(ctx,
+			"UPDATE mission_reward_log SET status = 1, updated_at_ms = ? WHERE id = ?",
+			nowMs, id)
+		return err
 	}
 	_, err := r.db.ExecContext(ctx,
-		"UPDATE mission_reward_log SET status = ?, updated_at_ms = ? WHERE id = ?",
-		status, nowMs, id)
+		"UPDATE mission_reward_log SET status = 2, updated_at_ms = ? WHERE id = ? AND status <> 1",
+		nowMs, id)
 	return err
 }
 

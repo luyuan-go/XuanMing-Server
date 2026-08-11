@@ -24,6 +24,12 @@ func (s *allocationErrorStub) AllocateBattle(context.Context, uint64, []uint64, 
 	return nil, s.err
 }
 
+func (s *allocationErrorStub) AllocateBattleWithCombatFactions(
+	ctx context.Context, matchID uint64, playerIDs []uint64, _ map[uint64]uint32, mapID uint32,
+) (*model.BattleAllocation, error) {
+	return s.AllocateBattle(ctx, matchID, playerIDs, mapID)
+}
+
 func (s *allocationErrorStub) AbortBattleAllocation(context.Context, uint64, string, *model.BattleAllocation) error {
 	return nil
 }

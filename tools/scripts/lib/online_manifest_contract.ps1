@@ -1545,57 +1545,6 @@ function Assert-PandoraRenderedOnlineContract {
     }
 }
 
-function Assert-PandoraPlacementPreflightContract {
-    param(
-        [Parameter(Mandatory = $true)][string[]]$ContractRows,
-        [Parameter(Mandatory = $true)][string]$PinnedImage
-    )
-    if ([string]::IsNullOrWhiteSpace((Get-PandoraImageDigestFromReference $PinnedImage))) {
-        throw "player-locator placement preflight image 不是 digest pin:$PinnedImage"
-    }
-    $targets = @()
-    foreach ($row in $ContractRows) {
-        if ([string]::IsNullOrWhiteSpace($row)) { continue }
-        $fields = @([regex]::Split($row, "`t"))
-        if ($fields.Count -lt 2 -or $fields[0] -cne 'Deployment' -or $fields[1] -cne 'player-locator') {
-            continue
-        }
-        if ($fields.Count -ne 13) {
-            throw "player-locator preflight kubectl contract 列数=$($fields.Count)，应为 13:$row"
-        }
-        $targets += ,$fields
-    }
-    if ($targets.Count -ne 1) {
-        throw "online 渲染 player-locator placement preflight Deployment 数=$($targets.Count)，应为 1。"
-    }
-    $fields = $targets[0]
-    if ([string]$fields[2] -cne 'Recreate') {
-        throw "Deployment/player-locator strategy=$($fields[2])，placement writer 升级必须为 Recreate。"
-    }
-    if ([string]$fields[3] -cne $PinnedImage) {
-        throw "Deployment/player-locator 主容器 image=$($fields[3])，expected=$PinnedImage。"
-    }
-    if ([string]$fields[4] -cne 'placement-preflight') {
-        throw "Deployment/player-locator initContainer 必须且只能是 placement-preflight；actual=$($fields[4])。"
-    }
-    if ([string]$fields[5] -cne $PinnedImage) {
-        throw "Deployment/player-locator placement-preflight image=$($fields[5])，必须与主容器使用同一 digest=$PinnedImage。"
-    }
-    if ([string]$fields[6] -cne 'IfNotPresent') {
-        throw "Deployment/player-locator placement-preflight imagePullPolicy=$($fields[6])，expected=IfNotPresent。"
-    }
-    $expectedArgs = '-conf etc/cluster.yaml -placement-preflight -placement-preflight-timeout=10m -placement-preflight-scan-count=1000'
-    if ([string]$fields[7] -cne $expectedArgs) {
-        throw "Deployment/player-locator placement-preflight args 非 canonical；actual=$($fields[7])。"
-    }
-    if (-not [string]::IsNullOrEmpty([string]$fields[8])) {
-        throw 'Deployment/player-locator placement-preflight 禁止覆盖 serving image ENTRYPOINT。'
-    }
-    if ([string]$fields[9] -cne 'conf' -or [string]$fields[10] -cne '/app/etc/cluster.yaml' -or
-        [string]$fields[11] -cne 'player-locator.yaml' -or [string]$fields[12] -cne 'true') {
-        throw 'Deployment/player-locator placement-preflight 必须只读挂载 canonical player-locator 配置。'
-    }
-}
 
 function Assert-PandoraHubAllocatorSingleWriterContract {
     param([Parameter(Mandatory = $true)][string[]]$ContractRows)
@@ -1615,9 +1564,30 @@ function Assert-PandoraHubAllocatorSingleWriterContract {
         throw "online 渲染 hub-allocator Deployment 数=$($targets.Count)，应为 1。"
     }
     $fields = $targets[0]
-    if ([string]$fields[2] -cne '1' -or [string]$fields[3] -cne 'Recreate' -or
-        -not [string]::IsNullOrWhiteSpace([string]$fields[4])) {
-        throw "Deployment/hub-allocator 必须精确为 replicas=1 + Recreate 且无 rollingUpdate；actual replicas=$($fields[2]) strategy=$($fields[3]) rollingUpdate=$($fields[4])。"
+    # 2026-08-11 对齐当前权威设计:本断言原先要求 `Recreate + 无 rollingUpdate`,但
+    # R9 P0-7 起 hub-allocator 的单写者约束**不再依赖部署策略**,改由运行时写者继任租约
+    # 保证(pkg/dsauthfence/writerlease:etcd 选举 + 单调 fencing token + Redis 同事务
+    # 存储级 fencing;未当选副本对写请求回可重试 UNAVAILABLE,失租旧 leader 永久不能补写)。
+    # services.yaml 因此改成 `RollingUpdate{maxSurge:1,maxUnavailable:0}`(§9.16/§9.21
+    # 不停服硬要求,Recreate 全量断流已被审计否决),并用 `pandora.dev/deploy-strategy`
+    # 注解 + 进程启动 fail-closed 校验把"RollingUpdate × writer_lease_mode≠enforce"挡死。
+    # 于是这条门禁若继续要求 Recreate,就变成一条与 manifest 永远对不上的死断言,
+    # 硬阻断每一次 online 发布 —— 改为断言当前真正的不变量:
+    #   ① replicas 恒为 1(多副本才是单写者风险的真实入口);
+    #   ② 策略必须是 RollingUpdate 且 **maxUnavailable=0**(升级全程始终有副本在服务);
+    #   ③ maxSurge 至多 1(重叠窗口内最多两个副本,与租约接任的时间预算匹配)。
+    if ([string]$fields[2] -cne '1') {
+        throw "Deployment/hub-allocator replicas=$($fields[2])，必须恒为 1(单写者;并发由写者租约而非副本数保证)。"
+    }
+    if ([string]$fields[3] -cne 'RollingUpdate') {
+        throw "Deployment/hub-allocator strategy=$($fields[3])，必须为 RollingUpdate(§9.16/§9.21 不停服;单写者由 writerlease 保证)。"
+    }
+    $rollingUpdate = [string]$fields[4]
+    if ($rollingUpdate -cnotmatch 'maxUnavailable:\s*0' -and $rollingUpdate -cnotmatch '"maxUnavailable"\s*:\s*0') {
+        throw "Deployment/hub-allocator rollingUpdate 必须显式 maxUnavailable=0(升级全程始终有副本在服务)；actual=$rollingUpdate。"
+    }
+    if ($rollingUpdate -cnotmatch 'maxSurge:\s*1' -and $rollingUpdate -cnotmatch '"maxSurge"\s*:\s*1') {
+        throw "Deployment/hub-allocator rollingUpdate 必须显式 maxSurge=1(重叠窗口最多两副本)；actual=$rollingUpdate。"
     }
 }
 

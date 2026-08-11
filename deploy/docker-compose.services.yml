@@ -257,7 +257,9 @@ services:
       args: { SERVICE_DIR: services/battle/ds_allocator, CMD_NAME: ds_allocator }
     image: pandora/ds-allocator:dev
     container_name: pandora-ds-allocator
-    volumes: [ "../run/cluster/etc/ds-allocator.yaml:/app/etc/cluster.yaml:ro" ]
+    volumes:
+      - "../run/cluster/etc/ds-allocator.yaml:/app/etc/cluster.yaml:ro"
+      - "../configtable/dist:/app/configtable/active:ro"
     ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20020:20020" ]
 
   hub-allocator:
@@ -277,7 +279,9 @@ services:
       args: { SERVICE_DIR: services/battle/battle_result, CMD_NAME: battle_result }
     image: pandora/battle-result:dev
     container_name: pandora-battle-result
-    volumes: [ "../run/cluster/etc/battle-result.yaml:/app/etc/cluster.yaml:ro" ]
+    volumes:
+      - "../run/cluster/etc/battle-result.yaml:/app/etc/cluster.yaml:ro"
+      - "../configtable/dist:/app/configtable/active:ro"
     ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20022:20022" ]
     # 含战斗混合模式:ds_allocator 跑宿主,battle_result 经 host.docker.internal:20020 回连(Linux/WSL 需显式映射)。
     extra_hosts:

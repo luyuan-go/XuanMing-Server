@@ -64,9 +64,12 @@ var bigFields = []fieldBudget{
 			"超 256KB 说明格子数或单格 attrs 异常——查 bag_section 容量闸是否被绕过(迁移路径曾传 math.MaxUint32),以及单个 BagItem.attrs 条数",
 	},
 	{
-		DB: "pandora_bag", Table: "bag_meta", Column: "snapshot", PK: "player_id",
+		// 2026-08-11 修正:此前登记成 `bag_meta`(那张表根本没有 snapshot 列,只有
+		// owner_epoch / last_journal_seq),导致 -size-check 对随身组快照**从来没体检过**。
+		// bigfield_test.go 的正反双向漂移检查就是为了让这类"登记了但永远匹配不上"当场暴露。
+		DB: "pandora_bag", Table: "bag_checkpoint", Column: "snapshot", PK: "player_id",
 		MaxBytes: 256 * 1024,
-		Why:      "随身组背包快照,设计规模同 bag_section;超限排查同上",
+		Why:      "随身组背包快照(pb BagStorageRecord),设计规模同 bag_section;超限排查同上",
 	},
 	{
 		DB: "pandora_bag", Table: "bag_journal", Column: "payload", PK: "id",
@@ -106,6 +109,27 @@ var bigFields = []fieldBudget{
 		DB: "pandora_battle", Table: "battle_exit_proof_outbox", Column: "payload", PK: "id",
 		MaxBytes: 1536,
 		Why:      "列是 VARBINARY(2048),装每玩家 Battle→Hub 终态 proof。超 1536(75%)即逼近列上限",
+	},
+	{
+		DB: "pandora_mission", Table: "player_mission_active", Column: "progress", PK: "id",
+		MaxBytes: 192,
+		Why: "列是 VARBINARY(256),装 pb MissionProgressStorageRecord(repeated uint32 每条件槽一个)。" +
+			"槽数上限 configtable.MaxMissionConditionSlots=8,满槽满值约 48 字节。" +
+			"超 192(75%)即逼近列上限——查槽数上限是否被绕过(热更加条件后旧行槽数会跟着涨)",
+	},
+	{
+		DB: "pandora_mission", Table: "mission_reward_log", Column: "reward_pb", PK: "id",
+		MaxBytes: 1536,
+		Why: "列是 VARBINARY(2048),装 pb MissionRewardStorageRecord(补发重放唯一入参)。" +
+			"超 1536(75%)即逼近列上限,再涨会拒写整条发奖流水——查奖励表单行 item_ids 条数" +
+			"(与 leaderboard_reward_log 同型同阈值)",
+	},
+	{
+		DB: "pandora_mission", Table: "mission_push_outbox", Column: "payload", PK: "id",
+		MaxBytes: 1536,
+		Why: "列是 VARBINARY(2048),装 pb MissionUpdateEvent 分片。biz 侧 marshalEventChunks 已按" +
+			"软上限 1800B / 每片 6 条任务分片,正常远小于此。超 1536 说明分片粒度失效——" +
+			"查单条 ActiveMission 的 progress/targets 槽数是否异常",
 	},
 }
 

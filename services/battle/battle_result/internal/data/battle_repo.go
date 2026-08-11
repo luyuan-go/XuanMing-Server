@@ -24,6 +24,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 )
 
@@ -95,6 +96,16 @@ type TerminalReleaseRecord struct {
 	// (no DB migration).
 	GameMode string
 	MapID    uint32
+	// RatingMode is the canonical "does this battle change rank" fact, frozen by
+	// matchmaker from the level table at match formation and copied here from the
+	// same canonical BattleStorageRecord snapshot as PlayerIDs/GameMode/MapID.
+	// It is the authoritative MMR policy input: LEVEL_RATING_MODE_NONE never runs
+	// Elo, LEVEL_RATING_MODE_ELO does. UNSPECIFIED means "not frozen" (old
+	// matchmaker or a config batch predating the column) and falls back to the
+	// legacy GameMode=="pve_coop" heuristic — never to the DS request. Like
+	// PlayerIDs/GameMode/MapID it lives only inside this authorized settlement and
+	// is not persisted in terminal_release_outbox (no DB migration).
+	RatingMode configpb.LevelRatingMode
 	// ReleasedAtMs>0 是阶段1“永久 Redis terminal + UID delete 已明确成功”的
 	// MySQL durable ACK。只有该状态才允许阶段2给墓碑设 TTL并删除本行。
 	ReleasedAtMs int64

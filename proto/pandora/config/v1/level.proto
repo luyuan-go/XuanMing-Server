@@ -54,6 +54,20 @@ enum LevelExpShareMode {
   LEVEL_EXP_SHARE_MODE_DAMAGE_SPLIT = 3;
 }
 
+// LevelRatingMode 计分模式:这张图打完「算不算段位分(MMR / Elo)」。
+// 消费者是 battle_result 的结算路径。判定值在**成局时**由 matchmaker 读本列定格进
+// canonical BattleStorageRecord,结算只认定格值、不在结算那一刻重新查表——否则热更改本列
+// 会改写「正在打的那一局」的计分规则(与 game_mode / map_id 同为本局元数据,同一口径定格)。
+enum LevelRatingMode {
+  // 未配置:沿用本列上线前的既定口径(canonical game_mode=="pve_coop" 不计分,其余按 Elo)。
+  // 滚动混版下旧批次表与旧 BattleStorageRecord 都安全(§9.21);新表应显式填值。
+  LEVEL_RATING_MODE_UNSPECIFIED = 0;
+  // 不计分:本图结算一律 mmr_delta=0,且完全不读 MMR(PVE 副本 / 娱乐图 / 训练场)。
+  LEVEL_RATING_MODE_NONE        = 1;
+  // 按 Elo 计分:battle_result 用既有 Elo 换算写 mmr_delta(排位对抗图)。
+  LEVEL_RATING_MODE_ELO         = 2;
+}
+
 // LevelCategory 关卡类别(对齐 g_关卡.xlsx「关卡类别」列取值,JSON 里用数字)。
 enum LevelCategory {
   LEVEL_CATEGORY_UNSPECIFIED = 0;
@@ -88,8 +102,14 @@ message LevelRow {
   // 是否能退出(客户端退出按钮门控:1=允许主动退出并按失败结算返回 Hub,0=不显示退出按钮;
   //   当前仅单人 PVE 副本置 1,DS 端 RequestSoloDungeonLeave 仍对 PVE/单人 roster 做兜底校验)
   bool allow_exit = 9 [(excel_col) = "是否能退出", (excel_default) = "0"];
-  // 玩法模式(canonical game_mode):取值必须与承接该关卡的 matchmaker 部署 game_mode 完全一致
-  //   ("5v5_ranked"=默认撮合部署,"pve_coop"=walk_in 直进部署)。非战斗类关卡留空。
+  // 玩法模式(canonical game_mode):**撮合池 / 部署标识**,取值必须与承接该关卡的 matchmaker
+  //   部署 game_mode 完全一致("5v5_ranked"=默认撮合部署,"pve_coop"=walk_in 直进部署)。
+  //   非战斗类关卡留空。
+  // ⚠️ 本列**只表达「这张图归哪个池」**,不表达人数、方数、是否排位:
+  //   人数 / 方数看 team_size × side_count(存量值 "5v5_ranked" 的图现在 team_size 是 1 和 3,
+  //   名字里的 5 对任何一行都不成立,是历史遗留标签);算不算段位看 rating_mode。
+  //   **禁止按本列的字符串去解析人数或推断计分**——那是第二份判定(§9.22),
+  //   历史上已因此出过 fail-open(见 rating_mode 注释)。新增池名不要再带数字。
   // 用途一(客户端):按 map_id 查得本列 → 选路由与冷启动恢复校验。**这是「这张图属于哪个撮合池」
   //   的唯一事实源**;客户端不得再按 game_mode_class 字符串推断玩法,也不得硬编码模式白名单
   //   (CLAUDE.md §17.1;退役 MyTeamModel.cpp IsPveMatchMap 与 PandoraMatchClient.cpp 双串白名单)。
@@ -129,6 +149,17 @@ message LevelRow {
   // ⚠️ 只在**进场那一刻**判定,不是局内持续不变量:开局后有人退出 / 掉线导致人数掉到
   //   下限以下,绝不允许据此踢人或强制收局(§9.19 / §9.20 不得让玩家卡死或被踢出场景)。
   uint32 min_team_size = 15 [(excel_col) = "队伍人数下限", (excel_default) = "0"];
+  // 计分模式(枚举数字;空单元格=未配置,沿用旧口径)。见 LevelRatingMode。
+  // 与 entry_mode / exp_share_mode 同规则**刻意不写 (excel_default)**:枚举列的 0 被生成器视为
+  //   非法数据值,而本列的"未配置"恰恰要落 0;非战斗类关卡本就不结算,留空即可。
+  //
+  // 本列存在的理由(2026-08-11):在它之前,「算不算段位」是从 canonical game_mode 字符串用
+  //   **排除法**推出来的(battle_result:`!= "pve_coop"` 即算 Elo)。而 game_mode 是撮合池 /
+  //   部署标识,是会新增取值的——ds/v1 `AllocateBattleRequest.game_mode` 的注释里就已经写着
+  //   未来取值 "casual_5v5" / "custom"。任何新池在旧口径下都会**静默按排位改玩家段位**,
+  //   而改段位不可逆,是最坏的失败方向。计分与否从此是表里一条独立事实:
+  //   新增玩法只填这一列,不改代码(§17.1 差异进表)。
+  LevelRatingMode rating_mode = 16 [(excel_col) = "计分模式"];
 }
 
 // LevelTableData 关卡表整表容器(dist/level.json 的根对象;excel_file 注解 = 导表登记)。

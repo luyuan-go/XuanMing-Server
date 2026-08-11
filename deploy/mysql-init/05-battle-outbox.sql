@@ -244,7 +244,7 @@ CREATE TABLE IF NOT EXISTS `battle_mission_outbox` (
     `created_at_ms`      BIGINT          NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_match_seq_player` (`match_id`, `seq`, `player_id`),
-    KEY `idx_mission_player_fifo` (`match_id`, `player_id`, `seq`, `id`),
+    KEY `idx_mission_player_fifo` (`player_id`, `id`),
     KEY `idx_mission_due` (`next_attempt_at_ms`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 战斗任务事实转发出箱(每玩家 FIFO + at-least-once + mission 侧收据幂等 + 失败退避)';

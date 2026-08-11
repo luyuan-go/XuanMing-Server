@@ -62,14 +62,21 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	return nil
 }
 
-// FetchMissionOutbox 取一批到期的任务事实出箱行,同 (match_id, player_id) 只返回
-// seq/id 最早的一条 —— 与进度出箱同款 NOT EXISTS 谓词,**每玩家严格 FIFO**。
+// FetchMissionOutbox 取一批到期的任务事实出箱行,**同一 player_id 只返回 id 最小的一条**
+// —— 与进度出箱同款 NOT EXISTS 谓词,每玩家严格 FIFO。
 //
 // 为什么必须 FIFO(推翻早期"任务事实顺序无关"的说法):任务链前后两环的条件类别通常
 // 不同(「杀 5 只狼」→「收集 3 张狼皮」),后环任务在前环完成时才被自动接取。若"狼皮"
 // 事实先于"杀狼"事实投递,mission 侧匹配不上任何活跃任务,进度**静默丢失**且事实已被
 // 收据吸收、永不重放。乱序的来源就是 DeferMissionOutbox:失败行退避后,同玩家后续行
 // 会越过它先投。改为队首阻塞后,退避的行会把同玩家后续事实一起挡住,顺序不再被破坏。
+//
+// **按 player_id 而不是 (match_id, player_id) 分组**:任务链是玩家维度的,不是对局维度的。
+// 按对局分组时,A 局卡住的队首挡不住 B 局的行,玩家打完 A 再打 B,B 的事实照样能抢在
+// A 的前面落地 —— 同一个丢进度的洞,只是要多打一局才踩到。同理排序键用 **id 而不是 seq**:
+// seq 是每对局自增的,跨对局不可比;id 是插入序,而 ApplyProgress 一个事务一批、批内按 seq
+// 升序插入,所以 id 序在对局内等价于 seq 序,跨对局等价于对局发生序(§9.1 保证玩家同一
+// 时刻只在一个可操作 DS,不存在两局并行产事实)。
 //
 // pending_action=1 的行同样占队首但不投递(等局内消费扣除落定),天然实现"扣除未落定
 // 就不推进使用类任务、也不让后续事实抢跑"。
@@ -83,8 +90,7 @@ WHERE cur.next_attempt_at_ms <= ?
   AND cur.pending_action = 0
   AND NOT EXISTS (
     SELECT 1 FROM battle_mission_outbox prev
-    WHERE prev.match_id = cur.match_id AND prev.player_id = cur.player_id
-      AND (prev.seq < cur.seq OR (prev.seq = cur.seq AND prev.id < cur.id))
+    WHERE prev.player_id = cur.player_id AND prev.id < cur.id
   )
 ORDER BY cur.id ASC LIMIT ?`
 	rows, err := r.db.QueryContext(ctx, q, time.Now().UnixMilli(), limit)

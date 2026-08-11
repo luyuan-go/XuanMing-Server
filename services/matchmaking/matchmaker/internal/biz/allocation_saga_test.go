@@ -58,6 +58,15 @@ func (s *switchingAllocationStub) AllocateBattle(context.Context, uint64, []uint
 	return &allocation, nil
 }
 
+// 阵营已是分配的必填输入，分配器不实现 CombatFactionDSAllocator 时 MatchUsecase 定性失败。
+// 本桩只需承载该能力，分配行为仍走上面的 first/second 切换逻辑。
+func (s *switchingAllocationStub) AllocateBattleWithCombatFactions(
+	ctx context.Context, matchID uint64, playerIDs []uint64,
+	_ map[uint64]uint32, mapID uint32,
+) (*model.BattleAllocation, error) {
+	return s.AllocateBattle(ctx, matchID, playerIDs, mapID)
+}
+
 func (s *switchingAllocationStub) AbortBattleAllocation(_ context.Context, matchID uint64, operationID string, allocation *model.BattleAllocation) error {
 	s.abortCalls++
 	s.abortMatchID = matchID
@@ -346,6 +355,12 @@ func (s *blockingDefiniteAllocationStub) AllocateBattle(context.Context, uint64,
 	return nil, s.err
 }
 
+func (s *blockingDefiniteAllocationStub) AllocateBattleWithCombatFactions(
+	ctx context.Context, matchID uint64, playerIDs []uint64, _ map[uint64]uint32, mapID uint32,
+) (*model.BattleAllocation, error) {
+	return s.AllocateBattle(ctx, matchID, playerIDs, mapID)
+}
+
 func (*blockingDefiniteAllocationStub) AbortBattleAllocation(context.Context, uint64, string, *model.BattleAllocation) error {
 	return errors.New("unexpected allocation abort")
 }
@@ -442,6 +457,12 @@ type blockingAbortSuccessAllocator struct {
 }
 
 func (*blockingAbortSuccessAllocator) AllocateBattle(context.Context, uint64, []uint64, uint32) (*model.BattleAllocation, error) {
+	return nil, errors.New("unexpected allocation")
+}
+
+func (*blockingAbortSuccessAllocator) AllocateBattleWithCombatFactions(
+	context.Context, uint64, []uint64, map[uint64]uint32, uint32,
+) (*model.BattleAllocation, error) {
 	return nil, errors.New("unexpected allocation")
 }
 
@@ -630,6 +651,12 @@ func (a *abortReadyRaceAllocator) AllocateBattle(context.Context, uint64, []uint
 	return &copy, nil
 }
 
+func (a *abortReadyRaceAllocator) AllocateBattleWithCombatFactions(
+	ctx context.Context, matchID uint64, playerIDs []uint64, _ map[uint64]uint32, mapID uint32,
+) (*model.BattleAllocation, error) {
+	return a.AllocateBattle(ctx, matchID, playerIDs, mapID)
+}
+
 func (a *abortReadyRaceAllocator) AbortBattleAllocation(context.Context, uint64, string, *model.BattleAllocation) error {
 	if a.abortCalls.Add(1) == 1 {
 		close(a.abortStarted)
@@ -749,6 +776,12 @@ type incompleteTicketSetAllocator struct {
 func (a *incompleteTicketSetAllocator) AllocateBattle(context.Context, uint64, []uint64, uint32) (*model.BattleAllocation, error) {
 	allocation := a.allocation
 	return &allocation, nil
+}
+
+func (a *incompleteTicketSetAllocator) AllocateBattleWithCombatFactions(
+	ctx context.Context, matchID uint64, playerIDs []uint64, _ map[uint64]uint32, mapID uint32,
+) (*model.BattleAllocation, error) {
+	return a.AllocateBattle(ctx, matchID, playerIDs, mapID)
 }
 
 func (*incompleteTicketSetAllocator) AbortBattleAllocation(context.Context, uint64, string, *model.BattleAllocation) error {

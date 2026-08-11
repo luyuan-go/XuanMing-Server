@@ -48,6 +48,14 @@ func (b *barrierAllocator) AllocateBattle(ctx context.Context, matchID uint64, p
 	}
 }
 
+// 必须显式覆写:barrierAllocator 内嵌 StubDSAllocator，若依赖提升来的方法，它会调用
+// **内嵌体**的 AllocateBattle 而不是上面这个带栅栏的实现，并发断言会静默失效。
+func (b *barrierAllocator) AllocateBattleWithCombatFactions(
+	ctx context.Context, matchID uint64, playerIDs []uint64, _ map[uint64]uint32, mapID uint32,
+) (*model.BattleAllocation, error) {
+	return b.AllocateBattle(ctx, matchID, playerIDs, mapID)
+}
+
 // seedAllocatingMatchN 造一个独立的 ALLOCATING match(票据/玩家 ID 按 base 区分,互不冲突)。
 func seedAllocatingMatchN(t *testing.T, ctx context.Context, f *fixture, matchID, base uint64) {
 	t.Helper()

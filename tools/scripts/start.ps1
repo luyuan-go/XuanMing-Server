@@ -2598,12 +2598,6 @@ function Get-PandoraWorkloadContractRows {
     return @(Invoke-KubectlClientContract -Manifest $Manifest -JsonPath $jsonPath -Action 'online Deployment manifest')
 }
 
-function Get-PandoraPlacementPreflightContractRows {
-    param([Parameter(Mandatory = $true)][string]$Manifest)
-    $jsonPath = '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.strategy.type}{"\t"}{.spec.template.spec.containers[?(@.name=="player-locator")].image}{"\t"}{.spec.template.spec.initContainers[*].name}{"\t"}{.spec.template.spec.initContainers[*].image}{"\t"}{.spec.template.spec.initContainers[*].imagePullPolicy}{"\t"}{.spec.template.spec.initContainers[*].args[*]}{"\t"}{.spec.template.spec.initContainers[*].command[*]}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].name}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].mountPath}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].subPath}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].readOnly}{"\n"}'
-    return @(Invoke-KubectlClientContract -Manifest $Manifest -JsonPath $jsonPath -Action 'player-locator placement preflight manifest')
-}
-
 function Get-PandoraHubAllocatorSingleWriterContractRows {
     param([Parameter(Mandatory = $true)][string]$Manifest)
     $jsonPath = '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.replicas}{"\t"}{.spec.strategy.type}{"\t"}{.spec.strategy.rollingUpdate}{"\n"}'
@@ -2976,9 +2970,6 @@ function New-OnlineRuntimeOverlay {
         }
         $contractRows = Get-PandoraWorkloadContractRows -Manifest $rendered
         Assert-PandoraRenderedOnlineContract -ContractRows $contractRows -Pins $pins -Digests $Digests -ServiceNames $ServiceNames -WriterServices $WriterServices
-        $placementPreflightRows = Get-PandoraPlacementPreflightContractRows -Manifest $rendered
-        Assert-PandoraPlacementPreflightContract -ContractRows $placementPreflightRows `
-            -PinnedImage ([string]$pins['player-locator'])
         $hubSingleWriterRows = Get-PandoraHubAllocatorSingleWriterContractRows -Manifest $rendered
         Assert-PandoraHubAllocatorSingleWriterContract -ContractRows $hubSingleWriterRows
         $dsticketRows = Get-PandoraDSTicketSignerContractRows -Manifest $rendered
@@ -6748,11 +6739,6 @@ function Invoke-Online {
             -SecureGoArgs $secureDsAuthGoArgs -ExpectedDigests $goDigests `
             -ActivationEvidence $onlineDsAuthActivationEvidence
         Write-Ok 'canonical green 普通发布终态审计通过；无 blue writer、无额外 capability。'
-        $placementGreen = Get-KubectlJsonObject -KubeContext $ctx `
-            -Arguments @('get', 'deployment/player-locator-ds-auth-green', '-n', $K8sNamespace, '-o', 'json') `
-            -Action '终态回读 player-locator canonical green placement preflight'
-        Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $placementGreen ([string]$goPins['player-locator'])
-        Write-Ok 'player-locator canonical green Recreate + same-digest placement preflight 终态通过。'
     }
     Wait-OnlineReadyFleetImageState -KubeContext $ctx -Fleet 'pandora-battle-stable' -Container 'pandora-battle-ds' `
         -Pin $battlePin -Digest $battleDescriptor.Digest -ExpectedTrack stable

@@ -530,12 +530,33 @@ func (uc *MissionUsecase) applyFactsEngine(st *PlayerState, facts []Fact) (*Muta
 	return mut, nil
 }
 
+// alignProgressSlots 把活跃行的进度槽补齐到**当前配置**的条件槽数(只扩不缩)。
+//
+// 热更给任务加条件时,旧活跃行的 progress 比 condition_ids 短。原实现在推进与达标判定
+// 两处都取 `min(len(condIDs), len(Progress))`,后果不是"新条件暂不生效"而是**白送完成**:
+// 例如任务原本单条件 3/3 未满(progress=[2]),热更加了第二个条件后,下一条属于条件 1 的
+// 事实把槽 0 推到 3 → 达标判定只看 min=1 个槽 → 直接判定全条件满足 → 完成并发奖,
+// 新加的条件一次都没被检查过。补零扩容后:已有进度原样保留,新条件从 0 开始必须真做完。
+//
+// 反向(热更删条件)刻意不截断:多出的尾部槽本就被两处循环按 condition_ids 长度忽略,
+// 留着还能在配置回滚后复原进度(截断则不可逆)。
+func alignProgressSlots(row *configpb.MissionRow, am *ActiveMission) {
+	need := len(configtable.MissionConditionIDs(row))
+	if len(am.Progress) >= need {
+		return
+	}
+	grown := make([]uint32, need)
+	copy(grown, am.Progress)
+	am.Progress = grown
+}
+
 // progressMission 单事实对单任务的槽位推进(D 版 UpdateMissionProgress)。
 func (uc *MissionUsecase) progressMission(row *configpb.MissionRow, am *ActiveMission, fact Fact) bool {
+	alignProgressSlots(row, am)
 	condIDs := configtable.MissionConditionIDs(row)
 	slots := len(condIDs)
 	if len(am.Progress) < slots {
-		slots = len(am.Progress) // 配置槽数变多的旧行:只推进既有槽(D 版 min 语义)
+		slots = len(am.Progress) // 防御:align 之后不该发生
 	}
 	progressed := false
 	for i := 0; i < slots; i++ {
@@ -562,14 +583,16 @@ func (uc *MissionUsecase) progressMission(row *configpb.MissionRow, am *ActiveMi
 }
 
 // allConditionsFulfilled 全槽达标判定(D 版 AreAllConditionsFulfilled)。
+//
+// 按**配置的全部条件槽**判定,槽数不足一律 fail-closed 判未达标(原实现取 min 会让
+// 热更新增的条件被整段跳过 → 白送完成,见 alignProgressSlots)。
 func (uc *MissionUsecase) allConditionsFulfilled(row *configpb.MissionRow, am *ActiveMission) bool {
 	condIDs := configtable.MissionConditionIDs(row)
-	slots := len(condIDs)
-	if len(am.Progress) < slots {
-		slots = len(am.Progress)
-	}
-	for i := 0; i < slots; i++ {
-		cond, ok := uc.catalog.ConditionByID(condIDs[i])
+	for i, cid := range condIDs {
+		if i >= len(am.Progress) {
+			return false // 进度槽比配置短(未对齐):宁可不完成,不误发奖
+		}
+		cond, ok := uc.catalog.ConditionByID(cid)
 		if !ok {
 			return false // 条件行缺失 fail-closed:宁可不完成,不误发奖
 		}
@@ -593,8 +616,13 @@ func (uc *MissionUsecase) buildRewardLog(playerID uint64, row *configpb.MissionR
 	}
 	record := &missionv1.MissionRewardStorageRecord{Exp: uint64(rrow.GetExp())}
 	for _, entry := range configtable.RewardItems(rrow) {
+		// 发放形态在**落快照这一刻**冻结:装备走 GrantInstances(`:inst` 键)、堆叠走
+		// GrantItems(`:stack` 键),两个键在 inventory 台账里互不相识。若发放时才回读
+		// 道具表,形态在两次投递之间被热更改掉(或滚动升级期新旧副本加载着不同配置批次),
+		// 同一条奖励会先后用两个不同幂等键各发一次 —— 幂等键防不住,因为不是同一个键。
+		equipment := uc.catalog.IsEquipment(entry.ItemConfigID)
 		record.Items = append(record.Items, &missionv1.MissionRewardItem{
-			ItemConfigId: entry.ItemConfigID, Count: entry.Count,
+			ItemConfigId: entry.ItemConfigID, Count: entry.Count, Equipment: &equipment,
 		})
 	}
 	pb, err := proto.Marshal(record)
@@ -618,6 +646,11 @@ func (uc *MissionUsecase) toProtoActive(am *ActiveMission) *missionv1.ActiveMiss
 		AcceptedAtMs:    uint64(am.AcceptedAtMs),
 	}
 	if row, ok := uc.catalog.MissionByID(am.MissionConfigID); ok {
+		// 热更加条件后的旧行 progress 比 condition_ids 短:下发前补零,
+		// 否则 progress 与 targets 长度不等,客户端逐槽渲染会错位/越界。
+		for len(out.Progress) < len(configtable.MissionConditionIDs(row)) {
+			out.Progress = append(out.Progress, 0)
+		}
 		condIDs := configtable.MissionConditionIDs(row)
 		out.Targets = make([]uint32, 0, len(condIDs))
 		for i, cid := range condIDs {

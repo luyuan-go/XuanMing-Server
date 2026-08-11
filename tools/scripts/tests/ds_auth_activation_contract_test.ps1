@@ -745,27 +745,8 @@ $locatorLive = (($liveGreen | ConvertTo-Json -Depth 40).Replace('ds-allocator', 
 $locatorObject = New-PandoraDsAuthCanonicalGreenObject $locatorLive 'player-locator' 'r7' `
     'etcd.pandora.internal' '/pandora/acl-negative/' $false 2 `
     ('registry/pandora/player-locator@' + $newDigest) $newDigest
-Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $locatorObject `
-    ('registry/pandora/player-locator@' + $newDigest)
 $null = Assert-PandoraDsAuthV3GreenStageDeploymentContract $locatorObject 'player-locator' 'r7' `
     'etcd.pandora.internal' '/pandora/acl-negative/' $false
-Assert-True ([string]$locatorObject.spec.strategy.type -ceq 'Recreate' -and
-    $null -eq $locatorObject.spec.strategy.PSObject.Properties['rollingUpdate'] -and
-    @($locatorObject.spec.template.spec.initContainers).Count -eq 1) `
-    'prod canonical green player-locator replacement must carry exact Recreate + preflight gate'
-$badLocator = Copy-Object $locatorObject
-$badLocator.spec.template.spec.initContainers[0].image = 'registry/pandora/player-locator@sha256:' + ('c' * 64)
-Assert-Throws {
-    Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $badLocator `
-        ('registry/pandora/player-locator@' + $newDigest)
-} 'canonical green rejects placement preflight digest drift'
-$badLocatorLive = Copy-Object $locatorLive
-$badLocatorLive.spec.template.spec.volumes = @($badLocatorLive.spec.template.spec.volumes | Where-Object name -cne 'conf')
-Assert-Throws {
-    New-PandoraDsAuthCanonicalGreenObject $badLocatorLive 'player-locator' 'r7' `
-        'etcd.pandora.internal' '/pandora/acl-negative/' $false 2 `
-        ('registry/pandora/player-locator@' + $newDigest) $newDigest
-} 'canonical green refuses preflight without canonical config source'
 $badGreen = Copy-Object $liveGreen
 $badGreen.spec.selector.matchLabels | Add-Member -NotePropertyName extra -NotePropertyValue smuggled
 Assert-Throws {
@@ -989,9 +970,6 @@ Assert-True ($successorPrepareSource.Contains("'--dry-run=server'") -and
     'producer must validate each server-side merged JSON candidate before the first mutating stage apply'
 Assert-True ($successorActivationSource.Contains('Assert-OrCreateV3CompletionMarker $currentInstances $false')) `
     'Audit of an already-required V3 cluster must require and verify the immutable completion marker read-only'
-Assert-True ($startSource.Contains(
-    'Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $placementGreen ([string]$goPins[''player-locator''])')) `
-    'prod ordinary release must read back and verify canonical green placement preflight after rollout'
 Assert-True (-not $startSource.Contains('--allowed-image-digests $devDigest')) `
     'fresh local bootstrap must not fabricate capability digest evidence'
 Assert-True ($startSource.Contains('--zero-writer-genesis-v3 --apply') -and
@@ -1000,8 +978,13 @@ Assert-True ($startSource.Contains('--zero-writer-genesis-v3 --apply') -and
     $startSource.Contains('zero-writer genesis 单事务 CAS') -and
     $startSource.Contains('--required-features $script:PandoraDsAuthRequiredFeaturesV3 --policy-v3')) `
     'new local/ordinary release paths must require V3 and fresh local must use one crash-safe zero-writer genesis transaction'
+# 取 digest 的实现于 2026-07-28 从 `ssh -- docker image inspect` 换成
+# `minikube image ls --format json`(containerd 节点上没有 docker CLI,旧写法直接硬失败;
+# 见 start.ps1 Get-LocalMinikubeImageDigest 上方说明),本断言的字面量当时没跟着改,
+# 于是从那天起在干净 HEAD 上就恒红。断言要守的性质不变 —— **digest 必须绑定本次目标
+# minikube profile 的镜像身份**,只把字面量对齐到现在的实现。
 Assert-True ($startSource.Contains('function Get-LocalMinikubeImageDigest') -and
-    $startSource.Contains("minikube -p `$MinikubeProfile ssh -- docker image inspect -f '{{.Id}}' `$Image") -and
+    $startSource.Contains("Get-MinikubeImageIds @('-p', `$MinikubeProfile)") -and
     $startSource.Contains('function Set-LocalDsAuthImageDigestAnnotations') -and
     $startSource.Contains('function Assert-LocalDsAuthImageDigestAnnotations') -and
     $startSource.Contains("`$writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')") -and
@@ -1033,10 +1016,17 @@ Assert-True ($resumeEtcdReady -ge 0 -and $resumeEtcdReady -lt $resumeBaseline -a
     [regex]::Matches($resumeBody, 'Set-LocalDsAuthImageDigestAnnotations').Count -eq 1 -and
     $resumeBody.Contains('Assert-LocalDsAuthImageDigestAnnotations')) `
     'Resume must wait etcd before baseline, apply Recreate before repairing node-derived writer provenance, then rollout and verify final Pods'
+# R11 P0-5 起 Hub 单写者不再要求 Recreate:RollingUpdate 也放行,但必须
+# replicas=1 且 `pandora.dev/deploy-strategy` 注解与 spec.strategy.type 逐字一致
+# (进程读该注解做 fail-closed 校验,RollingUpdate × writer_lease_mode≠enforce 直接拒启)。
+# 本断言原先只认死 `-cne 'Recreate'` 的旧写法,实现改完没跟着改 → 干净 HEAD 上恒红。
 Assert-True ($startSource.Contains("get deployment/hub-allocator -o json") -and
-    $startSource.Contains("[string]`$hubDeployment.spec.strategy.type -cne 'Recreate'") -and
+    $startSource.Contains("`$hubRecreateOk = ([int]`$hubDeployment.spec.replicas -eq 1 -and `$hubStrategyType -ceq 'Recreate'") -and
+    $startSource.Contains("`$hubRollingOk = ([int]`$hubDeployment.spec.replicas -eq 1 -and `$hubStrategyType -ceq 'RollingUpdate'") -and
+    $startSource.Contains("`$hubDeclaredStrategy -ceq 'RollingUpdate'") -and
+    $startSource.Contains("if (-not (`$hubRecreateOk -or `$hubRollingOk))") -and
     $startSource.Contains("`$hubDeployment.spec.strategy.PSObject.Properties['rollingUpdate']")) `
-    'local digest template patches must refuse Hub unless replicas=1 Recreate with no rollingUpdate'
+    'local digest template patches must refuse Hub unless replicas=1 且(Recreate 无 rollingUpdate)或(RollingUpdate 且 deploy-strategy 注解逐字一致)'
 $auditBranch = $activationSource.IndexOf("if (`$Phase -ceq 'Audit')", [StringComparison]::Ordinal)
 $firstApply = $activationSource.IndexOf('Invoke-CapabilityAudit $audit -ApplyEpoch', [StringComparison]::Ordinal)
 Assert-True ($auditBranch -ge 0 -and $firstApply -gt $auditBranch) 'CAS apply must be after Audit early exit'

@@ -733,3 +733,139 @@ func TestSaturatingAdd(t *testing.T) {
 		t.Fatalf("普通加法 %d, want 7", got)
 	}
 }
+
+// ── 复核回归(2026-08-11 对抗式复核确认的 P1,每条都是"改回旧写法即红")────────────
+
+// [P1-2] 发放路由必须用**快照冻结位**,不能在发放时回读道具表。
+//
+// 失效链(修复前真实存在):首投时 X 是堆叠 → 走 GrantItems、幂等键 `<key>:stack`,
+// inventory 已入账;随后 MarkReward 失败 / 经验段失败 / 进程被杀 → 行停在非 GRANTED;
+// 期间配置把 X 由堆叠改成装备 → 补扫重放 → 回读道具表得 equipment=true → 改走
+// GrantInstances、键变成 `<key>:inst` → inventory 查无此键 → **同一份奖励第二次发放**。
+// 幂等键防不住,因为压根不是同一个键。
+//
+// 本例把「快照之后配置翻转」压缩成:落快照时 catalog 说堆叠 → 翻成装备 → 再 deliver。
+// 断言仍走 stack 路由。改回 `equipment := uc.catalog.IsEquipment(...)` 本测试立刻红。
+func TestDeliverUsesFrozenRouteAcrossCatalogFlip(t *testing.T) {
+	cat := baseCatalog()
+	// 落快照这一刻:9001 是可堆叠道具。
+	cat.equipment[9001] = false
+	repo := newFakeRepo(testPlayer)
+	items := &fakeItemGranter{}
+	uc := newTestUsecase(t, cat, repo, items, &fakeExpGranter{}, nil)
+
+	entry, err := uc.buildRewardLog(testPlayer, cat.missions[1])
+	if err != nil {
+		t.Fatalf("buildRewardLog: %v", err)
+	}
+	if entry == nil {
+		t.Fatal("任务 1 配了 reward_id,应产出发奖流水")
+	}
+
+	// 配置热更 / 滚动升级期新批次:9001 被改成装备。
+	cat.equipment[9001] = true
+
+	row := &RewardLogRow{
+		ID: 1, PlayerID: testPlayer, MissionConfigID: entry.MissionConfigID,
+		Key: entry.Key, RewardPB: entry.RewardPB,
+	}
+	if derr := uc.deliver(context.Background(), row); derr != nil {
+		t.Fatalf("deliver: %v", derr)
+	}
+
+	if len(items.instances) != 0 {
+		t.Fatalf("翻转后仍按当前道具表走了实例路由 %v —— 冻结位没生效,会换幂等键重发", items.instances)
+	}
+	if len(items.stacks) != 1 || items.stacks[0].ItemConfigID != 9001 {
+		t.Fatalf("应沿用快照冻结的堆叠路由,实得 %+v", items.stacks)
+	}
+}
+
+// [P1-2 反向] 快照冻结的是「装备」时,即便配置改回堆叠也仍走实例路由。
+func TestDeliverFrozenRouteHoldsForEquipmentToStackFlip(t *testing.T) {
+	cat := baseCatalog()
+	cat.equipment[9001] = true // 落快照时是装备
+	repo := newFakeRepo(testPlayer)
+	items := &fakeItemGranter{}
+	uc := newTestUsecase(t, cat, repo, items, &fakeExpGranter{}, nil)
+
+	entry, err := uc.buildRewardLog(testPlayer, cat.missions[1])
+	if err != nil || entry == nil {
+		t.Fatalf("buildRewardLog: %v entry=%v", err, entry)
+	}
+	cat.equipment[9001] = false // 热更改回堆叠
+
+	row := &RewardLogRow{ID: 2, PlayerID: testPlayer, MissionConfigID: entry.MissionConfigID,
+		Key: entry.Key, RewardPB: entry.RewardPB}
+	if derr := uc.deliver(context.Background(), row); derr != nil {
+		t.Fatalf("deliver: %v", derr)
+	}
+	if len(items.stacks) != 0 {
+		t.Fatalf("翻转后走了堆叠路由 %+v —— 冻结位没生效", items.stacks)
+	}
+	if len(items.instances) != 2 {
+		t.Fatalf("应沿用快照冻结的实例路由(count=2 → 2 件),实得 %v", items.instances)
+	}
+}
+
+// [P1-3] 给已上线任务**加一条条件**,存量玩家不得跳过新条件直接完成。
+//
+// 失效链(修复前真实存在):任务 M 上线时 condition_ids="101",玩家接取 → progress 长度 1。
+// 热更改成 "101,102" 后,玩家打满 101:推进与达标判定两处都取 min(len(condIDs)=2,
+// len(Progress)=1)=1 → 只检查槽 0 → 判全条件满足 → **完成 + 发奖**,条件 102 一次没查过。
+//
+// 修复=推进前 alignProgressSlots 补零扩容 + 判定改为逐 condIDs 且槽不足即 fail-closed。
+// 把 allConditionsFulfilled 改回 min 语义,本测试立刻红。
+func TestHotAddedConditionIsNotSkipped(t *testing.T) {
+	cat := baseCatalog()
+	// 任务 20:上线时单条件(101 = 杀 5001 怪 ×3),无后续链,自动发奖。
+	cat.missions[20] = mission(20, 70, 0, "101", "", "", 61, 1)
+	repo := newFakeRepo(testPlayer)
+	items := &fakeItemGranter{}
+	uc := newTestUsecase(t, cat, repo, items, &fakeExpGranter{}, nil)
+
+	if _, err := uc.Accept(context.Background(), testPlayer, 20); err != nil {
+		t.Fatalf("接取: %v", err)
+	}
+	if got := len(repo.state.Active[20].Progress); got != 1 {
+		t.Fatalf("接取时进度槽数 %d, want 1(上线时单条件)", got)
+	}
+
+	// —— 热更:给任务 20 追加条件 102(完成任务 1)——
+	cat.missions[20] = mission(20, 70, 0, "101,102", "", "", 61, 1)
+
+	// 玩家把原条件 101 打满。
+	if _, err := uc.ReportFacts(context.Background(), testPlayer,
+		[]Fact{{Category: 1, SlotValues: []uint32{5001}, Amount: 3}}, "k1"); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+
+	if _, done := repo.state.Done[20]; done {
+		t.Fatal("只打满旧条件就完成了任务 —— 新增条件被整段跳过(白送完成)")
+	}
+	am, still := repo.state.Active[20]
+	if !still {
+		t.Fatal("任务应仍在活跃列表")
+	}
+	if len(am.Progress) != 2 {
+		t.Fatalf("进度槽未补齐到当前配置槽数:%d, want 2", len(am.Progress))
+	}
+	if am.Progress[0] != 3 {
+		t.Fatalf("已有进度必须原样保留,槽0=%d want 3", am.Progress[0])
+	}
+	if am.Progress[1] != 0 {
+		t.Fatalf("新条件必须从 0 开始,槽1=%d", am.Progress[1])
+	}
+	if len(repo.rewardLogs) != 0 {
+		t.Fatalf("未真正完成却落了发奖流水: %+v", repo.rewardLogs)
+	}
+
+	// 补做新条件 → 这次才真完成。
+	if _, err := uc.ReportFacts(context.Background(), testPlayer,
+		[]Fact{{Category: 8, SlotValues: []uint32{1}, Amount: 1}}, "k2"); err != nil {
+		t.Fatalf("report2: %v", err)
+	}
+	if _, done := repo.state.Done[20]; !done {
+		t.Fatal("两个条件都做完后应完成")
+	}
+}

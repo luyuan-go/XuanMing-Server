@@ -294,7 +294,7 @@ PVE 的目标形态是**同一张副本既能排队撮合、也能人不够时�
 | `mmr_max_window` | `2000` | 窗口放宽上限 |
 | `ds_allocate_timeout` | `60s`(dev PVE yaml 设 `150s`) | 调 ds_allocator 客户端超时(须 ≥ 其 server.grpc.timeout;冷加载大图链:ready_wait 120s < allocator server 150s ≤ 本值) |
 | `map_id` | `1` | 默认副本(客户端省略 `map_id` 时兜底) |
-| `game_mode` | `5v5_ranked` | 撮合池命名空间 + 透传 ds_allocator(PVE 实例为 `pve_coop`) |
+| `game_mode` | `5v5_ranked` | **撮合池 / 部署标识**:池命名空间(`pandora:match:<mode>:queue`)+ JWT audience + 透传 ds_allocator(PVE 实例为 `pve_coop`)。**只表达"归哪个池"** —— 人数看关卡表 `team_size`×`side_count`(现有 `5v5_ranked` 的图 team_size 是 1 和 3,名字里的 5 是历史遗留标签),算不算段位看关卡表 `rating_mode`;禁止按本值字符串解析人数或推断计分 |
 | `optimistic_retry` | `3` | WATCH/MULTI/EXEC 乐观锁重试次数 |
 | `battle_gate_fail_open` | `false` | locator 查询失败时是否放行入队(生产必须 false) |
 | `liveness_gate_enabled` | `false` | 是否启用在线保活两道离线门。**INC-20260724-001 后全部实跑配置已回退为 `false`,重开前置见下方《成局最终门的证据契约》** |

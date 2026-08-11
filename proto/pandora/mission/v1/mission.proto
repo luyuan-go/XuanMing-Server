@@ -193,6 +193,17 @@ message MissionProgressStorageRecord {
 message MissionRewardItem {
   uint32 item_config_id = 1;
   uint32 count = 2;
+  // 发放形态**冻结位**:落快照那一刻该道具是不是装备(equip_slot>0)。
+  //
+  // 为什么必须冻结而不是发放时回读道具表:装备走 GrantInstances(键 `<key>:inst`)、
+  // 堆叠走 GrantItems(键 `<key>:stack`),**两个键在 inventory 台账里互不相识**。
+  // 形态一旦在两次投递之间变化(配置热更改了 equip_slot,或滚动升级期新旧副本加载着
+  // 不同配置批次),同一条奖励就会先后用两个不同幂等键各发一次 —— 幂等键防不住,
+  // 因为它们压根不是同一个键。冻结后补扫重放永远走当初那条路由,与配置无关。
+  //
+  // optional(显式 presence):**缺省 = 本字段上线前写的旧行**,发放侧回退到读道具表
+  // (保持旧行为,§9.17 双向兼容);新行一律带值。不要把"没记"和"记了 false"混为一谈。
+  optional bool equipment = 3;
 }
 
 // mission_reward_log.reward_pb 列(VARBINARY(2048)):发放内容快照,补扫重放的

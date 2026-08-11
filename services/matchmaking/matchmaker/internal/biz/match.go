@@ -2252,16 +2252,19 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 			return errcode.New(errcode.ErrInvalidState,
 				"match %d combat factions invalid: %v", job.GetMatchId(), factionErr)
 		}
-		if factionAllocator, ok := u.allocator.(CombatFactionDSAllocator); ok {
-			allocation, err = factionAllocator.AllocateBattleWithCombatFactions(
-				ctx, job.MatchId, playerIDs, combatFactionByPlayer, job.MapId)
-		} else {
-			// 仅用于旧测试桩/滚动升级中的旧实现。生产 GrpcDSAllocator 实现上面的
-			// 扩展接口；缺能力时保持旧行为并显式告警，不能按 player 顺序猜阵营。
-			plog.With(ctx).Warnw("msg", "combat_faction_allocator_legacy_fallback",
+		factionAllocator, ok := u.allocator.(CombatFactionDSAllocator)
+		if !ok {
+			// 曾经这里会降级调用不带阵营的 AllocateBattle 并只打一条 Warn。那条路会产出
+			// 「有名单、无阵营」的分配，DS 侧只能退化成每人一个独立阵营 —— 队友互相能打，
+			// 而且对局照常进行、照常结算，错误完全不可见。阵营是对局定义的一部分，
+			// 送不出去就不该开局：这里改为定性失败，让问题在分配阶段就暴露。
+			plog.With(ctx).Errorw("msg", "combat_faction_allocator_unsupported",
 				"match_id", job.GetMatchId(), "players", len(playerIDs))
-			allocation, err = u.allocator.AllocateBattle(ctx, job.MatchId, playerIDs, job.MapId)
+			return errcode.New(errcode.ErrInvalidState,
+				"match %d allocator cannot carry combat factions", job.GetMatchId())
 		}
+		allocation, err = factionAllocator.AllocateBattleWithCombatFactions(
+			ctx, job.MatchId, playerIDs, combatFactionByPlayer, job.MapId)
 		if err != nil {
 			plog.With(ctx).Errorw("msg", "ds_allocate_failed", "match_id", job.MatchId, "err", err)
 			code := errcode.As(err)

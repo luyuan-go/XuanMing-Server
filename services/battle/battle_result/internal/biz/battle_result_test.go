@@ -21,6 +21,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
@@ -2118,6 +2119,114 @@ func TestAuthorizedPVPCannotMasqueradeAsPVE(t *testing.T) {
 	assertAllDeltas(t, saved, 16, -16)
 	if mmr.calls != len(result.GetStats()) {
 		t.Fatalf("pvp must read MMR per player, calls=%d want %d", mmr.calls, len(result.GetStats()))
+	}
+}
+
+// ── canonical rating_mode 是计分权威(2026-08-11 关卡表「计分模式」列)──────────────
+
+// TestSettlementRunsEloDecisionTable 钉死判据优先级:
+// canonical rating_mode > 旧口径(canonical game_mode) > legacy 无 canonical。
+func TestSettlementRunsEloDecisionTable(t *testing.T) {
+	elo := configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO
+	none := configpb.LevelRatingMode_LEVEL_RATING_MODE_NONE
+	unset := configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED
+	cases := []struct {
+		name      string
+		proof     *data.TerminalReleaseRecord
+		wantElo   bool
+		wantBasis string
+	}{
+		{"rating_mode=NONE 压过任何池名", &data.TerminalReleaseRecord{GameMode: "5v5_ranked", RatingMode: none}, false, "rating_mode_none"},
+		{"rating_mode=ELO 压过任何池名", &data.TerminalReleaseRecord{GameMode: canonicalGameModePVECoop, RatingMode: elo}, true, "rating_mode_elo"},
+		{"未定格 + pve_coop → 旧口径不计分", &data.TerminalReleaseRecord{GameMode: canonicalGameModePVECoop, RatingMode: unset}, false, "legacy_canonical_pve_coop"},
+		{"未定格 + 排位池 → 旧口径计分", &data.TerminalReleaseRecord{GameMode: "5v5_ranked", RatingMode: unset}, true, "legacy_canonical_game_mode"},
+		{"未定格 + canonical 为空(更早的旧局)→ 保守计分", &data.TerminalReleaseRecord{RatingMode: unset}, true, "legacy_canonical_game_mode"},
+		{"无 canonical(legacy 内部路径)→ 行为不变", nil, true, "legacy_no_canonical"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gotElo, gotBasis := settlementRunsElo(c.proof)
+			if gotElo != c.wantElo || gotBasis != c.wantBasis {
+				t.Fatalf("settlementRunsElo = (%t,%q), want (%t,%q)", gotElo, gotBasis, c.wantElo, c.wantBasis)
+			}
+		})
+	}
+}
+
+// TestCanonicalRatingModeNoneStopsEloForNonPVEPool 是本次修复的回归判据。
+//
+// 修复前:计分与否用**排除法**从 canonical game_mode 推(`!= "pve_coop"` 即算 Elo),
+// 于是任何新增撮合池(这里用 ds/v1 AllocateBattleRequest 注释里点名的未来取值
+// "casual_5v5")都会**静默按排位改玩家段位**——本测试在修复前必红(会得到 ±16 且读 MMR)。
+// 修复后:计分是关卡表 rating_mode 定格进 canonical 记录的独立事实,NONE 就是不计分。
+func TestCanonicalRatingModeNoneStopsEloForNonPVEPool(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	uc := newCountingUsecase(repo, mmr)
+
+	proof := terminalProof(812, "battle-812", "j1", 1)
+	proof.GameMode = "casual_5v5" // 新池:名字里既没有 pve 也不是排位
+	proof.MapID = 6
+	proof.RatingMode = configpb.LevelRatingMode_LEVEL_RATING_MODE_NONE
+
+	result := terminalResult(812, "battle-812")
+	result.Stats[0].MmrDelta = 77 // DS 脏值必须被覆盖
+	result.Stats[1].MmrDelta = -77
+
+	already, err := uc.ReportAuthorizedResult(context.Background(), result, proof, 0)
+	if err != nil || already {
+		t.Fatalf("authorized casual report already=%v err=%v", already, err)
+	}
+	saved, ok, _ := repo.GetResult(context.Background(), 812)
+	if !ok {
+		t.Fatal("casual settlement not persisted")
+	}
+	assertAllDeltas(t, result, 0, 0)
+	assertAllDeltas(t, saved, 0, 0)
+	if mmr.calls != 0 {
+		t.Fatalf("rating_mode=NONE must not touch MMR reader, calls=%d", mmr.calls)
+	}
+	// 不计分不等于不结算:正常结算的其余副作用必须照旧。
+	if saved.GetOutcome() != battlev1.BattleOutcome_BATTLE_OUTCOME_NORMAL ||
+		len(repo.outbox) != 2 || len(repo.terminalOutbox) != 1 || len(repo.matchReleaseOutbox) != 1 {
+		t.Fatalf("non-scoring settle side effects wrong: outcome=%v outbox=%d terminal=%d release=%d",
+			saved.GetOutcome(), len(repo.outbox), len(repo.terminalOutbox), len(repo.matchReleaseOutbox))
+	}
+	for _, o := range repo.outbox {
+		evt := &playerv1.PlayerUpdateEvent{}
+		if err := proto.Unmarshal(o.Payload, evt); err != nil {
+			t.Fatalf("decode outbox payload: %v", err)
+		}
+		if evt.GetMmrDelta() != 0 {
+			t.Fatalf("non-scoring outbox player %d mmr_delta got %d want 0", evt.GetPlayerId(), evt.GetMmrDelta())
+		}
+	}
+}
+
+// TestCanonicalRatingModeEloScoresRegardlessOfPoolName 反向锁死:显式 ELO 就必须真算,
+// 不因池名不在任何硬编码白名单里而被跳过(避免修成"只认识 5v5_ranked"的新 fail-closed)。
+func TestCanonicalRatingModeEloScoresRegardlessOfPoolName(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	uc := newCountingUsecase(repo, mmr)
+
+	proof := terminalProof(813, "battle-813", "j1", 1)
+	proof.GameMode = "arena_3v3" // 未来的新排位池,代码里没有任何地方硬编码过它
+	proof.MapID = 9
+	proof.RatingMode = configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO
+
+	result := terminalResult(813, "battle-813")
+	already, err := uc.ReportAuthorizedResult(context.Background(), result, proof, 0)
+	if err != nil || already {
+		t.Fatalf("authorized arena report already=%v err=%v", already, err)
+	}
+	saved, ok, _ := repo.GetResult(context.Background(), 813)
+	if !ok {
+		t.Fatal("arena settlement not persisted")
+	}
+	assertAllDeltas(t, saved, 16, -16)
+	if mmr.calls != len(result.GetStats()) {
+		t.Fatalf("rating_mode=ELO must read MMR per player, calls=%d want %d", mmr.calls, len(result.GetStats()))
 	}
 }
 

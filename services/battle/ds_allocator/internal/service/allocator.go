@@ -59,8 +59,11 @@ func (s *AllocatorService) AllocateBattle(ctx context.Context, req *dsv1.Allocat
 	if err != nil {
 		return &dsv1.AllocateBattleResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	// rating_mode 原样透传:allocator 不解释本局算不算段位,只把 matchmaker 定格的值
+	// 存进 canonical BattleStorageRecord 供 battle_result 结算时取用(见 biz 注释)。
 	res, err := s.uc.AllocateBattleWithCombatFactions(
-		ctx, req.GetMatchId(), req.GetPlayerIds(), combatFactionByPlayer, req.GetMapId(), req.GetGameMode())
+		ctx, req.GetMatchId(), req.GetPlayerIds(), combatFactionByPlayer, req.GetMapId(),
+		req.GetGameMode(), req.GetRatingMode())
 	if err != nil {
 		return &dsv1.AllocateBattleResponse{Code: toProtoCode(err)}, nil
 	}

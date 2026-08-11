@@ -152,6 +152,48 @@ func TestValidateMinTeamSize(t *testing.T) {
 	}
 }
 
+// TestValidateRatingMode 计分模式的加载期校验:
+//   - 未配置(0)一律放行——这是本列上线前的默认态,旧批次表必须照常加载(§9.21);
+//   - NONE 与任何对局结构都相容(合作副本、对抗图都可以不计分);
+//   - ELO 与 side_count=1 互斥:单方合作副本没有对手结构,Elo 算给谁都说不通,
+//     属配置错配,必须挡在加载边界(整批不切换、保留旧表),而不是等打完一局
+//     才在结算里给一群合作玩家互相扣分;
+//   - side_count=0 是"沿用服务端默认 2 方",按 2 方对待,与 ELO 相容。
+func TestValidateRatingMode(t *testing.T) {
+	elo := configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO
+	none := configpb.LevelRatingMode_LEVEL_RATING_MODE_NONE
+
+	unset := battleRow(30, "旧批次表没有这一列")
+	unset.TeamSize, unset.SideCount = 3, 2
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{unset}}); err != nil {
+		t.Fatalf("rating_mode 未配置应放行(旧表兼容),得 %v", err)
+	}
+
+	coopNone := battleRow(31, "合作副本不计分")
+	coopNone.TeamSize, coopNone.SideCount, coopNone.RatingMode = 3, 1, none
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{coopNone}}); err != nil {
+		t.Fatalf("单方合作副本 + 不计分应放行,得 %v", err)
+	}
+
+	pvpElo := battleRow(32, "双方对抗算段位")
+	pvpElo.TeamSize, pvpElo.SideCount, pvpElo.RatingMode = 3, 2, elo
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{pvpElo}}); err != nil {
+		t.Fatalf("双方对抗 + ELO 应放行,得 %v", err)
+	}
+
+	defaultSides := battleRow(33, "方数留空沿用默认 2 方")
+	defaultSides.TeamSize, defaultSides.SideCount, defaultSides.RatingMode = 3, 0, elo
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{defaultSides}}); err != nil {
+		t.Fatalf("side_count=0(默认 2 方)+ ELO 应放行,得 %v", err)
+	}
+
+	coopElo := battleRow(34, "合作副本却要算 Elo")
+	coopElo.TeamSize, coopElo.SideCount, coopElo.RatingMode = 3, 1, elo
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{coopElo}}); err == nil {
+		t.Fatal("side_count=1 + ELO 应被拦下(单方合作副本没有对手结构,无法算 Elo)")
+	}
+}
+
 // TestLevelPackagePath 关卡资源列 → UE 长包名:必须与 UE 侧
 // APandoraDSLoaderGameMode::BuildTravelURL 同规则(点号后的对象名不能进地图路径)。
 func TestLevelPackagePath(t *testing.T) {

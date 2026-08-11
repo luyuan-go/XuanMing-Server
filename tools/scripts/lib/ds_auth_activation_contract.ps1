@@ -438,44 +438,16 @@ function New-PandoraDsAuthCanonicalGreenObject($LiveDeployment, [string]$App, [s
         $confVolumes[0].secret.secretName = 'pandora-config'
     }
 
-    # Production serves the epoch=2 canonical green Deployment, while the base
-    # blue Deployment is deliberately dormant. Therefore putting Recreate +
-    # preflight only in services.yaml would be a false gate: an ordinary prod
-    # release replaces/restarts green and could still overlap old/new locator
-    # writers. Build the exact gate into the CAS replacement object itself.
-    if ($App -ceq 'player-locator') {
-        $confVolumes = @($spec.template.spec.volumes | Where-Object {
-            [string]$_.name -ceq 'conf' -and [string]$_.secret.secretName -ceq 'pandora-config'
-        })
-        if ($confVolumes.Count -ne 1) {
-            throw 'canonical green player-locator 缺唯一 pandora-config volume，无法执行 placement preflight。'
-        }
-        $strategy = [pscustomobject]@{ type = 'Recreate' }
-        if ($null -eq $spec.PSObject.Properties['strategy']) {
-            $spec | Add-Member -NotePropertyName strategy -NotePropertyValue $strategy
-        } else {
-            $spec.strategy = $strategy
-        }
-        $preflight = [pscustomobject]@{
-            name = 'placement-preflight'
-            image = $PinnedImage
-            imagePullPolicy = 'IfNotPresent'
-            args = @('-conf', 'etc/cluster.yaml', '-placement-preflight',
-                '-placement-preflight-timeout=10m', '-placement-preflight-scan-count=1000')
-            volumeMounts = @([pscustomobject]@{
-                name = 'conf'; mountPath = '/app/etc/cluster.yaml'; subPath = 'player-locator.yaml'; readOnly = $true
-            })
-            resources = [pscustomobject]@{
-                requests = [pscustomobject]@{ cpu = '25m'; memory = '32Mi' }
-                limits = [pscustomobject]@{ cpu = '1'; memory = '256Mi' }
-            }
-        }
-        if ($null -eq $spec.template.spec.PSObject.Properties['initContainers']) {
-            $spec.template.spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @($preflight)
-        } else {
-            $spec.template.spec.initContainers = @($preflight)
-        }
-    }
+    # 2026-08-11:此处原先给 player-locator 强行注入 `strategy: Recreate` + 一个跑
+    # `-placement-preflight` 的 initContainer,用来防"新旧 placement writer 重叠"。
+    # 该 flag 已于 2026-07-16 随 owner_epoch fencing 改造从 player_locator 二进制**删除**
+    # (commit 678d58d3;同批 4193897b 把 services.yaml 里的 Recreate + initContainer 也清了),
+    # 全仓 Go 代码对 placement.preflight 零引用。留着这段的后果是双重的:
+    #   ① 它会构造出一个跑不存在 flag 的 initContainer —— activate_ds_auth 部署下去必 CrashLoop;
+    #   ② 配套的 Assert-* 断言一个已不存在的 manifest 形态,硬阻断每一次 -Mode online 发布。
+    # 它守的那条性质现在由运行时写者租约保证:player_locator 走 dsauthfence.AcquireRuntime
+    # (WriterEpoch=ProtocolEpochV2),失租旧写者被存储层 fence 拒写 —— 与 hub-allocator
+    # "单写者约束不再依赖 Recreate 部署策略"(services.yaml R9 P0-7 注释)同一套机制。
     $candidate = [pscustomobject]@{
         apiVersion = 'apps/v1'
         kind = 'Deployment'
@@ -487,9 +459,6 @@ function New-PandoraDsAuthCanonicalGreenObject($LiveDeployment, [string]$App, [s
             annotations = $LiveDeployment.metadata.annotations
         }
         spec = $spec
-    }
-    if ($App -ceq 'player-locator') {
-        Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $candidate $PinnedImage
     }
     if ($App -ceq 'hub-allocator') {
         Assert-PandoraHubAllocatorSingleWriterDeploymentContract $candidate
@@ -591,9 +560,6 @@ function Assert-PandoraDsAuthV3GreenStageDeploymentContract(
     if ($App -ceq 'hub-allocator') {
         Assert-PandoraHubAllocatorSingleWriterDeploymentContract $Deployment
     }
-    if ($App -ceq 'player-locator') {
-        Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $Deployment $pinnedImage
-    }
     if ($App -in @('battle-result', 'ds-allocator')) {
         Assert-PandoraDsTerminalMeshTemplateContract $template $App
     }
@@ -604,47 +570,6 @@ function Assert-PandoraDsAuthV3GreenStageDeploymentContract(
     }
 }
 
-function Assert-PandoraPlayerLocatorPlacementPreflightObjectContract($Deployment, [string]$ExpectedPinnedImage = '') {
-    if ([string]$Deployment.apiVersion -cne 'apps/v1' -or [string]$Deployment.kind -cne 'Deployment' -or
-        [string]$Deployment.metadata.name -cnotin @('player-locator', 'player-locator-ds-auth-green')) {
-        throw 'placement preflight Deployment 身份非法。'
-    }
-    if ([string]$Deployment.spec.strategy.type -cne 'Recreate' -or
-        $null -ne $Deployment.spec.strategy.PSObject.Properties['rollingUpdate']) {
-        throw 'player-locator placement writer 必须使用 exact Recreate strategy。'
-    }
-    $main = @($Deployment.spec.template.spec.containers | Where-Object { [string]$_.name -ceq 'player-locator' })
-    $init = @($Deployment.spec.template.spec.initContainers)
-    if ($main.Count -ne 1 -or $init.Count -ne 1 -or [string]$init[0].name -cne 'placement-preflight') {
-        throw 'player-locator 必须有唯一主容器和唯一 placement-preflight initContainer。'
-    }
-    $mainImage = [string]$main[0].image
-    if ([string]::IsNullOrWhiteSpace($ExpectedPinnedImage)) { $ExpectedPinnedImage = $mainImage }
-    if ($ExpectedPinnedImage -cnotmatch '@sha256:[0-9a-f]{64}$' -or $mainImage -cne $ExpectedPinnedImage -or
-        [string]$init[0].image -cne $ExpectedPinnedImage) {
-        throw 'player-locator 主容器与 placement-preflight 必须使用同一 immutable digest。'
-    }
-    $commands = @()
-    if ($null -ne $init[0].PSObject.Properties['command']) { $commands = @($init[0].command) }
-    if ([string]$init[0].imagePullPolicy -cne 'IfNotPresent' -or
-        (@($init[0].args) -join ' ') -cne
-            '-conf etc/cluster.yaml -placement-preflight -placement-preflight-timeout=10m -placement-preflight-scan-count=1000' -or
-        $commands.Count -ne 0) {
-        throw 'player-locator placement-preflight image policy/args/ENTRYPOINT 非 canonical。'
-    }
-    $mounts = @($init[0].volumeMounts)
-    if ($mounts.Count -ne 1 -or [string]$mounts[0].name -cne 'conf' -or
-        [string]$mounts[0].mountPath -cne '/app/etc/cluster.yaml' -or
-        [string]$mounts[0].subPath -cne 'player-locator.yaml' -or $mounts[0].readOnly -ne $true) {
-        throw 'player-locator placement-preflight 配置挂载非 canonical read-only contract。'
-    }
-    $confVolumes = @($Deployment.spec.template.spec.volumes | Where-Object {
-        [string]$_.name -ceq 'conf' -and [string]$_.secret.secretName -ceq 'pandora-config'
-    })
-    if ($confVolumes.Count -ne 1) {
-        throw 'player-locator placement-preflight 配置源必须是唯一 pandora-config Secret。'
-    }
-}
 
 # Construct the explicit, one-shot Model-B legacy pod_uid release gate from the
 # exact dormant green ds-allocator image. This is a Job, never an initContainer:

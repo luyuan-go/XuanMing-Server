@@ -1560,7 +1560,8 @@ function Set-ProdOwnerRequireTiDB([string]$text) {
 $ProdDbCredentialWired = @('owner', 'login')
 $ProdDbCredentialDebt = @(
     'player', 'data-service', 'friend', 'chat', 'guild', 'mail',
-    'inventory', 'auction', 'leaderboard', 'battle-result'
+    'inventory', 'auction', 'leaderboard', 'battle-result',
+    'mission' # 2026-08-11 任务域上线:pandora_mission 存玩家任务进度与发奖流水,DSN 注入未接线
 )
 
 function Assert-ProdDbCredentials([string]$StageDir) {

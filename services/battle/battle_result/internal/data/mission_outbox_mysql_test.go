@@ -105,6 +105,71 @@ func TestMissionOutbox_PerPlayerFIFOBlocksOnDeferredHead(t *testing.T) {
 	}
 }
 
+// TestMissionOutbox_FIFOSpansMatches —— FIFO 分组是**玩家**维度,不是对局维度。
+//
+// 任务链跨对局延续:玩家在 A 局完成前环、B 局产出后环条件的事实。若按
+// (match_id, player_id) 分组,A 局卡住的队首挡不住 B 局的行,B 的事实会抢在 A 前面
+// 落地 —— 与同局乱序完全同一个丢进度的洞,只是要多打一局才踩到。
+func TestMissionOutbox_FIFOSpansMatches(t *testing.T) {
+	ctx := context.Background()
+	db := openBattleRetentionDB(t)
+	r := NewMySQLBattleRepo(db)
+	const (
+		matchA   = uint64(8001)
+		matchB   = uint64(8002)
+		playerID = uint64(55)
+	)
+
+	// 同一玩家:先打 A 局(seq 1/2),再打 B 局(seq 1 —— seq 每局自增,跨局重号)。
+	insertMissionFacts(t, r, []MissionFactRecord{
+		{MatchID: matchA, Seq: 1, PlayerID: playerID, Category: 1, SlotValue: 101, Amount: 1},
+		{MatchID: matchA, Seq: 2, PlayerID: playerID, Category: 1, SlotValue: 101, Amount: 1},
+	})
+	insertMissionFacts(t, r, []MissionFactRecord{
+		{MatchID: matchB, Seq: 1, PlayerID: playerID, Category: 9, SlotValue: 201, Amount: 1},
+	})
+
+	head, err := r.FetchMissionOutbox(ctx, 64)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(head) != 1 || head[0].MatchID != matchA || head[0].Seq != 1 {
+		t.Fatalf("首轮取到 %+v, want 仅 A 局 seq=1(每玩家全局只出一个队首)", head)
+	}
+
+	// A 局队首退避 → B 局的行**不得**抢跑(按对局分组的旧实现会把它放出来)。
+	if err := r.DeferMissionOutbox(ctx, head[0].ID); err != nil {
+		t.Fatalf("defer: %v", err)
+	}
+	if got, ferr := r.FetchMissionOutbox(ctx, 64); ferr != nil || len(got) != 0 {
+		t.Fatalf("A 局队首退避后取到 %+v(err=%v), want 空 —— B 局事实不得越过 A 局队首", got, ferr)
+	}
+
+	// 退避的队首投递成功后出队(直接按 id 删,不必等退避窗口),A 局第二行成为新队首。
+	if err := r.DeleteMissionOutbox(ctx, head[0].ID); err != nil {
+		t.Fatalf("delete deferred head: %v", err)
+	}
+	rows, err := r.FetchMissionOutbox(ctx, 64)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(rows) != 1 || rows[0].MatchID != matchA || rows[0].Seq != 2 {
+		t.Fatalf("取到 %+v, want A 局 seq=2(仍先于 B 局)", rows)
+	}
+	if err := r.DeleteMissionOutbox(ctx, rows[0].ID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	// A 局排空后,B 局的行才轮到。
+	rows, err = r.FetchMissionOutbox(ctx, 64)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(rows) != 1 || rows[0].MatchID != matchB || rows[0].Seq != 1 {
+		t.Fatalf("A 局排空后取到 %+v, want B 局 seq=1", rows)
+	}
+}
+
 // TestMissionOutbox_UseItemPendingUntilConsumeResolved —— USE_ITEM 事实在扣除落定前
 // 既不可投递、也挡住同玩家后续事实;扣除成功放行、失败删行。
 func TestMissionOutbox_UseItemPendingUntilConsumeResolved(t *testing.T) {
