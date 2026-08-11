@@ -59,6 +59,12 @@ try {
         Assert-True (-not [regex]::IsMatch($playerProd, '(?m)^[ \t]{2}' + $cleanupKey + ':[ \t]*true')) `
             "-Prod player 不得残留 ${cleanupKey}: true"
     }
+    # §9.24 总闸:产物里残留 "delete" 会让运维误以为清理已生效,且将来新表组若直接读
+    # RetentionMode() 而没有自己的前置闸,生产会静默开始删。
+    Assert-True (([regex]::Matches($playerProd, '(?m)^[ \t]{2}retention_mode:[ \t]*"report_only"[ \t]*$')).Count -eq 1) `
+        '-Prod player 必须恰好一处 retention_mode: "report_only"(§9.24 默认只报告不删)'
+    Assert-True (-not [regex]::IsMatch($playerProd, '(?m)^[ \t]{2}retention_mode:[ \t]*"delete"')) `
+        '-Prod player 不得残留 retention_mode: "delete"'
 
     # P0#5 收口(2026-07-25):-Prod 的 login 必须指向 hub-allocator headless FQDN,
     # 否则 round_robin 拿不到多后端,AssignHub 重试会被钉在同一个(可能非-writer)Pod。
@@ -100,6 +106,8 @@ try {
         Assert-True ([regex]::IsMatch($playerDev, '(?m)^[ \t]{2}' + $cleanupKey + ':[ \t]*true')) `
             "dev player 联调 ${cleanupKey}: true 不得被非 -Prod 生成改写"
     }
+    Assert-True ([regex]::IsMatch($playerDev, '(?m)^[ \t]{2}retention_mode:[ \t]*"delete"[ \t]*$')) `
+        'dev player 联调 retention_mode: "delete" 不得被非 -Prod 生成改写(真删代码路径要有人跑)'
     # 非 -Prod 产物同时服务 docker-compose(headless FQDN 在 compose 内不可解析),必须保持短名。
     $loginDev = Get-Content -LiteralPath (Join-Path $OutDirDev 'login.yaml') -Raw
     Assert-True (([regex]::Matches($loginDev, '(?m)^[ \t]{4}addr:[ \t]*"hub-allocator:20021"[ \t]*$')).Count -eq 1) `

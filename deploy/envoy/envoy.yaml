@@ -497,6 +497,10 @@ static_resources:
               - match:
                   path: "/pandora.player.v1.PlayerService/AddExperience"
                 direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              # 技能卡发放是系统 RPC(抽卡 / 活动 / GM 驱动),对客户端开放 = 玩家自助发卡。
+              - match:
+                  path: "/pandora.player.v1.PlayerService/GrantSkillCards"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
               - match:
                   prefix: "/pandora.player.v1.PlayerService/"
                 route:

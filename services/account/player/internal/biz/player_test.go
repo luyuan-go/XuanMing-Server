@@ -7,12 +7,14 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 	"github.com/luyuancpp/pandora/services/account/player/internal/conf"
@@ -38,6 +40,9 @@ type fakeRepo struct {
 	grants       map[string]bool // key=playerID|idempotencyKey
 	equipment    map[uint64][]data.EquipmentSlot
 	talents      map[uint64]map[uint32]data.TalentLevel
+	skillCards   map[uint64]map[uint32]data.SkillCard
+	skillSlots   map[uint64]map[uint32]uint32 // playerID → slot → cardID
+	cardGrants   map[string]bool              // key=playerID|idempotencyKey
 	talentTotal  map[uint64]int
 	talentGrants map[string]bool   // key=playerID|idempotencyKey
 	rewardRec    map[uint64][]byte // 领奖记录序列化 bytes
@@ -63,6 +68,9 @@ func newFakeRepo() *fakeRepo {
 		grants:       map[string]bool{},
 		equipment:    map[uint64][]data.EquipmentSlot{},
 		talents:      map[uint64]map[uint32]data.TalentLevel{},
+		skillCards:   map[uint64]map[uint32]data.SkillCard{},
+		skillSlots:   map[uint64]map[uint32]uint32{},
+		cardGrants:   map[string]bool{},
 		talentTotal:  map[uint64]int{},
 		talentGrants: map[string]bool{},
 		rewardRec:    map[uint64][]byte{},
@@ -308,6 +316,92 @@ func (f *fakeRepo) GetTalents(_ context.Context, playerID uint64) ([]data.Talent
 	return out, f.talentTotal[playerID] - f.talentUsed(playerID), nil
 }
 
+// ── 技能卡(持有 / 培养 / 更换)────────────────────────────────────────────────
+
+// GrantSkillCards 复刻 MySQL 的 ON DUPLICATE KEY UPDATE 语义:已持有累加碎片、等级不动;
+// 未持有以 1 级建卡。命中幂等键一片碎片都不加。
+func (f *fakeRepo) GrantSkillCards(_ context.Context, playerID uint64, grants []data.SkillCardGrant, idempotencyKey string) ([]data.SkillCard, bool, error) {
+	gk := fmt.Sprintf("%d|%s", playerID, idempotencyKey)
+	if f.cardGrants[gk] {
+		return f.skillCardsOf(playerID), true, nil
+	}
+	f.cardGrants[gk] = true
+	if f.skillCards[playerID] == nil {
+		f.skillCards[playerID] = map[uint32]data.SkillCard{}
+	}
+	for _, g := range grants {
+		card, ok := f.skillCards[playerID][g.CardID]
+		if !ok {
+			card = data.SkillCard{CardID: g.CardID, Level: 1}
+		}
+		card.Shards += g.Shards
+		f.skillCards[playerID][g.CardID] = card
+	}
+	return f.skillCardsOf(playerID), false, nil
+}
+
+// UpgradeSkillCard 复刻事务语义:价钱按**当前**等级查曲线(不由调用方预先算好),
+// 满级 / 碎片不足 / 曲线断档各自返回对应错误。
+func (f *fakeRepo) UpgradeSkillCard(_ context.Context, playerID uint64, cardID uint32, costByLevel map[uint32]uint32, maxLevel uint32) (data.SkillCard, uint32, error) {
+	card, ok := f.skillCards[playerID][cardID]
+	if !ok {
+		return data.SkillCard{}, 0, errcode.New(errcode.ErrSkillCardNotOwned, "not owned")
+	}
+	if card.Level >= maxLevel {
+		return data.SkillCard{}, 0, errcode.New(errcode.ErrSkillCardMaxLevel, "max level")
+	}
+	target := card.Level + 1
+	cost, found := costByLevel[target]
+	if !found {
+		return data.SkillCard{}, 0, errcode.New(errcode.ErrInternal, "curve missing level %d", target)
+	}
+	if card.Shards < cost {
+		return data.SkillCard{}, 0, errcode.New(errcode.ErrSkillCardInsufficientShards, "insufficient shards")
+	}
+	card.Level = target
+	card.Shards -= cost
+	f.skillCards[playerID][cardID] = card
+	return card, cost, nil
+}
+
+func (f *fakeRepo) SetSkillSlots(_ context.Context, playerID uint64, slots []data.SkillSlot) error {
+	for _, s := range slots {
+		if _, ok := f.skillCards[playerID][s.CardID]; !ok {
+			return errcode.New(errcode.ErrSkillCardNotOwned, "not owned: %d", s.CardID)
+		}
+	}
+	m := map[uint32]uint32{}
+	for _, s := range slots {
+		m[s.Slot] = s.CardID
+	}
+	f.skillSlots[playerID] = m
+	return nil
+}
+
+func (f *fakeRepo) GetSkillCards(_ context.Context, playerID uint64) ([]data.SkillCard, error) {
+	return f.skillCardsOf(playerID), nil
+}
+
+func (f *fakeRepo) GetSkillSlots(_ context.Context, playerID uint64) ([]data.SkillSlot, error) {
+	slots := make([]data.SkillSlot, 0, len(f.skillSlots[playerID]))
+	for slot, cardID := range f.skillSlots[playerID] {
+		slots = append(slots, data.SkillSlot{Slot: slot, CardID: cardID})
+	}
+	sort.Slice(slots, func(i, j int) bool { return slots[i].Slot < slots[j].Slot })
+	return slots, nil
+}
+
+// skillCardsOf 按 card_id 定序返回持卡,与 SQL 的 ORDER BY card_id 一致——
+// map 遍历顺序不稳定会让断言随机失败。
+func (f *fakeRepo) skillCardsOf(playerID uint64) []data.SkillCard {
+	cards := make([]data.SkillCard, 0, len(f.skillCards[playerID]))
+	for _, c := range f.skillCards[playerID] {
+		cards = append(cards, c)
+	}
+	sort.Slice(cards, func(i, j int) bool { return cards[i].CardID < cards[j].CardID })
+	return cards
+}
+
 // ── 玩家等级经验(实时成长)──────────────────────────────────────────────────
 
 func (f *fakeRepo) ApplyExperience(_ context.Context, apply data.ExpApply) (data.ExpState, bool, error) {
@@ -372,21 +466,26 @@ func (f *fakeRepo) DeletePushOutbox(_ context.Context, id int64) error {
 	return nil
 }
 
-func (f *fakeRepo) PurgeExpHistory(_ context.Context, _ time.Time, _ int) (int64, error) {
-	return 0, nil
+func (f *fakeRepo) SweepExpHistory(_ context.Context, mode dbguard.Mode, _ time.Time, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
 
 // 保留期清理(§9.24):biz 单测不模拟时间,默认 no-op。
-func (f *fakeRepo) PurgeMMRHistory(_ context.Context, _ time.Time, _ int) (int64, error) {
-	return 0, nil
+// 模式语义(report_only 不循环 / delete 追平积压)由 retention_test.go 直接测 drainRetention。
+func (f *fakeRepo) SweepMMRHistory(_ context.Context, mode dbguard.Mode, _ time.Time, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
 
-func (f *fakeRepo) PurgeAttrPointGrants(_ context.Context, _ time.Time, _ int) (int64, error) {
-	return 0, nil
+func (f *fakeRepo) SweepAttrPointGrants(_ context.Context, mode dbguard.Mode, _ time.Time, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
 
-func (f *fakeRepo) PurgeTalentPointGrants(_ context.Context, _ time.Time, _ int) (int64, error) {
-	return 0, nil
+func (f *fakeRepo) SweepTalentPointGrants(_ context.Context, mode dbguard.Mode, _ time.Time, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
+}
+
+func (f *fakeRepo) SweepSkillCardGrants(_ context.Context, mode dbguard.Mode, _ time.Time, _ int) (dbguard.Outcome, error) {
+	return dbguard.Outcome{Mode: mode}, nil
 }
 
 func (f *fakeRepo) LoadRewardClaims(_ context.Context, playerID uint64) ([]byte, int32, error) {
@@ -491,8 +590,39 @@ func newUCLoadout(repo data.PlayerRepo) *PlayerUsecase {
 		5001: {maxLevel: 5, cost: 1},
 		5002: {maxLevel: 3, cost: 2, reqID: 5001, reqLevel: 2},
 	}}
+	uc.skillCardRules = stubSkillCardRules{cards: map[uint32]stubSkillCard{
+		// 普通卡:上限 3,曲线 5/10。
+		7001: {maxLevel: 3, curve: map[uint32]uint32{2: 5, 3: 10}},
+		// 传说卡:上限 2,曲线 20。
+		7002: {maxLevel: 2, curve: map[uint32]uint32{2: 20}},
+		// 曲线断档的卡(上限 3 但只铺到 2 级):用来钉"缺档不得当免费升级放行"。
+		7003: {maxLevel: 3, curve: map[uint32]uint32{2: 5}},
+	}}
 	uc.SetItemOwnershipChecker(stubOwnership{})
 	return uc
+}
+
+type stubSkillCard struct {
+	maxLevel uint32
+	curve    map[uint32]uint32
+}
+
+// stubSkillCardRules 是技能卡配置表判定的测试替身。
+type stubSkillCardRules struct {
+	cards map[uint32]stubSkillCard
+}
+
+func (s stubSkillCardRules) CardExists(cardID uint32) bool {
+	_, ok := s.cards[cardID]
+	return ok
+}
+
+func (s stubSkillCardRules) UpgradeCurve(cardID uint32) (map[uint32]uint32, uint32, error) {
+	card, ok := s.cards[cardID]
+	if !ok {
+		return nil, 0, errcode.New(errcode.ErrInvalidArg, "unknown skill card %d", cardID)
+	}
+	return card.curve, card.maxLevel, nil
 }
 
 func TestUpdateMMR_AppliesDelta(t *testing.T) {

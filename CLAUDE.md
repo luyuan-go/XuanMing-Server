@@ -213,9 +213,9 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     | player_mail_archive | archived_at 超期 | 90 天(`archive_retention_days`) | mail `biz/sweep.go` |
     | player_mail_claim | mail_id 早于 cutoff(雪花时间) | **180 天(登记例外)**:发送侧已把邮件可领窗口钳到本值内,claim 行必须活得比可领窗口长 | mail `biz/sweep.go` |
     | battles + battle_player_stats | created_at(服务端落库时间;§9.6 不信 DS 上报的 ended_at_ms,防伪造提前删/永不删)超期,同事务批删 | **180 天(登记例外)**:战报保留期 = 玩家可见窗口,产品口径"最多存最近六个月"(`history_retention_days`,钳 `[30,180]`);**本域 `retention_mode` 默认 delete** | battle_result `biz/retention.go` |
-    | battle_progress_stream + battle_progress_player | settled_at_ms>0 且超期(未结算行永不清:陈年未结算 = 补偿链 bug 证据) | 180 天(同上) | battle_result `biz/retention.go` |
-    | exp_history | created_at 超期(**默认关**:上游 progress 出箱无总重试期限,清收据会双发;上游有界后运维显式开启) | 7 天(`exp_history_retention`) | player `RunExpHistoryJanitor` |
-    | mmr_history / attr_point_grants / talent_point_grants | created_at 超期(**默认关**,同上:kafka 重放 / 授予补扫须先有界) | 90 天(`history_retention_days`,下限 30) | player `RunHistoryJanitor` |
+    | battle_progress_stream + battle_progress_player + battle_progress_item_balance + battle_progress_action | 以 stream 的 settled_at_ms>0 且超期为锚点,同 match 成组删除(未结算行永不清:陈年未结算 = 补偿链 bug 证据) | 180 天(同上) | battle_result `biz/retention.go` |
+    | exp_history | created_at 超期(**默认 report_only**;真删还需第二道闸 `exp_history_cleanup_enabled`:上游 progress 出箱无总重试期限,清收据会双发,上游有界后运维显式开启) | 7 天(`exp_history_retention`) | player `RunExpHistoryJanitor` |
+    | mmr_history / attr_point_grants / talent_point_grants / skill_card_grants | created_at 超期(**默认 report_only**;真删还需第二道闸 `history_cleanup_enabled`,同上:kafka 重放 / 授予补扫须先有界) | 90 天(`history_retention_days`,钳 `[30,90]`) | player `RunHistoryJanitor` |
     | chat_private_messages | message_id 早于雪花 cutoff | 90 天(`history_retention_days`) | chat `biz/sweep.go` |
     | friend_requests(终态) | status≠pending 且 updated_at 超期(pending 永不清) | 90 天(`request_retention_days`) | friend `biz/sweep.go` |
     | guild_join_requests(终态) | status≠pending 且 updated_at 超期(pending 永不清) | 90 天(`request_retention_days`) | guild `biz/sweep.go` |
@@ -228,7 +228,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     | bag_journal | checkpoint 覆盖位之前且超期 | 90 天(`journal_retention_days`) | inventory(bag 域)journal sweep |
     | owner_transition_log | created_at 超期(idx_created_at 已预留) | 90 天 | owner 服务 sweep(§9.22 工作线落地中) |
 
-    **登记豁免(慢增长 / 权威闸,不清理)**:`leaderboard_settlement`(settle uk 是防重复结算的永久闸,每批次 1 行)、`auction_owner_guards`(每 owner 1 行,被玩家数有界)、`friend_player_guards` / `friend_pair_guards`(好友域写守卫行,R5 复审 P1-2/4:TiDB 无 gap 锁,限额与关系变更先锁守卫行再进临界区;每玩家/每关系对至多 1 行,被玩家数与社交图对数有界,无业务语义不清理)、`account_bans`(运营合规审计,量级 = 运营操作数)、各出箱表(投递成功即删,积压属告警问题)、`player_items` count=0 行(被 uk 有界,删行会漂移错误码语义)、`mail_transfer_escrow`(邮件 transfer 附件在途托管行,领取/释放即删;行是已扣出实例资产的唯一持有处,量级 = 在途 transfer 邮件数,被个人邮件 TTL + 归档补偿链兜底,不得按时间清理)、`bag_migration`(旧 inventory 存量迁移幂等闸,一玩家一行永久保留;删行会让迁移作业重跑双倍入账,decision-revisit-bag-replay-semantics.md D5)、`register_no_counter`(注册编号全局发号计数器,恒 1 行,发号权威闸;`docs/design/register-no-and-login-surge.md` §3.3)。
+    **登记豁免(慢增长 / 权威闸,不清理)**:`leaderboard_settlement`(settle uk 是防重复结算的永久闸,每批次 1 行)、`auction_owner_guards`(每 owner 1 行,被玩家数有界)、`friend_player_guards` / `friend_pair_guards`(好友域写守卫行,R5 复审 P1-2/4:TiDB 无 gap 锁,限额与关系变更先锁守卫行再进临界区;每玩家/每关系对至多 1 行,被玩家数与社交图对数有界,无业务语义不清理)、`account_bans`(运营合规审计,量级 = 运营操作数)、各出箱表(投递成功即删,积压属告警问题)、`player_items` count=0 行(被 uk 有界,删行会漂移错误码语义)、`mail_transfer_escrow`(邮件 transfer 附件在途托管行,领取/释放即删;行是已扣出实例资产的唯一持有处,量级 = 在途 transfer 邮件数,被个人邮件 TTL + 归档补偿链兜底,不得按时间清理)、`bag_migration`(旧 inventory 存量迁移幂等闸,一玩家一行永久保留;删行会让迁移作业重跑双倍入账,decision-revisit-bag-replay-semantics.md D5)、`register_no_counter`(注册编号全局发号计数器,恒 1 行,发号权威闸;`docs/design/register-no-and-login-surge.md` §3.3)、`player_skill_cards`(每玩家每卡至多 1 行,被技能卡配置表行数有界)、`player_skill_slots`(每玩家至多 `biz.SkillSlotCount`=4 行)。
     存量库补清理索引统一走 `tools/migrate` 各库 `*_retention_indexes` 迁移(幂等条件建索引);未登记不等于已达标。
 
     **机械化检查(上线前 / 压测强制)**:`tools/migrate/cmd/dbcheck` 内嵌与本清单同步的登记表,对真实库枚举全部 `pandora_%` 表并断言:①无未登记表;②swept 表清理索引齐备;③outbox 无堆积;`-snapshot`/`-compare` 供压测前后行数对比(增量必须能用业务量解释),`-pending` 供待清理量报告(只 COUNT),`-size-check [-top-rows N]` 供大字段体检(见下条)。**本工具永不 DELETE**(旧 `-force-sweep` 按用户指令已整块移除,且刻意不留同名 flag)。**上线前对生产库跑一次 dbcheck 且 PASS 是发布门禁**;新增表必须同时登记本清单与 dbcheck 内嵌清单,漂移即检查失败。压测接线见 `stress-discipline.md` §4.1.1/§4.3。

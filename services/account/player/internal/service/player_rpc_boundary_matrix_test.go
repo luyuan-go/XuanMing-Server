@@ -103,6 +103,18 @@ func TestPlayerRPCCrossPlayerIdentityMatrix(t *testing.T) {
 			r, e := svc.GetRewardClaims(ctx, &playerv1.GetRewardClaimsRequest{PlayerId: otherID})
 			return r.GetCode(), e
 		}},
+		{"UpgradeSkillCard", func(ctx context.Context) (commonv1.ErrCode, error) {
+			r, e := svc.UpgradeSkillCard(ctx, &playerv1.UpgradeSkillCardRequest{PlayerId: otherID})
+			return r.GetCode(), e
+		}},
+		{"SetSkillSlots", func(ctx context.Context) (commonv1.ErrCode, error) {
+			r, e := svc.SetSkillSlots(ctx, &playerv1.SetSkillSlotsRequest{PlayerId: otherID})
+			return r.GetCode(), e
+		}},
+		{"GetSkillCards", func(ctx context.Context) (commonv1.ErrCode, error) {
+			r, e := svc.GetSkillCards(ctx, &playerv1.GetSkillCardsRequest{PlayerId: otherID})
+			return r.GetCode(), e
+		}},
 	}
 	assertPlayerRPCMatrix(t, withCaller(callerID), commonv1.ErrCode_ERR_PERMISSION_DENY, crossPlayer)
 
@@ -128,6 +140,10 @@ func TestPlayerRPCCrossPlayerIdentityMatrix(t *testing.T) {
 		}},
 		{"GrantTalentPoints", func(ctx context.Context) (commonv1.ErrCode, error) {
 			r, e := svc.GrantTalentPoints(ctx, &playerv1.GrantTalentPointsRequest{PlayerId: callerID})
+			return r.GetCode(), e
+		}},
+		{"GrantSkillCards", func(ctx context.Context) (commonv1.ErrCode, error) {
+			r, e := svc.GrantSkillCards(ctx, &playerv1.GrantSkillCardsRequest{PlayerId: callerID})
 			return r.GetCode(), e
 		}},
 	}
@@ -203,6 +219,10 @@ func TestPlayerRPCInvalidArgumentMatrix(t *testing.T) {
 		}},
 		{"GrantTalentPoints", func(ctx context.Context) (commonv1.ErrCode, error) {
 			r, e := svc.GrantTalentPoints(ctx, &playerv1.GrantTalentPointsRequest{})
+			return r.GetCode(), e
+		}},
+		{"GrantSkillCards", func(ctx context.Context) (commonv1.ErrCode, error) {
+			r, e := svc.GrantSkillCards(ctx, &playerv1.GrantSkillCardsRequest{})
 			return r.GetCode(), e
 		}},
 	}

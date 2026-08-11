@@ -19,6 +19,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 )
@@ -239,40 +240,47 @@ func (r *MySQLPlayerRepo) DeletePushOutbox(ctx context.Context, id int64) error 
 	return nil
 }
 
-// PurgeExpHistory 删除 created_at < cutoff 的经验幂等收据(最多 limit 行)。
+// SweepExpHistory 按保留期处理经验幂等收据(mode=report_only 只数不删,delete 才批删)。
 // 走 idx_created 前导索引(无索引时收据全部未到期的稳态下会每小时全表扫,审计 P2);
 // 多副本并发调用安全(各删各的行)。
-func (r *MySQLPlayerRepo) PurgeExpHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
-	return r.purgeByCreatedAt(ctx, "exp_history", cutoff, limit)
+func (r *MySQLPlayerRepo) SweepExpHistory(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error) {
+	return r.sweepByCreatedAt(ctx, mode, "exp_history", cutoff, limit)
 }
 
-// PurgeMMRHistory / PurgeAttrPointGrants / PurgeTalentPointGrants:保留期清理
-// (CLAUDE.md §9 不变量 24)。三表均按 created_at 批删(需 idx_created,见 04-player-tables.sql);
-// 多副本并发调用安全(各删各的行)。
-func (r *MySQLPlayerRepo) PurgeMMRHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
-	return r.purgeByCreatedAt(ctx, "mmr_history", cutoff, limit)
+// SweepMMRHistory / SweepAttrPointGrants / SweepTalentPointGrants / SweepSkillCardGrants:
+// 保留期清理(CLAUDE.md §9 不变量 24)。四表均按 created_at 处理(需 idx_created,
+// 见 04-player-tables.sql 与 tools/migrate 000003 / 000005);多副本并发调用安全。
+func (r *MySQLPlayerRepo) SweepMMRHistory(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error) {
+	return r.sweepByCreatedAt(ctx, mode, "mmr_history", cutoff, limit)
 }
 
-func (r *MySQLPlayerRepo) PurgeAttrPointGrants(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
-	return r.purgeByCreatedAt(ctx, "attr_point_grants", cutoff, limit)
+func (r *MySQLPlayerRepo) SweepAttrPointGrants(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error) {
+	return r.sweepByCreatedAt(ctx, mode, "attr_point_grants", cutoff, limit)
 }
 
-func (r *MySQLPlayerRepo) PurgeTalentPointGrants(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
-	return r.purgeByCreatedAt(ctx, "talent_point_grants", cutoff, limit)
+func (r *MySQLPlayerRepo) SweepTalentPointGrants(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error) {
+	return r.sweepByCreatedAt(ctx, mode, "talent_point_grants", cutoff, limit)
 }
 
-// purgeByCreatedAt 按 created_at < cutoff 批删指定表(表名只来自本文件内固定调用点,非外部输入)。
-func (r *MySQLPlayerRepo) purgeByCreatedAt(ctx context.Context, table string, cutoff time.Time, limit int) (int64, error) {
+func (r *MySQLPlayerRepo) SweepSkillCardGrants(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error) {
+	return r.sweepByCreatedAt(ctx, mode, "skill_card_grants", cutoff, limit)
+}
+
+// sweepByCreatedAt 按 created_at < cutoff 处理指定表(表名只来自本文件内固定调用点,非外部输入)。
+//
+// 走 dbguard.SweepTable 而不是自己写 COUNT / DELETE 两条 SQL:它强制"报告"与"实删"
+// 共用同一个 where + 同一组参数,从机制上排除"报告说 0 行、实际删了 10 万行"的条件漂移
+// (§9.24);WARN 日志与 pandora_db_retention_pending_rows gauge 也由它统一打,
+// 全服清理告警长一个样,排查时对得上。
+func (r *MySQLPlayerRepo) sweepByCreatedAt(ctx context.Context, mode dbguard.Mode, table string, cutoff time.Time, limit int) (dbguard.Outcome, error) {
 	if limit <= 0 {
 		limit = 1000
 	}
-	res, err := r.db.ExecContext(ctx,
-		`DELETE FROM `+table+` WHERE created_at < ? LIMIT ?`, cutoff, limit)
+	out, err := dbguard.SweepTable(ctx, r.db, mode, "pandora_player", table, "created_at < ?", limit, cutoff)
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInternal, "purge %s: %v", table, err)
+		return out, errcode.New(errcode.ErrInternal, "sweep %s: %v", table, err)
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
+	return out, nil
 }
 
 // ValidateExperienceSchema 启动时探测经验相关表列,缺失即失败(fail-fast,§16.4):

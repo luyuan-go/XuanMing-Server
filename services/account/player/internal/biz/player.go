@@ -57,6 +57,10 @@ type PlayerUsecase struct {
 	// itemOwnership 查玩家是否持有指定道具(SetEquipment 的 ownEquipment)。
 	// 生产实现是 inventory.CheckItemsOwned 的 gRPC 客户端;nil = 未接线 → fail-closed 拒绝。
 	itemOwnership ItemOwnershipChecker
+
+	// skillCardRules 提供技能卡表判定(卡是否存在 / 等级上限 / 升级曲线)。
+	// nil = 技能卡表未加载 → 升级与装配 fail-closed 拒绝。
+	skillCardRules skillCardRuleSource
 }
 
 // SetConfigTables 注入启动时已成功加载、并注册整表校验器的配置表容器。
@@ -66,11 +70,13 @@ func (u *PlayerUsecase) SetConfigTables(store *configtable.Store) {
 		u.expLevels = nil
 		u.itemRules = nil
 		u.talentRules = nil
+		u.skillCardRules = nil
 		return
 	}
 	u.expLevels = configTableExperienceLevels{store: store}
 	u.itemRules = configTableItemRules{store: store}
 	u.talentRules = configTableTalentRules{store: store}
+	u.skillCardRules = configTableSkillCardRules{store: store}
 }
 
 // ItemOwnershipChecker 查询玩家在 inventory 域的持有情况(跨服务,SetEquipment 拥有权校验)。
@@ -132,6 +138,61 @@ func (s configTableTalentRules) ValidateAllocation(levels map[uint32]uint32) (ma
 		return nil, 0, errcode.New(errcode.ErrInternal, "talent table unavailable")
 	}
 	return tables.Talent.ValidateAllocation(levels)
+}
+
+// skillCardRuleSource 是技能卡培养 / 更换需要的配置表判定(生产实现读 configtable 原子快照)。
+//
+// UpgradeCurve 返回整条曲线而不是单级价钱:实际消耗取决于事务内锁到的当前等级,
+// biz 先读一次等级再算价会有 TOCTOU(见 data.PlayerRepo.UpgradeSkillCard 注释)。
+type skillCardRuleSource interface {
+	// CardExists 卡是否在配置表中。
+	CardExists(cardID uint32) bool
+	// UpgradeCurve 返回该卡的升级曲线(目标等级 → 碎片消耗)与等级上限。
+	// 卡不存在或表未加载 → error(fail-closed)。
+	UpgradeCurve(cardID uint32) (costByLevel map[uint32]uint32, maxLevel uint32, err error)
+}
+
+type configTableSkillCardRules struct {
+	store *configtable.Store
+}
+
+func (s configTableSkillCardRules) CardExists(cardID uint32) bool {
+	if s.store == nil {
+		return false
+	}
+	tables := s.store.Tables()
+	if tables == nil || tables.SkillCard == nil {
+		return false // 表缺失 → 当作"这张卡不存在",fail-closed。
+	}
+	return tables.SkillCard.Exists(cardID)
+}
+
+// UpgradeCurve 表缺失时返回错误(fail-closed),不静默按「免费升级」放行。
+func (s configTableSkillCardRules) UpgradeCurve(cardID uint32) (map[uint32]uint32, uint32, error) {
+	if s.store == nil {
+		return nil, 0, errcode.New(errcode.ErrInternal, "config table store unavailable")
+	}
+	tables := s.store.Tables()
+	if tables == nil || tables.SkillCard == nil || tables.SkillCardUpgrade == nil {
+		return nil, 0, errcode.New(errcode.ErrInternal, "skill card table unavailable")
+	}
+	card, ok := tables.SkillCard.ByID(cardID)
+	if !ok {
+		return nil, 0, errcode.New(errcode.ErrInvalidArg, "unknown skill card %d", cardID)
+	}
+	maxLevel := card.GetMaxLevel()
+	curve := make(map[uint32]uint32, maxLevel)
+	for level := uint32(2); level <= maxLevel; level++ {
+		cost, found := tables.SkillCardUpgrade.ShardCost(card.GetRarity(), level)
+		if !found {
+			// 加载期 ValidateCurves 已挡过断档;这里再挡一次是因为热更会换表,
+			// 而校验器只在加载时跑。缺档绝不能当免费升级。
+			return nil, 0, errcode.New(errcode.ErrInternal,
+				"upgrade curve missing: card=%d rarity=%d level=%d", cardID, card.GetRarity(), level)
+		}
+		curve[level] = cost
+	}
+	return curve, maxLevel, nil
 }
 
 type configTableExperienceLevels struct {
@@ -700,6 +761,24 @@ func (u *PlayerUsecase) GetLoadout(ctx context.Context, playerID uint64) (*playe
 	for _, t := range talents {
 		tl = append(tl, &playerv1.TalentNode{TalentId: t.TalentID, Level: t.Level})
 	}
+	cards, slots, err := u.GetSkillCards(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	// 卡等级随槽位一起带出:DS 只关心"这个槽是哪张卡、几级",
+	// 让它拿着 card_id 再查一次持有表等于把一次读拆成两次(且中间可能被改)。
+	levelOf := make(map[uint32]uint32, len(cards))
+	for _, c := range cards {
+		levelOf[c.CardID] = c.Level
+	}
+	sc := make([]*playerv1.LoadoutSkillCard, 0, len(slots))
+	for _, s := range slots {
+		sc = append(sc, &playerv1.LoadoutSkillCard{
+			Slot:   s.Slot,
+			CardId: s.CardID,
+			Level:  levelOf[s.CardID],
+		})
+	}
 	return &playerv1.PlayerLoadout{
 		PlayerId:            playerID,
 		ActiveHeroId:        heroID,
@@ -708,6 +787,7 @@ func (u *PlayerUsecase) GetLoadout(ctx context.Context, playerID uint64) (*playe
 		Equipment:           eq,
 		Talents:             tl,
 		UnspentTalentPoints: int32(talentUnspent),
+		SkillCards:          sc,
 	}, nil
 }
 

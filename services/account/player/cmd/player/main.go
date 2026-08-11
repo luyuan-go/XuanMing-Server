@@ -88,6 +88,14 @@ func main() {
 	}
 	cfg.Defaults()
 
+	// 保留期清理模式 fail-fast(§9.24):拼错 retention_mode(如 "delet" / "true" / "1")时
+	// RetentionMode() 会静默回落 report_only —— 运维以为开了清理、实际一行没删,库继续增长
+	// 且启动期毫无痕迹。这里在触碰 MySQL 之前拒启,把配置错误暴露在发布阶段。
+	if err := cfg.Player.ValidateRetentionMode(); err != nil {
+		helper.Errorw("msg", "player_retention_mode_invalid", "err", err)
+		os.Exit(1)
+	}
+
 	// 3. 玩家等级经验配置表:策划 j_玩家等级经验.xlsx 是唯一数值源。
 	// player 不保留 YAML 曲线兜底；目录缺失/坏批次均在监听端口前 fail-closed。
 	if cfg.ConfigTable.Dir == "" {
@@ -131,6 +139,20 @@ func main() {
 			if err := tb.TalentEffect.ValidateEffects(); err != nil {
 				return err
 			}
+		}
+		// 技能卡两张表(2026-08-10):UpgradeSkillCard 靠它们判等级上限与每级碎片消耗,
+		// SetSkillSlots 靠卡表判卡是否存在。缺表则这两条写路径只能 fail-closed 拒绝,
+		// 所以在加载边界就拒掉(与上面 item / talent 同一处置)。
+		if tb.SkillCard == nil {
+			return fmt.Errorf("缺少 skill_card 配置表(技能卡升级/装配的等级上限与卡校验依赖它)")
+		}
+		if tb.SkillCardUpgrade == nil {
+			return fmt.Errorf("缺少 skill_card_upgrade 配置表(技能卡升级的碎片消耗依赖它)")
+		}
+		// 曲线断档 / 重复行是跨行约束,生成器不做,只能在这里整表校验一次。
+		// 断档的表现是"卡升到某级之后按钮没反应"且不报错,必须在加载期挡住。
+		if err := tb.SkillCardUpgrade.ValidateCurves(tb.SkillCard); err != nil {
+			return err
 		}
 		return nil
 	})

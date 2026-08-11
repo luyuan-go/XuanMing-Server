@@ -75,16 +75,23 @@ player:
   # 满批自动连续排空,吞吐不受 interval 钉死)
   push_outbox_interval: "1s"
   push_outbox_batch: 128
-  # exp_history_cleanup_enabled: 收据清理开关(**缺省 false=不清理**:progress 出箱无总重试
-  # 期限,清收据会破坏幂等造成双发;上游具备小于留存期的有界重试后才可开启)。dev 本地
-  # 联调开启以覆盖清理代码路径,无双发风险(本地数据可弃)。
+  # retention_mode: 保留期清理总闸(§9.24)。**缺省 = report_only**:janitor 照常跑,
+  # 每轮只统计超期行数并 WARN + pandora_db_retention_pending_rows,一行都不删。
+  # 真删要这里写 "delete" **且**对应组的 *_cleanup_enabled 也为 true(两道闸)。
+  # 拼错(如 "delet"/"true")启动即 fail-fast 拒启,绝不会被猜成 delete。
+  # dev 写 delete 是为了覆盖真删代码路径(本地数据可弃);生产留空。
+  retention_mode: "delete"
+  # exp_history_cleanup_enabled: 经验收据**删除**前置条件确认(**缺省 false=只报告不删**:
+  # progress 出箱无总重试期限,清收据会破坏幂等造成双发;上游具备小于留存期的有界重试后
+  # 才可开启)。dev 本地联调开启以覆盖清理代码路径,无双发风险(本地数据可弃)。
   exp_history_cleanup_enabled: true
-  # exp_history_retention: 经验幂等收据留存期(缺省 7d,下限 7d;仅清理开启时生效)
+  # exp_history_retention: 经验幂等收据留存期(缺省 7d,下限 7d;report_only 与 delete 共用同一值)
   exp_history_retention: "168h"
-  # history_cleanup_enabled: mmr_history / 点数授予幂等历史清理开关(缺省 false,§9.24;
-  # 前置条件:上游 kafka retention / 授予补扫窗口 < 留存期)。dev 开启覆盖清理代码路径。
+  # history_cleanup_enabled: mmr_history / 点数授予 / 技能卡授予幂等历史**删除**前置条件确认
+  # (缺省 false=只报告不删,§9.24;前置条件:上游 kafka retention / 授予补扫窗口 < 留存期)。
+  # dev 开启覆盖清理代码路径。
   history_cleanup_enabled: true
-  # history_retention_days: 上述三表留存天数(缺省 90,下限 30;仅清理开启时生效)
+  # history_retention_days: 上述四表留存天数(缺省 90,下限 30,上限 90;报告与实删共用同一值)
   history_retention_days: 90
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威

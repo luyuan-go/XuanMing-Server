@@ -171,3 +171,45 @@ CREATE TABLE IF NOT EXISTS `talent_point_grants` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 天赋点授予幂等表(保留期清理见 §9.24,默认关)';
 -- 存量库由 tools/migrate pandora_player 000003_retention_indexes 条件补齐。
+
+-- ── 技能卡(持有 / 培养 / 更换;存量库由 tools/migrate 000005_skill_cards 补齐)──
+
+CREATE TABLE IF NOT EXISTS `player_skill_cards` (
+    `id`         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`  BIGINT UNSIGNED  NOT NULL,
+    `card_id`    INT UNSIGNED     NOT NULL COMMENT '技能卡配置 ID(uint32;j_技能卡.xlsx)',
+    `level`      INT UNSIGNED     NOT NULL DEFAULT 1 COMMENT '已培养等级(获得即 1 级;上限查配置表)',
+    `shards`     INT UNSIGNED     NOT NULL DEFAULT 0 COMMENT '碎片余量(升级从这里扣;重复获得同名卡转碎片)',
+    `updated_at` DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_card` (`player_id`, `card_id`),
+    KEY `idx_player` (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家技能卡持有(等级 + 碎片余量)';
+
+CREATE TABLE IF NOT EXISTS `player_skill_slots` (
+    `id`         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`  BIGINT UNSIGNED  NOT NULL,
+    `slot`       INT UNSIGNED     NOT NULL COMMENT '卡槽序号(0..N-1;N 由服务端配置,当前 4 = 战斗 Q/W/E/R)',
+    `card_id`    INT UNSIGNED     NOT NULL COMMENT '装在该槽的技能卡 ID(>0;空槽不落行,直接删)',
+    `updated_at` DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_slot` (`player_id`, `slot`),
+    -- 同一张卡不得同时占两个槽:并发两次 SetSkillSlots 各自校验都过、合并后撞车的窗口只有库能兜。
+    UNIQUE KEY `uk_player_card_once` (`player_id`, `card_id`),
+    KEY `idx_player` (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家技能卡槽装配(全量替换;空槽不落行)';
+
+CREATE TABLE IF NOT EXISTS `skill_card_grants` (
+    `id`              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `player_id`       BIGINT UNSIGNED NOT NULL,
+    `idempotency_key` VARCHAR(128)    NOT NULL COMMENT '发放幂等键(抽卡/活动/GM 各自的单点入口约定)',
+    `created_at`      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_key` (`player_id`, `idempotency_key`),
+    KEY `idx_player` (`player_id`),
+    -- 保留期清理按 created_at 扫(§9.24;dbcheck 会断言本索引存在)
+    KEY `idx_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 技能卡发放幂等收据(保留期清理见 §9.24,默认关)';

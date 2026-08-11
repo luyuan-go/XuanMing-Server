@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 )
 
@@ -60,6 +61,25 @@ type TalentLevel struct {
 	Level    int32
 	// SpentPoints 该节点实际消耗的天赋点;GetTalents 回填,SetTalents 由 biz 填。
 	SpentPoints int32
+}
+
+// SkillCard 是玩家持有的一张技能卡(等级 + 碎片余量)。
+type SkillCard struct {
+	CardID uint32
+	Level  uint32
+	Shards uint32
+}
+
+// SkillCardGrant 是一次发放中的一项(card_id + 碎片数;碎片可为 0 = 只解锁不给碎片)。
+type SkillCardGrant struct {
+	CardID uint32
+	Shards uint32
+}
+
+// SkillSlot 是一个卡槽的装配(槽位序号 + 卡 ID)。空槽不落行,故 CardID 恒 > 0。
+type SkillSlot struct {
+	Slot   uint32
+	CardID uint32
 }
 
 // PlayerRepo 是 player 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
@@ -115,6 +135,29 @@ type PlayerRepo interface {
 	// GetTalents 读已点天赋 + 可点天赋点(total - SUM(spent_points))。
 	GetTalents(ctx context.Context, playerID uint64) (talents []TalentLevel, unspent int, err error)
 
+	// ── 技能卡(持有 / 培养 / 更换)────────────────────────────────
+	// GrantSkillCards 幂等发放技能卡 / 碎片。命中幂等键 → (当前持卡, true, nil),不重复入账。
+	// 已持有的卡累加碎片,未持有的以 1 级建卡。
+	GrantSkillCards(ctx context.Context, playerID uint64, grants []SkillCardGrant, idempotencyKey string) (cards []SkillCard, already bool, err error)
+	// UpgradeSkillCard 消耗碎片把一张卡升一级(事务:锁卡行,扣碎片,level+1)。
+	//
+	// costByLevel 是该卡整条升级曲线(目标等级 → 碎片消耗),maxLevel 是等级上限,
+	// 两者都由 biz 按配置表算好传入——repo 层看不到配置(同 SetTalents 的 SpentPoints 处理)。
+	//
+	// 传整条曲线而不是单个 shardCost:消耗取决于**锁内读到的**当前等级,
+	// biz 先读一次等级再算价会有 TOCTOU——两次并发升级都按 2 级价钱升,第二次少扣。
+	// 曲线在事务内按锁到的等级查,价钱与实际升到的级数永远对得上。
+	//
+	// 返回本次实际消耗的碎片数。未持有 → ErrSkillCardNotOwned;已满级 → ErrSkillCardMaxLevel;
+	// 碎片不足 → ErrSkillCardInsufficientShards;曲线缺目标等级 → ErrInternal(配置断档)。
+	UpgradeSkillCard(ctx context.Context, playerID uint64, cardID uint32, costByLevel map[uint32]uint32, maxLevel uint32) (card SkillCard, shardCost uint32, err error)
+	// SetSkillSlots 全量替换卡槽装配(事务:删旧 + 插新)。装了未持有的卡 → ErrSkillCardNotOwned。
+	SetSkillSlots(ctx context.Context, playerID uint64, slots []SkillSlot) error
+	// GetSkillCards 读全部持卡(按 card_id 排序)。
+	GetSkillCards(ctx context.Context, playerID uint64) ([]SkillCard, error)
+	// GetSkillSlots 读卡槽装配(按 slot 排序)。
+	GetSkillSlots(ctx context.Context, playerID uint64) ([]SkillSlot, error)
+
 	// ── 玩家等级经验(实时成长)────────────────────────────────────────────
 	// ApplyExperience 幂等入账经验 + 等级结算 + 经验推送出箱(同一事务)。
 	// 命中幂等键 → (当前权威快照, true, nil);满级 → no-op 返回满级快照。
@@ -123,15 +166,17 @@ type PlayerRepo interface {
 	FetchPushOutbox(ctx context.Context, limit int) ([]PushOutboxRecord, error)
 	// DeletePushOutbox 删除已成功投递的推送出箱行。
 	DeletePushOutbox(ctx context.Context, id int64) error
-	// PurgeExpHistory 删除 created_at < cutoff 的经验幂等收据(最多 limit 行,返回删除数)。
-	PurgeExpHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error)
-	// PurgeMMRHistory / PurgeAttrPointGrants / PurgeTalentPointGrants 删除 created_at < cutoff
-	// 的幂等历史行(最多 limit 行,返回删除数;CLAUDE.md §9 不变量 24)。
-	// 前置条件同 exp_history:上游重放(kafka player.update 消费 / 授予补扫)须有小于
-	// 保留期的有界期限,否则清掉幂等行 = 同一事件双发(重复加段位分/加点)。
-	PurgeMMRHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error)
-	PurgeAttrPointGrants(ctx context.Context, cutoff time.Time, limit int) (int64, error)
-	PurgeTalentPointGrants(ctx context.Context, cutoff time.Time, limit int) (int64, error)
+	// SweepExpHistory 按保留期处理经验幂等收据:mode=report_only 只统计待清理行数并告警
+	// (一行不删,§9.24 默认),mode=delete 才批删最多 limit 行。
+	SweepExpHistory(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error)
+	// SweepMMRHistory / SweepAttrPointGrants / SweepTalentPointGrants / SweepSkillCardGrants
+	// 按 created_at 保留期处理幂等历史行(CLAUDE.md §9 不变量 24),语义同上。
+	// 真删的前置条件同 exp_history:上游重放(kafka player.update 消费 / 授予补扫)须有小于
+	// 保留期的有界期限,否则清掉幂等行 = 同一事件双发(重复加段位分/加点/重复发卡)。
+	SweepMMRHistory(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error)
+	SweepAttrPointGrants(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error)
+	SweepTalentPointGrants(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error)
+	SweepSkillCardGrants(ctx context.Context, mode dbguard.Mode, cutoff time.Time, limit int) (dbguard.Outcome, error)
 
 	// ── 领奖记录 ───────────────────────────────────────────────────────────
 	// LoadRewardClaims 读玩家领奖记录(RewardClaimStorageRecord 序列化 bytes + 乐观锁版本)。

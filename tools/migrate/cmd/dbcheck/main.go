@@ -84,24 +84,29 @@ var registry = map[string]map[string]tableEntry{
 		"player_attributes":    {Class: classBounded},
 		"player_equipment":     {Class: classBounded},
 		"player_talents":       {Class: classBounded},
+		"player_skill_cards":   {Class: classBounded}, // 每玩家每卡至多 1 行,被技能卡表行数有界
+		"player_skill_slots":   {Class: classBounded}, // 每玩家至多 SkillSlotCount(4) 行
 		"player_reward_claims": {Class: classBounded},
 		"player_push_outbox":   {Class: classOutbox},
 		"mmr_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
 		"exp_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
 		"attr_point_grants":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
 		"talent_point_grants":  {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
+		"skill_card_grants":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
 	},
 	"pandora_battle": {
-		"battles":                  {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}},                // 清理按服务端 created_at(§9.6 不信 DS ended_at_ms);与 stats 同事务批删,不支持工具直删
-		"battle_player_stats":      {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "uk_match_player", Columns: []string{"match_id", "player_id"}}}}, // 随 battles 批删(按 match_id 前缀)
-		"battle_progress_stream":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_settled", Columns: []string{"settled_at_ms"}}}},
-		"battle_progress_player":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "PRIMARY", Columns: []string{"match_id", "player_id"}}}}, // 随 stream 批删(PK 前缀 match_id)
-		"player_update_outbox":     {Class: classOutbox},
-		"battle_drop_outbox":       {Class: classOutbox},
-		"terminal_release_outbox":  {Class: classOutbox},
-		"match_release_outbox":     {Class: classOutbox},
-		"battle_progress_outbox":   {Class: classOutbox},
-		"battle_exit_proof_outbox": {Class: classOutbox},
+		"battles":                      {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}},                // 清理按服务端 created_at(§9.6 不信 DS ended_at_ms);与 stats 同事务批删,不支持工具直删
+		"battle_player_stats":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "uk_match_player", Columns: []string{"match_id", "player_id"}}}}, // 随 battles 批删(按 match_id 前缀)
+		"battle_progress_stream":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_settled", Columns: []string{"settled_at_ms"}}}},
+		"battle_progress_player":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "PRIMARY", Columns: []string{"match_id", "player_id"}}}},                   // 随 stream 批删(PK 前缀 match_id)
+		"battle_progress_item_balance": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "PRIMARY", Columns: []string{"match_id", "player_id", "item_config_id"}}}}, // 随 stream 按 match_id 成组批删
+		"battle_progress_action":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "PRIMARY", Columns: []string{"match_id", "seq", "player_id", "kind"}}}},    // 随 stream 按 match_id 成组批删
+		"player_update_outbox":         {Class: classOutbox},
+		"battle_drop_outbox":           {Class: classOutbox},
+		"terminal_release_outbox":      {Class: classOutbox},
+		"match_release_outbox":         {Class: classOutbox},
+		"battle_progress_outbox":       {Class: classOutbox},
+		"battle_exit_proof_outbox":     {Class: classOutbox},
 	},
 	"pandora_social": {
 		"friendships":           {Class: classBounded},

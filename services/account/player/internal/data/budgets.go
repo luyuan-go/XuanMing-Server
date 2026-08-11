@@ -29,6 +29,22 @@ func Budgets() []dbguard.TableBudget {
 		{Table: "attr_point_grants", MaxRows: planPlayers * 200 * 3, MaxAvgRowBytes: 192},
 		{Table: "talent_point_grants", MaxRows: planPlayers * 200 * 3, MaxAvgRowBytes: 192},
 		{
+			// 发卡幂等收据。idempotency_key 是 VARCHAR(128)(比另外两张的 64 宽一倍,
+			// 抽卡侧的键通常带批次 + 卡池 + 序号),故 avg_row 预算相应放宽。
+			Table: "skill_card_grants", MaxRows: planPlayers * 200 * 3, MaxAvgRowBytes: 256,
+			Note: "抽卡/活动发卡幂等收据;超限查 history_cleanup_enabled 与抽卡侧幂等键是否过长",
+		},
+		{
+			// 每玩家每卡至多一行,被技能卡配置表行数有界。
+			Table: "player_skill_cards", MaxRows: planPlayers * 200, MaxAvgRowBytes: 128,
+			Note: "行数上界 = 玩家数 × 技能卡表行数;远超说明发了配置表里没有的卡",
+		},
+		{
+			// 每玩家至多 SkillSlotCount(4) 行。
+			Table: "player_skill_slots", MaxRows: planPlayers * 8, MaxAvgRowBytes: 128,
+			Note: "行数上界 = 玩家数 × 卡槽数(4);超限说明卡槽越界校验被绕过",
+		},
+		{
 			// 出箱表:投递成功即删,稳态应接近空。这里给的是"积压告警线"而非容量上限。
 			Table: "player_push_outbox", MaxRows: 100_000, MaxAvgRowBytes: 1024,
 			Note: "推送出箱应即时排空;行数堆积 = kafka 投递链堵塞,查 RunPushOutboxPublisher 日志",

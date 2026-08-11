@@ -139,8 +139,8 @@ func TestPandoraPlayerExperienceMigrationIsInitSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 4 {
-		t.Fatalf("pandora_player latest version=%d, want 4", version)
+	if version != 5 {
+		t.Fatalf("pandora_player latest version=%d, want 5", version)
 	}
 	v2 := readEmbeddedMigration(t, "migrations/pandora_player/000002_experience.up.sql")
 	for _, fragment := range []string{
@@ -189,6 +189,24 @@ func TestPandoraPlayerExperienceMigrationIsInitSafe(t *testing.T) {
 	v4down := readEmbeddedMigration(t, "migrations/pandora_player/000004_talent_spent_points.down.sql")
 	if !strings.Contains(v4down, "DROP COLUMN `spent_points`") {
 		t.Fatal("000004 down must drop spent_points")
+	}
+
+	// 000005 新增技能卡持有、装配与发放幂等收据三张表。发放收据属于
+	// §9.24 只增表，必须随建表带 created_at 清理索引；同卡不得并发占两槽。
+	v5 := readEmbeddedMigration(t, "migrations/pandora_player/000005_skill_cards.up.sql")
+	for _, fragment := range []string{
+		"CREATE TABLE IF NOT EXISTS `player_skill_cards`",
+		"UNIQUE KEY `uk_player_card` (`player_id`, `card_id`)",
+		"CREATE TABLE IF NOT EXISTS `player_skill_slots`",
+		"UNIQUE KEY `uk_player_slot` (`player_id`, `slot`)",
+		"UNIQUE KEY `uk_player_card_once` (`player_id`, `card_id`)",
+		"CREATE TABLE IF NOT EXISTS `skill_card_grants`",
+		"UNIQUE KEY `uk_player_key` (`player_id`, `idempotency_key`)",
+		"KEY `idx_created` (`created_at`)",
+	} {
+		if !strings.Contains(v5, fragment) {
+			t.Fatalf("000005 up missing contract fragment %q", fragment)
+		}
 	}
 }
 

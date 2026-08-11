@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 )
 
@@ -68,25 +69,43 @@ type PlayerConf struct {
 	// PushOutboxBatch 每轮发布取多少条推送出箱记录(默认 128)。
 	PushOutboxBatch int `yaml:"push_outbox_batch,omitempty" json:"push_outbox_batch,omitempty"`
 
-	// ExpHistoryCleanupEnabled 经验幂等收据(exp_history)后台清理开关(**默认 false=不清理**,
-	// 审计 P1:battle_result progress 出箱只有退避上限(5min)没有总重试期限——入账成功但
-	// 响应/删行持续失败超过留存期后,同一事件会被再次入账(双发)。开启前置条件:上游出箱
-	// 必须先有小于留存期的有界重试/隔离期限,否则收据表宁可增长也不能破坏幂等,§9.2)。
+	// RetentionModeRaw 保留期清理模式(§9.24 全服标准口径):留空 / "report_only" / "report"
+	// = **只统计待清理量并 WARN 告警,一行都不删**(默认);"delete" = 真删。
+	// 无法识别的值由 ValidateRetentionMode 在启动期 fail-fast 拒启 —— 拼错一个字母就开始
+	// 删生产数据是不可接受的失败模式,绝不能猜成 delete。
+	//
+	// 与下面两个 *_cleanup_enabled 的分工(两道闸,都开才删):
+	//   retention_mode        = 本服的删除总闸(运维口径,§9.24 默认只报告)
+	//   *_cleanup_enabled     = 每组表的**前置条件确认**(技术口径:上游重放窗口已经小于
+	//                           留存期了吗?)。默认 false,即便总闸开着也只报告不删。
+	// 两个都是"默认不删",分开是因为它们回答的是不同的问题,且前置条件对 exp_history
+	// (battle_result progress 出箱无总重试期限)与 mmr/点数/发卡组(kafka 重放 + 授予补扫)
+	// 并不同时成立 —— 合成一个开关会让"这组已确认有界、那组还没有"无法表达。
+	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
+
+	// ExpHistoryCleanupEnabled 经验幂等收据(exp_history)**删除**前置条件确认开关
+	// (**默认 false=只报告不删**,审计 P1:battle_result progress 出箱只有退避上限(5min)
+	// 没有总重试期限——入账成功但响应/删行持续失败超过留存期后,同一事件会被再次入账(双发)。
+	// 开启前置条件:上游出箱必须先有小于留存期的有界重试/隔离期限,否则收据表宁可增长
+	// 也不能破坏幂等,§9.2)。关闭时 janitor 仍会跑,只是模式降为 report_only。
 	ExpHistoryCleanupEnabled bool `yaml:"exp_history_cleanup_enabled,omitempty" json:"exp_history_cleanup_enabled,omitempty"`
 
 	// ExpHistoryRetention 经验幂等收据(exp_history)留存期(默认 7 天,下限 7 天:
-	// 必须严格覆盖 battle_result progress 出箱最长重试窗;仅在 cleanup 开关开启时生效)。
+	// 必须严格覆盖 battle_result progress 出箱最长重试窗)。report_only 下它决定
+	// "多少行算待清理"(报告口径),delete 下它决定删哪些行 —— 两边同一个值。
 	ExpHistoryRetention config.Duration `yaml:"exp_history_retention,omitempty" json:"exp_history_retention,omitempty"`
 
-	// HistoryCleanupEnabled mmr_history / attr_point_grants / talent_point_grants 幂等
-	// 历史行后台清理开关(**默认 false=不清理**,与 exp_history 同理由:上游 kafka
-	// player.update 消费与授予补扫是 at-least-once,清掉幂等行后同一事件重放 = 双发
-	// (重复加段位分/重复加点)。开启前置条件:上游重放期限(kafka retention / 补扫窗口)
-	// 必须小于留存期,由运维确认后配置。CLAUDE.md §9 不变量 24)。
+	// HistoryCleanupEnabled mmr_history / attr_point_grants / talent_point_grants /
+	// skill_card_grants 幂等历史行**删除**前置条件确认开关(**默认 false=只报告不删**,
+	// 与 exp_history 同理由:上游 kafka player.update 消费与授予补扫是 at-least-once,
+	// 清掉幂等行后同一事件重放 = 双发(重复加段位分 / 重复加点 / 重复发卡)。开启前置条件:
+	// 上游重放期限(kafka retention / 补扫窗口)必须小于留存期,由运维确认后配置。
+	// CLAUDE.md §9 不变量 24)。关闭时 janitor 仍会跑,只是模式降为 report_only。
 	HistoryCleanupEnabled bool `yaml:"history_cleanup_enabled,omitempty" json:"history_cleanup_enabled,omitempty"`
 
-	// HistoryRetentionDays mmr_history / 点数授予幂等表留存天数(默认 90,下限 30:
-	// 必须远大于 kafka retention 与一切授予补扫窗口;仅在 cleanup 开关开启时生效)。
+	// HistoryRetentionDays mmr_history / 点数授予 / 技能卡发放幂等表留存天数
+	// (默认 90,下限 30,上限 90:必须远大于 kafka retention 与一切授予补扫窗口)。
+	// 同 ExpHistoryRetention:report_only 与 delete 共用这一个值。
 	HistoryRetentionDays int `yaml:"history_retention_days,omitempty" json:"history_retention_days,omitempty"`
 }
 
@@ -172,4 +191,45 @@ func (p *PlayerConf) HistoryRetentionOrDefault() time.Duration {
 		days = 90
 	}
 	return time.Duration(days) * 24 * time.Hour
+}
+
+// RetentionMode 返回本服生效的保留期清理模式(§9.24 全局默认:留空 = report_only,只报告不删)。
+//
+// 无法识别的值回落 ModeReportOnly(不删更安全),但启动期 ValidateRetentionMode 已经
+// fail-fast 拒启,正常路径到不了这里。
+func (p *PlayerConf) RetentionMode() dbguard.Mode {
+	mode, err := dbguard.ParseMode(p.RetentionModeRaw)
+	if err != nil {
+		return dbguard.ModeReportOnly
+	}
+	return mode
+}
+
+// ExpHistoryRetentionMode 返回 exp_history 这一组生效的模式:总闸(retention_mode)与本组
+// 前置条件确认(exp_history_cleanup_enabled)**都开**才删,任一没开都只报告。
+func (p *PlayerConf) ExpHistoryRetentionMode() dbguard.Mode {
+	return gateDelete(p.RetentionMode(), p.ExpHistoryCleanupEnabled)
+}
+
+// HistoryRetentionMode 返回 mmr_history / attr_point_grants / talent_point_grants /
+// skill_card_grants 这一组生效的模式(同上,两道闸都开才删)。
+func (p *PlayerConf) HistoryRetentionMode() dbguard.Mode {
+	return gateDelete(p.RetentionMode(), p.HistoryCleanupEnabled)
+}
+
+// gateDelete 把"前置条件没确认"表达成降级到 report_only,而不是干脆不跑 janitor ——
+// 不跑就等于既不删也不报,§9.24 要的待清理量(WARN + pending gauge)会整个消失,
+// 库在无人知晓的情况下继续涨。
+func gateDelete(mode dbguard.Mode, precondition bool) dbguard.Mode {
+	if !precondition {
+		return dbguard.ModeReportOnly
+	}
+	return mode
+}
+
+// ValidateRetentionMode 供启动 fail-fast(写了无法识别的模式必须拒启)。
+// 只回落默认是不够的:运维以为配了 delete、实际一行没删,库继续增长且启动期毫无痕迹。
+func (p *PlayerConf) ValidateRetentionMode() error {
+	_, err := dbguard.ParseMode(p.RetentionModeRaw)
+	return err
 }

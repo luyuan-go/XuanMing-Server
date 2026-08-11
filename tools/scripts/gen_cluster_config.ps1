@@ -1493,11 +1493,16 @@ function Set-ProdGrpcRateLimitOn([string]$svcName, [string]$text) {
     return [regex]::Replace($text, $anchor, '${1}    enable_rate_limit: true${2}', 1)
 }
 
-# -Prod 机械关断幂等历史清理(审核 P1,2026-07-21):dev 开启 exp_history_cleanup_enabled /
-# history_cleanup_enabled 只为覆盖清理代码路径(本地数据可弃)。上游 progress 出箱与
-# kafka 重放目前没有小于留存期的有界重试,生产删收据后迟到重放会重复入账经验/MMR/点数
-# (不可逆)。生产开启是独立显式动作:上游具备有界重试后按 §9.24 前置条件另行开启。
-function Set-ProdPlayerHistoryCleanupOff([string]$text) {
+# -Prod 机械关断幂等历史的**真删**(审核 P1,2026-07-21;2026-08-10 补 retention_mode):
+# dev 写 retention_mode: "delete" + 两个 *_cleanup_enabled: true 只为覆盖真删代码路径
+# (本地数据可弃)。上游 progress 出箱与 kafka 重放目前没有小于留存期的有界重试,生产删
+# 收据后迟到重放会重复入账经验/MMR/点数/技能卡(不可逆)。生产开启是独立显式动作:
+# 上游具备有界重试后按 §9.24 前置条件另行开启。
+#
+# 三个键都强制,不是只关前置开关:两道闸里任意一道都足以阻止真删,但产物里若残留
+# retention_mode: "delete",运维读配置会误以为清理已生效;而且将来若有新表组直接读
+# RetentionMode() 而没有自己的前置闸,生产就会静默开始删。
+function Set-ProdPlayerRetentionOff([string]$text) {
     foreach ($key in @('exp_history_cleanup_enabled', 'history_cleanup_enabled')) {
         $pattern = '(?m)^([ \t]{2})' + $key + ':[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
         $anchorCount = [regex]::Matches($text, $pattern).Count
@@ -1506,7 +1511,12 @@ function Set-ProdPlayerHistoryCleanupOff([string]$text) {
         }
         $text = [regex]::Replace($text, $pattern, ('${1}' + $key + ': false'))
     }
-    return $text
+    $modePattern = '(?m)^([ \t]{2})retention_mode:[ \t]*"[^"]*"[ \t]*(?:#.*)?$'
+    $modeCount = [regex]::Matches($text, $modePattern).Count
+    if ($modeCount -ne 1) {
+        throw "[FATAL] player 模板 retention_mode 锚点异常(count=$modeCount),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text, $modePattern, '${1}retention_mode: "report_only"')
 }
 
 # owner 权威库 DSN 注入(§9.22):整行替换 owner.yaml 的 node.mysql_client.dsn。
@@ -2042,7 +2052,7 @@ try {
         }
         if ($Prod -and $s.Name -eq 'player') {
             $out = Set-ProdPlayerExperienceOff $out
-            $out = Set-ProdPlayerHistoryCleanupOff $out
+            $out = Set-ProdPlayerRetentionOff $out
         }
         if ($Prod) { $out = Set-ProdReflectionOff $s.Name $out }
         if ($s.Name -eq 'owner' -and -not [string]::IsNullOrWhiteSpace($OwnerStoreDsn)) {

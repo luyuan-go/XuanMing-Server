@@ -17,6 +17,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/safego"
@@ -156,106 +157,121 @@ func (u *PlayerUsecase) RunPushOutboxPublisher(ctx context.Context) {
 	}
 }
 
-// RunExpHistoryJanitor 启动 exp_history 幂等收据的后台清理循环,直到 ctx 取消。
+// retentionSweepInterval / retentionSweepBatch 是两个 janitor 共用的节拍与批大小。
+// 复用同一对常量,避免"两个 janitor 各拍一个数"后再也说不清哪个才是本服口径。
+const (
+	retentionSweepInterval = time.Hour
+	retentionSweepBatch    = 1000
+)
+
+// RunExpHistoryJanitor 启动 exp_history 幂等收据的保留期循环,直到 ctx 取消。
 //
-// **默认关闭**(审计 P1):battle_result progress 出箱是永久重试链(退避上限 5min,
-// 无总重试期限)。入账成功但响应丢失/删行持续失败超过留存期时,清掉收据 = 同一事件
-// 再次入账(双发)。幂等正确性优先于表增长;开启(exp_history_cleanup_enabled)的前置
-// 条件是上游出箱先具备**小于留存期的有界重试/隔离期限**,由运维显式确认后配置。
+// **默认只报告不删**(§9.24):janitor 照常跑,每轮统计"有多少行超过留存期"并打 WARN +
+// pandora_db_retention_pending_rows,一行都不删。真删要两道闸同时开:
+// 服务级 `retention_mode: delete` + 本组前置条件 `exp_history_cleanup_enabled: true`。
+//
+// 后者为什么单独存在(审计 P1):battle_result progress 出箱是永久重试链(退避上限 5min,
+// 无总重试期限)。入账成功但响应丢失 / 删行持续失败超过留存期时,清掉收据 = 同一事件
+// 再次入账(双发)。幂等正确性优先于表增长,所以即便总闸开着,这一组也要单独确认
+// "上游已具备小于留存期的有界重试 / 隔离期限"才允许删。
+//
+// 早先的实现是前置条件没确认就**整个不跑** —— 那等于既不删也不报,§9.24 要的待清理量
+// 彻底不可见,库在无人知晓的情况下涨。现在改成降级为 report_only。
 // 多副本并发 DELETE ... LIMIT 安全(各删各的行);表按 PK 升序扫,老行在前。
 func (u *PlayerUsecase) RunExpHistoryJanitor(ctx context.Context) {
-	if !u.cfg.ExpHistoryCleanupEnabled {
-		plog.With(ctx).Infow("msg", "exp_history_janitor_disabled",
-			"hint", "progress 出箱无总重试期限,清收据会破坏幂等;上游具备有界重试后再显式开启")
-		return
-	}
-	const (
-		sweepInterval = time.Hour
-		purgeBatch    = 1000
+	u.runRetentionJanitor(ctx, "player_exp_history_janitor",
+		func() time.Time { return time.Now().Add(-u.cfg.ExpHistoryRetentionOrDefault()) },
+		u.cfg.ExpHistoryRetentionMode,
+		u.expHistoryRetentionSweeps(),
 	)
-	ticker := time.NewTicker(sweepInterval)
+}
+
+// RunHistoryJanitor 启动 mmr_history / attr_point_grants / talent_point_grants /
+// skill_card_grants 幂等历史的保留期循环,直到 ctx 取消(CLAUDE.md §9 不变量 24:只增表必须有界)。
+//
+// 默认同样只报告不删。真删的两道闸是 `retention_mode: delete` + `history_cleanup_enabled: true`;
+// 后者的前置条件与 exp_history 同源但不同上游:kafka player.update 消费与授予补扫是
+// at-least-once,清掉幂等行后同一事件重放 = 双发(重复加段位分 / 加点 / 重复发卡),
+// 必须先确认上游重放期限(kafka retention / 补扫窗口)小于留存期(默认 90 天,下限 30 天)。
+func (u *PlayerUsecase) RunHistoryJanitor(ctx context.Context) {
+	u.runRetentionJanitor(ctx, "player_history_janitor",
+		func() time.Time { return time.Now().Add(-u.cfg.HistoryRetentionOrDefault()) },
+		u.cfg.HistoryRetentionMode,
+		u.historyRetentionSweeps(),
+	)
+}
+
+// retentionSweep 是一张表的保留期处理入口(表名只用于日志,不拼进 SQL)。
+type retentionSweep struct {
+	table string
+	sweep func(context.Context, dbguard.Mode, time.Time, int) (dbguard.Outcome, error)
+}
+
+// expHistoryRetentionSweeps / historyRetentionSweeps 把实际登记清单集中在可测试入口。
+// 新增只增表时必须在这里接入,对应的测试会在漏接时直接失败。
+func (u *PlayerUsecase) expHistoryRetentionSweeps() []retentionSweep {
+	return []retentionSweep{{"exp_history", u.repo.SweepExpHistory}}
+}
+
+func (u *PlayerUsecase) historyRetentionSweeps() []retentionSweep {
+	return []retentionSweep{
+		{"mmr_history", u.repo.SweepMMRHistory},
+		{"attr_point_grants", u.repo.SweepAttrPointGrants},
+		{"talent_point_grants", u.repo.SweepTalentPointGrants},
+		{"skill_card_grants", u.repo.SweepSkillCardGrants},
+	}
+}
+
+// runRetentionJanitor 是两个 janitor 的共同循环:按节拍取一次 mode 与 cutoff,
+// 逐表 sweep。mode 每轮现取(而不是启动时定死),这样改配置重启副本即可生效,
+// 也不会出现"半个循环用旧模式"的错位。
+func (u *PlayerUsecase) runRetentionJanitor(
+	ctx context.Context, name string, cutoffAt func() time.Time,
+	modeOf func() dbguard.Mode, sweeps []retentionSweep,
+) {
+	ticker := time.NewTicker(retentionSweepInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			safego.Run(ctx, "player_exp_history_janitor", func() {
-				cutoff := time.Now().Add(-u.cfg.ExpHistoryRetentionOrDefault())
-				var total int64
-				for ctx.Err() == nil {
-					n, err := u.repo.PurgeExpHistory(ctx, cutoff, purgeBatch)
-					if err != nil {
-						plog.With(ctx).Warnw("msg", "exp_history_purge_failed", "purged", total, "err", err)
-						break
-					}
-					total += n
-					if n < purgeBatch {
-						break
-					}
-				}
-				if total > 0 {
-					plog.With(ctx).Infow("msg", "exp_history_purged", "rows", total)
+			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,下轮继续。
+			safego.Run(ctx, name, func() {
+				mode, cutoff := modeOf(), cutoffAt()
+				for _, s := range sweeps {
+					u.drainRetention(ctx, mode, cutoff, s)
 				}
 			})
 		}
 	}
 }
 
-// RunHistoryJanitor 启动 mmr_history / attr_point_grants / talent_point_grants 幂等历史
-// 的后台清理循环,直到 ctx 取消(CLAUDE.md §9 不变量 24:只增表必须有界)。
+// drainRetention 处理一张表:delete 模式下小批量循环删到追平,report_only 只跑一轮。
 //
-// **默认关闭**,与 RunExpHistoryJanitor 同理由:上游 kafka player.update 消费与授予补扫
-// 是 at-least-once,清掉幂等行后同一事件重放 = 双发(重复加段位分/加点)。开启前置条件:
-// 上游重放期限(kafka retention / 补扫窗口)必须小于留存期(默认 90 天,下限 30 天)。
-// 多副本并发 DELETE ... LIMIT 安全(各删各的行)。
-func (u *PlayerUsecase) RunHistoryJanitor(ctx context.Context) {
-	if !u.cfg.HistoryCleanupEnabled {
-		plog.With(ctx).Infow("msg", "history_janitor_disabled",
-			"hint", "mmr/点数授予幂等历史不清理;确认上游重放期限 < 留存期后显式开启 history_cleanup_enabled")
-		return
-	}
-	const (
-		sweepInterval = time.Hour
-		purgeBatch    = 1000
-	)
-	type purgeFn struct {
-		name string
-		fn   func(context.Context, time.Time, int) (int64, error)
-	}
-	purges := []purgeFn{
-		{"mmr_history", u.repo.PurgeMMRHistory},
-		{"attr_point_grants", u.repo.PurgeAttrPointGrants},
-		{"talent_point_grants", u.repo.PurgeTalentPointGrants},
-	}
-	ticker := time.NewTicker(sweepInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
+// report_only 下**不循环**:那一轮的 COUNT 已经给出全量待清理规模(不受 batch 截断),
+// 再循环只是把同一条 COUNT 重复执行 —— 循环的意义是"追平积压",而只报告时积压永远
+// 追不平,循环会变成每轮固定跑满的空转(与 battle_result drainPurge 同一处置)。
+func (u *PlayerUsecase) drainRetention(ctx context.Context, mode dbguard.Mode, cutoff time.Time, s retentionSweep) {
+	var deleted int64
+	for ctx.Err() == nil {
+		out, err := s.sweep(ctx, mode, cutoff, retentionSweepBatch)
+		if err != nil {
+			plog.With(ctx).Warnw("msg", "retention_sweep_failed",
+				"table", s.table, "mode", mode.String(), "deleted_before_fail", deleted, "err", err)
 			return
-		case <-ticker.C:
-			safego.Run(ctx, "player_history_janitor", func() {
-				cutoff := time.Now().Add(-u.cfg.HistoryRetentionOrDefault())
-				for _, p := range purges {
-					var total int64
-					for ctx.Err() == nil {
-						n, err := p.fn(ctx, cutoff, purgeBatch)
-						if err != nil {
-							plog.With(ctx).Warnw("msg", "history_purge_failed", "table", p.name, "purged", total, "err", err)
-							break
-						}
-						total += n
-						if n < purgeBatch {
-							break
-						}
-					}
-					if total > 0 {
-						plog.With(ctx).Infow("msg", "history_purged", "table", p.name, "rows", total)
-					}
-				}
-			})
 		}
+		if mode != dbguard.ModeDelete {
+			// 待清理量的 WARN + gauge 已由 dbguard.SweepTable 统一打,这里不重复。
+			return
+		}
+		deleted += out.Deleted
+		if !out.Truncated {
+			break
+		}
+	}
+	if deleted > 0 {
+		plog.With(ctx).Infow("msg", "retention_swept", "table", s.table, "deleted", deleted)
 	}
 }
 

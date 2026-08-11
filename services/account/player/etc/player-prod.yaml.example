@@ -51,8 +51,28 @@ player:
   max_exp_per_grant: 1000000
   push_outbox_interval: "1s"
   push_outbox_batch: 128
-  # 经验幂等收据留存期(默认/下限 7d,须覆盖 battle_result progress 出箱最长重试窗)
+  # 保留期清理(§9.24):生产**留空 retention_mode = report_only** —— janitor 照常跑,
+  # 每小时统计各表超期行数并打 WARN(db_retention_pending_not_deleted)+
+  # pandora_db_retention_pending_rows gauge,一行都不删。库会继续增长,靠这两个信号
+  # (以及 `dbcheck -pending`)让人判断何时开删。
+  #
+  # 开删是独立显式动作,需要两道闸同时开:
+  #   ① retention_mode: "delete"
+  #   ② 对应组的前置条件确认:exp_history_cleanup_enabled(上游 battle_result progress
+  #      出箱必须先有小于留存期的有界重试)/ history_cleanup_enabled(kafka retention 与
+  #      授予补扫窗口必须先小于留存期)。
+  # 前置条件未满足就开删 = 迟到重放重复入账经验 / MMR / 点数 / 技能卡,且不可逆。
+  # 首次开删前先跑 `dbcheck -pending` 看积压规模,低峰期发布。
+  # retention_mode: "delete"
+  # exp_history_cleanup_enabled: true
+  # history_cleanup_enabled: true
+  #
+  # 经验幂等收据留存期(默认/下限 7d,须覆盖 battle_result progress 出箱最长重试窗)。
+  # report_only 下它同时是"多少行算待清理"的报告口径。
   exp_history_retention: "168h"
+  # mmr_history / attr_point_grants / talent_point_grants / skill_card_grants 留存天数
+  # (默认 90,钳 [30,90];报告与实删共用同一值)
+  history_retention_days: 90
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):生产强制档,顶号后旧 JWT 立即失效;
 # 权威端点漏配拒启,权威不可达 fail-closed。与 gen_cluster_config.ps1 -Prod 产物一致。

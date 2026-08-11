@@ -212,6 +212,9 @@ loadRewardRecord → Unmarshal RewardClaimStorageRecord(保留 stored 原 messag
 | `player_equipment` | `player_id+slot` | 出战装备预设 |
 | `player_talents` | `player_id+talent_id` | 已点天赋等级 + 该节点实际消耗点数(`spent_points`,可点数按它求和,不按等级和反推) |
 | `talent_point_grants` | uk `player_id+idempotency_key` | 天赋点授予幂等收据 |
+| `player_skill_cards` | uk `player_id+card_id` | 技能卡持有状态(等级 + 碎片余量) |
+| `player_skill_slots` | uk `player_id+slot` / `player_id+card_id` | 4 个技能卡槽的全量装配;同卡不可占两槽 |
+| `skill_card_grants` | uk `player_id+idempotency_key` | 技能卡/碎片发放幂等收据 |
 | `exp_history` | uk `player_id+idempotency_key` | 经验入账幂等收据 |
 | `player_push_outbox` | PK `id` | 经验推送出箱(与入账同事务写,FIFO 发布) |
 | `player_reward_claims` | PK `player_id` | 领奖位图 blob(`RewardClaimStorageRecord`)+ 乐观锁 `version` |
@@ -220,9 +223,25 @@ loadRewardRecord → Unmarshal RewardClaimStorageRecord(保留 stored 原 messag
 (`node.redis_client` 指向共享实例)做会话现行性门校验。
 
 **保留期(不变量 §9.24)**:`exp_history`(默认 7d)、`mmr_history` / `attr_point_grants` /
-`talent_point_grants`(默认 90d,下限 30d)有后台清理 janitor,但**默认关闭**——上游(battle_result
-progress 出箱 / kafka 重放 / 授予补扫)重放期限尚未小于留存期前,清幂等收据会导致同一事件双发,故幂等正确性
-优先于表增长(见配置项与 `RunExpHistoryJanitor` / `RunHistoryJanitor` 注释)。
+`talent_point_grants` / `skill_card_grants`(默认 90d,钳 `[30,90]`)由 `RunExpHistoryJanitor` /
+`RunHistoryJanitor` 每小时跑一轮,**默认只报告不删**(`retention_mode` 留空 = `report_only`):
+只统计超期行数并打 `WARN db_retention_pending_not_deleted` + `pandora_db_retention_pending_rows`
+gauge,一行都不删。报告口径与真删口径共用同一个 `WHERE`(`pkg/dbguard.SweepTable` 强制),
+不会出现"报告说 0 行、实际删了一堆"。
+
+**真删要两道闸同时开**:
+
+| 闸 | 键 | 问的问题 |
+|---|---|---|
+| 服务总闸 | `retention_mode: "delete"` | 这个服务现在允许删数据吗?(运维口径,§9.24 默认不允许) |
+| 每组前置条件 | `exp_history_cleanup_enabled` / `history_cleanup_enabled` | 这一组的上游重放窗口已经小于留存期了吗?(技术口径) |
+
+分两道是因为前置条件对两组并不同时成立:`exp_history` 卡在 battle_result progress 出箱
+**没有总重试期限**;`mmr_history` 那一组卡在 kafka retention 与授予补扫窗口。任一没确认就删幂等
+收据 = 同一事件双发(重复加经验 / 段位分 / 点数 / 重复发卡),且删完才发现、不可逆。
+`retention_mode` 写了无法识别的值启动即 fail-fast 拒启(不会被猜成 `delete`);
+`-Prod` 产物由 `gen_cluster_config.ps1` 机械置成 `report_only` + 两个前置开关 `false`。
+首次开删前先 `dbcheck -pending` 看积压规模,低峰期发布。
 
 ## 幂等与关键约束
 
@@ -253,10 +272,11 @@ progress 出箱 / kafka 重放 / 授予补扫)重放期限尚未小于留存期�
 | `max_exp_per_grant` | `1000000` | 单次 `AddExperience` 入账上限(防一次灌满) |
 | `push_outbox_interval` | `1s` | 经验推送出箱发布轮询间隔 |
 | `push_outbox_batch` | `128` | 每轮出箱取多少条(满批自动续跑排空) |
-| `exp_history_cleanup_enabled` | `false` | `exp_history` 清理开关(默认关,上游有界重试前开启会破坏幂等) |
-| `exp_history_retention` | `7d` | `exp_history` 留存期(下限 7d,上限钳 90d) |
-| `history_cleanup_enabled` | `false` | `mmr_history` / 点数授予历史清理开关(默认关,同上理由) |
-| `history_retention_days` | `90` | 上述三表留存天数(下限 30,上限 90) |
+| `retention_mode` | `report_only` | 保留期清理总闸(§9.24);`delete` 才真删,拼错启动 fail-fast |
+| `exp_history_cleanup_enabled` | `false` | `exp_history` 删除前置条件确认(未确认 → 降级只报告;上游出箱无总重试期限时开启会破坏幂等) |
+| `exp_history_retention` | `7d` | `exp_history` 留存期(下限 7d,上限钳 90d;报告与实删同一值) |
+| `history_cleanup_enabled` | `false` | `mmr_history` / 点数授予 / 技能卡授予历史的删除前置条件确认(同上理由) |
+| `history_retention_days` | `90` | 上述四表留存天数(下限 30,上限 90;报告与实删同一值) |
 
 > **强依赖**:`config_table.dir`(等级经验表 `j_玩家等级经验.xlsx` 唯一数值源)、`node.mysql_client.dsn`
 > (`pandora_player`)、`kafka.brokers`(消费 `player.update`)缺失均在监听端口前 fail-closed。启动还跑
