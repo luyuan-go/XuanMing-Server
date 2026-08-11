@@ -18,8 +18,9 @@
 #   3. -Prod 产物已接线 DSN 注入的服务(owner / login)不得残留 pandora_dev_pwd。
 #   4. 非 -Prod(本地 dev)行为不变:dev mysql DSN / require_tidb: false / 三个开关仍为 true。
 #
-# 负向用例一律断言**错误文本**而不只是退出码非零:-Prod 校验项很多,只判 exit!=0 会让用例在
-# 「因为另一个原因被拒」时继续 PASS,变成证明不了任何事的空转测试。
+# 负向用例一律断言**稳定 ASCII 错误码**而不只是退出码非零:-Prod 校验项很多,只判 exit!=0
+# 会让用例在「因为另一个原因被拒」时继续 PASS,变成证明不了任何事的空转测试。不能匹配
+# 中文错误文本:Windows Jenkins 的 cmd OEM code page 会把子 pwsh 输出转成 `?`,造成假失败。
 [CmdletBinding()]
 param()
 
@@ -76,16 +77,16 @@ function Assert-Rejected([string[]]$AccountDsnArgs, [string]$MustContain, [strin
 
 try {
     # ── 1) -Prod 负向:缺失 / dev 凭据 / dev mysql / 错库 / 错 collation ──
-    Assert-Rejected @() 'PANDORA_ACCOUNT_TIDB_DSN' `
+    Assert-Rejected @() '[ACCOUNT_DSN_REQUIRED]' `
         '-Prod 缺 account TiDB DSN 必须拒绝生成'
     Assert-Rejected @('-AccountStoreDsn', 'pandora:pandora_dev_pwd@tcp(tidb.pandora.svc:4000)/pandora_account?parseTime=true') `
-        '公开 dev 凭据' '-Prod account DSN 含公开 dev 凭据必须拒绝'
+        '[ACCOUNT_DSN_DEV_CREDENTIAL]' '-Prod account DSN 含公开 dev 凭据必须拒绝'
     Assert-Rejected @('-AccountStoreDsn', 'prod_login:real-pwd-x@tcp(mysql:3306)/pandora_account?parseTime=true') `
-        'dev MySQL' '-Prod account DSN 指向 dev MySQL(mysql:3306)必须拒绝'
+        '[ACCOUNT_DSN_DEV_MYSQL]' '-Prod account DSN 指向 dev MySQL(mysql:3306)必须拒绝'
     Assert-Rejected @('-AccountStoreDsn', 'prod_login:real-pwd-x@tcp(tidb.pandora.svc:4000)/pandora_player?parseTime=true') `
-        '必须指向 pandora_account 库' '-Prod account DSN 未指向 pandora_account 库必须拒绝'
+        '[ACCOUNT_DSN_DATABASE]' '-Prod account DSN 未指向 pandora_account 库必须拒绝'
     Assert-Rejected @('-AccountStoreDsn', 'prod_login:real-pwd-x@tcp(tidb.pandora.svc:4000)/pandora_account?collation=utf8mb4_bin') `
-        'utf8mb4_bin' '-Prod account DSN 用 utf8mb4_bin 必须拒绝(账号名唯一键语义翻转)'
+        '[ACCOUNT_DSN_COLLATION]' '-Prod account DSN 用 utf8mb4_bin 必须拒绝(账号名唯一键语义翻转)'
 
     # ── 2) -Prod 正向:DSN 落位 + require_tidb + dev 后门全关 ──
     $ok = Invoke-ProdGen @('-AccountStoreDsn', $GoodAccountDsn) $OutDirProd

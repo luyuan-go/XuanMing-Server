@@ -497,27 +497,27 @@ if ($Prod) {
 # $ProdDevCredentialWired 断言)。两条都属发布阻断级。
 if ($Prod) {
     if ([string]::IsNullOrWhiteSpace($AccountStoreDsn)) {
-        throw '[FATAL] -Prod 必须提供 -AccountStoreDsn 或环境变量 PANDORA_ACCOUNT_TIDB_DSN(login 账号库真 TiDB DSN,pandora_account 库)。' +
+        throw '[FATAL][ACCOUNT_DSN_REQUIRED] -Prod 必须提供 -AccountStoreDsn 或环境变量 PANDORA_ACCOUNT_TIDB_DSN(login 账号库真 TiDB DSN,pandora_account 库)。' +
               ' 该库承载全服登录定序事务且不可分片降级,不允许 -Prod 产物继承 dev mysql 配置(公开凭据 pandora_dev_pwd)。'
     }
     if ($AccountStoreDsn -match '[\x00-\x1F\x7F-\x9F]') {
         throw '[FATAL] account DSN 含控制字符(换行/制表等),多为误带的尾部空白,请清理后再注入。'
     }
     if ($AccountStoreDsn.Contains('pandora_dev_pwd')) {
-        throw '[FATAL] -Prod 的 account DSN 不能使用公开 dev 凭据(pandora_dev_pwd)。请换成 CI/CD 注入的真 TiDB 凭据。'
+        throw '[FATAL][ACCOUNT_DSN_DEV_CREDENTIAL] -Prod 的 account DSN 不能使用公开 dev 凭据(pandora_dev_pwd)。请换成 CI/CD 注入的真 TiDB 凭据。'
     }
     if ($AccountStoreDsn.Contains('mysql:3306') -or $AccountStoreDsn.Contains('127.0.0.1:3307')) {
-        throw '[FATAL] -Prod 的 account DSN 指向 dev MySQL(mysql:3306 / 127.0.0.1:3307)。生产必须连 TiDB(deploy/tidb-init/03-account-tidb.sql)。'
+        throw '[FATAL][ACCOUNT_DSN_DEV_MYSQL] -Prod 的 account DSN 指向 dev MySQL(mysql:3306 / 127.0.0.1:3307)。生产必须连 TiDB(deploy/tidb-init/03-account-tidb.sql)。'
     }
     if ($AccountStoreDsn -cnotmatch '/pandora_account(?:[?]|$)') {
-        throw '[FATAL] -Prod 的 account DSN 必须指向 pandora_account 库(形如 user:pwd@tcp(tidb-host:4000)/pandora_account?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci)。'
+        throw '[FATAL][ACCOUNT_DSN_DATABASE] -Prod 的 account DSN 必须指向 pandora_account 库(形如 user:pwd@tcp(tidb-host:4000)/pandora_account?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci)。'
     }
     # accounts.account 的唯一性语义由列 collation 决定(Go 侧对账号串零归一化)。dev 单机 MySQL
     # 用 utf8mb4_0900_ai_ci(大小写/口音不敏感 + NO PAD);DSN 若改成 utf8mb4_bin,连接级
     # collation 翻转会让「大小写不同的同名账号」被当成两个账号,老玩家登不进、且可被抢注。
     # 这里只挡住显式写错的情形;真正的把关是 login 启动期对**列**做行为探针(§16 隐蔽 bug)。
     if ($AccountStoreDsn -match 'collation=utf8mb4_bin') {
-        throw '[FATAL] -Prod 的 account DSN 不能用 collation=utf8mb4_bin:accounts.account 是客户端上报的账号名且带唯一键,' +
+        throw '[FATAL][ACCOUNT_DSN_COLLATION] -Prod 的 account DSN 不能用 collation=utf8mb4_bin:accounts.account 是客户端上报的账号名且带唯一键,' +
               'Go 侧无归一化,大小写敏感化会让存量玩家登不进并开出同名抢注口子。请沿用 utf8mb4_0900_ai_ci(TiDB v7.4+ 原生支持)。'
     }
 } elseif (-not [string]::IsNullOrWhiteSpace($AccountStoreDsn)) {
