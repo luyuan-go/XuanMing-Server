@@ -127,6 +127,9 @@ type MatchRepo interface {
 	ReserveTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
 	// RequeueTicket 把票据重新写回 queue(确认失败退回,保留 enqueued_at_ms 排队时长)。
 	RequeueTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
+	// RequeueTicketIfOwned 守卫退队:仅当票据仍存在且存储态 MatchId==expectedMatchID 时写回,
+	// 封退票与 CancelMatch 删票并发的盲写复活竞态(见实现注释)。返回是否真正退队。
+	RequeueTicketIfOwned(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, expectedMatchID uint64, ticketTTL time.Duration) (bool, error)
 	// DeleteTicket 删票据 record + 移出 queue。
 	DeleteTicket(ctx context.Context, ticketID uint64) error
 	// DeleteTicketIfMatch 仅当 ticket 仍精确属于 expectedMatchID 时 WATCH/CAS 删除。
@@ -406,6 +409,67 @@ func (r *RedisMatchRepo) ReserveTicket(ctx context.Context, ticket *matchv1.Matc
 
 func (r *RedisMatchRepo) RequeueTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error {
 	return r.AddTicket(ctx, ticket, ticketTTL)
+}
+
+// RequeueTicketIfOwned 守卫退队(2026-08-10,封 failMatch/rollback 的盲 SET 复活竞态):
+// 只有票据仍存在**且**其存储态 MatchId==expectedMatchID 时,才把它(MatchId 已置 0)
+// 写回并重入 queue;返回 requeued 表示是否真正退队。
+//
+// 竞态背景:退票路径 GetTicket 读到 T(属 match M)后,若并发的玩家 CancelMatch 先 CAS
+// 删了 T 并释放全员 claim,原 RequeueTicket 的盲 SET 会把 T「复活」进队列——而 claim 已释放,
+// 已取消的玩家会被下一轮 matchOnce 重新凑局/白拉 DS→no_show 记罚,直接违反「退出路径零副作用」。
+// 本函数在 CAS 下发现 T 已消失(取消)或已归属他局时 no-op,不复活、不窃取。
+// 与 ReserveTicket 同构(WATCH+MULTI;queueKey 跨 slot 故 ZADD 置于 CAS 成功后)。
+func (r *RedisMatchRepo) RequeueTicketIfOwned(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, expectedMatchID uint64, ticketTTL time.Duration) (bool, error) {
+	payload, err := marshalTicket(ticket) // ticket.MatchId 已由调用方置 0
+	if err != nil {
+		return false, err
+	}
+	key := ticketKey(ticket.TicketId)
+	for attempt := 0; attempt < ticketCASRetry; attempt++ {
+		var wrote bool
+		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			wrote = false
+			b, gerr := tx.Get(ctx, key).Bytes()
+			if gerr == redis.Nil {
+				return nil // 已被取消删除 → no-op,绝不复活
+			}
+			if gerr != nil {
+				return gerr
+			}
+			cur, uerr := unmarshalTicket(ticket.TicketId, b)
+			if uerr != nil {
+				return uerr
+			}
+			if cur.MatchId != expectedMatchID {
+				return nil // 已退队(0)/已归属他局 → no-op,绝不窃取他局在票
+			}
+			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, key, payload, 0)
+				return nil
+			})
+			if perr != nil {
+				return perr
+			}
+			wrote = true
+			return nil
+		}, key)
+		if txErr == redis.TxFailedErr {
+			continue // 并发写(取消/预留),重读再判
+		}
+		if txErr != nil {
+			return false, txErr
+		}
+		if !wrote {
+			return false, nil
+		}
+		// Cluster 兼容:queueKey 与 ticketKey 不同 slot,CAS 外独立 ZADD 重入池。
+		if zerr := r.EnqueueTicket(ctx, ticket); zerr != nil {
+			return true, zerr
+		}
+		return true, nil
+	}
+	return false, errcode.New(errcode.ErrMatchConcurrent, "requeue ticket %d concurrent retry exhausted", ticket.TicketId)
 }
 
 func (r *RedisMatchRepo) DeleteTicket(ctx context.Context, ticketID uint64) error {

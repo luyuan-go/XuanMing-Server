@@ -235,7 +235,7 @@ func openInventoryMySQLFixture(t *testing.T) *inventoryMySQLFixture {
 	t.Helper()
 	serverDSN := strings.TrimSpace(os.Getenv("PANDORA_TEST_MYSQL_DSN"))
 	if serverDSN == "" {
-		t.Skip("未设置 PANDORA_TEST_MYSQL_DSN，跳过 EnsureAuctionEscrow 真 MySQL 集成测试")
+		t.Skip("未设置 PANDORA_TEST_MYSQL_DSN，跳过 inventory 真 MySQL 集成测试")
 	}
 	cfg, err := mysql.ParseDSN(serverDSN)
 	if err != nil {
@@ -426,6 +426,274 @@ func TestUseItemEmptiedRowDeleted(t *testing.T) {
 	if got := queryItemCount(t, f.db, player, item); got != 2 {
 		t.Fatalf("重建后应为 2,实际 %d", got)
 	}
+}
+
+func TestCheckInstancesOwnedExactPair_MySQL(t *testing.T) {
+	f := openInventoryMySQLFixture(t)
+	repo := NewMySQLInventoryRepo(f.db)
+	if _, err := f.db.Exec(`INSERT INTO player_item_instance
+(instance_id, player_id, item_config_id, slot_index) VALUES
+(9001, 701, 10003, 0), (9002, 701, 10003, 1), (9003, 702, 10003, 0)`); err != nil {
+		t.Fatalf("seed instances: %v", err)
+	}
+	owned, err := repo.CheckInstancesOwned(context.Background(), 701, []InstanceOwnershipQuery{
+		{InstanceID: 9001, ItemConfigID: 10003}, // exact
+		{InstanceID: 9002, ItemConfigID: 10027}, // config mismatch
+		{InstanceID: 9003, ItemConfigID: 10003}, // owner mismatch
+		{InstanceID: 9999, ItemConfigID: 10003}, // missing
+	})
+	if err != nil {
+		t.Fatalf("CheckInstancesOwned: %v", err)
+	}
+	if len(owned) != 1 || owned[0] != 9001 {
+		t.Fatalf("owned=%v want=[9001]", owned)
+	}
+}
+
+// TestItemClosureTransactions_MySQL 锁住本轮道具闭环新增的四条真实 MySQL 事务：
+// 战斗消耗、战斗丢弃与大厅丢弃都必须只扣一次并回放首次 remaining；实例出售必须把
+// 删除实例、金币入账与幂等流水放在同一事务里，绑定/入账失败时完整回滚。
+func TestItemClosureTransactions_MySQL(t *testing.T) {
+	f := openInventoryMySQLFixture(t)
+	repo := NewMySQLInventoryRepo(f.db)
+	ctx := context.Background()
+
+	type stackMutation func(context.Context, uint64, uint32, int64, string, string) (int64, bool, error)
+	stackCases := []struct {
+		name   string
+		player uint64
+		item   uint32
+		key    string
+		op     string
+		call   stackMutation
+	}{
+		{name: "ConsumeBattleItem", player: 801, item: 10001, key: "battle-consume-801", op: "battle_consume", call: repo.ConsumeBattleItem},
+		{name: "DiscardBattleItem", player: 802, item: 10006, key: "battle-discard-802", op: "battle_discard", call: repo.DiscardBattleItem},
+		{name: "DiscardItem", player: 803, item: 10007, key: "lobby-discard-803", op: "discard", call: repo.DiscardItem},
+	}
+	for _, tc := range stackCases {
+		t.Run(tc.name, func(t *testing.T) {
+			seedItem(t, f.db, tc.player, tc.item, 5)
+			remaining, already, err := tc.call(ctx, tc.player, tc.item, 2, tc.key, "mysql closure")
+			if err != nil || already || remaining != 3 {
+				t.Fatalf("首次扣减: remaining=%d already=%v err=%v", remaining, already, err)
+			}
+
+			// 模拟服务端已提交但调用方丢失回包：同一请求重试只回放首次快照，不再次扣减。
+			remaining, already, err = tc.call(ctx, tc.player, tc.item, 2, tc.key, "retry after lost response")
+			if err != nil || !already || remaining != 3 {
+				t.Fatalf("丢回包重放: remaining=%d already=%v err=%v", remaining, already, err)
+			}
+			if got := queryItemCount(t, f.db, tc.player, tc.item); got != 3 {
+				t.Fatalf("重放后只能扣一次: got=%d want=3", got)
+			}
+			if got := queryLedgerOp(t, f.db, tc.player, tc.key); got != tc.op {
+				t.Fatalf("ledger op=%q want=%q", got, tc.op)
+			}
+
+			// 同 key 改数量必须冲突，且不能改变库存。
+			if _, _, err := tc.call(ctx, tc.player, tc.item, 1, tc.key, "conflicting retry"); errcode.As(err) != errcode.ErrInventoryIdempotencyConflict {
+				t.Fatalf("同 key 改数量应冲突, got %v", err)
+			}
+			if got := queryItemCount(t, f.db, tc.player, tc.item); got != 3 {
+				t.Fatalf("冲突重试不得扣库存: got=%d want=3", got)
+			}
+		})
+	}
+
+	t.Run("SellInstance", func(t *testing.T) {
+		const (
+			player        = uint64(804)
+			instance      = uint64(98001)
+			boundInstance = uint64(98002)
+			item          = uint32(10003)
+			key           = "sell-instance-804"
+		)
+		seedGold(t, f.db, player, 10)
+		seedInstance(t, f.db, player, instance, item, false)
+		gold, already, err := repo.SellInstance(ctx, player, instance, item, 180, key, "mysql closure")
+		if err != nil || already || gold != 190 {
+			t.Fatalf("首次出售: gold=%d already=%v err=%v", gold, already, err)
+		}
+		if queryInstanceExists(t, f.db, player, instance) {
+			t.Fatal("出售成功后实例必须删除")
+		}
+		if got := queryGold(t, f.db, player); got != 190 {
+			t.Fatalf("出售金币=%d want=190", got)
+		}
+		if got := queryLedgerOp(t, f.db, player, key); got != "sell_inst" {
+			t.Fatalf("ledger op=%q want=sell_inst", got)
+		}
+
+		// 实例已删除也能靠 ledger 回放首次金币快照，不重复加钱。
+		gold, already, err = repo.SellInstance(ctx, player, instance, item, 180, key, "retry after lost response")
+		if err != nil || !already || gold != 190 {
+			t.Fatalf("丢回包重放: gold=%d already=%v err=%v", gold, already, err)
+		}
+		if got := queryGold(t, f.db, player); got != 190 {
+			t.Fatalf("重放不得重复加钱: got=%d want=190", got)
+		}
+		gold, already, err = repo.SellInstance(ctx, player, instance, item, 181, key, "retry after price reload")
+		if err != nil || !already || gold != 190 {
+			t.Fatalf("同客户端意图热更售价必须回放首次结果: gold=%d already=%v err=%v", gold, already, err)
+		}
+
+		seedInstance(t, f.db, player, boundInstance, item, true)
+		if _, _, err := repo.SellInstance(ctx, player, boundInstance, item, 180, "sell-bound-804", ""); errcode.As(err) != errcode.ErrInventoryInstanceBound {
+			t.Fatalf("绑定实例必须拒绝出售, got %v", err)
+		}
+		if !queryInstanceExists(t, f.db, player, boundInstance) {
+			t.Fatal("绑定保护失败后实例必须保留")
+		}
+		if got := queryGold(t, f.db, player); got != 190 {
+			t.Fatalf("绑定保护失败不得加钱: got=%d want=190", got)
+		}
+		if got := queryLedgerCount(t, f.db, player, "sell-bound-804"); got != 0 {
+			t.Fatalf("绑定保护失败必须回滚 ledger: got=%d", got)
+		}
+	})
+
+	t.Run("SellItemPriceReloadReplaysFirstResult", func(t *testing.T) {
+		const (
+			player = uint64(806)
+			item   = uint32(10008)
+			key    = "sell-stack-806"
+		)
+		seedItem(t, f.db, player, item, 5)
+		seedGold(t, f.db, player, 10)
+		remaining, gold, already, err := repo.SellItem(ctx, player, item, 2, 100, key,
+			"sell item=10008 count=2 gold=100")
+		if err != nil || already || remaining != 3 || gold != 110 {
+			t.Fatalf("首次出售 remaining=%d gold=%d already=%v err=%v", remaining, gold, already, err)
+		}
+		remaining, gold, already, err = repo.SellItem(ctx, player, item, 2, 200, key,
+			"sell item=10008 count=2 gold=200")
+		if err != nil || !already || remaining != 3 || gold != 110 {
+			t.Fatalf("价格热更回放 remaining=%d gold=%d already=%v err=%v", remaining, gold, already, err)
+		}
+		if got := queryItemCount(t, f.db, player, item); got != 3 {
+			t.Fatalf("热更重试不得二扣 item=%d", got)
+		}
+		if got := queryGold(t, f.db, player); got != 110 {
+			t.Fatalf("热更重试不得按新价二加 gold=%d", got)
+		}
+	})
+
+	t.Run("LegacySaleLedgerUsesPersistedFirstPrice", func(t *testing.T) {
+		const (
+			stackPlayer    = uint64(807)
+			stackItem      = uint32(10009)
+			stackKey       = "legacy-sell-stack-807"
+			instancePlayer = uint64(808)
+			instanceID     = uint64(98008)
+			instanceItem   = uint32(10003)
+			instanceKey    = "legacy-sell-instance-808"
+		)
+		// 模拟旧版本已按旧价完成并丢失响应：资产状态和 ledger 快照均已提交。
+		seedItem(t, f.db, stackPlayer, stackItem, 3)
+		seedGold(t, f.db, stackPlayer, 110)
+		if _, err := f.db.Exec(`INSERT INTO inventory_ledger
+(player_id,idempotency_key,op,request_fingerprint,detail,result_remaining,result_gold)
+VALUES(?,?,?,?,?,?,?)`, stackPlayer, stackKey, "sell",
+			legacySellFingerprint(stackItem, 2, 100), "sell item=10009 count=2 gold=100", 3, 110); err != nil {
+			t.Fatalf("seed legacy stack ledger: %v", err)
+		}
+		remaining, gold, already, err := repo.SellItem(ctx, stackPlayer, stackItem, 2, 200, stackKey,
+			"sell item=10009 count=2 gold=200")
+		if err != nil || !already || remaining != 3 || gold != 110 {
+			t.Fatalf("legacy stack replay remaining=%d gold=%d already=%v err=%v", remaining, gold, already, err)
+		}
+		if queryItemCount(t, f.db, stackPlayer, stackItem) != 3 || queryGold(t, f.db, stackPlayer) != 110 {
+			t.Fatal("legacy stack replay changed assets")
+		}
+
+		seedGold(t, f.db, instancePlayer, 190) // 旧实例已删除，只剩首次快照。
+		if _, err := f.db.Exec(`INSERT INTO inventory_ledger
+(player_id,idempotency_key,op,request_fingerprint,detail,result_remaining,result_gold)
+VALUES(?,?,?,?,?,0,?)`, instancePlayer, instanceKey, "sell_inst",
+			legacySellInstanceFingerprint(instanceID, instanceItem, 180),
+			"sell instance=98008 item=10003 gold=180", 190); err != nil {
+			t.Fatalf("seed legacy instance ledger: %v", err)
+		}
+		gold, already, err = repo.SellInstance(ctx, instancePlayer, instanceID, instanceItem, 360, instanceKey,
+			"sell instance=98008 item=10003 gold=360")
+		if err != nil || !already || gold != 190 || queryGold(t, f.db, instancePlayer) != 190 {
+			t.Fatalf("legacy instance replay gold=%d already=%v err=%v", gold, already, err)
+		}
+
+		// 旧 hash 不能成为万能通行证：detail 的意图不一致时必须冲突。
+		if _, err := f.db.Exec(`INSERT INTO inventory_ledger
+(player_id,idempotency_key,op,request_fingerprint,detail,result_remaining,result_gold)
+VALUES(?,?,?,?,?,?,?)`, 809, "legacy-malformed-809", "sell",
+			legacySellFingerprint(10010, 2, 100), "sell item=10010 count=3 gold=100", 3, 100); err != nil {
+			t.Fatalf("seed malformed legacy ledger: %v", err)
+		}
+		if _, _, _, err := repo.SellItem(ctx, 809, 10010, 2, 200, "legacy-malformed-809",
+			"sell item=10010 count=2 gold=200"); errcode.As(err) != errcode.ErrInventoryIdempotencyConflict {
+			t.Fatalf("malformed legacy detail must conflict, got %v", err)
+		}
+	})
+
+	t.Run("SellInstanceGoldFailureRollsBack", func(t *testing.T) {
+		const (
+			player   = uint64(805)
+			instance = uint64(98003)
+			item     = uint32(10003)
+			maxGold  = int64(1<<63 - 1)
+		)
+		seedGold(t, f.db, player, maxGold)
+		seedInstance(t, f.db, player, instance, item, false)
+		if _, _, err := repo.SellInstance(ctx, player, instance, item, 1, "sell-overflow-805", ""); errcode.As(err) != errcode.ErrInternal {
+			t.Fatalf("金币溢出应使事务失败, got %v", err)
+		}
+		if !queryInstanceExists(t, f.db, player, instance) {
+			t.Fatal("金币入账失败必须回滚实例删除")
+		}
+		if got := queryGold(t, f.db, player); got != maxGold {
+			t.Fatalf("金币入账失败必须保留原余额: got=%d want=%d", got, maxGold)
+		}
+		if got := queryLedgerCount(t, f.db, player, "sell-overflow-805"); got != 0 {
+			t.Fatalf("金币入账失败必须回滚 ledger: got=%d", got)
+		}
+	})
+}
+
+func seedInstance(t *testing.T, db *sql.DB, playerID, instanceID uint64, itemID uint32, bound bool) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT INTO player_item_instance(instance_id,player_id,item_config_id,bound) VALUES(?,?,?,?)`,
+		instanceID, playerID, itemID, bound); err != nil {
+		t.Fatalf("seed instance player=%d instance=%d: %v", playerID, instanceID, err)
+	}
+}
+
+func queryInstanceExists(t *testing.T, db *sql.DB, playerID, instanceID uint64) bool {
+	t.Helper()
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM player_item_instance WHERE player_id=? AND instance_id=?`,
+		playerID, instanceID).Scan(&count); err != nil {
+		t.Fatalf("query instance player=%d instance=%d: %v", playerID, instanceID, err)
+	}
+	return count == 1
+}
+
+func queryLedgerOp(t *testing.T, db *sql.DB, playerID uint64, key string) string {
+	t.Helper()
+	var op string
+	if err := db.QueryRow(`SELECT op FROM inventory_ledger WHERE player_id=? AND idempotency_key=?`,
+		playerID, key).Scan(&op); err != nil {
+		t.Fatalf("query ledger player=%d key=%s: %v", playerID, key, err)
+	}
+	return op
+}
+
+func queryLedgerCount(t *testing.T, db *sql.DB, playerID uint64, key string) int {
+	t.Helper()
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM inventory_ledger WHERE player_id=? AND idempotency_key=?`,
+		playerID, key).Scan(&count); err != nil {
+		t.Fatalf("count ledger player=%d key=%s: %v", playerID, key, err)
+	}
+	return count
 }
 
 func queryGold(t *testing.T, db *sql.DB, playerID uint64) int64 {

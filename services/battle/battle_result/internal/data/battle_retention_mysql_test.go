@@ -30,7 +30,7 @@ func openBattleRetentionDB(t *testing.T) *sql.DB {
 	t.Helper()
 	serverDSN := strings.TrimSpace(os.Getenv("PANDORA_TEST_MYSQL_DSN"))
 	if serverDSN == "" {
-		t.Skip("未设置 PANDORA_TEST_MYSQL_DSN,跳过保留期清理真 MySQL 集成测试")
+		t.Skip("未设置 PANDORA_TEST_MYSQL_DSN,跳过 battle_result 真 MySQL 集成测试")
 	}
 	cfg, err := mysql.ParseDSN(serverDSN)
 	if err != nil {

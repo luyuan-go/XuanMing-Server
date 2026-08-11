@@ -17,6 +17,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/battleabort"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/placement"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
@@ -199,10 +200,34 @@ func (s *AllocatorService) EnsurePlayerDeparture(
 }
 
 // Heartbeat 处理战斗 DS 心跳上报(DS 每 5s 调)。
+// dsReportableStates 是 DS 心跳允许自报的生命周期状态白名单(§9.6:DS 写权限有范围)。
+// abandoned 是**后端专属判决**(空场超时 / 补偿),绝不接受 DS 自报——否则被攻破 / 出 bug
+// 的 DS 可直接把对局推成 abandoned,进而触发 no-show 记罚给玩家铸造处罚(anti-abuse §6 第 8 项),
+// 越过后端自己的 150s 超时证据。内部 allocation_* fence 态同理只属后端。
+var dsReportableStates = map[string]struct{}{
+	"warming": {}, "ready": {}, "running": {}, "ended": {},
+}
+
+// sanitizeReportedState 把 DS 上报的 state 收敛到白名单;非白名单值(含 abandoned / 乱码)
+// 归一化为空串 = 「本跳不更新 state」,两条心跳路径都已按 `if state != ""` 处理。
+// 于是 abandoned 的唯一来源仍是后端超时 switch,与 legacy 路径语义对齐(不再两轨漂移)。
+func sanitizeReportedState(ctx context.Context, state string) string {
+	if state == "" {
+		return ""
+	}
+	if _, ok := dsReportableStates[state]; ok {
+		return state
+	}
+	plog.With(ctx).Warnw("msg", "ds_reported_state_rejected", "state", state,
+		"hint", "abandoned/internal states are backend-only (§9.6); ignoring DS self-report")
+	return ""
+}
+
 func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatRequest) (*dsv1.HeartbeatResponse, error) {
 	if req.GetMatchId() == 0 {
 		return &dsv1.HeartbeatResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	reportedState := sanitizeReportedState(ctx, req.GetState())
 	var res *biz.HeartbeatResult
 	var err error
 	if s.uc.RedisAuthorityEnabled() {
@@ -227,7 +252,7 @@ func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatReq
 			Kid:           verified.Kid,
 			TokenSHA256:   verified.TokenSHA256,
 			WriterEpoch:   verified.WriterEpoch,
-		}, req.GetPlayerCount(), req.GetState(), req.GetTsMs(),
+		}, req.GetPlayerCount(), reportedState, req.GetTsMs(),
 			req.GetActivePlayerSnapshotPresent(), req.GetPlayerCensusCapabilityVersion(),
 			req.GetPlayerCensusId(), req.GetActivePlayerIds(), req.GetAcknowledgedDepartureIds())
 	} else {
@@ -240,7 +265,7 @@ func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatReq
 		// census 一并透传:legacy 面据此续 owner 实例租约并代提交在场玩家 Admit
 		// (不传则 owner 恒 PENDING、租约恒过期,客户端永远等不到 STABLE,2026-08-04)。
 		res, err = s.uc.HeartbeatWithCensus(ctx, req.GetMatchId(), req.GetDsPodName(),
-			req.GetPlayerCount(), req.GetState(), req.GetTsMs(),
+			req.GetPlayerCount(), reportedState, req.GetTsMs(),
 			req.GetActivePlayerSnapshotPresent(), req.GetActivePlayerIds())
 	}
 	if err != nil {

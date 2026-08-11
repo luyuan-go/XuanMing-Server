@@ -36,11 +36,15 @@ const (
 	InventoryService_GetInventory_FullMethodName           = "/pandora.inventory.v1.InventoryService/GetInventory"
 	InventoryService_GrantItems_FullMethodName             = "/pandora.inventory.v1.InventoryService/GrantItems"
 	InventoryService_UseItem_FullMethodName                = "/pandora.inventory.v1.InventoryService/UseItem"
+	InventoryService_ConsumeBattleItem_FullMethodName      = "/pandora.inventory.v1.InventoryService/ConsumeBattleItem"
+	InventoryService_DiscardBattleItem_FullMethodName      = "/pandora.inventory.v1.InventoryService/DiscardBattleItem"
 	InventoryService_SellItem_FullMethodName               = "/pandora.inventory.v1.InventoryService/SellItem"
+	InventoryService_DiscardItem_FullMethodName            = "/pandora.inventory.v1.InventoryService/DiscardItem"
 	InventoryService_GrantInstances_FullMethodName         = "/pandora.inventory.v1.InventoryService/GrantInstances"
 	InventoryService_IdentifyItem_FullMethodName           = "/pandora.inventory.v1.InventoryService/IdentifyItem"
 	InventoryService_DiscardInstance_FullMethodName        = "/pandora.inventory.v1.InventoryService/DiscardInstance"
 	InventoryService_MoveInstance_FullMethodName           = "/pandora.inventory.v1.InventoryService/MoveInstance"
+	InventoryService_SellInstance_FullMethodName           = "/pandora.inventory.v1.InventoryService/SellInstance"
 	InventoryService_FreezeForOrder_FullMethodName         = "/pandora.inventory.v1.InventoryService/FreezeForOrder"
 	InventoryService_EnsureAuctionEscrow_FullMethodName    = "/pandora.inventory.v1.InventoryService/EnsureAuctionEscrow"
 	InventoryService_SettleAuctionMatch_FullMethodName     = "/pandora.inventory.v1.InventoryService/SettleAuctionMatch"
@@ -51,6 +55,7 @@ const (
 	InventoryService_ReleaseTransferEscrow_FullMethodName  = "/pandora.inventory.v1.InventoryService/ReleaseTransferEscrow"
 	InventoryService_ConsumeTransferEscrow_FullMethodName  = "/pandora.inventory.v1.InventoryService/ConsumeTransferEscrow"
 	InventoryService_CheckItemsOwned_FullMethodName        = "/pandora.inventory.v1.InventoryService/CheckItemsOwned"
+	InventoryService_CheckInstancesOwned_FullMethodName    = "/pandora.inventory.v1.InventoryService/CheckInstancesOwned"
 )
 
 // InventoryServiceClient is the client API for InventoryService service.
@@ -63,8 +68,17 @@ type InventoryServiceClient interface {
 	GrantItems(ctx context.Context, in *GrantItemsRequest, opts ...grpc.CallOption) (*GrantItemsResponse, error)
 	// UseItem 大厅态使用消耗品(开箱 / 经验书等);战斗内即时道具走 GAS,不走此 RPC。
 	UseItem(ctx context.Context, in *UseItemRequest, opts ...grpc.CallOption) (*UseItemResponse, error)
+	// ConsumeBattleItem 持久扣减已由 UE GAS 局内使用的可堆叠消耗品(系统接口)。
+	// 仅接受可信 battle_result 进度出箱；客户端不得直调，也不得用大厅 UseItem 冒充。
+	ConsumeBattleItem(ctx context.Context, in *ConsumeBattleItemRequest, opts ...grpc.CallOption) (*ConsumeBattleItemResponse, error)
+	// DiscardBattleItem 持久扣减副本内丢弃的可堆叠道具(系统接口)。装备实例不支持：
+	// phase0 DS 本地 Guid 不是 inventory instance_id，实例只能回大厅走 DiscardInstance。
+	DiscardBattleItem(ctx context.Context, in *DiscardBattleItemRequest, opts ...grpc.CallOption) (*DiscardBattleItemResponse, error)
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(ctx context.Context, in *SellItemRequest, opts ...grpc.CallOption) (*SellItemResponse, error)
+	// DiscardItem 丢弃可堆叠道具(客户端 RPC,以调用者身份为准)。
+	// 幂等键绑定 item_config_id+count；响应丢失重试不会重复扣减。
+	DiscardItem(ctx context.Context, in *DiscardItemRequest, opts ...grpc.CallOption) (*DiscardItemResponse, error)
 	// GrantInstances 幂等发放装备实例(系统驱动:掉落 / 活动 / 购买到账)。
 	// 每件生成一个雪花 instance_id,默认未鉴定(identified=false,无随机属性);
 	// 幂等键防重复入账(同 drop:<match_id> 重放只生效一次)。不在 Envoy 暴露(同 GrantItems)。
@@ -79,6 +93,9 @@ type InventoryServiceClient interface {
 	// MoveInstance 移动一件装备实例到新格子(改 slot_index;客户端 RPC,以调用者身份为准)。
 	// 目标格越界(>= capacity)/ 已被占用 → 拒。纯大厅整理操作,不影响属性。
 	MoveInstance(ctx context.Context, in *MoveInstanceRequest, opts ...grpc.CallOption) (*MoveInstanceResponse, error)
+	// SellInstance 出售唯一装备实例换金币(客户端 RPC,以调用者身份为准)。
+	// 绑定实例拒绝；删除实例与金币入账、ledger 幂等流水在同一事务。
+	SellInstance(ctx context.Context, in *SellInstanceRequest, opts ...grpc.CallOption) (*SellInstanceResponse, error)
 	// FreezeForOrder 拍卖挂单冻结资产(系统接口,仅后端内部直连):
 	//
 	//	卖单(SELL):把 quantity 个 item_config_id 从活跃背包移入托管(escrow),挂单期间不可被别处消耗;
@@ -155,6 +172,10 @@ type InventoryServiceClient interface {
 	//
 	// 只回「请求集合中确实持有的子集」,不回数量、不回实例 id,避免把背包细节外溢到其它域。
 	CheckItemsOwned(ctx context.Context, in *CheckItemsOwnedRequest, opts ...grpc.CallOption) (*CheckItemsOwnedResponse, error)
+	// CheckInstancesOwned 精确校验唯一实例归属(系统接口,仅后端内部直连)。
+	// 每项同时携 instance_id + item_config_id；只有两者都与该玩家当前实例行一致才返回。
+	// 旧 CheckItemsOwned 保留兼容，新的实例化装备预设应使用本接口避免同配置多实例选错词条。
+	CheckInstancesOwned(ctx context.Context, in *CheckInstancesOwnedRequest, opts ...grpc.CallOption) (*CheckInstancesOwnedResponse, error)
 }
 
 type inventoryServiceClient struct {
@@ -195,10 +216,40 @@ func (c *inventoryServiceClient) UseItem(ctx context.Context, in *UseItemRequest
 	return out, nil
 }
 
+func (c *inventoryServiceClient) ConsumeBattleItem(ctx context.Context, in *ConsumeBattleItemRequest, opts ...grpc.CallOption) (*ConsumeBattleItemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConsumeBattleItemResponse)
+	err := c.cc.Invoke(ctx, InventoryService_ConsumeBattleItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) DiscardBattleItem(ctx context.Context, in *DiscardBattleItemRequest, opts ...grpc.CallOption) (*DiscardBattleItemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardBattleItemResponse)
+	err := c.cc.Invoke(ctx, InventoryService_DiscardBattleItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *inventoryServiceClient) SellItem(ctx context.Context, in *SellItemRequest, opts ...grpc.CallOption) (*SellItemResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SellItemResponse)
 	err := c.cc.Invoke(ctx, InventoryService_SellItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) DiscardItem(ctx context.Context, in *DiscardItemRequest, opts ...grpc.CallOption) (*DiscardItemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardItemResponse)
+	err := c.cc.Invoke(ctx, InventoryService_DiscardItem_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -239,6 +290,16 @@ func (c *inventoryServiceClient) MoveInstance(ctx context.Context, in *MoveInsta
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MoveInstanceResponse)
 	err := c.cc.Invoke(ctx, InventoryService_MoveInstance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) SellInstance(ctx context.Context, in *SellInstanceRequest, opts ...grpc.CallOption) (*SellInstanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SellInstanceResponse)
+	err := c.cc.Invoke(ctx, InventoryService_SellInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -345,6 +406,16 @@ func (c *inventoryServiceClient) CheckItemsOwned(ctx context.Context, in *CheckI
 	return out, nil
 }
 
+func (c *inventoryServiceClient) CheckInstancesOwned(ctx context.Context, in *CheckInstancesOwnedRequest, opts ...grpc.CallOption) (*CheckInstancesOwnedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckInstancesOwnedResponse)
+	err := c.cc.Invoke(ctx, InventoryService_CheckInstancesOwned_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InventoryServiceServer is the server API for InventoryService service.
 // All implementations should embed UnimplementedInventoryServiceServer
 // for forward compatibility.
@@ -355,8 +426,17 @@ type InventoryServiceServer interface {
 	GrantItems(context.Context, *GrantItemsRequest) (*GrantItemsResponse, error)
 	// UseItem 大厅态使用消耗品(开箱 / 经验书等);战斗内即时道具走 GAS,不走此 RPC。
 	UseItem(context.Context, *UseItemRequest) (*UseItemResponse, error)
+	// ConsumeBattleItem 持久扣减已由 UE GAS 局内使用的可堆叠消耗品(系统接口)。
+	// 仅接受可信 battle_result 进度出箱；客户端不得直调，也不得用大厅 UseItem 冒充。
+	ConsumeBattleItem(context.Context, *ConsumeBattleItemRequest) (*ConsumeBattleItemResponse, error)
+	// DiscardBattleItem 持久扣减副本内丢弃的可堆叠道具(系统接口)。装备实例不支持：
+	// phase0 DS 本地 Guid 不是 inventory instance_id，实例只能回大厅走 DiscardInstance。
+	DiscardBattleItem(context.Context, *DiscardBattleItemRequest) (*DiscardBattleItemResponse, error)
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(context.Context, *SellItemRequest) (*SellItemResponse, error)
+	// DiscardItem 丢弃可堆叠道具(客户端 RPC,以调用者身份为准)。
+	// 幂等键绑定 item_config_id+count；响应丢失重试不会重复扣减。
+	DiscardItem(context.Context, *DiscardItemRequest) (*DiscardItemResponse, error)
 	// GrantInstances 幂等发放装备实例(系统驱动:掉落 / 活动 / 购买到账)。
 	// 每件生成一个雪花 instance_id,默认未鉴定(identified=false,无随机属性);
 	// 幂等键防重复入账(同 drop:<match_id> 重放只生效一次)。不在 Envoy 暴露(同 GrantItems)。
@@ -371,6 +451,9 @@ type InventoryServiceServer interface {
 	// MoveInstance 移动一件装备实例到新格子(改 slot_index;客户端 RPC,以调用者身份为准)。
 	// 目标格越界(>= capacity)/ 已被占用 → 拒。纯大厅整理操作,不影响属性。
 	MoveInstance(context.Context, *MoveInstanceRequest) (*MoveInstanceResponse, error)
+	// SellInstance 出售唯一装备实例换金币(客户端 RPC,以调用者身份为准)。
+	// 绑定实例拒绝；删除实例与金币入账、ledger 幂等流水在同一事务。
+	SellInstance(context.Context, *SellInstanceRequest) (*SellInstanceResponse, error)
 	// FreezeForOrder 拍卖挂单冻结资产(系统接口,仅后端内部直连):
 	//
 	//	卖单(SELL):把 quantity 个 item_config_id 从活跃背包移入托管(escrow),挂单期间不可被别处消耗;
@@ -447,6 +530,10 @@ type InventoryServiceServer interface {
 	//
 	// 只回「请求集合中确实持有的子集」,不回数量、不回实例 id,避免把背包细节外溢到其它域。
 	CheckItemsOwned(context.Context, *CheckItemsOwnedRequest) (*CheckItemsOwnedResponse, error)
+	// CheckInstancesOwned 精确校验唯一实例归属(系统接口,仅后端内部直连)。
+	// 每项同时携 instance_id + item_config_id；只有两者都与该玩家当前实例行一致才返回。
+	// 旧 CheckItemsOwned 保留兼容，新的实例化装备预设应使用本接口避免同配置多实例选错词条。
+	CheckInstancesOwned(context.Context, *CheckInstancesOwnedRequest) (*CheckInstancesOwnedResponse, error)
 }
 
 // UnimplementedInventoryServiceServer should be embedded to have
@@ -465,8 +552,17 @@ func (UnimplementedInventoryServiceServer) GrantItems(context.Context, *GrantIte
 func (UnimplementedInventoryServiceServer) UseItem(context.Context, *UseItemRequest) (*UseItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UseItem not implemented")
 }
+func (UnimplementedInventoryServiceServer) ConsumeBattleItem(context.Context, *ConsumeBattleItemRequest) (*ConsumeBattleItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConsumeBattleItem not implemented")
+}
+func (UnimplementedInventoryServiceServer) DiscardBattleItem(context.Context, *DiscardBattleItemRequest) (*DiscardBattleItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DiscardBattleItem not implemented")
+}
 func (UnimplementedInventoryServiceServer) SellItem(context.Context, *SellItemRequest) (*SellItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SellItem not implemented")
+}
+func (UnimplementedInventoryServiceServer) DiscardItem(context.Context, *DiscardItemRequest) (*DiscardItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DiscardItem not implemented")
 }
 func (UnimplementedInventoryServiceServer) GrantInstances(context.Context, *GrantInstancesRequest) (*GrantInstancesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GrantInstances not implemented")
@@ -479,6 +575,9 @@ func (UnimplementedInventoryServiceServer) DiscardInstance(context.Context, *Dis
 }
 func (UnimplementedInventoryServiceServer) MoveInstance(context.Context, *MoveInstanceRequest) (*MoveInstanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveInstance not implemented")
+}
+func (UnimplementedInventoryServiceServer) SellInstance(context.Context, *SellInstanceRequest) (*SellInstanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SellInstance not implemented")
 }
 func (UnimplementedInventoryServiceServer) FreezeForOrder(context.Context, *FreezeForOrderRequest) (*FreezeForOrderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FreezeForOrder not implemented")
@@ -509,6 +608,9 @@ func (UnimplementedInventoryServiceServer) ConsumeTransferEscrow(context.Context
 }
 func (UnimplementedInventoryServiceServer) CheckItemsOwned(context.Context, *CheckItemsOwnedRequest) (*CheckItemsOwnedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckItemsOwned not implemented")
+}
+func (UnimplementedInventoryServiceServer) CheckInstancesOwned(context.Context, *CheckInstancesOwnedRequest) (*CheckInstancesOwnedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckInstancesOwned not implemented")
 }
 func (UnimplementedInventoryServiceServer) testEmbeddedByValue() {}
 
@@ -584,6 +686,42 @@ func _InventoryService_UseItem_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_ConsumeBattleItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConsumeBattleItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).ConsumeBattleItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_ConsumeBattleItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).ConsumeBattleItem(ctx, req.(*ConsumeBattleItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_DiscardBattleItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardBattleItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).DiscardBattleItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_DiscardBattleItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).DiscardBattleItem(ctx, req.(*DiscardBattleItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InventoryService_SellItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SellItemRequest)
 	if err := dec(in); err != nil {
@@ -598,6 +736,24 @@ func _InventoryService_SellItem_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(InventoryServiceServer).SellItem(ctx, req.(*SellItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_DiscardItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).DiscardItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_DiscardItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).DiscardItem(ctx, req.(*DiscardItemRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -670,6 +826,24 @@ func _InventoryService_MoveInstance_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(InventoryServiceServer).MoveInstance(ctx, req.(*MoveInstanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_SellInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SellInstanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).SellInstance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_SellInstance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).SellInstance(ctx, req.(*SellInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -854,6 +1028,24 @@ func _InventoryService_CheckItemsOwned_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_CheckInstancesOwned_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckInstancesOwnedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).CheckInstancesOwned(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_CheckInstancesOwned_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).CheckInstancesOwned(ctx, req.(*CheckInstancesOwnedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InventoryService_ServiceDesc is the grpc.ServiceDesc for InventoryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -874,8 +1066,20 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _InventoryService_UseItem_Handler,
 		},
 		{
+			MethodName: "ConsumeBattleItem",
+			Handler:    _InventoryService_ConsumeBattleItem_Handler,
+		},
+		{
+			MethodName: "DiscardBattleItem",
+			Handler:    _InventoryService_DiscardBattleItem_Handler,
+		},
+		{
 			MethodName: "SellItem",
 			Handler:    _InventoryService_SellItem_Handler,
+		},
+		{
+			MethodName: "DiscardItem",
+			Handler:    _InventoryService_DiscardItem_Handler,
 		},
 		{
 			MethodName: "GrantInstances",
@@ -892,6 +1096,10 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MoveInstance",
 			Handler:    _InventoryService_MoveInstance_Handler,
+		},
+		{
+			MethodName: "SellInstance",
+			Handler:    _InventoryService_SellInstance_Handler,
 		},
 		{
 			MethodName: "FreezeForOrder",
@@ -932,6 +1140,10 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckItemsOwned",
 			Handler:    _InventoryService_CheckItemsOwned_Handler,
+		},
+		{
+			MethodName: "CheckInstancesOwned",
+			Handler:    _InventoryService_CheckInstancesOwned_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

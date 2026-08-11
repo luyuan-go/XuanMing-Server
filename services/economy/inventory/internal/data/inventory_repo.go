@@ -70,6 +70,15 @@ type InventoryRepo interface {
 	// 数量不足 → ErrInventoryInsufficient;道具不存在 → ErrInventoryItemNotFound。返回剩余数量。
 	UseItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, detail string) (remaining int64, already bool, err error)
 
+	// ConsumeBattleItem 幂等扣减可信战斗事实对应的局内消耗；与大厅 use 分开流水。
+	ConsumeBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, detail string) (remaining int64, already bool, err error)
+
+	// DiscardBattleItem 幂等扣减可信战斗丢弃事实；与客户端 discard 分开流水/权限。
+	DiscardBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, detail string) (remaining int64, already bool, err error)
+
+	// DiscardItem 幂等丢弃可堆叠道具；与 UseItem 分开记 op/fingerprint，审计语义不混淆。
+	DiscardItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, detail string) (remaining int64, already bool, err error)
+
 	// SellItem 幂等出售(事务:INSERT ledger;扣道具 + 加 gold)。返回剩余数量 + 出售后 gold。
 	SellItem(ctx context.Context, playerID uint64, itemConfigID uint32, count, gold int64, idempotencyKey, detail string) (remaining, newGold int64, already bool, err error)
 
@@ -117,6 +126,9 @@ type InventoryRepo interface {
 	// ListInstances 读玩家全部装备实例(按 instance_id 升序;未建档 → 空)。
 	ListInstances(ctx context.Context, playerID uint64) ([]ItemInstance, error)
 
+	// CheckInstancesOwned 精确返回 instance_id + item_config_id 都与玩家当前实例行一致的 ID 子集。
+	CheckInstancesOwned(ctx context.Context, playerID uint64, queries []InstanceOwnershipQuery) ([]uint64, error)
+
 	// GrantInstances 幂等发放装备实例(事务:INSERT ledger 命中 uk → 回放已发实例;
 	// 否则锁玩家实例行校验 count+n<=capacity,给每件分配最低空闲格并 INSERT)。
 	// instanceIDs 由 biz 用 snowflake 预生成(与 itemConfigIDs 等长一一对应)。
@@ -137,6 +149,9 @@ type InventoryRepo interface {
 	// DiscardInstance 丢弃实例(DELETE WHERE instance_id AND player_id)。
 	// 幂等:不存在(已丢弃)→ OK no-op(auth 已保证只能删自己的)。
 	DiscardInstance(ctx context.Context, playerID, instanceID uint64) error
+
+	// SellInstance 原子出售唯一实例：锁实例、拒绝 bound、删除实例、金币入账与 ledger 同事务。
+	SellInstance(ctx context.Context, playerID, instanceID uint64, itemConfigID uint32, gold int64, idempotencyKey, detail string) (newGold int64, already bool, err error)
 
 	// ── 邮件 transfer 附件实例托管(2026-07-22,bag-domain.md §7.1;inventory_transfer.go)──
 
@@ -213,7 +228,7 @@ func (r *MySQLInventoryRepo) GetInventory(ctx context.Context, playerID uint64) 
 
 // ── 幂等指纹 ────────────────────────────────────────────────────────────────
 //
-// 同一 idempotency_key 复用到**不同**请求(op/item/count/gold 不同)会被静默当 no-op
+// 同一 idempotency_key 复用到**不同客户端意图**(op/item/count/instance 等不同)会被静默当 no-op
 // 是反作弊隐患;指纹把 key 绑定到请求内容:首次执行记录指纹 + 结果快照,
 // 重复请求指纹不一致 → ErrInventoryIdempotencyConflict;一致 → 回放首次结果快照。
 
@@ -239,9 +254,40 @@ func UseFingerprint(itemConfigID uint32, count int64) string {
 	return hashHex(fmt.Sprintf("use|%d:%d", itemConfigID, count))
 }
 
-// SellFingerprint 计算出售请求指纹(含算得的 gold)。
-func SellFingerprint(itemConfigID uint32, count, gold int64) string {
+// DiscardFingerprint 计算堆叠道具丢弃请求指纹。
+func DiscardFingerprint(itemConfigID uint32, count int64) string {
+	return hashHex(fmt.Sprintf("discard|%d:%d", itemConfigID, count))
+}
+
+// BattleConsumeFingerprint 计算局内消费事实请求指纹。
+func BattleConsumeFingerprint(itemConfigID uint32, count int64) string {
+	return hashHex(fmt.Sprintf("battle_consume|%d:%d", itemConfigID, count))
+}
+
+// BattleDiscardFingerprint 计算局内丢弃事实请求指纹。
+func BattleDiscardFingerprint(itemConfigID uint32, count int64) string {
+	return hashHex(fmt.Sprintf("battle_discard|%d:%d", itemConfigID, count))
+}
+
+// SellFingerprint 只绑定客户端出售意图。售价是服务端热配置，不得参与新指纹；否则
+// 首次响应丢失后热更价格会把同 key 重试误判为冲突，甚至诱发二次出售。
+func SellFingerprint(itemConfigID uint32, count int64) string {
+	return hashHex(fmt.Sprintf("sell|%d:%d", itemConfigID, count))
+}
+
+// SellInstanceFingerprint 只绑定客户端选中的唯一实例和配置一致性字段。
+func SellInstanceFingerprint(instanceID uint64, itemConfigID uint32) string {
+	return hashHex(fmt.Sprintf("sell_inst|%d|item=%d", instanceID, itemConfigID))
+}
+
+// legacy*Fingerprint 仅用于安全识别升级前已提交的 ledger。不能拿当前热更价格计算：
+// 必须从旧行 detail 恢复首次价格并严格验证完整意图后再接受。
+func legacySellFingerprint(itemConfigID uint32, count, gold int64) string {
 	return hashHex(fmt.Sprintf("sell|%d:%d|gold=%d", itemConfigID, count, gold))
+}
+
+func legacySellInstanceFingerprint(instanceID uint64, itemConfigID uint32, gold int64) string {
+	return hashHex(fmt.Sprintf("sell_inst|%d|item=%d|gold=%d", instanceID, itemConfigID, gold))
 }
 
 // AuctionSettleFingerprint 计算拍卖结算请求指纹(双方 + 道具 + 数量 + 总价)。
@@ -307,6 +353,70 @@ func claimLedger(ctx context.Context, tx *sql.Tx, playerID uint64, idempotencyKe
 		return true, snapRemaining, snapGold, nil
 	}
 	return false, 0, 0, nil
+}
+
+type saleLedgerIntent struct {
+	op           string
+	itemConfigID uint32
+	count        int64
+	instanceID   uint64
+}
+
+// claimSaleLedger 是售价热更安全的幂等声明：新行只存客户端意图指纹；旧行只有在
+// op、detail 中的完整首次意图和由首次 gold 重算的旧指纹全部一致时才允许回放。
+func claimSaleLedger(ctx context.Context, tx *sql.Tx, playerID uint64, idempotencyKey, fingerprint, detail string, intent saleLedgerIntent) (already bool, snapRemaining, snapGold int64, err error) {
+	const ins = `INSERT INTO inventory_ledger (player_id, idempotency_key, op, request_fingerprint, detail) VALUES (?, ?, ?, ?, ?)`
+	if _, lerr := tx.ExecContext(ctx, ins, playerID, idempotencyKey, intent.op, fingerprint, detail); lerr == nil {
+		return false, 0, 0, nil
+	} else if !isDupErr(lerr) {
+		return false, 0, 0, errcode.New(errcode.ErrInternal,
+			"insert sale ledger player=%d key=%s: %v", playerID, idempotencyKey, lerr)
+	}
+
+	var storedOp, storedFP, storedDetail string
+	if qerr := tx.QueryRowContext(ctx, `SELECT op,request_fingerprint,detail,result_remaining,result_gold
+FROM inventory_ledger WHERE player_id=? AND idempotency_key=? LIMIT 1`, playerID, idempotencyKey).
+		Scan(&storedOp, &storedFP, &storedDetail, &snapRemaining, &snapGold); qerr != nil {
+		return false, 0, 0, errcode.New(errcode.ErrInternal,
+			"read sale ledger player=%d key=%s: %v", playerID, idempotencyKey, qerr)
+	}
+	matched := storedOp == intent.op && storedFP == fingerprint
+	if !matched && storedOp == intent.op {
+		matched = legacySaleLedgerMatches(storedFP, storedDetail, intent)
+	}
+	if !matched {
+		plog.With(ctx).Warnw("msg", "inventory_idempotency_conflict",
+			"player_id", playerID, "idempotency_key", idempotencyKey, "op", intent.op)
+		return false, 0, 0, errcode.New(errcode.ErrInventoryIdempotencyConflict,
+			"idempotency_key reused for different sale request player=%d key=%s", playerID, idempotencyKey)
+	}
+	return true, snapRemaining, snapGold, nil
+}
+
+func legacySaleLedgerMatches(storedFP, detail string, intent saleLedgerIntent) bool {
+	switch intent.op {
+	case "sell":
+		var itemID uint32
+		var count, gold int64
+		n, err := fmt.Sscanf(detail, "sell item=%d count=%d gold=%d", &itemID, &count, &gold)
+		if err != nil || n != 3 || detail != fmt.Sprintf("sell item=%d count=%d gold=%d", itemID, count, gold) ||
+			itemID != intent.itemConfigID || count != intent.count || gold <= 0 {
+			return false
+		}
+		return storedFP == legacySellFingerprint(itemID, count, gold)
+	case "sell_inst":
+		var instanceID uint64
+		var itemID uint32
+		var gold int64
+		n, err := fmt.Sscanf(detail, "sell instance=%d item=%d gold=%d", &instanceID, &itemID, &gold)
+		if err != nil || n != 3 || detail != fmt.Sprintf("sell instance=%d item=%d gold=%d", instanceID, itemID, gold) ||
+			instanceID != intent.instanceID || itemID != intent.itemConfigID || gold <= 0 {
+			return false
+		}
+		return storedFP == legacySellInstanceFingerprint(instanceID, itemID, gold)
+	default:
+		return false
+	}
 }
 
 // updateLedgerResult 在事务里把首次执行的结果快照写回流水(供后续幂等回放返回稳定值)。
@@ -440,6 +550,90 @@ func (r *MySQLInventoryRepo) UseItem(ctx context.Context, playerID uint64, itemC
 	return remaining, false, nil
 }
 
+func (r *MySQLInventoryRepo) DiscardItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, detail string) (int64, bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	already, snapRemaining, _, lerr := claimLedger(ctx, tx, playerID, idempotencyKey,
+		"discard", DiscardFingerprint(itemConfigID, count), detail)
+	if lerr != nil {
+		return 0, false, lerr
+	}
+	if already {
+		return snapRemaining, true, nil
+	}
+	remaining, derr := deductItemTx(ctx, tx, playerID, itemConfigID, count)
+	if derr != nil {
+		return 0, false, derr
+	}
+	if uerr := updateLedgerResult(ctx, tx, playerID, idempotencyKey, remaining, 0); uerr != nil {
+		return 0, false, uerr
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "commit discard player=%d: %v", playerID, cerr)
+	}
+	return remaining, false, nil
+}
+
+func (r *MySQLInventoryRepo) ConsumeBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, detail string) (int64, bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "begin battle consume tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	already, snapRemaining, _, lerr := claimLedger(ctx, tx, playerID, idempotencyKey,
+		"battle_consume", BattleConsumeFingerprint(itemConfigID, count), detail)
+	if lerr != nil {
+		return 0, false, lerr
+	}
+	if already {
+		return snapRemaining, true, nil
+	}
+	remaining, derr := deductItemTx(ctx, tx, playerID, itemConfigID, count)
+	if derr != nil {
+		return 0, false, derr
+	}
+	if uerr := updateLedgerResult(ctx, tx, playerID, idempotencyKey, remaining, 0); uerr != nil {
+		return 0, false, uerr
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal,
+			"commit battle consume player=%d: %v", playerID, cerr)
+	}
+	return remaining, false, nil
+}
+
+func (r *MySQLInventoryRepo) DiscardBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, detail string) (int64, bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "begin battle discard tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	already, snapRemaining, _, lerr := claimLedger(ctx, tx, playerID, idempotencyKey,
+		"battle_discard", BattleDiscardFingerprint(itemConfigID, count), detail)
+	if lerr != nil {
+		return 0, false, lerr
+	}
+	if already {
+		return snapRemaining, true, nil
+	}
+	remaining, derr := deductItemTx(ctx, tx, playerID, itemConfigID, count)
+	if derr != nil {
+		return 0, false, derr
+	}
+	if uerr := updateLedgerResult(ctx, tx, playerID, idempotencyKey, remaining, 0); uerr != nil {
+		return 0, false, uerr
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal,
+			"commit battle discard player=%d: %v", playerID, cerr)
+	}
+	return remaining, false, nil
+}
+
 func (r *MySQLInventoryRepo) SellItem(ctx context.Context, playerID uint64, itemConfigID uint32, count, gold int64, idempotencyKey, detail string) (int64, int64, bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -447,13 +641,20 @@ func (r *MySQLInventoryRepo) SellItem(ctx context.Context, playerID uint64, item
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	already, snapRemaining, snapGold, lerr := claimLedger(ctx, tx, playerID, idempotencyKey, "sell", SellFingerprint(itemConfigID, count, gold), detail)
+	already, snapRemaining, snapGold, lerr := claimSaleLedger(ctx, tx, playerID, idempotencyKey,
+		SellFingerprint(itemConfigID, count), detail, saleLedgerIntent{
+			op: "sell", itemConfigID: itemConfigID, count: count,
+		})
 	if lerr != nil {
 		return 0, 0, false, lerr
 	}
 	if already {
 		// 幂等命中:回放首次执行的剩余数量 + 金币快照。
 		return snapRemaining, snapGold, true, nil
+	}
+	if gold <= 0 {
+		return 0, 0, false, errcode.New(errcode.ErrInventoryNotSellable,
+			"item not sellable player=%d item=%d", playerID, itemConfigID)
 	}
 
 	remaining, derr := deductItemTx(ctx, tx, playerID, itemConfigID, count)

@@ -106,31 +106,12 @@ battle:
   # 进度出箱发布节奏(经验/掉落即时到账的体感上界;缺省 1s / 128)
   progress_publish_interval: "1s"
   progress_batch_size: 128
-  # 掉落发放(实时通道与结算路径共用白名单):
-  # inventory_addr 未配 → 掉落出箱积压不丢;drop_whitelist 空 → 一律过滤不发放。
+  # 掉落发放：过滤与路由直接读取同一 config_table 批次的 drop×item。
+  # inventory_addr 未配 → 掉落出箱积压不丢。
   # 弱依赖:gRPC 懒连接,inventory 未起时出箱行保留重试,不阻断结算/进度落库。
   inventory_addr: "127.0.0.1:20015"
-  # 白名单与 UE 侧掉落表(Pandora-Client Table/道具/d_掉落.xlsx)同源维护:
-  # 表里新增掉落物品必须同步加进这里,否则 DS 上报的拾取会被过滤不发放(只告警)。
-  #
-  # **本名单只能放 type=3 装备**(item 表 max_stack=1 且 equip_slot>0)。发放走的是
-  # inventory.GrantInstances,它是**装备实例专用**:不查道具表、按 count 逐个铸雪花实例
-  # (progress.go 把 count 展开成 N 份同 id)。把可堆叠道具放进来 → 捡 3 个材料 = 3 行
-  # player_item_instance 各占一格,而 UseItem/SellItem 操作的是 player_items 计数模型、
-  # 够不着实例 → 发进去就锁死,比现在"静默丢弃"更难回退。可堆叠道具的正确通道是
-  # GrantItems,battle_result 目前没有接(2026-08-06 记:33 个可堆叠掉落物因此仍然发不出来,
-  # 需要代码改动而非配置)。
-  #
-  # 2026-08-06 修正:原值 [10001..10006] 抄自 chest_drop 占位表,其中只有 10003 是装备,
-  # 另外 5 个都是可堆叠道具(当时 inventory.capacity 没配、GrantInstances 恒失败,反而没
-  # 造成脏资产)。现按 configtable/dist/drop.json ∩ item.json(type=3) 取全部 25 件装备。
-  #
-  # 这份手抄镜像本身是反模式(同一文件上方 monster_exp 已因同样理由移出 yaml 改查 role_level
-  # 表)。后续应删键改由 configtable 现算 drop×item 交集,并补契约测试
-  # (照抄 ds_allocator/cmd/ds_allocator/configtable_wiring_test.go 的做法)。
-  drop_whitelist: [10003, 10027, 10030, 10032, 10035, 10036, 10038, 10039, 10040, 10041,
-                   10042, 10043, 10044, 10045, 10046, 10047, 10048, 10049, 10050, 10051,
-                   10052, 10053, 10054, 10055, 10056]
+  # 可堆叠掉落走 GrantItems，装备走 GrantInstances；真实 dist 契约当前为 33/25。
+  # 旧 drop_whitelist 字段仅保留单测/旧版本配置兼容，正式配置不得再手抄。
 
   # ── 战报保留期(§9.24 登记例外:180 天)──────────────────────────────────
   # 产品口径:MySQL 里最多只存最近六个月的战报,超过六个月的就没有数据

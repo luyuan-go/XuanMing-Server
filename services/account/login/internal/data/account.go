@@ -40,9 +40,10 @@ type AccountRepo interface {
 	TouchDevice(ctx context.Context, playerID uint64, deviceID string) error
 
 	// GetRegisterNo 读玩家注册编号(展示专用,register-no-and-login-surge.md §3)。
-	// 0 = 补号任务尚未分配(客户端显示「生成中」)。调用方必须 fail-soft:失败置 0
-	// 只记日志,绝不因展示字段拒登录——存量库未跑 000004 迁移时本方法报错,靠该
-	// 口径兜住(刻意不合并进 FindByAccount:列缺失会把登录整链打挂,展示字段必须失败隔离)。
+	// 0 = 补号任务尚未分配(客户端显示「生成中」)。错误策略按入口分流:
+	// Login 主路径必须 fail-soft(失败置 0 只记日志,绝不因展示字段拒登录——存量库未跑
+	// 000004 迁移时靠该口径兜住);GetRegisterNo 补拉 RPC 必须把查询错误翻译成非 OK,
+	// 不得伪装为 0。刻意不合并进 FindByAccount:列缺失不能把登录整链打挂。
 	GetRegisterNo(ctx context.Context, playerID uint64) (uint64, error)
 }
 

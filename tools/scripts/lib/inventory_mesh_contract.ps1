@@ -12,20 +12,20 @@ $script:PandoraInventoryMeshWorkloads = [ordered]@{
     'battle-result' = 'pandora-battle-result'
 }
 $script:PandoraInventorySystemMethods = @(
-    'GrantItems', 'GrantInstances', 'FreezeForOrder', 'EnsureAuctionEscrow',
+    'GrantItems', 'GrantInstances', 'ConsumeBattleItem', 'DiscardBattleItem', 'FreezeForOrder', 'EnsureAuctionEscrow',
     'SettleAuctionMatch', 'SettlePlayerTrade', 'ReleaseEscrow')
 $script:PandoraInventoryPlayerMethods = @(
-    'GetInventory', 'UseItem', 'SellItem', 'IdentifyItem', 'DiscardInstance', 'MoveInstance')
+    'GetInventory', 'UseItem', 'SellItem', 'DiscardItem', 'IdentifyItem', 'DiscardInstance', 'MoveInstance', 'SellInstance')
 $script:PandoraInventoryPolicyName = 'pandora-inventory-exact-allow'
 $script:PandoraInventoryPeerAuthenticationName = 'pandora-inventory-mtls'
 $script:PandoraInventoryRenderedDocumentHashes = [ordered]@{
-    'Service/inventory' = '7f92c8a42c9665bfa32aa78954c97f0f637c52b917f140a1e7fea4e8982c22de'
+    'Service/inventory' = 'cbc82a31129ef9a8b54ac94f3350cc44f8c6daf5c1d98b02382ef08fd1873697'
     'ValidatingAdmissionPolicy/pandora-inventory-edge-deployments' = '431316e80a10370169c57e0426948e44d81e05bfb2f813e1d01e6cd96758ae6a'
     'ValidatingAdmissionPolicy/pandora-inventory-edge-pods' = 'c586267f81d48b4da832936b524682084d45bfe5af3082b3a4ee1aaa9e81f94a'
     'ValidatingAdmissionPolicy/pandora-inventory-edge-replicasets' = '59d0d474f0716ad52dd38695e3a2adab874843dedc7ccc150b48b8b5fc81074a'
     'ValidatingAdmissionPolicy/pandora-inventory-mesh-deployments' = '0505ef57ccc1a971e72d82dc1dd59e4935f9323cfc36d364d1d35673c51dfd46'
     'ValidatingAdmissionPolicy/pandora-inventory-mesh-namespace-revision' = 'f260cd3f8e4d461ff626a2c2d3c3cf901b6d3f7b82ca48b5070b36ddd2c7e374'
-    'ValidatingAdmissionPolicy/pandora-inventory-mesh-pods' = '37a523d2c0a563fc73b3cd2cd4d650a7d9d68938b23e3a7739b6f7b3ff31af35'
+    'ValidatingAdmissionPolicy/pandora-inventory-mesh-pods' = '136fc9ade77a68ea4c9294555444b3a7f9b10b0b9a3f4763fe0e0bf0d2af55e1'
     'ValidatingAdmissionPolicy/pandora-inventory-mesh-replicasets' = '0f9459fca5ca33562ac4a7fe16a16ad5ec34d26270fb976fb69544ad98fd6cd3'
     'ValidatingAdmissionPolicyBinding/pandora-inventory-edge-deployments' = '3257790e70e04dd1dc1615a4794b44cf5445e11a125644fe064baa5356af4bd0'
     'ValidatingAdmissionPolicyBinding/pandora-inventory-edge-pods' = '54733a3768aa1d695839e4700f296029a4bb61c1fa7f592428973c0246e94f94'
@@ -37,14 +37,14 @@ $script:PandoraInventoryRenderedDocumentHashes = [ordered]@{
     'NetworkPolicy/allow-app-mesh' = 'e1ab54a6d53f9938b10b60297722d3904e3877319c5c7b9c4a85271a28c11e64'
     'NetworkPolicy/allow-ds-to-envoy' = '35f6487d57a6a4f20becdb1b4baf2b806bf3e78fb89d362124af8200e9cc10a4'
     'NetworkPolicy/allow-etcd-ingress' = '660202edada31833ba1ee7845b2451ff54a8a0997ca57da461de1efae56e0ff9'
-    'NetworkPolicy/allow-ingress-gateway' = '984a2b565adf3c1eb0df672d79811dc3f39e60e54c0d0a77e11f94e248863192'
-    'NetworkPolicy/allow-inventory-grpc' = '39882b47d1d46468ee2174a6ad82de5ef0b897be619152d8cafa3cc211d35d11'
+    'NetworkPolicy/allow-ingress-gateway' = '356aef8b9d087289eefaf6354869afd6c026b39f0425a895d48fd1d7dd1bd14f'
+    'NetworkPolicy/allow-inventory-grpc' = 'bb5ff53978af29de92f44543ef0c1a970f06d7c7d747699d8093dd21a60e68ab'
     'NetworkPolicy/allow-kafka-ingress' = '43899d5b1c42fe115b9da466122b17275de257bb26169b1cd18d992f984df36d'
     'NetworkPolicy/allow-mysql-ingress' = '07a0348ee2dfe576b1132bbd83b3590fdd881075d492357e70c745d9daa2855d'
     'NetworkPolicy/allow-redis-ingress' = 'e175a4d2c5496344b91fd8cf4a7c161e79ebcc686c3c49319fe921741e659899'
     'NetworkPolicy/allow-zookeeper-ingress' = '9097fcd8973b3c515e410e721da9e3fd5969a5a43bf3e9e532a075a1c5dab78c'
     'NetworkPolicy/default-deny-ingress' = '90cf769a75a92aae7784d65b68424cf8ab2c142de639a8e5c9f2cdd97c170c2d'
-    'AuthorizationPolicy/pandora-inventory-exact-allow' = 'a7dc805f41f402e0bd77f8f85133d56450bfcacf6a640b6fd00ec6adc9e5a766'
+    'AuthorizationPolicy/pandora-inventory-exact-allow' = '3ecfd444113af7c8bfa8742f3a94c35bdad12def74bc2f3babb739d0766ecf5b'
     'PeerAuthentication/pandora-inventory-mtls' = '3314f81ef92e102c9c1a1b311a4a27af7661bdd8d0e8037deec5ed5b90c77774'
 }
 
@@ -130,7 +130,7 @@ function Get-PandoraInventoryExpectedAuthorizationRows {
         'cluster.local/ns/pandora/sa/pandora-trade' = @('SettlePlayerTrade')
         'cluster.local/ns/pandora/sa/pandora-mail' = @('GrantItems', 'GrantInstances')
         'cluster.local/ns/pandora/sa/pandora-leaderboard' = @('GrantItems')
-        'cluster.local/ns/pandora/sa/pandora-battle-result' = @('GrantInstances')
+        'cluster.local/ns/pandora/sa/pandora-battle-result' = @('GrantItems', 'GrantInstances', 'ConsumeBattleItem', 'DiscardBattleItem')
     }
     if ($IncludeEdge) {
         $matrix['cluster.local/ns/pandora-ingress/sa/pandora-edge-envoy'] = $script:PandoraInventoryPlayerMethods

@@ -139,7 +139,7 @@ type LoginConf struct {
 	// 未经 Envoy 的直连(本机 dev)拿不到 IP → 自动退化为仅账号维度(fail-open 方向)。
 	// 背压非权威门:Redis 故障一律放行只 Warn(§2 铁律)。
 
-	// LoginFailLimit 失败窗口内允许的凭据失败次数(默认 5;<=0 关闭整个失败配额)。
+	// LoginFailLimit 失败窗口内允许的凭据失败次数(默认 5;**负值**关闭整个失败配额,0=用默认)。
 	LoginFailLimit int `yaml:"login_fail_limit,omitempty" json:"login_fail_limit,omitempty"`
 	// LoginFailWindow 失败计数窗口(默认 15min)。
 	LoginFailWindow config.Duration `yaml:"login_fail_window,omitempty" json:"login_fail_window,omitempty"`

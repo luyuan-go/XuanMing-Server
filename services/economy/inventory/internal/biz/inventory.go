@@ -35,6 +35,25 @@ type snowflakeGen interface {
 	GenerateInto(dst []uint64)
 }
 
+// ItemDefinition 是 inventory 业务真正需要的道具表最小投影。
+// 展示字段不进入本域；规则每次现查同一个热更 Store，避免 YAML 与 UE 配置表漂移。
+type ItemDefinition struct {
+	Equipment bool
+	// LobbyUsable 只有存在服务端大厅效果处理器时才可为真。真实 item.usable
+	// 当前表示 UE GAS 局内使用，因此配置表适配器必须保持本字段为 false。
+	LobbyUsable bool
+	// BattleUsable 表示可由可信战斗进度事实触发持久扣减；它不赋予玩家 JWT
+	// 直接调用大厅 UseItem 的权限。
+	BattleUsable  bool
+	SellUnitPrice int64
+	MaxStack      uint32
+}
+
+// ItemCatalog 是策划道具表的只读热更视图。ok=false 必须 fail-closed，未知 ID 不能入账。
+type ItemCatalog interface {
+	Lookup(itemConfigID uint32) (def ItemDefinition, ok bool)
+}
+
 // InventoryUsecase 是 inventory 服务业务逻辑核心。
 type InventoryUsecase struct {
 	repo data.InventoryRepo
@@ -54,6 +73,9 @@ type InventoryUsecase struct {
 	// randIntn 返回 [0,n) 的随机整数(装备鉴定 roll 随机属性用,W5 ④)。
 	// 默认全局 math/rand;测试经 SetRandSource 注入确定性序列。n<=0 时约定返回 0。
 	randIntn func(n int64) int64
+
+	// catalog 非 nil 时是规则唯一权威；cfg.ItemRules 仅保留给未接配置表的单测/兼容部署。
+	catalog ItemCatalog
 }
 
 // NewInventoryUsecase 构造。
@@ -75,6 +97,20 @@ func defaultRandIntn(n int64) int64 {
 
 // SetSnowflake 注入装备实例 ID 生成器(W5 ④)。nil-safe:不调用时实例背包禁用。
 func (u *InventoryUsecase) SetSnowflake(sf snowflakeGen) { u.sf = sf }
+
+// SetItemCatalog 注入策划道具表。启用后未知 ID、堆叠/实例模型错路由全部 fail-closed。
+func (u *InventoryUsecase) SetItemCatalog(c ItemCatalog) { u.catalog = c }
+
+func (u *InventoryUsecase) itemDefinition(itemConfigID uint32) (ItemDefinition, bool) {
+	if u.catalog != nil {
+		return u.catalog.Lookup(itemConfigID)
+	}
+	rule := u.cfg.RuleOf(itemConfigID)
+	if rule == nil {
+		return ItemDefinition{}, false
+	}
+	return ItemDefinition{LobbyUsable: rule.Usable, SellUnitPrice: rule.SellUnitPrice}, true
+}
 
 // SetRandSource 注入鉴定 roll 随机源(测试用确定性序列;不调用则用默认 math/rand)。
 func (u *InventoryUsecase) SetRandSource(fn func(n int64) int64) {
@@ -138,6 +174,15 @@ func (u *InventoryUsecase) GrantInstances(ctx context.Context, playerID uint64, 
 		if id == 0 {
 			return nil, errcode.New(errcode.ErrInvalidArg, "item_config_id required")
 		}
+		if u.catalog != nil {
+			def, ok := u.itemDefinition(id)
+			if !ok {
+				return nil, errcode.New(errcode.ErrInvalidArg, "unknown item_config_id: %d", id)
+			}
+			if !def.Equipment {
+				return nil, errcode.New(errcode.ErrInvalidArg, "stackable item %d must use GrantItems", id)
+			}
+		}
 	}
 	if u.sf == nil {
 		return nil, errcode.New(errcode.ErrInvalidArg, "instance inventory not enabled (no id generator)")
@@ -188,7 +233,18 @@ func (u *InventoryUsecase) IdentifyItem(ctx context.Context, playerID, instanceI
 	if !found {
 		return data.ItemInstance{}, errcode.New(errcode.ErrInventoryItemNotFound, "instance not found player=%d id=%d", playerID, instanceID)
 	}
+	if u.catalog != nil {
+		def, ok := u.itemDefinition(configID)
+		if !ok || !def.Equipment {
+			return data.ItemInstance{}, errcode.New(errcode.ErrInvalidArg,
+				"instance config is not a configured equipment: %d", configID)
+		}
+	}
 	attrs := u.rollIdentifyAttrs(configID)
+	if u.catalog != nil && len(attrs) == 0 {
+		return data.ItemInstance{}, errcode.New(errcode.ErrInvalidState,
+			"equipment identify rule unavailable: %d", configID)
+	}
 	inst, already, err := u.repo.IdentifyInstance(ctx, playerID, instanceID, attrs)
 	if err != nil {
 		return data.ItemInstance{}, err
@@ -201,7 +257,8 @@ func (u *InventoryUsecase) IdentifyItem(ctx context.Context, playerID, instanceI
 }
 
 // rollIdentifyAttrs 按配置从属性池不放回抽 AttrCount 条,每条在 [Min,Max] 均匀 roll 数值。
-// 无规则 / 空池 → 返回 nil(鉴定只置 identified 无属性)。
+// 无规则 / 空池 → 返回 nil；接入配置表的生产路径由 IdentifyItem fail-closed，
+// 防止把装备永久写成 identified=true 但零词条。
 func (u *InventoryUsecase) rollIdentifyAttrs(itemConfigID uint32) []data.ItemAttribute {
 	rule := u.cfg.IdentifyRuleOf(itemConfigID)
 	if rule == nil || len(rule.Pool) == 0 || rule.AttrCount <= 0 {
@@ -258,6 +315,41 @@ func (u *InventoryUsecase) DiscardInstance(ctx context.Context, playerID, instan
 	return u.repo.DiscardInstance(ctx, playerID, instanceID)
 }
 
+// CheckInstancesOwned 精确校验唯一实例归属。instance_id 与 item_config_id 必须同时匹配，
+// 返回请求集合中匹配的 instance_id 子集（去重、升序）。
+const MaxCheckInstancesOwned = 64
+
+func (u *InventoryUsecase) CheckInstancesOwned(ctx context.Context, playerID uint64, queries []data.InstanceOwnershipQuery) ([]uint64, error) {
+	if playerID == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if len(queries) == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "instances required")
+	}
+	if len(queries) > MaxCheckInstancesOwned {
+		return nil, errcode.New(errcode.ErrInvalidArg,
+			"too many instances: %d > %d", len(queries), MaxCheckInstancesOwned)
+	}
+	seen := make(map[uint64]struct{}, len(queries))
+	for _, q := range queries {
+		if q.InstanceID == 0 || q.ItemConfigID == 0 {
+			return nil, errcode.New(errcode.ErrInvalidArg, "instance_id and item_config_id required")
+		}
+		if _, duplicate := seen[q.InstanceID]; duplicate {
+			return nil, errcode.New(errcode.ErrInvalidArg, "duplicate instance_id: %d", q.InstanceID)
+		}
+		seen[q.InstanceID] = struct{}{}
+		if u.catalog != nil {
+			def, ok := u.itemDefinition(q.ItemConfigID)
+			if !ok || !def.Equipment {
+				return nil, errcode.New(errcode.ErrInvalidArg,
+					"instance query config is not configured equipment: %d", q.ItemConfigID)
+			}
+		}
+	}
+	return u.repo.CheckInstancesOwned(ctx, playerID, queries)
+}
+
 // GrantItems 幂等发放道具 + 货币(系统驱动,idempotency_key 防重复入账)。
 func (u *InventoryUsecase) GrantItems(ctx context.Context, playerID uint64, items []data.ItemGrant, gold int64, idempotencyKey string) (int64, error) {
 	if playerID == 0 {
@@ -278,6 +370,15 @@ func (u *InventoryUsecase) GrantItems(ctx context.Context, playerID uint64, item
 		}
 		if it.Count <= 0 {
 			return 0, errcode.New(errcode.ErrInvalidArg, "count must be positive: item=%d", it.ItemConfigID)
+		}
+		if u.catalog != nil {
+			def, ok := u.itemDefinition(it.ItemConfigID)
+			if !ok {
+				return 0, errcode.New(errcode.ErrInvalidArg, "unknown item_config_id: %d", it.ItemConfigID)
+			}
+			if def.Equipment {
+				return 0, errcode.New(errcode.ErrInvalidArg, "equipment item %d must use GrantInstances", it.ItemConfigID)
+			}
 		}
 	}
 	detail := fmt.Sprintf("grant items=%d gold=%d", len(items), gold)
@@ -306,8 +407,8 @@ func (u *InventoryUsecase) UseItem(ctx context.Context, playerID uint64, itemCon
 	if idempotencyKey == "" {
 		return 0, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
 	}
-	rule := u.cfg.RuleOf(itemConfigID)
-	if rule == nil || !rule.Usable {
+	def, ok := u.itemDefinition(itemConfigID)
+	if !ok || !def.LobbyUsable || def.Equipment {
 		return 0, errcode.New(errcode.ErrInventoryItemNotUsable, "item not usable in lobby: %d", itemConfigID)
 	}
 	detail := fmt.Sprintf("use item=%d count=%d", itemConfigID, count)
@@ -320,6 +421,131 @@ func (u *InventoryUsecase) UseItem(ctx context.Context, playerID uint64, itemCon
 			"player_id", playerID, "idempotency_key", idempotencyKey, "item", itemConfigID, "remaining", remaining)
 	}
 	return remaining, nil
+}
+
+// ConsumeBattleItem 按可信 DS 进度事实持久扣减局内消耗品。此能力只供系统 RPC，
+// 与大厅 UseItem 分离，避免把 item.usable 误解为“扣掉即完成效果”。实际回血/增益由 UE GAS
+// 在 ReportProgress ACK 后执行；这里仅保证后端资产不会在重登后复活。
+func (u *InventoryUsecase) ConsumeBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey string) (int64, error) {
+	if playerID == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if itemConfigID == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "item_config_id required")
+	}
+	if count <= 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "count must be positive")
+	}
+	if idempotencyKey == "" {
+		return 0, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
+	}
+	def, ok := u.itemDefinition(itemConfigID)
+	if !ok || !def.BattleUsable || def.Equipment {
+		return 0, errcode.New(errcode.ErrInventoryItemNotUsable,
+			"item not consumable in battle: %d", itemConfigID)
+	}
+	detail := fmt.Sprintf("battle consume item=%d count=%d", itemConfigID, count)
+	remaining, already, err := u.repo.ConsumeBattleItem(ctx, playerID, itemConfigID, count, idempotencyKey, detail)
+	if err != nil {
+		return 0, err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "consume_battle_item_idempotent_hit",
+			"player_id", playerID, "idempotency_key", idempotencyKey,
+			"item", itemConfigID, "remaining", remaining)
+	}
+	return remaining, nil
+}
+
+// DiscardBattleItem 按可信 DS 进度事实持久丢弃可堆叠物品。装备实例没有可靠的
+// phase0 DS Guid ↔ inventory instance_id 映射，本接口明确只接收非装备配置。
+func (u *InventoryUsecase) DiscardBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey string) (int64, error) {
+	if playerID == 0 || itemConfigID == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "player_id and item_config_id required")
+	}
+	if count <= 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "count must be positive")
+	}
+	if idempotencyKey == "" {
+		return 0, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
+	}
+	def, ok := u.itemDefinition(itemConfigID)
+	if !ok || def.Equipment {
+		return 0, errcode.New(errcode.ErrInvalidArg,
+			"battle discard only supports configured stackable item: %d", itemConfigID)
+	}
+	detail := fmt.Sprintf("battle discard item=%d count=%d", itemConfigID, count)
+	remaining, already, err := u.repo.DiscardBattleItem(ctx, playerID, itemConfigID, count, idempotencyKey, detail)
+	if err != nil {
+		return 0, err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "discard_battle_item_idempotent_hit",
+			"player_id", playerID, "idempotency_key", idempotencyKey,
+			"item", itemConfigID, "remaining", remaining)
+	}
+	return remaining, nil
+}
+
+// DiscardItem 幂等丢弃可堆叠物品。装备实例必须走 DiscardInstance，避免按配置 ID
+// 随机删掉同配置但不同词条的实例。
+func (u *InventoryUsecase) DiscardItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey string) (int64, error) {
+	if playerID == 0 || itemConfigID == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "player_id and item_config_id required")
+	}
+	if count <= 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "count must be positive")
+	}
+	if idempotencyKey == "" {
+		return 0, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
+	}
+	if u.catalog != nil {
+		def, ok := u.itemDefinition(itemConfigID)
+		if !ok || def.Equipment {
+			return 0, errcode.New(errcode.ErrInvalidArg,
+				"item %d is not configured stackable", itemConfigID)
+		}
+	}
+	detail := fmt.Sprintf("discard item=%d count=%d", itemConfigID, count)
+	remaining, already, err := u.repo.DiscardItem(ctx, playerID, itemConfigID, count, idempotencyKey, detail)
+	if err != nil {
+		return 0, err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "discard_item_idempotent_hit",
+			"player_id", playerID, "idempotency_key", idempotencyKey,
+			"item", itemConfigID, "remaining", remaining)
+	}
+	return remaining, nil
+}
+
+// SellInstance 原子出售唯一装备实例。售价由该实例的真实 item_config_id 查同源表，
+// repo 在事务里重新锁实例并拒绝 bound，删除与金币入账/ledger 同成同败。
+func (u *InventoryUsecase) SellInstance(ctx context.Context, playerID, instanceID uint64, itemConfigID uint32, idempotencyKey string) (int64, error) {
+	if playerID == 0 || instanceID == 0 || itemConfigID == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "player_id, instance_id and item_config_id required")
+	}
+	if idempotencyKey == "" {
+		return 0, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
+	}
+	def, ok := u.itemDefinition(itemConfigID)
+	gold := int64(0)
+	if ok && (u.catalog == nil || def.Equipment) && def.SellUnitPrice > 0 {
+		gold = def.SellUnitPrice
+	}
+	// 即使热更后配置已删/禁售也要进入 repo：同 key 的首次成功结果必须从 ledger
+	// 回放。gold=0 的首次请求由 repo 在 claim 后回滚为 NotSellable，不会建脏流水。
+	detail := fmt.Sprintf("sell instance=%d item=%d gold=%d", instanceID, itemConfigID, gold)
+	newGold, already, err := u.repo.SellInstance(ctx, playerID, instanceID, itemConfigID, gold, idempotencyKey, detail)
+	if err != nil {
+		return 0, err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "sell_instance_idempotent_hit",
+			"player_id", playerID, "instance_id", instanceID,
+			"idempotency_key", idempotencyKey, "gold", newGold)
+	}
+	return newGold, nil
 }
 
 // SellItem 出售道具换金币(不可出售 → ErrInventoryNotSellable;数量不足 → ErrInventoryInsufficient)。
@@ -336,22 +562,23 @@ func (u *InventoryUsecase) SellItem(ctx context.Context, playerID uint64, itemCo
 	if idempotencyKey == "" {
 		return 0, 0, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
 	}
-	rule := u.cfg.RuleOf(itemConfigID)
-	if rule == nil || !rule.Sellable {
-		return 0, 0, errcode.New(errcode.ErrInventoryNotSellable, "item not sellable: %d", itemConfigID)
-	}
-	// 防御:可出售必须单价 > 0(启动时已校验,此处兜底防配置漂移/负价扣币)。
-	if rule.SellUnitPrice <= 0 {
-		return 0, 0, errcode.New(errcode.ErrInventoryNotSellable, "item not sellable (non-positive price): %d", itemConfigID)
-	}
-	// 防御:单价 * 数量 int64 溢出会变负数进而少扣/反加金币,溢出直接拒。
-	gold, ok := safeMulInt64(rule.SellUnitPrice, count)
-	if !ok || gold <= 0 {
-		return 0, 0, errcode.New(errcode.ErrInvalidArg, "sell amount overflow item=%d price=%d count=%d", itemConfigID, rule.SellUnitPrice, count)
+	def, ok := u.itemDefinition(itemConfigID)
+	gold := int64(0)
+	overflow := false
+	if ok && !def.Equipment && def.SellUnitPrice > 0 {
+		gold, ok = safeMulInt64(def.SellUnitPrice, count)
+		overflow = !ok || gold <= 0
+		if overflow {
+			gold = 0
+		}
 	}
 	detail := fmt.Sprintf("sell item=%d count=%d gold=%d", itemConfigID, count, gold)
 	remaining, newGold, already, err := u.repo.SellItem(ctx, playerID, itemConfigID, count, gold, idempotencyKey, detail)
 	if err != nil {
+		if overflow && errcode.As(err) == errcode.ErrInventoryNotSellable {
+			return 0, 0, errcode.New(errcode.ErrInvalidArg,
+				"sell amount overflow item=%d price=%d count=%d", itemConfigID, def.SellUnitPrice, count)
+		}
 		return 0, 0, err
 	}
 	if already {

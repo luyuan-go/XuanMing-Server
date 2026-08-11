@@ -1,9 +1,10 @@
 # inventory
 
 > 经济 / 背包服务:玩家货币 + 可堆叠道具 + 装备实例的**权威持久化**,大厅态发放 / 使用 / 出售 /
-> 鉴定,拍卖与玩家交易的**原子结算 + escrow 冻结**,以及邮件 transfer 附件实例托管;可选承载
+> 鉴定/丢弃/出售,拍卖与玩家交易的**原子结算 + escrow 冻结**,以及邮件 transfer 附件实例托管;可选承载
 > 背包域(`pandora.bag.v1`,bag phase 1)。全部写走 MySQL 本地事务 + `inventory_ledger` 幂等键
-> (不变量 §9.7)。战斗内即时道具走 UE GAS,不经本服务(ds-arch §0.1)。
+> (不变量 §9.7)。战斗内即时效果走 UE GAS；对应持久消费/丢弃由 battle_result 事实出箱调本服
+> 系统 RPC 最终扣减，绝不复用大厅 `UseItem`。
 >
 > 本 README 是**模块级说明**(职责 / RPC / 存储 / 调用链 / 起动)。**设计判断 / 决策记录**见
 > `docs/design` 的 [`bag-domain.md`](../../../docs/design/bag-domain.md)、
@@ -51,13 +52,19 @@
 | RPC | 调用方 | 语义 | 鉴权 |
 |---|---|---|---|
 | `GetInventory` | 客户端 | 读货币 + 道具堆叠 + 容量 + 装备实例 | JWT;`callerPlayerID` 校验请求体 `player_id`==调用者 |
-| `UseItem` | 客户端 | 大厅态使用消耗品(开箱 / 经验书) | JWT;同上 |
+| `UseItem` | 客户端 | 大厅使用入口；真实 `item.usable` 当前仅表示局内 GAS，故真实表全量 fail-closed、不扣物 | JWT;同上 |
 | `SellItem` | 客户端 | 出售道具换金币(单价服务端裁决) | JWT;同上 |
+| `DiscardItem` | 客户端 | 幂等丢弃可堆叠道具，返回 `remaining` | JWT;同上 |
 | `IdentifyItem` | 客户端 | 鉴定一件未鉴定装备实例(服务端 roll 属性) | JWT;同上 |
 | `DiscardInstance` | 客户端 | 丢弃一件装备实例 | JWT;同上 |
 | `MoveInstance` | 客户端 | 移动装备实例到新格 | JWT;同上 |
+| `SellInstance` | 客户端 | 按 `instance_id+item_config_id` 精确出售实例，bound 拒绝，返回金币余额 | JWT;同上 |
 | `GrantItems` | 内部(掉落 / 活动 / 购买到账) | 幂等发放道具 + 货币 | **拒玩家 JWT**(`callerID` 必须 =0) |
 | `GrantInstances` | 内部 | 幂等发放装备实例(snowflake 生成 `instance_id`) | **拒玩家 JWT** |
+| `ConsumeBattleItem` | battle_result(内部) | 按进度事实幂等扣局内消耗品 | **拒玩家 JWT** |
+| `DiscardBattleItem` | battle_result(内部) | 按进度事实幂等丢弃可堆叠物；副本装备不支持 | **拒玩家 JWT** |
+| `CheckItemsOwned` | player(内部,兼容) | 按配置 ID 查询持有子集 | **拒玩家 JWT** |
+| `CheckInstancesOwned` | player(内部) | 按 `instance_id+item_config_id` 精确查询实例归属子集 | **拒玩家 JWT** |
 | `SettleAuctionMatch` | auction(内部) | 原子结算拍卖成交(双方 escrow 对转) | **拒玩家 JWT** |
 | `SettlePlayerTrade` | trade(内部) | 原子结算点对点交易(无预冻,双方活跃余额扣转) | **拒玩家 JWT** |
 | `FreezeForOrder` | auction(内部) | 挂单冻结资产进 escrow(SELL 冻道具 / BUY 冻金币) | **拒玩家 JWT** |
@@ -116,7 +123,7 @@ internal/
 
 ## 核心调用链
 
-### 1. 幂等权威写(UseItem / SellItem / GrantItems)—— ledger 先行 + 锁行扣减
+### 1. 幂等权威写—— ledger 先行 + 锁行扣减
 
 所有改账写共用「先 claim 幂等流水(记指纹)→ 再原子改余额 → 回写结果快照」一条骨架。以 `UseItem`
 为例:
@@ -146,6 +153,17 @@ service.UseItem (inventory.go:104)
   `player_items` / `player_currency`,回写发放后 `gold` 快照。
 - **`SellItem`**(`biz/inventory.go:320`):biz 层用 `safeMulInt64` 防 `单价×数量` int64 溢出变负数
   反加金币(`inventory.go:342`),再走 `data:434` 扣道具 + 加金币事务。
+- **真实配置同源**:`cmd/inventory/configtable.go` 每次从热更 `Store` 读取 `item.type/max_stack/
+  sell_price/usable`。`GrantItems` 拒装备、`GrantInstances` 拒可堆叠物，未知 ID 一律拒；不再使用
+  `2001/3001` 样例。`usable=true` 只授权内部 `ConsumeBattleItem`，不授权大厅 `UseItem`。
+- **战斗事实扣减**:`ConsumeBattleItem` / `DiscardBattleItem` 使用独立 ledger op/fingerprint，和大厅
+  use/discard 不混淆。battle_result 对普通拾取仍异步出箱；对独立 consume/discard action 只有本事务
+  明确完成才回成功 ACK，并以持久 outcome 处理回包丢失。
+- **phase0 资产边界**:battle_result 只允许 action 支出本场已接受的同玩家/同 item stack pickup，
+  不允许 DS 用合法 match 凭证扣进入本场前的主库存；副本装备实例丢弃仍 fail-closed。
+- **出售热更幂等**:`SellItem` 新指纹只含 `item+count`，`SellInstance` 只含 `instance+item`；售价只
+  进入首次 ledger detail/result。升级前含价格的旧指纹仅在严格解析首次 detail 并重算旧 hash
+  完整一致时回放，禁止任意旧 hash 放行。
 
 ### 2. 拍卖成交结算 SettleAuctionMatch —— 双方 escrow 对转
 
@@ -258,9 +276,9 @@ authorizeOwner (biz/bag.go:80)
 | `sweep_batch` | `500` | 每轮每表清理行数上限(小批量防长事务锁表) |
 | `ledger_retention_days` | `90` | `inventory_ledger` 幂等流水保留天数(≫ 一切重试窗口;≥ mail 可领窗口) |
 | `escrow_retention_days` | `90` | closed `auction_escrow` 保留天数(active 永不清) |
-| `item_rules` | `[]` | 道具大厅经济规则(usable / sellable + 单价);空 = 任何道具不可用 / 不可售(安全默认) |
 | `capacity` | `0` | 装备实例背包格容量;`<=0` = 未启用实例背包(`GrantInstances` 拒) |
-| `identify_rules` | `[]` | 装备鉴定随机属性池;空 / 无匹配 = 只置 `identified` 无属性 |
+| `default_identify_rule` | 必填(配置表路径) | 无专属词条表时的开发安全默认；当前仅 `Atk(3)+1` |
+| `identify_rules` | `[]` | 装备专属鉴定池，优先于默认规则；属性 ID 必须存在于 `role_attr_map` |
 
 ### `bag.*`(`dsn` 为空 = 背包域未启用,不注册 BagService,安全默认)
 
@@ -288,9 +306,11 @@ authorizeOwner (biz/bag.go:80)
 | `session_gate.require` | `false`(dev) | 客户端面请求 jti 必须是 login 会话当前一代;prod 生成器机械置 `true`(漏配拒启) |
 | `node.mysql_client.dsn` | 必填 | `pandora_trade` 库(强依赖,空则启动失败) |
 | `node.redis_client` | — | 会话现行性门只读 login 会话权威 `pandora:sess`(共享实例) |
+| `config_table.dir` | 必填 | 与 UE 同源的 `configtable/dist`；缺目录/表/checksum/属性引用均拒启 |
 
-> `Validate()` 启动 fail-fast:可出售道具必须单价 > 0、非可售单价必须为 0;鉴定池 `min<=max`、
-> `attr_id` 不重复;容量购买仅 `bag_type` 0/1、档位 slots 总和 ≤ `max_extra`。非法配置拒启,不带病上线。
+> 当前没有专用装备词条表。默认鉴定只给 `Atk(3)+1`，因为 UE 已能对称应用/卸除；`Hp(1)`、
+> `Shield(5)` 缺 Max 语义，`MoveSpeedRate(7)` 的 int64 单位未定义，显式规则中的这些属性目前只保证
+> 展示/存储保真，不应作为默认有效词条。配置表 validator 会校验引用真实存在，但不会凭空定义数值语义。
 
 ## 本地启动
 

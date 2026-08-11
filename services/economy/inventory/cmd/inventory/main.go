@@ -25,6 +25,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	pkgconfig "github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/dbguard"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	pkgmw "github.com/luyuancpp/pandora/pkg/middleware"
@@ -83,6 +84,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	// 道具规则的唯一权威是与 UE 同源的 configtable/dist/item.json。缺目录、缺表、
+	// checksum/外键/鉴定属性引用异常一律拒启，不能再退回 2001/3001 样例 YAML。
+	if cfg.ConfigTable.Dir == "" {
+		helper.Errorw("msg", "configtable_dir_required",
+			"hint", "inventory Use/Sell/Grant/Identify rules require config_table.dir")
+		os.Exit(1)
+	}
+	ctStore := configtable.NewStore()
+	ctStore.AddValidator(validateInventoryTables(cfg.Inventory))
+	ctRes, lerr := ctStore.Load(cfg.ConfigTable.Dir, 0)
+	if lerr != nil {
+		helper.Errorw("msg", "configtable_load_failed", "dir", cfg.ConfigTable.Dir, "err", lerr)
+		os.Exit(1)
+	}
+	for _, warning := range ctRes.Warnings {
+		helper.Warnw("msg", "configtable_load_warning", "warning", warning)
+	}
+	cfg.Bag.ItemMaxStacks = itemMaxStacksFromTables(ctStore.Tables())
+	helper.Infow("msg", "inventory_item_table_loaded", "dir", cfg.ConfigTable.Dir,
+		"version", ctRes.Version, "items", ctStore.Tables().Item.Count(),
+		"identify_default_pool", len(cfg.Inventory.DefaultIdentifyRule.Pool))
+
 	// 校验背包域配置(段容量 / 堆叠上限;非法配置 fail-fast,bag-domain.md §5.2)。
 	if verr := cfg.Bag.Validate(); verr != nil {
 		helper.Errorw("msg", "bag_conf_invalid", "err", verr)
@@ -120,6 +143,7 @@ func main() {
 	// 4. 装配链
 	repo := data.NewMySQLInventoryRepo(db)
 	uc := biz.NewInventoryUsecase(repo, cfg.Inventory)
+	uc.SetItemCatalog(inventoryCatalogFromStore{store: ctStore})
 
 	// Snowflake(instance_id 生成,W5 ④):仅在启用实例背包(capacity>0)时装配。
 	// node_id_source=static 静态,=etcd 走 etcd 自动抢占,失租自动退出。
@@ -252,14 +276,15 @@ func main() {
 	sessGate, sgClose := sessiongate.MustBuild(cfg.Node.RedisClient, cfg.SessionGate.Require)
 	defer sgClose()
 
-	grpcSrv := server.NewGRPCServer(&cfg, svc, bagSvc, sessGate)
+	ctAdmin := configtable.NewAdminService(ctStore, cfg.ConfigTable.Dir)
+	grpcSrv := server.NewGRPCServer(&cfg, svc, bagSvc, ctAdmin, sessGate)
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	helper.Infow(
 		"msg", "service_ready",
 		"grpc", cfg.Server.Grpc.Addr,
 		"http", cfg.Server.Http.Addr,
-		"item_rules", len(cfg.Inventory.ItemRules),
+		"item_rules_source", "configtable/item",
 	)
 
 	// 5. Kratos App

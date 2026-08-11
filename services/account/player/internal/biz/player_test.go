@@ -37,7 +37,7 @@ type fakeRepo struct {
 	unspent      map[uint64]int
 	grants       map[string]bool // key=playerID|idempotencyKey
 	equipment    map[uint64][]data.EquipmentSlot
-	talents      map[uint64]map[uint32]int32
+	talents      map[uint64]map[uint32]data.TalentLevel
 	talentTotal  map[uint64]int
 	talentGrants map[string]bool   // key=playerID|idempotencyKey
 	rewardRec    map[uint64][]byte // 领奖记录序列化 bytes
@@ -62,7 +62,7 @@ func newFakeRepo() *fakeRepo {
 		unspent:      map[uint64]int{},
 		grants:       map[string]bool{},
 		equipment:    map[uint64][]data.EquipmentSlot{},
-		talents:      map[uint64]map[uint32]int32{},
+		talents:      map[uint64]map[uint32]data.TalentLevel{},
 		talentTotal:  map[uint64]int{},
 		talentGrants: map[string]bool{},
 		rewardRec:    map[uint64][]byte{},
@@ -253,10 +253,12 @@ func (f *fakeRepo) GetEquipment(_ context.Context, playerID uint64) ([]data.Equi
 	return f.equipment[playerID], nil
 }
 
+// talentUsed 复刻 MySQL 的 SUM(spent_points) 口径:已花点数按落库的每节点实际消耗算,
+// **不是** Σ 等级。用等级和会让 cost_per_level≠1 的分配读出虚高的可点数(写扣 6 读算 4)。
 func (f *fakeRepo) talentUsed(playerID uint64) int {
 	var used int
-	for _, lv := range f.talents[playerID] {
-		used += int(lv)
+	for _, t := range f.talents[playerID] {
+		used += int(t.SpentPoints)
 	}
 	return used
 }
@@ -271,29 +273,37 @@ func (f *fakeRepo) GrantTalentPoints(_ context.Context, playerID uint64, points 
 	return f.talentTotal[playerID] - f.talentUsed(playerID), false, nil
 }
 
-// SetTalents 复刻 MySQL 语义:点数按 biz 传入的 totalCost 扣(不再自己按 sum(level) 推算,
-// 每级消耗是配置表列,repo 层看不到)。
-func (f *fakeRepo) SetTalents(_ context.Context, playerID uint64, talents []data.TalentLevel, totalCost uint32) (int, error) {
-	if int64(totalCost) > int64(f.talentTotal[playerID]) {
+// SetTalents 复刻 MySQL 语义:总消耗 = Σ 每节点 SpentPoints(biz 按专精表算好填入),
+// 每节点消耗随分配一起落库,读取侧据此还原已花点数——repo 层看不到配置表,
+// 自行按 sum(level) 推算会在 cost_per_level≠1 时算少扣。
+func (f *fakeRepo) SetTalents(_ context.Context, playerID uint64, talents []data.TalentLevel) (int, error) {
+	var totalCost int64
+	for _, t := range talents {
+		if t.SpentPoints <= 0 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "talent %d missing spent points", t.TalentID)
+		}
+		totalCost += int64(t.SpentPoints)
+	}
+	if totalCost > int64(f.talentTotal[playerID]) {
 		return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "insufficient")
 	}
-	m := map[uint32]int32{}
+	m := map[uint32]data.TalentLevel{}
 	for _, t := range talents {
-		m[t.TalentID] = t.Level
+		m[t.TalentID] = t
 	}
 	f.talents[playerID] = m
 	return f.talentTotal[playerID] - int(totalCost), nil
 }
 
 func (f *fakeRepo) ResetTalents(_ context.Context, playerID uint64) (int, error) {
-	f.talents[playerID] = map[uint32]int32{}
+	f.talents[playerID] = map[uint32]data.TalentLevel{}
 	return f.talentTotal[playerID], nil
 }
 
 func (f *fakeRepo) GetTalents(_ context.Context, playerID uint64) ([]data.TalentLevel, int, error) {
 	var out []data.TalentLevel
-	for id, lv := range f.talents[playerID] {
-		out = append(out, data.TalentLevel{TalentID: id, Level: lv})
+	for _, t := range f.talents[playerID] {
+		out = append(out, t)
 	}
 	return out, f.talentTotal[playerID] - f.talentUsed(playerID), nil
 }
@@ -427,22 +437,24 @@ type stubTalentRules struct {
 	nodes map[uint32]stubTalentNode
 }
 
-func (s stubTalentRules) ValidateAllocation(levels map[uint32]uint32) (uint32, error) {
+func (s stubTalentRules) ValidateAllocation(levels map[uint32]uint32) (map[uint32]uint32, uint32, error) {
 	var total uint32
+	costs := make(map[uint32]uint32, len(levels))
 	for id, lv := range levels {
 		node, ok := s.nodes[id]
 		if !ok {
-			return 0, fmt.Errorf("专精 %d 不在配置表中", id)
+			return nil, 0, fmt.Errorf("专精 %d 不在配置表中", id)
 		}
 		if lv > node.maxLevel {
-			return 0, fmt.Errorf("专精 %d 等级 %d 超过上限 %d", id, lv, node.maxLevel)
+			return nil, 0, fmt.Errorf("专精 %d 等级 %d 超过上限 %d", id, lv, node.maxLevel)
 		}
 		if node.reqID != 0 && levels[node.reqID] < node.reqLevel {
-			return 0, fmt.Errorf("专精 %d 前置未达标", id)
+			return nil, 0, fmt.Errorf("专精 %d 前置未达标", id)
 		}
+		costs[id] = lv * node.cost
 		total += lv * node.cost
 	}
-	return total, nil
+	return costs, total, nil
 }
 
 // stubOwnership 是拥有权查询的测试替身;owned 为 nil 表示"请求什么就持有什么"。

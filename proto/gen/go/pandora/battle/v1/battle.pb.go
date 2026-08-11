@@ -791,6 +791,117 @@ func (x *ItemPickupFact) GetCount() uint32 {
 	return 0
 }
 
+// ItemConsumeFact 局内消耗事实。仅用于把已由 UE GAS 执行的食物/水等使用同步为
+// 后端持久扣减；battle_result 按真实 item.usable/type 校验，并经 inventory 内部系统 RPC
+// 幂等扣除。DS/客户端必须等包含本 seq 的 ReportProgress ACK 后再最终扣本地数量并应用
+// GAS 效果；失败原批重试，禁止用大厅 UseItem JWT 路径替代。
+type ItemConsumeFact struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemConfigId  uint32                 `protobuf:"varint,1,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
+	Count         uint32                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"` // >0，且不得超过单事件拾取数量上限
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ItemConsumeFact) Reset() {
+	*x = ItemConsumeFact{}
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ItemConsumeFact) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ItemConsumeFact) ProtoMessage() {}
+
+func (x *ItemConsumeFact) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ItemConsumeFact.ProtoReflect.Descriptor instead.
+func (*ItemConsumeFact) Descriptor() ([]byte, []int) {
+	return file_pandora_battle_v1_battle_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ItemConsumeFact) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *ItemConsumeFact) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+// ItemDiscardFact 副本内丢弃可堆叠物品事实。当前不携 instance_id：phase0 DS 为装备
+// 生成的本地 Guid 与 inventory instance_id 没有可靠映射，装备丢弃必须在副本 UI
+// fail-closed，回大厅后走 DiscardInstance 精确处理。
+type ItemDiscardFact struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemConfigId  uint32                 `protobuf:"varint,1,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
+	Count         uint32                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"` // >0，真实 item.type 必须不是 EQUIPMENT
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ItemDiscardFact) Reset() {
+	*x = ItemDiscardFact{}
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ItemDiscardFact) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ItemDiscardFact) ProtoMessage() {}
+
+func (x *ItemDiscardFact) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ItemDiscardFact.ProtoReflect.Descriptor instead.
+func (*ItemDiscardFact) Descriptor() ([]byte, []int) {
+	return file_pandora_battle_v1_battle_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ItemDiscardFact) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *ItemDiscardFact) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
 // BattleProgressEvent 一条战斗中进度事实事件。
 // seq 每场单调递增(从 1 起),是幂等键 (match_id, seq) 的组成部分。
 type BattleProgressEvent struct {
@@ -801,6 +912,8 @@ type BattleProgressEvent struct {
 	//
 	//	*BattleProgressEvent_MonsterKill
 	//	*BattleProgressEvent_ItemPickup
+	//	*BattleProgressEvent_ItemConsume
+	//	*BattleProgressEvent_ItemDiscard
 	Fact          isBattleProgressEvent_Fact `protobuf_oneof:"fact"`
 	TsMs          int64                      `protobuf:"varint,5,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"` // DS 侧事件发生时间(审计;权威时间以服务端为准)
 	unknownFields protoimpl.UnknownFields
@@ -809,7 +922,7 @@ type BattleProgressEvent struct {
 
 func (x *BattleProgressEvent) Reset() {
 	*x = BattleProgressEvent{}
-	mi := &file_pandora_battle_v1_battle_proto_msgTypes[10]
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -821,7 +934,7 @@ func (x *BattleProgressEvent) String() string {
 func (*BattleProgressEvent) ProtoMessage() {}
 
 func (x *BattleProgressEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_battle_v1_battle_proto_msgTypes[10]
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -834,7 +947,7 @@ func (x *BattleProgressEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleProgressEvent.ProtoReflect.Descriptor instead.
 func (*BattleProgressEvent) Descriptor() ([]byte, []int) {
-	return file_pandora_battle_v1_battle_proto_rawDescGZIP(), []int{10}
+	return file_pandora_battle_v1_battle_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *BattleProgressEvent) GetSeq() uint64 {
@@ -876,6 +989,24 @@ func (x *BattleProgressEvent) GetItemPickup() *ItemPickupFact {
 	return nil
 }
 
+func (x *BattleProgressEvent) GetItemConsume() *ItemConsumeFact {
+	if x != nil {
+		if x, ok := x.Fact.(*BattleProgressEvent_ItemConsume); ok {
+			return x.ItemConsume
+		}
+	}
+	return nil
+}
+
+func (x *BattleProgressEvent) GetItemDiscard() *ItemDiscardFact {
+	if x != nil {
+		if x, ok := x.Fact.(*BattleProgressEvent_ItemDiscard); ok {
+			return x.ItemDiscard
+		}
+	}
+	return nil
+}
+
 func (x *BattleProgressEvent) GetTsMs() int64 {
 	if x != nil {
 		return x.TsMs
@@ -895,9 +1026,21 @@ type BattleProgressEvent_ItemPickup struct {
 	ItemPickup *ItemPickupFact `protobuf:"bytes,4,opt,name=item_pickup,json=itemPickup,proto3,oneof"`
 }
 
+type BattleProgressEvent_ItemConsume struct {
+	ItemConsume *ItemConsumeFact `protobuf:"bytes,6,opt,name=item_consume,json=itemConsume,proto3,oneof"`
+}
+
+type BattleProgressEvent_ItemDiscard struct {
+	ItemDiscard *ItemDiscardFact `protobuf:"bytes,7,opt,name=item_discard,json=itemDiscard,proto3,oneof"`
+}
+
 func (*BattleProgressEvent_MonsterKill) isBattleProgressEvent_Fact() {}
 
 func (*BattleProgressEvent_ItemPickup) isBattleProgressEvent_Fact() {}
+
+func (*BattleProgressEvent_ItemConsume) isBattleProgressEvent_Fact() {}
+
+func (*BattleProgressEvent_ItemDiscard) isBattleProgressEvent_Fact() {}
 
 // ReportProgressRequest 一批进度事件(批内 seq 升序;单飞行批,失败原批重发)。
 type ReportProgressRequest struct {
@@ -910,7 +1053,7 @@ type ReportProgressRequest struct {
 
 func (x *ReportProgressRequest) Reset() {
 	*x = ReportProgressRequest{}
-	mi := &file_pandora_battle_v1_battle_proto_msgTypes[11]
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -922,7 +1065,7 @@ func (x *ReportProgressRequest) String() string {
 func (*ReportProgressRequest) ProtoMessage() {}
 
 func (x *ReportProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_battle_v1_battle_proto_msgTypes[11]
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -935,7 +1078,7 @@ func (x *ReportProgressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportProgressRequest.ProtoReflect.Descriptor instead.
 func (*ReportProgressRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_battle_v1_battle_proto_rawDescGZIP(), []int{11}
+	return file_pandora_battle_v1_battle_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ReportProgressRequest) GetMatchId() uint64 {
@@ -964,7 +1107,7 @@ type ReportProgressResponse struct {
 
 func (x *ReportProgressResponse) Reset() {
 	*x = ReportProgressResponse{}
-	mi := &file_pandora_battle_v1_battle_proto_msgTypes[12]
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -976,7 +1119,7 @@ func (x *ReportProgressResponse) String() string {
 func (*ReportProgressResponse) ProtoMessage() {}
 
 func (x *ReportProgressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_battle_v1_battle_proto_msgTypes[12]
+	mi := &file_pandora_battle_v1_battle_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -989,7 +1132,7 @@ func (x *ReportProgressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportProgressResponse.ProtoReflect.Descriptor instead.
 func (*ReportProgressResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_battle_v1_battle_proto_rawDescGZIP(), []int{12}
+	return file_pandora_battle_v1_battle_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ReportProgressResponse) GetCode() v1.ErrCode {
@@ -1116,20 +1259,39 @@ var file_pandora_battle_v1_battle_proto_rawDesc = string([]byte{
 	0x69, 0x67, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x69, 0x74, 0x65,
 	0x6d, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x49, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x63, 0x6f, 0x75,
 	0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x22,
-	0xf0, 0x01, 0x0a, 0x13, 0x42, 0x61, 0x74, 0x74, 0x6c, 0x65, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65,
-	0x73, 0x73, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x65, 0x71, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x04, 0x52, 0x03, 0x73, 0x65, 0x71, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6c, 0x61,
-	0x79, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x70, 0x6c,
-	0x61, 0x79, 0x65, 0x72, 0x49, 0x64, 0x12, 0x47, 0x0a, 0x0c, 0x6d, 0x6f, 0x6e, 0x73, 0x74, 0x65,
-	0x72, 0x5f, 0x6b, 0x69, 0x6c, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x70,
-	0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x62, 0x61, 0x74, 0x74, 0x6c, 0x65, 0x2e, 0x76, 0x31,
-	0x2e, 0x4d, 0x6f, 0x6e, 0x73, 0x74, 0x65, 0x72, 0x4b, 0x69, 0x6c, 0x6c, 0x46, 0x61, 0x63, 0x74,
-	0x48, 0x00, 0x52, 0x0b, 0x6d, 0x6f, 0x6e, 0x73, 0x74, 0x65, 0x72, 0x4b, 0x69, 0x6c, 0x6c, 0x12,
-	0x44, 0x0a, 0x0b, 0x69, 0x74, 0x65, 0x6d, 0x5f, 0x70, 0x69, 0x63, 0x6b, 0x75, 0x70, 0x18, 0x04,
-	0x20, 0x01, 0x28, 0x0b, 0x32, 0x21, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x62,
-	0x61, 0x74, 0x74, 0x6c, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x74, 0x65, 0x6d, 0x50, 0x69, 0x63,
-	0x6b, 0x75, 0x70, 0x46, 0x61, 0x63, 0x74, 0x48, 0x00, 0x52, 0x0a, 0x69, 0x74, 0x65, 0x6d, 0x50,
-	0x69, 0x63, 0x6b, 0x75, 0x70, 0x12, 0x13, 0x0a, 0x05, 0x74, 0x73, 0x5f, 0x6d, 0x73, 0x18, 0x05,
+	0x4d, 0x0a, 0x0f, 0x49, 0x74, 0x65, 0x6d, 0x43, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x46, 0x61,
+	0x63, 0x74, 0x12, 0x24, 0x0a, 0x0e, 0x69, 0x74, 0x65, 0x6d, 0x5f, 0x63, 0x6f, 0x6e, 0x66, 0x69,
+	0x67, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x69, 0x74, 0x65, 0x6d,
+	0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x49, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x63, 0x6f, 0x75, 0x6e,
+	0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0x4d,
+	0x0a, 0x0f, 0x49, 0x74, 0x65, 0x6d, 0x44, 0x69, 0x73, 0x63, 0x61, 0x72, 0x64, 0x46, 0x61, 0x63,
+	0x74, 0x12, 0x24, 0x0a, 0x0e, 0x69, 0x74, 0x65, 0x6d, 0x5f, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67,
+	0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x69, 0x74, 0x65, 0x6d, 0x43,
+	0x6f, 0x6e, 0x66, 0x69, 0x67, 0x49, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0x82, 0x03,
+	0x0a, 0x13, 0x42, 0x61, 0x74, 0x74, 0x6c, 0x65, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73,
+	0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x65, 0x71, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x03, 0x73, 0x65, 0x71, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6c, 0x61, 0x79, 0x65,
+	0x72, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x70, 0x6c, 0x61, 0x79,
+	0x65, 0x72, 0x49, 0x64, 0x12, 0x47, 0x0a, 0x0c, 0x6d, 0x6f, 0x6e, 0x73, 0x74, 0x65, 0x72, 0x5f,
+	0x6b, 0x69, 0x6c, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x70, 0x61, 0x6e,
+	0x64, 0x6f, 0x72, 0x61, 0x2e, 0x62, 0x61, 0x74, 0x74, 0x6c, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x4d,
+	0x6f, 0x6e, 0x73, 0x74, 0x65, 0x72, 0x4b, 0x69, 0x6c, 0x6c, 0x46, 0x61, 0x63, 0x74, 0x48, 0x00,
+	0x52, 0x0b, 0x6d, 0x6f, 0x6e, 0x73, 0x74, 0x65, 0x72, 0x4b, 0x69, 0x6c, 0x6c, 0x12, 0x44, 0x0a,
+	0x0b, 0x69, 0x74, 0x65, 0x6d, 0x5f, 0x70, 0x69, 0x63, 0x6b, 0x75, 0x70, 0x18, 0x04, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x21, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x62, 0x61, 0x74,
+	0x74, 0x6c, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x74, 0x65, 0x6d, 0x50, 0x69, 0x63, 0x6b, 0x75,
+	0x70, 0x46, 0x61, 0x63, 0x74, 0x48, 0x00, 0x52, 0x0a, 0x69, 0x74, 0x65, 0x6d, 0x50, 0x69, 0x63,
+	0x6b, 0x75, 0x70, 0x12, 0x47, 0x0a, 0x0c, 0x69, 0x74, 0x65, 0x6d, 0x5f, 0x63, 0x6f, 0x6e, 0x73,
+	0x75, 0x6d, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x70, 0x61, 0x6e, 0x64,
+	0x6f, 0x72, 0x61, 0x2e, 0x62, 0x61, 0x74, 0x74, 0x6c, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x74,
+	0x65, 0x6d, 0x43, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x46, 0x61, 0x63, 0x74, 0x48, 0x00, 0x52,
+	0x0b, 0x69, 0x74, 0x65, 0x6d, 0x43, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x12, 0x47, 0x0a, 0x0c,
+	0x69, 0x74, 0x65, 0x6d, 0x5f, 0x64, 0x69, 0x73, 0x63, 0x61, 0x72, 0x64, 0x18, 0x07, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x22, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x62, 0x61, 0x74,
+	0x74, 0x6c, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x74, 0x65, 0x6d, 0x44, 0x69, 0x73, 0x63, 0x61,
+	0x72, 0x64, 0x46, 0x61, 0x63, 0x74, 0x48, 0x00, 0x52, 0x0b, 0x69, 0x74, 0x65, 0x6d, 0x44, 0x69,
+	0x73, 0x63, 0x61, 0x72, 0x64, 0x12, 0x13, 0x0a, 0x05, 0x74, 0x73, 0x5f, 0x6d, 0x73, 0x18, 0x05,
 	0x20, 0x01, 0x28, 0x03, 0x52, 0x04, 0x74, 0x73, 0x4d, 0x73, 0x42, 0x06, 0x0a, 0x04, 0x66, 0x61,
 	0x63, 0x74, 0x22, 0x72, 0x0a, 0x15, 0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x50, 0x72, 0x6f, 0x67,
 	0x72, 0x65, 0x73, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x19, 0x0a, 0x08, 0x6d,
@@ -1208,7 +1370,7 @@ func file_pandora_battle_v1_battle_proto_rawDescGZIP() []byte {
 }
 
 var file_pandora_battle_v1_battle_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pandora_battle_v1_battle_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_pandora_battle_v1_battle_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_pandora_battle_v1_battle_proto_goTypes = []any{
 	(BattleOutcome)(0),                // 0: pandora.battle.v1.BattleOutcome
 	(*PlayerStats)(nil),               // 1: pandora.battle.v1.PlayerStats
@@ -1221,37 +1383,41 @@ var file_pandora_battle_v1_battle_proto_goTypes = []any{
 	(*ListPlayerHistoryResponse)(nil), // 8: pandora.battle.v1.ListPlayerHistoryResponse
 	(*MonsterKillFact)(nil),           // 9: pandora.battle.v1.MonsterKillFact
 	(*ItemPickupFact)(nil),            // 10: pandora.battle.v1.ItemPickupFact
-	(*BattleProgressEvent)(nil),       // 11: pandora.battle.v1.BattleProgressEvent
-	(*ReportProgressRequest)(nil),     // 12: pandora.battle.v1.ReportProgressRequest
-	(*ReportProgressResponse)(nil),    // 13: pandora.battle.v1.ReportProgressResponse
-	(v1.ErrCode)(0),                   // 14: pandora.common.v1.ErrCode
+	(*ItemConsumeFact)(nil),           // 11: pandora.battle.v1.ItemConsumeFact
+	(*ItemDiscardFact)(nil),           // 12: pandora.battle.v1.ItemDiscardFact
+	(*BattleProgressEvent)(nil),       // 13: pandora.battle.v1.BattleProgressEvent
+	(*ReportProgressRequest)(nil),     // 14: pandora.battle.v1.ReportProgressRequest
+	(*ReportProgressResponse)(nil),    // 15: pandora.battle.v1.ReportProgressResponse
+	(v1.ErrCode)(0),                   // 16: pandora.common.v1.ErrCode
 }
 var file_pandora_battle_v1_battle_proto_depIdxs = []int32{
 	1,  // 0: pandora.battle.v1.BattleResult.stats:type_name -> pandora.battle.v1.PlayerStats
 	0,  // 1: pandora.battle.v1.BattleResult.outcome:type_name -> pandora.battle.v1.BattleOutcome
 	2,  // 2: pandora.battle.v1.ReportResultRequest.result:type_name -> pandora.battle.v1.BattleResult
-	14, // 3: pandora.battle.v1.ReportResultResponse.code:type_name -> pandora.common.v1.ErrCode
-	14, // 4: pandora.battle.v1.GetMatchResultResponse.code:type_name -> pandora.common.v1.ErrCode
+	16, // 3: pandora.battle.v1.ReportResultResponse.code:type_name -> pandora.common.v1.ErrCode
+	16, // 4: pandora.battle.v1.GetMatchResultResponse.code:type_name -> pandora.common.v1.ErrCode
 	2,  // 5: pandora.battle.v1.GetMatchResultResponse.result:type_name -> pandora.battle.v1.BattleResult
-	14, // 6: pandora.battle.v1.ListPlayerHistoryResponse.code:type_name -> pandora.common.v1.ErrCode
+	16, // 6: pandora.battle.v1.ListPlayerHistoryResponse.code:type_name -> pandora.common.v1.ErrCode
 	2,  // 7: pandora.battle.v1.ListPlayerHistoryResponse.results:type_name -> pandora.battle.v1.BattleResult
 	9,  // 8: pandora.battle.v1.BattleProgressEvent.monster_kill:type_name -> pandora.battle.v1.MonsterKillFact
 	10, // 9: pandora.battle.v1.BattleProgressEvent.item_pickup:type_name -> pandora.battle.v1.ItemPickupFact
-	11, // 10: pandora.battle.v1.ReportProgressRequest.events:type_name -> pandora.battle.v1.BattleProgressEvent
-	14, // 11: pandora.battle.v1.ReportProgressResponse.code:type_name -> pandora.common.v1.ErrCode
-	3,  // 12: pandora.battle.v1.BattleResultService.ReportResult:input_type -> pandora.battle.v1.ReportResultRequest
-	5,  // 13: pandora.battle.v1.BattleResultService.GetMatchResult:input_type -> pandora.battle.v1.GetMatchResultRequest
-	7,  // 14: pandora.battle.v1.BattleResultService.ListPlayerHistory:input_type -> pandora.battle.v1.ListPlayerHistoryRequest
-	12, // 15: pandora.battle.v1.BattleResultService.ReportProgress:input_type -> pandora.battle.v1.ReportProgressRequest
-	4,  // 16: pandora.battle.v1.BattleResultService.ReportResult:output_type -> pandora.battle.v1.ReportResultResponse
-	6,  // 17: pandora.battle.v1.BattleResultService.GetMatchResult:output_type -> pandora.battle.v1.GetMatchResultResponse
-	8,  // 18: pandora.battle.v1.BattleResultService.ListPlayerHistory:output_type -> pandora.battle.v1.ListPlayerHistoryResponse
-	13, // 19: pandora.battle.v1.BattleResultService.ReportProgress:output_type -> pandora.battle.v1.ReportProgressResponse
-	16, // [16:20] is the sub-list for method output_type
-	12, // [12:16] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	11, // 10: pandora.battle.v1.BattleProgressEvent.item_consume:type_name -> pandora.battle.v1.ItemConsumeFact
+	12, // 11: pandora.battle.v1.BattleProgressEvent.item_discard:type_name -> pandora.battle.v1.ItemDiscardFact
+	13, // 12: pandora.battle.v1.ReportProgressRequest.events:type_name -> pandora.battle.v1.BattleProgressEvent
+	16, // 13: pandora.battle.v1.ReportProgressResponse.code:type_name -> pandora.common.v1.ErrCode
+	3,  // 14: pandora.battle.v1.BattleResultService.ReportResult:input_type -> pandora.battle.v1.ReportResultRequest
+	5,  // 15: pandora.battle.v1.BattleResultService.GetMatchResult:input_type -> pandora.battle.v1.GetMatchResultRequest
+	7,  // 16: pandora.battle.v1.BattleResultService.ListPlayerHistory:input_type -> pandora.battle.v1.ListPlayerHistoryRequest
+	14, // 17: pandora.battle.v1.BattleResultService.ReportProgress:input_type -> pandora.battle.v1.ReportProgressRequest
+	4,  // 18: pandora.battle.v1.BattleResultService.ReportResult:output_type -> pandora.battle.v1.ReportResultResponse
+	6,  // 19: pandora.battle.v1.BattleResultService.GetMatchResult:output_type -> pandora.battle.v1.GetMatchResultResponse
+	8,  // 20: pandora.battle.v1.BattleResultService.ListPlayerHistory:output_type -> pandora.battle.v1.ListPlayerHistoryResponse
+	15, // 21: pandora.battle.v1.BattleResultService.ReportProgress:output_type -> pandora.battle.v1.ReportProgressResponse
+	18, // [18:22] is the sub-list for method output_type
+	14, // [14:18] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_pandora_battle_v1_battle_proto_init() }
@@ -1259,9 +1425,11 @@ func file_pandora_battle_v1_battle_proto_init() {
 	if File_pandora_battle_v1_battle_proto != nil {
 		return
 	}
-	file_pandora_battle_v1_battle_proto_msgTypes[10].OneofWrappers = []any{
+	file_pandora_battle_v1_battle_proto_msgTypes[12].OneofWrappers = []any{
 		(*BattleProgressEvent_MonsterKill)(nil),
 		(*BattleProgressEvent_ItemPickup)(nil),
+		(*BattleProgressEvent_ItemConsume)(nil),
+		(*BattleProgressEvent_ItemDiscard)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1269,7 +1437,7 @@ func file_pandora_battle_v1_battle_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pandora_battle_v1_battle_proto_rawDesc), len(file_pandora_battle_v1_battle_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

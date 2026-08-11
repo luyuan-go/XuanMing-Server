@@ -1776,11 +1776,19 @@ func (u *MatchUsecase) failMatchOpts(ctx context.Context, m *matchv1.MatchStorag
 			}
 			continue
 		}
-		// 其余票据退回队列,保留 enqueued_at_ms(排队时长),清掉 match_id
+		// 其余票据退回队列,保留 enqueued_at_ms(排队时长),清掉 match_id。
+		// 守卫退队(封盲写复活竞态):expected=本 match;若并发 CancelMatch 已删该票并释放
+		// claim,RequeueTicketIfOwned 会 no-op(不把已取消玩家的票复活进队列)。
+		expectedMatchID := ticket.MatchId // == m.MatchId(:1560 守卫已确认归属本局)
 		ticket.MatchId = 0
-		if err := u.repo.RequeueTicket(ctx, ticket, u.ticketTTL()); err != nil {
+		requeued, err := u.repo.RequeueTicketIfOwned(ctx, ticket, expectedMatchID, u.ticketTTL())
+		if err != nil {
 			plog.With(ctx).Warnw("msg", "match_requeue_failed", "ticket_id", tid, "err", err)
 			joined = errors.Join(joined, err)
+			continue
+		}
+		if !requeued {
+			// 票据已被取消删除 / 已归属他局:退出路径已把它处理掉,本局不再补推 QUEUEING。
 			continue
 		}
 		// 退回队列会刷新票据 TTL,claim 必须同步续期(否则 claim 先于票据过期,
@@ -3422,9 +3430,16 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTi
 // 调用方须在本函数之后才删 match(先退票再删 match)。
 func (u *MatchUsecase) rollbackReservations(ctx context.Context, reserved []*matchv1.MatchTicketStorageRecord) {
 	for _, t := range reserved {
+		// 守卫退队(同 failMatch):这些票刚被 ReserveTicket 置 MatchId=matchID;若并发
+		// CancelMatch 已删其一,守卫退队 no-op 不复活。
+		expectedMatchID := t.MatchId
 		t.MatchId = 0
-		if err := u.repo.RequeueTicket(ctx, t, u.ticketTTL()); err != nil {
+		requeued, err := u.repo.RequeueTicketIfOwned(ctx, t, expectedMatchID, u.ticketTTL())
+		if err != nil {
 			plog.With(ctx).Warnw("msg", "rollback_reservation_failed", "ticket_id", t.TicketId, "err", err)
+			continue
+		}
+		if !requeued {
 			continue
 		}
 		u.refreshClaims(ctx, t) // 票据 TTL 已刷新,claim 同步续期(见 onMatchFailed 注释)

@@ -295,7 +295,7 @@ review 判据改为:**`register_no` 出现在 `pandora_account` 以外的任何�
 | 5 | 容量/清单登记 | dbcheck registry + login budgets.go + CLAUDE.md §9.24 豁免段:`register_no_counter` 恒 1 行权威闸 | ✅ |
 | 6 | 展示链路(A② 已拍板 2026-08-10:**客户端玩家可见**) | 服务端已落码:proto `LoginResponse.register_no = 13`、`AccountRepo.GetRegisterNo`(**fail-soft**:独立 250ms 查询预算,失败/超时置 0 且不取消登录父 ctx;刻意不并进 FindByAccount——列缺失不能打挂登录整链)、biz 主路径与 battle 重连路径都带出、service 组装 `RegisterNo`。0 = 补号中,客户端显示「生成中」 | ✅ 服务端 |
 | 7 | UE 展示与交付验证(Codex,2026-08-10) | 服务端 C++ pb 以 `[proto]` 提交 `bea78b83`,客户端通过官方 `GenClientProto.ps1 -UpdateLock` 同步并以 `-VerifyOnly` 复验;登录解码→会话态→RoleInfo 全链带出 `register_no`,0 显示「生成中」;login `go build/vet/test`、`Pandora` 与 `PandoraEditor` Development 编译全绿 | ✅ 生成/编译;PIE 与真实登录 E2E 未跑 |
-| 8 | 首次会话补拉闭环(2026-08-10 实测后补) | 服务端新增空请求 `LoginService.GetRegisterNo`、JWT 身份与 Envoy exact rule、`0/OK` 和错误分流;见 §3.7。旧 `bea78b83` 只覆盖 LoginResponse 字段,不含本次 RPC | 🟡 服务端已落码并由实现方报告 Go build/vet/test 全绿;新 C++ pb、UE 补拉、UE 编译、Envoy 运行态与真实登录 E2E 待完成 |
+| 8 | 首次会话补拉闭环(2026-08-10 实测后补) | 服务端新增空请求 `LoginService.GetRegisterNo`、JWT 身份与 Envoy exact rule、`0/OK` 和错误分流;客户端以官方生成器同步协议,登录后用 CoreTicker 补拉并以 attempt / SessionGeneration / PlayerId 围栏保护写回;见 §3.7 | 🟡 服务端和 UE 客户端本地落码、`-UpdateLock` / `-VerifyOnly`、本任务源码编译及 PandoraTests DLL 链接已完成;完整 PandoraEditor 链接被无关 MyMainView 并行改动阻断,新测试 DLL 因旧主 DLL 缺本轮导出而加载失败,三组 Automation 未执行;Envoy 运行态与真实登录 E2E 未验收 |
 
 ### 3.6 客服/运营按编号反查玩家(2026-08-10 用户提出,**待落地**)
 
@@ -376,10 +376,28 @@ vs 编号存在但玩家刚注册还没补号——后者客服看到的是玩�
 **测试**:`internal/service/login_register_no_rpc_test.go` 四条(正常补拉 / 0 是 OK 非错误 /
 无 player_id 硬拒 / repo 故障透传);`login_register_no_test.go`(Codex)覆盖 Login 响应带出。
 
-**当前交付边界**:服务端源码链与 Go 生成物已落在工作树,但旧客户端协议锁
-`bea78b83` 只覆盖 `LoginResponse.register_no`,尚不含本 RPC。须先形成新的服务端 `[proto]`
-稳定提交,再同步客户端 C++ pb 并接 UE 补拉;生成成功也不能代替 UE 编译和“首登生成中 →
-无需重登变为非 0”的真实 Envoy/JWT E2E。
+**客户端实现(已落码)**:
+- 官方 `GenClientProto.ps1 -UpdateLock` 已把协议锁推进到服务端 `11320853`,随后
+  `-VerifyOnly` 通过;实际只改 login `.pb.h`、login `.pb.cc`、`ClientProto.lock.json` 三个生成文件。
+- RPC 使用空请求和 `bWithAuth=true`。登录拿到 0 后立即查询,随后由 CoreTicker 每 3s + 最多
+  0.75s jitter 单飞补拉;`OK+0` 保持“生成中”,非 0 写回即停。真实错误显式停轮询并显示失败,
+  玩家可点角色界面刷新按钮重试,不得以 0 掩盖。
+- 回调以 attempt、`SessionGeneration`、`PlayerId` 三重围栏防止登出/切号后的迟到写回;
+  专用写回入口不推进会话世代。UI 分别展示实际编号、“注册编号 生成中”和
+  “注册编号 获取失败，点击刷新”。
+- 新增三类 Automation:codec 契约、当前会话写回围栏、RPC/source 契约。
+
+**当前交付边界**:服务端源码链与 Go 生成物已进入稳定提交 `11320853`,但该提交标题遗漏了
+仓库规范要求的 `[proto]` 标记;推送前须由人决定 amend 或明确记录例外,Codex 不擅自改历史。
+客户端本轮未 SVN commit、未 push。本任务修改的 C++ 源码已编译、
+`UnrealEditor-PandoraTests.dll` 已链接成功;完整 `PandoraEditor` 最终链接被无关并行改动
+`MyMainView.cpp/.h` 阻断:已声明并调用但未实现 `EnsureClientPerfWidget()` /
+`RefreshClientPerf(float)`,触发 LNK2019/LNK1120。Editor 随后能加载旧 `Pandora.dll` /
+`PandoraProto`,却无法加载新 `PandoraTests.dll`(`GetLastError=127`,game module could not be
+loaded):新测试 DLL 引用了本轮新增导出,旧主 DLL 不具备。因此三组 Automation 均未实际执行,
+不是测试断言失败。
+仍须在该无关阻断清除后跑通完整 UE 目标,并完成“首登生成中 → 无需重登变为非 0”的
+真实 Envoy/JWT E2E;生成成功或测试 DLL 链接成功均不能代替这两道门禁。
 
 **待复核边界**:当前 `AccountRepo.GetRegisterNo` 把 `sql.ErrNoRows` 与 `register_no IS NULL`
 都映射为 `0,nil`。在“有效 JWT 的账号行必然存在”不变量下,正常补号窗口语义成立;若未来允许
@@ -455,7 +473,7 @@ bcrypt/DB 之前挡住流量的层。
 
 | # | 待拍板 | 责任方 | 依赖 |
 |---|---|---|---|
-| A | 策划三问:①严格连续 ②给谁看 ③起始号;④存储形态 | 策划/用户 | **全部已定**(2026-08-10):①严格连续+④加列已落码;②用户拍板=客户端玩家可见,服务端链路已落码、UE 侧交 Codex(§3.5 第 6/7 项);③= login 配置 `register_no_start`(默认 1,计数器初始化前可改) |
+| A | 策划三问:①严格连续 ②给谁看 ③起始号;④存储形态 | 策划/用户 | **全部已定**(2026-08-10):①严格连续+④加列已落码;②用户拍板=客户端玩家可见,服务端与 UE 本地链路已落码(完整编译/E2E 边界见 §3.5 第 6/7/8 项);③= login 配置 `register_no_start`(默认 1,计数器初始化前可改) |
 | B | bcrypt cost:维持 4(明示接受弱点)或升 10(账单进容量口径,存量懒升级) | 用户 | 与 C 联动 |
 | C | 登录排队/放量立项 + Envoy local_ratelimit 优先级提级 | 用户 | §5.4 洪峰压测数据 |
 | D | 洪峰压测专项排期 | 用户 | robot/stress 现有能力即可开跑 |

@@ -22,6 +22,12 @@ type GrpcInstanceGranter struct {
 	cli  inventoryv1.InventoryServiceClient
 }
 
+// StackGrant 是 inventory.GrantItems 的最小跨层投影。
+type StackGrant struct {
+	ItemConfigID uint32
+	Count        int64
+}
+
 // NewGrpcInstanceGranter 直连 inventory 服务 endpoint(host:port,内网 insecure)。
 func NewGrpcInstanceGranter(inventoryAddr string) *GrpcInstanceGranter {
 	conn := grpcclient.MustDialInsecure(inventoryAddr)
@@ -49,6 +55,52 @@ func (g *GrpcInstanceGranter) GrantInstances(ctx context.Context, playerID uint6
 	}
 	if resp.GetCode() != commonv1.ErrCode_OK {
 		return errcode.New(errcode.Code(resp.GetCode()), "inventory grant instances code=%d", resp.GetCode())
+	}
+	return nil
+}
+
+// GrantItems 把可堆叠战利品按配置 ID 聚合后写入计数背包。
+func (g *GrpcInstanceGranter) GrantItems(ctx context.Context, playerID uint64, items []StackGrant, idempotencyKey string) error {
+	grants := make([]*inventoryv1.ItemGrant, 0, len(items))
+	for _, it := range items {
+		grants = append(grants, &inventoryv1.ItemGrant{ItemConfigId: it.ItemConfigID, Count: it.Count})
+	}
+	resp, err := g.cli.GrantItems(ctx, &inventoryv1.GrantItemsRequest{
+		PlayerId: playerID, Items: grants, IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return errcode.New(errcode.Code(resp.GetCode()), "inventory grant items code=%d", resp.GetCode())
+	}
+	return nil
+}
+
+// ConsumeBattleItem 持久扣减已经可信进度事实确认的局内消耗。
+func (g *GrpcInstanceGranter) ConsumeBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey string) error {
+	resp, err := g.cli.ConsumeBattleItem(ctx, &inventoryv1.ConsumeBattleItemRequest{
+		PlayerId: playerID, ItemConfigId: itemConfigID, Count: count, IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return errcode.New(errcode.Code(resp.GetCode()), "inventory consume battle item code=%d", resp.GetCode())
+	}
+	return nil
+}
+
+// DiscardBattleItem 持久扣减可信进度事实确认的副本内堆叠物丢弃。
+func (g *GrpcInstanceGranter) DiscardBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey string) error {
+	resp, err := g.cli.DiscardBattleItem(ctx, &inventoryv1.DiscardBattleItemRequest{
+		PlayerId: playerID, ItemConfigId: itemConfigID, Count: count, IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return errcode.New(errcode.Code(resp.GetCode()), "inventory discard battle item code=%d", resp.GetCode())
 	}
 	return nil
 }

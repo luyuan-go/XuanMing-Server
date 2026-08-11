@@ -70,16 +70,20 @@ type fakeRepo struct {
 	progressOutbox       []data.ProgressOutboxRecord
 	nextProgressID       int64
 	deferredIDs          []int64 // DeferProgressOutbox 调用记录(fake 不真正推迟,行保持可取)
+	progressBalances     map[[3]uint64][2]uint32
+	progressActions      map[[4]uint64]data.ProgressAction
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		store:           map[uint64]*battlev1.BattleResult{},
-		progressSeq:     map[uint64]uint64{},
-		progressExp:     map[uint64]uint64{},
-		progressItems:   map[uint64]uint32{},
-		progressPlayers: map[uint64]map[uint64]data.ProgressPlayerTotals{},
-		progressSettled: map[uint64]bool{},
+		store:            map[uint64]*battlev1.BattleResult{},
+		progressSeq:      map[uint64]uint64{},
+		progressExp:      map[uint64]uint64{},
+		progressItems:    map[uint64]uint32{},
+		progressPlayers:  map[uint64]map[uint64]data.ProgressPlayerTotals{},
+		progressSettled:  map[uint64]bool{},
+		progressBalances: map[[3]uint64][2]uint32{},
+		progressActions:  map[[4]uint64]data.ProgressAction{},
 	}
 }
 
@@ -113,7 +117,9 @@ func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, 
 			r.nextDropID++
 			r.dropOutbox = append(r.dropOutbox, data.DropOutboxRecord{
 				ID: r.nextDropID, MatchID: result.GetMatchId(), PlayerID: d.PlayerID,
-				ItemConfigIDs: append([]uint32(nil), d.ItemConfigIDs...),
+				ItemConfigIDs:         append([]uint32(nil), d.ItemConfigIDs...),
+				StackItemConfigIDs:    append([]uint32(nil), d.StackItemConfigIDs...),
+				InstanceItemConfigIDs: append([]uint32(nil), d.InstanceItemConfigIDs...),
 			})
 		}
 	}
@@ -204,6 +210,44 @@ func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq
 			return errcode.New(errcode.ErrInvalidArg, "match %d player %d cumulative kills exceeds per-player cap %d", matchID, d.PlayerID, caps.PlayerKills)
 		}
 	}
+	// 先在副本上校验/预留，模拟 MySQL 整体事务回滚语义。
+	nextBalances := make(map[[3]uint64][2]uint32, len(r.progressBalances))
+	for key, value := range r.progressBalances {
+		nextBalances[key] = value
+	}
+	var newActions []data.ProgressAction
+	for _, row := range rows {
+		switch row.Kind {
+		case data.ProgressGrantStack:
+			counts := map[uint32]uint32{}
+			for _, itemID := range row.ItemConfigIDs {
+				counts[itemID]++
+			}
+			for itemID, count := range counts {
+				key := [3]uint64{matchID, row.PlayerID, uint64(itemID)}
+				balance := nextBalances[key]
+				balance[0] += count
+				nextBalances[key] = balance
+			}
+		case data.ProgressConsumeStack, data.ProgressDiscardStack:
+			itemID, count, err := progressSingleStackFactForTest(row)
+			if err != nil {
+				return err
+			}
+			key := [3]uint64{matchID, row.PlayerID, uint64(itemID)}
+			balance := nextBalances[key]
+			if balance[0]-balance[1] < count {
+				return errcode.New(errcode.ErrInvalidArg,
+					"battle item action exceeds same-match accepted pickup balance")
+			}
+			balance[1] += count
+			nextBalances[key] = balance
+			newActions = append(newActions, data.ProgressAction{
+				MatchID: matchID, Seq: row.Seq, PlayerID: row.PlayerID, Kind: row.Kind,
+				ItemConfigID: itemID, Count: count, Status: data.ProgressActionPending,
+			})
+		}
+	}
 	r.progressSeq[matchID] = newSeq
 	r.progressExp[matchID] += addExp
 	r.progressItems[matchID] += addItems
@@ -217,6 +261,11 @@ func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq
 		t.TotalKills += d.Kills
 		r.progressPlayers[matchID][d.PlayerID] = t
 	}
+	r.progressBalances = nextBalances
+	for _, action := range newActions {
+		key := [4]uint64{action.MatchID, action.Seq, action.PlayerID, uint64(action.Kind)}
+		r.progressActions[key] = action
+	}
 	for _, row := range rows {
 		r.nextProgressID++
 		row.ID = r.nextProgressID
@@ -226,13 +275,89 @@ func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq
 	return nil
 }
 
-func (r *fakeRepo) FetchProgressOutbox(_ context.Context, limit int) ([]data.ProgressOutboxRecord, error) {
-	if limit <= 0 || limit > len(r.progressOutbox) {
-		limit = len(r.progressOutbox)
+func progressSingleStackFactForTest(row data.ProgressOutboxRecord) (uint32, uint32, error) {
+	ids := row.ItemConfigIDs
+	if len(ids) == 0 || ids[0] == 0 {
+		return 0, 0, errcode.New(errcode.ErrInvalidArg, "empty stack action")
 	}
-	out := make([]data.ProgressOutboxRecord, limit)
-	copy(out, r.progressOutbox[:limit])
+	if row.ItemCount > 0 {
+		if len(ids) != 1 {
+			return 0, 0, errcode.New(errcode.ErrInvalidArg, "compact action must have one item")
+		}
+		return ids[0], row.ItemCount, nil
+	}
+	for _, id := range ids[1:] {
+		if id != ids[0] {
+			return 0, 0, errcode.New(errcode.ErrInvalidArg, "mixed stack action")
+		}
+	}
+	return ids[0], uint32(len(ids)), nil
+}
+
+func (r *fakeRepo) FetchProgressOutbox(_ context.Context, limit int) ([]data.ProgressOutboxRecord, error) {
+	// 复刻 MySQL：同 match/player 只取 seq/id 最早行，前序失败时后序不得越过。
+	earliest := make(map[[2]uint64]data.ProgressOutboxRecord)
+	for _, rec := range r.progressOutbox {
+		key := [2]uint64{rec.MatchID, rec.PlayerID}
+		prev, ok := earliest[key]
+		if !ok || rec.Seq < prev.Seq || (rec.Seq == prev.Seq && rec.ID < prev.ID) {
+			earliest[key] = rec
+		}
+	}
+	out := make([]data.ProgressOutboxRecord, 0, len(earliest))
+	for _, rec := range r.progressOutbox { // 保持真实查询的 id 顺序。
+		if first := earliest[[2]uint64{rec.MatchID, rec.PlayerID}]; first.ID == rec.ID {
+			out = append(out, rec)
+		}
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
 	return out, nil
+}
+
+func (r *fakeRepo) FetchProgressOutboxForPlayer(_ context.Context, matchID, playerID, maxSeq uint64) (data.ProgressOutboxRecord, bool, error) {
+	var found data.ProgressOutboxRecord
+	for _, rec := range r.progressOutbox {
+		if rec.MatchID != matchID || rec.PlayerID != playerID || rec.Seq > maxSeq {
+			continue
+		}
+		if found.ID == 0 || rec.Seq < found.Seq || (rec.Seq == found.Seq && rec.ID < found.ID) {
+			found = rec
+		}
+	}
+	return found, found.ID != 0, nil
+}
+
+func (r *fakeRepo) GetProgressAction(_ context.Context, matchID, seq, playerID uint64, kind data.ProgressGrantKind) (data.ProgressAction, bool, error) {
+	action, ok := r.progressActions[[4]uint64{matchID, seq, playerID, uint64(kind)}]
+	return action, ok, nil
+}
+
+func (r *fakeRepo) ResolveProgressAction(_ context.Context, row data.ProgressOutboxRecord, resultCode errcode.Code) (data.ProgressAction, error) {
+	key := [4]uint64{row.MatchID, row.Seq, row.PlayerID, uint64(row.Kind)}
+	action, ok := r.progressActions[key]
+	if !ok {
+		return data.ProgressAction{}, errcode.New(errcode.ErrInvalidState, "progress action missing")
+	}
+	if action.Status == data.ProgressActionPending {
+		if resultCode == errcode.OK {
+			action.Status = data.ProgressActionSucceeded
+		} else {
+			balanceKey := [3]uint64{row.MatchID, row.PlayerID, uint64(action.ItemConfigID)}
+			balance := r.progressBalances[balanceKey]
+			if balance[1] < action.Count {
+				return data.ProgressAction{}, errcode.New(errcode.ErrInvalidState, "reserved balance missing")
+			}
+			balance[1] -= action.Count
+			r.progressBalances[balanceKey] = balance
+			action.Status = data.ProgressActionFailed
+			action.ResultCode = resultCode
+		}
+		r.progressActions[key] = action
+	}
+	_ = r.DeleteProgressOutbox(context.Background(), row.ID)
+	return action, nil
 }
 
 func (r *fakeRepo) DeleteProgressOutbox(_ context.Context, id int64) error {
@@ -512,13 +637,36 @@ func (p *fakePusher) PushPlayerUpdate(_ context.Context, playerID uint64, payloa
 // capacityFull=true 时所有玩家返 ErrInventoryCapacityFull(验证背包满转邮件路径)。
 type fakeGranter struct {
 	calls        []grantCall
+	stackCalls   []stackGrantCall
+	consumeCalls []consumeCall
+	discardCalls []consumeCall
 	failPlayer   uint64
 	capacityFull bool
+	failStack    bool
+	failConsume  bool
+	failDiscard  bool
+	consumeErr   error
+	discardErr   error
+	consumeTries int
+	discardTries int
 }
 
 type grantCall struct {
 	playerID uint64
 	items    []uint32
+	key      string
+}
+
+type stackGrantCall struct {
+	playerID uint64
+	items    []data.StackGrant
+	key      string
+}
+
+type consumeCall struct {
+	playerID uint64
+	itemID   uint32
+	count    int64
 	key      string
 }
 
@@ -530,6 +678,39 @@ func (g *fakeGranter) GrantInstances(_ context.Context, playerID uint64, itemCon
 		return simpleErr("bag full")
 	}
 	g.calls = append(g.calls, grantCall{playerID: playerID, items: append([]uint32(nil), itemConfigIDs...), key: key})
+	return nil
+}
+
+func (g *fakeGranter) GrantItems(_ context.Context, playerID uint64, items []data.StackGrant, key string) error {
+	if g.failStack {
+		return simpleErr("stack grant failed")
+	}
+	cpy := append([]data.StackGrant(nil), items...)
+	g.stackCalls = append(g.stackCalls, stackGrantCall{playerID: playerID, items: cpy, key: key})
+	return nil
+}
+
+func (g *fakeGranter) ConsumeBattleItem(_ context.Context, playerID uint64, itemID uint32, count int64, key string) error {
+	g.consumeTries++
+	if g.consumeErr != nil {
+		return g.consumeErr
+	}
+	if g.failConsume {
+		return simpleErr("consume failed")
+	}
+	g.consumeCalls = append(g.consumeCalls, consumeCall{playerID: playerID, itemID: itemID, count: count, key: key})
+	return nil
+}
+
+func (g *fakeGranter) DiscardBattleItem(_ context.Context, playerID uint64, itemID uint32, count int64, key string) error {
+	g.discardTries++
+	if g.discardErr != nil {
+		return g.discardErr
+	}
+	if g.failDiscard {
+		return simpleErr("discard failed")
+	}
+	g.discardCalls = append(g.discardCalls, consumeCall{playerID: playerID, itemID: itemID, count: count, key: key})
 	return nil
 }
 

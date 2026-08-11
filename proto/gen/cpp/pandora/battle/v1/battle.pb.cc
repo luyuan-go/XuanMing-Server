@@ -49,6 +49,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto, /* tracker*/ nullptr,},
         // ::pandora::battle::v1::ItemPickupFact
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::battle::v1::ItemConsumeFact
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::battle::v1::ItemDiscardFact
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto, /* tracker*/ nullptr,},
         // ::pandora::battle::v1::BattleProgressEvent
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto, /* tracker*/ nullptr,},
         // ::pandora::battle::v1::ReportProgressRequest
@@ -306,7 +310,7 @@ constexpr auto ReportProgressResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto,
@@ -1047,6 +1051,302 @@ const ::_pbi::ClassData* ItemPickupFact_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ItemDiscardFact::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ItemDiscardFact>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ItemDiscardFact, _impl_._has_bits_);
+};
+
+constexpr ItemDiscardFact::ParseTableT_ ItemDiscardFact::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ItemDiscardFact, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::battle::v1::ItemDiscardFact>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 count = 2 [json_name = "count"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemDiscardFact, _impl_.count_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ItemDiscardFact, _impl_.count_)}},
+      // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemDiscardFact, _impl_.item_config_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ItemDiscardFact, _impl_.item_config_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+      {PROTOBUF_FIELD_OFFSET(ItemDiscardFact, _impl_.item_config_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 count = 2 [json_name = "count"];
+      {PROTOBUF_FIELD_OFFSET(ItemDiscardFact, _impl_.count_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ItemDiscardFact::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        item_config_id_{0u},
+        count_{0u} {}
+
+template <typename>
+constexpr ItemDiscardFact::ItemDiscardFact(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ItemDiscardFact::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ItemDiscardFact(arena);
+}
+constexpr auto ItemDiscardFact::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ItemDiscardFact), alignof(ItemDiscardFact));
+}
+constexpr auto ItemDiscardFact::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ItemDiscardFact::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ItemDiscardFact>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ItemDiscardFact::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ItemDiscardFact>(), &ItemDiscardFact::ByteSizeLong,
+              &ItemDiscardFact::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ItemDiscardFact, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[11],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ItemDiscardFactGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ItemDiscardFactGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ItemDiscardFact_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ItemDiscardFact::InternalGenerateClassData_(
+            _default, &ItemDiscardFact_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ItemDiscardFact>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ItemDiscardFactGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ItemDiscardFact _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ItemDiscardFact>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ItemDiscardFactGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ItemDiscardFactGlobalsTypeInternal ItemDiscardFact_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ItemDiscardFact_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ItemDiscardFact_globals_.GetClassData();
+#else
+  return ItemDiscardFact_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ItemConsumeFact::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ItemConsumeFact>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ItemConsumeFact, _impl_._has_bits_);
+};
+
+constexpr ItemConsumeFact::ParseTableT_ ItemConsumeFact::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ItemConsumeFact, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::battle::v1::ItemConsumeFact>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 count = 2 [json_name = "count"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemConsumeFact, _impl_.count_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ItemConsumeFact, _impl_.count_)}},
+      // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemConsumeFact, _impl_.item_config_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ItemConsumeFact, _impl_.item_config_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+      {PROTOBUF_FIELD_OFFSET(ItemConsumeFact, _impl_.item_config_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 count = 2 [json_name = "count"];
+      {PROTOBUF_FIELD_OFFSET(ItemConsumeFact, _impl_.count_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ItemConsumeFact::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        item_config_id_{0u},
+        count_{0u} {}
+
+template <typename>
+constexpr ItemConsumeFact::ItemConsumeFact(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ItemConsumeFact::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ItemConsumeFact(arena);
+}
+constexpr auto ItemConsumeFact::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ItemConsumeFact), alignof(ItemConsumeFact));
+}
+constexpr auto ItemConsumeFact::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ItemConsumeFact::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ItemConsumeFact>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ItemConsumeFact::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ItemConsumeFact>(), &ItemConsumeFact::ByteSizeLong,
+              &ItemConsumeFact::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ItemConsumeFact, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[10],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ItemConsumeFactGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ItemConsumeFactGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ItemConsumeFact_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ItemConsumeFact::InternalGenerateClassData_(
+            _default, &ItemConsumeFact_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ItemConsumeFact>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ItemConsumeFactGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ItemConsumeFact _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ItemConsumeFact>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ItemConsumeFactGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ItemConsumeFactGlobalsTypeInternal ItemConsumeFact_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ItemConsumeFact_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ItemConsumeFact_globals_.GetClassData();
+#else
+  return ItemConsumeFact_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetMatchResultRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetMatchResultRequest>()._impl_._has_bits_);
@@ -1424,12 +1724,12 @@ constexpr BattleProgressEvent::ParseTableT_ BattleProgressEvent::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(BattleProgressEvent, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
-      2,  // num_aux_entries
+      7,  // num_field_entries
+      4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1468,6 +1768,10 @@ constexpr BattleProgressEvent::ParseTableT_ BattleProgressEvent::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(BattleProgressEvent, _impl_.fact_.item_pickup_), _Internal::kOneofCaseOffset + 0, 1, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
       // int64 ts_ms = 5 [json_name = "tsMs"];
       {PROTOBUF_FIELD_OFFSET(BattleProgressEvent, _impl_.ts_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // .pandora.battle.v1.ItemConsumeFact item_consume = 6 [json_name = "itemConsume"];
+      {PROTOBUF_FIELD_OFFSET(BattleProgressEvent, _impl_.fact_.item_consume_), _Internal::kOneofCaseOffset + 0, 2, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .pandora.battle.v1.ItemDiscardFact item_discard = 7 [json_name = "itemDiscard"];
+      {PROTOBUF_FIELD_OFFSET(BattleProgressEvent, _impl_.fact_.item_discard_), _Internal::kOneofCaseOffset + 0, 3, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1479,6 +1783,16 @@ constexpr BattleProgressEvent::ParseTableT_ BattleProgressEvent::InternalGenerat
         {::_pbi::TcParser::GetTable<::pandora::battle::v1::ItemPickupFact>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::pandora::battle::v1::ItemPickupFact_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::battle::v1::ItemConsumeFact>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::battle::v1::ItemConsumeFact_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::battle::v1::ItemDiscardFact>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::battle::v1::ItemDiscardFact_globals_},
         #endif
     }},
     {{
@@ -1538,7 +1852,7 @@ constexpr auto BattleProgressEvent::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto,
@@ -1850,7 +2164,7 @@ constexpr auto ReportProgressRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto,
@@ -2331,18 +2645,36 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ItemPickupFact, _impl_.count_),
         0,
         1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ItemConsumeFact, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ItemConsumeFact, _impl_.item_config_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ItemConsumeFact, _impl_.count_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ItemDiscardFact, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ItemDiscardFact, _impl_.item_config_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ItemDiscardFact, _impl_.count_),
+        0,
+        1,
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_._oneof_case_[0]),
-        10, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_.seq_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_.fact_),
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_.fact_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_.fact_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_.fact_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_.ts_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleProgressEvent, _impl_.fact_),
         0,
         1,
+        ~0u,
+        ~0u,
         ~0u,
         ~0u,
         2,
@@ -2374,9 +2706,11 @@ static const ::_pbi::MigrationSchema
         {83, sizeof(::pandora::battle::v1::ListPlayerHistoryResponse)},
         {90, sizeof(::pandora::battle::v1::MonsterKillFact)},
         {101, sizeof(::pandora::battle::v1::ItemPickupFact)},
-        {108, sizeof(::pandora::battle::v1::BattleProgressEvent)},
-        {123, sizeof(::pandora::battle::v1::ReportProgressRequest)},
-        {130, sizeof(::pandora::battle::v1::ReportProgressResponse)},
+        {108, sizeof(::pandora::battle::v1::ItemConsumeFact)},
+        {115, sizeof(::pandora::battle::v1::ItemDiscardFact)},
+        {122, sizeof(::pandora::battle::v1::BattleProgressEvent)},
+        {141, sizeof(::pandora::battle::v1::ReportProgressRequest)},
+        {148, sizeof(::pandora::battle::v1::ReportProgressResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2390,6 +2724,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::battle::v1::ListPlayerHistoryResponse_globals_,
         &::pandora::battle::v1::MonsterKillFact_globals_,
         &::pandora::battle::v1::ItemPickupFact_globals_,
+        &::pandora::battle::v1::ItemConsumeFact_globals_,
+        &::pandora::battle::v1::ItemDiscardFact_globals_,
         &::pandora::battle::v1::BattleProgressEvent_globals_,
         &::pandora::battle::v1::ReportProgressRequest_globals_,
         &::pandora::battle::v1::ReportProgressResponse_globals_,
@@ -2438,33 +2774,40 @@ const char descriptor_table_protodef_pandora_2fbattle_2fv1_2fbattle_2eproto[] AB
     "\016share_permille\030\003 \001(\rR\rsharePermille\022#\n\r"
     "monster_level\030\004 \001(\rR\014monsterLevel\"L\n\016Ite"
     "mPickupFact\022$\n\016item_config_id\030\001 \001(\rR\014ite"
-    "mConfigId\022\024\n\005count\030\002 \001(\rR\005count\"\360\001\n\023Batt"
-    "leProgressEvent\022\020\n\003seq\030\001 \001(\004R\003seq\022\033\n\tpla"
-    "yer_id\030\002 \001(\004R\010playerId\022G\n\014monster_kill\030\003"
-    " \001(\0132\".pandora.battle.v1.MonsterKillFact"
-    "H\000R\013monsterKill\022D\n\013item_pickup\030\004 \001(\0132!.p"
-    "andora.battle.v1.ItemPickupFactH\000R\nitemP"
-    "ickup\022\023\n\005ts_ms\030\005 \001(\003R\004tsMsB\006\n\004fact\"r\n\025Re"
-    "portProgressRequest\022\031\n\010match_id\030\001 \001(\004R\007m"
-    "atchId\022>\n\006events\030\002 \003(\0132&.pandora.battle."
-    "v1.BattleProgressEventR\006events\"e\n\026Report"
-    "ProgressResponse\022.\n\004code\030\001 \001(\0162\032.pandora"
-    ".common.v1.ErrCodeR\004code\022\033\n\tacked_seq\030\002 "
-    "\001(\004R\010ackedSeq*h\n\rBattleOutcome\022\036\n\032BATTLE"
-    "_OUTCOME_UNSPECIFIED\020\000\022\031\n\025BATTLE_OUTCOME"
-    "_NORMAL\020\001\022\034\n\030BATTLE_OUTCOME_ABANDONED\020\0022"
-    "\264\003\n\023BattleResultService\022_\n\014ReportResult\022"
-    "&.pandora.battle.v1.ReportResultRequest\032"
-    "\'.pandora.battle.v1.ReportResultResponse"
-    "\022e\n\016GetMatchResult\022(.pandora.battle.v1.G"
-    "etMatchResultRequest\032).pandora.battle.v1"
-    ".GetMatchResultResponse\022n\n\021ListPlayerHis"
-    "tory\022+.pandora.battle.v1.ListPlayerHisto"
-    "ryRequest\032,.pandora.battle.v1.ListPlayer"
-    "HistoryResponse\022e\n\016ReportProgress\022(.pand"
-    "ora.battle.v1.ReportProgressRequest\032).pa"
-    "ndora.battle.v1.ReportProgressResponseb\006"
-    "proto3"
+    "mConfigId\022\024\n\005count\030\002 \001(\rR\005count\"M\n\017ItemC"
+    "onsumeFact\022$\n\016item_config_id\030\001 \001(\rR\014item"
+    "ConfigId\022\024\n\005count\030\002 \001(\rR\005count\"M\n\017ItemDi"
+    "scardFact\022$\n\016item_config_id\030\001 \001(\rR\014itemC"
+    "onfigId\022\024\n\005count\030\002 \001(\rR\005count\"\202\003\n\023Battle"
+    "ProgressEvent\022\020\n\003seq\030\001 \001(\004R\003seq\022\033\n\tplaye"
+    "r_id\030\002 \001(\004R\010playerId\022G\n\014monster_kill\030\003 \001"
+    "(\0132\".pandora.battle.v1.MonsterKillFactH\000"
+    "R\013monsterKill\022D\n\013item_pickup\030\004 \001(\0132!.pan"
+    "dora.battle.v1.ItemPickupFactH\000R\nitemPic"
+    "kup\022G\n\014item_consume\030\006 \001(\0132\".pandora.batt"
+    "le.v1.ItemConsumeFactH\000R\013itemConsume\022G\n\014"
+    "item_discard\030\007 \001(\0132\".pandora.battle.v1.I"
+    "temDiscardFactH\000R\013itemDiscard\022\023\n\005ts_ms\030\005"
+    " \001(\003R\004tsMsB\006\n\004fact\"r\n\025ReportProgressRequ"
+    "est\022\031\n\010match_id\030\001 \001(\004R\007matchId\022>\n\006events"
+    "\030\002 \003(\0132&.pandora.battle.v1.BattleProgres"
+    "sEventR\006events\"e\n\026ReportProgressResponse"
+    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
+    "deR\004code\022\033\n\tacked_seq\030\002 \001(\004R\010ackedSeq*h\n"
+    "\rBattleOutcome\022\036\n\032BATTLE_OUTCOME_UNSPECI"
+    "FIED\020\000\022\031\n\025BATTLE_OUTCOME_NORMAL\020\001\022\034\n\030BAT"
+    "TLE_OUTCOME_ABANDONED\020\0022\264\003\n\023BattleResult"
+    "Service\022_\n\014ReportResult\022&.pandora.battle"
+    ".v1.ReportResultRequest\032\'.pandora.battle"
+    ".v1.ReportResultResponse\022e\n\016GetMatchResu"
+    "lt\022(.pandora.battle.v1.GetMatchResultReq"
+    "uest\032).pandora.battle.v1.GetMatchResultR"
+    "esponse\022n\n\021ListPlayerHistory\022+.pandora.b"
+    "attle.v1.ListPlayerHistoryRequest\032,.pand"
+    "ora.battle.v1.ListPlayerHistoryResponse\022"
+    "e\n\016ReportProgress\022(.pandora.battle.v1.Re"
+    "portProgressRequest\032).pandora.battle.v1."
+    "ReportProgressResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto_deps[1] = {
@@ -2474,13 +2817,13 @@ static ::absl::once_flag descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto = {
     false,
     false,
-    2726,
+    3030,
     descriptor_table_protodef_pandora_2fbattle_2fv1_2fbattle_2eproto,
     "pandora/battle/v1/battle.proto",
     &descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto_once,
     descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto_deps,
     1,
-    13,
+    15,
     schemas,
     file_message_globals,
     TableStruct_pandora_2fbattle_2fv1_2fbattle_2eproto::offsets,
@@ -5337,6 +5680,462 @@ void ItemPickupFact::InternalSwap(ItemPickupFact* PROTOBUF_RESTRICT PROTOBUF_NON
 }
 // ===================================================================
 
+ItemConsumeFact::ItemConsumeFact(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ItemConsumeFact_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.battle.v1.ItemConsumeFact)
+}
+ItemConsumeFact::ItemConsumeFact(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ItemConsumeFact& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ItemConsumeFact_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ItemConsumeFact::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ItemConsumeFact::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, item_config_id_),
+           0,
+           offsetof(Impl_, count_) -
+               offsetof(Impl_, item_config_id_) +
+               sizeof(Impl_::count_));
+}
+ItemConsumeFact::~ItemConsumeFact() {
+  // @@protoc_insertion_point(destructor:pandora.battle.v1.ItemConsumeFact)
+  SharedDtor(*this);
+}
+inline void ItemConsumeFact::SharedDtor(MessageLite& self) {
+  ItemConsumeFact& this_ = static_cast<ItemConsumeFact&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ItemConsumeFact_class_data_ =
+        ItemConsumeFact::InternalGenerateClassData_(ItemConsumeFact_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ItemConsumeFact::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ItemConsumeFact_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ItemConsumeFact_class_data_.tc_table);
+  return ItemConsumeFact_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ItemConsumeFact::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ItemConsumeFact_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ItemConsumeFact_globals_));
+  return ItemConsumeFact_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ItemConsumeFact::ParseTableT_
+    ItemConsumeFact::_table_ =
+        ItemConsumeFact::InternalGenerateParseTable_(ItemConsumeFact_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ItemConsumeFact::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.battle.v1.ItemConsumeFact)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.item_config_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.count_) -
+        reinterpret_cast<char*>(&_impl_.item_config_id_)) + sizeof(_impl_.count_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ItemConsumeFact::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ItemConsumeFact& this_ = static_cast<const ItemConsumeFact&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ItemConsumeFact::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ItemConsumeFact& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.battle.v1.ItemConsumeFact)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_item_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_item_config_id(), target);
+    }
+  }
+
+  // uint32 count = 2 [json_name = "count"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_count(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.battle.v1.ItemConsumeFact)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ItemConsumeFact::ByteSizeLong(const MessageLite& base) {
+  const ItemConsumeFact& this_ = static_cast<const ItemConsumeFact&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ItemConsumeFact::ByteSizeLong() const {
+  const ItemConsumeFact& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.battle.v1.ItemConsumeFact)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_item_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_item_config_id());
+      }
+    }
+    // uint32 count = 2 [json_name = "count"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_count());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ItemConsumeFact::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ItemConsumeFact*>(&to_msg);
+  auto& from = static_cast<const ItemConsumeFact&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.battle.v1.ItemConsumeFact)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_item_config_id() != 0) {
+        _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_count() != 0) {
+        _this->_impl_.count_ = from._impl_.count_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ItemConsumeFact::CopyFrom(const ItemConsumeFact& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.battle.v1.ItemConsumeFact)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ItemConsumeFact::InternalSwap(ItemConsumeFact* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ItemConsumeFact, _impl_.count_)
+      + sizeof(ItemConsumeFact::_impl_.count_)
+      - PROTOBUF_FIELD_OFFSET(ItemConsumeFact, _impl_.item_config_id_)>(
+          reinterpret_cast<char*>(&_impl_.item_config_id_),
+          reinterpret_cast<char*>(&other->_impl_.item_config_id_));
+}
+
+::google::protobuf::Metadata ItemConsumeFact::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ItemDiscardFact::ItemDiscardFact(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ItemDiscardFact_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.battle.v1.ItemDiscardFact)
+}
+ItemDiscardFact::ItemDiscardFact(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ItemDiscardFact& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ItemDiscardFact_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ItemDiscardFact::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ItemDiscardFact::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, item_config_id_),
+           0,
+           offsetof(Impl_, count_) -
+               offsetof(Impl_, item_config_id_) +
+               sizeof(Impl_::count_));
+}
+ItemDiscardFact::~ItemDiscardFact() {
+  // @@protoc_insertion_point(destructor:pandora.battle.v1.ItemDiscardFact)
+  SharedDtor(*this);
+}
+inline void ItemDiscardFact::SharedDtor(MessageLite& self) {
+  ItemDiscardFact& this_ = static_cast<ItemDiscardFact&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ItemDiscardFact_class_data_ =
+        ItemDiscardFact::InternalGenerateClassData_(ItemDiscardFact_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ItemDiscardFact::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ItemDiscardFact_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ItemDiscardFact_class_data_.tc_table);
+  return ItemDiscardFact_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ItemDiscardFact::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ItemDiscardFact_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ItemDiscardFact_globals_));
+  return ItemDiscardFact_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ItemDiscardFact::ParseTableT_
+    ItemDiscardFact::_table_ =
+        ItemDiscardFact::InternalGenerateParseTable_(ItemDiscardFact_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ItemDiscardFact::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.battle.v1.ItemDiscardFact)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.item_config_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.count_) -
+        reinterpret_cast<char*>(&_impl_.item_config_id_)) + sizeof(_impl_.count_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ItemDiscardFact::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ItemDiscardFact& this_ = static_cast<const ItemDiscardFact&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ItemDiscardFact::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ItemDiscardFact& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.battle.v1.ItemDiscardFact)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_item_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_item_config_id(), target);
+    }
+  }
+
+  // uint32 count = 2 [json_name = "count"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_count(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.battle.v1.ItemDiscardFact)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ItemDiscardFact::ByteSizeLong(const MessageLite& base) {
+  const ItemDiscardFact& this_ = static_cast<const ItemDiscardFact&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ItemDiscardFact::ByteSizeLong() const {
+  const ItemDiscardFact& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.battle.v1.ItemDiscardFact)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_item_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_item_config_id());
+      }
+    }
+    // uint32 count = 2 [json_name = "count"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_count());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ItemDiscardFact::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ItemDiscardFact*>(&to_msg);
+  auto& from = static_cast<const ItemDiscardFact&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.battle.v1.ItemDiscardFact)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_item_config_id() != 0) {
+        _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_count() != 0) {
+        _this->_impl_.count_ = from._impl_.count_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ItemDiscardFact::CopyFrom(const ItemDiscardFact& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.battle.v1.ItemDiscardFact)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ItemDiscardFact::InternalSwap(ItemDiscardFact* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ItemDiscardFact, _impl_.count_)
+      + sizeof(ItemDiscardFact::_impl_.count_)
+      - PROTOBUF_FIELD_OFFSET(ItemDiscardFact, _impl_.item_config_id_)>(
+          reinterpret_cast<char*>(&_impl_.item_config_id_),
+          reinterpret_cast<char*>(&other->_impl_.item_config_id_));
+}
+
+::google::protobuf::Metadata ItemDiscardFact::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 void BattleProgressEvent::set_allocated_monster_kill(::pandora::battle::v1::MonsterKillFact* PROTOBUF_NULLABLE monster_kill) {
   ::google::protobuf::Arena* message_arena = GetArena();
   clear_fact();
@@ -5362,6 +6161,32 @@ void BattleProgressEvent::set_allocated_item_pickup(::pandora::battle::v1::ItemP
     _impl_.fact_.item_pickup_ = item_pickup;
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.battle.v1.BattleProgressEvent.item_pickup)
+}
+void BattleProgressEvent::set_allocated_item_consume(::pandora::battle::v1::ItemConsumeFact* PROTOBUF_NULLABLE item_consume) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_fact();
+  if (item_consume) {
+    ::google::protobuf::Arena* submessage_arena = item_consume->GetArena();
+    if (message_arena != submessage_arena) {
+      item_consume = ::google::protobuf::internal::GetOwnedMessage(message_arena, item_consume, submessage_arena);
+    }
+    set_has_item_consume();
+    _impl_.fact_.item_consume_ = item_consume;
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.battle.v1.BattleProgressEvent.item_consume)
+}
+void BattleProgressEvent::set_allocated_item_discard(::pandora::battle::v1::ItemDiscardFact* PROTOBUF_NULLABLE item_discard) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_fact();
+  if (item_discard) {
+    ::google::protobuf::Arena* submessage_arena = item_discard->GetArena();
+    if (message_arena != submessage_arena) {
+      item_discard = ::google::protobuf::internal::GetOwnedMessage(message_arena, item_discard, submessage_arena);
+    }
+    set_has_item_discard();
+    _impl_.fact_.item_discard_ = item_discard;
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.battle.v1.BattleProgressEvent.item_discard)
 }
 BattleProgressEvent::BattleProgressEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -5410,6 +6235,12 @@ BattleProgressEvent::BattleProgressEvent(
         break;
       case kItemPickup:
         _impl_.fact_.item_pickup_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.fact_.item_pickup_);
+        break;
+      case kItemConsume:
+        _impl_.fact_.item_consume_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.fact_.item_consume_);
+        break;
+      case kItemDiscard:
+        _impl_.fact_.item_discard_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.fact_.item_discard_);
         break;
   }
 
@@ -5465,6 +6296,22 @@ void BattleProgressEvent::clear_fact() {
         delete _impl_.fact_.item_pickup_;
       } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
         ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.fact_.item_pickup_);
+      }
+      break;
+    }
+    case kItemConsume: {
+      if (GetArena() == nullptr) {
+        delete _impl_.fact_.item_consume_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.fact_.item_consume_);
+      }
+      break;
+    }
+    case kItemDiscard: {
+      if (GetArena() == nullptr) {
+        delete _impl_.fact_.item_discard_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.fact_.item_discard_);
       }
       break;
     }
@@ -5582,6 +6429,22 @@ PROTOBUF_NOINLINE void BattleProgressEvent::Clear() {
     }
   }
 
+  switch (this_.fact_case()) {
+    case kItemConsume: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          6, *this_._impl_.fact_.item_consume_, this_._impl_.fact_.item_consume_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kItemDiscard: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          7, *this_._impl_.fact_.item_discard_, this_._impl_.fact_.item_discard_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    default:
+      break;
+  }
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -5641,6 +6504,18 @@ PROTOBUF_NOINLINE void BattleProgressEvent::Clear() {
     case kItemPickup: {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.fact_.item_pickup_);
+      break;
+    }
+    // .pandora.battle.v1.ItemConsumeFact item_consume = 6 [json_name = "itemConsume"];
+    case kItemConsume: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.fact_.item_consume_);
+      break;
+    }
+    // .pandora.battle.v1.ItemDiscardFact item_discard = 7 [json_name = "itemDiscard"];
+    case kItemDiscard: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.fact_.item_discard_);
       break;
     }
     case FACT_NOT_SET: {
@@ -5708,6 +6583,22 @@ void BattleProgressEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.fact_.item_pickup_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.fact_.item_pickup_);
         } else {
           _this->_impl_.fact_.item_pickup_->MergeFrom(*from._impl_.fact_.item_pickup_);
+        }
+        break;
+      }
+      case kItemConsume: {
+        if (oneof_needs_init) {
+          _this->_impl_.fact_.item_consume_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.fact_.item_consume_);
+        } else {
+          _this->_impl_.fact_.item_consume_->MergeFrom(*from._impl_.fact_.item_consume_);
+        }
+        break;
+      }
+      case kItemDiscard: {
+        if (oneof_needs_init) {
+          _this->_impl_.fact_.item_discard_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.fact_.item_discard_);
+        } else {
+          _this->_impl_.fact_.item_discard_->MergeFrom(*from._impl_.fact_.item_discard_);
         }
         break;
       }

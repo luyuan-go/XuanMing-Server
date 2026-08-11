@@ -210,7 +210,7 @@ loadRewardRecord → Unmarshal RewardClaimStorageRecord(保留 stored 原 messag
 | `player_attributes` | `player_id+attr_key` | 已分配属性点 |
 | `attr_point_grants` | uk `player_id+idempotency_key` | 属性点授予幂等收据 |
 | `player_equipment` | `player_id+slot` | 出战装备预设 |
-| `player_talents` | `player_id+talent_id` | 已点天赋等级 |
+| `player_talents` | `player_id+talent_id` | 已点天赋等级 + 该节点实际消耗点数(`spent_points`,可点数按它求和,不按等级和反推) |
 | `talent_point_grants` | uk `player_id+idempotency_key` | 天赋点授予幂等收据 |
 | `exp_history` | uk `player_id+idempotency_key` | 经验入账幂等收据 |
 | `player_push_outbox` | PK `id` | 经验推送出箱(与入账同事务写,FIFO 发布) |

@@ -146,10 +146,17 @@ func (s *BattleResultService) ReportProgress(ctx context.Context, req *battlev1.
 		roster = proof.PlayerIDs
 	}
 	acked, err := s.uc.ReportProgress(ctx, req.GetMatchId(), roster, req.GetEvents())
+	return progressResponse(acked, err), nil
+}
+
+func progressResponse(acked uint64, err error) *battlev1.ReportProgressResponse {
 	if err != nil {
-		return &battlev1.ReportProgressResponse{Code: toProtoCode(err)}, nil
+		// isolated consume/discard 的 durable terminal failure 已经是一个被服务端
+		// 明确处理的 seq：带回 AckedSeq 让 UE 释放该 action claim，但保留本地物品。
+		// 瞬时失败返回 acked=0，UE 保持同 seq/同 payload 重试。
+		return &battlev1.ReportProgressResponse{Code: toProtoCode(err), AckedSeq: acked}
 	}
-	return &battlev1.ReportProgressResponse{Code: commonv1.ErrCode_OK, AckedSeq: acked}, nil
+	return &battlev1.ReportProgressResponse{Code: commonv1.ErrCode_OK, AckedSeq: acked}
 }
 
 // GetMatchResult 查询一场对局结算。

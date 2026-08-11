@@ -75,13 +75,30 @@ type TerminalReleaseRelay interface {
 	FinalizeTerminal(context.Context, data.TerminalReleaseRecord) error
 }
 
-// InstanceGranter 把战斗装备掉落幂等发放到 inventory(GrantInstances,W5 ④)。
+// InstanceGranter 把战斗掉落按真实类型幂等写入 inventory。历史名称保留以减少接线漂移；
+// 可堆叠物品走 GrantItems，装备走 GrantInstances，局内消费走系统 ConsumeBattleItem。
 //
 // 由后台 RunDropPublisher 调用:发放失败 → 返回 error → drop 出箱行保留下轮重试
 // (at-least-once,配合 GrantInstances 幂等键去重)。实现可为 nil:inventory_addr 未配
 // → 不启动掉落发布器,掉落出箱积压不丢(等 inventory 地址配好重启后补发)。
 type InstanceGranter interface {
+	GrantItems(ctx context.Context, playerID uint64, items []data.StackGrant, idempotencyKey string) error
 	GrantInstances(ctx context.Context, playerID uint64, itemConfigIDs []uint32, idempotencyKey string) error
+	ConsumeBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey string) error
+	DiscardBattleItem(ctx context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey string) error
+}
+
+// BattleItemDefinition 是 battle_result 对同源 item/drop 表需要的最小投影。
+type BattleItemDefinition struct {
+	Equipment    bool
+	BattleUsable bool
+	Droppable    bool
+	MaxStack     uint32
+}
+
+// BattleItemCatalog 每次从热更 Store 查当前批次；未知 ID 必须 fail-closed。
+type BattleItemCatalog interface {
+	Lookup(itemConfigID uint32) (BattleItemDefinition, bool)
 }
 
 // MailSender 把背包满溢出的战斗装备掉落转个人邮件(mail.SendPersonalMail,幂等键防重发)。
@@ -130,6 +147,10 @@ type BattleResultUsecase struct {
 	// **非 nil-safe**:nil 时击杀事实按可重试错误拒收,绝不"跳过并推进水位"(会永久丢经验)。
 	monsterExp MonsterExpTable
 
+	// itemCatalog 同时裁决掉落白名单、堆叠/实例路由与局内可消费语义。
+	// 生产必须注入；nil 仅保留旧单测按 cfg.DropWhitelist 运行。
+	itemCatalog BattleItemCatalog
+
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
 	// 可为 nil:单 Cell / dev / 阶段 1~2 不分区,结算回流落点观测退化为不打日志(行为不变)。
 	// 多 Region 部署(阶段 3)由 main 经 SetCellRouter 注入,ReportResult 落库后额外打一条
@@ -162,6 +183,22 @@ func (u *BattleResultUsecase) SetCellRouter(r *cellroute.Router) {
 // nil / 不调用 = inventory_addr 未配 → RunDropPublisher 不启动,掉落出箱积压不丢。
 func (u *BattleResultUsecase) SetInstanceGranter(g InstanceGranter) {
 	u.granter = g
+}
+
+// SetBattleItemCatalog 注入与 UE 同源的 item/drop 热更视图。
+func (u *BattleResultUsecase) SetBattleItemCatalog(c BattleItemCatalog) {
+	u.itemCatalog = c
+}
+
+func (u *BattleResultUsecase) battleItemDefinition(itemConfigID uint32) (BattleItemDefinition, bool) {
+	if u.itemCatalog != nil {
+		return u.itemCatalog.Lookup(itemConfigID)
+	}
+	// 兼容旧单测：历史 drop_whitelist 仅装装备，因此 fallback 只声明 equipment。
+	if u.cfg.IsDroppable(itemConfigID) {
+		return BattleItemDefinition{Equipment: true, Droppable: true, MaxStack: 1}, true
+	}
+	return BattleItemDefinition{}, false
 }
 
 // SetMailSender 注入背包满溢出转邮件发送器(W5 ④+,nil-safe)。
@@ -501,8 +538,8 @@ func (u *BattleResultUsecase) buildOutbox(result *battlev1.BattleResult, abandon
 
 // buildDropOutbox 把一场结算里每个玩家的战斗装备掉落组装成 drop 出箱记录(与落库同事务,W5 ④)。
 //
-// DS 不可信:逐条按 cfg.IsDroppable(drop 白名单)过滤 DS 上报的 dropped_item_config_ids,
-// 只有落在白名单内的 item_config_id 才入出箱发放;白名单为空 → 全过滤掉(不发放,安全默认)。
+// DS 不可信:逐条按同源 drop 表过滤 DS 上报的 dropped_item_config_ids；item/drop 缺失
+// 一律 fail-closed。生产不再维护手抄 drop_whitelist。
 // 每玩家最多保留 cfg.MaxDropsPerPlayer() 条(超限截断记 Warn):防异常/恶意 DS 重复上报
 // 海量白名单 ID 撑爆 battle_drop_outbox.item_config_ids VARCHAR(512) 导致整场结算回滚。
 // 无任何白名单内掉落的玩家不产出出箱行。
@@ -521,14 +558,22 @@ func (u *BattleResultUsecase) buildDropOutbox(ctx context.Context, result *battl
 			capHint = maxDrops
 		}
 		allowed := make([]uint32, 0, capHint)
+		stacks := make([]uint32, 0, capHint)
+		instances := make([]uint32, 0, capHint)
 		truncated := false
 		for _, id := range reported {
-			if id != 0 && u.cfg.IsDroppable(id) {
+			def, ok := u.battleItemDefinition(id)
+			if id != 0 && ok && def.Droppable {
 				if len(allowed) >= maxDrops {
 					truncated = true
 					break
 				}
 				allowed = append(allowed, id)
+				if def.Equipment {
+					instances = append(instances, id)
+				} else {
+					stacks = append(stacks, id)
+				}
 			}
 		}
 		if truncated {
@@ -543,7 +588,10 @@ func (u *BattleResultUsecase) buildDropOutbox(ctx context.Context, result *battl
 				"match_id", result.GetMatchId(), "player_id", s.GetPlayerId(), "reported", len(reported))
 			continue
 		}
-		recs = append(recs, data.DropOutboxRecord{PlayerID: s.GetPlayerId(), ItemConfigIDs: allowed})
+		recs = append(recs, data.DropOutboxRecord{
+			PlayerID: s.GetPlayerId(), ItemConfigIDs: allowed,
+			StackItemConfigIDs: stacks, InstanceItemConfigIDs: instances,
+		})
 	}
 	return recs
 }
@@ -836,26 +884,10 @@ func (u *BattleResultUsecase) publishDropBatch(ctx context.Context) (int, error)
 	}
 	granted := 0
 	for _, r := range recs {
-		key := dropIdempotencyKey(r.MatchID, r.PlayerID)
-		gerr := u.granter.GrantInstances(ctx, r.PlayerID, r.ItemConfigIDs, key)
-		if gerr != nil {
-			// 背包满且已配 mail:转个人邮件溢出(传相同源键 key,领取时 GrantInstances 同键去重
-			// → 直发链与邮件链至多一次),成功后删出箱行,不再无休止重试。
-			if u.mailSender != nil && errcode.As(gerr) == errcode.ErrInventoryCapacityFull {
-				if merr := u.mailSender.SendOverflowMail(ctx, r.PlayerID, r.ItemConfigIDs, key); merr != nil {
-					// 转邮件失败 → 保留出箱行下轮重试(不丢),不阻塞其他玩家。
-					plog.With(ctx).Warnw("msg", "drop_overflow_mail_failed", "player_id", r.PlayerID, "items", len(r.ItemConfigIDs), "err", merr)
-					continue
-				}
-				plog.With(ctx).Infow("msg", "drop_overflow_mailed", "player_id", r.PlayerID, "items", len(r.ItemConfigIDs))
-				if derr := u.repo.DeleteDropOutbox(ctx, r.ID); derr != nil {
-					return granted, derr
-				}
-				granted++
-				continue
-			}
-			// 其他失败(inventory 临时不可用等)/ 未配 mail 的背包满 → 保留出箱行下轮重试,不阻塞其他玩家。
-			plog.With(ctx).Warnw("msg", "drop_grant_failed", "player_id", r.PlayerID, "items", len(r.ItemConfigIDs), "err", gerr)
+		if gerr := u.deliverDropRecord(ctx, r); gerr != nil {
+			// 任一路由失败都保留整行；已成功的另一路由靠独立幂等键回放，不会重复入账。
+			plog.With(ctx).Warnw("msg", "drop_grant_failed", "player_id", r.PlayerID,
+				"items", len(r.ItemConfigIDs), "err", gerr)
 			continue
 		}
 		if derr := u.repo.DeleteDropOutbox(ctx, r.ID); derr != nil {
@@ -867,6 +899,51 @@ func (u *BattleResultUsecase) publishDropBatch(ctx context.Context) (int, error)
 		plog.With(ctx).Debugw("msg", "drop_outbox_granted", "count", granted)
 	}
 	return granted, nil
+}
+
+func (u *BattleResultUsecase) deliverDropRecord(ctx context.Context, r data.DropOutboxRecord) error {
+	// 路由在 SaveResult 首次入箱时已经冻结。重试绝不读取 item/drop 热配置，否则
+	// stack 已成功、instance 失败期间的类型热更会换 method/key，造成已成功部分双发。
+	var stacks []data.StackGrant
+	if len(r.StackItemConfigIDs) > 0 {
+		var err error
+		stacks, err = aggregateStackGrants(r.StackItemConfigIDs)
+		if err != nil {
+			return err
+		}
+	}
+	instances := r.InstanceItemConfigIDs
+	if len(stacks) == 0 && len(instances) == 0 {
+		return errcode.New(errcode.ErrInvalidState, "drop outbox row has no frozen route id=%d", r.ID)
+	}
+	baseKey := dropIdempotencyKey(r.MatchID, r.PlayerID)
+	stackKey, instanceKey := baseKey, baseKey
+	if len(stacks) > 0 && len(instances) > 0 {
+		stackKey, instanceKey = baseKey+":stack", baseKey+":instance"
+	}
+	if len(stacks) > 0 {
+		if err := u.granter.GrantItems(ctx, r.PlayerID, stacks, stackKey); err != nil {
+			return err
+		}
+	}
+	if len(instances) == 0 {
+		return nil
+	}
+	if err := u.granter.GrantInstances(ctx, r.PlayerID, instances, instanceKey); err != nil {
+		// 只有实例背包满才允许转邮件；堆叠物品已走计数模型，不应进入装备邮件链。
+		if u.mailSender != nil && errcode.As(err) == errcode.ErrInventoryCapacityFull {
+			if merr := u.mailSender.SendOverflowMail(ctx, r.PlayerID, instances, instanceKey); merr != nil {
+				plog.With(ctx).Warnw("msg", "drop_overflow_mail_failed", "player_id", r.PlayerID,
+					"items", len(instances), "err", merr)
+				return merr
+			}
+			plog.With(ctx).Infow("msg", "drop_overflow_mailed", "player_id", r.PlayerID,
+				"items", len(instances))
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // dropBatchSize 返回每轮掉落发放批大小(配置缺省 128)。

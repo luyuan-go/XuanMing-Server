@@ -49,10 +49,17 @@ type EquipmentSlot struct {
 	ItemConfigID uint32
 }
 
-// TalentLevel 是天赋树某节点的已点等级。
+// TalentLevel 是天赋树某节点的已点等级与该节点实际消耗的天赋点。
+//
+// SpentPoints = 等级 × 专精表 cost_per_level,写入时由 biz 按表算好填入、随分配一起落库;
+// 读取时由 repo 回填。之所以要存而不是读时再算:repo 层看不到配置表,只能按 Σ 等级 反推,
+// 而 cost_per_level≠1 时反推会把已花点数算少,玩家看到的可点数比实际多(写扣 6 读算 4)。
+// 存下来后写与读共用专精表这一个口径,且策划改表不会追溯改写老玩家已花掉的点。
 type TalentLevel struct {
 	TalentID uint32
 	Level    int32
+	// SpentPoints 该节点实际消耗的天赋点;GetTalents 回填,SetTalents 由 biz 填。
+	SpentPoints int32
 }
 
 // PlayerRepo 是 player 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
@@ -96,14 +103,16 @@ type PlayerRepo interface {
 	GetEquipment(ctx context.Context, playerID uint64) ([]EquipmentSlot, error)
 	// GrantTalentPoints 幂等授予天赋点(total_talent_points += points)。命中幂等键 → (当前可点, true, nil)。
 	GrantTalentPoints(ctx context.Context, playerID uint64, points int32, idempotencyKey string) (unspent int, already bool, err error)
-	// SetTalents 全量重置天赋(事务:校验 totalCost<=total,替换 player_talents)。点数不足 → ErrPlayerInsufficientPoints。
+	// SetTalents 全量重置天赋(事务:校验总消耗<=total,替换 player_talents)。点数不足 → ErrPlayerInsufficientPoints。
 	//
-	// totalCost 由 biz 按专精表算好后传入(Σ 等级 × cost_per_level),repo 不再自己按 sum(level) 推算:
-	// 每级消耗是配置表列,repo 层看不到配置,自行推算会在 cost_per_level≠1 时算少扣。
-	SetTalents(ctx context.Context, playerID uint64, talents []TalentLevel, totalCost uint32) (unspent int, err error)
+	// 每条 TalentLevel.SpentPoints 由 biz 按专精表算好后传入(等级 × cost_per_level),
+	// repo 不自己按 sum(level) 推算:每级消耗是配置表列,repo 层看不到配置,
+	// 自行推算会在 cost_per_level≠1 时算少扣。总消耗 = Σ SpentPoints,repo 内直接累加,
+	// 不再另收一个总数参数——两个来源就有漂移的可能。
+	SetTalents(ctx context.Context, playerID uint64, talents []TalentLevel) (unspent int, err error)
 	// ResetTalents 清空天赋(返回 total = 全部可点)。
 	ResetTalents(ctx context.Context, playerID uint64) (unspent int, err error)
-	// GetTalents 读已点天赋 + 可点天赋点(total - SUM(level))。
+	// GetTalents 读已点天赋 + 可点天赋点(total - SUM(spent_points))。
 	GetTalents(ctx context.Context, playerID uint64) (talents []TalentLevel, unspent int, err error)
 
 	// ── 玩家等级经验(实时成长)────────────────────────────────────────────

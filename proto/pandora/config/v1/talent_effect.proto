@@ -1,0 +1,57 @@
+// Pandora 配置表:专精(天赋)效果表。
+//
+// 源表:Pandora-Client-SVN/Table/角色/z_专精_效果.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/talent_effect.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:一行 = 「某个专精节点每提升一级,给哪个 GAS 属性加多少」。
+//   Battle DS 开局按 player.GetLoadout 拿到的 TalentNode{talent_id, level},
+//   在本表查出该节点的全部效果行,按 等级 × 每级数值 转成初始 GameplayEffect
+//   (与装备预设同一条路径,ds-arch.md §0.5;服务端不据此算任何战斗数值,§9.6)。
+//
+// === 为什么是独立子表而不是往 z_专精.xlsx 加两列 ===
+// 专精 8「专精精通」的设计就是**同时**提升攻击力 / 生命值 / 防御,一个 (属性键, 每级数值)
+// 列对装不下。往主表堆 属性键1/数值1/属性键2/数值2… 会把上限写死在列数里,
+// 且大部分行留空。子表按 talent_id 分组是本仓既有做法(同 chest_drop 按 loot_table_id 分组)。
+// 这不是"以后可能扩展"的预留(§15.3),是当前 8 号节点已经提出的需求。
+//
+// === 属性键的权威在客户端 ===
+// attr_key 必须是 UE GAS 属性名,权威定义在
+// Pandora-Client-SVN/Pandora/Source/Pandora/Public/GAS/MyEntityAttrSet.h(UMyEntityAttrSet)。
+// 服务端不消费这些数值,但**必须**在加载期用白名单挡住拼错的键:拼错在 DS 上表现为
+// "这个天赋点了没反应",没有任何报错,是最难查的一类配置事故。白名单是校验用的副本,
+// 不是第二份权威(§9.22);MyEntityAttrSet 增删属性时须同步 pkg/configtable/talent_effect.go。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// TalentEffectRow 专精效果表一行(列序 = 字段号序 = 表头 A..D)。
+message TalentEffectRow {
+  // ID(主键,效果行标识;与专精 ID 无关,仅用于唯一定位一行)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 专精ID(= TalentRow.id;同一专精可有多行效果)。
+  // 启用外键校验:指向不存在的专精的效果行永远不会被应用,属静默失效,必须在加载期挡住。
+  uint32 talent_id = 2 [(excel_col) = "专精ID", (excel_required) = true, (excel_fk) = "talent"];
+  // 属性键(UE GAS 属性名,区分大小写,如 Atk / Hp / MoveSpeedRate)。
+  //   取值白名单见 pkg/configtable/talent_effect.go 的 allowedTalentAttrKeys。
+  string attr_key = 3 [(excel_col) = "属性键", (excel_required) = true];
+  // 每级数值(加算;该节点每提升一级,对应属性增加的量)。
+  //   倍率类属性(MoveSpeedRate / AtkSpeedRate / CritChance / CritDamage)填小数,
+  //   故必须是 float 而不是整数类型。不设 (excel_required):0 由伴生校验单独拒
+  //   (留空和填 0 都是"这行没有任何效果",报错要能说清是哪一行)。
+  float value_per_level = 4 [(excel_col) = "每级数值"];
+}
+
+// TalentEffectTableData 专精效果整表容器(dist/talent_effect.json 的根对象;excel_file 注解 = 导表登记)。
+message TalentEffectTableData {
+  option (excel_file) = "角色/z_专精_效果.xlsx";
+  // 版式与 z_专精.xlsx 一致:第 1 行表头、2~3 行列说明,数据自第 4 行起。
+  option (excel_data_start_row) = 4;
+
+  repeated TalentEffectRow rows = 1;
+}

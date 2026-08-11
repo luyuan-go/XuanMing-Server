@@ -172,6 +172,23 @@ message ItemPickupFact {
   uint32 count          = 2;  // 本事件拾取件数(>0;服务端按配置上限校验)
 }
 
+// ItemConsumeFact 局内消耗事实。仅用于把已由 UE GAS 执行的食物/水等使用同步为
+// 后端持久扣减；battle_result 按真实 item.usable/type 校验，并经 inventory 内部系统 RPC
+// 幂等扣除。DS/客户端必须等包含本 seq 的 ReportProgress ACK 后再最终扣本地数量并应用
+// GAS 效果；失败原批重试，禁止用大厅 UseItem JWT 路径替代。
+message ItemConsumeFact {
+  uint32 item_config_id = 1;
+  uint32 count          = 2;  // >0，且不得超过单事件拾取数量上限
+}
+
+// ItemDiscardFact 副本内丢弃可堆叠物品事实。当前不携 instance_id：phase0 DS 为装备
+// 生成的本地 Guid 与 inventory instance_id 没有可靠映射，装备丢弃必须在副本 UI
+// fail-closed，回大厅后走 DiscardInstance 精确处理。
+message ItemDiscardFact {
+  uint32 item_config_id = 1;
+  uint32 count          = 2;  // >0，真实 item.type 必须不是 EQUIPMENT
+}
+
 // BattleProgressEvent 一条战斗中进度事实事件。
 // seq 每场单调递增(从 1 起),是幂等键 (match_id, seq) 的组成部分。
 message BattleProgressEvent {
@@ -180,6 +197,8 @@ message BattleProgressEvent {
   oneof fact {
     MonsterKillFact monster_kill = 3;
     ItemPickupFact  item_pickup  = 4;
+    ItemConsumeFact item_consume = 6;
+    ItemDiscardFact item_discard = 7;
   }
   int64 ts_ms = 5;  // DS 侧事件发生时间(审计;权威时间以服务端为准)
 }

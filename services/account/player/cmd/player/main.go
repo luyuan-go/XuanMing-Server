@@ -123,6 +123,15 @@ func main() {
 		if err := tb.Talent.ValidateTree(); err != nil {
 			return err
 		}
+		// 专精效果表(2026-08-10):天赋的战斗加成由它承载,Battle DS 开局按 GetLoadout
+		// 的分配查表转 GameplayEffect。同一专精对同一属性配多行会让加成翻倍,
+		// 跨行约束只能在整表校验一次。缺表不拒:效果表为空等于"天赋只存数据不加数值",
+		// 是合法的过渡态,不该让 player 服务起不来(§9.6 数值权威本就不在这里)。
+		if tb.TalentEffect != nil {
+			if err := tb.TalentEffect.ValidateEffects(); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	loadResult, err := ctStore.Load(cfg.ConfigTable.Dir, 0)

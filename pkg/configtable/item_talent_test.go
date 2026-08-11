@@ -199,33 +199,37 @@ func TestTalentValidateAllocation(t *testing.T) {
 	)
 
 	// 总消耗 = 2×1 + 2×2 = 6,不是等级和 4。
-	cost, err := tbl.ValidateAllocation(map[uint32]uint32{1: 2, 2: 2})
+	costs, cost, err := tbl.ValidateAllocation(map[uint32]uint32{1: 2, 2: 2})
 	if err != nil {
 		t.Fatalf("合法分配不应报错: %v", err)
 	}
 	if cost != 6 {
 		t.Fatalf("总消耗应为 6(按每级消耗), got %d", cost)
 	}
+	// 逐节点消耗要落库供读取侧还原已花点数,必须逐条对上而不只对总数。
+	if costs[1] != 2 || costs[2] != 4 {
+		t.Fatalf("逐节点消耗应为 {1:2, 2:4}, got %v", costs)
+	}
 
-	if _, err := tbl.ValidateAllocation(map[uint32]uint32{99: 1}); err == nil {
+	if _, _, err := tbl.ValidateAllocation(map[uint32]uint32{99: 1}); err == nil {
 		t.Fatal("未知节点应被拒")
 	}
-	if _, err := tbl.ValidateAllocation(map[uint32]uint32{1: 6}); err == nil {
+	if _, _, err := tbl.ValidateAllocation(map[uint32]uint32{1: 6}); err == nil {
 		t.Fatal("超等级上限应被拒")
 	}
-	if _, err := tbl.ValidateAllocation(map[uint32]uint32{1: 0}); err == nil {
+	if _, _, err := tbl.ValidateAllocation(map[uint32]uint32{1: 0}); err == nil {
 		t.Fatal("等级 0 应被拒(应由调用方剔除)")
 	}
 	// 前置只看本次方案:1 只有 1 级,不满足 2 要求的 2 级。
-	if _, err := tbl.ValidateAllocation(map[uint32]uint32{1: 1, 2: 1}); err == nil {
+	if _, _, err := tbl.ValidateAllocation(map[uint32]uint32{1: 1, 2: 1}); err == nil {
 		t.Fatal("前置未达标应被拒")
 	}
 	// 完全不点前置同样要拒,否则"先点满前置再洗掉前置"能留下悬空节点。
-	if _, err := tbl.ValidateAllocation(map[uint32]uint32{2: 1}); err == nil {
+	if _, _, err := tbl.ValidateAllocation(map[uint32]uint32{2: 1}); err == nil {
 		t.Fatal("缺前置应被拒")
 	}
 	// 空分配是合法的"清空",总消耗 0。
-	if cost, err := tbl.ValidateAllocation(nil); err != nil || cost != 0 {
+	if _, cost, err := tbl.ValidateAllocation(nil); err != nil || cost != 0 {
 		t.Fatalf("空分配应返回 (0, nil), got (%d, %v)", cost, err)
 	}
 }

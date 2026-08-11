@@ -468,42 +468,40 @@ go run ./cmd/gmctl additem --match <matchID> --player <playerID> --config <真�
 
 ### 11.2 当前快照与提交边界
 
-- 本轮新 RPC、Go pb、Envoy、业务实现和新测试仍在未暂存工作树;新文件
-  `services/account/login/internal/service/login_register_no_rpc_test.go` 尚未跟踪。
-- 当前旧 `[proto]` 提交 `bea78b83` 只加入 `LoginResponse.register_no=13`,**不包含**
-  `GetRegisterNoRequest/Response`。提交本次协议时标题仍须标 `[proto]`。
-- 工作树混有反滥用与其他并行改动,不能 `git add -A`;尤其 `envoy.yaml`、login biz/service、
-  `PROGRESS.md` 是共享文件,提交前按路径和 diff 确认主题。
+- 2026-08-10 08:45 并发提交 `11320853` 已纳入本轮新 RPC、Go pb、Envoy、业务实现和
+  `login_register_no_rpc_test.go`;服务端 `proto/` 当前干净,可作为客户端生成输入。
+- `11320853` 的标题是 `feat(server): 完成防滥用配额与注册编号补拉`,**遗漏仓库规范要求的
+  `[proto]` 标记**。推送前须由人决定 amend 或明确记录例外;Codex 不得在未授权时改提交历史。
+- 客户端已用官方 `Tool/Protobuf/GenClientProto.ps1` 对 `11320853` 执行 `-UpdateLock`,并以
+  同参数 `-VerifyOnly` 复验通过。协议锁已推进到 `11320853`;实际只有 login `.pb.h`、
+  login `.pb.cc`、`ClientProto.lock.json` 三个生成文件变化。
+- 提交后工作树仍有并行的 configtable 生成物修改;后续不能 `git add -A`。
 
-### 11.3 Codex 跨仓待办(按顺序)
+### 11.3 UE 客户端已落码与验证边界
 
-1. 先把服务端新 RPC 与对应 Go 生成物形成稳定 `[proto]` 提交。客户端生成脚本会拒绝脏的
-   服务端 `proto/`,不能在未提交快照上推进协议锁。
-2. 先处理客户端当前已修改、仍锁在 `bea78b83` 的 `Tool/Protobuf/ClientProto.lock.json`,
-   不得直接覆盖并行修改。边界干净后执行官方流程:
-
-   ```powershell
-   & 'F:\work\Pandora-Client-SVN\Tool\Protobuf\GenClientProto.ps1' `
-     -ServerRoot 'F:\work\XuanMing-Server' `
-     -BufPath 'C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Links\buf.exe' `
-     -ProtocPath 'C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe' `
-     -UpdateLock
-
-   & 'F:\work\Pandora-Client-SVN\Tool\Protobuf\GenClientProto.ps1' `
-     -ServerRoot 'F:\work\XuanMing-Server' `
-     -BufPath 'C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Links\buf.exe' `
-     -ProtocPath 'C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe' `
-     -VerifyOnly
-   ```
-
-   预计触及 login 的 `.pb.h/.pb.cc` 与协议锁,以实际 SVN diff 为准;脚本的
-   `Unreal build: not run` 必须如实保留。
-3. UE 增加 `/pandora.login.v1.LoginService/GetRegisterNo` 空请求(`bWithAuth=true`)与响应解码。
-   编号为 0 时几秒后单飞补拉,或接现有角色界面刷新按钮;拿到非 0 立即停止。业务/传输失败
-   不得写 0。迟到响应必须校验发起时的 `SessionGeneration + PlayerId`,登出、切号或界面销毁后
-   零副作用;不要复用 `SetSession` 更新编号,否则会无故推进会话世代。
-4. 至少验证:请求 path/空 body/Authorization、`OK+0`、非 0 停轮询、错误不伪装、切号迟到
-   回调、UE 客户端目标编译、真实 Envoy/JWT 新账号 E2E(“生成中”无需重登收敛为非 0)。
+- `PandoraLoginClient` 已接 `/pandora.login.v1.LoginService/GetRegisterNo`:请求体为空且
+  `bWithAuth=true`;codec 保留 `OK+0` 正常态,响应缺 data frame、解析失败或业务/传输失败均显式
+  非 OK,不会伪装成编号 0。
+- `MyAccountModel` 在登录拿到 0 后立即发起并用 CoreTicker 每 3s + 最多 0.75s jitter 单飞补拉;
+  `OK+0` 继续显示“生成中”,非 0 写回并停止。真实错误停止自动补拉并显示失败,由角色界面刷新按钮
+  显式重试,不会无限空等。
+- 写回通过 `PandoraBackendSubsystem::TrySetRegisterNo`,绑定发起时的 attempt、
+  `SessionGeneration`、`PlayerId` 三重围栏;不推进会话世代。登出、切号、重连放弃、
+  `Deinitialize` 后的迟到结果均无副作用。
+- `MyRoleInfoView` 已展示非 0 编号、“注册编号 生成中”和“注册编号 获取失败，点击刷新”三态;
+  Widget 重用时会重新绑定刷新按钮。
+- 新增三类 Automation 覆盖 codec 契约、当前会话写回围栏、RPC/source 契约(含空请求、JWT auth、
+  CoreTicker/三围栏、错误不重试和 Widget 重绑)。本任务修改的 C++ 源码已编译,
+  `UnrealEditor-PandoraTests.dll` 已链接成功。
+- **完整目标仍未全绿**:`PandoraEditor` 最终链接被无关并行改动 `MyMainView.cpp/.h` 阻断——
+  其中已经声明并调用、但未实现 `EnsureClientPerfWidget()` / `RefreshClientPerf(float)`,触发
+  LNK2019/LNK1120。本交接不越权修改该并行功能。随后 Editor 可加载旧 `Pandora.dll` /
+  `PandoraProto`,但加载新链接的 `PandoraTests.dll` 失败(`GetLastError=127`,game module
+  `PandoraTests` could not be loaded):新测试 DLL 引用了本轮新增导出,旧主 DLL 不具备。因此三组
+  Automation **均未实际执行**,不是测试断言失败。
+- 客户端本轮未 SVN commit、未 push。服务端 `11320853` 也未由 Codex amend;仍需人决定缺失
+  `[proto]` 标记的处理方式。最终验收还需完整 UE 目标编译通过，以及真实 Envoy/JWT 新账号 E2E
+  验证“生成中”无需重登收敛为非 0且不再请求。
 
 ### 11.4 部署与排障口径
 
@@ -520,3 +518,50 @@ go run ./cmd/gmctl additem --match <matchID> --player <playerID> --config <真�
 `AccountRepo.GetRegisterNo` 当前把 `sql.ErrNoRows` 和 `register_no IS NULL` 都映射成
 `0,nil`。在“有效 JWT 对应账号行必然存在”的现有不变量下不影响正常路径;若账号行异常缺失,
 客户端仍会 `OK+0` 空等。未来允许删号或排查到缺行时,必须把 no-row 改为非 OK,不能继续冒充补号中。
+
+### 11.6 对抗性复审(2026-08-10,6 路 agent)结论与修复
+
+复审横跨 matchmaker 不变量 / fail-open 全面审计 / no-show 记罚 / login+Envoy 安全链 /
+配置与文档一致性(Envoy 配置有效性 agent 中途断线,其发现由其余 agent 交叉覆盖)。
+**0 个 P0**;大量 clean 确认了核心 fail-open / 零副作用 / 退出路径零波及纪律正确。
+
+**已修复(9 项)**:
+1. **[P1] 守卫退队**(match.go / data/match.go):`RequeueTicketIfOwned` 镜像 ReserveTicket 的
+   WATCH CAS——票据被并发 CancelMatch 删除后不再盲写复活(避免已取消玩家被重新凑局 + 误记
+   no-show 罚)。failMatch 与 rollbackReservations 两个调用点已切换,3 个回归测试。
+   注:此竞态**先于本轮存在**(failMatch 一直盲写),onMatchNoCapacity 放大了暴露面,一并修掉。
+2. **[P1] login 账号大小写绕过**(login_ratelimit.go):hashAccount 前先 `ToLower+TrimSpace`
+   归一化,对齐 utf8mb4_0900_ai_ci;否则 alice/Alice/ALICE 各享独立失败预算。回归测试锁定。
+3. **[P2] §9.6 DS 自报 abandoned**(allocator service):新增 `sanitizeReportedState` 白名单——
+   DS 只能报 warming/ready/running/ended,"abandoned"(后端专属判决)归一化为空串;堵住
+   「DS 输入直接铸造 no-show 处罚」的将来陷阱,两条心跳路径语义对齐。
+4. **[P2] login 部分故障放大**(LockRemaining):账号/IP 两维度独立读、各自 fail-open,
+   一维读失败不再短路掉另一维已读到的锁(撞库时 IP 锁常是唯一防线)。
+5. **[P2] login 续锁攻击**(RecordFailure):布锁时清零该维度计数——否则计数窗(15m)>锁窗(5m)
+   时锁到期后单次失败即重锁。回归测试锁定「单次失败不重锁」。
+6. **[P2] team_id 骚扰面**(entry_limiter.go):StartMatch 冷却只按 JWT 的 captain_id 计
+   (自限),删掉按未校验 team_id 占坑的 per-队伍窗(那是「刷任意 team_id 压制他人队伍」原语)。
+7. **[P2] 配置注释失实**(matchmaker/ds_allocator/login conf.go 共 6 字段):`<=0 关闭` 改为
+   `负值关闭,0=用默认`,与 Defaults 实际语义(==0 用默认)一致。
+8. **[P2] Envoy :8444 纵深**:DS 面 header_mutation 一并入站剥离 x-pandora-client-ip。
+9. **[P2] 文档键名漂移**:anti-abuse §3.3 的 hub 冷却键 `transfer:cd:{}` 更正为代码实际的
+   `transfer_cd:<>`。
+
+**已评估、判定为可接受并文档化(不修,附依据)**:
+- **onMatchNoCapacity 补偿重放会闪 FAILED**(match.go 重放路径走 plain failMatch):
+  「不闪 FAILED」保证只在首攻补偿成功时成立;崩溃/Redis 抖动的重放路径会推一次 FAILED
+  (无倒计时),客户端经 ResolvePlayerMatchContext 恢复,**不卡死(§9.20 不破)**。彻底修需在
+  match 记录上持久化「容量耗尽 reason」——那要加 proto 字段,与本轮「零 proto 改动」冲突,留待
+  下次 proto 批次。
+- **no-show 采样窗口漏连**(battle_auth.go:两跳心跳<5s 间完成连入并崩溃 → EverHadPlayers 恒 false):
+  窗口极窄 + 首次免罚兜底;彻底闭合需判 no_show 前只读核验 departure journal,改动更大,记为
+  已知窄边界。
+- **IPv6 轮换 / CGNAT 连坐**(IP 维度按精确 IP):IP 限流的固有取舍;主威胁由账号维度 + Envoy
+  边缘桶 + 生产关自动注册(§7 真正杠杆)覆盖。/64 聚合属将来可配项。
+- **FirstAbandon 排在可失败步骤后**(Model B 依赖错误会吞掉记罚):方向是 fail-open「少罚」,
+  安全;不值得为它重排删除延迟收尾链。
+- **no-show 拒绝在 BeginTeamMatch roster 租约之后**(组队路径非严格零副作用):租约按
+  operationID 幂等、秒级自净,拒绝前无 DS 分配 / durable operation / 流水等真持久副作用。
+- **anyTicketInFormCooldown 满载期 O(队列长) 串行 PTTL**:纯成本/节拍(fail-open、探测在
+  CreateMatch 前无副作用);满载恢复瞬间的时延放大,可后续加「本 tick 探测记忆」优化,非正确性。
+- **Envoy 桶值 100/50rps**:已标「待压测复核」。

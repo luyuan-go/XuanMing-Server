@@ -29,20 +29,22 @@ node:
     conn_max_lifetime: "30m"
     ping_timeout: "3s"
 
+config_table:
+  dir: "/app/configtable/active"
+
 inventory:
   # 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界,失效数据最多保留 90 天)。
   sweep_interval: "5m"
   sweep_batch: 500
   ledger_retention_days: 90
   escrow_retention_days: 90
+  capacity: 200
 
-  # 生产道具规则应由配置表服务下发 / 同步;此处仅占位示例。
-  item_rules:
-    - item_config_id: 2001
-      usable: true
-    - item_config_id: 3001
-      sellable: true
-      sell_unit_price: 10
+  # 缺专用装备词条表时仅用 UE 已能对称生效的 Atk(3)+1；专属规则优先。
+  default_identify_rule:
+    attr_count: 1
+    pool:
+      - { attr_id: 3, min: 1, max: 1 }
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):生产强制档,顶号后旧 JWT 立即失效;
 # 权威端点漏配拒启,权威不可达 fail-closed。与 gen_cluster_config.ps1 -Prod 产物一致。

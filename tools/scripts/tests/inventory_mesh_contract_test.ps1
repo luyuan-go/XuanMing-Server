@@ -58,14 +58,14 @@ if ($ServerDryRun) {
     throw '仅提供 KubeContext 没有意义；如需真实 API server CEL 编译，请同时传 -ServerDryRun。'
 }
 
-# 构造独立的 9 个 system allow + 6 个 edge player allow；contract 必须拒绝任何扩边/通配。
+# 构造独立的 12 个 system allow + 8 个 edge player allow；contract 必须拒绝任何扩边/通配。
 $matrix = [ordered]@{
     'cluster.local/ns/pandora/sa/pandora-auction' = @('FreezeForOrder', 'EnsureAuctionEscrow', 'SettleAuctionMatch', 'ReleaseEscrow')
     'cluster.local/ns/pandora/sa/pandora-trade' = @('SettlePlayerTrade')
     'cluster.local/ns/pandora/sa/pandora-mail' = @('GrantItems', 'GrantInstances')
     'cluster.local/ns/pandora/sa/pandora-leaderboard' = @('GrantItems')
-    'cluster.local/ns/pandora/sa/pandora-battle-result' = @('GrantInstances')
-    'cluster.local/ns/pandora-ingress/sa/pandora-edge-envoy' = @('GetInventory', 'UseItem', 'SellItem', 'IdentifyItem', 'DiscardInstance', 'MoveInstance')
+    'cluster.local/ns/pandora/sa/pandora-battle-result' = @('GrantItems', 'GrantInstances', 'ConsumeBattleItem', 'DiscardBattleItem')
+    'cluster.local/ns/pandora-ingress/sa/pandora-edge-envoy' = @('GetInventory', 'UseItem', 'SellItem', 'DiscardItem', 'IdentifyItem', 'DiscardInstance', 'MoveInstance', 'SellInstance')
 }
 $rules = @()
 foreach ($principal in $matrix.Keys) {
@@ -81,9 +81,9 @@ $exactPolicy = ([ordered]@{
         spec = [ordered]@{ selector = [ordered]@{ matchLabels = [ordered]@{ app = 'inventory' } }; action = 'ALLOW'; rules = $rules }
     } | ConvertTo-Json -Depth 30 | ConvertFrom-Json -Depth 30)
 Assert-PandoraInventoryAuthorizationPolicy -Policy $exactPolicy -Phase enforce
-Assert-True (@(Get-PandoraInventoryExpectedAuthorizationRows).Count -eq 9) 'system allow 应为 9'
-Assert-True (@(Get-PandoraInventoryExpectedDeniedSystemRows).Count -eq 26) 'system deny 应为 26'
-Assert-True (@(Get-PandoraInventoryExpectedAuthorizationRows -IncludeEdge).Count -eq 15) '含 edge allow 应为 15'
+Assert-True (@(Get-PandoraInventoryExpectedAuthorizationRows).Count -eq 12) 'system allow 应为 12'
+Assert-True (@(Get-PandoraInventoryExpectedDeniedSystemRows).Count -eq 33) 'system deny 应为 33'
+Assert-True (@(Get-PandoraInventoryExpectedAuthorizationRows -IncludeEdge).Count -eq 20) '含 edge allow 应为 20'
 $wildcard = Copy-TestObject $exactPolicy
 $wildcard.spec.rules[0].to[0].operation.paths[0] = '/pandora.inventory.v1.InventoryService/*'
 Assert-Throws { Assert-PandoraInventoryAuthorizationPolicy -Policy $wildcard } '通配 path mutant 未拒绝'

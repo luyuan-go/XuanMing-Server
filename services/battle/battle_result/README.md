@@ -2,7 +2,7 @@
 
 > 战斗结算服务:接 Battle DS 的对局结算(Model-B `ReportResult`)与战斗中实时进度
 > (`ReportProgress`),**幂等落库** + **服务端算 MMR(Elo)** + 掉落/经验发放 + DS 崩溃补偿,
-> 并把段位事件、装备掉落、撮合释放、终态资源回收全部经 **MySQL 事务出箱**可靠投递下游。
+> 并把段位事件、战斗掉落、撮合释放、终态资源回收全部经 **MySQL 事务出箱**可靠投递下游。
 >
 > 本 README 是**模块级说明**(职责 / RPC / 存储 / 调用链 / 起动)。**设计判断 / 决策记录**见
 > `docs/design` 的 [`go-services.md §2.13`](../../../docs/design/go-services.md)、
@@ -19,11 +19,11 @@
   (不变量 §4)+ 战绩查询。
 - **权威态**:对局头 `battles` / 玩家战绩 `battle_player_stats` / 实时进度水位
   `battle_progress_stream` 全在 **MySQL `pandora_battle` 库**(强依赖,结算落库不可降级)。
-- **DS 不可信(不变量 §6)**:MMR 只由**胜负事实**在本服算;掉落只发放 `drop_whitelist` 白名单内
-  的 `item_config_id`;经验只由**怪物击杀事实**查服务端换算表折算;`game_mode` / `map_id` 一律以
+- **DS 不可信(不变量 §6)**:MMR 只由**胜负事实**在本服算;掉落只发放同源 `drop×item` 表存在的
+  `item_config_id`;经验只由**怪物击杀事实**查服务端换算表折算;`game_mode` / `map_id` 一律以
   服务端 canonical `BattleStorageRecord` 覆盖 DS 请求体。
 - **不做的事**:不写玩家段位/经验的权威库(只发 `player.update` 出箱事件 + 调 `player.AddExperience`,
-  由 player 服务落库)、不改玩家背包权威(调 `inventory.GrantInstances`)、不签发 DS 令牌
+  由 player 服务落库)、不直接改玩家背包权威(可堆叠/实例分别调 inventory 系统 RPC)、不签发 DS 令牌
   (**verify-only**:令牌由 ds_allocator 签发)、不做撮合(结算后调 `matchmaker.ReleaseMatch` 释放)。
 
 ## 端口(`docs/design/infra.md`)
@@ -45,7 +45,7 @@
 | RPC | 调用方 | 语义 | 鉴权 |
 |---|---|---|---|
 | `ReportResult(result, final_progress_seq)` | Battle DS(内部) | 上报一场对局结算,幂等落库 + 算 MMR + 组织下游出箱 | **DS battle 令牌**(Guard `RequireToken`);`authority_mode=redis` 时再过 Redis active 精确校验。**拒绝玩家 JWT**(无令牌直连一律拒) |
-| `ReportProgress(match_id, events)` | Battle DS(内部) | 战斗中实时进度事实批(击杀/拾取,`seq` 幂等) | 同上;roster 取自权威 `BattleStorageRecord`,非本场玩家事实直接拒 |
+| `ReportProgress(match_id, events)` | Battle DS(内部) | 战斗中实时进度事实批(击杀/拾取/消费/堆叠丢弃,`seq` 幂等) | 同上;roster 取自权威 `BattleStorageRecord`,非本场玩家事实直接拒 |
 | `GetMatchResult(match_id)` | 后端内部 / 运维 | 查一场对局结算(含全部玩家战绩) | `AuthOptional`(不认 JWT 身份,`match_id` 由入参给出) |
 | `ListPlayerHistory(player_id, limit, before_ms)` | 后端内部 / 运维 | 倒序游标列出玩家战绩历史 | `AuthOptional`(`player_id` 由入参给出) |
 
@@ -53,6 +53,12 @@
 > MatchID, RequireToken: true}` 把令牌 `match_id` 绑定到上报的 `match_id`(防拿 A 局令牌伪造 B 局
 > 结算);`enforce` 模式下无令牌的东西向旁路直连被拒(堵绕过 Envoy)。这两个 RPC 不看玩家 JWT,
 > 玩家侧无法调用。
+>
+> `ReportProgress` 有两种 ACK 语义：普通击杀/拾取成功只表示“水位 + outbox 已 durable 接受”，
+> 后台最终发放；`ItemConsume` / `ItemDiscard` 必须是**独立单 event 批**，服务端会同步驱动同玩家
+> 前序 outbox，只有 inventory 扣减事务明确完成才返回 `OK + AckedSeq=seq`。终态业务失败持久化后统一
+> 返回 `ERR_INVALID_ARG + AckedSeq=seq`（UE 保留本地物品/不施放效果）；瞬时失败返回可重试码且
+> `AckedSeq=0`，同 seq/同 payload 重试。副本装备没有可靠 inventory `instance_id` 映射，丢弃 fail-closed。
 >
 > **另有一条 Kafka 结算入口(legacy)**:`pandora.battle.result` topic → `BattleResultHandler`。它**不带**
 > Model-B 可核验凭据,故 `authority_mode=redis` 时被 `Config.ValidateRedisAuthorityIngress` 启动期
@@ -85,7 +91,7 @@ internal/
     terminal_release_schema.go  terminal_release_outbox schema 启动探测
     match_releaser.go           matchmaker.ReleaseMatch gRPC client
     mmr_reader.go               player 服务 MMR gRPC reader(弱依赖,空则 StaticMMRReader)
-    inventory_client.go         inventory.GrantInstances gRPC client(掉落/进度装备发放)
+    inventory_client.go         inventory GrantItems/GrantInstances/Consume/Discard 系统 gRPC client
     experience_client.go        player.AddExperience gRPC client(实时击杀经验)
     mail_client.go              mail.SendPersonalMail gRPC client(背包满溢出转邮件)
   server/                       grpc / http server 注册(http 仅 /metrics)
@@ -117,7 +123,7 @@ ReportResult(result, final_progress_seq)
 2. **MMR 决策**(`assignMMR`,`battle_result.go`;纯函数 `eloDeltas` / `reasonForTeam` 在 `mmr.go`):`ABANDONED` → `mmr_delta` 全 0;canonical
    `pve_coop`(仅授权路径可判定,`decision-dungeon-entry-modes.md`)→ 全 0 且不碰 MMR reader;其余
    → 按两队当前 MMR 均值算 Elo,覆盖 DS 上报的 `mmr_delta`。
-3. **组装出箱**:`buildOutbox`(每玩家一条 `player.update` 事件)+ `buildDropOutbox`(按 `drop_whitelist`
+3. **组装出箱**:`buildOutbox`(每玩家一条 `player.update` 事件)+ `buildDropOutbox`(按同源 `drop×item`
    过滤 + 每玩家 `MaxDropsPerPlayer()` 截断)+ `prepareTerminalRelease`(给终态回收证明打 `release_after_ms`
    宽限)。
 4. **原子落库** `repo.SaveResult`(见下)。
@@ -135,7 +141,7 @@ BEGIN
 ├─ INSERT player_update_outbox × N                   段位事件出箱(→ worker 1)
 ├─ settleProgressStreamTx(match_id, final_seq)       ★ 收口实时进度水位:打终局标记(fencing 迟到进度)
 │                                                     + 返回 DropsSuppressed(水位>0 → 掉落已归实时通道)
-├─ INSERT battle_drop_outbox × N   [!DropsSuppressed] 装备掉落出箱(→ worker 2);已归实时通道则跳过只审计
+├─ INSERT battle_drop_outbox × N   [!DropsSuppressed] 战斗掉落出箱(→ worker 2);已归实时通道则跳过只审计
 ├─ INSERT terminal_release_outbox  [terminalRelease] 终态资源回收证明(→ worker 6)
 └─ INSERT match_release_outbox                        撮合释放出箱(→ worker 4)
 COMMIT
@@ -159,11 +165,19 @@ ReportProgress(match_id, roster, events)
 │    ├─ MonsterKill → 计入 killsByPlayer;MonsterExpOf 查换算表(未配置怪跳过告警,水位照推)
 │    ├─ ItemPickup  → IsDroppable 白名单(非白名单跳过告警);每拾取事实一行进度出箱
 │    └─ 未知事实类型 → MarkProgressStopped 持久停流 + ErrInvalidState(新 DS 对旧 Go,能力不匹配)
+├─ consume/discard 批形状门:必须独占单 event；count≤item.max_stack 且硬上限 1000
 └─ repo.ApplyProgress(expectedSeq, newSeq, 批 delta, caps)   ★ 事务内:
      ├─ 水位乐观 CAS(WHERE last_applied_seq=expected AND settled=0 AND stopped=0)
      ├─ 单场 + 单玩家累计上限在**同一事务一致快照**判定(§16.1 TOCTOU:不得事务外先判)
+     ├─ stack pickup 增加 (match,player,item) picked_count
+     ├─ consume/discard 条件预留 spent_count≤picked_count + INSERT durable action outcome
      └─ INSERT battle_progress_outbox(→ worker 3)
 ```
+
+phase0 只允许消费/丢弃**本场已接受的同玩家、同 item 可堆叠拾取物**；大厅带入/进入本场前的
+主库存不提供额度。action 同步路径严格先 Grant 后 Consume/Discard；成功原子标 outcome succeeded
+并删 outbox，终态失败原子标 failed、释放本次 spent 预留并删 outbox，后序不会被永久饿死。
+响应丢失后只从 `battle_progress_action` 回放结果，绝不以“outbox 不存在”猜成功。
 
 错误语义即 DS 侧行为契约(见 `progress.go` 抬头):`ErrUnavailable` DS 原批重试 /
 `ErrInvalidArg`·`ErrUnauthorized` 丢批继续 / `ErrInvalidState` 停流不重试。
@@ -183,8 +197,8 @@ ReportProgress(match_id, roster, events)
 | worker | 出箱表 | 下游 | 语义 |
 |---|---|---|---|
 | `RunOutboxPublisher` | `player_update_outbox` | Kafka `pandora.player.update`(key=player_id) | 段位事件,FIFO 保序,失败中断本轮保留重试 |
-| `RunDropPublisher` | `battle_drop_outbox` | `inventory.GrantInstances` | 装备掉落;背包满且配 mail → 溢出转个人邮件(同键去重),单行失败不阻塞他人 |
-| `RunProgressPublisher` | `battle_progress_outbox` | `player.AddExperience` / `inventory.GrantInstances` | 实时经验/掉落;单行失败指数退避推迟防队首阻塞 |
+| `RunDropPublisher` | `battle_drop_outbox` | `inventory.GrantItems` / `GrantInstances` | 首次入箱冻结 stack/instance 路由；重试不读热配置，混合行稳定用 `:stack/:instance` 键，实例满可转邮件 |
+| `RunProgressPublisher` | `battle_progress_outbox` | `player.AddExperience` + inventory 发/扣系统 RPC | 拾取按玩家 seq 严格保序；action 与同步路径共用处理器和 durable outcome |
 | `RunMatchReleasePublisher` | `match_release_outbox` | `matchmaker.ReleaseMatch` | 释放残留 claim/票据/match(修复结算回 Hub 后 4002 无法再匹配),失败指数退避 |
 | `RunTerminalReleasePublisher` | `terminal_release_outbox` | `ds_allocator`(两阶段:ReleaseTerminal → FinalizeTerminal) | Model-B 终态资源回收 + UID 回收;`authority_mode=redis` 才启动 |
 | `RunRetentionSweep` | — | MySQL 批删 | 保留期清理(见下) |
@@ -216,12 +230,14 @@ Kafka consumer(`mustBuildConsumers`,每 topic 一个,失败 3 次进 DLQ):`Battl
 | `battles` | PK `match_id` | 对局结算头(幂等键,不变量 §2) |
 | `battle_player_stats` | uk `match_id+player_id` | 玩家战绩 + `mmr_delta` |
 | `player_update_outbox` | id | 段位事件事务出箱 |
-| `battle_drop_outbox` | id | 装备掉落事务出箱(`item_config_ids` CSV) |
+| `battle_drop_outbox` | id | 战斗掉落事务出箱；`stack_item_config_ids` / `instance_item_config_ids` 在首次落库冻结路由 |
 | `terminal_release_outbox` | id | Model-B 终态资源回收证明出箱 |
 | `match_release_outbox` | uk `match_id` | matchmaker 撮合释放出箱 |
 | `battle_progress_stream` | PK `match_id` | 实时进度水位 + `settled_at_ms` / `stopped_at_ms` 终局/停流标记 |
 | `battle_progress_player` | uk `match_id+player_id` | 单玩家累计(经验/件数/击杀,单玩家上限依据) |
-| `battle_progress_outbox` | uk `match+seq+player+kind` | 实时经验/掉落发放事务出箱 |
+| `battle_progress_outbox` | uk `match+seq+player+kind` | 实时经验/掉落/action 出箱；action 用单 item CSV + `item_count` 紧凑表示整次意图 |
+| `battle_progress_item_balance` | PK `match+player+item` | phase0 本场 stack pickup / action 支出权威余额 |
+| `battle_progress_action` | PK `match+seq+player+kind` | consume/discard 的 pending/succeeded/failed 结果与原始业务码 |
 
 Redis(`authority_mode=redis` 才连):**只读**校验 DS 授权记录(`GetBattleAuthority`)+ best-effort
 写结算 receipt(`RecordBattleResult`);authority 记录由 ds_allocator 等 owner 权威写,本服不写。
@@ -245,7 +261,8 @@ fail-fast 拒启(`ValidateRetentionMode`),避免六个月口径静默失效。�
 
 - `battles` + `battle_player_stats`:按**服务端落库时间 `created_at`** 超期同事务批删(§9.6 不信 DS 上报的
   `ended_at_ms`,防伪造提前删/永不删)。
-- `battle_progress_stream` + `battle_progress_player`:仅删 `settled_at_ms>0`(已结算)且超期的行。
+- `battle_progress_stream` + `battle_progress_player` + `battle_progress_item_balance` +
+  `battle_progress_action`（以及异常残留 progress outbox）:仅按已结算且超期的 match 成组删除。
 - **陈年未结算水位**(`settled_at_ms=0` 且超期)= 结算补偿链 bug 证据,**永不自动清**,每轮打 `Error` 告警暴露。
 
 出箱表投递成功即删,不在清理范围(积压属告警问题,不是增长问题)。
@@ -260,9 +277,9 @@ fail-fast 拒启(`ValidateRetentionMode`),避免六个月口径静默失效。�
 | `player_addr` | 空 | player gRPC(弱依赖):MMR reader + 经验入账器;空则静态 MMR + 经验积压不发 |
 | `matchmaker_addr` | 空 | matchmaker gRPC:释放撮合状态;`authority_mode=redis` 时为**强依赖**(空则启动失败) |
 | `ds_allocator_addr` | 空 | 终态回收 relay;`authority_mode=redis` 时为**强依赖** |
-| `inventory_addr` | 空 | inventory gRPC(弱依赖):掉落/进度装备发放;空则出箱积压不丢 |
+| `inventory_addr` | 空 | inventory gRPC(弱依赖):掉落发放与战斗消费/丢弃持久扣减;空则出箱积压不丢 |
 | `mail_addr` | 空 | mail gRPC(弱依赖):背包满溢出转个人邮件 |
-| `drop_whitelist` | 空 | 可掉落 `item_config_id` 白名单(DS 不可信);**空 = 一律不发放** |
+| `config_table.dir` | 必填 | `drop/item/role_level` 同源发布批次；drop 过滤及 stack/instance 路由不再手抄 YAML |
 | `max_drop_per_player` | `32` | 单场单玩家最多入库掉落条数(硬上限 46,超列宽) |
 | `outbox_publish_interval` / `outbox_batch_size` | `2s` / `128` | `player.update` 出箱发布节奏 |
 | `drop_publish_interval` / `drop_batch_size` | `2s` / `128` | 掉落出箱发布节奏 |
@@ -271,7 +288,7 @@ fail-fast 拒启(`ValidateRetentionMode`),避免六个月口径静默失效。�
 | `monster_exp` | `{}` | 怪物击杀经验表 `monster_config_id → exp`(空 = 击杀不折算经验,跳过告警) |
 | `max_progress_batch` | `256` | 单批事件条数上限 |
 | `max_progress_seq_per_match` | `100000` | 单场事件 seq 硬上限 |
-| `max_kill_count_per_fact` / `max_pickup_count_per_fact` | `100` / `10` | 单事实计数上限(pickup 钳 ≤46) |
+| `max_kill_count_per_fact` / `max_pickup_count_per_fact` | `100` / `10` | 击杀/拾取单事实上限；consume/discard 独立按真实 `item.max_stack`，另有硬上限 1000 |
 | `max_progress_exp_per_match` / `_items_per_match` | `1000000` / `500` | 单场累计硬上限(反作弊,事务权威侧封顶) |
 | `max_progress_exp_per_player` / `_items_per_player` / `_kills_per_player` | `200000` / `100` / `1000` | 单场单玩家累计硬上限 |
 | `progress_publish_interval` / `progress_batch_size` | `1s` / `128` | 进度出箱发布节奏 |

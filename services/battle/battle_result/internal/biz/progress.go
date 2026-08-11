@@ -69,6 +69,52 @@ func (u *BattleResultUsecase) SetMonsterExpTable(t MonsterExpTable) {
 // expSharePermilleFull 是「一整份经验」对应的归属权重(千分比满值)。
 const expSharePermilleFull = 1000
 
+// maxBattleItemActionCountHard 是独立于 CSV/配置错误的最终护栏。正常上限来自
+// item.max_stack；硬上限只防热配置异常把单次同步事务放大到不可控规模。
+const maxBattleItemActionCountHard uint32 = 1000
+
+type progressActionRequest struct {
+	Seq          uint64
+	PlayerID     uint64
+	Kind         data.ProgressGrantKind
+	ItemConfigID uint32
+	Count        uint32
+}
+
+// isolatedProgressAction 强制 consume/discard 独占 ReportProgress 批。这样 action 的
+// 业务失败不会让同一批已接受的 pickup claim 被 UE 整批释放，也不存在一个 action 被
+// 拆成多个下游事务后部分成功的问题。
+func isolatedProgressAction(events []*battlev1.BattleProgressEvent) (*progressActionRequest, error) {
+	var action *progressActionRequest
+	for _, e := range events {
+		var candidate *progressActionRequest
+		switch fact := e.GetFact().(type) {
+		case *battlev1.BattleProgressEvent_ItemConsume:
+			candidate = &progressActionRequest{
+				Seq: e.GetSeq(), PlayerID: e.GetPlayerId(), Kind: data.ProgressConsumeStack,
+				ItemConfigID: fact.ItemConsume.GetItemConfigId(), Count: fact.ItemConsume.GetCount(),
+			}
+		case *battlev1.BattleProgressEvent_ItemDiscard:
+			candidate = &progressActionRequest{
+				Seq: e.GetSeq(), PlayerID: e.GetPlayerId(), Kind: data.ProgressDiscardStack,
+				ItemConfigID: fact.ItemDiscard.GetItemConfigId(), Count: fact.ItemDiscard.GetCount(),
+			}
+		}
+		if candidate != nil {
+			if action != nil || len(events) != 1 {
+				return nil, errcode.New(errcode.ErrInvalidArg,
+					"consume/discard must be exactly one fact in an isolated ReportProgress batch")
+			}
+			action = candidate
+		}
+	}
+	if action != nil && (action.Count == 0 || action.Count > maxBattleItemActionCountHard) {
+		return nil, errcode.New(errcode.ErrInvalidArg,
+			"battle item action count %d out of hard range (max %d)", action.Count, maxBattleItemActionCountHard)
+	}
+	return action, nil
+}
+
 // applyExpShare 按千分比权重切一份经验,向下取整(拆成商余两段算,等价 total*share/1000
 // 但不会在 total 很大时溢出;余项乘积上界 999*1000 远小于 uint64)。
 // 向下取整意味着小额经验 × 小权重可能归零 —— 归零的份额不产出箱行(0 额度会被 player 拒收),
@@ -102,10 +148,31 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			rosterSet[pid] = struct{}{}
 		}
 	}
+	action, err := isolatedProgressAction(events)
+	if err != nil {
+		return 0, err
+	}
+	if action != nil {
+		if action.Seq == 0 || action.PlayerID == 0 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "isolated action requires seq and player_id")
+		}
+		if rosterSet != nil {
+			if _, ok := rosterSet[action.PlayerID]; !ok {
+				return 0, errcode.New(errcode.ErrUnauthorized,
+					"player %d not in match %d roster", action.PlayerID, matchID)
+			}
+		}
+	}
 
 	wm, err := u.repo.GetProgressWatermark(ctx, matchID)
 	if err != nil {
 		return 0, err
+	}
+	// 已接受 action 的终态回放优先于 settled/stopped 门。否则 inventory 已完成但
+	// ReportProgress 回包丢失、随后对局结算时，UE 重试会只收到 InvalidState，永远
+	// 无法确定是否应该扣本地/施放效果。未曾接受的 action 查不到 outcome，仍会拒绝。
+	if action != nil && action.Seq <= wm.LastAppliedSeq {
+		return u.completeProgressAction(ctx, matchID, *action)
 	}
 	if wm.Settled {
 		// 结算后仍收到进度 = 僵尸 / 分区恢复 DS 迟到上报(水位表终局标记挡住,§9.22 / §9.4 fencing);
@@ -276,7 +343,8 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 				return 0, errcode.New(errcode.ErrInvalidArg, "pickup count %d out of range (max %d)", cnt, maxPickup)
 			}
 			itemID := fact.ItemPickup.GetItemConfigId()
-			if itemID == 0 || !u.cfg.IsDroppable(itemID) {
+			def, configured := u.battleItemDefinition(itemID)
+			if itemID == 0 || !configured || !def.Droppable {
 				skippedFact++
 				if _, seen := notWhitelistedItems[itemID]; !seen {
 					notWhitelistedItems[itemID] = struct{}{}
@@ -292,12 +360,52 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			for i := range items {
 				items[i] = itemID
 			}
+			kind := data.ProgressGrantStack
+			if def.Equipment {
+				kind = data.ProgressGrantInstance
+			}
 			itemRows = append(itemRows, data.ProgressOutboxRecord{
 				MatchID: matchID, Seq: seq, PlayerID: playerID,
-				Kind: data.ProgressGrantItem, ItemConfigIDs: items,
+				Kind: kind, ItemConfigIDs: items,
 			})
 			batchItems += cnt
 			itemsByPlayer[playerID] += cnt
+		case *battlev1.BattleProgressEvent_ItemConsume:
+			cnt := fact.ItemConsume.GetCount()
+			itemID := fact.ItemConsume.GetItemConfigId()
+			def, configured := u.battleItemDefinition(itemID)
+			if itemID == 0 || !configured || def.Equipment || !def.BattleUsable {
+				// 不能跳过并 ACK：DS 会据 ACK 最终扣本地并应用 GAS，后端若未留下
+				// 消费出箱会让资产重登复活。坏事实必须整批明确拒绝。
+				return 0, errcode.New(errcode.ErrInvalidArg,
+					"item %d is not configured battle consumable", itemID)
+			}
+			if cnt == 0 || def.MaxStack == 0 || cnt > def.MaxStack || cnt > maxBattleItemActionCountHard {
+				return 0, errcode.New(errcode.ErrInvalidArg,
+					"consume count %d out of range for item %d (max_stack %d, hard max %d)",
+					cnt, itemID, def.MaxStack, maxBattleItemActionCountHard)
+			}
+			itemRows = append(itemRows, data.ProgressOutboxRecord{
+				MatchID: matchID, Seq: seq, PlayerID: playerID,
+				Kind: data.ProgressConsumeStack, ItemConfigIDs: []uint32{itemID}, ItemCount: cnt,
+			})
+		case *battlev1.BattleProgressEvent_ItemDiscard:
+			cnt := fact.ItemDiscard.GetCount()
+			itemID := fact.ItemDiscard.GetItemConfigId()
+			def, configured := u.battleItemDefinition(itemID)
+			if itemID == 0 || !configured || def.Equipment || !def.Droppable {
+				return 0, errcode.New(errcode.ErrInvalidArg,
+					"battle discard only supports configured droppable stackable item: %d", itemID)
+			}
+			if cnt == 0 || def.MaxStack == 0 || cnt > def.MaxStack || cnt > maxBattleItemActionCountHard {
+				return 0, errcode.New(errcode.ErrInvalidArg,
+					"discard count %d out of range for item %d (max_stack %d, hard max %d)",
+					cnt, itemID, def.MaxStack, maxBattleItemActionCountHard)
+			}
+			itemRows = append(itemRows, data.ProgressOutboxRecord{
+				MatchID: matchID, Seq: seq, PlayerID: playerID,
+				Kind: data.ProgressDiscardStack, ItemConfigIDs: []uint32{itemID}, ItemCount: cnt,
+			})
 		default:
 			// 未知事实类型 = 能力不匹配(新 DS 对旧 Go),是整场性质而非单批坏数据:
 			// ErrInvalidArg 的"丢批继续"语义会让 DS 逐批丢弃所有含新事实的批(永久丢失,
@@ -335,7 +443,11 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 	}
 
 	if newSeq == lastSeq {
-		// 整批都是旧事件(原批重发)→ 纯重放 ACK,零副作用。
+		// 普通旧事件是纯重放；action 必须从 durable outcome 稳定回放，不能从
+		// “outbox 已不存在”猜成功。
+		if action != nil {
+			return u.completeProgressAction(ctx, matchID, *action)
+		}
 		return lastSeq, nil
 	}
 
@@ -394,6 +506,9 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		"match_id", matchID, "acked_seq", newSeq, "events", len(events),
 		"grant_rows", len(rows), "skipped_facts", skippedFact,
 		"batch_exp", batchExp, "batch_items", batchItems)
+	if action != nil {
+		return u.completeProgressAction(ctx, matchID, *action)
+	}
 	return newSeq, nil
 }
 
@@ -414,6 +529,62 @@ func reconcileProgress(ctx context.Context, matchID, finalSeq uint64, info data.
 	default:
 		plog.With(ctx).Debugw("msg", "progress_reconcile_ok",
 			"match_id", matchID, "applied_seq", info.LastAppliedSeq)
+	}
+}
+
+// completeProgressAction 同步驱动该玩家到 action seq 为止的出箱，并只从
+// battle_progress_action 回放终态。普通 pickup/exp 仍是异步 ACK；只有 isolated
+// consume/discard 会走这里等待 inventory 事务明确完成。
+func (u *BattleResultUsecase) completeProgressAction(ctx context.Context, matchID uint64, req progressActionRequest) (uint64, error) {
+	for {
+		action, found, err := u.repo.GetProgressAction(ctx, matchID, req.Seq, req.PlayerID, req.Kind)
+		if err != nil {
+			return 0, err
+		}
+		if !found {
+			return 0, errcode.New(errcode.ErrInvalidState,
+				"progress action outcome missing match=%d seq=%d player=%d kind=%d",
+				matchID, req.Seq, req.PlayerID, req.Kind)
+		}
+		if action.ItemConfigID != req.ItemConfigID || action.Count != req.Count {
+			return 0, errcode.New(errcode.ErrInvalidArg,
+				"progress action seq reused with different payload match=%d seq=%d stored=%d:%d request=%d:%d",
+				matchID, req.Seq, action.ItemConfigID, action.Count, req.ItemConfigID, req.Count)
+		}
+		switch action.Status {
+		case data.ProgressActionSucceeded:
+			return req.Seq, nil
+		case data.ProgressActionFailed:
+			// UE 的 mutation claim 只需区分“确定拒绝”与“可重试”。内部保留
+			// inventory 原始 result_code 供审计；线协议统一映射 InvalidArg，避免
+			// 客户端把陌生的 701x 业务码误当瞬时失败无限重试。
+			return req.Seq, errcode.New(errcode.ErrInvalidArg,
+				"battle item action terminally failed match=%d seq=%d player=%d item=%d count=%d inventory_code=%d",
+				matchID, req.Seq, req.PlayerID, req.ItemConfigID, req.Count, action.ResultCode)
+		}
+
+		row, ok, err := u.repo.FetchProgressOutboxForPlayer(ctx, matchID, req.PlayerID, req.Seq)
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			// Missing outbox is never evidence of success. A concurrent worker may have
+			// just resolved it, so re-read once on the next loop; if still pending this
+			// invariant violation remains retryable and is never ACKed.
+			action, found, err = u.repo.GetProgressAction(ctx, matchID, req.Seq, req.PlayerID, req.Kind)
+			if err != nil {
+				return 0, err
+			}
+			if found && action.Status != data.ProgressActionPending {
+				continue
+			}
+			return 0, errcode.New(errcode.ErrUnavailable,
+				"pending progress action has no outbox match=%d seq=%d; retry", matchID, req.Seq)
+		}
+		if _, err := u.processProgressRecord(ctx, row); err != nil {
+			u.deferProgressRow(ctx, row.ID)
+			return 0, err
+		}
 	}
 }
 
@@ -443,74 +614,169 @@ func (u *BattleResultUsecase) RunProgressPublisher(ctx context.Context) {
 		case <-ticker.C:
 			safego.Run(ctx, "battle_progress_publisher", func() {
 				if n, err := u.publishProgressBatch(ctx); err != nil {
-					plog.With(ctx).Warnw("msg", "progress_publish_batch_failed", "granted", n, "err", err)
+					plog.With(ctx).Warnw("msg", "progress_publish_batch_failed", "resolved", n, "err", err)
 				}
 			})
 		}
 	}
 }
 
-// publishProgressBatch 取一批进度出箱行发放,返回本轮成功发放并删除的条数。
+// publishProgressBatch 取一批进度出箱行处理,返回本轮成功发放或落定 action 终态的条数。
 // 单行失败 → deferRow 指数退避推迟(行不丢,坏行不会长期占满首批饿死后续正常行)。
 func (u *BattleResultUsecase) publishProgressBatch(ctx context.Context) (int, error) {
 	recs, err := u.repo.FetchProgressOutbox(ctx, u.cfg.ProgressBatchSizeOrDefault())
 	if err != nil {
 		return 0, err
 	}
-	granted := 0
+	processed := 0
 	for _, r := range recs {
-		switch r.Kind {
-		case data.ProgressGrantExp:
-			if u.expGranter == nil {
-				u.deferProgressRow(ctx, r.ID) // player_addr 未配:积压不丢,退避防饿死 item 行
-				continue
-			}
-			key := progressIdempotencyKey(r.MatchID, r.Seq, r.PlayerID, "exp")
-			if gerr := u.expGranter.AddExperience(ctx, r.PlayerID, r.ExpDelta, "monster_kill", key); gerr != nil {
-				plog.With(ctx).Warnw("msg", "progress_exp_grant_failed",
-					"player_id", r.PlayerID, "exp", r.ExpDelta, "err", gerr)
-				u.deferProgressRow(ctx, r.ID)
-				continue
-			}
-		case data.ProgressGrantItem:
-			if u.granter == nil {
-				u.deferProgressRow(ctx, r.ID) // inventory_addr 未配:积压不丢
-				continue
-			}
-			key := progressIdempotencyKey(r.MatchID, r.Seq, r.PlayerID, "item")
-			if gerr := u.granter.GrantInstances(ctx, r.PlayerID, r.ItemConfigIDs, key); gerr != nil {
-				// 背包满且已配 mail → 转个人邮件(同键,直发链与邮件链至多一次),成功后删行。
-				if u.mailSender != nil && errcode.As(gerr) == errcode.ErrInventoryCapacityFull {
-					if merr := u.mailSender.SendOverflowMail(ctx, r.PlayerID, r.ItemConfigIDs, key); merr != nil {
-						plog.With(ctx).Warnw("msg", "progress_overflow_mail_failed",
-							"player_id", r.PlayerID, "items", len(r.ItemConfigIDs), "err", merr)
-						u.deferProgressRow(ctx, r.ID)
-						continue
-					}
-					plog.With(ctx).Infow("msg", "progress_overflow_mailed",
-						"player_id", r.PlayerID, "items", len(r.ItemConfigIDs))
-				} else {
-					plog.With(ctx).Warnw("msg", "progress_item_grant_failed",
-						"player_id", r.PlayerID, "items", len(r.ItemConfigIDs), "err", gerr)
-					u.deferProgressRow(ctx, r.ID)
-					continue
-				}
-			}
-		default:
-			// 未知类型行(未来扩展 / 脏数据):告警并退避推迟,不删(人工介入)。
-			plog.With(ctx).Warnw("msg", "progress_outbox_unknown_kind", "id", r.ID, "kind", r.Kind)
+		if _, err := u.processProgressRecord(ctx, r); err != nil {
+			plog.With(ctx).Warnw("msg", "progress_outbox_delivery_failed",
+				"id", r.ID, "match_id", r.MatchID, "seq", r.Seq, "player_id", r.PlayerID,
+				"kind", r.Kind, "err", err)
 			u.deferProgressRow(ctx, r.ID)
 			continue
 		}
-		if derr := u.repo.DeleteProgressOutbox(ctx, r.ID); derr != nil {
-			return granted, derr
+		processed++
+	}
+	if processed > 0 {
+		plog.With(ctx).Debugw("msg", "progress_outbox_resolved", "count", processed)
+	}
+	return processed, nil
+}
+
+// processProgressRecord 是后台 publisher 与同步 action 路径共用的唯一投递语义。
+// action 的终态（成功或业务失败）由 repo 原子写 outcome + 删除 outbox；普通行成功后
+// 直接删 outbox。返回的 action 非 nil 表示已持久进入终态。
+func (u *BattleResultUsecase) processProgressRecord(ctx context.Context, r data.ProgressOutboxRecord) (*data.ProgressAction, error) {
+	switch r.Kind {
+	case data.ProgressGrantExp:
+		if u.expGranter == nil {
+			return nil, errcode.New(errcode.ErrUnavailable, "player_addr not configured")
 		}
-		granted++
+		key := progressIdempotencyKey(r.MatchID, r.Seq, r.PlayerID, "exp")
+		if err := u.expGranter.AddExperience(ctx, r.PlayerID, r.ExpDelta, "monster_kill", key); err != nil {
+			return nil, err
+		}
+	case data.ProgressGrantInstance:
+		if u.granter == nil {
+			return nil, errcode.New(errcode.ErrUnavailable, "inventory_addr not configured")
+		}
+		key := progressIdempotencyKey(r.MatchID, r.Seq, r.PlayerID, "item")
+		if err := u.granter.GrantInstances(ctx, r.PlayerID, r.ItemConfigIDs, key); err != nil {
+			if u.mailSender == nil || errcode.As(err) != errcode.ErrInventoryCapacityFull {
+				return nil, err
+			}
+			if err := u.mailSender.SendOverflowMail(ctx, r.PlayerID, r.ItemConfigIDs, key); err != nil {
+				return nil, err
+			}
+		}
+	case data.ProgressGrantStack:
+		if u.granter == nil {
+			return nil, errcode.New(errcode.ErrUnavailable, "inventory_addr not configured")
+		}
+		stacks, err := aggregateStackGrants(r.ItemConfigIDs)
+		if err != nil {
+			return nil, err
+		}
+		key := progressIdempotencyKey(r.MatchID, r.Seq, r.PlayerID, "stack")
+		if err := u.granter.GrantItems(ctx, r.PlayerID, stacks, key); err != nil {
+			return nil, err
+		}
+	case data.ProgressConsumeStack, data.ProgressDiscardStack:
+		if u.granter == nil {
+			return nil, errcode.New(errcode.ErrUnavailable, "inventory_addr not configured")
+		}
+		itemID, count, err := singleStackFact(r)
+		if err != nil {
+			return nil, err
+		}
+		kindName := "consume"
+		if r.Kind == data.ProgressDiscardStack {
+			kindName = "discard"
+		}
+		key := progressIdempotencyKey(r.MatchID, r.Seq, r.PlayerID, kindName)
+		if r.Kind == data.ProgressConsumeStack {
+			err = u.granter.ConsumeBattleItem(ctx, r.PlayerID, itemID, count, key)
+		} else {
+			err = u.granter.DiscardBattleItem(ctx, r.PlayerID, itemID, count, key)
+		}
+		if err != nil && isRetryableProgressActionError(errcode.As(err)) {
+			return nil, err
+		}
+		resultCode := errcode.OK
+		if err != nil {
+			resultCode = errcode.As(err)
+		}
+		resolved, err := u.repo.ResolveProgressAction(ctx, r, resultCode)
+		if err != nil {
+			return nil, err
+		}
+		return &resolved, nil
+	default:
+		return nil, errcode.New(errcode.ErrInvalidState,
+			"unknown progress outbox kind id=%d kind=%d", r.ID, r.Kind)
 	}
-	if granted > 0 {
-		plog.With(ctx).Debugw("msg", "progress_outbox_granted", "count", granted)
+	if err := u.repo.DeleteProgressOutbox(ctx, r.ID); err != nil {
+		return nil, err
 	}
-	return granted, nil
+	return nil, nil
+}
+
+func isRetryableProgressActionError(code errcode.Code) bool {
+	switch code {
+	case errcode.ErrUnknown, errcode.ErrInternal, errcode.ErrTimeout, errcode.ErrUnavailable,
+		errcode.ErrRateLimited, errcode.ErrCanceled, errcode.ErrServiceDisabled,
+		errcode.ErrInventoryLockFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+func aggregateStackGrants(itemConfigIDs []uint32) ([]data.StackGrant, error) {
+	if len(itemConfigIDs) == 0 {
+		return nil, errcode.New(errcode.ErrInvalidState, "empty stack grant row")
+	}
+	counts := make(map[uint32]int64)
+	for _, id := range itemConfigIDs {
+		if id == 0 {
+			return nil, errcode.New(errcode.ErrInvalidState, "zero item_config_id in stack row")
+		}
+		counts[id]++
+	}
+	ids := make([]uint32, 0, len(counts))
+	for id := range counts {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	out := make([]data.StackGrant, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, data.StackGrant{ItemConfigID: id, Count: counts[id]})
+	}
+	return out, nil
+}
+
+func singleStackFact(row data.ProgressOutboxRecord) (uint32, int64, error) {
+	itemConfigIDs := row.ItemConfigIDs
+	if len(itemConfigIDs) == 0 || itemConfigIDs[0] == 0 {
+		return 0, 0, errcode.New(errcode.ErrInvalidState, "empty consume row")
+	}
+	if row.ItemCount > 0 {
+		if len(itemConfigIDs) != 1 {
+			return 0, 0, errcode.New(errcode.ErrInvalidState,
+				"compact consume row must contain exactly one item_config_id")
+		}
+		return itemConfigIDs[0], int64(row.ItemCount), nil
+	}
+	id := itemConfigIDs[0]
+	for _, got := range itemConfigIDs[1:] {
+		if got != id {
+			return 0, 0, errcode.New(errcode.ErrInvalidState,
+				"consume row mixes item_config_ids %d and %d", id, got)
+		}
+	}
+	return id, int64(len(itemConfigIDs)), nil
 }
 
 // deferProgressRow 推迟一条发放失败的出箱行(失败本身只告警:推迟失败下轮 Fetch 仍会

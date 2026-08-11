@@ -543,9 +543,13 @@ spec:
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20015 } ]
           readinessProbe: { grpc: { port: 20015 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
-          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: inventory.yaml, readOnly: true } ]
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: inventory.yaml, readOnly: true }
+            - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: configtable, configMap: { name: pandora-configtable } }
 ---
 apiVersion: v1
 kind: Service

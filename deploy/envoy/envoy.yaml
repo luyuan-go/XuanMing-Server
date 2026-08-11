@@ -514,6 +514,12 @@ static_resources:
                   path: "/pandora.inventory.v1.InventoryService/GrantInstances"
                 direct_response: { status: 403, body: { inline_string: "internal rpc" } }
               - match:
+                  path: "/pandora.inventory.v1.InventoryService/ConsumeBattleItem"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/DiscardBattleItem"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
                   path: "/pandora.inventory.v1.InventoryService/FreezeForOrder"
                 direct_response: { status: 403, body: { inline_string: "internal rpc" } }
               - match:
@@ -546,6 +552,9 @@ static_resources:
               # 玩家可自助调用 = 可探测任意 player_id 的持有情况,精确 403 + 服务层 callerID==0 兜底。
               - match:
                   path: "/pandora.inventory.v1.InventoryService/CheckItemsOwned"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/CheckInstancesOwned"
                 direct_response: { status: 403, body: { inline_string: "internal rpc" } }
               # ----- phase 2 cutover 预留(bag-domain.md §10):DS 背包/领取链全量启用并排空旧客户端后,
               # 取消注释砍客户端直连 UseItem/SellItem(mail 侧同批砍 ClaimMail,见 mail 路由段)。
@@ -650,6 +659,10 @@ static_resources:
                 # 入站先剥离网关标记头(防伪造),再由下方 vh 统一盖回 "1":
                 # 后端 DSCallbackGuard 凭此头区分「DS 面流量(须验令牌)」与「内部东西向直连」。
                 - remove: "x-pandora-ds-gateway"
+                # 受信客户端 IP 头同 :8443 一并入站剥离(纵深防御):当前 :8444 白名单里
+                # 没有该头的消费者(login.Login 不可达),但伪 DS 不得预置一个可被将来 RPC 误信的
+                # x-pandora-client-ip;:8444 不注入该头(DS 面无客户端 IP 语义)。
+                - remove: "x-pandora-client-ip"
           # 注意:DS 面不挂 jwt_authn(见上方鉴权说明)。
           - name: envoy.filters.http.router
             typed_config:

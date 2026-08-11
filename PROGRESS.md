@@ -2909,3 +2909,16 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
 - **验证**:login `go build` / `go vet` / `go test ./... -count=1` 全绿。
 - **待 Codex**:① cpp pb 同步(新 RPC,标 [proto]);② 客户端拿到 0 时补拉(建议几秒一次、
   拿到非 0 即停;或挂在「刷新」按钮上),脱离「生成中」。
+
+## 2026-08-10(续):防滥用落地的对抗性复审 + 9 项修复
+
+- 6 路 agent 对抗性复审(证伪导向),**0 P0**;确认核心 fail-open / 零副作用 / 退出路径零波及
+  纪律正确(大量 clean)。已修 9 项(2 P1 + 7 P2),全部补回归测试,10 模块重跑全绿:
+  - [P1] `RequeueTicketIfOwned` 守卫退队封盲写复活竞态(先前就存在,onMatchNoCapacity 放大);
+  - [P1] login hashAccount 归一化(大小写/空格绕过);
+  - [P2] §9.6 DS 自报 abandoned 白名单(sanitizeReportedState);LockRemaining 双维度独立读;
+    RecordFailure 布锁清计数(封续锁);StartMatch 冷却只按 captain_id(删 team_id 骚扰面);
+    6 处配置注释「负值关闭/0 用默认」;Envoy :8444 剥离 client-ip;anti-abuse 文档键名更正。
+- 7 项 P2 评估后判定可接受并文档化(见 HANDOFF §11.6):onMatchNoCapacity 重放闪 FAILED
+  (需加 proto 字段,留待下批)、no-show 采样窄窗、IPv6/CGNAT 固有取舍、FirstAbandon 少罚
+  (fail-open 安全)、roster 租约秒级自净、anyTicketInFormCooldown 满载成本、Envoy 桶值待压测。

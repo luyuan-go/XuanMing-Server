@@ -34,6 +34,11 @@ node:
     conn_max_lifetime: "30m"
     ping_timeout: "3s"
 
+# inventory 的类型、堆叠、出售与局内可消费规则必须和 UE 使用同一份 item 表。
+# 缺目录/缺表/checksum 错误会拒绝启动，不再回退到 2001/3001 样例。
+config_table:
+  dir: "../../../configtable/dist"
+
 inventory:
   # 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界,失效数据最多保留 90 天)。
   # inventory_ledger 超期流水 / auction_escrow closed 超期行由 sweep 周期批量删除;
@@ -56,14 +61,12 @@ inventory:
   # 启动、行为与没配一模一样。唯一判据是启动日志出现 `instance_bag_enabled capacity=200`。
   capacity: 200
 
-  # item_rules: 道具大厅经济规则表(留空 = 任何道具都不可大厅使用 / 出售,安全默认)。
-  # 正式项目应来自配置表服务;W5 ③ demo 给两条样例(经验书可用,材料可卖)。
-  item_rules:
-    - item_config_id: 2001     # 经验书:大厅可用
-      usable: true
-    - item_config_id: 3001     # 材料:可出售,单价 10 金币
-      sellable: true
-      sell_unit_price: 10
+  # 当前没有专用装备词条表。开发安全默认只使用 UE 已能对称生效的 Atk(3)+1；
+  # Hp(1)/Shield(5) 缺 Max 语义、MoveSpeedRate(7) 单位未定，暂不得进入默认池。
+  default_identify_rule:
+    attr_count: 1
+    pool:
+      - { attr_id: 3, min: 1, max: 1 }
 
 # 背包域(pandora.bag.v1,bag-domain.md;phase 1 由本进程承载)。
 # dsn 为空 = 未启用(不注册 BagService)。dev 直接开启联调;

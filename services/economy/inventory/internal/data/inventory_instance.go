@@ -97,6 +97,12 @@ type ItemInstance struct {
 	Bound        bool
 }
 
+// InstanceOwnershipQuery 是精确实例归属校验项；两个字段必须同时匹配。
+type InstanceOwnershipQuery struct {
+	InstanceID   uint64
+	ItemConfigID uint32
+}
+
 // GrantInstancesFingerprint 计算发放实例请求指纹(item_config_ids 排序规范化)。
 // 同一 idempotency_key 复用到不同发放内容 → 指纹不一致判冲突,防 key 复用串改账。
 func GrantInstancesFingerprint(itemConfigIDs []uint32) string {
@@ -189,6 +195,43 @@ func (r *MySQLInventoryRepo) ListInstances(ctx context.Context, playerID uint64)
 		return nil, errcode.New(errcode.ErrInternal, "iterate instances player=%d: %v", playerID, rerr)
 	}
 	return out, nil
+}
+
+func (r *MySQLInventoryRepo) CheckInstancesOwned(ctx context.Context, playerID uint64, queries []InstanceOwnershipQuery) ([]uint64, error) {
+	if len(queries) == 0 {
+		return nil, nil
+	}
+	want := make(map[uint64]uint32, len(queries))
+	placeholders := make([]string, 0, len(queries))
+	args := make([]any, 0, len(queries)+1)
+	args = append(args, playerID)
+	for _, q := range queries {
+		want[q.InstanceID] = q.ItemConfigID
+		placeholders = append(placeholders, "?")
+		args = append(args, q.InstanceID)
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT instance_id, item_config_id FROM player_item_instance WHERE player_id = ? AND instance_id IN (`+
+			strings.Join(placeholders, ",")+`) ORDER BY instance_id ASC`, args...)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "check instance ownership player=%d: %v", playerID, err)
+	}
+	defer func() { _ = rows.Close() }()
+	owned := make([]uint64, 0, len(queries))
+	for rows.Next() {
+		var instanceID uint64
+		var itemConfigID uint32
+		if serr := rows.Scan(&instanceID, &itemConfigID); serr != nil {
+			return nil, errcode.New(errcode.ErrInternal, "scan instance ownership player=%d: %v", playerID, serr)
+		}
+		if want[instanceID] == itemConfigID {
+			owned = append(owned, instanceID)
+		}
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return nil, errcode.New(errcode.ErrInternal, "iterate instance ownership player=%d: %v", playerID, rerr)
+	}
+	return owned, nil
 }
 
 // lockPlayerInstances 在事务里锁玩家全部实例行,返回已占用格集合 + 实例总数(容量校验 + 分配空闲格用)。
@@ -431,10 +474,84 @@ func (r *MySQLInventoryRepo) MoveInstance(ctx context.Context, playerID, instanc
 }
 
 func (r *MySQLInventoryRepo) DiscardInstance(ctx context.Context, playerID, instanceID uint64) error {
-	if _, err := r.db.ExecContext(ctx,
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "begin discard instance tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	inst, serr := selectInstanceForUpdate(ctx, tx, playerID, instanceID)
+	if serr != nil {
+		if errcode.As(serr) == errcode.ErrInventoryItemNotFound {
+			return nil // 资源状态本身承担幂等：已丢弃重放 no-op。
+		}
+		return serr
+	}
+	if inst.Bound {
+		return errcode.New(errcode.ErrInventoryInstanceBound,
+			"bound instance cannot be discarded player=%d id=%d", playerID, instanceID)
+	}
+	if _, derr := tx.ExecContext(ctx,
 		`DELETE FROM player_item_instance WHERE instance_id = ? AND player_id = ?`,
-		instanceID, playerID); err != nil {
-		return errcode.New(errcode.ErrInternal, "discard instance player=%d id=%d: %v", playerID, instanceID, err)
+		instanceID, playerID); derr != nil {
+		return errcode.New(errcode.ErrInternal, "discard instance player=%d id=%d: %v", playerID, instanceID, derr)
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return errcode.New(errcode.ErrInternal, "commit discard instance player=%d id=%d: %v", playerID, instanceID, cerr)
 	}
 	return nil
+}
+
+func (r *MySQLInventoryRepo) SellInstance(ctx context.Context, playerID, instanceID uint64, itemConfigID uint32, gold int64, idempotencyKey, detail string) (int64, bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "begin sell instance tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	already, _, snapGold, lerr := claimSaleLedger(ctx, tx, playerID, idempotencyKey,
+		SellInstanceFingerprint(instanceID, itemConfigID), detail, saleLedgerIntent{
+			op: "sell_inst", itemConfigID: itemConfigID, instanceID: instanceID,
+		})
+	if lerr != nil {
+		return 0, false, lerr
+	}
+	if already {
+		return snapGold, true, nil
+	}
+	if gold <= 0 {
+		return 0, false, errcode.New(errcode.ErrInventoryNotSellable,
+			"instance item not sellable player=%d instance=%d item=%d", playerID, instanceID, itemConfigID)
+	}
+	inst, serr := selectInstanceForUpdate(ctx, tx, playerID, instanceID)
+	if serr != nil {
+		return 0, false, serr
+	}
+	if inst.Bound {
+		return 0, false, errcode.New(errcode.ErrInventoryInstanceBound,
+			"bound instance cannot be sold player=%d id=%d", playerID, instanceID)
+	}
+	if inst.ItemConfigID != itemConfigID {
+		return 0, false, errcode.New(errcode.ErrInvalidArg,
+			"instance config mismatch player=%d id=%d got=%d want=%d",
+			playerID, instanceID, inst.ItemConfigID, itemConfigID)
+	}
+	if _, derr := tx.ExecContext(ctx,
+		`DELETE FROM player_item_instance WHERE instance_id = ? AND player_id = ?`,
+		instanceID, playerID); derr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "sell instance delete player=%d id=%d: %v", playerID, instanceID, derr)
+	}
+	if gerr := addGoldTx(ctx, tx, playerID, gold); gerr != nil {
+		return 0, false, gerr
+	}
+	newGold, rerr := readGoldTx(ctx, tx, playerID)
+	if rerr != nil {
+		return 0, false, rerr
+	}
+	if uerr := updateLedgerResult(ctx, tx, playerID, idempotencyKey, 0, newGold); uerr != nil {
+		return 0, false, uerr
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "commit sell instance player=%d id=%d: %v", playerID, instanceID, cerr)
+	}
+	return newGold, false, nil
 }

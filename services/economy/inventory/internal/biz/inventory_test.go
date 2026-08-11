@@ -136,14 +136,83 @@ func (f *fakeRepo) UseItem(_ context.Context, playerID uint64, itemConfigID uint
 	return have - count, false, nil
 }
 
+func (f *fakeRepo) DiscardItem(_ context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, _ string) (int64, bool, error) {
+	gk := keyOf(playerID, idempotencyKey)
+	fp := data.DiscardFingerprint(itemConfigID, count)
+	if e, ok := f.ledger[gk]; ok {
+		if e.fingerprint != fp {
+			return 0, false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
+		}
+		return e.snapRemaining, true, nil
+	}
+	have := f.items[playerID][itemConfigID]
+	if have == 0 {
+		return 0, false, errcode.New(errcode.ErrInventoryItemNotFound, "not found")
+	}
+	if have < count {
+		return 0, false, errcode.New(errcode.ErrInventoryInsufficient, "insufficient")
+	}
+	remaining := have - count
+	f.items[playerID][itemConfigID] = remaining
+	f.ledger[gk] = ledgerEntry{fingerprint: fp, snapRemaining: remaining}
+	return remaining, false, nil
+}
+
+func (f *fakeRepo) ConsumeBattleItem(_ context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, _ string) (int64, bool, error) {
+	gk := keyOf(playerID, idempotencyKey)
+	fp := data.BattleConsumeFingerprint(itemConfigID, count)
+	if e, ok := f.ledger[gk]; ok {
+		if e.fingerprint != fp {
+			return 0, false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
+		}
+		return e.snapRemaining, true, nil
+	}
+	have := f.items[playerID][itemConfigID]
+	if have == 0 {
+		return 0, false, errcode.New(errcode.ErrInventoryItemNotFound, "not found")
+	}
+	if have < count {
+		return 0, false, errcode.New(errcode.ErrInventoryInsufficient, "insufficient")
+	}
+	remaining := have - count
+	f.items[playerID][itemConfigID] = remaining
+	f.ledger[gk] = ledgerEntry{fingerprint: fp, snapRemaining: remaining}
+	return remaining, false, nil
+}
+
+func (f *fakeRepo) DiscardBattleItem(_ context.Context, playerID uint64, itemConfigID uint32, count int64, idempotencyKey, _ string) (int64, bool, error) {
+	gk := keyOf(playerID, idempotencyKey)
+	fp := data.BattleDiscardFingerprint(itemConfigID, count)
+	if e, ok := f.ledger[gk]; ok {
+		if e.fingerprint != fp {
+			return 0, false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
+		}
+		return e.snapRemaining, true, nil
+	}
+	have := f.items[playerID][itemConfigID]
+	if have == 0 {
+		return 0, false, errcode.New(errcode.ErrInventoryItemNotFound, "not found")
+	}
+	if have < count {
+		return 0, false, errcode.New(errcode.ErrInventoryInsufficient, "insufficient")
+	}
+	remaining := have - count
+	f.items[playerID][itemConfigID] = remaining
+	f.ledger[gk] = ledgerEntry{fingerprint: fp, snapRemaining: remaining}
+	return remaining, false, nil
+}
+
 func (f *fakeRepo) SellItem(_ context.Context, playerID uint64, itemConfigID uint32, count, gold int64, idempotencyKey, _ string) (int64, int64, bool, error) {
 	gk := keyOf(playerID, idempotencyKey)
-	fp := data.SellFingerprint(itemConfigID, count, gold)
+	fp := data.SellFingerprint(itemConfigID, count)
 	if e, ok := f.ledger[gk]; ok {
 		if e.fingerprint != fp {
 			return 0, 0, false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
 		}
 		return e.snapRemaining, e.snapGold, true, nil
+	}
+	if gold <= 0 {
+		return 0, 0, false, errcode.New(errcode.ErrInventoryNotSellable, "not sellable")
 	}
 	have := f.items[playerID][itemConfigID]
 	if have == 0 {
@@ -368,6 +437,17 @@ func (f *fakeRepo) ListInstances(_ context.Context, playerID uint64) ([]data.Ite
 	return out, nil
 }
 
+func (f *fakeRepo) CheckInstancesOwned(_ context.Context, playerID uint64, queries []data.InstanceOwnershipQuery) ([]uint64, error) {
+	var out []uint64
+	for _, q := range queries {
+		if inst := f.instances[playerID][q.InstanceID]; inst != nil && inst.ItemConfigID == q.ItemConfigID {
+			out = append(out, q.InstanceID)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out, nil
+}
+
 func (f *fakeRepo) instancesByIDs(playerID uint64, ids []uint64) []data.ItemInstance {
 	m := f.instances[playerID]
 	sorted := append([]uint64(nil), ids...)
@@ -469,8 +549,39 @@ func (f *fakeRepo) SweepClosedEscrowBefore(_ context.Context, mode dbguard.Mode,
 }
 
 func (f *fakeRepo) DiscardInstance(_ context.Context, playerID, instanceID uint64) error {
+	if inst := f.instances[playerID][instanceID]; inst != nil && inst.Bound {
+		return errcode.New(errcode.ErrInventoryInstanceBound, "bound")
+	}
 	delete(f.instances[playerID], instanceID)
 	return nil
+}
+
+func (f *fakeRepo) SellInstance(_ context.Context, playerID, instanceID uint64, itemConfigID uint32, gold int64, idempotencyKey, _ string) (int64, bool, error) {
+	gk := keyOf(playerID, idempotencyKey)
+	fp := data.SellInstanceFingerprint(instanceID, itemConfigID)
+	if e, ok := f.ledger[gk]; ok {
+		if e.fingerprint != fp {
+			return 0, false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
+		}
+		return e.snapGold, true, nil
+	}
+	if gold <= 0 {
+		return 0, false, errcode.New(errcode.ErrInventoryNotSellable, "not sellable")
+	}
+	inst := f.instances[playerID][instanceID]
+	if inst == nil {
+		return 0, false, errcode.New(errcode.ErrInventoryItemNotFound, "not found")
+	}
+	if inst.Bound {
+		return 0, false, errcode.New(errcode.ErrInventoryInstanceBound, "bound")
+	}
+	if inst.ItemConfigID != itemConfigID {
+		return 0, false, errcode.New(errcode.ErrInvalidArg, "instance config mismatch")
+	}
+	delete(f.instances[playerID], instanceID)
+	f.gold[playerID] += gold
+	f.ledger[gk] = ledgerEntry{fingerprint: fp, snapGold: f.gold[playerID]}
+	return f.gold[playerID], false, nil
 }
 
 // ── 邮件 transfer 托管(2026-07-22)内存实现,复刻 mail_transfer_escrow 事务搬移语义 ──

@@ -11,8 +11,8 @@ func TestPandoraBattleRecoveryMigrationsStayAdditive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 8 {
-		t.Fatalf("pandora_battle latest version=%d, want 8", version)
+	if version != 9 {
+		t.Fatalf("pandora_battle latest version=%d, want 9", version)
 	}
 
 	v3 := readEmbeddedMigration(t, "migrations/pandora_battle/000003_match_release_outbox.up.sql")
@@ -105,6 +105,30 @@ func TestPandoraBattleRecoveryMigrationsStayAdditive(t *testing.T) {
 	if strings.Contains(strings.ToUpper(v8down), "DROP COLUMN") {
 		t.Fatal("000008 down must stay no-op (additive column)")
 	}
+
+	// 000009 冻结 drop 路由，并为 phase0 item action 增加本场余额和 durable outcome。
+	// 旧行必须按旧契约回填 instance route，不能在迁移时按热配置重新分类。
+	v9 := readEmbeddedMigration(t, "migrations/pandora_battle/000009_item_action_outcome_and_drop_route.up.sql")
+	for _, fragment := range []string{
+		"information_schema.COLUMNS",
+		"ADD COLUMN `stack_item_config_ids`",
+		"ADD COLUMN `instance_item_config_ids`",
+		"ADD COLUMN `item_count`",
+		"ALGORITHM=INSTANT",
+		"SET `instance_item_config_ids` = `item_config_ids`",
+		"CREATE TABLE IF NOT EXISTS `battle_progress_item_balance`",
+		"CONSTRAINT `chk_battle_progress_item_balance` CHECK (`spent_count` <= `picked_count`)",
+		"CREATE TABLE IF NOT EXISTS `battle_progress_action`",
+		"CONSTRAINT `chk_battle_progress_action_status` CHECK (`status` IN (0,1,2))",
+	} {
+		if !strings.Contains(v9, fragment) {
+			t.Fatalf("000009 up missing contract fragment %q", fragment)
+		}
+	}
+	v9down := strings.ToUpper(readEmbeddedMigration(t, "migrations/pandora_battle/000009_item_action_outcome_and_drop_route.down.sql"))
+	if strings.Contains(v9down, "DROP TABLE") || strings.Contains(v9down, "DROP COLUMN") {
+		t.Fatal("000009 down must stay no-op; dropping durable outcome/balance/routes destroys authority")
+	}
 }
 
 // TestPandoraPlayerExperienceMigrationIsInitSafe 保证 pandora_player 000002 与
@@ -115,8 +139,8 @@ func TestPandoraPlayerExperienceMigrationIsInitSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 3 {
-		t.Fatalf("pandora_player latest version=%d, want 3", version)
+	if version != 4 {
+		t.Fatalf("pandora_player latest version=%d, want 4", version)
 	}
 	v2 := readEmbeddedMigration(t, "migrations/pandora_player/000002_experience.up.sql")
 	for _, fragment := range []string{
@@ -147,6 +171,24 @@ func TestPandoraPlayerExperienceMigrationIsInitSafe(t *testing.T) {
 	v3down := readEmbeddedMigration(t, "migrations/pandora_player/000003_retention_indexes.down.sql")
 	if strings.Contains(v3down, "DROP KEY") || strings.Contains(v3down, "DROP INDEX") {
 		t.Fatal("000003 down must stay no-op; dropping idx_created diverges rolled-back v2 from authoritative v2 definition")
+	}
+
+	// 000004 把天赋实际消耗点数落列。fresh-init 已直接建列，因此升级迁移必须
+	// 条件加列；存量行按升级前 cost_per_level=1 的契约回填为 level。
+	v4 := readEmbeddedMigration(t, "migrations/pandora_player/000004_talent_spent_points.up.sql")
+	for _, fragment := range []string{
+		"information_schema.COLUMNS",
+		"ADD COLUMN `spent_points`",
+		"ALGORITHM=INSTANT",
+		"UPDATE `player_talents` SET `spent_points` = `level` WHERE `spent_points` = 0",
+	} {
+		if !strings.Contains(v4, fragment) {
+			t.Fatalf("000004 up missing contract fragment %q", fragment)
+		}
+	}
+	v4down := readEmbeddedMigration(t, "migrations/pandora_player/000004_talent_spent_points.down.sql")
+	if !strings.Contains(v4down, "DROP COLUMN `spent_points`") {
+		t.Fatal("000004 down must drop spent_points")
 	}
 }
 

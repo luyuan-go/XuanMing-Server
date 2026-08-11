@@ -1814,7 +1814,7 @@ function Assert-GeneratedSet {
                 throw '[FATAL] -Prod 产物 battle-result progress_enabled 必须且只能为 false(实时通道启用是独立显式动作)。'
             }
         }
-        if ($svc.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result')) {
+        if ($svc.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result', 'inventory')) {
             # \r? 不能省:battle_result-dev.yaml 是 CRLF(其余模板 LF),生成器按源文件换行符原样
             # 回写。.NET 多行模式的 $ 只锚在 \n 前,行尾残留的 \r 会让 [ \t]*$ 匹配 0 次,
             # 于是"改写明明成功却断言失败"。
@@ -2024,7 +2024,7 @@ try {
         # 凡 dev 模板里配了 config_table 的服务都必须在此列出:容器内没有 ../../../configtable/dist,
         # 漏掉一个 = 该服务带着宿主相对路径进集群 → 启动 fail-closed 退出 → CrashLoopBackOff。
         # (2026-08-05:ds-allocator 因 08-04 新增 config_table 时未同步登记,正是这样炸的。)
-        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result', 'ds-allocator')) {
+        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result', 'ds-allocator', 'inventory')) {
             $out = Set-ServiceClusterConfigTableDir $s.Name $out
         }
         if ($s.Name -in $script:MultiReplicaSnowflakeServices) {

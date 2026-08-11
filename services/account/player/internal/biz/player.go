@@ -95,8 +95,10 @@ type itemRuleSource interface {
 }
 
 // talentRuleSource 是 SetTalents 需要的专精表判定(生产实现读 configtable 原子快照)。
+// 返回 (逐节点消耗, 总消耗, error):总消耗用于与可用点比对,逐节点消耗随分配一起落库,
+// 读取侧据此还原已花点数,不再按 Σ 等级 反推(cost_per_level≠1 时会算少)。
 type talentRuleSource interface {
-	ValidateAllocation(levels map[uint32]uint32) (uint32, error)
+	ValidateAllocation(levels map[uint32]uint32) (map[uint32]uint32, uint32, error)
 }
 
 type configTableItemRules struct {
@@ -121,13 +123,13 @@ type configTableTalentRules struct {
 }
 
 // ValidateAllocation 表缺失时返回错误(fail-closed),不静默按「无约束」放行。
-func (s configTableTalentRules) ValidateAllocation(levels map[uint32]uint32) (uint32, error) {
+func (s configTableTalentRules) ValidateAllocation(levels map[uint32]uint32) (map[uint32]uint32, uint32, error) {
 	if s.store == nil {
-		return 0, errcode.New(errcode.ErrInternal, "config table store unavailable")
+		return nil, 0, errcode.New(errcode.ErrInternal, "config table store unavailable")
 	}
 	tables := s.store.Tables()
 	if tables == nil || tables.Talent == nil {
-		return 0, errcode.New(errcode.ErrInternal, "talent table unavailable")
+		return nil, 0, errcode.New(errcode.ErrInternal, "talent table unavailable")
 	}
 	return tables.Talent.ValidateAllocation(levels)
 }
@@ -607,31 +609,40 @@ func (u *PlayerUsecase) SetTalents(ctx context.Context, playerID uint64, talents
 		levels[t.TalentID] = uint32(t.Level)
 	}
 
-	totalCost, err := u.talentAllocationCost(levels)
+	costs, err := u.talentAllocationCost(levels)
 	if err != nil {
 		return 0, err
 	}
+	// 逐节点消耗随分配一起落库:读取侧(GetTalents / GrantTalentPoints 回读可点数)
+	// 直接 SUM 这一列,不再按 Σ 等级 反推——反推在 cost_per_level≠1 时会算少已花点数,
+	// 玩家看到的可点数比实际多。写与读从此共用专精表这一个口径。
+	priced := make([]data.TalentLevel, 0, len(talents))
+	for _, t := range talents {
+		t.SpentPoints = int32(costs[t.TalentID])
+		priced = append(priced, t)
+	}
+
 	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return 0, err
 	}
-	return u.repo.SetTalents(ctx, playerID, talents, totalCost)
+	return u.repo.SetTalents(ctx, playerID, priced)
 }
 
-// talentAllocationCost 用专精表校验整份分配并算出总消耗点数。
+// talentAllocationCost 用专精表校验整份分配并算出逐节点消耗点数。
 // 表未加载时 fail-closed;表判定非法时统一归为 ErrInvalidArg(具体原因带在消息里)。
-func (u *PlayerUsecase) talentAllocationCost(levels map[uint32]uint32) (uint32, error) {
+func (u *PlayerUsecase) talentAllocationCost(levels map[uint32]uint32) (map[uint32]uint32, error) {
 	if len(levels) == 0 {
-		return 0, nil
+		return nil, nil
 	}
 	rules := u.talentRules
 	if rules == nil {
-		return 0, errcode.New(errcode.ErrInternal, "talent config table unavailable")
+		return nil, errcode.New(errcode.ErrInternal, "talent config table unavailable")
 	}
-	cost, err := rules.ValidateAllocation(levels)
+	costs, _, err := rules.ValidateAllocation(levels)
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInvalidArg, "invalid talent allocation: %v", err)
+		return nil, errcode.New(errcode.ErrInvalidArg, "invalid talent allocation: %v", err)
 	}
-	return cost, nil
+	return costs, nil
 }
 
 // ResetTalents 清空天赋分配(功能开关关闭 → ErrPlayerFeatureDisabled)。

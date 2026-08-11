@@ -113,6 +113,30 @@ func (s *InventoryService) UseItem(ctx context.Context, req *inventoryv1.UseItem
 	return &inventoryv1.UseItemResponse{Code: commonv1.ErrCode_OK, Remaining: remaining}, nil
 }
 
+// ConsumeBattleItem 按可信战斗进度事实持久扣减局内消耗品（系统接口）。
+func (s *InventoryService) ConsumeBattleItem(ctx context.Context, req *inventoryv1.ConsumeBattleItemRequest) (*inventoryv1.ConsumeBattleItemResponse, error) {
+	if pmw.PlayerIDFromContext(ctx) != 0 {
+		return &inventoryv1.ConsumeBattleItemResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	remaining, err := s.uc.ConsumeBattleItem(ctx, req.GetPlayerId(), req.GetItemConfigId(), req.GetCount(), req.GetIdempotencyKey())
+	if err != nil {
+		return &inventoryv1.ConsumeBattleItemResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.ConsumeBattleItemResponse{Code: commonv1.ErrCode_OK, Remaining: remaining}, nil
+}
+
+// DiscardBattleItem 按可信战斗进度事实持久丢弃堆叠物（系统接口）。
+func (s *InventoryService) DiscardBattleItem(ctx context.Context, req *inventoryv1.DiscardBattleItemRequest) (*inventoryv1.DiscardBattleItemResponse, error) {
+	if pmw.PlayerIDFromContext(ctx) != 0 {
+		return &inventoryv1.DiscardBattleItemResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	remaining, err := s.uc.DiscardBattleItem(ctx, req.GetPlayerId(), req.GetItemConfigId(), req.GetCount(), req.GetIdempotencyKey())
+	if err != nil {
+		return &inventoryv1.DiscardBattleItemResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.DiscardBattleItemResponse{Code: commonv1.ErrCode_OK, Remaining: remaining}, nil
+}
+
 // SellItem 出售道具换金币。以调用者身份为准。
 func (s *InventoryService) SellItem(ctx context.Context, req *inventoryv1.SellItemRequest) (*inventoryv1.SellItemResponse, error) {
 	playerID, code := callerPlayerID(ctx, req.GetPlayerId())
@@ -124,6 +148,19 @@ func (s *InventoryService) SellItem(ctx context.Context, req *inventoryv1.SellIt
 		return &inventoryv1.SellItemResponse{Code: toProtoCode(err)}, nil
 	}
 	return &inventoryv1.SellItemResponse{Code: commonv1.ErrCode_OK, Remaining: remaining, Gold: gold}, nil
+}
+
+// DiscardItem 丢弃可堆叠物品。以调用者身份为准。
+func (s *InventoryService) DiscardItem(ctx context.Context, req *inventoryv1.DiscardItemRequest) (*inventoryv1.DiscardItemResponse, error) {
+	playerID, code := callerPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &inventoryv1.DiscardItemResponse{Code: code}, nil
+	}
+	remaining, err := s.uc.DiscardItem(ctx, playerID, req.GetItemConfigId(), req.GetCount(), req.GetIdempotencyKey())
+	if err != nil {
+		return &inventoryv1.DiscardItemResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.DiscardItemResponse{Code: commonv1.ErrCode_OK, Remaining: remaining}, nil
 }
 
 // SettleAuctionMatch 原子结算拍卖成交(系统接口,仅后端内部直连)。
@@ -275,6 +312,19 @@ func (s *InventoryService) DiscardInstance(ctx context.Context, req *inventoryv1
 	return &inventoryv1.DiscardInstanceResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
+// SellInstance 出售唯一装备实例。以调用者身份为准；instance/config 同时校验。
+func (s *InventoryService) SellInstance(ctx context.Context, req *inventoryv1.SellInstanceRequest) (*inventoryv1.SellInstanceResponse, error) {
+	playerID, code := callerPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &inventoryv1.SellInstanceResponse{Code: code}, nil
+	}
+	gold, err := s.uc.SellInstance(ctx, playerID, req.GetInstanceId(), req.GetItemConfigId(), req.GetIdempotencyKey())
+	if err != nil {
+		return &inventoryv1.SellInstanceResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.SellInstanceResponse{Code: commonv1.ErrCode_OK, Gold: gold}, nil
+}
+
 // MoveInstance 移动一件装备实例到新格子。以调用者身份为准。
 func (s *InventoryService) MoveInstance(ctx context.Context, req *inventoryv1.MoveInstanceRequest) (*inventoryv1.MoveInstanceResponse, error) {
 	playerID, code := callerPlayerID(ctx, req.GetPlayerId())
@@ -308,5 +358,29 @@ func (s *InventoryService) CheckItemsOwned(ctx context.Context, req *inventoryv1
 	return &inventoryv1.CheckItemsOwnedResponse{
 		Code:               commonv1.ErrCode_OK,
 		OwnedItemConfigIds: owned,
+	}, nil
+}
+
+func toInstanceOwnershipQueries(in []*inventoryv1.InstanceOwnershipQuery) []data.InstanceOwnershipQuery {
+	out := make([]data.InstanceOwnershipQuery, 0, len(in))
+	for _, q := range in {
+		out = append(out, data.InstanceOwnershipQuery{
+			InstanceID: q.GetInstanceId(), ItemConfigID: q.GetItemConfigId(),
+		})
+	}
+	return out
+}
+
+// CheckInstancesOwned 精确实例拥有权查询（系统接口）。
+func (s *InventoryService) CheckInstancesOwned(ctx context.Context, req *inventoryv1.CheckInstancesOwnedRequest) (*inventoryv1.CheckInstancesOwnedResponse, error) {
+	if pmw.PlayerIDFromContext(ctx) != 0 {
+		return &inventoryv1.CheckInstancesOwnedResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	owned, err := s.uc.CheckInstancesOwned(ctx, req.GetPlayerId(), toInstanceOwnershipQueries(req.GetInstances()))
+	if err != nil {
+		return &inventoryv1.CheckInstancesOwnedResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.CheckInstancesOwnedResponse{
+		Code: commonv1.ErrCode_OK, OwnedInstanceIds: owned,
 	}, nil
 }

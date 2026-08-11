@@ -37,17 +37,20 @@ type OutboxRecord struct {
 	Payload  []byte // player.v1.PlayerUpdateEvent proto bytes
 }
 
-// DropOutboxRecord 是一条待发放的战斗装备掉落事务出箱记录(W5 ④)。
+// DropOutboxRecord 是一条待发放的战斗道具掉落事务出箱记录(W5 ④)。
 //
 // 与 battles + battle_player_stats 同一事务写入(原子提交);后台 RunDropPublisher
-// 轮询本表,逐行调 inventory.GrantInstances(幂等键 battle_drop:{match_id}:{player_id}),
-// 成功才删行。ItemConfigIDs 已由 biz 层按 drop 白名单过滤(DS 不可信)。
+// 轮询本表,按真实 item.type 分流到 inventory.GrantItems / GrantInstances，
+// 两路使用稳定子幂等键，全部成功才删行。ItemConfigIDs 已由 biz 层按同源
+// configtable drop×item 过滤(DS 不可信)。
 // ID 仅 FetchDropOutbox 返回时填充。
 type DropOutboxRecord struct {
-	ID            int64    // 出箱行主键(SaveResult 入参时忽略,FetchDropOutbox 返回时填充)
-	MatchID       uint64   // 对局 ID(SaveResult 入参时忽略,取 result.MatchId;FetchDropOutbox 返回时填充,组幂等键用)
-	PlayerID      uint64   // 受益玩家
-	ItemConfigIDs []uint32 // 本局该玩家所获白名单内装备 config id(每个发一件实例)
+	ID                    int64    // 出箱行主键(SaveResult 入参时忽略,FetchDropOutbox 返回时填充)
+	MatchID               uint64   // 对局 ID(SaveResult 入参时忽略,取 result.MatchId;FetchDropOutbox 返回时填充,组幂等键用)
+	PlayerID              uint64   // 受益玩家
+	ItemConfigIDs         []uint32 // 首次过滤后的完整掉落列表(审计/历史兼容)
+	StackItemConfigIDs    []uint32 // 首次入箱时冻结的可堆叠路由；重试不查热配置
+	InstanceItemConfigIDs []uint32 // 首次入箱时冻结的装备路由；重试不查热配置
 }
 
 // TerminalReleaseRecord 是正常结算的持久终态回收证明。
@@ -159,13 +162,22 @@ type BattleRepo interface {
 	// 内容返回 claimed=false,调用方必须重读水位按现行状态继续。
 	ClaimProgressLegacy(ctx context.Context, matchID uint64) (claimed bool, err error)
 	// ApplyProgress 原子推进水位(乐观 CAS)+ 累计本批经验/件数(场 + 单玩家)+
-	// **事务内一致快照上判定 caps 累计上限** + 写进度出箱(同一事务)。
+	// **事务内一致快照上判定 caps 累计上限** + 写进度出箱。stack pickup 同事务
+	// 增加本场同 item 余额；consume/discard 条件预留支出并创建 durable action outcome。
 	// CAS 失败 / 已结算 → ErrUnavailable(调用方重读水位收敛);超限 → ErrInvalidArg
 	// 整体回滚。上限判定必须留在事务内:事务外读-判与 CAS 分属不同快照,重试请求
 	// 会把同批 delta 重复计入后永久误拒(审计 P1,§16.1 TOCTOU)。
 	ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []ProgressPlayerDelta, rows []ProgressOutboxRecord, caps ProgressCaps) error
 	// FetchProgressOutbox 按 id 升序取最多 limit 条已到重试时点的待发放进度出箱记录。
 	FetchProgressOutbox(ctx context.Context, limit int) ([]ProgressOutboxRecord, error)
+	// FetchProgressOutboxForPlayer 忽略退避时间，取该玩家不超过 maxSeq 的最早行。
+	// ReportProgress 的同步 action 路径用它驱动前序 Grant，确保 Grant 先于 Consume/Discard。
+	FetchProgressOutboxForPlayer(ctx context.Context, matchID, playerID, maxSeq uint64) (ProgressOutboxRecord, bool, error)
+	// GetProgressAction 读取独立 action 批的 durable completion outcome。
+	GetProgressAction(ctx context.Context, matchID, seq, playerID uint64, kind ProgressGrantKind) (ProgressAction, bool, error)
+	// ResolveProgressAction 把 inventory 明确结果持久为 success/failure，并与删除对应
+	// outbox 行放在同一 MySQL 事务；并发执行时返回先落库的权威 outcome。
+	ResolveProgressAction(ctx context.Context, row ProgressOutboxRecord, resultCode errcode.Code) (ProgressAction, error)
 	// DeleteProgressOutbox 删除已成功发放的进度出箱行。
 	DeleteProgressOutbox(ctx context.Context, id int64) error
 	// DeferProgressOutbox 发放失败后指数退避推迟该行(行不丢,防队首阻塞)。
@@ -184,7 +196,7 @@ type BattleRepo interface {
 	// (权威 BattleStorageRecord / active match / Guard 早已释放,ReportResult 在凭据层就被拒)。
 	SweepExpiredBattles(ctx context.Context, mode dbguard.Mode, cutoffMs int64, batch int) (dbguard.Outcome, error)
 	// SweepSettledProgress 处理已结算(settled_at_ms>0,服务端结算打标)且早于 cutoffMs
-	// 的进度水位(battle_progress_stream + battle_progress_player 成组)。
+	// 的进度水位(stream + player + item balance + action + 残留 progress outbox 成组)。
 	// **mode 默认 ModeReportOnly(只报告不删)**;未结算行无论如何都不在处理范围
 	// (陈年未结算 = 补偿链 bug,由 CountStaleUnsettledProgress 持续告警,不静默删证据)。
 	SweepSettledProgress(ctx context.Context, mode dbguard.Mode, cutoffMs int64, batch int) (dbguard.Outcome, error)
@@ -208,6 +220,7 @@ func NewMySQLBattleRepo(db *sql.DB) *MySQLBattleRepo {
 func (r *MySQLBattleRepo) ValidateRecoveryOutboxSchema(ctx context.Context) error {
 	checks := []string{
 		`SELECT id, match_id, payload, next_attempt_at_ms, attempt_count, created_at_ms FROM match_release_outbox LIMIT 0`,
+		`SELECT id, match_id, player_id, item_config_ids, stack_item_config_ids, instance_item_config_ids, created_at_ms FROM battle_drop_outbox LIMIT 0`,
 	}
 	for _, query := range checks {
 		rows, err := r.db.QueryContext(ctx, query)
@@ -324,15 +337,16 @@ VALUES (?, ?, ?, ?)`
 
 	// 同事务写战斗装备掉落出箱(W5 ④):落库与待发放装备掉落原子提交(不变量 §4)。
 	const insDropOutbox = `INSERT INTO battle_drop_outbox
-(match_id, player_id, item_config_ids, created_at_ms)
-VALUES (?, ?, ?, ?)`
+(match_id, player_id, item_config_ids, stack_item_config_ids, instance_item_config_ids, created_at_ms)
+VALUES (?, ?, ?, ?, ?, ?)`
 	if !settleInfo.DropsSuppressed {
 		for _, d := range dropOutbox {
 			if len(d.ItemConfigIDs) == 0 {
 				continue
 			}
 			if _, derr := tx.ExecContext(ctx, insDropOutbox,
-				result.GetMatchId(), d.PlayerID, encodeConfigIDs(d.ItemConfigIDs), nowMs,
+				result.GetMatchId(), d.PlayerID, encodeConfigIDs(d.ItemConfigIDs),
+				encodeConfigIDs(d.StackItemConfigIDs), encodeConfigIDs(d.InstanceItemConfigIDs), nowMs,
 			); derr != nil {
 				return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite, "insert drop outbox match=%d player=%d: %v",
 					result.GetMatchId(), d.PlayerID, derr)
@@ -465,7 +479,8 @@ func (r *MySQLBattleRepo) FetchDropOutbox(ctx context.Context, limit int) ([]Dro
 	if limit <= 0 {
 		limit = 128
 	}
-	const q = `SELECT id, match_id, player_id, item_config_ids FROM battle_drop_outbox ORDER BY id ASC LIMIT ?`
+	const q = `SELECT id, match_id, player_id, item_config_ids, stack_item_config_ids, instance_item_config_ids
+FROM battle_drop_outbox ORDER BY id ASC LIMIT ?`
 	rows, err := r.db.QueryContext(ctx, q, limit)
 	if err != nil {
 		return nil, errcode.New(errcode.ErrInternal, "query drop outbox: %v", err)
@@ -475,13 +490,17 @@ func (r *MySQLBattleRepo) FetchDropOutbox(ctx context.Context, limit int) ([]Dro
 	out := make([]DropOutboxRecord, 0, limit)
 	for rows.Next() {
 		var (
-			rec DropOutboxRecord
-			csv string
+			rec         DropOutboxRecord
+			allCSV      string
+			stackCSV    string
+			instanceCSV string
 		)
-		if serr := rows.Scan(&rec.ID, &rec.MatchID, &rec.PlayerID, &csv); serr != nil {
+		if serr := rows.Scan(&rec.ID, &rec.MatchID, &rec.PlayerID, &allCSV, &stackCSV, &instanceCSV); serr != nil {
 			return nil, errcode.New(errcode.ErrInternal, "scan drop outbox: %v", serr)
 		}
-		rec.ItemConfigIDs = decodeConfigIDs(csv)
+		rec.ItemConfigIDs = decodeConfigIDs(allCSV)
+		rec.StackItemConfigIDs = decodeConfigIDs(stackCSV)
+		rec.InstanceItemConfigIDs = decodeConfigIDs(instanceCSV)
 		out = append(out, rec)
 	}
 	if rerr := rows.Err(); rerr != nil {
@@ -915,7 +934,7 @@ func (r *MySQLBattleRepo) SweepExpiredBattles(ctx context.Context, mode dbguard.
 // (陈年未结算 = 补偿链 bug 证据,另有 CountStaleUnsettledProgress 持续告警)。
 func (r *MySQLBattleRepo) SweepSettledProgress(ctx context.Context, mode dbguard.Mode, cutoffMs int64, batch int) (dbguard.Outcome, error) {
 	return r.sweepByMatchID(ctx, mode, "battle_progress_stream", settledProgressWhere,
-		[]string{"battle_progress_player", "battle_progress_stream"}, cutoffMs, batch)
+		[]string{"battle_progress_outbox", "battle_progress_action", "battle_progress_item_balance", "battle_progress_player", "battle_progress_stream"}, cutoffMs, batch)
 }
 
 func (r *MySQLBattleRepo) CountStaleUnsettledProgress(ctx context.Context, cutoffMs int64) (int64, error) {

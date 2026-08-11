@@ -82,10 +82,10 @@ func TestLoadRealDistIfPresent(t *testing.T) {
 		t.Fatalf("专精 1 等级上限应为 5, got %d", got)
 	}
 	// 专精 4(聚能)前置是专精 1 达 3 级:只点 4 必须被拒。
-	if _, err := tb.Talent.ValidateAllocation(map[uint32]uint32{4: 1}); err == nil {
+	if _, _, err := tb.Talent.ValidateAllocation(map[uint32]uint32{4: 1}); err == nil {
 		t.Fatal("缺前置的分配应被拒")
 	}
-	cost, err := tb.Talent.ValidateAllocation(map[uint32]uint32{1: 3, 4: 1})
+	costs, cost, err := tb.Talent.ValidateAllocation(map[uint32]uint32{1: 3, 4: 1})
 	if err != nil {
 		t.Fatalf("满足前置的分配应通过: %v", err)
 	}
@@ -93,7 +93,12 @@ func TestLoadRealDistIfPresent(t *testing.T) {
 	if cost != 4 {
 		t.Fatalf("总消耗应为 4, got %d", cost)
 	}
-	if _, err := tb.Talent.ValidateAllocation(map[uint32]uint32{1: 99}); err == nil {
+	// 每级消耗全为 1 正是"读按等级和反推"能长期蒙混过关的原因,这里把它钉成显式事实:
+	// 逐节点消耗此刻恰好等于等级,一旦策划调表,本断言会随真实 dist 一起变。
+	if costs[1] != 3 || costs[4] != 1 {
+		t.Fatalf("逐节点消耗应为 {1:3, 4:1}, got %v", costs)
+	}
+	if _, _, err := tb.Talent.ValidateAllocation(map[uint32]uint32{1: 99}); err == nil {
 		t.Fatal("超等级上限的分配应被拒")
 	}
 }

@@ -31,18 +31,19 @@ CREATE TABLE IF NOT EXISTS `player_update_outbox` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora player.update 事务出箱(at-least-once 可靠补偿,不变量 §4)';
 
--- ── 战斗装备掉落事务出箱 W5 ④(2026-07-08)────────────────────────────────────
+-- ── 战斗道具掉落事务出箱 W5 ④(2026-07-08)────────────────────────────────────
 --
--- 背景:DS 上报的战斗装备掉落(BattleResult.PlayerStats.dropped_item_config_ids)
---   必须可靠、幂等地落进 inventory(装备实例,不可丢也不可重复)。沿用 player.update
+-- 背景:DS 上报的战斗道具掉落(BattleResult.PlayerStats.dropped_item_config_ids)
+--   必须可靠、幂等地落进 inventory(可堆叠物/装备实例,不可丢也不可重复)。沿用 player.update
 --   同款「事务出箱」:落 battles + battle_player_stats 的同一事务里,对每个有掉落的玩家
 --   再写一行 drop 出箱记录(原子提交);后台 RunDropPublisher 轮询本表,逐行调
---   inventory.GrantInstances(幂等键 battle_drop:{match_id}:{player_id}),成功才删行。
+--   inventory.GrantItems / GrantInstances(各自稳定幂等子键),成功才删行。
 --
 -- 与 player.update 出箱的差异:
 --   - 掉落无跨玩家保序需求 → 发布器按行独立重试(单行失败不阻塞其他玩家)。
---   - item_config_ids 存 CSV(如 "5001,5002");GrantInstances 幂等,重放安全。
---   - DS 不可信:写入本表前 battle_result 已按 drop_whitelist 过滤,非白名单 ID 不入表;
+--   - 首次入箱按真实 item.type 分流并把两条路由 CSV 固化；发布重试不再读热配置。
+--   - DS 不可信:写入本表前 battle_result 已按同一份 configtable drop×item 过滤,
+--     不在真实掉落表或不存在于 item 表的 ID 不入表;
 --     且每玩家按 max_drop_per_player 截断(默认 32,硬上限 46 = VARCHAR(512) 可容纳的
 --     最大条数:46 个 10 位 uint32 + 45 逗号 = 505 字符),防超长 CSV 打失败整场结算。
 --
@@ -55,11 +56,13 @@ CREATE TABLE IF NOT EXISTS `battle_drop_outbox` (
     `match_id`        BIGINT UNSIGNED  NOT NULL,
     `player_id`       BIGINT UNSIGNED  NOT NULL,
     `item_config_ids` VARCHAR(512)     NOT NULL COMMENT 'CSV of dropped item_config_id, e.g. 5001,5002',
+    `stack_item_config_ids`    VARCHAR(512) NOT NULL DEFAULT '' COMMENT '首次入箱时冻结的可堆叠路由;发布重试不得按热配置重算',
+    `instance_item_config_ids` VARCHAR(512) NOT NULL DEFAULT '' COMMENT '首次入箱时冻结的装备实例路由;发布重试不得按热配置重算',
     `created_at_ms`   BIGINT           NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_match_player` (`match_id`, `player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 战斗装备掉落事务出箱(at-least-once 幂等发放 GrantInstances,W5 ④)';
+  COMMENT='Pandora 战斗道具掉落事务出箱(at-least-once 幂等发放 stack/instance,W5 ④)';
 
 -- ── Battle 结算终态回收事务出箱(Model-B,2026-07-13)──────────────────────────
 --
@@ -116,8 +119,9 @@ CREATE TABLE IF NOT EXISTS `match_release_outbox` (
 --     (僵尸 / 分区恢复 DS fencing);结算时水位>0 → 结算路径掉落只对账不发放(单一权威路径)。
 --     已结算行保留 90 天后由 battle_result 保留期清理回收(§9.24;final_seq 在保留期内
 --     留存对账证据);未结算行永不自动清理(陈年未结算 = 补偿链 bug 证据,每轮告警)。
---   battle_progress_outbox 进度发放事务出箱:exp → player.AddExperience /
---     item → inventory.GrantInstances,幂等键 progress:{match_id}:{seq}:{player_id}:{kind};
+--   battle_progress_outbox 进度发放事务出箱:exp → player.AddExperience;
+--     装备/堆叠拾取 → GrantInstances/GrantItems;局内消费/丢弃 → ConsumeBattleItem/
+--     DiscardBattleItem。幂等键 progress:{match_id}:{seq}:{player_id}:{kind};
 --     发放成功即 DELETE,只保留待发放行。
 
 CREATE TABLE IF NOT EXISTS `battle_progress_stream` (
@@ -141,9 +145,10 @@ CREATE TABLE IF NOT EXISTS `battle_progress_outbox` (
     `match_id`           BIGINT UNSIGNED NOT NULL,
     `seq`                BIGINT UNSIGNED NOT NULL COMMENT 'exp 行=批末 seq;item 行=拾取事实自身 seq(幂等键组成)',
     `player_id`          BIGINT UNSIGNED NOT NULL,
-    `kind`               TINYINT UNSIGNED NOT NULL COMMENT '1=exp(player.AddExperience) 2=item(inventory.GrantInstances)',
+    `kind`               TINYINT UNSIGNED NOT NULL COMMENT '1=exp 2=grant_instance 3=grant_stack 4=consume_stack 5=discard_stack',
     `exp_delta`          BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'kind=1:本行经验(批内聚合)',
-    `item_config_ids`    VARCHAR(512)    NOT NULL DEFAULT '' COMMENT 'kind=2:CSV item_config_id(每 ID 一件实例)',
+    `item_config_ids`    VARCHAR(512)    NOT NULL DEFAULT '' COMMENT 'kind=2/3:CSV;kind=4/5:单个 item_config_id',
+    `item_count`         INT UNSIGNED    NOT NULL DEFAULT 0 COMMENT 'kind=4/5:紧凑 action count;0=兼容旧重复CSV',
     `next_attempt_at_ms` BIGINT          NOT NULL DEFAULT 0 COMMENT '发放失败指数退避后的下次尝试时点(防队首阻塞)',
     `attempt_count`      INT UNSIGNED    NOT NULL DEFAULT 0,
     `created_at_ms`      BIGINT          NOT NULL DEFAULT 0,
@@ -152,6 +157,41 @@ CREATE TABLE IF NOT EXISTS `battle_progress_outbox` (
     KEY `idx_progress_due` (`next_attempt_at_ms`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 战斗实时进度发放事务出箱(at-least-once + 下游幂等 + 失败退避,实时成长)';
+
+-- phase0 战斗堆叠道具支出额度。只把本场已接受的同玩家/同 item stack pickup 计入
+-- picked_count；consume/discard 在 ApplyProgress 同一事务条件累加 spent_count，失陷 DS
+-- 不能用合法 match 凭证删除玩家进入本场前已有的主库存。
+CREATE TABLE IF NOT EXISTS `battle_progress_item_balance` (
+    `match_id`       BIGINT UNSIGNED NOT NULL,
+    `player_id`      BIGINT UNSIGNED NOT NULL,
+    `item_config_id` INT UNSIGNED    NOT NULL,
+    `picked_count`   BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `spent_count`    BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `updated_at_ms`  BIGINT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (`match_id`, `player_id`, `item_config_id`),
+    CONSTRAINT `chk_battle_progress_item_balance` CHECK (`spent_count` <= `picked_count`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora phase0 每场玩家同配置 stack pickup/支出权威余额';
+
+-- consume/discard 的 durable completion outcome。status:0=pending 1=succeeded 2=failed。
+-- ReportProgress 响应丢失后按本表稳定回放；成功/终态失败与对应 outbox 删除同事务，
+-- 绝不从“outbox 行不存在”猜测结果。
+CREATE TABLE IF NOT EXISTS `battle_progress_action` (
+    `match_id`       BIGINT UNSIGNED NOT NULL,
+    `seq`            BIGINT UNSIGNED NOT NULL,
+    `player_id`      BIGINT UNSIGNED NOT NULL,
+    `kind`           TINYINT UNSIGNED NOT NULL COMMENT '4=consume_stack 5=discard_stack',
+    `item_config_id` INT UNSIGNED    NOT NULL,
+    `count`          INT UNSIGNED    NOT NULL,
+    `status`         TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=pending 1=succeeded 2=failed',
+    `result_code`    INT             NOT NULL DEFAULT 0 COMMENT 'failed 时稳定回放的 pandora ErrCode',
+    `created_at_ms`  BIGINT          NOT NULL DEFAULT 0,
+    `updated_at_ms`  BIGINT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (`match_id`, `seq`, `player_id`, `kind`),
+    KEY `idx_progress_action_match_player` (`match_id`, `player_id`, `seq`),
+    CONSTRAINT `chk_battle_progress_action_status` CHECK (`status` IN (0,1,2))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 战斗消费/丢弃同步完成结果(响应丢失可重放)';
 
 -- 每玩家 Battle→Hub 终态证明。初始行与 battles/stats 同事务提交；worker
 -- 从 player_locator 读取精确 stable BATTLE version 后把 UUIDv4/HMAC proof CAS

@@ -75,15 +75,14 @@ type BattleConf struct {
 	// 宽限到期仍由 worker 回收。
 	TerminalReleaseGrace config.Duration `yaml:"terminal_release_grace,omitempty" json:"terminal_release_grace,omitempty"`
 
-	// ── 战斗装备掉落回写 W5 ④ ──
+	// ── 战斗掉落回写 W5 ④ ──
 
-	// InventoryAddr inventory 服务 gRPC 地址(弱依赖:空 → 关闭掉落回写,不发放战斗装备掉落)。
-	// 内网 insecure 直连(系统接口,无 JWT)。RunDropPublisher 用它调 GrantInstances。
+	// InventoryAddr inventory 服务 gRPC 地址(弱依赖:空 → 关闭掉落/消费/丢弃发布)。
+	// 内网 insecure 直连(系统接口,无 JWT)。
 	InventoryAddr string `yaml:"inventory_addr,omitempty" json:"inventory_addr,omitempty"`
 
-	// DropWhitelist 允许作为战斗掉落落库的装备 item_config_id 白名单(DS 不可信,§12)。
-	// 空 = 不放行任何掉落(安全默认:DS 上报的 dropped_item_config_ids 全被过滤掉,不发放)。
-	// battle_result 写 drop 出箱前按此过滤,DS 只能触发白名单内装备落库。
+	// DropWhitelist 仅保留旧配置/单测兼容。生产由 configtable drop×item 热更视图裁决，
+	// 不得再手抄本字段。
 	DropWhitelist []uint32 `yaml:"drop_whitelist,omitempty" json:"drop_whitelist,omitempty"`
 
 	// MaxDropPerPlayer 单场结算里单个玩家最多入库的掉落条数(DS 不可信:防异常/恶意 DS
@@ -274,8 +273,7 @@ func (c *Config) ValidateRedisAuthorityIngress() error {
 	return nil
 }
 
-// IsDroppable 判断某 item_config_id 是否在战斗掉落白名单内(DS 不可信过滤,W5 ④)。
-// 白名单为空 → 恒 false(安全默认:不放行任何掉落)。
+// IsDroppable 是旧单测/兼容部署的 fallback；生产注入 BattleItemCatalog 后不会调用。
 func (b *BattleConf) IsDroppable(itemConfigID uint32) bool {
 	for _, id := range b.DropWhitelist {
 		if id == itemConfigID {

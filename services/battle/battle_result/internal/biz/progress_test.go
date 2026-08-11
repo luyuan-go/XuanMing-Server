@@ -499,16 +499,23 @@ func TestPublishProgressBatch(t *testing.T) {
 	uc.SetExperienceGranter(expG)
 	uc.SetInstanceGranter(itemG)
 
-	// 第一轮:exp 行失败保留,item 行照发(单行失败不阻塞)。
-	if n, err := uc.publishProgressBatch(ctx); err != nil || n != 1 {
-		t.Fatalf("round1 n=%d err=%v, want 1/nil", n, err)
+	// 同玩家严格 seq/id：第一轮 exp 失败时 item 不得越过（保证拾取/消费/丢弃同序）。
+	if n, err := uc.publishProgressBatch(ctx); err != nil || n != 0 {
+		t.Fatalf("round1 n=%d err=%v, want 0/nil", n, err)
 	}
-	if len(repo.progressOutbox) != 1 {
-		t.Fatalf("failed exp row must remain, got %d rows", len(repo.progressOutbox))
+	if len(repo.progressOutbox) != 2 {
+		t.Fatalf("failed exp and blocked item rows must remain, got %d rows", len(repo.progressOutbox))
 	}
 	// 第二轮:exp 行补发成功。
 	if n, err := uc.publishProgressBatch(ctx); err != nil || n != 1 {
 		t.Fatalf("round2 n=%d err=%v, want 1/nil", n, err)
+	}
+	if len(repo.progressOutbox) != 1 {
+		t.Fatalf("item row should remain for next ordered fetch, got %d", len(repo.progressOutbox))
+	}
+	// 第三轮:item 行在前序删除后发放。
+	if n, err := uc.publishProgressBatch(ctx); err != nil || n != 1 {
+		t.Fatalf("round3 n=%d err=%v, want 1/nil", n, err)
 	}
 	if len(repo.progressOutbox) != 0 {
 		t.Fatalf("all rows must be delivered, got %d", len(repo.progressOutbox))
@@ -796,8 +803,8 @@ func TestApplyExpShare_FloorsWithoutOverflow(t *testing.T) {
 		total, share, want uint64
 	}{
 		{total: 25, share: 1000, want: 25},
-		{total: 25, share: 500, want: 12},  // 12.5 向下取整
-		{total: 25, share: 1, want: 0},     // 份额小到归零:不产出箱行,不是丢账
+		{total: 25, share: 500, want: 12}, // 12.5 向下取整
+		{total: 25, share: 1, want: 0},    // 份额小到归零:不产出箱行,不是丢账
 		{total: 0, share: 500, want: 0},
 		// 大数不走乘法溢出:total*share 会超 uint64,拆商余后仍精确。
 		{total: 1 << 62, share: 500, want: (1 << 62) / 2},

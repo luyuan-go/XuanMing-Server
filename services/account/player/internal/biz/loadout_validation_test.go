@@ -177,6 +177,59 @@ func TestSetTalents_CostPerLevelCanExhaustBudget(t *testing.T) {
 	}
 }
 
+// TestGetTalents_UnspentUsesCostPerLevel 是本次修复的核心回归:读可点数必须按
+// 每节点实际消耗算,而不是 Σ 等级。此前写按 Σ 等级×每级消耗 扣、读按 Σ 等级 算,
+// 两个口径只在全表 cost_per_level=1 时才碰巧一致;5002 每级消耗 2,
+// 方案 5001×2 + 5002×2 实扣 6 点,旧读取口径只会算 4 点,界面凭空多出 2 点可点数。
+func TestGetTalents_UnspentUsesCostPerLevel(t *testing.T) {
+	uc := newUCLoadout(newFakeRepo())
+	if _, err := uc.GrantTalentPoints(context.Background(), 100, 10, "g1"); err != nil {
+		t.Fatalf("grant: %v", err)
+	}
+	setUnspent, err := uc.SetTalents(context.Background(), 100, []data.TalentLevel{
+		{TalentID: 5001, Level: 2},
+		{TalentID: 5002, Level: 2},
+	})
+	if err != nil {
+		t.Fatalf("set talents: %v", err)
+	}
+	if setUnspent != 4 {
+		t.Fatalf("写侧总消耗应为 6,余点应为 4,实为 %d", setUnspent)
+	}
+
+	_, getUnspent, err := uc.GetTalents(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("get talents: %v", err)
+	}
+	// 读写必须报同一个数;不等就说明读取侧又在按等级和反推。
+	if getUnspent != setUnspent {
+		t.Fatalf("读侧可点数应与写侧一致(%d),实为 %d", setUnspent, getUnspent)
+	}
+}
+
+// TestGrantTalentPoints_UnspentUsesCostPerLevel 覆盖同一口径分裂的另一个出口:
+// 授予点数后回读的可点数也走 talentUnspent,同样不能按 Σ 等级 反推。
+func TestGrantTalentPoints_UnspentUsesCostPerLevel(t *testing.T) {
+	uc := newUCLoadout(newFakeRepo())
+	if _, err := uc.GrantTalentPoints(context.Background(), 100, 6, "g1"); err != nil {
+		t.Fatalf("grant: %v", err)
+	}
+	if _, err := uc.SetTalents(context.Background(), 100, []data.TalentLevel{
+		{TalentID: 5001, Level: 2},
+		{TalentID: 5002, Level: 2},
+	}); err != nil {
+		t.Fatalf("set talents: %v", err)
+	}
+	// 再授 3 点:已花 6 点,总授予 9 点 → 可点 3 点。按等级和反推会得到 5。
+	unspent, err := uc.GrantTalentPoints(context.Background(), 100, 3, "g2")
+	if err != nil {
+		t.Fatalf("grant 2: %v", err)
+	}
+	if unspent != 3 {
+		t.Fatalf("授予后可点数应为 3,实为 %d", unspent)
+	}
+}
+
 func TestSetTalents_FailsClosedWithoutTalentTable(t *testing.T) {
 	uc := NewPlayerUsecase(newFakeRepo(), conf.PlayerConf{
 		BaseMMR: 1500, DefaultNicknamePrefix: "Player_", MaxNicknameLen: 32, LoadoutCustomizeEnabled: true,

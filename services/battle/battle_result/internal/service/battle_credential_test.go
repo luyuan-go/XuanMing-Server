@@ -317,6 +317,15 @@ func (*serviceBattleRepo) ApplyProgress(context.Context, uint64, uint64, uint64,
 func (*serviceBattleRepo) FetchProgressOutbox(context.Context, int) ([]data.ProgressOutboxRecord, error) {
 	return nil, nil
 }
+func (*serviceBattleRepo) FetchProgressOutboxForPlayer(context.Context, uint64, uint64, uint64) (data.ProgressOutboxRecord, bool, error) {
+	return data.ProgressOutboxRecord{}, false, nil
+}
+func (*serviceBattleRepo) GetProgressAction(context.Context, uint64, uint64, uint64, data.ProgressGrantKind) (data.ProgressAction, bool, error) {
+	return data.ProgressAction{}, false, nil
+}
+func (*serviceBattleRepo) ResolveProgressAction(context.Context, data.ProgressOutboxRecord, errcode.Code) (data.ProgressAction, error) {
+	return data.ProgressAction{}, nil
+}
 func (*serviceBattleRepo) DeleteProgressOutbox(context.Context, int64) error { return nil }
 
 // 保留期清理(§9.24):service 单测不涉及,默认 no-op。

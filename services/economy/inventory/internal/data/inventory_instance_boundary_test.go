@@ -59,3 +59,30 @@ func TestInstanceIDLedgerDetailRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestItemClosureFingerprintsSeparateOperationsAndExactInstance(t *testing.T) {
+	if UseFingerprint(10001, 1) == BattleConsumeFingerprint(10001, 1) ||
+		DiscardFingerprint(10001, 1) == BattleDiscardFingerprint(10001, 1) {
+		t.Fatal("大厅与战斗操作必须使用不同指纹域")
+	}
+	base := SellInstanceFingerprint(9001, 10003)
+	if SellInstanceFingerprint(9001, 10027) == base ||
+		SellInstanceFingerprint(9002, 10003) == base {
+		t.Fatal("实例出售指纹必须绑定 instance/config")
+	}
+	if SellInstanceFingerprint(9001, 10003) != base {
+		t.Fatal("服务端热更售价不得改变实例出售意图指纹")
+	}
+	if legacySaleLedgerMatches(legacySellFingerprint(10001, 2, 180),
+		"sell item=10001 count=2 gold=180", saleLedgerIntent{op: "sell", itemConfigID: 10001, count: 2}) != true {
+		t.Fatal("合法旧 stack ledger 应按 detail 中首次售价兼容")
+	}
+	if legacySaleLedgerMatches(legacySellFingerprint(10001, 2, 180),
+		"sell item=10001 count=3 gold=180", saleLedgerIntent{op: "sell", itemConfigID: 10001, count: 2}) {
+		t.Fatal("旧 ledger 的 detail/hash 与请求意图不一致不得放行")
+	}
+	if legacySaleLedgerMatches(legacySellInstanceFingerprint(9001, 10003, 180),
+		"sell instance=9001 item=10003 gold=180 trailing", saleLedgerIntent{op: "sell_inst", instanceID: 9001, itemConfigID: 10003}) {
+		t.Fatal("旧 ledger detail 必须精确解析，不得接受尾随内容")
+	}
+}

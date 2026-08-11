@@ -4,8 +4,8 @@
 //
 //	pandora_battle.battle_progress_stream 每场进度水位(PK match_id;last_applied_seq 单调推进,
 //	                                      settled_at_ms>0 = 对局已结算,后续进度一律拒 = 僵尸 DS fencing)
-//	pandora_battle.battle_progress_outbox 进度发放事务出箱(uk match+seq+player+kind;
-//	                                      exp → player.AddExperience / item → inventory.GrantInstances)
+//	pandora_battle.battle_progress_outbox 进度事实事务出箱(uk match+seq+player+kind;
+//	                                      exp / stack+instance grant / stack consume+discard)
 //
 // 幂等 / 原子:水位推进(乐观 CAS:WHERE last_applied_seq=expected AND settled_at_ms=0)、
 // 单场/单玩家累计上限判定与出箱行写入同一 MySQL 事务;CAS 失败(并发写者 / 已结算)或
@@ -28,9 +28,40 @@ type ProgressGrantKind uint8
 const (
 	// ProgressGrantExp 经验入账(player.AddExperience)。
 	ProgressGrantExp ProgressGrantKind = 1
-	// ProgressGrantItem 掉落发放(inventory.GrantInstances,每 ID 一件未鉴定实例)。
-	ProgressGrantItem ProgressGrantKind = 2
+	// ProgressGrantInstance 装备掉落发放(inventory.GrantInstances)。值 2 保持旧出箱兼容。
+	ProgressGrantInstance ProgressGrantKind = 2
+	// ProgressGrantItem 是历史名称兼容别名。
+	ProgressGrantItem = ProgressGrantInstance
+	// ProgressGrantStack 可堆叠掉落发放(inventory.GrantItems)。
+	ProgressGrantStack ProgressGrantKind = 3
+	// ProgressConsumeStack 局内消费持久扣减(inventory.ConsumeBattleItem)。
+	ProgressConsumeStack ProgressGrantKind = 4
+	// ProgressDiscardStack 副本丢弃持久扣减(inventory.DiscardBattleItem)。
+	ProgressDiscardStack ProgressGrantKind = 5
 )
+
+// ProgressActionStatus 是 consume/discard 的 durable completion outcome。
+// Pending 只表示事实和 outbox 已接受；只有 Succeeded 才允许 ReportProgress 返回 OK。
+type ProgressActionStatus uint8
+
+const (
+	ProgressActionPending ProgressActionStatus = iota
+	ProgressActionSucceeded
+	ProgressActionFailed
+)
+
+// ProgressAction 固化一个独立 action 事实及其最终结果。Item/Count 同时充当请求指纹，
+// 同 seq 改 payload 必须拒绝；ResultCode 只在 Failed 时非 OK。
+type ProgressAction struct {
+	MatchID      uint64
+	Seq          uint64
+	PlayerID     uint64
+	Kind         ProgressGrantKind
+	ItemConfigID uint32
+	Count        uint32
+	Status       ProgressActionStatus
+	ResultCode   errcode.Code
+}
 
 // ProgressOutboxRecord 是一条待发放的进度出箱记录。
 // 幂等键 = progress:{match_id}:{seq}:{player_id}:{kind 名}。
@@ -43,7 +74,8 @@ type ProgressOutboxRecord struct {
 	PlayerID      uint64
 	Kind          ProgressGrantKind
 	ExpDelta      uint64   // Kind=Exp 时有效
-	ItemConfigIDs []uint32 // Kind=Item 时有效(CSV 存储,复用 drop 出箱编码)
+	ItemConfigIDs []uint32 // 掉落/消费时有效(CSV 存储；同一事实内为同配置 ID)
+	ItemCount     uint32   // consume/discard 紧凑计数；0 表示兼容旧重复 CSV
 }
 
 // ProgressWatermark 是一场对局的进度水位快照(单场模式 / 去重 / 累计上限的权威依据)。
@@ -162,6 +194,16 @@ updated_at_ms = VALUES(updated_at_ms)`,
 func (r *MySQLBattleRepo) ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []ProgressPlayerDelta, rows []ProgressOutboxRecord, caps ProgressCaps) error {
 	if matchID == 0 || newSeq <= expectedSeq {
 		return errcode.New(errcode.ErrInvalidArg, "apply progress requires match/seq advance")
+	}
+	actionRows := 0
+	for _, row := range rows {
+		if row.Kind == ProgressConsumeStack || row.Kind == ProgressDiscardStack {
+			actionRows++
+		}
+	}
+	if actionRows > 0 && (actionRows != 1 || len(rows) != 1 || addExp != 0 || addItems != 0 || len(playerDeltas) != 0) {
+		return errcode.New(errcode.ErrInvalidArg,
+			"consume/discard progress action must be one isolated outbox row")
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -287,12 +329,15 @@ WHERE match_id = ? AND player_id IN (?` + strings.Repeat(",?", len(playerDeltas)
 	}
 
 	const insRow = `INSERT INTO battle_progress_outbox
-(match_id, seq, player_id, kind, exp_delta, item_config_ids, created_at_ms)
-VALUES (?, ?, ?, ?, ?, ?, ?)`
+(match_id, seq, player_id, kind, exp_delta, item_config_ids, item_count, created_at_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	for _, row := range rows {
+		if aerr := applyProgressItemAuthorityTx(ctx, tx, matchID, row, nowMs); aerr != nil {
+			return aerr
+		}
 		if _, rerr := tx.ExecContext(ctx, insRow,
 			matchID, row.Seq, row.PlayerID, uint8(row.Kind),
-			row.ExpDelta, encodeConfigIDs(row.ItemConfigIDs), nowMs,
+			row.ExpDelta, encodeConfigIDs(row.ItemConfigIDs), row.ItemCount, nowMs,
 		); rerr != nil {
 			return errcode.New(errcode.ErrUnavailable, "insert progress outbox match=%d player=%d: %v",
 				matchID, row.PlayerID, rerr)
@@ -305,15 +350,118 @@ VALUES (?, ?, ?, ?, ?, ?, ?)`
 	return nil
 }
 
+// applyProgressItemAuthorityTx 把 phase0 stack pickup 额度与 action 支出预留收进
+// ApplyProgress 的同一个水位事务。只有本场、同玩家、同 item 已接受的 stack pickup
+// 能提供额度；进入本场前的主库存永远不会增加这里的 picked_count。
+func applyProgressItemAuthorityTx(ctx context.Context, tx *sql.Tx, matchID uint64, row ProgressOutboxRecord, nowMs int64) error {
+	switch row.Kind {
+	case ProgressGrantStack:
+		counts := make(map[uint32]uint32)
+		for _, itemID := range row.ItemConfigIDs {
+			if itemID == 0 {
+				return errcode.New(errcode.ErrInvalidArg, "stack pickup contains zero item_config_id")
+			}
+			counts[itemID]++
+		}
+		if len(counts) == 0 {
+			return errcode.New(errcode.ErrInvalidArg, "stack pickup row is empty")
+		}
+		const upsertBalance = `INSERT INTO battle_progress_item_balance
+(match_id,player_id,item_config_id,picked_count,spent_count,updated_at_ms)
+VALUES(?,?,?,?,0,?)
+ON DUPLICATE KEY UPDATE picked_count=picked_count+VALUES(picked_count),updated_at_ms=VALUES(updated_at_ms)`
+		for itemID, count := range counts {
+			if _, err := tx.ExecContext(ctx, upsertBalance,
+				matchID, row.PlayerID, itemID, count, nowMs); err != nil {
+				return errcode.New(errcode.ErrUnavailable,
+					"credit battle pickup balance match=%d player=%d item=%d: %v",
+					matchID, row.PlayerID, itemID, err)
+			}
+		}
+		return nil
+	case ProgressConsumeStack, ProgressDiscardStack:
+		itemID, count, err := progressSingleStackFact(row)
+		if err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `UPDATE battle_progress_item_balance
+SET spent_count=spent_count+?,updated_at_ms=?
+WHERE match_id=? AND player_id=? AND item_config_id=?
+  AND spent_count<=picked_count AND picked_count-spent_count>=?`,
+			count, nowMs, matchID, row.PlayerID, itemID, count)
+		if err != nil {
+			return errcode.New(errcode.ErrUnavailable,
+				"reserve battle item spend match=%d player=%d item=%d: %v",
+				matchID, row.PlayerID, itemID, err)
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return errcode.New(errcode.ErrUnavailable,
+				"read battle item spend result match=%d player=%d item=%d: %v",
+				matchID, row.PlayerID, itemID, err)
+		}
+		if affected != 1 {
+			return errcode.New(errcode.ErrInvalidArg,
+				"battle item action exceeds same-match accepted pickup balance match=%d player=%d item=%d count=%d; phase0 actions may only spend this match's stack pickups",
+				matchID, row.PlayerID, itemID, count)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO battle_progress_action
+(match_id,seq,player_id,kind,item_config_id,count,status,result_code,created_at_ms,updated_at_ms)
+VALUES(?,?,?,?,?,?,0,0,?,?)`,
+			matchID, row.Seq, row.PlayerID, uint8(row.Kind), itemID, count, nowMs, nowMs); err != nil {
+			return errcode.New(errcode.ErrUnavailable,
+				"insert battle progress action match=%d seq=%d player=%d: %v",
+				matchID, row.Seq, row.PlayerID, err)
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func progressSingleStackFact(row ProgressOutboxRecord) (uint32, uint32, error) {
+	itemConfigIDs := row.ItemConfigIDs
+	if len(itemConfigIDs) == 0 || itemConfigIDs[0] == 0 {
+		return 0, 0, errcode.New(errcode.ErrInvalidArg, "empty battle stack action")
+	}
+	if row.ItemCount > 0 {
+		if len(itemConfigIDs) != 1 {
+			return 0, 0, errcode.New(errcode.ErrInvalidArg,
+				"compact battle stack action must contain exactly one item_config_id")
+		}
+		return itemConfigIDs[0], row.ItemCount, nil
+	}
+	if uint64(len(itemConfigIDs)) > uint64(^uint32(0)) {
+		return 0, 0, errcode.New(errcode.ErrInvalidArg, "battle stack action count overflows uint32")
+	}
+	itemID := itemConfigIDs[0]
+	for _, got := range itemConfigIDs[1:] {
+		if got != itemID {
+			return 0, 0, errcode.New(errcode.ErrInvalidArg,
+				"battle stack action mixes item_config_ids %d and %d", itemID, got)
+		}
+	}
+	return itemID, uint32(len(itemConfigIDs)), nil
+}
+
 // FetchProgressOutbox 按 id 升序取最多 limit 条**已到重试时点**的待发放进度出箱记录。
+// 同 (match,player) 只返回 seq/id 最早的一条：即使前序失败已被退避，后序也不能
+// 越过它先发，保证 ItemPickup 的 Grant 一定先于后续 ItemConsume。
 // next_attempt_at_ms 过滤 + DeferProgressOutbox 退避,保证个别永久失败行(坏数据 /
 // granter 未配)不会长期占满首批饿死后续正常行(审计 P1 队首阻塞)。
 func (r *MySQLBattleRepo) FetchProgressOutbox(ctx context.Context, limit int) ([]ProgressOutboxRecord, error) {
 	if limit <= 0 {
 		limit = 128
 	}
-	const q = `SELECT id, match_id, seq, player_id, kind, exp_delta, item_config_ids
-FROM battle_progress_outbox WHERE next_attempt_at_ms <= ? ORDER BY id ASC LIMIT ?`
+	const q = `SELECT cur.id, cur.match_id, cur.seq, cur.player_id, cur.kind, cur.exp_delta, cur.item_config_ids, cur.item_count
+FROM battle_progress_outbox cur
+WHERE cur.next_attempt_at_ms <= ?
+  AND NOT EXISTS (
+    SELECT 1 FROM battle_progress_outbox prev
+    WHERE prev.match_id = cur.match_id AND prev.player_id = cur.player_id
+      AND (prev.seq < cur.seq OR (prev.seq = cur.seq AND prev.id < cur.id))
+  )
+ORDER BY cur.id ASC LIMIT ?`
 	rows, err := r.db.QueryContext(ctx, q, time.Now().UnixMilli(), limit)
 	if err != nil {
 		return nil, errcode.New(errcode.ErrInternal, "query progress outbox: %v", err)
@@ -327,7 +475,7 @@ FROM battle_progress_outbox WHERE next_attempt_at_ms <= ? ORDER BY id ASC LIMIT 
 			kind uint8
 			csv  string
 		)
-		if serr := rows.Scan(&rec.ID, &rec.MatchID, &rec.Seq, &rec.PlayerID, &kind, &rec.ExpDelta, &csv); serr != nil {
+		if serr := rows.Scan(&rec.ID, &rec.MatchID, &rec.Seq, &rec.PlayerID, &kind, &rec.ExpDelta, &csv, &rec.ItemCount); serr != nil {
 			return nil, errcode.New(errcode.ErrInternal, "scan progress outbox: %v", serr)
 		}
 		rec.Kind = ProgressGrantKind(kind)
@@ -338,6 +486,146 @@ FROM battle_progress_outbox WHERE next_attempt_at_ms <= ? ORDER BY id ASC LIMIT 
 		return nil, errcode.New(errcode.ErrInternal, "iterate progress outbox: %v", rerr)
 	}
 	return out, nil
+}
+
+// FetchProgressOutboxForPlayer 忽略 next_attempt_at_ms，供同步 action 路径主动驱动
+// 该玩家不超过 target seq 的最早出箱。其它玩家完全不受影响。
+func (r *MySQLBattleRepo) FetchProgressOutboxForPlayer(ctx context.Context, matchID, playerID, maxSeq uint64) (ProgressOutboxRecord, bool, error) {
+	var (
+		rec  ProgressOutboxRecord
+		kind uint8
+		csv  string
+	)
+	err := r.db.QueryRowContext(ctx, `SELECT id,match_id,seq,player_id,kind,exp_delta,item_config_ids,item_count
+FROM battle_progress_outbox
+WHERE match_id=? AND player_id=? AND seq<=?
+ORDER BY seq ASC,id ASC LIMIT 1`, matchID, playerID, maxSeq).
+		Scan(&rec.ID, &rec.MatchID, &rec.Seq, &rec.PlayerID, &kind, &rec.ExpDelta, &csv, &rec.ItemCount)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ProgressOutboxRecord{}, false, nil
+	}
+	if err != nil {
+		return ProgressOutboxRecord{}, false, errcode.New(errcode.ErrInternal,
+			"query player progress outbox match=%d player=%d max_seq=%d: %v", matchID, playerID, maxSeq, err)
+	}
+	rec.Kind = ProgressGrantKind(kind)
+	rec.ItemConfigIDs = decodeConfigIDs(csv)
+	return rec, true, nil
+}
+
+// GetProgressAction 返回 consume/discard 的持久事实与权威结果；不存在不能解释为成功。
+func (r *MySQLBattleRepo) GetProgressAction(ctx context.Context, matchID, seq, playerID uint64, kind ProgressGrantKind) (ProgressAction, bool, error) {
+	var (
+		a          ProgressAction
+		storedKind uint8
+		status     uint8
+		code       int32
+	)
+	err := r.db.QueryRowContext(ctx, `SELECT match_id,seq,player_id,kind,item_config_id,count,status,result_code
+FROM battle_progress_action WHERE match_id=? AND seq=? AND player_id=? AND kind=? LIMIT 1`,
+		matchID, seq, playerID, uint8(kind)).
+		Scan(&a.MatchID, &a.Seq, &a.PlayerID, &storedKind, &a.ItemConfigID, &a.Count, &status, &code)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ProgressAction{}, false, nil
+	}
+	if err != nil {
+		return ProgressAction{}, false, errcode.New(errcode.ErrInternal,
+			"query progress action match=%d seq=%d player=%d kind=%d: %v",
+			matchID, seq, playerID, kind, err)
+	}
+	a.Kind = ProgressGrantKind(storedKind)
+	a.Status = ProgressActionStatus(status)
+	a.ResultCode = errcode.Code(code)
+	return a, true, nil
+}
+
+// ResolveProgressAction 原子落 action outcome 并删除对应 outbox。inventory RPC 与
+// battle MySQL 之间的崩溃窗由 inventory 幂等键收敛：RPC 成功后若本事务未提交，重试
+// 会得到同一 RPC 结果，再完成本事务。并发执行以首个已提交 outcome 为权威。
+func (r *MySQLBattleRepo) ResolveProgressAction(ctx context.Context, row ProgressOutboxRecord, resultCode errcode.Code) (ProgressAction, error) {
+	itemID, count, err := progressSingleStackFact(row)
+	if err != nil {
+		return ProgressAction{}, err
+	}
+	if row.ID == 0 || row.MatchID == 0 || row.Seq == 0 || row.PlayerID == 0 ||
+		(row.Kind != ProgressConsumeStack && row.Kind != ProgressDiscardStack) {
+		return ProgressAction{}, errcode.New(errcode.ErrInvalidArg, "resolve progress action requires persisted action outbox row")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return ProgressAction{}, errcode.New(errcode.ErrInternal, "begin resolve progress action: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var (
+		a          ProgressAction
+		storedKind uint8
+		status     uint8
+		code       int32
+	)
+	err = tx.QueryRowContext(ctx, `SELECT match_id,seq,player_id,kind,item_config_id,count,status,result_code
+FROM battle_progress_action
+WHERE match_id=? AND seq=? AND player_id=? AND kind=? FOR UPDATE`,
+		row.MatchID, row.Seq, row.PlayerID, uint8(row.Kind)).
+		Scan(&a.MatchID, &a.Seq, &a.PlayerID, &storedKind, &a.ItemConfigID, &a.Count, &status, &code)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ProgressAction{}, errcode.New(errcode.ErrInvalidState,
+			"progress action outcome missing match=%d seq=%d player=%d kind=%d",
+			row.MatchID, row.Seq, row.PlayerID, row.Kind)
+	}
+	if err != nil {
+		return ProgressAction{}, errcode.New(errcode.ErrInternal, "lock progress action: %v", err)
+	}
+	a.Kind = ProgressGrantKind(storedKind)
+	a.Status = ProgressActionStatus(status)
+	a.ResultCode = errcode.Code(code)
+	if a.ItemConfigID != itemID || a.Count != count {
+		return ProgressAction{}, errcode.New(errcode.ErrInvalidState,
+			"progress action/outbox mismatch match=%d seq=%d stored=%d:%d row=%d:%d",
+			row.MatchID, row.Seq, a.ItemConfigID, a.Count, itemID, count)
+	}
+	if a.Status == ProgressActionPending {
+		if resultCode == errcode.OK {
+			a.Status = ProgressActionSucceeded
+			a.ResultCode = errcode.OK
+		} else {
+			// 预留发生在 ApplyProgress。终态业务失败意味着 inventory 没有扣物、UE
+			// 也会保留本地物品，因此必须在 outcome 同一事务释放 spent 额度；否则
+			// 玩家用新 seq 重试同一意图会被假余额永久拒绝。
+			res, releaseErr := tx.ExecContext(ctx, `UPDATE battle_progress_item_balance
+SET spent_count=spent_count-?,updated_at_ms=?
+WHERE match_id=? AND player_id=? AND item_config_id=? AND spent_count>=?`,
+				count, time.Now().UnixMilli(), a.MatchID, a.PlayerID, a.ItemConfigID, count)
+			if releaseErr != nil {
+				return ProgressAction{}, errcode.New(errcode.ErrInternal,
+					"release failed progress action balance: %v", releaseErr)
+			}
+			affected, releaseErr := res.RowsAffected()
+			if releaseErr != nil || affected != 1 {
+				return ProgressAction{}, errcode.New(errcode.ErrInvalidState,
+					"release failed progress action balance match=%d seq=%d affected=%d err=%v",
+					a.MatchID, a.Seq, affected, releaseErr)
+			}
+			a.Status = ProgressActionFailed
+			a.ResultCode = resultCode
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE battle_progress_action
+SET status=?,result_code=?,updated_at_ms=?
+WHERE match_id=? AND seq=? AND player_id=? AND kind=? AND status=0`,
+			uint8(a.Status), int32(a.ResultCode), time.Now().UnixMilli(),
+			a.MatchID, a.Seq, a.PlayerID, uint8(a.Kind)); err != nil {
+			return ProgressAction{}, errcode.New(errcode.ErrInternal, "update progress action outcome: %v", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM battle_progress_outbox
+WHERE id=? AND match_id=? AND seq=? AND player_id=? AND kind=?`,
+		row.ID, row.MatchID, row.Seq, row.PlayerID, uint8(row.Kind)); err != nil {
+		return ProgressAction{}, errcode.New(errcode.ErrInternal, "delete resolved progress action outbox id=%d: %v", row.ID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ProgressAction{}, errcode.New(errcode.ErrInternal, "commit progress action outcome: %v", err)
+	}
+	return a, nil
 }
 
 // DeleteProgressOutbox 删除已成功发放的进度出箱行。
@@ -361,14 +649,16 @@ WHERE id = ?`, time.Now().UnixMilli(), id); err != nil {
 	return nil
 }
 
-// ValidateProgressSchema 启动时探测实时进度三表(stream/outbox/player,含累计上限 /
-// 退避列;000005 + 000006 两个迁移的产物),缺失即失败:
+// ValidateProgressSchema 启动时探测实时进度五表(stream/outbox/player/item balance/action,
+// 含累计上限/退避/outcome 列;000005+000006+000009 迁移产物),缺失即失败:
 // settleProgressStreamTx 在**每次结算**都会无条件访问水位表,不能等首个结算才炸(§16.4)。
 func (r *MySQLBattleRepo) ValidateProgressSchema(ctx context.Context) error {
 	checks := []string{
 		`SELECT match_id, last_applied_seq, total_exp, total_items, final_seq, settled_at_ms, stopped_at_ms, updated_at_ms FROM battle_progress_stream LIMIT 0`,
-		`SELECT id, match_id, seq, player_id, kind, exp_delta, item_config_ids, next_attempt_at_ms, attempt_count, created_at_ms FROM battle_progress_outbox LIMIT 0`,
+		`SELECT id, match_id, seq, player_id, kind, exp_delta, item_config_ids, item_count, next_attempt_at_ms, attempt_count, created_at_ms FROM battle_progress_outbox LIMIT 0`,
 		`SELECT match_id, player_id, total_exp, total_items, total_kills, updated_at_ms FROM battle_progress_player LIMIT 0`,
+		`SELECT match_id, player_id, item_config_id, picked_count, spent_count, updated_at_ms FROM battle_progress_item_balance LIMIT 0`,
+		`SELECT match_id, seq, player_id, kind, item_config_id, count, status, result_code, created_at_ms, updated_at_ms FROM battle_progress_action LIMIT 0`,
 	}
 	for _, query := range checks {
 		rows, err := r.db.QueryContext(ctx, query)

@@ -243,6 +243,11 @@ type InventoryConf struct {
 	// 留空 / 无匹配 = 鉴定只把 identified 置真、无随机属性(安全默认,不阻断)。
 	IdentifyRules []IdentifyRule `yaml:"identify_rules,omitempty" json:"identify_rules,omitempty"`
 
+	// DefaultIdentifyRule 是真实装备未配置专属规则时的安全默认鉴定池。
+	// 仅在 item 配置表确认该 config_id 为装备时生效；专属 IdentifyRules 优先。
+	// nil = 无默认规则（启用配置表闭环的部署会在启动期 fail-fast）。
+	DefaultIdentifyRule *IdentifyRule `yaml:"default_identify_rule,omitempty" json:"default_identify_rule,omitempty"`
+
 	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
 
 	// SweepInterval 保留期清理轮询间隔(默认 5m)。多副本各自跑,DELETE 幂等无需锁
@@ -367,7 +372,7 @@ func (ic *InventoryConf) IdentifyRuleOf(itemConfigID uint32) *IdentifyRule {
 			return &ic.IdentifyRules[i]
 		}
 	}
-	return nil
+	return ic.DefaultIdentifyRule
 }
 
 // Validate 校验道具规则表(启动时调,非法配置直接 fail-fast,避免上线后负价/重复规则扣币)。
@@ -419,6 +424,38 @@ func (ic *InventoryConf) Validate() error {
 			if p.Min > p.Max {
 				return fmt.Errorf("identify_rules[%d].pool[%d]: min %d must be <= max %d", i, j, p.Min, p.Max)
 			}
+		}
+	}
+	if r := ic.DefaultIdentifyRule; r != nil {
+		if r.ItemConfigID != 0 {
+			return fmt.Errorf("default_identify_rule.item_config_id must be 0 (got %d)", r.ItemConfigID)
+		}
+		if err := validateIdentifyPool("default_identify_rule", r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateIdentifyPool(path string, r *IdentifyRule) error {
+	if r.AttrCount <= 0 {
+		return fmt.Errorf("%s.attr_count must be > 0 (got %d)", path, r.AttrCount)
+	}
+	if len(r.Pool) == 0 {
+		return fmt.Errorf("%s.pool must not be empty", path)
+	}
+	seen := make(map[uint32]struct{}, len(r.Pool))
+	for i := range r.Pool {
+		p := &r.Pool[i]
+		if p.AttrID == 0 {
+			return fmt.Errorf("%s.pool[%d]: attr_id must not be 0", path, i)
+		}
+		if _, dup := seen[p.AttrID]; dup {
+			return fmt.Errorf("%s.pool[%d]: duplicate attr_id %d", path, i, p.AttrID)
+		}
+		seen[p.AttrID] = struct{}{}
+		if p.Min > p.Max {
+			return fmt.Errorf("%s.pool[%d]: min %d must be <= max %d", path, i, p.Min, p.Max)
 		}
 	}
 	return nil

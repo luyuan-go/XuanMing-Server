@@ -29,8 +29,20 @@ service InventoryService {
   // UseItem 大厅态使用消耗品(开箱 / 经验书等);战斗内即时道具走 GAS,不走此 RPC。
   rpc UseItem(UseItemRequest) returns (UseItemResponse);
 
+  // ConsumeBattleItem 持久扣减已由 UE GAS 局内使用的可堆叠消耗品(系统接口)。
+  // 仅接受可信 battle_result 进度出箱；客户端不得直调，也不得用大厅 UseItem 冒充。
+  rpc ConsumeBattleItem(ConsumeBattleItemRequest) returns (ConsumeBattleItemResponse);
+
+  // DiscardBattleItem 持久扣减副本内丢弃的可堆叠道具(系统接口)。装备实例不支持：
+  // phase0 DS 本地 Guid 不是 inventory instance_id，实例只能回大厅走 DiscardInstance。
+  rpc DiscardBattleItem(DiscardBattleItemRequest) returns (DiscardBattleItemResponse);
+
   // SellItem 出售道具换金币(原子扣道具 + 加金币)。
   rpc SellItem(SellItemRequest) returns (SellItemResponse);
+
+  // DiscardItem 丢弃可堆叠道具(客户端 RPC,以调用者身份为准)。
+  // 幂等键绑定 item_config_id+count；响应丢失重试不会重复扣减。
+  rpc DiscardItem(DiscardItemRequest) returns (DiscardItemResponse);
 
   // ── 装备实例 / 鉴定(W5 ④ 实例化背包,ds-arch §0.5 大厅态持久化)──
   //
@@ -55,6 +67,10 @@ service InventoryService {
   // MoveInstance 移动一件装备实例到新格子(改 slot_index;客户端 RPC,以调用者身份为准)。
   // 目标格越界(>= capacity)/ 已被占用 → 拒。纯大厅整理操作,不影响属性。
   rpc MoveInstance(MoveInstanceRequest) returns (MoveInstanceResponse);
+
+  // SellInstance 出售唯一装备实例换金币(客户端 RPC,以调用者身份为准)。
+  // 绑定实例拒绝；删除实例与金币入账、ledger 幂等流水在同一事务。
+  rpc SellInstance(SellInstanceRequest) returns (SellInstanceResponse);
 
   // FreezeForOrder 拍卖挂单冻结资产(系统接口,仅后端内部直连):
   //   卖单(SELL):把 quantity 个 item_config_id 从活跃背包移入托管(escrow),挂单期间不可被别处消耗;
@@ -144,6 +160,11 @@ service InventoryService {
   //
   // 只回「请求集合中确实持有的子集」,不回数量、不回实例 id,避免把背包细节外溢到其它域。
   rpc CheckItemsOwned(CheckItemsOwnedRequest) returns (CheckItemsOwnedResponse);
+
+  // CheckInstancesOwned 精确校验唯一实例归属(系统接口,仅后端内部直连)。
+  // 每项同时携 instance_id + item_config_id；只有两者都与该玩家当前实例行一致才返回。
+  // 旧 CheckItemsOwned 保留兼容，新的实例化装备预设应使用本接口避免同配置多实例选错词条。
+  rpc CheckInstancesOwned(CheckInstancesOwnedRequest) returns (CheckInstancesOwnedResponse);
 }
 
 // EscrowSide 冻结方向(对齐 auction OrderSide:SELL=1 冻道具 / BUY=2 冻金币)。
@@ -250,6 +271,22 @@ message CheckItemsOwnedResponse {
   repeated uint32 owned_item_config_ids = 2;
 }
 
+message InstanceOwnershipQuery {
+  uint64 instance_id    = 1;
+  uint32 item_config_id = 2;
+}
+
+message CheckInstancesOwnedRequest {
+  uint64 player_id = 1;
+  repeated InstanceOwnershipQuery instances = 2;
+}
+
+message CheckInstancesOwnedResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // 请求中 instance_id + item_config_id 都精确匹配当前归属的实例 ID 子集（去重、升序）。
+  repeated uint64 owned_instance_ids = 2;
+}
+
 // UseItemRequest 大厅态使用消耗品(数量不足 → ERR_INVENTORY_INSUFFICIENT;
 // 不可大厅使用 → ERR_INVENTORY_ITEM_NOT_USABLE)。
 message UseItemRequest {
@@ -262,6 +299,30 @@ message UseItemRequest {
 message UseItemResponse {
   pandora.common.v1.ErrCode code = 1;
   int64 remaining = 2;  // 使用后该道具剩余数量
+}
+
+message ConsumeBattleItemRequest {
+  uint64 player_id       = 1;
+  uint32 item_config_id  = 2;
+  int64  count           = 3;  // 须 > 0；真实 item.usable=true 且非装备
+  string idempotency_key = 4;  // battle progress (match, player, seq) 稳定键
+}
+
+message ConsumeBattleItemResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int64 remaining = 2;
+}
+
+message DiscardBattleItemRequest {
+  uint64 player_id       = 1;
+  uint32 item_config_id  = 2;
+  int64  count           = 3;  // 须 > 0，且真实配置必须为非装备
+  string idempotency_key = 4;
+}
+
+message DiscardBattleItemResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int64 remaining = 2;
 }
 
 // SellItemRequest 出售道具换金币(数量不足 → ERR_INVENTORY_INSUFFICIENT;
@@ -277,6 +338,18 @@ message SellItemResponse {
   pandora.common.v1.ErrCode code = 1;
   int64 remaining = 2;  // 出售后该道具剩余数量
   int64 gold      = 3;  // 出售后金币余额
+}
+
+message DiscardItemRequest {
+  uint64 player_id       = 1;
+  uint32 item_config_id  = 2;
+  int64  count           = 3;  // 须 > 0
+  string idempotency_key = 4;
+}
+
+message DiscardItemResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int64 remaining = 2;
 }
 
 // SettleAuctionMatchRequest 拍卖成交结算(系统接口,后端内部直连)。
@@ -398,6 +471,18 @@ message MoveInstanceRequest {
 
 message MoveInstanceResponse {
   pandora.common.v1.ErrCode code = 1;
+}
+
+message SellInstanceRequest {
+  uint64 player_id       = 1;
+  uint64 instance_id     = 2;
+  uint32 item_config_id  = 3;  // 与实例行一致性校验，避免同配置多实例/陈旧 UI 误售
+  string idempotency_key = 4;
+}
+
+message SellInstanceResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int64 gold = 2;  // 出售后金币余额
 }
 
 // ── 邮件 transfer 附件实例托管消息(2026-07-22)──

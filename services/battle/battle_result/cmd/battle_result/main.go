@@ -43,6 +43,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/safego"
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/biz"
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
@@ -260,7 +261,7 @@ func main() {
 		defer func() { _ = granter.Close() }()
 		uc.SetInstanceGranter(granter)
 		helper.Infow("msg", "drop_granter_grpc", "inventory_addr", cfg.Battle.InventoryAddr,
-			"drop_whitelist", len(cfg.Battle.DropWhitelist))
+			"item_rules_source", "configtable/drop+item")
 	} else {
 		helper.Warnw("msg", "drop_granter_disabled",
 			"hint", "inventory_addr 未配置 → 战斗装备掉落不发放(drop 出箱积压不丢,配好地址重启补发)")
@@ -288,10 +289,12 @@ func main() {
 		helper.Warnw("msg", "configtable_load_warning", "warning", w)
 	}
 	helper.Infow("msg", "configtable_loaded", "dir", ctDir, "version", ctRes.Version,
-		"role_level_rows", ctStore.Tables().RoleLevel.Count())
+		"role_level_rows", ctStore.Tables().RoleLevel.Count(),
+		"item_rows", ctStore.Tables().Item.Count(), "drop_rows", ctStore.Tables().Drop.Count())
 	// 注入的是"当前批次"的表指针。热更(ReloadConfigTable)后 Store 原子换指针,
 	// 而这里注入的是快照 —— 经验表要跟随热更必须注入 Store 而非 Tables。
 	uc.SetMonsterExpTable(monsterExpFromStore{store: ctStore})
+	uc.SetBattleItemCatalog(battleItemCatalogFromStore{store: ctStore})
 
 	// 6.2.0 player 经验入账器(实时成长,弱依赖:PlayerAddr 空 → 进度出箱经验行积压不丢,
 	// 配好地址重启补发)。AddExperience 是系统接口,走内网 insecure 直连(复用 MMR reader 地址)。
@@ -530,6 +533,36 @@ func maskDSN(dsn string) string {
 // 就在于不重启)。每次查询经 Tables() 取当前批次,读的是 atomic 指针,无锁无拷贝。
 type monsterExpFromStore struct {
 	store *configtable.Store
+}
+
+// battleItemCatalogFromStore 让掉落过滤、堆叠/实例路由与局内可消费规则共用 UE 同源表。
+// 持 Store 而不是 Tables 快照，热更整批切换后读路径立即生效。
+type battleItemCatalogFromStore struct {
+	store *configtable.Store
+}
+
+func (c battleItemCatalogFromStore) Lookup(itemConfigID uint32) (biz.BattleItemDefinition, bool) {
+	tb := c.store.Tables()
+	if tb == nil || tb.Item == nil || tb.Drop == nil {
+		return biz.BattleItemDefinition{}, false
+	}
+	item, ok := tb.Item.ByID(itemConfigID)
+	if !ok {
+		return biz.BattleItemDefinition{}, false
+	}
+	droppable := false
+	for _, row := range tb.Drop.All() {
+		if row.GetItemConfigId() == itemConfigID {
+			droppable = true
+			break
+		}
+	}
+	return biz.BattleItemDefinition{
+		Equipment:    item.GetType() == configpb.ItemType_ITEM_TYPE_EQUIPMENT,
+		BattleUsable: item.GetUsable(),
+		Droppable:    droppable,
+		MaxStack:     item.GetMaxStackSize(),
+	}, true
 }
 
 // KillExpOf 查 (怪物角色 ID, 等级) 的整份击杀经验。

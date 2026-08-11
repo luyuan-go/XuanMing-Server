@@ -122,14 +122,18 @@ func (t *TalentTable) MaxLevelOf(talentID uint32) uint32 {
 	return row.GetMaxLevel()
 }
 
-// ValidateAllocation 校验一份完整专精分配并返回总消耗点数。
+// ValidateAllocation 校验一份完整专精分配,返回逐节点消耗与总消耗点数。
 //
 // levels 是「节点 ID → 等级」的完整分配(等级 0 的节点不应出现,由调用方剔除),
 // 对齐服务端 SetTalents 的全量替换语义:每次提交都是一份完整方案,因此前置关系
 // 只看本次方案自身,不看库里旧数据——否则"先点满前置、再单独洗掉前置"就能留下悬空节点。
 //
-// 返回的总消耗供调用方与玩家可用专精点比对;任一条不满足返回 error。
-func (t *TalentTable) ValidateAllocation(levels map[uint32]uint32) (uint32, error) {
+// 返回的总消耗供调用方与玩家可用专精点比对;逐节点消耗(节点 ID → 等级 × 每级消耗)
+// 供调用方落库,让读取侧不必再按 Σ 等级 反推——反推在 cost_per_level≠1 时会把
+// 已花掉的点算少,读出来的可点数比实际多。**一次调用取一份表快照**,校验与逐节点
+// 消耗必然同版本;分成两次查表则可能跨热更边界混算(§9.15)。
+// 任一条不满足返回 error。
+func (t *TalentTable) ValidateAllocation(levels map[uint32]uint32) (map[uint32]uint32, uint32, error) {
 	// map 遍历顺序不稳定,先定序,保证同一份非法分配每次报同一条错误(便于定位与测试)。
 	ids := make([]uint32, 0, len(levels))
 	for id := range levels {
@@ -138,31 +142,35 @@ func (t *TalentTable) ValidateAllocation(levels map[uint32]uint32) (uint32, erro
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 
 	var total uint64
+	costs := make(map[uint32]uint32, len(levels))
 	for _, id := range ids {
 		level := levels[id]
 		row, ok := t.byID[id]
 		if !ok {
-			return 0, fmt.Errorf("专精 %d 不在配置表中", id)
+			return nil, 0, fmt.Errorf("专精 %d 不在配置表中", id)
 		}
 		if level == 0 {
-			return 0, fmt.Errorf("专精 %d 等级为 0(等级 0 应从分配中移除)", id)
+			return nil, 0, fmt.Errorf("专精 %d 等级为 0(等级 0 应从分配中移除)", id)
 		}
 		if level > row.GetMaxLevel() {
-			return 0, fmt.Errorf("专精 %d 等级 %d 超过上限 %d", id, level, row.GetMaxLevel())
+			return nil, 0, fmt.Errorf("专精 %d 等级 %d 超过上限 %d", id, level, row.GetMaxLevel())
 		}
 		if reqID := row.GetRequireTalentId(); reqID != 0 {
 			// 前置必须在**本次方案**里达标,不看历史分配。
 			if got := levels[reqID]; got < row.GetRequireTalentLevel() {
-				return 0, fmt.Errorf("专精 %d 需要前置专精 %d 达到 %d 级,本次方案只有 %d 级",
+				return nil, 0, fmt.Errorf("专精 %d 需要前置专精 %d 达到 %d 级,本次方案只有 %d 级",
 					id, reqID, row.GetRequireTalentLevel(), got)
 			}
 		}
-		// 单节点消耗已由 validateTalentRow 的上限钳在 10 万内,这里再用 uint64 累加并
-		// 逐步比对 uint32 上界,保证任意行数下都不回绕。
-		total += uint64(level) * uint64(row.GetCostPerLevel())
+		// 单节点消耗已由 validateTalentRow 的上限钳在 10 万内(level ≤ 100 × cost ≤ 1000),
+		// 单独放进 uint32 不会溢出;这里再用 uint64 累加并逐步比对 uint32 上界,
+		// 保证任意行数下总消耗都不回绕。
+		nodeCost := uint64(level) * uint64(row.GetCostPerLevel())
+		costs[id] = uint32(nodeCost)
+		total += nodeCost
 		if total > math.MaxUint32 {
-			return 0, fmt.Errorf("专精总消耗超出上限(累加到节点 %d 时已达 %d)", id, total)
+			return nil, 0, fmt.Errorf("专精总消耗超出上限(累加到节点 %d 时已达 %d)", id, total)
 		}
 	}
-	return uint32(total), nil
+	return costs, uint32(total), nil
 }

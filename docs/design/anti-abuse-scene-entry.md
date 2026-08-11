@@ -153,7 +153,7 @@ StartMatch(单人 PVE) → 分配一台 Battle GameServer(14Gi Pod)
 
 | 检查 | 状态 | 位置 |
 |---|---|---|
-| per-player 切线冷却 | ✅ **本仓唯一做对的进场侧防刷范例** | `services/battle/hub_allocator/internal/biz/hub.go:968-984`;`data/hub_repo.go:1005` `TryTransferCooldown` = `SET pandora:hub:transfer:cd:{player_id} 1 NX EX`;配置 `hub.transfer_cooldown` 默认 `10s`(`≤0` 不限流);错误码 `ErrHubTransferCooldown(5104)` |
+| per-player 切线冷却 | ✅ **本仓唯一做对的进场侧防刷范例** | `services/battle/hub_allocator/internal/biz/hub.go:968-984`;`data/hub_repo.go:1005` `TryTransferCooldown` = `SET pandora:hub:transfer_cd:<player_id> 1 NX EX`(实际键无大括号、用下划线;infra.md §3.2 登记口径一致);配置 `hub.transfer_cooldown` 默认 `10s`(`≤0` 不限流);错误码 `ErrHubTransferCooldown(5104)` |
 | 冷却先占坑、失败即释放 | ✅ | `hub.go:977-982`:`transferToLineInner` 出错时 `ClearTransferCooldown`,让玩家能立刻重试(符合 §9.20 不卡玩家) |
 | 战斗/匹配中禁止切线 | ✅ fail-closed | locator 查询失败一律拒(`ErrHubTransferNotInHub` / `ErrUnavailable`),见 `docs/incidents/2026-07-22-p0-hub-allocator-locator-fail-open.md` |
 | 临界区内会话终检 | ✅ | `hub.go:990` `requireCallerSessionCurrent` |

@@ -80,6 +80,9 @@ type Tables struct {
 	// SpawnPoint 配置表 spawn_point(关卡/s_刷怪点.xlsx)
 	SpawnPoint *SpawnPointTable
 
+	// TalentEffect 配置表 talent_effect(角色/z_专精_效果.xlsx)
+	TalentEffect *TalentEffectTable
+
 	// Talent 配置表 talent(角色/z_专精.xlsx)
 	Talent *TalentTable
 
@@ -110,6 +113,7 @@ var specByName = map[string]tableSpec{
 	"skill":               {protoName: "pandora.config.v1.SkillTableData", build: buildSkillTable},
 	"spawn_group":         {protoName: "pandora.config.v1.SpawnGroupTableData", build: buildSpawnGroupTable},
 	"spawn_point":         {protoName: "pandora.config.v1.SpawnPointTableData", build: buildSpawnPointTable},
+	"talent_effect":       {protoName: "pandora.config.v1.TalentEffectTableData", build: buildTalentEffectTable},
 	"talent":              {protoName: "pandora.config.v1.TalentTableData", build: buildTalentTable},
 	"weapon":              {protoName: "pandora.config.v1.WeaponTableData", build: buildWeaponTable},
 }
@@ -196,6 +200,15 @@ func validateCrossTables(dst *Tables) error {
 		}
 		if !dst.Level.Exists(v) {
 			return fmt.Errorf("表 spawn_point 主键 %d 的 关卡Id(%d)在表 level 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.TalentEffect.All() {
+		v := row.GetTalentId()
+		if v == 0 {
+			return fmt.Errorf("表 talent_effect 主键 %d 的 专精ID 为 0(必填外键)", row.GetId())
+		}
+		if !dst.Talent.Exists(v) {
+			return fmt.Errorf("表 talent_effect 主键 %d 的 专精ID(%d)在表 talent 中不存在", row.GetId(), v)
 		}
 	}
 	return nil
@@ -325,6 +338,20 @@ func (tb *Tables) SpawnPointLevelIdRowByID(id uint32) (*configpb.LevelRow, bool)
 		return nil, false
 	}
 	return tb.SpawnPointLevelIdRow(row)
+}
+
+// TalentEffectTalentIdRow 解析 talent_effect.专精ID → talent 行(外键正查)。
+func (tb *Tables) TalentEffectTalentIdRow(row *configpb.TalentEffectRow) (*configpb.TalentRow, bool) {
+	return tb.Talent.ByID(row.GetTalentId())
+}
+
+// TalentEffectTalentIdRowByID 按 talent_effect 主键取行再解析 专精ID → talent 行。
+func (tb *Tables) TalentEffectTalentIdRowByID(id uint32) (*configpb.TalentRow, bool) {
+	row, ok := tb.TalentEffect.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.TalentEffectTalentIdRow(row)
 }
 
 func buildChestDropTable(raw []byte, mt ManifestTable, dst *Tables) error {
@@ -660,6 +687,22 @@ func buildSpawnPointTable(raw []byte, mt ManifestTable, dst *Tables) error {
 		return err
 	}
 	dst.SpawnPoint = t
+	return nil
+}
+
+func buildTalentEffectTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.TalentEffectTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 talent_effect 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 talent_effect 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newTalentEffectTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.TalentEffect = t
 	return nil
 }
 

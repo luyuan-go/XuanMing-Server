@@ -13,13 +13,16 @@ function Assert-True([bool]$Condition, [string]$Message) {
 $systemMethods = @(
     'GrantItems',
     'GrantInstances',
+    'ConsumeBattleItem',
+    'DiscardBattleItem',
     'FreezeForOrder',
     'EnsureAuctionEscrow',
     'SettleAuctionMatch',
     'SettlePlayerTrade',
     'ReleaseEscrow',
     # 2026-07-25:player.SetEquipment 拥有权校验用的系统查询,玩家可调即可探测他人背包。
-    'CheckItemsOwned'
+    'CheckItemsOwned',
+    'CheckInstancesOwned'
 )
 $catchAll = 'prefix: "/pandora.inventory.v1.InventoryService/"'
 $catchAllIndex = $manifest.LastIndexOf($catchAll, [StringComparison]::Ordinal)
@@ -35,7 +38,7 @@ foreach ($method in $systemMethods) {
 }
 
 # 玩家自助方法继续由 JWT + Inventory 业务权限校验，不得被本组内部 RPC 规则误封。
-foreach ($method in @('GetInventory', 'UseItem', 'SellItem', 'IdentifyItem', 'DiscardInstance', 'MoveInstance')) {
+foreach ($method in @('GetInventory', 'UseItem', 'SellItem', 'DiscardItem', 'IdentifyItem', 'DiscardInstance', 'MoveInstance', 'SellInstance')) {
     $path = "/pandora.inventory.v1.InventoryService/$method"
     Assert-True (-not [regex]::IsMatch($manifest,
         '(?ms)path:\s*"' + [regex]::Escape($path) + '"\s*\r?\n\s*direct_response:\s*\{\s*status:\s*403\b')) `

@@ -105,6 +105,47 @@ func TestLogin_IPDimensionLocksAcrossAccounts(t *testing.T) {
 	}
 }
 
+// TestLogin_FailQuotaCaseVariantsShareCounter:大小写/尾空格变体必须共享同一账号维度计数,
+// 否则撞库可用 alice/Alice/ALICE 各享独立预算绕过账号锁(账号权威是大小写不敏感 collation)。
+func TestLogin_FailQuotaCaseVariantsShareCounter(t *testing.T) {
+	uc, _ := newQuotaUsecase(t, 15*time.Minute, 5*time.Minute)
+	ctx := context.Background()
+
+	// 对同一真实账号用 3 个变体各失败一次 → 归一化后共享计数 → 第 3 次即达限布锁。
+	for _, variant := range []string{"acc", "ACC", " Acc "} {
+		if _, err := uc.Login(ctx, variant, "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+			t.Fatalf("variant %q want password mismatch, got %v", variant, err)
+		}
+	}
+	// 任一变体(含原文)此时都应被锁——账号维度未被大小写绕过。
+	if _, err := uc.Login(ctx, "acc", "pw", "dev"); errcode.As(err) != errcode.ErrRateLimited {
+		t.Fatalf("after 3 case-variant failures account must be locked, got %v", err)
+	}
+}
+
+// TestLogin_LockResetsCounterSoSingleFailureDoesNotRelock:锁到期后单次失败不得立即重锁
+// (计数窗 > 锁窗时的续锁攻击);锁时清零计数,恢复后需重新攒满 limit 次。
+func TestLogin_LockResetsCounterSoSingleFailureDoesNotRelock(t *testing.T) {
+	uc, mr := newQuotaUsecase(t, 15*time.Minute, 5*time.Minute) // window 15m > lock 5m
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		if _, err := uc.Login(ctx, "acc", "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+			t.Fatalf("fail #%d: %v", i+1, err)
+		}
+	}
+	// 锁到期。
+	mr.FastForward(5*time.Minute + time.Millisecond)
+	// 单次失败不应立即重锁(计数已在布锁时清零,现在只是第 1 次)。
+	if _, err := uc.Login(ctx, "acc", "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+		t.Fatalf("single post-lock failure should be plain mismatch, got %v", err)
+	}
+	// 正确密码此刻必须能进(未被单次失败重锁)。
+	if _, err := uc.Login(ctx, "acc", "pw", "dev"); err != nil {
+		t.Fatalf("must not be re-locked by a single post-expiry failure, got %v", err)
+	}
+}
+
 func TestLogin_FailQuotaFailOpenOnRedisError(t *testing.T) {
 	cfg := auth.Config{Secret: []byte(testSecret)}
 	signer, _ := auth.NewSigner(cfg)

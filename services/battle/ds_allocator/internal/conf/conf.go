@@ -418,11 +418,11 @@ type AllocatorConf struct {
 	// 记账在本服务(判弃权威),执行在 matchmaker StartMatch(读 pandora:rl:match:noshowcd)。
 	// 背压非权威门:Redis 故障只 Warn 不阻断判弃收尾。
 
-	// NoShowLedgerWindow 记账窗口(默认 10min;<=0 关闭整个记罚)。窗口内累计 no-show 次数,
-	// 决定退避档位;PX 自过期,无后台清理。
+	// NoShowLedgerWindow 记账窗口(默认 10min;**负值**关闭整个记罚,0=用默认)。窗口内累计
+	// no-show 次数,决定退避档位;PX 自过期,无后台清理。
 	NoShowLedgerWindow config.Duration `yaml:"no_show_ledger_window,omitempty" json:"no_show_ledger_window,omitempty"`
 
-	// NoShowPenaltyBase 首个受罚档位的退避时长(默认 30s;<=0 关闭记罚)。
+	// NoShowPenaltyBase 首个受罚档位的退避时长(默认 30s;**负值**关闭记罚,0=用默认)。
 	// 之后每多一次翻倍:30s→60s→120s→…,封顶 NoShowPenaltyCap。
 	NoShowPenaltyBase config.Duration `yaml:"no_show_penalty_base,omitempty" json:"no_show_penalty_base,omitempty"`
 

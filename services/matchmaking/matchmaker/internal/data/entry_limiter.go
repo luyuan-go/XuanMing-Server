@@ -8,9 +8,12 @@
 // key 由 ds_allocator 写、本服务读,两端都经 redisx.RLKey 构造,不得各自拼字符串):
 //
 //	pandora:rl:match:start:<captain_id>      StartMatch per-队长冷却
-//	pandora:rl:match:startteam:<team_id>     StartMatch per-队伍冷却
 //	pandora:rl:match:form:<ticket_id>        成局级冷却(含容量耗尽静默窗)
 //	pandora:rl:match:noshowcd:<player_id>    no-show 进入侧退避(写者 ds_allocator)
+//
+// 刻意只按队长(captain_id)计,不按 team_id:captain_id 来自 JWT(service 层 callerID),
+// 攻击者只能占用自己作为队长的键,天然自限;而 team_id 来自请求体、未经校验,若按它占坑
+// 会变成「刷任意 team_id 压制他人队伍进场」的定向骚扰原语(冷却门在成员校验之前),得不偿失。
 package data
 
 import (
@@ -30,38 +33,15 @@ func NewRedisEntryLimiter(rdb redis.UniversalClient) *RedisEntryLimiter {
 	return &RedisEntryLimiter{rdb: rdb}
 }
 
-// TryStartCooldown 依次占用队长与队伍两个冷却窗。任一在窗内 → 拒绝;
-// 队长占成而队伍被拒时回收队长窗,避免半占状态双重惩罚下一次合法重试。
-// teamID 为 0 时只按队长限(防御:调用方契约上 teamID 恒非 0)。
+// TryStartCooldown 占用队长冷却窗(按 JWT 身份的 captain_id,自限、不可用于骚扰他人)。
+// teamID 参数保留在签名里仅为接口稳定,当前不参与占坑(见文件头说明)。
 func (l *RedisEntryLimiter) TryStartCooldown(ctx context.Context, captainID, teamID uint64, window time.Duration) (bool, error) {
-	capKey := redisx.RLKey("match", "start", captainID)
-	ok, err := redisx.Cooldown(ctx, l.rdb, capKey, window)
-	if err != nil || !ok {
-		return ok, err // 原语契约:err 时 ok=true(fail-open)
-	}
-	if teamID == 0 {
-		return true, nil
-	}
-	teamOK, err := redisx.Cooldown(ctx, l.rdb, redisx.RLKey("match", "startteam", teamID), window)
-	if err != nil {
-		return true, err
-	}
-	if !teamOK {
-		_ = redisx.ClearCooldown(ctx, l.rdb, capKey)
-		return false, nil
-	}
-	return true, nil
+	return redisx.Cooldown(ctx, l.rdb, redisx.RLKey("match", "start", captainID), window)
 }
 
-// ClearStartCooldown 释放两个冷却窗(StartMatch 占窗后业务失败时调用,§9.20 立即可重试)。
+// ClearStartCooldown 释放队长冷却窗(StartMatch 占窗后业务失败时调用,§9.20 立即可重试)。
 func (l *RedisEntryLimiter) ClearStartCooldown(ctx context.Context, captainID, teamID uint64) error {
-	err := redisx.ClearCooldown(ctx, l.rdb, redisx.RLKey("match", "start", captainID))
-	if teamID != 0 {
-		if terr := redisx.ClearCooldown(ctx, l.rdb, redisx.RLKey("match", "startteam", teamID)); err == nil {
-			err = terr
-		}
-	}
-	return err
+	return redisx.ClearCooldown(ctx, l.rdb, redisx.RLKey("match", "start", captainID))
 }
 
 // TryFormCooldown 成局提交前占用本票据的成局冷却窗(首次零延迟,窗内重成局拒绝)。
