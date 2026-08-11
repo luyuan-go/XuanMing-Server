@@ -57,14 +57,14 @@ spec:
               # Agones 自动注入 SDK sidecar；DS 内 UPandoraAgonesSubsystem 走 sidecar HTTP 调 Ready/Health/Shutdown。
               # 镜像一律钉**不可变 tag**,与 30-fleet-hub.yaml 同改同收(P1-4,§9.21;推导与换版
               # 流程见该文件注释)。canary 轨换新版本时改本行为新的不可变 tag。
-              # 2026-08-10 与 stable 同步换到 r1949(四份 Fleet 同版:battle/hub × stable/canary)。
+              # 2026-08-10 与 stable 同步换到 r1955(四份 Fleet 同版:battle/hub × stable/canary)。
               # 与 battle 同一构建;hub 与 battle 不同版会让玩家 travel 时撞上不同的
               # PandoraNetProtocolVersion(依据见 30-fleet-hub.yaml 该行注释)。
               # ⚠️ 漏改 canary 的代价见 21-fleet-battle-canary.yaml 该行注释:start.ps1 会为残留的
               # 旧 tag 去制品库重建镜像,把 stage 降级覆盖,一键启动在降级守卫处 fail-closed 中断。
               # 注:canary 与 stable 钉同一 tag = 灰度轨当前无差异版本;真正灰度时本行必须换成
               # 与 stable **不同** digest 的新镜像。
-              image: pandora/hub-ds:r1949-dirty-20260810-054629
+              image: pandora/hub-ds:r1955-dirty-20260810-093912
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT
