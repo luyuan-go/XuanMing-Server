@@ -76,6 +76,11 @@ const (
 	ErrPlayerInsufficientPoints Code = 2021 // 属性点不足
 	ErrRewardAlreadyClaimed     Code = 2030 // 该奖励档位已领取(幂等命中)
 	ErrRewardUnknownID          Code = 2031 // 奖励配置 ID 非法 / 不在 bit 索引上界内
+
+	ErrSkillCardNotOwned           Code = 2040 // 未持有该技能卡(升级 / 装配前置)
+	ErrSkillCardMaxLevel           Code = 2041 // 已达该卡等级上限
+	ErrSkillCardInsufficientShards Code = 2042 // 碎片不足
+	ErrSkillCardSlotInvalid        Code = 2043 // 卡槽序号越界 / 同一张卡占了多个槽
 )
 
 // team(3000-3999)

@@ -21,6 +21,7 @@
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/arenastring.h"
+#include "google/protobuf/generated_message_bases.h"
 #include "google/protobuf/generated_message_tctable_decl.h"
 #include "google/protobuf/generated_message_util.h"
 #include "google/protobuf/metadata_lite.h"
@@ -76,6 +77,22 @@ extern DSTicketGlobalsTypeInternal DSTicket_globals_;
 extern const ::google::protobuf::internal::ClassDataFull DSTicket_class_data_;
 #else
 extern const DSTicketGlobalsTypeInternal DSTicket_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetRegisterNoRequest;
+struct GetRegisterNoRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetRegisterNoRequestGlobalsTypeInternal GetRegisterNoRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetRegisterNoRequest_class_data_;
+#else
+extern const GetRegisterNoRequestGlobalsTypeInternal GetRegisterNoRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetRegisterNoResponse;
+struct GetRegisterNoResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetRegisterNoResponseGlobalsTypeInternal GetRegisterNoResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetRegisterNoResponse_class_data_;
+#else
+extern const GetRegisterNoResponseGlobalsTypeInternal GetRegisterNoResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetResumeContextRequest;
 struct GetResumeContextRequestGlobalsTypeInternal;
@@ -727,7 +744,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectRoleResponse final : public :
   [[nodiscard]] static const SelectRoleResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectRoleResponse>(&SelectRoleResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(SelectRoleResponse& a, SelectRoleResponse& b) { a.Swap(&b); }
   inline void Swap(SelectRoleResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -962,7 +979,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectRoleRequest final : public ::
   [[nodiscard]] static const SelectRoleRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectRoleRequest>(&SelectRoleRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(SelectRoleRequest& a, SelectRoleRequest& b) { a.Swap(&b); }
   inline void Swap(SelectRoleRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2917,6 +2934,357 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetResumeContextRequest final : pub
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRegisterNoResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.GetRegisterNoResponse) */ {
+ public:
+  inline GetRegisterNoResponse() : GetRegisterNoResponse(nullptr) {}
+  ~GetRegisterNoResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetRegisterNoResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetRegisterNoResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetRegisterNoResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetRegisterNoResponse(const GetRegisterNoResponse& from) : GetRegisterNoResponse(nullptr, from) {}
+  inline GetRegisterNoResponse(GetRegisterNoResponse&& from) noexcept : GetRegisterNoResponse(nullptr, ::std::move(from)) {}
+  inline GetRegisterNoResponse& operator=(const GetRegisterNoResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetRegisterNoResponse& operator=(GetRegisterNoResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetRegisterNoResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRegisterNoResponse>(&GetRegisterNoResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(GetRegisterNoResponse& a, GetRegisterNoResponse& b) { a.Swap(&b); }
+  inline void Swap(GetRegisterNoResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetRegisterNoResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetRegisterNoResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetRegisterNoResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetRegisterNoResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetRegisterNoResponse& from) { GetRegisterNoResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetRegisterNoResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.GetRegisterNoResponse"; }
+
+  explicit GetRegisterNoResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetRegisterNoResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetRegisterNoResponse& from);
+  GetRegisterNoResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetRegisterNoResponse&& from) noexcept
+      : GetRegisterNoResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRegisterNoFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // uint64 register_no = 2 [json_name = "registerNo"];
+  void clear_register_no() ;
+  [[nodiscard]] ::uint64_t register_no() const;
+  void set_register_no(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_register_no() const;
+  void _internal_set_register_no(::uint64_t value);
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.GetRegisterNoResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetRegisterNoResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t register_no_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRegisterNoRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.GetRegisterNoRequest) */ {
+ public:
+  inline GetRegisterNoRequest() : GetRegisterNoRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetRegisterNoRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetRegisterNoRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetRegisterNoRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetRegisterNoRequest(const GetRegisterNoRequest& from) : GetRegisterNoRequest(nullptr, from) {}
+  inline GetRegisterNoRequest(GetRegisterNoRequest&& from) noexcept : GetRegisterNoRequest(nullptr, ::std::move(from)) {}
+  inline GetRegisterNoRequest& operator=(const GetRegisterNoRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetRegisterNoRequest& operator=(GetRegisterNoRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetRegisterNoRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRegisterNoRequest>(&GetRegisterNoRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(GetRegisterNoRequest& a, GetRegisterNoRequest& b) { a.Swap(&b); }
+  inline void Swap(GetRegisterNoRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetRegisterNoRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetRegisterNoRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<GetRegisterNoRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const GetRegisterNoRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const GetRegisterNoRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.GetRegisterNoRequest"; }
+
+  explicit GetRegisterNoRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetRegisterNoRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetRegisterNoRequest& from);
+  GetRegisterNoRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetRegisterNoRequest&& from) noexcept
+      : GetRegisterNoRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.GetRegisterNoRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
   friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
 };
 // -------------------------------------------------------------------
@@ -7788,6 +8156,62 @@ inline void VerifyDSTicketResponse::set_allocated_claims(::pandora::login::v1::D
 
   _impl_.claims_ = reinterpret_cast<::pandora::login::v1::DSTicket*>(value);
   // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.VerifyDSTicketResponse.claims)
+}
+
+// -------------------------------------------------------------------
+
+// GetRegisterNoRequest
+
+// -------------------------------------------------------------------
+
+// GetRegisterNoResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void GetRegisterNoResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode GetRegisterNoResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.GetRegisterNoResponse.code)
+  return _internal_code();
+}
+inline void GetRegisterNoResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.GetRegisterNoResponse.code)
+}
+inline ::pandora::common::v1::ErrCode GetRegisterNoResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void GetRegisterNoResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// uint64 register_no = 2 [json_name = "registerNo"];
+inline void GetRegisterNoResponse::clear_register_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.register_no_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GetRegisterNoResponse::register_no() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.GetRegisterNoResponse.register_no)
+  return _internal_register_no();
+}
+inline void GetRegisterNoResponse::set_register_no(::uint64_t value) {
+  _internal_set_register_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.GetRegisterNoResponse.register_no)
+}
+inline ::uint64_t GetRegisterNoResponse::_internal_register_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.register_no_;
+}
+inline void GetRegisterNoResponse::_internal_set_register_no(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.register_no_ = value;
 }
 
 // -------------------------------------------------------------------

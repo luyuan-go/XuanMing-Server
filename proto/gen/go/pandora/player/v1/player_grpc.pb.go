@@ -44,6 +44,10 @@ const (
 	PlayerService_SetTalents_FullMethodName              = "/pandora.player.v1.PlayerService/SetTalents"
 	PlayerService_ResetTalents_FullMethodName            = "/pandora.player.v1.PlayerService/ResetTalents"
 	PlayerService_GetTalents_FullMethodName              = "/pandora.player.v1.PlayerService/GetTalents"
+	PlayerService_GrantSkillCards_FullMethodName         = "/pandora.player.v1.PlayerService/GrantSkillCards"
+	PlayerService_UpgradeSkillCard_FullMethodName        = "/pandora.player.v1.PlayerService/UpgradeSkillCard"
+	PlayerService_SetSkillSlots_FullMethodName           = "/pandora.player.v1.PlayerService/SetSkillSlots"
+	PlayerService_GetSkillCards_FullMethodName           = "/pandora.player.v1.PlayerService/GetSkillCards"
 	PlayerService_GetLoadout_FullMethodName              = "/pandora.player.v1.PlayerService/GetLoadout"
 	PlayerService_ClaimReward_FullMethodName             = "/pandora.player.v1.PlayerService/ClaimReward"
 	PlayerService_GetRewardClaims_FullMethodName         = "/pandora.player.v1.PlayerService/GetRewardClaims"
@@ -78,6 +82,12 @@ type PlayerServiceClient interface {
 	SetTalents(ctx context.Context, in *SetTalentsRequest, opts ...grpc.CallOption) (*SetTalentsResponse, error)
 	ResetTalents(ctx context.Context, in *ResetTalentsRequest, opts ...grpc.CallOption) (*ResetTalentsResponse, error)
 	GetTalents(ctx context.Context, in *GetTalentsRequest, opts ...grpc.CallOption) (*GetTalentsResponse, error)
+	// 技能卡:持有(GrantSkillCards 系统发放)、培养(UpgradeSkillCard 消耗碎片升级)、
+	// 更换(SetSkillSlots 全量替换卡槽装配)。
+	GrantSkillCards(ctx context.Context, in *GrantSkillCardsRequest, opts ...grpc.CallOption) (*GrantSkillCardsResponse, error)
+	UpgradeSkillCard(ctx context.Context, in *UpgradeSkillCardRequest, opts ...grpc.CallOption) (*UpgradeSkillCardResponse, error)
+	SetSkillSlots(ctx context.Context, in *SetSkillSlotsRequest, opts ...grpc.CallOption) (*SetSkillSlotsResponse, error)
+	GetSkillCards(ctx context.Context, in *GetSkillCardsRequest, opts ...grpc.CallOption) (*GetSkillCardsResponse, error)
 	GetLoadout(ctx context.Context, in *GetLoadoutRequest, opts ...grpc.CallOption) (*GetLoadoutResponse, error)
 	// ── 领奖(签到里程碑 / 成就 / 新手 / 永久任务 / 活动)──
 	// 客户端经 Envoy 调用领取奖励档位;服务端权威判重幂等(不变量 §2 / §7),
@@ -283,6 +293,46 @@ func (c *playerServiceClient) GetTalents(ctx context.Context, in *GetTalentsRequ
 	return out, nil
 }
 
+func (c *playerServiceClient) GrantSkillCards(ctx context.Context, in *GrantSkillCardsRequest, opts ...grpc.CallOption) (*GrantSkillCardsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GrantSkillCardsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GrantSkillCards_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) UpgradeSkillCard(ctx context.Context, in *UpgradeSkillCardRequest, opts ...grpc.CallOption) (*UpgradeSkillCardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpgradeSkillCardResponse)
+	err := c.cc.Invoke(ctx, PlayerService_UpgradeSkillCard_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) SetSkillSlots(ctx context.Context, in *SetSkillSlotsRequest, opts ...grpc.CallOption) (*SetSkillSlotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSkillSlotsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_SetSkillSlots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GetSkillCards(ctx context.Context, in *GetSkillCardsRequest, opts ...grpc.CallOption) (*GetSkillCardsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSkillCardsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GetSkillCards_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *playerServiceClient) GetLoadout(ctx context.Context, in *GetLoadoutRequest, opts ...grpc.CallOption) (*GetLoadoutResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetLoadoutResponse)
@@ -351,6 +401,12 @@ type PlayerServiceServer interface {
 	SetTalents(context.Context, *SetTalentsRequest) (*SetTalentsResponse, error)
 	ResetTalents(context.Context, *ResetTalentsRequest) (*ResetTalentsResponse, error)
 	GetTalents(context.Context, *GetTalentsRequest) (*GetTalentsResponse, error)
+	// 技能卡:持有(GrantSkillCards 系统发放)、培养(UpgradeSkillCard 消耗碎片升级)、
+	// 更换(SetSkillSlots 全量替换卡槽装配)。
+	GrantSkillCards(context.Context, *GrantSkillCardsRequest) (*GrantSkillCardsResponse, error)
+	UpgradeSkillCard(context.Context, *UpgradeSkillCardRequest) (*UpgradeSkillCardResponse, error)
+	SetSkillSlots(context.Context, *SetSkillSlotsRequest) (*SetSkillSlotsResponse, error)
+	GetSkillCards(context.Context, *GetSkillCardsRequest) (*GetSkillCardsResponse, error)
 	GetLoadout(context.Context, *GetLoadoutRequest) (*GetLoadoutResponse, error)
 	// ── 领奖(签到里程碑 / 成就 / 新手 / 永久任务 / 活动)──
 	// 客户端经 Envoy 调用领取奖励档位;服务端权威判重幂等(不变量 §2 / §7),
@@ -428,6 +484,18 @@ func (UnimplementedPlayerServiceServer) ResetTalents(context.Context, *ResetTale
 }
 func (UnimplementedPlayerServiceServer) GetTalents(context.Context, *GetTalentsRequest) (*GetTalentsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTalents not implemented")
+}
+func (UnimplementedPlayerServiceServer) GrantSkillCards(context.Context, *GrantSkillCardsRequest) (*GrantSkillCardsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GrantSkillCards not implemented")
+}
+func (UnimplementedPlayerServiceServer) UpgradeSkillCard(context.Context, *UpgradeSkillCardRequest) (*UpgradeSkillCardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpgradeSkillCard not implemented")
+}
+func (UnimplementedPlayerServiceServer) SetSkillSlots(context.Context, *SetSkillSlotsRequest) (*SetSkillSlotsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetSkillSlots not implemented")
+}
+func (UnimplementedPlayerServiceServer) GetSkillCards(context.Context, *GetSkillCardsRequest) (*GetSkillCardsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSkillCards not implemented")
 }
 func (UnimplementedPlayerServiceServer) GetLoadout(context.Context, *GetLoadoutRequest) (*GetLoadoutResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLoadout not implemented")
@@ -785,6 +853,78 @@ func _PlayerService_GetTalents_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerService_GrantSkillCards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GrantSkillCardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GrantSkillCards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GrantSkillCards_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GrantSkillCards(ctx, req.(*GrantSkillCardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_UpgradeSkillCard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpgradeSkillCardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).UpgradeSkillCard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_UpgradeSkillCard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).UpgradeSkillCard(ctx, req.(*UpgradeSkillCardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_SetSkillSlots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSkillSlotsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).SetSkillSlots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_SetSkillSlots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).SetSkillSlots(ctx, req.(*SetSkillSlotsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GetSkillCards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSkillCardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GetSkillCards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GetSkillCards_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GetSkillCards(ctx, req.(*GetSkillCardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlayerService_GetLoadout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetLoadoutRequest)
 	if err := dec(in); err != nil {
@@ -935,6 +1075,22 @@ var PlayerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTalents",
 			Handler:    _PlayerService_GetTalents_Handler,
+		},
+		{
+			MethodName: "GrantSkillCards",
+			Handler:    _PlayerService_GrantSkillCards_Handler,
+		},
+		{
+			MethodName: "UpgradeSkillCard",
+			Handler:    _PlayerService_UpgradeSkillCard_Handler,
+		},
+		{
+			MethodName: "SetSkillSlots",
+			Handler:    _PlayerService_SetSkillSlots_Handler,
+		},
+		{
+			MethodName: "GetSkillCards",
+			Handler:    _PlayerService_GetSkillCards_Handler,
 		},
 		{
 			MethodName: "GetLoadout",

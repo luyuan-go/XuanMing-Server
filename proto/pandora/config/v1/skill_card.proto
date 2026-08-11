@@ -1,0 +1,70 @@
+// Pandora 配置表:技能卡表 + 技能卡升级消耗表。
+//
+// 源表:Pandora-Client-SVN/Table/技能/j_技能卡.xlsx、j_技能卡升级.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/skill_card.json、skill_card_upgrade.json。
+//
+// === 域模型 ===
+// 一张技能卡 = 一个可装配的技能来源。玩家持有卡(可重复持有 → 攒碎片)、升卡、把卡装到卡槽;
+// 卡槽对应战斗内的技能位。卡本体是配置(SkillCardRow),玩家的持有状态是存档
+// (player_skill_cards:等级 + 碎片余量),装配是存档(player_skill_slots)。
+//
+// === 为什么升级消耗按稀有度而不是按卡 ===
+// 同稀有度的卡走同一条曲线是策划的普遍做法,按卡填会让每加一张卡就要补 4 行,
+// 且这 4 行几乎总是复制粘贴——复制粘贴出来的表就是漂移源。稀有度维度让
+// "调整传说卡养成节奏" 变成改 4 行而不是改 4×N 行。
+// 若将来确有单卡特例,再加一张按卡覆盖的子表,不影响本表结构(§15.3 不预留空列)。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// SkillCardRow 技能卡表一行(列序 = 字段号序 = 表头 A..E)。
+message SkillCardRow {
+  // ID(卡主键;玩家存档以本值定位持有的卡)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 名称(卡面显示名)
+  string name = 2 [(excel_col) = "名称", (excel_required) = true];
+  // 技能ID(该卡装配后释放的技能;指向 j_技能.xlsx)。
+  //   启用外键校验:指向不存在的技能的卡装上去只会是个空槽,必须在加载期挡住。
+  uint32 skill_id = 3 [(excel_col) = "技能ID", (excel_required) = true, (excel_fk) = "skill"];
+  // 稀有度(1=普通 2=稀有 3=史诗 4=传说;决定走哪条升级消耗曲线)。
+  //   不设 (excel_fk):稀有度不是独立表,取值合法性由伴生校验按枚举挡。
+  uint32 rarity = 4 [(excel_col) = "稀有度", (excel_required) = true];
+  // 等级上限(该卡最高可升到的等级;>=1,1 表示不可升级)
+  uint32 max_level = 5 [(excel_col) = "等级上限", (excel_required) = true];
+}
+
+// SkillCardTableData 技能卡整表容器(excel_file 注解 = 导表登记)。
+message SkillCardTableData {
+  option (excel_file) = "技能/j_技能卡.xlsx";
+  // 版式:第 1 行表头、2~3 行列说明,数据自第 4 行起。
+  option (excel_data_start_row) = 4;
+
+  repeated SkillCardRow rows = 1;
+}
+
+// SkillCardUpgradeRow 技能卡升级消耗表一行(列序 = 字段号序 = 表头 A..D)。
+//
+// 一行 =「某稀有度的卡,从 level-1 升到 level,需要多少碎片」。
+message SkillCardUpgradeRow {
+  // ID(行主键)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 稀有度(与 SkillCardRow.rarity 对应)
+  uint32 rarity = 2 [(excel_col) = "稀有度", (excel_required) = true];
+  // 目标等级(升到该等级;从 2 起——1 级是获得卡时的初始等级,不需要消耗)
+  uint32 level = 3 [(excel_col) = "目标等级", (excel_required) = true];
+  // 碎片消耗(升到该等级所需碎片数;须 > 0,0 等于免费升级)
+  uint32 shard_cost = 4 [(excel_col) = "碎片消耗", (excel_required) = true];
+}
+
+// SkillCardUpgradeTableData 技能卡升级消耗整表容器。
+message SkillCardUpgradeTableData {
+  option (excel_file) = "技能/j_技能卡升级.xlsx";
+  option (excel_data_start_row) = 4;
+
+  repeated SkillCardUpgradeRow rows = 1;
+}

@@ -66,6 +66,10 @@ enum ErrCode {
   ERR_PLAYER_INSUFFICIENT_POINTS = 2021;
   ERR_REWARD_ALREADY_CLAIMED   = 2030;  // 该奖励档位已领取(幂等命中)
   ERR_REWARD_UNKNOWN_ID        = 2031;  // 奖励配置 ID 非法 / 超出 bit 索引上界
+  ERR_SKILL_CARD_NOT_OWNED     = 2040;  // 未持有该技能卡(升级 / 装配前置)
+  ERR_SKILL_CARD_MAX_LEVEL     = 2041;  // 已达该卡等级上限,无法继续升级
+  ERR_SKILL_CARD_INSUFFICIENT_SHARDS = 2042;  // 碎片不足,无法升级
+  ERR_SKILL_CARD_SLOT_INVALID  = 2043;  // 卡槽序号越界 / 同一张卡占了多个槽
 
   // 3000-3999 team
   ERR_TEAM_NOT_FOUND           = 3001;

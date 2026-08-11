@@ -2428,7 +2428,627 @@ func (x *GetTalentsResponse) GetUnspentPoints() int32 {
 	return 0
 }
 
-// PlayerLoadout 是开战前快照(出战英雄 + 属性点 + 装备预设 + 天赋),供匹配/进战下发(客户端可见结构)。
+// SkillCard 是玩家持有的一张技能卡(客户端可见结构)。
+//
+//	card_id 指向 j_技能卡.xlsx;level 是已培养等级(>=1,获得即 1 级);
+//	shards 是该卡当前碎片余量(升级消耗从这里扣;重复获得同名卡转化为碎片)。
+type SkillCard struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CardId        uint32                 `protobuf:"varint,1,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	Level         uint32                 `protobuf:"varint,2,opt,name=level,proto3" json:"level,omitempty"`
+	Shards        uint32                 `protobuf:"varint,3,opt,name=shards,proto3" json:"shards,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SkillCard) Reset() {
+	*x = SkillCard{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillCard) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillCard) ProtoMessage() {}
+
+func (x *SkillCard) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillCard.ProtoReflect.Descriptor instead.
+func (*SkillCard) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *SkillCard) GetCardId() uint32 {
+	if x != nil {
+		return x.CardId
+	}
+	return 0
+}
+
+func (x *SkillCard) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *SkillCard) GetShards() uint32 {
+	if x != nil {
+		return x.Shards
+	}
+	return 0
+}
+
+// SkillSlot 是一个技能卡槽的装配(大厅态;开战前随 Loadout 下发,DS 据此给技能)。
+//
+//	slot 是槽位序号(0..N-1);card_id 是装在该槽的卡,0 表示空槽。
+type SkillSlot struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
+	CardId        uint32                 `protobuf:"varint,2,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SkillSlot) Reset() {
+	*x = SkillSlot{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillSlot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillSlot) ProtoMessage() {}
+
+func (x *SkillSlot) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillSlot.ProtoReflect.Descriptor instead.
+func (*SkillSlot) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *SkillSlot) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *SkillSlot) GetCardId() uint32 {
+	if x != nil {
+		return x.CardId
+	}
+	return 0
+}
+
+// GrantSkillCards 幂等发放技能卡 / 碎片(系统 RPC,不经 Envoy;来源:抽卡 / 活动 / GM)。
+//
+//	已持有该卡时,shards 累加到碎片余量;未持有则以 1 级建卡并把 shards 记为初始余量。
+type GrantSkillCardsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Grants         []*SkillCardGrant      `protobuf:"bytes,2,rep,name=grants,proto3" json:"grants,omitempty"`
+	IdempotencyKey string                 `protobuf:"bytes,3,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GrantSkillCardsRequest) Reset() {
+	*x = GrantSkillCardsRequest{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GrantSkillCardsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GrantSkillCardsRequest) ProtoMessage() {}
+
+func (x *GrantSkillCardsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GrantSkillCardsRequest.ProtoReflect.Descriptor instead.
+func (*GrantSkillCardsRequest) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *GrantSkillCardsRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GrantSkillCardsRequest) GetGrants() []*SkillCardGrant {
+	if x != nil {
+		return x.Grants
+	}
+	return nil
+}
+
+func (x *GrantSkillCardsRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+// SkillCardGrant 一次发放中的一项。shards 可以为 0——那表示"只解锁这张卡,不给碎片"。
+type SkillCardGrant struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CardId        uint32                 `protobuf:"varint,1,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	Shards        uint32                 `protobuf:"varint,2,opt,name=shards,proto3" json:"shards,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SkillCardGrant) Reset() {
+	*x = SkillCardGrant{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillCardGrant) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillCardGrant) ProtoMessage() {}
+
+func (x *SkillCardGrant) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillCardGrant.ProtoReflect.Descriptor instead.
+func (*SkillCardGrant) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *SkillCardGrant) GetCardId() uint32 {
+	if x != nil {
+		return x.CardId
+	}
+	return 0
+}
+
+func (x *SkillCardGrant) GetShards() uint32 {
+	if x != nil {
+		return x.Shards
+	}
+	return 0
+}
+
+type GrantSkillCardsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          v1.ErrCode             `protobuf:"varint,1,opt,name=code,proto3,enum=pandora.common.v1.ErrCode" json:"code,omitempty"`
+	Cards         []*SkillCard           `protobuf:"bytes,2,rep,name=cards,proto3" json:"cards,omitempty"`      // 发放后该玩家的全部持有卡
+	Already       bool                   `protobuf:"varint,3,opt,name=already,proto3" json:"already,omitempty"` // true = 幂等命中,本次未重复发放
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GrantSkillCardsResponse) Reset() {
+	*x = GrantSkillCardsResponse{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GrantSkillCardsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GrantSkillCardsResponse) ProtoMessage() {}
+
+func (x *GrantSkillCardsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GrantSkillCardsResponse.ProtoReflect.Descriptor instead.
+func (*GrantSkillCardsResponse) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *GrantSkillCardsResponse) GetCode() v1.ErrCode {
+	if x != nil {
+		return x.Code
+	}
+	return v1.ErrCode(0)
+}
+
+func (x *GrantSkillCardsResponse) GetCards() []*SkillCard {
+	if x != nil {
+		return x.Cards
+	}
+	return nil
+}
+
+func (x *GrantSkillCardsResponse) GetAlready() bool {
+	if x != nil {
+		return x.Already
+	}
+	return false
+}
+
+// UpgradeSkillCard 消耗碎片把一张卡升一级(每次只升一级,便于客户端逐级确认消耗)。
+type UpgradeSkillCardRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	CardId        uint32                 `protobuf:"varint,2,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpgradeSkillCardRequest) Reset() {
+	*x = UpgradeSkillCardRequest{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpgradeSkillCardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpgradeSkillCardRequest) ProtoMessage() {}
+
+func (x *UpgradeSkillCardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpgradeSkillCardRequest.ProtoReflect.Descriptor instead.
+func (*UpgradeSkillCardRequest) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *UpgradeSkillCardRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *UpgradeSkillCardRequest) GetCardId() uint32 {
+	if x != nil {
+		return x.CardId
+	}
+	return 0
+}
+
+type UpgradeSkillCardResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          v1.ErrCode             `protobuf:"varint,1,opt,name=code,proto3,enum=pandora.common.v1.ErrCode" json:"code,omitempty"`
+	Card          *SkillCard             `protobuf:"bytes,2,opt,name=card,proto3" json:"card,omitempty"`                             // 升级后的该卡状态(等级 + 剩余碎片)
+	ShardCost     uint32                 `protobuf:"varint,3,opt,name=shard_cost,json=shardCost,proto3" json:"shard_cost,omitempty"` // 本次实际消耗的碎片数
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpgradeSkillCardResponse) Reset() {
+	*x = UpgradeSkillCardResponse{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpgradeSkillCardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpgradeSkillCardResponse) ProtoMessage() {}
+
+func (x *UpgradeSkillCardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpgradeSkillCardResponse.ProtoReflect.Descriptor instead.
+func (*UpgradeSkillCardResponse) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *UpgradeSkillCardResponse) GetCode() v1.ErrCode {
+	if x != nil {
+		return x.Code
+	}
+	return v1.ErrCode(0)
+}
+
+func (x *UpgradeSkillCardResponse) GetCard() *SkillCard {
+	if x != nil {
+		return x.Card
+	}
+	return nil
+}
+
+func (x *UpgradeSkillCardResponse) GetShardCost() uint32 {
+	if x != nil {
+		return x.ShardCost
+	}
+	return 0
+}
+
+// SetSkillSlots 全量替换卡槽装配(更换技能卡;未列出的槽视为清空)。
+//
+//	card_id=0 表示显式清空该槽;同一张卡不得占用多个槽。
+type SetSkillSlotsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Slots         []*SkillSlot           `protobuf:"bytes,2,rep,name=slots,proto3" json:"slots,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSkillSlotsRequest) Reset() {
+	*x = SetSkillSlotsRequest{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSkillSlotsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSkillSlotsRequest) ProtoMessage() {}
+
+func (x *SetSkillSlotsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSkillSlotsRequest.ProtoReflect.Descriptor instead.
+func (*SetSkillSlotsRequest) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *SetSkillSlotsRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *SetSkillSlotsRequest) GetSlots() []*SkillSlot {
+	if x != nil {
+		return x.Slots
+	}
+	return nil
+}
+
+type SetSkillSlotsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          v1.ErrCode             `protobuf:"varint,1,opt,name=code,proto3,enum=pandora.common.v1.ErrCode" json:"code,omitempty"`
+	Slots         []*SkillSlot           `protobuf:"bytes,2,rep,name=slots,proto3" json:"slots,omitempty"` // 设置后的权威装配
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSkillSlotsResponse) Reset() {
+	*x = SetSkillSlotsResponse{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSkillSlotsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSkillSlotsResponse) ProtoMessage() {}
+
+func (x *SetSkillSlotsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSkillSlotsResponse.ProtoReflect.Descriptor instead.
+func (*SetSkillSlotsResponse) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *SetSkillSlotsResponse) GetCode() v1.ErrCode {
+	if x != nil {
+		return x.Code
+	}
+	return v1.ErrCode(0)
+}
+
+func (x *SetSkillSlotsResponse) GetSlots() []*SkillSlot {
+	if x != nil {
+		return x.Slots
+	}
+	return nil
+}
+
+type GetSkillCardsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSkillCardsRequest) Reset() {
+	*x = GetSkillCardsRequest{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSkillCardsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSkillCardsRequest) ProtoMessage() {}
+
+func (x *GetSkillCardsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSkillCardsRequest.ProtoReflect.Descriptor instead.
+func (*GetSkillCardsRequest) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *GetSkillCardsRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+type GetSkillCardsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          v1.ErrCode             `protobuf:"varint,1,opt,name=code,proto3,enum=pandora.common.v1.ErrCode" json:"code,omitempty"`
+	Cards         []*SkillCard           `protobuf:"bytes,2,rep,name=cards,proto3" json:"cards,omitempty"`
+	Slots         []*SkillSlot           `protobuf:"bytes,3,rep,name=slots,proto3" json:"slots,omitempty"` // 一次往返拿齐"有哪些卡"和"装了哪几张"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSkillCardsResponse) Reset() {
+	*x = GetSkillCardsResponse{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSkillCardsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSkillCardsResponse) ProtoMessage() {}
+
+func (x *GetSkillCardsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSkillCardsResponse.ProtoReflect.Descriptor instead.
+func (*GetSkillCardsResponse) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *GetSkillCardsResponse) GetCode() v1.ErrCode {
+	if x != nil {
+		return x.Code
+	}
+	return v1.ErrCode(0)
+}
+
+func (x *GetSkillCardsResponse) GetCards() []*SkillCard {
+	if x != nil {
+		return x.Cards
+	}
+	return nil
+}
+
+func (x *GetSkillCardsResponse) GetSlots() []*SkillSlot {
+	if x != nil {
+		return x.Slots
+	}
+	return nil
+}
+
+// PlayerLoadout 是开战前快照(出战英雄 + 属性点 + 装备预设 + 天赋 + 技能卡槽),
+// 供匹配/进战下发(客户端可见结构)。
 type PlayerLoadout struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -2438,13 +3058,15 @@ type PlayerLoadout struct {
 	Equipment           []*LoadoutEquipment    `protobuf:"bytes,5,rep,name=equipment,proto3" json:"equipment,omitempty"`
 	Talents             []*TalentNode          `protobuf:"bytes,6,rep,name=talents,proto3" json:"talents,omitempty"`
 	UnspentTalentPoints int32                  `protobuf:"varint,7,opt,name=unspent_talent_points,json=unspentTalentPoints,proto3" json:"unspent_talent_points,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 技能卡槽装配 + 卡等级(DS 据此给技能;等级随卡带出,免得 DS 再查一次持有表)。
+	SkillCards    []*LoadoutSkillCard `protobuf:"bytes,8,rep,name=skill_cards,json=skillCards,proto3" json:"skill_cards,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlayerLoadout) Reset() {
 	*x = PlayerLoadout{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[42]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2456,7 +3078,7 @@ func (x *PlayerLoadout) String() string {
 func (*PlayerLoadout) ProtoMessage() {}
 
 func (x *PlayerLoadout) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[42]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2469,7 +3091,7 @@ func (x *PlayerLoadout) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerLoadout.ProtoReflect.Descriptor instead.
 func (*PlayerLoadout) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{42}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *PlayerLoadout) GetPlayerId() uint64 {
@@ -2521,6 +3143,74 @@ func (x *PlayerLoadout) GetUnspentTalentPoints() int32 {
 	return 0
 }
 
+func (x *PlayerLoadout) GetSkillCards() []*LoadoutSkillCard {
+	if x != nil {
+		return x.SkillCards
+	}
+	return nil
+}
+
+// LoadoutSkillCard 是出战快照里的一个已装配卡槽(槽位 + 卡 + 该卡等级)。
+type LoadoutSkillCard struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
+	CardId        uint32                 `protobuf:"varint,2,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	Level         uint32                 `protobuf:"varint,3,opt,name=level,proto3" json:"level,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LoadoutSkillCard) Reset() {
+	*x = LoadoutSkillCard{}
+	mi := &file_pandora_player_v1_player_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LoadoutSkillCard) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LoadoutSkillCard) ProtoMessage() {}
+
+func (x *LoadoutSkillCard) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_player_v1_player_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LoadoutSkillCard.ProtoReflect.Descriptor instead.
+func (*LoadoutSkillCard) Descriptor() ([]byte, []int) {
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *LoadoutSkillCard) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *LoadoutSkillCard) GetCardId() uint32 {
+	if x != nil {
+		return x.CardId
+	}
+	return 0
+}
+
+func (x *LoadoutSkillCard) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
 type GetLoadoutRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -2530,7 +3220,7 @@ type GetLoadoutRequest struct {
 
 func (x *GetLoadoutRequest) Reset() {
 	*x = GetLoadoutRequest{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[43]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2542,7 +3232,7 @@ func (x *GetLoadoutRequest) String() string {
 func (*GetLoadoutRequest) ProtoMessage() {}
 
 func (x *GetLoadoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[43]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2555,7 +3245,7 @@ func (x *GetLoadoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLoadoutRequest.ProtoReflect.Descriptor instead.
 func (*GetLoadoutRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{43}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *GetLoadoutRequest) GetPlayerId() uint64 {
@@ -2575,7 +3265,7 @@ type GetLoadoutResponse struct {
 
 func (x *GetLoadoutResponse) Reset() {
 	*x = GetLoadoutResponse{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[44]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2587,7 +3277,7 @@ func (x *GetLoadoutResponse) String() string {
 func (*GetLoadoutResponse) ProtoMessage() {}
 
 func (x *GetLoadoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[44]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2600,7 +3290,7 @@ func (x *GetLoadoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLoadoutResponse.ProtoReflect.Descriptor instead.
 func (*GetLoadoutResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{44}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *GetLoadoutResponse) GetCode() v1.ErrCode {
@@ -2645,7 +3335,7 @@ type RewardClaimStorageRecord struct {
 
 func (x *RewardClaimStorageRecord) Reset() {
 	*x = RewardClaimStorageRecord{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[45]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2657,7 +3347,7 @@ func (x *RewardClaimStorageRecord) String() string {
 func (*RewardClaimStorageRecord) ProtoMessage() {}
 
 func (x *RewardClaimStorageRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[45]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2670,7 +3360,7 @@ func (x *RewardClaimStorageRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RewardClaimStorageRecord.ProtoReflect.Descriptor instead.
 func (*RewardClaimStorageRecord) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{45}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *RewardClaimStorageRecord) GetPermanent() map[string][]byte {
@@ -2705,7 +3395,7 @@ type ClaimRewardRequest struct {
 
 func (x *ClaimRewardRequest) Reset() {
 	*x = ClaimRewardRequest{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[46]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2717,7 +3407,7 @@ func (x *ClaimRewardRequest) String() string {
 func (*ClaimRewardRequest) ProtoMessage() {}
 
 func (x *ClaimRewardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[46]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2730,7 +3420,7 @@ func (x *ClaimRewardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimRewardRequest.ProtoReflect.Descriptor instead.
 func (*ClaimRewardRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{46}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ClaimRewardRequest) GetPlayerId() uint64 {
@@ -2777,7 +3467,7 @@ type ClaimRewardResponse struct {
 
 func (x *ClaimRewardResponse) Reset() {
 	*x = ClaimRewardResponse{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[47]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2789,7 +3479,7 @@ func (x *ClaimRewardResponse) String() string {
 func (*ClaimRewardResponse) ProtoMessage() {}
 
 func (x *ClaimRewardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[47]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2802,7 +3492,7 @@ func (x *ClaimRewardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimRewardResponse.ProtoReflect.Descriptor instead.
 func (*ClaimRewardResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{47}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ClaimRewardResponse) GetCode() v1.ErrCode {
@@ -2825,7 +3515,7 @@ type GetRewardClaimsRequest struct {
 
 func (x *GetRewardClaimsRequest) Reset() {
 	*x = GetRewardClaimsRequest{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[48]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2837,7 +3527,7 @@ func (x *GetRewardClaimsRequest) String() string {
 func (*GetRewardClaimsRequest) ProtoMessage() {}
 
 func (x *GetRewardClaimsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[48]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2850,7 +3540,7 @@ func (x *GetRewardClaimsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRewardClaimsRequest.ProtoReflect.Descriptor instead.
 func (*GetRewardClaimsRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{48}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *GetRewardClaimsRequest) GetPlayerId() uint64 {
@@ -2892,7 +3582,7 @@ type GetRewardClaimsResponse struct {
 
 func (x *GetRewardClaimsResponse) Reset() {
 	*x = GetRewardClaimsResponse{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[49]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2904,7 +3594,7 @@ func (x *GetRewardClaimsResponse) String() string {
 func (*GetRewardClaimsResponse) ProtoMessage() {}
 
 func (x *GetRewardClaimsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[49]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2917,7 +3607,7 @@ func (x *GetRewardClaimsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRewardClaimsResponse.ProtoReflect.Descriptor instead.
 func (*GetRewardClaimsResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{49}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *GetRewardClaimsResponse) GetCode() v1.ErrCode {
@@ -2952,7 +3642,7 @@ type AddExperienceRequest struct {
 
 func (x *AddExperienceRequest) Reset() {
 	*x = AddExperienceRequest{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[50]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2964,7 +3654,7 @@ func (x *AddExperienceRequest) String() string {
 func (*AddExperienceRequest) ProtoMessage() {}
 
 func (x *AddExperienceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[50]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2977,7 +3667,7 @@ func (x *AddExperienceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddExperienceRequest.ProtoReflect.Descriptor instead.
 func (*AddExperienceRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{50}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *AddExperienceRequest) GetPlayerId() uint64 {
@@ -3022,7 +3712,7 @@ type AddExperienceResponse struct {
 
 func (x *AddExperienceResponse) Reset() {
 	*x = AddExperienceResponse{}
-	mi := &file_pandora_player_v1_player_proto_msgTypes[51]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3034,7 +3724,7 @@ func (x *AddExperienceResponse) String() string {
 func (*AddExperienceResponse) ProtoMessage() {}
 
 func (x *AddExperienceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_player_v1_player_proto_msgTypes[51]
+	mi := &file_pandora_player_v1_player_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3047,7 +3737,7 @@ func (x *AddExperienceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddExperienceResponse.ProtoReflect.Descriptor instead.
 func (*AddExperienceResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{51}
+	return file_pandora_player_v1_player_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *AddExperienceResponse) GetCode() v1.ErrCode {
@@ -3373,30 +4063,116 @@ var file_pandora_player_v1_player_proto_rawDesc = string([]byte{
 	0x6f, 0x64, 0x65, 0x52, 0x07, 0x74, 0x61, 0x6c, 0x65, 0x6e, 0x74, 0x73, 0x12, 0x25, 0x0a, 0x0e,
 	0x75, 0x6e, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x5f, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x73, 0x18, 0x03,
 	0x20, 0x01, 0x28, 0x05, 0x52, 0x0d, 0x75, 0x6e, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x50, 0x6f, 0x69,
-	0x6e, 0x74, 0x73, 0x22, 0xfa, 0x02, 0x0a, 0x0d, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x4c, 0x6f,
-	0x61, 0x64, 0x6f, 0x75, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5f,
+	0x6e, 0x74, 0x73, 0x22, 0x52, 0x0a, 0x09, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64,
+	0x12, 0x17, 0x0a, 0x07, 0x63, 0x61, 0x72, 0x64, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0d, 0x52, 0x06, 0x63, 0x61, 0x72, 0x64, 0x49, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x6c, 0x65, 0x76,
+	0x65, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x6c, 0x65, 0x76, 0x65, 0x6c, 0x12,
+	0x16, 0x0a, 0x06, 0x73, 0x68, 0x61, 0x72, 0x64, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d, 0x52,
+	0x06, 0x73, 0x68, 0x61, 0x72, 0x64, 0x73, 0x22, 0x38, 0x0a, 0x09, 0x53, 0x6b, 0x69, 0x6c, 0x6c,
+	0x53, 0x6c, 0x6f, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x0d, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x12, 0x17, 0x0a, 0x07, 0x63, 0x61, 0x72, 0x64,
+	0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x06, 0x63, 0x61, 0x72, 0x64, 0x49,
+	0x64, 0x22, 0x99, 0x01, 0x0a, 0x16, 0x47, 0x72, 0x61, 0x6e, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c,
+	0x43, 0x61, 0x72, 0x64, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09,
+	0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52,
+	0x08, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x49, 0x64, 0x12, 0x39, 0x0a, 0x06, 0x67, 0x72, 0x61,
+	0x6e, 0x74, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x21, 0x2e, 0x70, 0x61, 0x6e, 0x64,
+	0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x6b,
+	0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x47, 0x72, 0x61, 0x6e, 0x74, 0x52, 0x06, 0x67, 0x72,
+	0x61, 0x6e, 0x74, 0x73, 0x12, 0x27, 0x0a, 0x0f, 0x69, 0x64, 0x65, 0x6d, 0x70, 0x6f, 0x74, 0x65,
+	0x6e, 0x63, 0x79, 0x5f, 0x6b, 0x65, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x69,
+	0x64, 0x65, 0x6d, 0x70, 0x6f, 0x74, 0x65, 0x6e, 0x63, 0x79, 0x4b, 0x65, 0x79, 0x22, 0x41, 0x0a,
+	0x0e, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x47, 0x72, 0x61, 0x6e, 0x74, 0x12,
+	0x17, 0x0a, 0x07, 0x63, 0x61, 0x72, 0x64, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d,
+	0x52, 0x06, 0x63, 0x61, 0x72, 0x64, 0x49, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x68, 0x61, 0x72,
+	0x64, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x06, 0x73, 0x68, 0x61, 0x72, 0x64, 0x73,
+	0x22, 0x97, 0x01, 0x0a, 0x17, 0x47, 0x72, 0x61, 0x6e, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43,
+	0x61, 0x72, 0x64, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x04,
+	0x63, 0x6f, 0x64, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x1a, 0x2e, 0x70, 0x61, 0x6e,
+	0x64, 0x6f, 0x72, 0x61, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x45,
+	0x72, 0x72, 0x43, 0x6f, 0x64, 0x65, 0x52, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x12, 0x32, 0x0a, 0x05,
+	0x63, 0x61, 0x72, 0x64, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1c, 0x2e, 0x70, 0x61,
+	0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e,
+	0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x52, 0x05, 0x63, 0x61, 0x72, 0x64, 0x73,
+	0x12, 0x18, 0x0a, 0x07, 0x61, 0x6c, 0x72, 0x65, 0x61, 0x64, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x07, 0x61, 0x6c, 0x72, 0x65, 0x61, 0x64, 0x79, 0x22, 0x4f, 0x0a, 0x17, 0x55, 0x70,
+	0x67, 0x72, 0x61, 0x64, 0x65, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5f,
 	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72,
-	0x49, 0x64, 0x12, 0x24, 0x0a, 0x0e, 0x61, 0x63, 0x74, 0x69, 0x76, 0x65, 0x5f, 0x68, 0x65, 0x72,
-	0x6f, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x61, 0x63, 0x74, 0x69,
-	0x76, 0x65, 0x48, 0x65, 0x72, 0x6f, 0x49, 0x64, 0x12, 0x46, 0x0a, 0x0a, 0x61, 0x74, 0x74, 0x72,
-	0x69, 0x62, 0x75, 0x74, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x26, 0x2e, 0x70,
-	0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31,
-	0x2e, 0x41, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x41, 0x6c, 0x6c, 0x6f, 0x63, 0x61,
-	0x74, 0x69, 0x6f, 0x6e, 0x52, 0x0a, 0x61, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73,
-	0x12, 0x2e, 0x0a, 0x13, 0x75, 0x6e, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x5f, 0x61, 0x74, 0x74, 0x72,
-	0x5f, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x05, 0x52, 0x11, 0x75,
-	0x6e, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x41, 0x74, 0x74, 0x72, 0x50, 0x6f, 0x69, 0x6e, 0x74, 0x73,
-	0x12, 0x41, 0x0a, 0x09, 0x65, 0x71, 0x75, 0x69, 0x70, 0x6d, 0x65, 0x6e, 0x74, 0x18, 0x05, 0x20,
-	0x03, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c,
-	0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x6f, 0x61, 0x64, 0x6f, 0x75, 0x74, 0x45,
-	0x71, 0x75, 0x69, 0x70, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x09, 0x65, 0x71, 0x75, 0x69, 0x70, 0x6d,
-	0x65, 0x6e, 0x74, 0x12, 0x37, 0x0a, 0x07, 0x74, 0x61, 0x6c, 0x65, 0x6e, 0x74, 0x73, 0x18, 0x06,
-	0x20, 0x03, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70,
-	0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x61, 0x6c, 0x65, 0x6e, 0x74, 0x4e,
-	0x6f, 0x64, 0x65, 0x52, 0x07, 0x74, 0x61, 0x6c, 0x65, 0x6e, 0x74, 0x73, 0x12, 0x32, 0x0a, 0x15,
-	0x75, 0x6e, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x61, 0x6c, 0x65, 0x6e, 0x74, 0x5f, 0x70,
-	0x6f, 0x69, 0x6e, 0x74, 0x73, 0x18, 0x07, 0x20, 0x01, 0x28, 0x05, 0x52, 0x13, 0x75, 0x6e, 0x73,
-	0x70, 0x65, 0x6e, 0x74, 0x54, 0x61, 0x6c, 0x65, 0x6e, 0x74, 0x50, 0x6f, 0x69, 0x6e, 0x74, 0x73,
+	0x49, 0x64, 0x12, 0x17, 0x0a, 0x07, 0x63, 0x61, 0x72, 0x64, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x0d, 0x52, 0x06, 0x63, 0x61, 0x72, 0x64, 0x49, 0x64, 0x22, 0x9b, 0x01, 0x0a, 0x18,
+	0x55, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x04, 0x63, 0x6f, 0x64, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x1a, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61,
+	0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x45, 0x72, 0x72, 0x43, 0x6f,
+	0x64, 0x65, 0x52, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x12, 0x30, 0x0a, 0x04, 0x63, 0x61, 0x72, 0x64,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1c, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61,
+	0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x6b, 0x69, 0x6c, 0x6c,
+	0x43, 0x61, 0x72, 0x64, 0x52, 0x04, 0x63, 0x61, 0x72, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x73, 0x68,
+	0x61, 0x72, 0x64, 0x5f, 0x63, 0x6f, 0x73, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x09,
+	0x73, 0x68, 0x61, 0x72, 0x64, 0x43, 0x6f, 0x73, 0x74, 0x22, 0x67, 0x0a, 0x14, 0x53, 0x65, 0x74,
+	0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x53, 0x6c, 0x6f, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x49, 0x64, 0x12, 0x32,
+	0x0a, 0x05, 0x73, 0x6c, 0x6f, 0x74, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1c, 0x2e,
+	0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76,
+	0x31, 0x2e, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x05, 0x73, 0x6c, 0x6f,
+	0x74, 0x73, 0x22, 0x7b, 0x0a, 0x15, 0x53, 0x65, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x53, 0x6c,
+	0x6f, 0x74, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x04, 0x63,
+	0x6f, 0x64, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x1a, 0x2e, 0x70, 0x61, 0x6e, 0x64,
+	0x6f, 0x72, 0x61, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x45, 0x72,
+	0x72, 0x43, 0x6f, 0x64, 0x65, 0x52, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x12, 0x32, 0x0a, 0x05, 0x73,
+	0x6c, 0x6f, 0x74, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1c, 0x2e, 0x70, 0x61, 0x6e,
+	0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x53,
+	0x6b, 0x69, 0x6c, 0x6c, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x05, 0x73, 0x6c, 0x6f, 0x74, 0x73, 0x22,
+	0x33, 0x0a, 0x14, 0x47, 0x65, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x73,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6c, 0x61, 0x79, 0x65,
+	0x72, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x70, 0x6c, 0x61, 0x79,
+	0x65, 0x72, 0x49, 0x64, 0x22, 0xaf, 0x01, 0x0a, 0x15, 0x47, 0x65, 0x74, 0x53, 0x6b, 0x69, 0x6c,
+	0x6c, 0x43, 0x61, 0x72, 0x64, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e,
+	0x0a, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x1a, 0x2e, 0x70,
+	0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x76, 0x31,
+	0x2e, 0x45, 0x72, 0x72, 0x43, 0x6f, 0x64, 0x65, 0x52, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x12, 0x32,
+	0x0a, 0x05, 0x63, 0x61, 0x72, 0x64, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1c, 0x2e,
+	0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76,
+	0x31, 0x2e, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x52, 0x05, 0x63, 0x61, 0x72,
+	0x64, 0x73, 0x12, 0x32, 0x0a, 0x05, 0x73, 0x6c, 0x6f, 0x74, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x1c, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79,
+	0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x53, 0x6c, 0x6f, 0x74, 0x52,
+	0x05, 0x73, 0x6c, 0x6f, 0x74, 0x73, 0x22, 0xc0, 0x03, 0x0a, 0x0d, 0x50, 0x6c, 0x61, 0x79, 0x65,
+	0x72, 0x4c, 0x6f, 0x61, 0x64, 0x6f, 0x75, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6c, 0x61, 0x79,
+	0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x70, 0x6c, 0x61,
+	0x79, 0x65, 0x72, 0x49, 0x64, 0x12, 0x24, 0x0a, 0x0e, 0x61, 0x63, 0x74, 0x69, 0x76, 0x65, 0x5f,
+	0x68, 0x65, 0x72, 0x6f, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x61,
+	0x63, 0x74, 0x69, 0x76, 0x65, 0x48, 0x65, 0x72, 0x6f, 0x49, 0x64, 0x12, 0x46, 0x0a, 0x0a, 0x61,
+	0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x26, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72,
+	0x2e, 0x76, 0x31, 0x2e, 0x41, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x41, 0x6c, 0x6c,
+	0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x0a, 0x61, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75,
+	0x74, 0x65, 0x73, 0x12, 0x2e, 0x0a, 0x13, 0x75, 0x6e, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x5f, 0x61,
+	0x74, 0x74, 0x72, 0x5f, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x05,
+	0x52, 0x11, 0x75, 0x6e, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x41, 0x74, 0x74, 0x72, 0x50, 0x6f, 0x69,
+	0x6e, 0x74, 0x73, 0x12, 0x41, 0x0a, 0x09, 0x65, 0x71, 0x75, 0x69, 0x70, 0x6d, 0x65, 0x6e, 0x74,
+	0x18, 0x05, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61,
+	0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x6f, 0x61, 0x64, 0x6f,
+	0x75, 0x74, 0x45, 0x71, 0x75, 0x69, 0x70, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x09, 0x65, 0x71, 0x75,
+	0x69, 0x70, 0x6d, 0x65, 0x6e, 0x74, 0x12, 0x37, 0x0a, 0x07, 0x74, 0x61, 0x6c, 0x65, 0x6e, 0x74,
+	0x73, 0x18, 0x06, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72,
+	0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x61, 0x6c, 0x65,
+	0x6e, 0x74, 0x4e, 0x6f, 0x64, 0x65, 0x52, 0x07, 0x74, 0x61, 0x6c, 0x65, 0x6e, 0x74, 0x73, 0x12,
+	0x32, 0x0a, 0x15, 0x75, 0x6e, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x61, 0x6c, 0x65, 0x6e,
+	0x74, 0x5f, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x73, 0x18, 0x07, 0x20, 0x01, 0x28, 0x05, 0x52, 0x13,
+	0x75, 0x6e, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x54, 0x61, 0x6c, 0x65, 0x6e, 0x74, 0x50, 0x6f, 0x69,
+	0x6e, 0x74, 0x73, 0x12, 0x44, 0x0a, 0x0b, 0x73, 0x6b, 0x69, 0x6c, 0x6c, 0x5f, 0x63, 0x61, 0x72,
+	0x64, 0x73, 0x18, 0x08, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f,
+	0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x6f, 0x61,
+	0x64, 0x6f, 0x75, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x52, 0x0a, 0x73,
+	0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x73, 0x22, 0x55, 0x0a, 0x10, 0x4c, 0x6f, 0x61,
+	0x64, 0x6f, 0x75, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x12, 0x12, 0x0a,
+	0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x73, 0x6c, 0x6f,
+	0x74, 0x12, 0x17, 0x0a, 0x07, 0x63, 0x61, 0x72, 0x64, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x0d, 0x52, 0x06, 0x63, 0x61, 0x72, 0x64, 0x49, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x6c, 0x65,
+	0x76, 0x65, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x6c, 0x65, 0x76, 0x65, 0x6c,
 	0x22, 0x30, 0x0a, 0x11, 0x47, 0x65, 0x74, 0x4c, 0x6f, 0x61, 0x64, 0x6f, 0x75, 0x74, 0x52, 0x65,
 	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5f,
 	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72,
@@ -3505,7 +4281,7 @@ var file_pandora_player_v1_player_proto_rawDesc = string([]byte{
 	0x54, 0x59, 0x50, 0x45, 0x5f, 0x50, 0x45, 0x52, 0x4d, 0x41, 0x4e, 0x45, 0x4e, 0x54, 0x10, 0x01,
 	0x12, 0x1f, 0x0a, 0x1b, 0x52, 0x45, 0x57, 0x41, 0x52, 0x44, 0x5f, 0x53, 0x4f, 0x55, 0x52, 0x43,
 	0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x41, 0x43, 0x54, 0x49, 0x56, 0x49, 0x54, 0x59, 0x10,
-	0x02, 0x32, 0x87, 0x11, 0x0a, 0x0d, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x53, 0x65, 0x72, 0x76,
+	0x02, 0x32, 0xa6, 0x14, 0x0a, 0x0d, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x53, 0x65, 0x72, 0x76,
 	0x69, 0x63, 0x65, 0x12, 0x59, 0x0a, 0x0a, 0x47, 0x65, 0x74, 0x50, 0x72, 0x6f, 0x66, 0x69, 0x6c,
 	0x65, 0x12, 0x24, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79,
 	0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x50, 0x72, 0x6f, 0x66, 0x69, 0x6c, 0x65,
@@ -3617,45 +4393,71 @@ var file_pandora_player_v1_player_proto_rawDesc = string([]byte{
 	0x61, 0x6c, 0x65, 0x6e, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x25, 0x2e,
 	0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76,
 	0x31, 0x2e, 0x47, 0x65, 0x74, 0x54, 0x61, 0x6c, 0x65, 0x6e, 0x74, 0x73, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x59, 0x0a, 0x0a, 0x47, 0x65, 0x74, 0x4c, 0x6f, 0x61, 0x64, 0x6f,
-	0x75, 0x74, 0x12, 0x24, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61,
-	0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x4c, 0x6f, 0x61, 0x64, 0x6f, 0x75,
-	0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x25, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f,
-	0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74,
-	0x4c, 0x6f, 0x61, 0x64, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
-	0x5c, 0x0a, 0x0b, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x12, 0x25,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x68, 0x0a, 0x0f, 0x47, 0x72, 0x61, 0x6e, 0x74, 0x53, 0x6b, 0x69,
+	0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x73, 0x12, 0x29, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72,
+	0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x72, 0x61, 0x6e,
+	0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x2a, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61,
+	0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x72, 0x61, 0x6e, 0x74, 0x53, 0x6b, 0x69, 0x6c,
+	0x6c, 0x43, 0x61, 0x72, 0x64, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x6b,
+	0x0a, 0x10, 0x55, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61,
+	0x72, 0x64, 0x12, 0x2a, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61,
+	0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x55, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x53, 0x6b,
+	0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2b,
 	0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e,
-	0x76, 0x31, 0x2e, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x26, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e,
-	0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x52,
-	0x65, 0x77, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x68, 0x0a,
-	0x0f, 0x47, 0x65, 0x74, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x73,
-	0x12, 0x29, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65,
-	0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x43, 0x6c,
-	0x61, 0x69, 0x6d, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2a, 0x2e, 0x70, 0x61,
-	0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e,
-	0x47, 0x65, 0x74, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x73, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x62, 0x0a, 0x0d, 0x41, 0x64, 0x64, 0x45, 0x78,
-	0x70, 0x65, 0x72, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x12, 0x27, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f,
-	0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x41, 0x64, 0x64,
-	0x45, 0x78, 0x70, 0x65, 0x72, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x1a, 0x28, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79,
-	0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x41, 0x64, 0x64, 0x45, 0x78, 0x70, 0x65, 0x72, 0x69, 0x65,
-	0x6e, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0xd0, 0x01, 0x0a, 0x15,
-	0x63, 0x6f, 0x6d, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79,
-	0x65, 0x72, 0x2e, 0x76, 0x31, 0x42, 0x0b, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x50, 0x72, 0x6f,
-	0x74, 0x6f, 0x50, 0x01, 0x5a, 0x44, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d,
-	0x2f, 0x6c, 0x75, 0x79, 0x75, 0x61, 0x6e, 0x63, 0x70, 0x70, 0x2f, 0x70, 0x61, 0x6e, 0x64, 0x6f,
-	0x72, 0x61, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x67, 0x6f, 0x2f,
-	0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2f, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2f, 0x76,
-	0x31, 0x3b, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x76, 0x31, 0xa2, 0x02, 0x03, 0x50, 0x50, 0x58,
-	0xaa, 0x02, 0x11, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x50, 0x6c, 0x61, 0x79, 0x65,
-	0x72, 0x2e, 0x56, 0x31, 0xca, 0x02, 0x11, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x5c, 0x50,
-	0x6c, 0x61, 0x79, 0x65, 0x72, 0x5c, 0x56, 0x31, 0xe2, 0x02, 0x1d, 0x50, 0x61, 0x6e, 0x64, 0x6f,
-	0x72, 0x61, 0x5c, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5c, 0x56, 0x31, 0x5c, 0x47, 0x50, 0x42,
-	0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02, 0x13, 0x50, 0x61, 0x6e, 0x64, 0x6f,
-	0x72, 0x61, 0x3a, 0x3a, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x3a, 0x3a, 0x56, 0x31, 0x62, 0x06,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x76, 0x31, 0x2e, 0x55, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43,
+	0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x62, 0x0a, 0x0d, 0x53,
+	0x65, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x53, 0x6c, 0x6f, 0x74, 0x73, 0x12, 0x27, 0x2e, 0x70,
+	0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31,
+	0x2e, 0x53, 0x65, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x53, 0x6c, 0x6f, 0x74, 0x73, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x28, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e,
+	0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74, 0x53, 0x6b, 0x69,
+	0x6c, 0x6c, 0x53, 0x6c, 0x6f, 0x74, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x62, 0x0a, 0x0d, 0x47, 0x65, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x73,
+	0x12, 0x27, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65,
+	0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72,
+	0x64, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x28, 0x2e, 0x70, 0x61, 0x6e, 0x64,
+	0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65,
+	0x74, 0x53, 0x6b, 0x69, 0x6c, 0x6c, 0x43, 0x61, 0x72, 0x64, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x12, 0x59, 0x0a, 0x0a, 0x47, 0x65, 0x74, 0x4c, 0x6f, 0x61, 0x64, 0x6f, 0x75,
+	0x74, 0x12, 0x24, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79,
+	0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x4c, 0x6f, 0x61, 0x64, 0x6f, 0x75, 0x74,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x25, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72,
+	0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x4c,
+	0x6f, 0x61, 0x64, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5c,
+	0x0a, 0x0b, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x12, 0x25, 0x2e,
+	0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76,
+	0x31, 0x2e, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x1a, 0x26, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70,
+	0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x52, 0x65,
+	0x77, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x68, 0x0a, 0x0f,
+	0x47, 0x65, 0x74, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x73, 0x12,
+	0x29, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72,
+	0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x43, 0x6c, 0x61,
+	0x69, 0x6d, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2a, 0x2e, 0x70, 0x61, 0x6e,
+	0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x47,
+	0x65, 0x74, 0x52, 0x65, 0x77, 0x61, 0x72, 0x64, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x73, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x62, 0x0a, 0x0d, 0x41, 0x64, 0x64, 0x45, 0x78, 0x70,
+	0x65, 0x72, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x12, 0x27, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72,
+	0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x41, 0x64, 0x64, 0x45,
+	0x78, 0x70, 0x65, 0x72, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x28, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65,
+	0x72, 0x2e, 0x76, 0x31, 0x2e, 0x41, 0x64, 0x64, 0x45, 0x78, 0x70, 0x65, 0x72, 0x69, 0x65, 0x6e,
+	0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0xd0, 0x01, 0x0a, 0x15, 0x63,
+	0x6f, 0x6d, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x70, 0x6c, 0x61, 0x79, 0x65,
+	0x72, 0x2e, 0x76, 0x31, 0x42, 0x0b, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x50, 0x72, 0x6f, 0x74,
+	0x6f, 0x50, 0x01, 0x5a, 0x44, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
+	0x6c, 0x75, 0x79, 0x75, 0x61, 0x6e, 0x63, 0x70, 0x70, 0x2f, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72,
+	0x61, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x67, 0x6f, 0x2f, 0x70,
+	0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2f, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x2f, 0x76, 0x31,
+	0x3b, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x76, 0x31, 0xa2, 0x02, 0x03, 0x50, 0x50, 0x58, 0xaa,
+	0x02, 0x11, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72,
+	0x2e, 0x56, 0x31, 0xca, 0x02, 0x11, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x5c, 0x50, 0x6c,
+	0x61, 0x79, 0x65, 0x72, 0x5c, 0x56, 0x31, 0xe2, 0x02, 0x1d, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72,
+	0x61, 0x5c, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5c, 0x56, 0x31, 0x5c, 0x47, 0x50, 0x42, 0x4d,
+	0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02, 0x13, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72,
+	0x61, 0x3a, 0x3a, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x3a, 0x3a, 0x56, 0x31, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 })
 
 var (
@@ -3671,7 +4473,7 @@ func file_pandora_player_v1_player_proto_rawDescGZIP() []byte {
 }
 
 var file_pandora_player_v1_player_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_pandora_player_v1_player_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
+var file_pandora_player_v1_player_proto_msgTypes = make([]protoimpl.MessageInfo, 66)
 var file_pandora_player_v1_player_proto_goTypes = []any{
 	(PlayerPushEventType)(0),                // 0: pandora.player.v1.PlayerPushEventType
 	(RewardSourceType)(0),                   // 1: pandora.player.v1.RewardSourceType
@@ -3717,107 +4519,139 @@ var file_pandora_player_v1_player_proto_goTypes = []any{
 	(*ResetTalentsResponse)(nil),            // 41: pandora.player.v1.ResetTalentsResponse
 	(*GetTalentsRequest)(nil),               // 42: pandora.player.v1.GetTalentsRequest
 	(*GetTalentsResponse)(nil),              // 43: pandora.player.v1.GetTalentsResponse
-	(*PlayerLoadout)(nil),                   // 44: pandora.player.v1.PlayerLoadout
-	(*GetLoadoutRequest)(nil),               // 45: pandora.player.v1.GetLoadoutRequest
-	(*GetLoadoutResponse)(nil),              // 46: pandora.player.v1.GetLoadoutResponse
-	(*RewardClaimStorageRecord)(nil),        // 47: pandora.player.v1.RewardClaimStorageRecord
-	(*ClaimRewardRequest)(nil),              // 48: pandora.player.v1.ClaimRewardRequest
-	(*ClaimRewardResponse)(nil),             // 49: pandora.player.v1.ClaimRewardResponse
-	(*GetRewardClaimsRequest)(nil),          // 50: pandora.player.v1.GetRewardClaimsRequest
-	(*GetRewardClaimsResponse)(nil),         // 51: pandora.player.v1.GetRewardClaimsResponse
-	(*AddExperienceRequest)(nil),            // 52: pandora.player.v1.AddExperienceRequest
-	(*AddExperienceResponse)(nil),           // 53: pandora.player.v1.AddExperienceResponse
-	nil,                                     // 54: pandora.player.v1.RewardClaimStorageRecord.PermanentEntry
-	nil,                                     // 55: pandora.player.v1.RewardClaimStorageRecord.ActivityEntry
-	(v1.ErrCode)(0),                         // 56: pandora.common.v1.ErrCode
+	(*SkillCard)(nil),                       // 44: pandora.player.v1.SkillCard
+	(*SkillSlot)(nil),                       // 45: pandora.player.v1.SkillSlot
+	(*GrantSkillCardsRequest)(nil),          // 46: pandora.player.v1.GrantSkillCardsRequest
+	(*SkillCardGrant)(nil),                  // 47: pandora.player.v1.SkillCardGrant
+	(*GrantSkillCardsResponse)(nil),         // 48: pandora.player.v1.GrantSkillCardsResponse
+	(*UpgradeSkillCardRequest)(nil),         // 49: pandora.player.v1.UpgradeSkillCardRequest
+	(*UpgradeSkillCardResponse)(nil),        // 50: pandora.player.v1.UpgradeSkillCardResponse
+	(*SetSkillSlotsRequest)(nil),            // 51: pandora.player.v1.SetSkillSlotsRequest
+	(*SetSkillSlotsResponse)(nil),           // 52: pandora.player.v1.SetSkillSlotsResponse
+	(*GetSkillCardsRequest)(nil),            // 53: pandora.player.v1.GetSkillCardsRequest
+	(*GetSkillCardsResponse)(nil),           // 54: pandora.player.v1.GetSkillCardsResponse
+	(*PlayerLoadout)(nil),                   // 55: pandora.player.v1.PlayerLoadout
+	(*LoadoutSkillCard)(nil),                // 56: pandora.player.v1.LoadoutSkillCard
+	(*GetLoadoutRequest)(nil),               // 57: pandora.player.v1.GetLoadoutRequest
+	(*GetLoadoutResponse)(nil),              // 58: pandora.player.v1.GetLoadoutResponse
+	(*RewardClaimStorageRecord)(nil),        // 59: pandora.player.v1.RewardClaimStorageRecord
+	(*ClaimRewardRequest)(nil),              // 60: pandora.player.v1.ClaimRewardRequest
+	(*ClaimRewardResponse)(nil),             // 61: pandora.player.v1.ClaimRewardResponse
+	(*GetRewardClaimsRequest)(nil),          // 62: pandora.player.v1.GetRewardClaimsRequest
+	(*GetRewardClaimsResponse)(nil),         // 63: pandora.player.v1.GetRewardClaimsResponse
+	(*AddExperienceRequest)(nil),            // 64: pandora.player.v1.AddExperienceRequest
+	(*AddExperienceResponse)(nil),           // 65: pandora.player.v1.AddExperienceResponse
+	nil,                                     // 66: pandora.player.v1.RewardClaimStorageRecord.PermanentEntry
+	nil,                                     // 67: pandora.player.v1.RewardClaimStorageRecord.ActivityEntry
+	(v1.ErrCode)(0),                         // 68: pandora.common.v1.ErrCode
 }
 var file_pandora_player_v1_player_proto_depIdxs = []int32{
-	56, // 0: pandora.player.v1.GetProfileResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 0: pandora.player.v1.GetProfileResponse.code:type_name -> pandora.common.v1.ErrCode
 	2,  // 1: pandora.player.v1.GetProfileResponse.profile:type_name -> pandora.player.v1.PlayerProfile
-	56, // 2: pandora.player.v1.UpdateNicknameResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 3: pandora.player.v1.ListHeroesResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 4: pandora.player.v1.UnlockHeroResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 5: pandora.player.v1.GetMMRResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 6: pandora.player.v1.UpdateMMRResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 7: pandora.player.v1.SelectHeroResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 8: pandora.player.v1.GetActiveHeroResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 9: pandora.player.v1.GrantAttributePointsResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 2: pandora.player.v1.UpdateNicknameResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 3: pandora.player.v1.ListHeroesResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 4: pandora.player.v1.UnlockHeroResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 5: pandora.player.v1.GetMMRResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 6: pandora.player.v1.UpdateMMRResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 7: pandora.player.v1.SelectHeroResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 8: pandora.player.v1.GetActiveHeroResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 9: pandora.player.v1.GrantAttributePointsResponse.code:type_name -> pandora.common.v1.ErrCode
 	17, // 10: pandora.player.v1.AllocateAttributePointsRequest.allocations:type_name -> pandora.player.v1.AttributeAllocation
-	56, // 11: pandora.player.v1.AllocateAttributePointsResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 12: pandora.player.v1.ResetAttributesResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 13: pandora.player.v1.GetAttributesResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 11: pandora.player.v1.AllocateAttributePointsResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 12: pandora.player.v1.ResetAttributesResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 13: pandora.player.v1.GetAttributesResponse.code:type_name -> pandora.common.v1.ErrCode
 	17, // 14: pandora.player.v1.GetAttributesResponse.attributes:type_name -> pandora.player.v1.AttributeAllocation
 	30, // 15: pandora.player.v1.SetEquipmentRequest.equipment:type_name -> pandora.player.v1.LoadoutEquipment
-	56, // 16: pandora.player.v1.SetEquipmentResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 17: pandora.player.v1.GetEquipmentResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 16: pandora.player.v1.SetEquipmentResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 17: pandora.player.v1.GetEquipmentResponse.code:type_name -> pandora.common.v1.ErrCode
 	30, // 18: pandora.player.v1.GetEquipmentResponse.equipment:type_name -> pandora.player.v1.LoadoutEquipment
-	56, // 19: pandora.player.v1.GrantTalentPointsResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 19: pandora.player.v1.GrantTalentPointsResponse.code:type_name -> pandora.common.v1.ErrCode
 	31, // 20: pandora.player.v1.SetTalentsRequest.talents:type_name -> pandora.player.v1.TalentNode
-	56, // 21: pandora.player.v1.SetTalentsResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 22: pandora.player.v1.ResetTalentsResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 23: pandora.player.v1.GetTalentsResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 21: pandora.player.v1.SetTalentsResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 22: pandora.player.v1.ResetTalentsResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 23: pandora.player.v1.GetTalentsResponse.code:type_name -> pandora.common.v1.ErrCode
 	31, // 24: pandora.player.v1.GetTalentsResponse.talents:type_name -> pandora.player.v1.TalentNode
-	17, // 25: pandora.player.v1.PlayerLoadout.attributes:type_name -> pandora.player.v1.AttributeAllocation
-	30, // 26: pandora.player.v1.PlayerLoadout.equipment:type_name -> pandora.player.v1.LoadoutEquipment
-	31, // 27: pandora.player.v1.PlayerLoadout.talents:type_name -> pandora.player.v1.TalentNode
-	56, // 28: pandora.player.v1.GetLoadoutResponse.code:type_name -> pandora.common.v1.ErrCode
-	44, // 29: pandora.player.v1.GetLoadoutResponse.loadout:type_name -> pandora.player.v1.PlayerLoadout
-	54, // 30: pandora.player.v1.RewardClaimStorageRecord.permanent:type_name -> pandora.player.v1.RewardClaimStorageRecord.PermanentEntry
-	55, // 31: pandora.player.v1.RewardClaimStorageRecord.activity:type_name -> pandora.player.v1.RewardClaimStorageRecord.ActivityEntry
-	1,  // 32: pandora.player.v1.ClaimRewardRequest.source_type:type_name -> pandora.player.v1.RewardSourceType
-	56, // 33: pandora.player.v1.ClaimRewardResponse.code:type_name -> pandora.common.v1.ErrCode
-	1,  // 34: pandora.player.v1.GetRewardClaimsRequest.source_type:type_name -> pandora.player.v1.RewardSourceType
-	56, // 35: pandora.player.v1.GetRewardClaimsResponse.code:type_name -> pandora.common.v1.ErrCode
-	56, // 36: pandora.player.v1.AddExperienceResponse.code:type_name -> pandora.common.v1.ErrCode
-	3,  // 37: pandora.player.v1.PlayerService.GetProfile:input_type -> pandora.player.v1.GetProfileRequest
-	5,  // 38: pandora.player.v1.PlayerService.UpdateNickname:input_type -> pandora.player.v1.UpdateNicknameRequest
-	7,  // 39: pandora.player.v1.PlayerService.ListHeroes:input_type -> pandora.player.v1.ListHeroesRequest
-	9,  // 40: pandora.player.v1.PlayerService.UnlockHero:input_type -> pandora.player.v1.UnlockHeroRequest
-	11, // 41: pandora.player.v1.PlayerService.GetMMR:input_type -> pandora.player.v1.GetMMRRequest
-	13, // 42: pandora.player.v1.PlayerService.UpdateMMR:input_type -> pandora.player.v1.UpdateMMRRequest
-	18, // 43: pandora.player.v1.PlayerService.SelectHero:input_type -> pandora.player.v1.SelectHeroRequest
-	20, // 44: pandora.player.v1.PlayerService.GetActiveHero:input_type -> pandora.player.v1.GetActiveHeroRequest
-	22, // 45: pandora.player.v1.PlayerService.GrantAttributePoints:input_type -> pandora.player.v1.GrantAttributePointsRequest
-	24, // 46: pandora.player.v1.PlayerService.AllocateAttributePoints:input_type -> pandora.player.v1.AllocateAttributePointsRequest
-	26, // 47: pandora.player.v1.PlayerService.ResetAttributes:input_type -> pandora.player.v1.ResetAttributesRequest
-	28, // 48: pandora.player.v1.PlayerService.GetAttributes:input_type -> pandora.player.v1.GetAttributesRequest
-	32, // 49: pandora.player.v1.PlayerService.SetEquipment:input_type -> pandora.player.v1.SetEquipmentRequest
-	34, // 50: pandora.player.v1.PlayerService.GetEquipment:input_type -> pandora.player.v1.GetEquipmentRequest
-	36, // 51: pandora.player.v1.PlayerService.GrantTalentPoints:input_type -> pandora.player.v1.GrantTalentPointsRequest
-	38, // 52: pandora.player.v1.PlayerService.SetTalents:input_type -> pandora.player.v1.SetTalentsRequest
-	40, // 53: pandora.player.v1.PlayerService.ResetTalents:input_type -> pandora.player.v1.ResetTalentsRequest
-	42, // 54: pandora.player.v1.PlayerService.GetTalents:input_type -> pandora.player.v1.GetTalentsRequest
-	45, // 55: pandora.player.v1.PlayerService.GetLoadout:input_type -> pandora.player.v1.GetLoadoutRequest
-	48, // 56: pandora.player.v1.PlayerService.ClaimReward:input_type -> pandora.player.v1.ClaimRewardRequest
-	50, // 57: pandora.player.v1.PlayerService.GetRewardClaims:input_type -> pandora.player.v1.GetRewardClaimsRequest
-	52, // 58: pandora.player.v1.PlayerService.AddExperience:input_type -> pandora.player.v1.AddExperienceRequest
-	4,  // 59: pandora.player.v1.PlayerService.GetProfile:output_type -> pandora.player.v1.GetProfileResponse
-	6,  // 60: pandora.player.v1.PlayerService.UpdateNickname:output_type -> pandora.player.v1.UpdateNicknameResponse
-	8,  // 61: pandora.player.v1.PlayerService.ListHeroes:output_type -> pandora.player.v1.ListHeroesResponse
-	10, // 62: pandora.player.v1.PlayerService.UnlockHero:output_type -> pandora.player.v1.UnlockHeroResponse
-	12, // 63: pandora.player.v1.PlayerService.GetMMR:output_type -> pandora.player.v1.GetMMRResponse
-	14, // 64: pandora.player.v1.PlayerService.UpdateMMR:output_type -> pandora.player.v1.UpdateMMRResponse
-	19, // 65: pandora.player.v1.PlayerService.SelectHero:output_type -> pandora.player.v1.SelectHeroResponse
-	21, // 66: pandora.player.v1.PlayerService.GetActiveHero:output_type -> pandora.player.v1.GetActiveHeroResponse
-	23, // 67: pandora.player.v1.PlayerService.GrantAttributePoints:output_type -> pandora.player.v1.GrantAttributePointsResponse
-	25, // 68: pandora.player.v1.PlayerService.AllocateAttributePoints:output_type -> pandora.player.v1.AllocateAttributePointsResponse
-	27, // 69: pandora.player.v1.PlayerService.ResetAttributes:output_type -> pandora.player.v1.ResetAttributesResponse
-	29, // 70: pandora.player.v1.PlayerService.GetAttributes:output_type -> pandora.player.v1.GetAttributesResponse
-	33, // 71: pandora.player.v1.PlayerService.SetEquipment:output_type -> pandora.player.v1.SetEquipmentResponse
-	35, // 72: pandora.player.v1.PlayerService.GetEquipment:output_type -> pandora.player.v1.GetEquipmentResponse
-	37, // 73: pandora.player.v1.PlayerService.GrantTalentPoints:output_type -> pandora.player.v1.GrantTalentPointsResponse
-	39, // 74: pandora.player.v1.PlayerService.SetTalents:output_type -> pandora.player.v1.SetTalentsResponse
-	41, // 75: pandora.player.v1.PlayerService.ResetTalents:output_type -> pandora.player.v1.ResetTalentsResponse
-	43, // 76: pandora.player.v1.PlayerService.GetTalents:output_type -> pandora.player.v1.GetTalentsResponse
-	46, // 77: pandora.player.v1.PlayerService.GetLoadout:output_type -> pandora.player.v1.GetLoadoutResponse
-	49, // 78: pandora.player.v1.PlayerService.ClaimReward:output_type -> pandora.player.v1.ClaimRewardResponse
-	51, // 79: pandora.player.v1.PlayerService.GetRewardClaims:output_type -> pandora.player.v1.GetRewardClaimsResponse
-	53, // 80: pandora.player.v1.PlayerService.AddExperience:output_type -> pandora.player.v1.AddExperienceResponse
-	59, // [59:81] is the sub-list for method output_type
-	37, // [37:59] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	47, // 25: pandora.player.v1.GrantSkillCardsRequest.grants:type_name -> pandora.player.v1.SkillCardGrant
+	68, // 26: pandora.player.v1.GrantSkillCardsResponse.code:type_name -> pandora.common.v1.ErrCode
+	44, // 27: pandora.player.v1.GrantSkillCardsResponse.cards:type_name -> pandora.player.v1.SkillCard
+	68, // 28: pandora.player.v1.UpgradeSkillCardResponse.code:type_name -> pandora.common.v1.ErrCode
+	44, // 29: pandora.player.v1.UpgradeSkillCardResponse.card:type_name -> pandora.player.v1.SkillCard
+	45, // 30: pandora.player.v1.SetSkillSlotsRequest.slots:type_name -> pandora.player.v1.SkillSlot
+	68, // 31: pandora.player.v1.SetSkillSlotsResponse.code:type_name -> pandora.common.v1.ErrCode
+	45, // 32: pandora.player.v1.SetSkillSlotsResponse.slots:type_name -> pandora.player.v1.SkillSlot
+	68, // 33: pandora.player.v1.GetSkillCardsResponse.code:type_name -> pandora.common.v1.ErrCode
+	44, // 34: pandora.player.v1.GetSkillCardsResponse.cards:type_name -> pandora.player.v1.SkillCard
+	45, // 35: pandora.player.v1.GetSkillCardsResponse.slots:type_name -> pandora.player.v1.SkillSlot
+	17, // 36: pandora.player.v1.PlayerLoadout.attributes:type_name -> pandora.player.v1.AttributeAllocation
+	30, // 37: pandora.player.v1.PlayerLoadout.equipment:type_name -> pandora.player.v1.LoadoutEquipment
+	31, // 38: pandora.player.v1.PlayerLoadout.talents:type_name -> pandora.player.v1.TalentNode
+	56, // 39: pandora.player.v1.PlayerLoadout.skill_cards:type_name -> pandora.player.v1.LoadoutSkillCard
+	68, // 40: pandora.player.v1.GetLoadoutResponse.code:type_name -> pandora.common.v1.ErrCode
+	55, // 41: pandora.player.v1.GetLoadoutResponse.loadout:type_name -> pandora.player.v1.PlayerLoadout
+	66, // 42: pandora.player.v1.RewardClaimStorageRecord.permanent:type_name -> pandora.player.v1.RewardClaimStorageRecord.PermanentEntry
+	67, // 43: pandora.player.v1.RewardClaimStorageRecord.activity:type_name -> pandora.player.v1.RewardClaimStorageRecord.ActivityEntry
+	1,  // 44: pandora.player.v1.ClaimRewardRequest.source_type:type_name -> pandora.player.v1.RewardSourceType
+	68, // 45: pandora.player.v1.ClaimRewardResponse.code:type_name -> pandora.common.v1.ErrCode
+	1,  // 46: pandora.player.v1.GetRewardClaimsRequest.source_type:type_name -> pandora.player.v1.RewardSourceType
+	68, // 47: pandora.player.v1.GetRewardClaimsResponse.code:type_name -> pandora.common.v1.ErrCode
+	68, // 48: pandora.player.v1.AddExperienceResponse.code:type_name -> pandora.common.v1.ErrCode
+	3,  // 49: pandora.player.v1.PlayerService.GetProfile:input_type -> pandora.player.v1.GetProfileRequest
+	5,  // 50: pandora.player.v1.PlayerService.UpdateNickname:input_type -> pandora.player.v1.UpdateNicknameRequest
+	7,  // 51: pandora.player.v1.PlayerService.ListHeroes:input_type -> pandora.player.v1.ListHeroesRequest
+	9,  // 52: pandora.player.v1.PlayerService.UnlockHero:input_type -> pandora.player.v1.UnlockHeroRequest
+	11, // 53: pandora.player.v1.PlayerService.GetMMR:input_type -> pandora.player.v1.GetMMRRequest
+	13, // 54: pandora.player.v1.PlayerService.UpdateMMR:input_type -> pandora.player.v1.UpdateMMRRequest
+	18, // 55: pandora.player.v1.PlayerService.SelectHero:input_type -> pandora.player.v1.SelectHeroRequest
+	20, // 56: pandora.player.v1.PlayerService.GetActiveHero:input_type -> pandora.player.v1.GetActiveHeroRequest
+	22, // 57: pandora.player.v1.PlayerService.GrantAttributePoints:input_type -> pandora.player.v1.GrantAttributePointsRequest
+	24, // 58: pandora.player.v1.PlayerService.AllocateAttributePoints:input_type -> pandora.player.v1.AllocateAttributePointsRequest
+	26, // 59: pandora.player.v1.PlayerService.ResetAttributes:input_type -> pandora.player.v1.ResetAttributesRequest
+	28, // 60: pandora.player.v1.PlayerService.GetAttributes:input_type -> pandora.player.v1.GetAttributesRequest
+	32, // 61: pandora.player.v1.PlayerService.SetEquipment:input_type -> pandora.player.v1.SetEquipmentRequest
+	34, // 62: pandora.player.v1.PlayerService.GetEquipment:input_type -> pandora.player.v1.GetEquipmentRequest
+	36, // 63: pandora.player.v1.PlayerService.GrantTalentPoints:input_type -> pandora.player.v1.GrantTalentPointsRequest
+	38, // 64: pandora.player.v1.PlayerService.SetTalents:input_type -> pandora.player.v1.SetTalentsRequest
+	40, // 65: pandora.player.v1.PlayerService.ResetTalents:input_type -> pandora.player.v1.ResetTalentsRequest
+	42, // 66: pandora.player.v1.PlayerService.GetTalents:input_type -> pandora.player.v1.GetTalentsRequest
+	46, // 67: pandora.player.v1.PlayerService.GrantSkillCards:input_type -> pandora.player.v1.GrantSkillCardsRequest
+	49, // 68: pandora.player.v1.PlayerService.UpgradeSkillCard:input_type -> pandora.player.v1.UpgradeSkillCardRequest
+	51, // 69: pandora.player.v1.PlayerService.SetSkillSlots:input_type -> pandora.player.v1.SetSkillSlotsRequest
+	53, // 70: pandora.player.v1.PlayerService.GetSkillCards:input_type -> pandora.player.v1.GetSkillCardsRequest
+	57, // 71: pandora.player.v1.PlayerService.GetLoadout:input_type -> pandora.player.v1.GetLoadoutRequest
+	60, // 72: pandora.player.v1.PlayerService.ClaimReward:input_type -> pandora.player.v1.ClaimRewardRequest
+	62, // 73: pandora.player.v1.PlayerService.GetRewardClaims:input_type -> pandora.player.v1.GetRewardClaimsRequest
+	64, // 74: pandora.player.v1.PlayerService.AddExperience:input_type -> pandora.player.v1.AddExperienceRequest
+	4,  // 75: pandora.player.v1.PlayerService.GetProfile:output_type -> pandora.player.v1.GetProfileResponse
+	6,  // 76: pandora.player.v1.PlayerService.UpdateNickname:output_type -> pandora.player.v1.UpdateNicknameResponse
+	8,  // 77: pandora.player.v1.PlayerService.ListHeroes:output_type -> pandora.player.v1.ListHeroesResponse
+	10, // 78: pandora.player.v1.PlayerService.UnlockHero:output_type -> pandora.player.v1.UnlockHeroResponse
+	12, // 79: pandora.player.v1.PlayerService.GetMMR:output_type -> pandora.player.v1.GetMMRResponse
+	14, // 80: pandora.player.v1.PlayerService.UpdateMMR:output_type -> pandora.player.v1.UpdateMMRResponse
+	19, // 81: pandora.player.v1.PlayerService.SelectHero:output_type -> pandora.player.v1.SelectHeroResponse
+	21, // 82: pandora.player.v1.PlayerService.GetActiveHero:output_type -> pandora.player.v1.GetActiveHeroResponse
+	23, // 83: pandora.player.v1.PlayerService.GrantAttributePoints:output_type -> pandora.player.v1.GrantAttributePointsResponse
+	25, // 84: pandora.player.v1.PlayerService.AllocateAttributePoints:output_type -> pandora.player.v1.AllocateAttributePointsResponse
+	27, // 85: pandora.player.v1.PlayerService.ResetAttributes:output_type -> pandora.player.v1.ResetAttributesResponse
+	29, // 86: pandora.player.v1.PlayerService.GetAttributes:output_type -> pandora.player.v1.GetAttributesResponse
+	33, // 87: pandora.player.v1.PlayerService.SetEquipment:output_type -> pandora.player.v1.SetEquipmentResponse
+	35, // 88: pandora.player.v1.PlayerService.GetEquipment:output_type -> pandora.player.v1.GetEquipmentResponse
+	37, // 89: pandora.player.v1.PlayerService.GrantTalentPoints:output_type -> pandora.player.v1.GrantTalentPointsResponse
+	39, // 90: pandora.player.v1.PlayerService.SetTalents:output_type -> pandora.player.v1.SetTalentsResponse
+	41, // 91: pandora.player.v1.PlayerService.ResetTalents:output_type -> pandora.player.v1.ResetTalentsResponse
+	43, // 92: pandora.player.v1.PlayerService.GetTalents:output_type -> pandora.player.v1.GetTalentsResponse
+	48, // 93: pandora.player.v1.PlayerService.GrantSkillCards:output_type -> pandora.player.v1.GrantSkillCardsResponse
+	50, // 94: pandora.player.v1.PlayerService.UpgradeSkillCard:output_type -> pandora.player.v1.UpgradeSkillCardResponse
+	52, // 95: pandora.player.v1.PlayerService.SetSkillSlots:output_type -> pandora.player.v1.SetSkillSlotsResponse
+	54, // 96: pandora.player.v1.PlayerService.GetSkillCards:output_type -> pandora.player.v1.GetSkillCardsResponse
+	58, // 97: pandora.player.v1.PlayerService.GetLoadout:output_type -> pandora.player.v1.GetLoadoutResponse
+	61, // 98: pandora.player.v1.PlayerService.ClaimReward:output_type -> pandora.player.v1.ClaimRewardResponse
+	63, // 99: pandora.player.v1.PlayerService.GetRewardClaims:output_type -> pandora.player.v1.GetRewardClaimsResponse
+	65, // 100: pandora.player.v1.PlayerService.AddExperience:output_type -> pandora.player.v1.AddExperienceResponse
+	75, // [75:101] is the sub-list for method output_type
+	49, // [49:75] is the sub-list for method input_type
+	49, // [49:49] is the sub-list for extension type_name
+	49, // [49:49] is the sub-list for extension extendee
+	0,  // [0:49] is the sub-list for field type_name
 }
 
 func init() { file_pandora_player_v1_player_proto_init() }
@@ -3831,7 +4665,7 @@ func file_pandora_player_v1_player_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pandora_player_v1_player_proto_rawDesc), len(file_pandora_player_v1_player_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   54,
+			NumMessages:   66,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

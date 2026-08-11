@@ -53,6 +53,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto, /* tracker*/ nullptr,},
         // ::pandora::login::v1::VerifyDSTicketResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::login::v1::GetRegisterNoRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::login::v1::GetRegisterNoResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto, /* tracker*/ nullptr,},
         // ::pandora::login::v1::SelectRoleRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto, /* tracker*/ nullptr,},
         // ::pandora::login::v1::SelectRoleResponse
@@ -343,7 +347,7 @@ constexpr auto SelectRoleResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto,
@@ -484,7 +488,7 @@ constexpr auto SelectRoleRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto,
@@ -1781,6 +1785,278 @@ const ::_pbi::ClassData* GetResumeContextRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GetRegisterNoResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetRegisterNoResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetRegisterNoResponse, _impl_._has_bits_);
+};
+
+constexpr GetRegisterNoResponse::ParseTableT_ GetRegisterNoResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetRegisterNoResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::login::v1::GetRegisterNoResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 register_no = 2 [json_name = "registerNo"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetRegisterNoResponse, _impl_.register_no_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetRegisterNoResponse, _impl_.register_no_)}},
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetRegisterNoResponse, _impl_.code_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetRegisterNoResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(GetRegisterNoResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint64 register_no = 2 [json_name = "registerNo"];
+      {PROTOBUF_FIELD_OFFSET(GetRegisterNoResponse, _impl_.register_no_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetRegisterNoResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        register_no_{::uint64_t{0u}},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr GetRegisterNoResponse::GetRegisterNoResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetRegisterNoResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetRegisterNoResponse(arena);
+}
+constexpr auto GetRegisterNoResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetRegisterNoResponse), alignof(GetRegisterNoResponse));
+}
+constexpr auto GetRegisterNoResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetRegisterNoResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetRegisterNoResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetRegisterNoResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetRegisterNoResponse>(), &GetRegisterNoResponse::ByteSizeLong,
+              &GetRegisterNoResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetRegisterNoResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[13],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetRegisterNoResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetRegisterNoResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetRegisterNoResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetRegisterNoResponse::InternalGenerateClassData_(
+            _default, &GetRegisterNoResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetRegisterNoResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetRegisterNoResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetRegisterNoResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetRegisterNoResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetRegisterNoResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetRegisterNoResponseGlobalsTypeInternal GetRegisterNoResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetRegisterNoResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetRegisterNoResponse_globals_.GetClassData();
+#else
+  return GetRegisterNoResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetRegisterNoRequest::_Internal {
+ public:
+};
+
+constexpr GetRegisterNoRequest::ParseTableT_ GetRegisterNoRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetRegisterNoRequest,
+                            _impl_._cached_size_),  // no hasbits
+      0, // no _extensions_
+      0, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967295,  // skipmap
+      offsetof(ParseTableT_, field_names),  // no field_entries
+      0,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::login::v1::GetRegisterNoRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, // no field_entries, or aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr GetRegisterNoRequest::GetRegisterNoRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::internal::ZeroFieldsBase(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL GetRegisterNoRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetRegisterNoRequest(arena);
+}
+constexpr auto GetRegisterNoRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetRegisterNoRequest), alignof(GetRegisterNoRequest));
+}
+constexpr auto GetRegisterNoRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetRegisterNoRequest::MergeImpl,
+          ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<GetRegisterNoRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetRegisterNoRequest::SharedDtor,
+          ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<GetRegisterNoRequest>(), &GetRegisterNoRequest::ByteSizeLong,
+              &GetRegisterNoRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetRegisterNoRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[12],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetRegisterNoRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetRegisterNoRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetRegisterNoRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetRegisterNoRequest::InternalGenerateClassData_(
+            _default, &GetRegisterNoRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetRegisterNoRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetRegisterNoRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetRegisterNoRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetRegisterNoRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetRegisterNoRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetRegisterNoRequestGlobalsTypeInternal GetRegisterNoRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetRegisterNoRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetRegisterNoRequest_globals_.GetClassData();
+#else
+  return GetRegisterNoRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class DSTicket::_Internal {
  public:
   using HasBits = decltype(::std::declval<DSTicket>()._impl_._has_bits_);
@@ -2871,6 +3147,14 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::VerifyDSTicketResponse, _impl_.claims_),
         1,
         0,
+        0x000, // bitmap
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::GetRegisterNoResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::GetRegisterNoResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::GetRegisterNoResponse, _impl_.register_no_),
+        1,
+        0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::SelectRoleRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -2901,8 +3185,10 @@ static const ::_pbi::MigrationSchema
         {163, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
         {172, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
         {181, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
-        {188, sizeof(::pandora::login::v1::SelectRoleRequest)},
-        {193, sizeof(::pandora::login::v1::SelectRoleResponse)},
+        {188, sizeof(::pandora::login::v1::GetRegisterNoRequest)},
+        {189, sizeof(::pandora::login::v1::GetRegisterNoResponse)},
+        {196, sizeof(::pandora::login::v1::SelectRoleRequest)},
+        {201, sizeof(::pandora::login::v1::SelectRoleResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2918,6 +3204,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::login::v1::IssueDSTicketResponse_globals_,
         &::pandora::login::v1::VerifyDSTicketRequest_globals_,
         &::pandora::login::v1::VerifyDSTicketResponse_globals_,
+        &::pandora::login::v1::GetRegisterNoRequest_globals_,
+        &::pandora::login::v1::GetRegisterNoResponse_globals_,
         &::pandora::login::v1::SelectRoleRequest_globals_,
         &::pandora::login::v1::SelectRoleResponse_globals_,
 };
@@ -3005,54 +3293,60 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "\026VerifyDSTicketResponse\022.\n\004code\030\001 \001(\0162\032."
     "pandora.common.v1.ErrCodeR\004code\0222\n\006claim"
     "s\030\002 \001(\0132\032.pandora.login.v1.DSTicketR\006cla"
-    "ims\",\n\021SelectRoleRequest\022\027\n\007role_id\030\001 \001("
-    "\rR\006roleId\"\203\001\n\022SelectRoleResponse\022.\n\004code"
-    "\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code"
-    "\022\036\n\013hub_ds_addr\030\002 \001(\tR\thubDsAddr\022\035\n\nhub_"
-    "ticket\030\003 \001(\tR\thubTicket*t\n\013ResumeRoute\022\034"
-    "\n\030RESUME_ROUTE_UNSPECIFIED\020\000\022\024\n\020RESUME_R"
-    "OUTE_HUB\020\001\022\027\n\023RESUME_ROUTE_BATTLE\020\002\022\030\n\024R"
-    "ESUME_ROUTE_UNKNOWN\020\003*\366\001\n\020ResumeMatchSta"
-    "ge\022\"\n\036RESUME_MATCH_STAGE_UNSPECIFIED\020\000\022\033"
-    "\n\027RESUME_MATCH_STAGE_NONE\020\001\022\035\n\031RESUME_MA"
-    "TCH_STAGE_QUEUED\020\002\022!\n\035RESUME_MATCH_STAGE"
-    "_CONFIRMING\020\003\022!\n\035RESUME_MATCH_STAGE_ALLO"
-    "CATING\020\004\022\034\n\030RESUME_MATCH_STAGE_READY\020\005\022\036"
-    "\n\032RESUME_MATCH_STAGE_RUNNING\020\006*\205\001\n\024Resum"
-    "ePlacementState\022&\n\"RESUME_PLACEMENT_STAT"
-    "E_UNSPECIFIED\020\000\022\"\n\036RESUME_PLACEMENT_STAT"
-    "E_PENDING\020\001\022!\n\035RESUME_PLACEMENT_STATE_ST"
-    "ABLE\020\002*\330\001\n\020ResumeEntryState\022\"\n\036RESUME_EN"
-    "TRY_STATE_UNSPECIFIED\020\000\022$\n RESUME_ENTRY_"
-    "STATE_ROLE_REQUIRED\020\001\022\033\n\027RESUME_ENTRY_ST"
-    "ATE_WAIT\020\002\022\035\n\031RESUME_ENTRY_STATE_TARGET\020"
-    "\003\022\035\n\031RESUME_ENTRY_STATE_REAUTH\020\004\022\037\n\033RESU"
-    "ME_ENTRY_STATE_TERMINAL\020\005*\354\001\n\020ResumeWait"
-    "Reason\022\"\n\036RESUME_WAIT_REASON_UNSPECIFIED"
-    "\020\000\022$\n RESUME_WAIT_REASON_OWNER_UNKNOWN\020\001"
-    "\022$\n RESUME_WAIT_REASON_ADMIT_BARRIER\020\002\022\037"
-    "\n\033RESUME_WAIT_REASON_MATCHING\020\003\022#\n\037RESUM"
-    "E_WAIT_REASON_ROLE_UNKNOWN\020\004\022\"\n\036RESUME_W"
-    "AIT_REASON_NO_CAPACITY\020\0052\334\005\n\014LoginServic"
-    "e\022^\n\005Login\022\036.pandora.login.v1.LoginReque"
-    "st\032\037.pandora.login.v1.LoginResponse\"\024\202\323\344"
-    "\223\002\016\"\t/v1/login:\001*\022b\n\006Logout\022\037.pandora.lo"
-    "gin.v1.LogoutRequest\032 .pandora.login.v1."
-    "LogoutResponse\"\025\202\323\344\223\002\017\"\n/v1/logout:\001*\022\200\001"
-    "\n\rIssueDSTicket\022&.pandora.login.v1.Issue"
-    "DSTicketRequest\032\'.pandora.login.v1.Issue"
-    "DSTicketResponse\"\036\202\323\344\223\002\030\"\023/v1/ds/ticket/"
-    "issue:\001*\022s\n\nSelectRole\022#.pandora.login.v"
-    "1.SelectRoleRequest\032$.pandora.login.v1.S"
-    "electRoleResponse\"\032\202\323\344\223\002\024\"\017/v1/role/sele"
-    "ct:\001*\022\204\001\n\016VerifyDSTicket\022\'.pandora.login"
-    ".v1.VerifyDSTicketRequest\032(.pandora.logi"
-    "n.v1.VerifyDSTicketResponse\"\037\202\323\344\223\002\031\"\024/v1"
-    "/ds/ticket/verify:\001*\022\210\001\n\020GetResumeContex"
-    "t\022).pandora.login.v1.GetResumeContextReq"
-    "uest\032*.pandora.login.v1.GetResumeContext"
-    "Response\"\035\202\323\344\223\002\027\"\022/v1/resume/context:\001*b"
-    "\006proto3"
+    "ims\"\026\n\024GetRegisterNoRequest\"h\n\025GetRegist"
+    "erNoResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
+    "mon.v1.ErrCodeR\004code\022\037\n\013register_no\030\002 \001("
+    "\004R\nregisterNo\",\n\021SelectRoleRequest\022\027\n\007ro"
+    "le_id\030\001 \001(\rR\006roleId\"\203\001\n\022SelectRoleRespon"
+    "se\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
+    "CodeR\004code\022\036\n\013hub_ds_addr\030\002 \001(\tR\thubDsAd"
+    "dr\022\035\n\nhub_ticket\030\003 \001(\tR\thubTicket*t\n\013Res"
+    "umeRoute\022\034\n\030RESUME_ROUTE_UNSPECIFIED\020\000\022\024"
+    "\n\020RESUME_ROUTE_HUB\020\001\022\027\n\023RESUME_ROUTE_BAT"
+    "TLE\020\002\022\030\n\024RESUME_ROUTE_UNKNOWN\020\003*\366\001\n\020Resu"
+    "meMatchStage\022\"\n\036RESUME_MATCH_STAGE_UNSPE"
+    "CIFIED\020\000\022\033\n\027RESUME_MATCH_STAGE_NONE\020\001\022\035\n"
+    "\031RESUME_MATCH_STAGE_QUEUED\020\002\022!\n\035RESUME_M"
+    "ATCH_STAGE_CONFIRMING\020\003\022!\n\035RESUME_MATCH_"
+    "STAGE_ALLOCATING\020\004\022\034\n\030RESUME_MATCH_STAGE"
+    "_READY\020\005\022\036\n\032RESUME_MATCH_STAGE_RUNNING\020\006"
+    "*\205\001\n\024ResumePlacementState\022&\n\"RESUME_PLAC"
+    "EMENT_STATE_UNSPECIFIED\020\000\022\"\n\036RESUME_PLAC"
+    "EMENT_STATE_PENDING\020\001\022!\n\035RESUME_PLACEMEN"
+    "T_STATE_STABLE\020\002*\330\001\n\020ResumeEntryState\022\"\n"
+    "\036RESUME_ENTRY_STATE_UNSPECIFIED\020\000\022$\n RES"
+    "UME_ENTRY_STATE_ROLE_REQUIRED\020\001\022\033\n\027RESUM"
+    "E_ENTRY_STATE_WAIT\020\002\022\035\n\031RESUME_ENTRY_STA"
+    "TE_TARGET\020\003\022\035\n\031RESUME_ENTRY_STATE_REAUTH"
+    "\020\004\022\037\n\033RESUME_ENTRY_STATE_TERMINAL\020\005*\354\001\n\020"
+    "ResumeWaitReason\022\"\n\036RESUME_WAIT_REASON_U"
+    "NSPECIFIED\020\000\022$\n RESUME_WAIT_REASON_OWNER"
+    "_UNKNOWN\020\001\022$\n RESUME_WAIT_REASON_ADMIT_B"
+    "ARRIER\020\002\022\037\n\033RESUME_WAIT_REASON_MATCHING\020"
+    "\003\022#\n\037RESUME_WAIT_REASON_ROLE_UNKNOWN\020\004\022\""
+    "\n\036RESUME_WAIT_REASON_NO_CAPACITY\020\0052\337\006\n\014L"
+    "oginService\022^\n\005Login\022\036.pandora.login.v1."
+    "LoginRequest\032\037.pandora.login.v1.LoginRes"
+    "ponse\"\024\202\323\344\223\002\016\"\t/v1/login:\001*\022b\n\006Logout\022\037."
+    "pandora.login.v1.LogoutRequest\032 .pandora"
+    ".login.v1.LogoutResponse\"\025\202\323\344\223\002\017\"\n/v1/lo"
+    "gout:\001*\022\200\001\n\rIssueDSTicket\022&.pandora.logi"
+    "n.v1.IssueDSTicketRequest\032\'.pandora.logi"
+    "n.v1.IssueDSTicketResponse\"\036\202\323\344\223\002\030\"\023/v1/"
+    "ds/ticket/issue:\001*\022\200\001\n\rGetRegisterNo\022&.p"
+    "andora.login.v1.GetRegisterNoRequest\032\'.p"
+    "andora.login.v1.GetRegisterNoResponse\"\036\202"
+    "\323\344\223\002\030\"\023/v1/register-no/get:\001*\022s\n\nSelectR"
+    "ole\022#.pandora.login.v1.SelectRoleRequest"
+    "\032$.pandora.login.v1.SelectRoleResponse\"\032"
+    "\202\323\344\223\002\024\"\017/v1/role/select:\001*\022\204\001\n\016VerifyDST"
+    "icket\022\'.pandora.login.v1.VerifyDSTicketR"
+    "equest\032(.pandora.login.v1.VerifyDSTicket"
+    "Response\"\037\202\323\344\223\002\031\"\024/v1/ds/ticket/verify:\001"
+    "*\022\210\001\n\020GetResumeContext\022).pandora.login.v"
+    "1.GetResumeContextRequest\032*.pandora.logi"
+    "n.v1.GetResumeContextResponse\"\035\202\323\344\223\002\027\"\022/"
+    "v1/resume/context:\001*b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_deps[2] = {
@@ -3063,13 +3357,13 @@ static ::absl::once_flag descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto = {
     false,
     false,
-    5167,
+    5428,
     descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto,
     "pandora/login/v1/login.proto",
     &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_once,
     descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_deps,
     2,
-    14,
+    16,
     schemas,
     file_message_globals,
     TableStruct_pandora_2flogin_2fv1_2flogin_2eproto::offsets,
@@ -7507,6 +7801,297 @@ void VerifyDSTicketResponse::InternalSwap(VerifyDSTicketResponse* PROTOBUF_RESTR
 }
 
 ::google::protobuf::Metadata VerifyDSTicketResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetRegisterNoRequest::GetRegisterNoRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, GetRegisterNoRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(arena_constructor:pandora.login.v1.GetRegisterNoRequest)
+}
+GetRegisterNoRequest::GetRegisterNoRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetRegisterNoRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, GetRegisterNoRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetRegisterNoRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+
+  // @@protoc_insertion_point(copy_constructor:pandora.login.v1.GetRegisterNoRequest)
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetRegisterNoRequest_class_data_ =
+        GetRegisterNoRequest::InternalGenerateClassData_(GetRegisterNoRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetRegisterNoRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetRegisterNoRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetRegisterNoRequest_class_data_.tc_table);
+  return GetRegisterNoRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetRegisterNoRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetRegisterNoRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetRegisterNoRequest_globals_));
+  return GetRegisterNoRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetRegisterNoRequest::ParseTableT_
+    GetRegisterNoRequest::_table_ =
+        GetRegisterNoRequest::InternalGenerateParseTable_(GetRegisterNoRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+
+
+
+
+
+
+
+::google::protobuf::Metadata GetRegisterNoRequest::GetMetadata() const {
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetRegisterNoResponse::GetRegisterNoResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetRegisterNoResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.login.v1.GetRegisterNoResponse)
+}
+GetRegisterNoResponse::GetRegisterNoResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetRegisterNoResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetRegisterNoResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GetRegisterNoResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetRegisterNoResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, register_no_),
+           0,
+           offsetof(Impl_, code_) -
+               offsetof(Impl_, register_no_) +
+               sizeof(Impl_::code_));
+}
+GetRegisterNoResponse::~GetRegisterNoResponse() {
+  // @@protoc_insertion_point(destructor:pandora.login.v1.GetRegisterNoResponse)
+  SharedDtor(*this);
+}
+inline void GetRegisterNoResponse::SharedDtor(MessageLite& self) {
+  GetRegisterNoResponse& this_ = static_cast<GetRegisterNoResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetRegisterNoResponse_class_data_ =
+        GetRegisterNoResponse::InternalGenerateClassData_(GetRegisterNoResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetRegisterNoResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetRegisterNoResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetRegisterNoResponse_class_data_.tc_table);
+  return GetRegisterNoResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetRegisterNoResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetRegisterNoResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetRegisterNoResponse_globals_));
+  return GetRegisterNoResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetRegisterNoResponse::ParseTableT_
+    GetRegisterNoResponse::_table_ =
+        GetRegisterNoResponse::InternalGenerateParseTable_(GetRegisterNoResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetRegisterNoResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.login.v1.GetRegisterNoResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.register_no_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.code_) -
+        reinterpret_cast<char*>(&_impl_.register_no_)) + sizeof(_impl_.code_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetRegisterNoResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetRegisterNoResponse& this_ = static_cast<const GetRegisterNoResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetRegisterNoResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetRegisterNoResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.login.v1.GetRegisterNoResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // uint64 register_no = 2 [json_name = "registerNo"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_register_no() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_register_no(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.login.v1.GetRegisterNoResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetRegisterNoResponse::ByteSizeLong(const MessageLite& base) {
+  const GetRegisterNoResponse& this_ = static_cast<const GetRegisterNoResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetRegisterNoResponse::ByteSizeLong() const {
+  const GetRegisterNoResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.login.v1.GetRegisterNoResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint64 register_no = 2 [json_name = "registerNo"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_register_no() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_register_no());
+      }
+    }
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetRegisterNoResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetRegisterNoResponse*>(&to_msg);
+  auto& from = static_cast<const GetRegisterNoResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.login.v1.GetRegisterNoResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_register_no() != 0) {
+        _this->_impl_.register_no_ = from._impl_.register_no_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetRegisterNoResponse::CopyFrom(const GetRegisterNoResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.login.v1.GetRegisterNoResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetRegisterNoResponse::InternalSwap(GetRegisterNoResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetRegisterNoResponse, _impl_.code_)
+      + sizeof(GetRegisterNoResponse::_impl_.code_)
+      - PROTOBUF_FIELD_OFFSET(GetRegisterNoResponse, _impl_.register_no_)>(
+          reinterpret_cast<char*>(&_impl_.register_no_),
+          reinterpret_cast<char*>(&other->_impl_.register_no_));
+}
+
+::google::protobuf::Metadata GetRegisterNoResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

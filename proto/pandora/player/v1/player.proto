@@ -39,6 +39,13 @@ service PlayerService {
   rpc ResetTalents(ResetTalentsRequest) returns (ResetTalentsResponse);
   rpc GetTalents(GetTalentsRequest) returns (GetTalentsResponse);
 
+  // 技能卡:持有(GrantSkillCards 系统发放)、培养(UpgradeSkillCard 消耗碎片升级)、
+  // 更换(SetSkillSlots 全量替换卡槽装配)。
+  rpc GrantSkillCards(GrantSkillCardsRequest) returns (GrantSkillCardsResponse);
+  rpc UpgradeSkillCard(UpgradeSkillCardRequest) returns (UpgradeSkillCardResponse);
+  rpc SetSkillSlots(SetSkillSlotsRequest) returns (SetSkillSlotsResponse);
+  rpc GetSkillCards(GetSkillCardsRequest) returns (GetSkillCardsResponse);
+
   rpc GetLoadout(GetLoadoutRequest) returns (GetLoadoutResponse);
 
   // ── 领奖(签到里程碑 / 成就 / 新手 / 永久任务 / 活动)──
@@ -338,7 +345,80 @@ message GetTalentsResponse {
   int32 unspent_points = 3;
 }
 
-// PlayerLoadout 是开战前快照(出战英雄 + 属性点 + 装备预设 + 天赋),供匹配/进战下发(客户端可见结构)。
+// ── 技能卡(持有 / 培养 / 更换)────────────────────────────────────────────────
+
+// SkillCard 是玩家持有的一张技能卡(客户端可见结构)。
+//   card_id 指向 j_技能卡.xlsx;level 是已培养等级(>=1,获得即 1 级);
+//   shards 是该卡当前碎片余量(升级消耗从这里扣;重复获得同名卡转化为碎片)。
+message SkillCard {
+  uint32 card_id = 1;
+  uint32 level   = 2;
+  uint32 shards  = 3;
+}
+
+// SkillSlot 是一个技能卡槽的装配(大厅态;开战前随 Loadout 下发,DS 据此给技能)。
+//   slot 是槽位序号(0..N-1);card_id 是装在该槽的卡,0 表示空槽。
+message SkillSlot {
+  uint32 slot    = 1;
+  uint32 card_id = 2;
+}
+
+// GrantSkillCards 幂等发放技能卡 / 碎片(系统 RPC,不经 Envoy;来源:抽卡 / 活动 / GM)。
+//   已持有该卡时,shards 累加到碎片余量;未持有则以 1 级建卡并把 shards 记为初始余量。
+message GrantSkillCardsRequest {
+  uint64 player_id       = 1;
+  repeated SkillCardGrant grants = 2;
+  string idempotency_key = 3;
+}
+
+// SkillCardGrant 一次发放中的一项。shards 可以为 0——那表示"只解锁这张卡,不给碎片"。
+message SkillCardGrant {
+  uint32 card_id = 1;
+  uint32 shards  = 2;
+}
+
+message GrantSkillCardsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated SkillCard cards = 2;  // 发放后该玩家的全部持有卡
+  bool already = 3;              // true = 幂等命中,本次未重复发放
+}
+
+// UpgradeSkillCard 消耗碎片把一张卡升一级(每次只升一级,便于客户端逐级确认消耗)。
+message UpgradeSkillCardRequest {
+  uint64 player_id = 1;
+  uint32 card_id   = 2;
+}
+
+message UpgradeSkillCardResponse {
+  pandora.common.v1.ErrCode code = 1;
+  SkillCard card = 2;          // 升级后的该卡状态(等级 + 剩余碎片)
+  uint32 shard_cost = 3;       // 本次实际消耗的碎片数
+}
+
+// SetSkillSlots 全量替换卡槽装配(更换技能卡;未列出的槽视为清空)。
+//   card_id=0 表示显式清空该槽;同一张卡不得占用多个槽。
+message SetSkillSlotsRequest {
+  uint64 player_id = 1;
+  repeated SkillSlot slots = 2;
+}
+
+message SetSkillSlotsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated SkillSlot slots = 2;  // 设置后的权威装配
+}
+
+message GetSkillCardsRequest {
+  uint64 player_id = 1;
+}
+
+message GetSkillCardsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated SkillCard cards = 2;
+  repeated SkillSlot slots = 3;  // 一次往返拿齐"有哪些卡"和"装了哪几张"
+}
+
+// PlayerLoadout 是开战前快照(出战英雄 + 属性点 + 装备预设 + 天赋 + 技能卡槽),
+// 供匹配/进战下发(客户端可见结构)。
 message PlayerLoadout {
   uint64 player_id = 1;
   uint32 active_hero_id = 2;
@@ -347,6 +427,15 @@ message PlayerLoadout {
   repeated LoadoutEquipment equipment = 5;
   repeated TalentNode talents = 6;
   int32 unspent_talent_points = 7;
+  // 技能卡槽装配 + 卡等级(DS 据此给技能;等级随卡带出,免得 DS 再查一次持有表)。
+  repeated LoadoutSkillCard skill_cards = 8;
+}
+
+// LoadoutSkillCard 是出战快照里的一个已装配卡槽(槽位 + 卡 + 该卡等级)。
+message LoadoutSkillCard {
+  uint32 slot    = 1;
+  uint32 card_id = 2;
+  uint32 level   = 3;
 }
 
 message GetLoadoutRequest {
