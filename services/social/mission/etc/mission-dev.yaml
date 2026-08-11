@@ -1,0 +1,53 @@
+# Pandora mission 服务开发期配置(2026-08-11)。
+#
+# - gRPC :20019 / HTTP :21019(仅 /metrics)
+# - MySQL 强依赖(pandora_mission);配置表强依赖(configtable/dist 或发布 active 目录)
+# - kafka 弱依赖(pandora.mission.update 推送;未配则推送禁用,出箱堆积可见)
+# - 发奖下游:inventory(道具/装备)+ player(经验)强依赖;mail(满包溢出转邮件)弱依赖
+# - dev: enable_reflection=true 便于 grpcurl 联调
+#
+# 集群模式下本文件被 gen_cluster_config.ps1 生成的 run/cluster/etc/mission.yaml 取代。
+
+server:
+  grpc:
+    network: tcp
+    addr: ":20019"
+    timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
+    enable_reflection: true     # dev 开;prod 关(零值=false)
+    max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
+  http:
+    network: tcp
+    addr: ":21019"
+
+node:
+  node_id: 1
+  # ⚠️ 基础设施端口必须写 Pandora 的 dev 端口(mysql 3307 / redis 6380 / kafka 9093,
+  # 见 deploy/docker-compose.dev.yml,刻意与 vanilla 3306/6379/9092 区分)。
+  # 这不只是本机能不能连上的问题:gen_cluster_config.ps1 的 Convert-DevToCluster 只按
+  # 这三个端口做「127.0.0.1:3307 → mysql:3306」的集群改写,写成 vanilla 端口会**原样**
+  # 带进 run/cluster/etc/mission.yaml,Pod 里连自己的 127.0.0.1 起不来(生成期不报错)。
+  mysql_client:
+    dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_mission?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
+  redis_client:
+    host: "127.0.0.1:6380"      # sessiongate 会话门只读(login 会话权威 pandora:sess)
+
+# dev 单机放宽;-Prod 由 gen_cluster_config 机械置 true(§9 会话现行性门,
+# INC-20260722-004)。注释必须另起一行:契约测试断言 `require: false` 后无尾随内容。
+session_gate:
+  require: false
+
+kafka:
+  brokers: ["127.0.0.1:9093"]
+
+config_table:
+  dir: "../../../configtable/dist"   # dev 直读仓库 dist;发布环境指向 active 目录
+
+mission:
+  max_active_missions: 50
+  # 发奖下游(dev 单机默认端口;集群模式由 gen_cluster_config 改写)
+  inventory_addr: "127.0.0.1:20015"
+  player_addr: "127.0.0.1:20002"
+  mail_addr: "127.0.0.1:20009"   # mail = 20009(infra.md 端口表);20011 是 matchmaker
+  # allow_noop_reward: true    # 仅骨架联调(不起 inventory/player 时)放开;奖励滞留 PENDING
+  # retention_mode: ""         # 默认 report_only 只报告不删;真删须显式 "delete"(§9.24)
+  # receipt_cleanup_enabled: false  # 收据清理组级闸,默认关(上游重试无界,删收据会双计)

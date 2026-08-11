@@ -148,19 +148,19 @@ func TestStartMatch_MapGate(t *testing.T) {
 	ctx := context.Background()
 
 	// 战斗类关卡放行
-	if _, err := f.uc.StartMatch(ctx, 8101, 8101, 1001, 6); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 8101, 8101, 1001, 6, entryUnset); err != nil {
 		t.Fatalf("map 6 应放行: %v", err)
 	}
 	// map_id=0 → 兜底 cfg.MapId=6,放行
-	if _, err := f.uc.StartMatch(ctx, 8102, 8102, 1002, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 8102, 8102, 1002, 0, entryUnset); err != nil {
 		t.Fatalf("map 0(默认 6)应放行: %v", err)
 	}
 	// 非战斗类关卡(登录)拒绝
-	if _, err := f.uc.StartMatch(ctx, 8103, 8103, 1003, 1); errcode.As(err) != errcode.ErrMatchInvalidMap {
+	if _, err := f.uc.StartMatch(ctx, 8103, 8103, 1003, 1, entryUnset); errcode.As(err) != errcode.ErrMatchInvalidMap {
 		t.Fatalf("map 1(登录)应拒绝 ErrMatchInvalidMap: %v", err)
 	}
 	// 表里不存在的 map 拒绝
-	if _, err := f.uc.StartMatch(ctx, 8104, 8104, 1004, 999); errcode.As(err) != errcode.ErrMatchInvalidMap {
+	if _, err := f.uc.StartMatch(ctx, 8104, 8104, 1004, 999, entryUnset); errcode.As(err) != errcode.ErrMatchInvalidMap {
 		t.Fatalf("map 999 应拒绝 ErrMatchInvalidMap: %v", err)
 	}
 }
@@ -178,7 +178,7 @@ func TestStartMatch_MapGateHotReload(t *testing.T) {
 	f.uc.SetConfigTables(store)
 	ctx := context.Background()
 
-	if _, err := f.uc.StartMatch(ctx, 8201, 8201, 2001, 6); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 8201, 8201, 2001, 6, entryUnset); err != nil {
 		t.Fatalf("热更前 map 6 应放行: %v", err)
 	}
 
@@ -188,11 +188,11 @@ func TestStartMatch_MapGateHotReload(t *testing.T) {
 	if err != nil || !res.Reloaded {
 		t.Fatalf("热更失败: res=%+v err=%v", res, err)
 	}
-	if _, err := f.uc.StartMatch(ctx, 8202, 8202, 2002, 6); errcode.As(err) != errcode.ErrMatchInvalidMap {
+	if _, err := f.uc.StartMatch(ctx, 8202, 8202, 2002, 6, entryUnset); errcode.As(err) != errcode.ErrMatchInvalidMap {
 		t.Fatalf("热更后 map 6 应被拒: %v", err)
 	}
 	// 默认副本 7 仍在表内,map 0 继续放行
-	if _, err := f.uc.StartMatch(ctx, 8203, 8203, 2003, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 8203, 8203, 2003, 0, entryUnset); err != nil {
 		t.Fatalf("热更后 map 0(默认 7)应放行: %v", err)
 	}
 }
@@ -226,15 +226,15 @@ func TestStartMatch_MapGameModeCrossCheck(t *testing.T) {
 	ctx := context.Background()
 
 	// 同模式放行。
-	if _, err := f.uc.StartMatch(ctx, 8501, 8501, 5001, 6); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 8501, 8501, 5001, 6, entryUnset); err != nil {
 		t.Fatalf("同 game_mode 的 map 6 应放行: %v", err)
 	}
 	// 跨模式拒绝:pve_coop 的图被送进 5v5_ranked 实例。
-	if _, err := f.uc.StartMatch(ctx, 8502, 8502, 5002, 7); errcode.As(err) != errcode.ErrMatchInvalidMap {
+	if _, err := f.uc.StartMatch(ctx, 8502, 8502, 5002, 7, entryUnset); errcode.As(err) != errcode.ErrMatchInvalidMap {
 		t.Fatalf("跨 game_mode 的 map 7 应拒绝 ErrMatchInvalidMap: %v", err)
 	}
 	// 留空 = 无法判定,不是错误证据:必须放行(§9.21 新二进制兼容旧批次表)。
-	if _, err := f.uc.StartMatch(ctx, 8503, 8503, 5003, 8); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 8503, 8503, 5003, 8, entryUnset); err != nil {
 		t.Fatalf("game_mode 留空(旧批次表)应放行而非拒绝: %v", err)
 	}
 }
@@ -263,7 +263,7 @@ func TestStartMatch_SoloWithoutTeam(t *testing.T) {
 	f.uc.SetConfigTables(store)
 
 	// team_id=0 单排进 5v5:受理成功,票据成员就是调用者本人。
-	ticketID, err := f.uc.StartMatch(context.Background(), 8601, 0, 6001, 6)
+	ticketID, err := f.uc.StartMatch(context.Background(), 8601, 0, 6001, 6, entryUnset)
 	if err != nil {
 		t.Fatalf("单人入口(team_id=0)应放行: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestEntryModeAndSideCountFromLevelTable(t *testing.T) {
 // TestStartMatch_MapGateDisabled 未启用配置表(tables=nil)保持历史行为:任意 map_id 放行。
 func TestStartMatch_MapGateDisabled(t *testing.T) {
 	f := newFixture(t, 8300)
-	if _, err := f.uc.StartMatch(context.Background(), 8301, 8301, 3001, 424242); err != nil {
+	if _, err := f.uc.StartMatch(context.Background(), 8301, 8301, 3001, 424242, entryUnset); err != nil {
 		t.Fatalf("未启用配置表时不应校验 map_id: %v", err)
 	}
 }

@@ -116,6 +116,42 @@ func TestValidateTeamSizeUpperBound(t *testing.T) {
 	}
 }
 
+// TestValidateMinTeamSize 直进人数下限的加载期校验:
+//   - 0 = 无下限,合法(本列上线前的默认态,滚动混版下旧表照常加载);
+//   - 填了下限就必须同时填上限(上限留 0 表示"沿用全局",全局值逐部署不同,加载期无从比对);
+//   - 下限不得大于上限——那会让该图任何人数都进不去,是个静默拒服务,必须挡在加载边界。
+func TestValidateMinTeamSize(t *testing.T) {
+	unset := battleRow(20, "无下限")
+	unset.TeamSize = 5
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{unset}}); err != nil {
+		t.Fatalf("min_team_size=0 应放行(无下限),得 %v", err)
+	}
+
+	ok := battleRow(21, "5 人本最少 3 人")
+	ok.TeamSize, ok.MinTeamSize = 5, 3
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{ok}}); err != nil {
+		t.Fatalf("min=3 ≤ team_size=5 应放行,得 %v", err)
+	}
+
+	eq := battleRow(22, "下限=上限(必须满员才准直进)")
+	eq.TeamSize, eq.MinTeamSize = 5, 5
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{eq}}); err != nil {
+		t.Fatalf("min=team_size 应放行,得 %v", err)
+	}
+
+	noMax := battleRow(23, "填了下限却没填上限")
+	noMax.MinTeamSize = 3 // TeamSize 留 0
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{noMax}}); err == nil {
+		t.Fatal("min_team_size>0 而 team_size=0 应被拦下(下限相对上限才有意义)")
+	}
+
+	inverted := battleRow(24, "下限大于上限")
+	inverted.TeamSize, inverted.MinTeamSize = 3, 5
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{inverted}}); err == nil {
+		t.Fatal("min_team_size>team_size 应被拦下(否则该图任何人数都进不去)")
+	}
+}
+
 // TestLevelPackagePath 关卡资源列 → UE 长包名:必须与 UE 侧
 // APandoraDSLoaderGameMode::BuildTravelURL 同规则(点号后的对象名不能进地图路径)。
 func TestLevelPackagePath(t *testing.T) {

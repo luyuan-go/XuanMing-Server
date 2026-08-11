@@ -333,15 +333,21 @@ func (u *MatchUsecase) teamSizeForMap(mapID uint32) int {
 	return fallback
 }
 
-// isWalkInMap 判断某副本(map_id)是否走「直进」入口:关卡表 entry_mode 列为唯一事实源,
+// allowedEntryModes 取某副本(map_id)**允许哪些进法**:关卡表 entry_mode 列为唯一事实源,
 // 未配置(UNSPECIFIED / 表未启用 / 行不存在)时沿用本部署的 cfg.WalkIn 开关。
+// 返回值恒是三者之一:MATCHMAKE(只准排队)/ WALK_IN(只准直进)/ BOTH(两种都开放)。
 //
 // 为什么下沉到表:部署级开关只能表达「整个池要么全直进、要么全撮合」,而
-// 「多人撮合进副本」要求同一个 pve 池里有的副本直进、有的副本撮合(CLAUDE.md §17.1)。
+// 「多人撮合进副本」要求同一个 pve 池里有的副本直进、有的副本撮合(CLAUDE.md §17.1);
+// BOTH 再进一步,要求**同一张图**两个入口共存,那已经不是图的属性而是玩家的选择。
 // 兼容方向(§9.21):新二进制 + 旧批次表(无本列)→ 逐字节保持旧行为,不会误改入口语义。
-func (u *MatchUsecase) isWalkInMap(mapID uint32) bool {
+func (u *MatchUsecase) allowedEntryModes(mapID uint32) configpb.LevelEntryMode {
+	fallback := configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE
+	if u.cfg.WalkIn {
+		fallback = configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN
+	}
 	if u.tables == nil {
-		return u.cfg.WalkIn
+		return fallback
 	}
 	effective := mapID
 	if effective == 0 {
@@ -349,20 +355,114 @@ func (u *MatchUsecase) isWalkInMap(mapID uint32) bool {
 	}
 	tb := u.tables.Tables()
 	if tb == nil {
-		return u.cfg.WalkIn
+		return fallback
 	}
 	row, ok := tb.Level.ByID(effective)
 	if !ok {
+		return fallback
+	}
+	switch m := row.GetEntryMode(); m {
+	case configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN,
+		configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE,
+		configpb.LevelEntryMode_LEVEL_ENTRY_MODE_BOTH:
+		return m
+	default:
+		return fallback
+	}
+}
+
+// isWalkInMap 判断某副本**在没有玩家选择时**是否走直进。只用于兜底:滚动升级期旧 matchmaker
+// 写下的、不带 entry_mode 的存量票据(见 isWalkInTicket)。新票据一律以票上落定的进法为准。
+//
+// 本函数的目标不是"做个合理判断",而是**逐字节复刻旧二进制对同一张票会做的决定**:
+// 配置表热更与二进制发布相互独立,"旧二进制 + 含 BOTH 的新表"是真实存在的组合,而旧二进制
+// 的 switch 不认识 BOTH,会落 default 用部署级 cfg.WalkIn。撮合循环虽是单写者,leader 仍会
+// 在新旧副本间交棒 —— 两边对同一张存量票的分流必须一致,否则票的命运取决于当时谁是 leader
+// (§9.21 共存窗口必须双向兼容)。所以这里对 BOTH 也必须回退 cfg.WalkIn,不能自作聪明。
+func (u *MatchUsecase) isWalkInMap(mapID uint32) bool {
+	switch u.allowedEntryModes(mapID) {
+	case configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN:
+		return true
+	case configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE:
+		return false
+	default: // BOTH:旧二进制眼里的未知值
 		return u.cfg.WalkIn
 	}
-	switch row.GetEntryMode() {
+}
+
+// isWalkInTicket 判断一张票据走直进还是撮合。票上落定的 entry_mode 是权威;为空只可能是
+// 滚动升级期旧 matchmaker 写入的存量票(§9.21 共存窗口),按关卡表 / 部署开关兜底,
+// 与本字段上线前逐字节等价。存量票排空后本兜底不再有活路径,但不删——旧票据在 Redis 里
+// 无 TTL(非终态持久),删兜底等于让升级期的票永远分流不出去。
+func (u *MatchUsecase) isWalkInTicket(t *matchv1.MatchTicketStorageRecord) bool {
+	switch t.GetEntryMode() {
 	case configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN:
 		return true
 	case configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE:
 		return false
 	default:
-		return u.cfg.WalkIn
+		return u.isWalkInMap(t.GetMapId())
 	}
+}
+
+// resolveEntryMode 把「关卡表允许什么」× 「玩家选什么」求交,落定本次进法。
+// 返回值恒是 MATCHMAKE 或 WALK_IN 之一(BOTH 只是表侧的允许集合,不是可执行的进法)。
+//
+// fail-closed 规则(§17.3 准入条件只有服务端一份权威判定):
+//   - 该图只允许一种进法:请求留空(老客户端)按那一种放行;显式选了别的即拒。
+//   - 该图 BOTH:必须明确选 MATCHMAKE 或 WALK_IN,留空即拒——**不替玩家猜入口**。
+//     猜错的代价是玩家以为在排队实则已经单刷进本(或反之),而副本进去就消耗了次数/CD,
+//     不是一个能靠重试挽回的错误。
+//   - 请求填 BOTH 一律拒:它不是一种进法。
+func (u *MatchUsecase) resolveEntryMode(mapID uint32, choice configpb.LevelEntryMode) (configpb.LevelEntryMode, error) {
+	allowed := u.allowedEntryModes(mapID)
+	if allowed == configpb.LevelEntryMode_LEVEL_ENTRY_MODE_BOTH {
+		switch choice {
+		case configpb.LevelEntryMode_LEVEL_ENTRY_MODE_MATCHMAKE,
+			configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN:
+			return choice, nil
+		default:
+			return 0, errcode.New(errcode.ErrMatchEntryModeDenied,
+				"map %d allows both matchmake and walk-in, request must pick one (got %v)", mapID, choice)
+		}
+	}
+	if choice == configpb.LevelEntryMode_LEVEL_ENTRY_MODE_UNSPECIFIED || choice == allowed {
+		return allowed, nil
+	}
+	return 0, errcode.New(errcode.ErrMatchEntryModeDenied,
+		"map %d only allows entry mode %v, request asked for %v", mapID, allowed, choice)
+}
+
+// minTeamSizeForMap 取某副本的「直进人数下限」(关卡表 min_team_size;0 / 表未启用 / 行不存在
+// = 无下限)。与 teamSizeForMap 同一 effective 兜底口径(map_id==0 用本实例默认副本)。
+//
+// 上界钳制刻意用 teamSizeForMap 而非 MaxLevelTeamSize:加载期已校验 min ≤ team_size,
+// 这里再钳一次是防"手改 dist / 绕过生成器"把下限填得比上限还大——那会让该图**任何人数
+// 都进不去**,是个静默的拒服务,不能只靠加载期一道门(§16.5)。
+func (u *MatchUsecase) minTeamSizeForMap(mapID uint32) int {
+	if u.tables == nil {
+		return 0
+	}
+	effective := mapID
+	if effective == 0 {
+		effective = u.cfg.MapId
+	}
+	tb := u.tables.Tables()
+	if tb == nil {
+		return 0
+	}
+	row, ok := tb.Level.ByID(effective)
+	if !ok {
+		return 0
+	}
+	min := int(row.GetMinTeamSize())
+	if min <= 0 {
+		return 0
+	}
+	if max := u.teamSizeForMap(mapID); min > max {
+		return max
+	}
+	return min
 }
 
 // sideCountForMap 取某副本(map_id)的对局方数:关卡表 side_count>0 时按表,否则回退 2
@@ -555,7 +655,8 @@ func (u *MatchUsecase) removeActive(ctx context.Context, matchID uint64) {
 // 返回的 ticketID 同时作为客户端 QUEUEING 阶段的 match 句柄(CancelMatch/GetMatchProgress 用)。
 //
 // 前置(reader 非 nil 时):team 必须存在、state=READY、captainID 为队长、成员数 ≤ 一方人数。
-func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32) (uint64, error) {
+// entryChoice 是玩家选的进法(0=未选,老客户端);能不能这么进由 resolveEntryMode 按关卡表判定。
+func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32, entryChoice configpb.LevelEntryMode) (uint64, error) {
 	// 关卡表准入门(不变量 §9.15 接线):客户端上送的 map_id 必须是关卡表里的战斗类关卡,
 	// 否则任意 map_id 会一路透传成 DS 的 PANDORA_MAP_ID(拉起加载不存在关卡的 DS)。
 	if err := u.validateMapID(mapID); err != nil {
@@ -584,7 +685,7 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 		return 0, errcode.New(errcode.ErrRateLimited,
 			"start match cooldown, retry in %s", u.cfg.StartMatchCooldown.Std())
 	}
-	id, err := u.startMatchAdmitted(ctx, ticketID, teamID, captainID, mapID)
+	id, err := u.startMatchAdmitted(ctx, ticketID, teamID, captainID, mapID, entryChoice)
 	if err != nil {
 		// 先占坑→干活→失败释放(hub transferToLineInner 同模板,§9.20):
 		// 冷却只约束成功受理的频率,业务失败不得让玩家白等一个冷却窗。
@@ -594,10 +695,28 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 }
 
 // startMatchAdmitted 是 StartMatch 过冷却门之后的主体(拆出以便失败路径统一释放冷却)。
-func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32) (uint64, error) {
+func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32, entryChoice configpb.LevelEntryMode) (uint64, error) {
+	// 进法先落定:后续的下限判定、票据落库、撮合分流全用这一个结果,不各自再解析一遍。
+	entryMode, err := u.resolveEntryMode(mapID, entryChoice)
+	if err != nil {
+		return 0, err
+	}
+
 	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID, mapID)
 	if err != nil {
 		return 0, err
+	}
+
+	// 直进人数下限(关卡表 min_team_size):人没凑够时玩家自己进,至少要够这么多人。
+	// 落在这里而不是 resolveMembers 里,是因为 resolveMembers 对 teamID==0(单人入口)
+	// 直接返回单人名单、不走任何人数校验——下限若写在那个分支后面,"不组队直接点进"
+	// 就能整条绕过去。用 len(members) 判定则两条路径都被覆盖。
+	// 撮合入口不判本闸:它的目标恒是凑满 team_size(≥ min,加载期已校验),天然满足。
+	if entryMode == configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN {
+		if min := u.minTeamSizeForMap(mapID); len(members) < min {
+			return 0, errcode.New(errcode.ErrMatchTeamTooSmall,
+				"map %d requires at least %d players to walk in, got %d", mapID, min, len(members))
+		}
 	}
 
 	// no-show 进入侧退避执行点(anti-abuse §6 第 8 项,温和档):ds_allocator 在空场判弃
@@ -631,6 +750,7 @@ func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID,
 		NextAttemptAtMs: nowMs,
 		CreatedAtMs:     nowMs,
 		GameMode:        u.cfg.GameMode,
+		EntryMode:       entryMode,
 	}
 
 	// RPC 的唯一提交点是 durable operation。票据主体→成员 compare-claim→queue ZADD
@@ -824,6 +944,7 @@ func ticketFromStartOperation(op *matchv1.MatchStartOperationStorageRecord) *mat
 		EnqueuedAtMs: op.GetCreatedAtMs(),
 		MapId:        op.GetMapId(),
 		GameMode:     op.GetGameMode(),
+		EntryMode:    op.GetEntryMode(),
 	}
 }
 
@@ -3039,13 +3160,15 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 	}
 	sort.SliceStable(tickets, func(i, j int) bool { return tickets[i].AvgMmr < tickets[j].AvgMmr })
 
-	// 入口模式分流:逐票按其 map_id 的 entry_mode 决定直进还是撮合(关卡表未配置时沿用
-	// 部署级 cfg.WalkIn)。直进票不参与凑局,立即成局;其余进撮合分组。
-	// 分流在同一个 loop 内完成,不新开循环/协程——单写者仍是「每个池一个 leader」
-	// (decision-revisit-matchmaker-single-writer.md),本改动不触碰该约束。
+	// 入口模式分流:逐票按**票据上落定的 entry_mode** 决定直进还是撮合。直进票不参与凑局,
+	// 立即成局;其余进撮合分组。分流在同一个 loop 内完成,不新开循环/协程——单写者仍是
+	// 「每个池一个 leader」(decision-revisit-matchmaker-single-writer.md),本改动不触碰该约束。
+	//
+	// 为什么读票不读表:关卡表 entry_mode=BOTH 的图两个入口共存,"这张票是排队还是直进"
+	// 只有玩家的选择知道,回查表答不了。旧票(滚动升级期写入、无本字段)按表/部署开关兜底。
 	pending := make([]*matchv1.MatchTicketStorageRecord, 0, len(tickets))
 	for _, t := range tickets {
-		if !u.isWalkInMap(t.GetMapId()) {
+		if !u.isWalkInTicket(t) {
 			pending = append(pending, t)
 			continue
 		}

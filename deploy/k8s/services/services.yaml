@@ -459,6 +459,41 @@ spec: { selector: { app: dialogue }, ports: [ { port: 20013, targetPort: 20013 }
 ---
 apiVersion: apps/v1
 kind: Deployment
+metadata: { name: mission, namespace: pandora, labels: { app: mission } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: mission } }
+  template:
+    metadata:
+      labels: { app: mission }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "21019"
+        prometheus.io/path: /metrics
+    spec:
+      containers:
+        - name: mission
+          image: pandora/mission:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 20019 } ]
+          readinessProbe: { grpc: { port: 20019 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: mission.yaml, readOnly: true }
+            # 配置表 active 目录(任务/条件/奖励表;启动强依赖,§9.15 热更流水线)
+            - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: configtable, configMap: { name: pandora-configtable } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: mission, namespace: pandora }
+spec: { selector: { app: mission }, ports: [ { port: 20019, targetPort: 20019 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
 metadata: { name: push, namespace: pandora, labels: { app: push } }
 spec:
   replicas: 1

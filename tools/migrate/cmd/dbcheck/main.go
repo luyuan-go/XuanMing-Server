@@ -107,6 +107,7 @@ var registry = map[string]map[string]tableEntry{
 		"match_release_outbox":         {Class: classOutbox},
 		"battle_progress_outbox":       {Class: classOutbox},
 		"battle_exit_proof_outbox":     {Class: classOutbox},
+		"battle_mission_outbox":        {Class: classOutbox}, // 任务事实转发出箱:投递成功即删,稳态接近空
 	},
 	"pandora_social": {
 		"friendships":           {Class: classBounded},
@@ -161,6 +162,14 @@ var registry = map[string]map[string]tableEntry{
 		"owner_record":         {Class: classBounded},                                                                                                                            // 每玩家一行(§9.22 owner 权威)
 		"ds_instance_lease":    {Class: classBounded},                                                                                                                            // 每 DS 实例一行
 		"owner_transition_log": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created_at", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"}, // 迁移审计流水,90 天(owner 线负责 sweep 落地)
+	},
+	"pandora_mission": {
+		"player_mission_active": {Class: classBounded},                                                                                                                                                                                     // 每玩家 ≤ max_active_missions(50) 行(§9.18 写入侧上限)
+		"player_mission_done":   {Class: classBounded},                                                                                                                                                                                     // 每玩家每任务至多 1 行,被任务表行数有界
+		"mission_reward_log":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at_ms"}}}, PendingWhere: "status = 1 AND updated_at_ms < UNIX_TIMESTAMP(NOW(3))*1000"}, // GRANTED 90 天清;PENDING/FAILED 是补发工作集永不清(对齐 leaderboard_reward_log)
+		"mission_fact_receipts": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},                                                             // 清理默认关:上游 battle_progress_outbox 重试无总期限,删收据会双计(同 exp_history)
+		"mission_push_outbox":   {Class: classOutbox},                                                                                                                                                                                      // 推送事务出箱:投递成功即删,稳态应接近空
+		"mission_player_guards": {Class: classExempt},                                                                                                                                                                                      // 每玩家一行写守卫(TiDB 无 gap 锁;被玩家数有界,§9.24 豁免,同 friend_player_guards)
 	},
 	// 预留库:当前应无业务表;一旦出现新表必须先登记。
 	"pandora_ops": {},

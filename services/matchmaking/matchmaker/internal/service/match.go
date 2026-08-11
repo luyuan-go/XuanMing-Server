@@ -60,8 +60,10 @@ func (s *MatchService) StartMatch(ctx context.Context, req *matchv1.StartMatchRe
 	// 不再要求「先建一个 1 人队」——那是用组队机制模拟单人,多一次 RPC 与一个失败点。
 	// 成员解析与人数校验统一在 biz.resolveMembers,这里不重复判定。
 
+	// entry_mode 是玩家的**选择**(§17.2),不是权威数据:能不能这么进由 biz 按关卡表
+	// fail-closed 判定。这里只透传,不在 service 层预判——第二份判定就是漂移的来源。
 	ticketID := s.sf.Generate()
-	id, err := s.uc.StartMatch(ctx, ticketID, req.GetTeamId(), captainID, req.GetMapId())
+	id, err := s.uc.StartMatch(ctx, ticketID, req.GetTeamId(), captainID, req.GetMapId(), req.GetEntryMode())
 	if err != nil {
 		return &matchv1.StartMatchResponse{Code: toProtoCode(err)}, nil
 	}

@@ -67,7 +67,7 @@ func TestStartMatchClaimRaceAfterAcceptedReturnsSuccessThenDurablyCompensates(t 
 	uc := NewMatchUsecase(repo, nil, f.pusher, NewStubDSAllocator("127.0.0.1:7777"),
 		&fakeIDGen{next: 10000}, f.locator, f.cfg)
 
-	accepted, err := uc.StartMatch(ctx, ticketID, ticketID, playerID, 0)
+	accepted, err := uc.StartMatch(ctx, ticketID, ticketID, playerID, 0, entryUnset)
 	if err != nil || accepted != ticketID {
 		t.Fatalf("post-commit claim race was reported as rejection: ticket=%d err=%v", accepted, err)
 	}

@@ -6,7 +6,7 @@
   面向策划的极简入口:默认 docker 模式不需要装 Go、不需要会编译,机器上只要有 Docker Desktop。
   做的事:
     1) 检查 Docker —— 没装就引导安装(能 winget 就自动装),没在跑就帮忙把 Docker Desktop 拉起来并等待就绪。
-    2) Docker 就绪后,把整套后端跑起来(基础设施 + 21 个业务服务容器)。
+    2) Docker 就绪后,把整套后端跑起来(基础设施 + 22 个业务服务容器)。
        首次会在容器内编译镜像(稍慢),之后复用缓存秒起。
   -Battle(含战斗混合模式)【已废弃 2026-07-14】:Windows DS 只保留给 start.ps1 -Mode local
   断点调试;要真实 Hub/Battle DS 一律走 k8s + Agones(Linux DS)。-Battle -Stop 仍可用于
@@ -289,7 +289,7 @@ if (-not (Ensure-DockerRunning))   { exit 1 }
 Write-Step '检查 mkcert(Envoy 本地 TLS 证书)'
 if (-not (Ensure-MkcertInstalled)) { exit 1 }
 
-# 委托给已验证的 docker 模式:基础设施 + 21 个业务服务全容器化
+# 委托给已验证的 docker 模式:基础设施 + 22 个业务服务全容器化
 # (首次会在容器内编译镜像,稍慢;之后复用缓存。策划本机不需要装 Go。)
 & $StartPs1 -Mode docker
 $rc = $LASTEXITCODE

@@ -52,11 +52,11 @@ func TestStartMatch_CooldownRejectsRapidRepeatWithZeroSideEffect(t *testing.T) {
 	f.uc.SetEntryLimiter(lim)
 	ctx := context.Background()
 
-	if _, err := f.uc.StartMatch(ctx, 7100, 500, 800, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 7100, 500, 800, 0, entryUnset); err != nil {
 		t.Fatalf("first StartMatch: %v", err)
 	}
 	// 冷却窗内同队长立即重试:ErrRateLimited,且零副作用(不创建新 operation)。
-	_, err := f.uc.StartMatch(ctx, 7101, 500, 800, 0)
+	_, err := f.uc.StartMatch(ctx, 7101, 500, 800, 0, entryUnset)
 	if errcode.As(err) != errcode.ErrRateLimited {
 		t.Fatalf("want ErrRateLimited, got %v", err)
 	}
@@ -65,7 +65,7 @@ func TestStartMatch_CooldownRejectsRapidRepeatWithZeroSideEffect(t *testing.T) {
 	}
 	// 窗口过后不再被冷却门拦(此时同队长撞的是一人一票 preflight,证明冷却已放行)。
 	mr.FastForward(f.cfg.StartMatchCooldown.Std() + time.Millisecond)
-	_, err = f.uc.StartMatch(ctx, 7102, 500, 800, 0)
+	_, err = f.uc.StartMatch(ctx, 7102, 500, 800, 0, entryUnset)
 	if errcode.As(err) != errcode.ErrMatchAlreadyMatching {
 		t.Fatalf("after window want ErrMatchAlreadyMatching (cooldown released), got %v", err)
 	}
@@ -78,11 +78,11 @@ func TestStartMatch_CooldownReleasedOnBusinessFailure(t *testing.T) {
 	ctx := context.Background()
 
 	f.locator.inBattle[810] = true
-	if _, err := f.uc.StartMatch(ctx, 7110, 510, 810, 0); errcode.As(err) != errcode.ErrMatchInBattle {
+	if _, err := f.uc.StartMatch(ctx, 7110, 510, 810, 0, entryUnset); errcode.As(err) != errcode.ErrMatchInBattle {
 		t.Fatalf("want ErrMatchInBattle, got %v", err)
 	}
 	// 失败已释放冷却:立即重试拿到的仍是业务错误,而不是 ErrRateLimited(§9.20)。
-	if _, err := f.uc.StartMatch(ctx, 7111, 510, 810, 0); errcode.As(err) != errcode.ErrMatchInBattle {
+	if _, err := f.uc.StartMatch(ctx, 7111, 510, 810, 0, entryUnset); errcode.As(err) != errcode.ErrMatchInBattle {
 		t.Fatalf("immediate retry after failure want ErrMatchInBattle, got %v", err)
 	}
 }
@@ -92,7 +92,7 @@ func TestStartMatch_CooldownFailOpenOnRedisError(t *testing.T) {
 	f.uc.SetEntryLimiter(brokenEntryLimiter(t))
 	ctx := context.Background()
 
-	if _, err := f.uc.StartMatch(ctx, 7120, 520, 820, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 7120, 520, 820, 0, entryUnset); err != nil {
 		t.Fatalf("limiter redis down must fail-open, got %v", err)
 	}
 }
@@ -109,7 +109,7 @@ func TestStartMatch_NoShowPenaltyBlocksThenExpires(t *testing.T) {
 	if err := redisx.ArmPenalty(ctx, rdb, redisx.RLKey("match", "noshowcd", 830), 30*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	_, err := f.uc.StartMatch(ctx, 7130, 530, 830, 0)
+	_, err := f.uc.StartMatch(ctx, 7130, 530, 830, 0, entryUnset)
 	if errcode.As(err) != errcode.ErrRateLimited || !strings.Contains(err.Error(), "no-show") {
 		t.Fatalf("want no-show ErrRateLimited with visible countdown, got %v", err)
 	}
@@ -118,7 +118,7 @@ func TestStartMatch_NoShowPenaltyBlocksThenExpires(t *testing.T) {
 	}
 	// 罚窗过期自动恢复,无需任何人工清理。
 	mr.FastForward(30*time.Second + time.Millisecond)
-	if _, err := f.uc.StartMatch(ctx, 7131, 530, 830, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 7131, 530, 830, 0, entryUnset); err != nil {
 		t.Fatalf("StartMatch after penalty expiry: %v", err)
 	}
 }
@@ -129,7 +129,7 @@ func TestCancelMatch_UsableDuringNoShowPenalty(t *testing.T) {
 	f.uc.SetEntryLimiter(lim)
 	ctx := context.Background()
 
-	if _, err := f.uc.StartMatch(ctx, 7140, 540, 840, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 7140, 540, 840, 0, entryUnset); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.uc.advanceStartOperationsOnce(ctx); err != nil {
@@ -150,7 +150,7 @@ func TestFormSoloMatch_UsesFreshSnowflakeMatchID(t *testing.T) {
 	f := newFixtureWith(t, 9050, func(c *conf.MatchConf) { c.WalkIn = true })
 	ctx := context.Background()
 
-	if _, err := f.uc.StartMatch(ctx, 7200, 560, 8200, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 7200, 560, 8200, 0, entryUnset); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.uc.advanceStartOperationsOnce(ctx); err != nil {
@@ -181,7 +181,7 @@ func TestFormSoloMatch_FormCooldownDampsReformation(t *testing.T) {
 	f.uc.SetEntryLimiter(lim)
 	ctx := context.Background()
 
-	if _, err := f.uc.StartMatch(ctx, 7300, 570, 8300, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 7300, 570, 8300, 0, entryUnset); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.uc.advanceStartOperationsOnce(ctx); err != nil {

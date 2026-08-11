@@ -147,6 +147,11 @@ type BattleResultUsecase struct {
 	// **非 nil-safe**:nil 时击杀事实按可重试错误拒收,绝不"跳过并推进水位"(会永久丢经验)。
 	monsterExp MonsterExpTable
 
+	// missionReporter 把战斗事实(击杀/拾取/局内使用)转发给 mission 服务推进任务进度。
+	// nil = mission_addr 未配 → **不产生任务出箱行**(产生却投不出去只会让出箱无界堆积);
+	// 发布顺序 Go 先行:先上 mission 服务再配地址开转发(§9.21)。
+	missionReporter MissionReporter
+
 	// itemCatalog 同时裁决掉落白名单、堆叠/实例路由与局内可消费语义。
 	// 生产必须注入；nil 仅保留旧单测按 cfg.DropWhitelist 运行。
 	itemCatalog BattleItemCatalog

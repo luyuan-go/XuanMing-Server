@@ -23,7 +23,7 @@ $OutDirs = @($OutDirProd, $OutDirDev)
 $RateLimitServices = @(
     'friend', 'chat', 'mail', 'guild', 'trade', 'team',
     'matchmaker', 'matchmaker-pve', 'player', 'inventory', 'leaderboard', 'hub-allocator',
-    'login', 'push'
+    'mission', 'login', 'push'
 )
 
 function Assert-True([bool]$Condition, [string]$Message) {

@@ -222,3 +222,29 @@ CREATE TABLE IF NOT EXISTS `battle_progress_player` (
     PRIMARY KEY (`match_id`, `player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 战斗实时进度单玩家累计(单场单玩家 经验/掉落/击杀 上限,实时成长)';
+
+-- 任务事实转发出箱(docs/design/mission.md §5.1;迁移同构 pandora_battle/000010)。
+-- 独立于 battle_progress_outbox 的理由是**故障域隔离**:任务行混入进度出箱会让 mission
+-- 不可用卡住队首、连带阻塞该玩家的经验/掉落投递。两张表各自都是每玩家严格 FIFO ——
+-- 任务链前后两环的条件类别通常不同,后环在前环完成时才被自动接取,提前到达的后环事实
+-- 匹配不上任何活跃任务会被收据吸收后静默丢弃且永不重放(详见迁移 000010 文件头)。
+-- pending_action=1 是 USE_ITEM 的「扣除未落定」闸:占队首但不投递,由局内消费结果
+-- 同事务置 0(扣成功)或删行(扣失败),防「上报没有的消耗刷使用类任务」。
+CREATE TABLE IF NOT EXISTS `battle_mission_outbox` (
+    `id`                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `match_id`           BIGINT UNSIGNED NOT NULL,
+    `seq`                BIGINT UNSIGNED NOT NULL COMMENT '产生本事实的事件 seq(幂等键组成 + 每玩家 FIFO 排序键)',
+    `player_id`          BIGINT UNSIGNED NOT NULL,
+    `category`           INT UNSIGNED    NOT NULL COMMENT 'MissionConditionCategory:1 杀怪 / 4 使用道具 / 9 拾取',
+    `slot_value`         INT UNSIGNED    NOT NULL COMMENT '槽位1值(怪物配置 ID / 道具配置 ID)',
+    `amount`             INT UNSIGNED    NOT NULL COMMENT '进度增量(击杀数 / 拾取数 / 使用数)',
+    `pending_action`     TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1=等局内消费扣除落定(USE_ITEM);占队首但不投递',
+    `next_attempt_at_ms` BIGINT          NOT NULL DEFAULT 0 COMMENT '投递失败指数退避后的下次尝试时点',
+    `attempt_count`      INT UNSIGNED    NOT NULL DEFAULT 0,
+    `created_at_ms`      BIGINT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_match_seq_player` (`match_id`, `seq`, `player_id`),
+    KEY `idx_mission_player_fifo` (`match_id`, `player_id`, `seq`, `id`),
+    KEY `idx_mission_due` (`next_attempt_at_ms`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 战斗任务事实转发出箱(每玩家 FIFO + at-least-once + mission 侧收据幂等 + 失败退避)';

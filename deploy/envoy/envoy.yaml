@@ -187,6 +187,12 @@ static_resources:
                   prefix: "/pandora.friend.v1.FriendService/"
                 requires:
                   provider_name: "pandora_session"
+              # mission 服务客户端 RPC 均需 JWT(player_id 以 JWT sub 为准;系统 RPC
+              # ReportMissionFacts / CompleteAllMissions 在下方 route 精确 403,不经此处)
+              - match:
+                  prefix: "/pandora.mission.v1.MissionService/"
+                requires:
+                  provider_name: "pandora_session"
               # chat 服务所有 RPC 均需 JWT(sender_id / player_id 以 JWT sub 为准,R5)
               - match:
                   prefix: "/pandora.chat.v1.ChatService/"
@@ -388,6 +394,23 @@ static_resources:
                   prefix: "/pandora.friend.v1.FriendService/"
                 route:
                   cluster: friend_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+
+              # ----- mission(unary,立即完成型,demo 15s 超时)-----
+              # ⚠️ 系统 RPC 绝不对客户端开放:ReportMissionFacts 是任务进度的唯一写入通道
+              #    (battle_result 出箱内网直连),CompleteAllMissions 是 GM 批量完成 ——
+              #    精确 path 必须排在下方 prefix 前直接 403(服务层还有 systemOnly 兜底,双保险)。
+              - match:
+                  path: "/pandora.mission.v1.MissionService/ReportMissionFacts"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
+                  path: "/pandora.mission.v1.MissionService/CompleteAllMissions"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
+                  prefix: "/pandora.mission.v1.MissionService/"
+                route:
+                  cluster: mission_cluster
                   timeout: 15s
                   idle_timeout: 60s
 
@@ -947,6 +970,27 @@ static_resources:
               socket_address:
                 address: host.docker.internal
                 port_value: 20004
+
+  # ===== mission_cluster(unary,demo 15s 超时)=====
+  - name: mission_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: mission_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 20019
 
   # ===== chat_cluster(unary,demo 15s 超时)=====
   - name: chat_cluster

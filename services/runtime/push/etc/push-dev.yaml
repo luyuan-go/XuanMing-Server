@@ -47,6 +47,11 @@ push:
   #   + pandora.guild.event(公会成员变更通知,key=to_player_id)。
   # 2026-07-21 实时成长上线,补 pandora.player.experience(经验/升级推送,key=player_id,
   #   event_type=1;独立 topic 原因见 pkg/kafkax/topics.go TopicPlayerUpdate 注释)。
+  # 2026-08-11 任务域上线,补 pandora.mission.update(进度/完成/可领推送,key=player_id)。
+  #
+  # ⚠️ 本清单是**覆盖**而非追加:少一条 = 该业务事件在 dev 完全不消费(mission 出箱堆积、
+  # 客户端只能靠 ListMissions 兜底)。新增 topic 必须与 pkg/kafkax.PushTopics 逐条核对,
+  # push_topics_dev_contract_test.go 已把这条对齐钉死。
   topics:
     - "pandora.team.update"
     - "pandora.match.progress"
@@ -60,6 +65,7 @@ push:
     - "pandora.hub.migrate"
     - "pandora.presence.update"
     - "pandora.player.experience"
+    - "pandora.mission.update"
 
   # 离线消息 redis ZSET TTL(每次写入刷新)。
   offline_cache_ttl: "5m"

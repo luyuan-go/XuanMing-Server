@@ -443,6 +443,51 @@ EndDialogue(player_id, dialogue_id) → ok
 **会话状态机**:`StartDialogue` 服务端分配 `dialogue_id` 建会话 → `ChooseOption` 按 `option_id` 推进节点 → `EndDialogue` 关闭;当前 `MemorySessionStore` 单实例内存会话(`session_ttl` 默认 5m),多实例部署改 `SessionStore` 接 Redis,biz/service 不动。
 
 **MOBA 早期**:简单 if-else 即可,不上行为树。对话选项当前无副作用(领奖励 / 改任务等留后续接 trade / player 服务,届时在服务端权威判定 `visible` 前置条件)。
+**注**:2026-08-11 起任务域已独立成 `mission` 服务(§2.10a);对话侧接任务应调 `mission` 的
+`ReportMissionFacts`(TALK_NPC 类别),不在 dialogue 内自建任务状态。
+
+---
+
+### 2.10a mission
+
+**职责**:通用任务域 —— 接取 / 放弃 / 条件事实驱动进度 / 完成扇出(发奖或标记可领、自动接
+后续任务链)/ 领奖。语义整体移植自 luyuan/mmorpg 的 C++ mission/condition/reward 模块,
+完整设计与 C++→Go 对照见 `mission.md`。
+
+**端口**:gRPC 20019 / metrics 21019。**库**:`pandora_mission`(MySQL 唯一权威,无 Redis 权威态)。
+**错误码**:11000-11999。
+
+**对外 RPC**:
+```
+# 客户端(Envoy + JWT,player_id 以 sub 为准)
+ListMissions()                     → active[](进度/目标) + completed[](领奖状态)
+AcceptMission(mission_config_id)   → ActiveMission
+AbandonMission(mission_config_id)  → ok
+ClaimMissionReward(mission_config_id) → ok
+
+# 系统(内网 callerID==0;Envoy 精确 path 403 + 服务层 systemOnly 双保险)
+ReportMissionFacts(player_id, facts[], idempotency_key) → already
+CompleteAllMissions(player_id)     → completed_count   # GM,无副作用路径
+```
+
+**进度写入唯一通道**:`ReportMissionFacts`。at-least-once,幂等由 `mission_fact_receipts`
+(uk(player_id, idempotency_key) + 请求指纹)吸收;同键异内容 fail-closed(`ERR_MISSION_FACTS_CONFLICT`)。
+首版事实源 = battle_result 出箱转发(击杀 / 拾取 / 局内使用),幂等键
+`progress:{match_id}:{seq}:{player_id}:mission`;TALK_NPC / LEVEL_UP / Hub 交互等其它事实源
+按同一 RPC 接入,mission 侧零改动。
+
+**配置表**:mission / condition / reward 三张(+item 只读),走 configtable 注解流水线,启动
+fail-closed;数组列存逗号分隔原文,跨表引用与**任务链环**在加载期 AddValidator 拒批次。
+
+**发奖**:`mission_reward_log`(PENDING/GRANTED/FAILED)+ 提交后同步尝试一次 + 1min 补扫
+(同 leaderboard)。道具 → inventory `GrantItems`(键 `mission:<p>:<m>:stack`);装备 →
+`GrantInstances`(`:inst`,满包溢出转邮件传同键);经验 → player `AddExperience`
+(`quest:<p>:<m>`,reason="quest",player.proto 预留口径)。三下游必须分键(inventory ledger
+uk 是 (player_id, key),同键会撞请求指纹冲突)。
+
+**推送**:状态变化与写入同事务入 `mission_push_outbox` → kafka `pandora.mission.update`
+(key=player_id)→ push 透传。推送不承担正确性(protocol-ordering-rules 原则 5),
+客户端收到 `pandora.push.resync` 回源 `ListMissions`。
 
 ---
 

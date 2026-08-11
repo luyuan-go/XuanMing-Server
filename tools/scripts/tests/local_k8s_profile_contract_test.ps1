@@ -997,11 +997,27 @@ $bridgeSource = Get-Content -LiteralPath $bridgePath -Raw
 $forwardEntries = @([regex]::Matches(
     $bridgeSource,
     '@\{\s*Name\s*=\s*''(?<name>[^'']+)'';\s*Port\s*=\s*(?<port>\d+);\s*Essential\s*=\s*\$(?<essential>true|false)\s*\}'))
-Assert-True ($forwardEntries.Count -eq 21) 'bridge 必须映射全部 21 个 Go Deployment'
+# 期望集合从 start.ps1 的 Get-ServiceList 推导,**不写字面量个数**:上一版硬编码 21,
+# 2026-08-11 新增 mission(第 22 个)后本断言直接失败,而 bridge 本身是对的 ——
+# 字面量把"服务清单变了"伪装成"bridge 漏映射"。改为逐名核对后,两个方向的漂移都能定位。
+$serviceListEntries = @([regex]::Matches(
+    $source,
+    "@\{\s*Name\s*=\s*'(?<name>[^']+)';\s*Dir\s*=\s*'[^']+';\s*Cmd\s*=\s*'[^']+'\s*\}"))
+Assert-True ($serviceListEntries.Count -ge 20) `
+    "start.ps1 Get-ServiceList 解析失败(正则与清单写法漂移),实际匹配=$($serviceListEntries.Count)"
+$expectedForwardNames = @($serviceListEntries | ForEach-Object { $_.Groups['name'].Value } | Sort-Object -Unique)
 $forwardNames = @($forwardEntries | ForEach-Object { $_.Groups['name'].Value })
 $forwardPorts = @($forwardEntries | ForEach-Object { [int]$_.Groups['port'].Value })
-Assert-True (@($forwardNames | Sort-Object -Unique).Count -eq 21) 'bridge 服务名必须 21 个且唯一'
-Assert-True (@($forwardPorts | Sort-Object -Unique).Count -eq 21) 'bridge 服务端口必须 21 个且唯一'
+$nameDiff = @(Compare-Object -ReferenceObject $expectedForwardNames `
+    -DifferenceObject @($forwardNames | Sort-Object -Unique) -CaseSensitive)
+Assert-True ($nameDiff.Count -eq 0) `
+    ("bridge 映射与 start.ps1 服务清单不一致:缺=[" +
+     (@($nameDiff | Where-Object SideIndicator -eq '<=' | ForEach-Object InputObject) -join ', ') +
+     "] 多=[" + (@($nameDiff | Where-Object SideIndicator -eq '=>' | ForEach-Object InputObject) -join ', ') + ']')
+Assert-True ($forwardEntries.Count -eq $expectedForwardNames.Count) `
+    "bridge 必须映射全部 $($expectedForwardNames.Count) 个 Go Deployment,实际=$($forwardEntries.Count)"
+Assert-True (@($forwardPorts | Sort-Object -Unique).Count -eq $expectedForwardNames.Count) `
+    "bridge 服务端口必须 $($expectedForwardNames.Count) 个且唯一"
 $ownerForward = @($forwardEntries | Where-Object {
     $_.Groups['name'].Value -ceq 'owner' -and
     [int]$_.Groups['port'].Value -eq 20017 -and

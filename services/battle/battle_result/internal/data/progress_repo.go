@@ -191,7 +191,7 @@ updated_at_ms = VALUES(updated_at_ms)`,
 //	上限判定不得放在事务外(§16.1 TOCTOU;混合快照误判会把可重试竞争放大成永久拒,审计 P1)。
 //	CAS 失败(并发写者抢先 / 对局已结算)→ ErrUnavailable(瞬时,DS 单飞行批下几乎不会发生,
 //	重试后按新水位去重收敛);行不存在时首批 INSERT,撞 PK 同样按 ErrUnavailable 重试收敛。
-func (r *MySQLBattleRepo) ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []ProgressPlayerDelta, rows []ProgressOutboxRecord, caps ProgressCaps) error {
+func (r *MySQLBattleRepo) ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []ProgressPlayerDelta, rows []ProgressOutboxRecord, missionRows []MissionFactRecord, caps ProgressCaps) error {
 	if matchID == 0 || newSeq <= expectedSeq {
 		return errcode.New(errcode.ErrInvalidArg, "apply progress requires match/seq advance")
 	}
@@ -342,6 +342,12 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 			return errcode.New(errcode.ErrUnavailable, "insert progress outbox match=%d player=%d: %v",
 				matchID, row.PlayerID, rerr)
 		}
+	}
+
+	// 任务事实出箱与水位 CAS 同事务(docs/design/mission.md §5.1):分开写会在两次提交
+	// 之间留下"seq 已推进但事实未落箱"的窗口 —— DS 不会重发,事实永久丢失。
+	if merr := insertMissionFactsTx(ctx, tx, missionRows, nowMs); merr != nil {
+		return merr
 	}
 
 	if cerr := tx.Commit(); cerr != nil {
@@ -621,6 +627,14 @@ WHERE match_id=? AND seq=? AND player_id=? AND kind=? AND status=0`,
 WHERE id=? AND match_id=? AND seq=? AND player_id=? AND kind=?`,
 		row.ID, row.MatchID, row.Seq, row.PlayerID, uint8(row.Kind)); err != nil {
 		return ProgressAction{}, errcode.New(errcode.ErrInternal, "delete resolved progress action outbox id=%d: %v", row.ID, err)
+	}
+	// 「使用道具」任务事实与扣除结果同事务落定:成功放行、失败删行(见
+	// settleMissionFactPendingTx)。丢弃(discard)不产任务事实,命中 0 行即可。
+	if row.Kind == ProgressConsumeStack {
+		if err := settleMissionFactPendingTx(ctx, tx, a.MatchID, a.Seq, a.PlayerID,
+			a.Status == ProgressActionSucceeded); err != nil {
+			return ProgressAction{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return ProgressAction{}, errcode.New(errcode.ErrInternal, "commit progress action outcome: %v", err)

@@ -20,7 +20,7 @@ func fillQueue(t *testing.T, f *fixture, n int) {
 	for i := 0; i < n; i++ {
 		ticketID := uint64(7000 + i)
 		playerID := uint64(8000 + i)
-		if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0); err != nil {
+		if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0, entryUnset); err != nil {
 			t.Fatalf("seed StartMatch #%d: %v", i, err)
 		}
 	}
@@ -43,7 +43,7 @@ func TestStartMatch_QueueAdmissionRejectsWhenFull(t *testing.T) {
 	}
 
 	// 队列已满:新 StartMatch 必须被准入门拒绝,且不留 start operation(零副作用)。
-	_, serr := f.uc.StartMatch(ctx, 7100, 7100, 8100, 0)
+	_, serr := f.uc.StartMatch(ctx, 7100, 7100, 8100, 0, entryUnset)
 	if errcode.As(serr) != errcode.ErrRateLimited {
 		t.Fatalf("want ErrRateLimited, got %v", serr)
 	}
@@ -59,7 +59,7 @@ func TestStartMatch_QueueAdmissionAllowsBelowCap(t *testing.T) {
 	ctx := context.Background()
 	fillQueue(t, f, 2)
 
-	if _, err := f.uc.StartMatch(ctx, 7100, 7100, 8100, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 7100, 7100, 8100, 0, entryUnset); err != nil {
 		t.Fatalf("below-cap StartMatch must pass, got %v", err)
 	}
 }
@@ -71,7 +71,7 @@ func TestStartMatch_QueueAdmissionDisabled(t *testing.T) {
 	ctx := context.Background()
 	fillQueue(t, f, 2)
 
-	if _, err := f.uc.StartMatch(ctx, 7100, 7100, 8100, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 7100, 7100, 8100, 0, entryUnset); err != nil {
 		t.Fatalf("disabled cap must not throttle, got %v", err)
 	}
 }

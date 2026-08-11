@@ -298,7 +298,7 @@ message Vector3 { float x = 1; float y = 2; float z = 3; }
 8000-8999   = dialogue
 9000-9999   = chat / friend / locator
 10000-10999 = data_service
-11000-11999 = 预留
+11000-11999 = mission(任务)
 12000-12999 = auction(全服拍卖行 / 撮合)
 ```
 

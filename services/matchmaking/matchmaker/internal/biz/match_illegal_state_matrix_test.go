@@ -114,7 +114,7 @@ func TestStartMatchRejectsWholeTeamWhenAnyMemberIsInBattleWithoutSideEffects(t *
 	f.uc.reader = illegalStateTeamReader{team: readyIllegalStateTeam(teamID, captainID, captainID, memberID)}
 	f.uc.locator = &selectiveBattleLocator{inBattle: map[uint64]bool{memberID: true}, errs: map[uint64]error{}}
 
-	if _, err := f.uc.StartMatch(context.Background(), ticketID, teamID, captainID, 0); errcode.As(err) != errcode.ErrMatchInBattle {
+	if _, err := f.uc.StartMatch(context.Background(), ticketID, teamID, captainID, 0, entryUnset); errcode.As(err) != errcode.ErrMatchInBattle {
 		t.Fatalf("team with one in-battle member must be rejected: err=%v", err)
 	}
 	assertNoStartArtifacts(t, f, ticketID, captainID, memberID)
@@ -134,7 +134,7 @@ func TestStartMatchFailsClosedWhenAnyTeamMemberBattleStateIsUnknownWithoutSideEf
 		errs:     map[uint64]error{memberID: errors.New("locator unavailable")},
 	}
 
-	if _, err := f.uc.StartMatch(context.Background(), ticketID, teamID, captainID, 0); errcode.As(err) != errcode.ErrUnavailable {
+	if _, err := f.uc.StartMatch(context.Background(), ticketID, teamID, captainID, 0, entryUnset); errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("unknown battle state must fail closed: err=%v", err)
 	}
 	assertNoStartArtifacts(t, f, ticketID, captainID, memberID)
@@ -152,10 +152,10 @@ func TestRepeatedWholeTeamStartMatchKeepsOriginalOperationAndCreatesOnlyOneTicke
 	f.uc.reader = illegalStateTeamReader{team: readyIllegalStateTeam(teamID, playerID, playerID, memberID)}
 	ctx := context.Background()
 
-	if got, err := f.uc.StartMatch(ctx, firstTicketID, teamID, playerID, 0); err != nil || got != firstTicketID {
+	if got, err := f.uc.StartMatch(ctx, firstTicketID, teamID, playerID, 0, entryUnset); err != nil || got != firstTicketID {
 		t.Fatalf("first StartMatch: ticket=%d err=%v", got, err)
 	}
-	if _, err := f.uc.StartMatch(ctx, secondTicketID, teamID, playerID, 0); errcode.As(err) != errcode.ErrMatchAlreadyMatching {
+	if _, err := f.uc.StartMatch(ctx, secondTicketID, teamID, playerID, 0, entryUnset); errcode.As(err) != errcode.ErrMatchAlreadyMatching {
 		t.Fatalf("repeated StartMatch must be rejected as already matching: err=%v", err)
 	}
 	for _, currentPlayerID := range []uint64{playerID, memberID} {
@@ -238,7 +238,7 @@ func TestConcurrentDuplicateStartMatchConvergesToOneLiveTicket(t *testing.T) {
 	for _, ticketID := range []uint64{ticketA, ticketB} {
 		ticketID := ticketID
 		go func() {
-			_, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0)
+			_, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0, entryUnset)
 			errCh <- err
 		}()
 	}

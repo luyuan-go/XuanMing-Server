@@ -4,8 +4,8 @@
 
 .DESCRIPTION
   一条命令把后端跑起来,覆盖 5 套环境(DS 分配模式随环境变):
-    local    本地 windows 调试 —— 基础设施在 docker,21 个 go 服务以宿主进程跑(可断点);DS=local(Windows PandoraServer.exe)
-    docker   本地 docker 启动   —— 基础设施 + 21 个 go 服务全跑在本机 docker;DS=mock(容器内无真 DS)
+    local    本地 windows 调试 —— 基础设施在 docker,22 个 go 服务以宿主进程跑(可断点);DS=local(Windows PandoraServer.exe)
+    docker   本地 docker 启动   —— 基础设施 + 22 个 go 服务全跑在本机 docker;DS=mock(容器内无真 DS)
     intranet 内网测试服     —— 同 docker 全容器,但绑定内网 IP 供多人联调;DS=mock
     online   线上 k8s 集群   —— kustomize 部署到远端 k8s + Agones 真 Linux DS;DS=agones
                              用 -Env test|prod 区分「测试服集群」与「生产 kbs 集群」(不同 kube-context)
@@ -35,7 +35,7 @@
 .EXAMPLE
   # 只更新了客户端仓(改资源 / 重编编辑器 DLL),go 服务没动 —— 只重启本机 DS,秒级:
   pwsh tools/scripts/start.ps1 -Mode local -DsOnly
-  # 基础设施、数据库迁移、21 个 go 服务全部原样不动;后端没在跑时自动回落到完整启动。
+  # 基础设施、数据库迁移、22 个 go 服务全部原样不动;后端没在跑时自动回落到完整启动。
 
 .EXAMPLE
   # 电脑重启后『快速恢复』上次的环境(不重建镜像,把停掉的集群/容器拉回来):
@@ -93,7 +93,7 @@ param(
     [switch]$GenTables,
     # -DsOnly(仅 -Mode local):**只重启本机 DS**,不动 docker 基础设施、不动其余 go 服务。
     # 给「只更新了客户端仓(改资源 / 重编编辑器 DLL),go 服务一行没改」的日常循环用:
-    # 完整启动要走基础设施健康等待 → TiDB → 数据库迁移 → 21 个 go 服务逐个 build/起/探活,
+    # 完整启动要走基础设施健康等待 → TiDB → 数据库迁移 → 22 个 go 服务逐个 build/起/探活,
     # 这个场景下全是白跑。后端没在跑时自动回落到完整启动(见 Invoke-LocalDsOnly)。
     [switch]$DsOnly,
 
@@ -163,7 +163,7 @@ param(
     [string]$DsTicketActiveKid = $env:PANDORA_DSTICKET_ACTIVE_KID,
     # 玩家 DSTicket 公钥 keyset revision，和 DS callback auth 的 keyset revision 是两套独立值。
     [string]$DsTicketKeysetRevision = $env:PANDORA_DSTICKET_KEYSET_REVISION,
-    [switch]$BuildPush    # online:本地构建并推送 21 个镜像到 -Registry(远端发布动作,需人工授权)
+    [switch]$BuildPush    # online:本地构建并推送 22 个镜像到 -Registry(远端发布动作,需人工授权)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -407,7 +407,7 @@ function Assert-LocalEtcdDataPreservedAfterDown {
     Write-Ok "本地 k8s 基础设施已停止；namespace/$K8sNamespace 与 PVC/etcd-data 已保留供下次启动恢复 DS auth 基线。"
 }
 
-# pandora-config Secret 只收录 21 份服务 YAML。envoy-jwks.json 是给外部边缘网关的产物，
+# pandora-config Secret 只收录 22 份服务 YAML。envoy-jwks.json 是给外部边缘网关的产物，
 # OutDir 中其它运维文件也不应被 --from-file=<目录> 意外灌进 Pod Secret。
 function Apply-PandoraConfigSecret {
     param(
@@ -431,7 +431,13 @@ function Apply-PandoraConfigSecret {
             "--from-file=$name=$path"
         }
     )
-    if ($fileArgs.Count -ne 21) { throw "pandora-config Secret 期望 21 份服务配置,实际=$($fileArgs.Count)" }
+    # 期望份数从 Get-ServiceList 推导,**不写字面量**:上一版硬编码 21,新增 mission 后
+    # 一键启动在这里直接抛错。计数仍保留(而不是删掉)是为了挡住 foreach 里因异常吞掉
+    # 而少收一份的情况 —— 但基线必须跟着服务清单走。
+    $expectedServiceCount = @(Get-ServiceList).Count
+    if ($fileArgs.Count -ne $expectedServiceCount) {
+        throw "pandora-config Secret 期望 $expectedServiceCount 份服务配置,实际=$($fileArgs.Count)"
+    }
 
     $manifest = @(kubectl @KubectlContextArgs create secret generic pandora-config @fileArgs `
         -n $K8sNamespace --dry-run=client -o yaml)
@@ -456,7 +462,7 @@ function Apply-PandoraConfigSecret {
     # 只核对 key 名不够 —— 名字齐全但**内容陈旧**同样是致命漂移,而且更隐蔽。
     # 2026-08-05 实测事故:磁盘已是 :20001 的集群配置,Secret 里却still是 :50001 的旧端口方案,
     # 而 `kubectl apply` 报的是 `unchanged`(客户端侧 apply 以 last-applied 注解为基线做三方合并,
-    # live 被带外改动过时可能算不出 patch)。结果 21 个服务全部按错端口启动、gRPC readiness 探针
+    # live 被带外改动过时可能算不出 patch)。结果 22 个服务全部按错端口启动、gRPC readiness 探针
     # 全红,直到 [7/8] rollout 180s 超时才暴露,且报错指向"新 Pod 未就绪"这种无关症状。
     # 因此这里逐 key 比对**内容字节**;漂移就用 replace 强制收敛(整份覆盖 data,不走三方合并),
     # 再复验一次,仍不一致才 fail-fast。
@@ -470,7 +476,7 @@ function Apply-PandoraConfigSecret {
         }
     )
     if ($driftedKeys.Count -gt 0) {
-        Write-Warn "pandora-config Secret 内容与磁盘不一致($($driftedKeys.Count)/21 项:$($driftedKeys -join ', ')),apply 未收敛;改用 replace 强制覆盖。"
+        Write-Warn "pandora-config Secret 内容与磁盘不一致($($driftedKeys.Count)/$expectedServiceCount 项:$($driftedKeys -join ', ')),apply 未收敛;改用 replace 强制覆盖。"
         $manifest | kubectl @kubectlContextArgs replace -f -
         Assert-LastExit "$Action(内容漂移 → replace 强制覆盖)"
         $secret = Get-KubectlJsonObject -KubeContext $KubeContext `
@@ -489,12 +495,12 @@ function Apply-PandoraConfigSecret {
             throw "pandora-config Secret 内容在 replace 后仍与磁盘不一致:$($stillDrifted -join ', ')。" +
                   '继续 rollout 只会让 Pod 加载陈旧配置,已中止。'
         }
-        Write-Ok "pandora-config Secret 已强制收敛到磁盘内容(21/21 项逐字节一致)。"
+        Write-Ok "pandora-config Secret 已强制收敛到磁盘内容($expectedServiceCount/$expectedServiceCount 项逐字节一致)。"
     }
 }
 
 # player 的等级经验表从独立 ConfigMap 挂载；只收录 manifest 声明的精确批次文件。
-# 该对象不含密钥，不混入 pandora-config Secret 的 21 份服务 YAML 契约。
+# 该对象不含密钥，不混入 pandora-config Secret 的 22 份服务 YAML 契约。
 # 发布纪律与 configtable_publish.ps1 一致:先把候选完整读入内存快照并校验 checksum/rows/语义，
 # 再按 version 单调 + resourceVersion CAS 写固定 ConfigMap；同版本不同内容与低版本均拒绝。
 # ConfigMap 一旦升版就只向前收敛:player 进程内 Store 拒绝降版，失败时若只回滚文件会造成
@@ -3539,7 +3545,7 @@ function Get-LegacyPandoraConfigMapRefs([object[]]$Items) {
     )
 }
 
-# Secret 迁移的最后一道门：当前 21 个 Deployment 都已改挂 Secret、控制器模板与存活 Pod
+# Secret 迁移的最后一道门：当前 22 个 Deployment 都已改挂 Secret、控制器模板与存活 Pod
 # 均不再引用旧 ConfigMap 后才删除。历史零副本 ReplicaSet 刻意不纳入检查；删除后迁移前 revision
 # 不再可直接 rollout undo，故本次切换是明确的配置载体回退边界。
 function Remove-LegacyPandoraConfigMapAfterRollout([string]$KubeContext) {
@@ -3618,7 +3624,7 @@ function Remove-LegacyPandoraConfigMapAfterRollout([string]$KubeContext) {
     if (-not [string]::IsNullOrWhiteSpace((($remaining | ForEach-Object { $_.ToString() }) -join '').Trim())) {
         throw '旧 pandora-config ConfigMap 删除后仍存在。'
     }
-    Write-Ok '21 个业务 Deployment 与存活 Pod 已迁移到 Secret;旧 pandora-config ConfigMap 已删除。'
+    Write-Ok '22 个业务 Deployment 与存活 Pod 已迁移到 Secret;旧 pandora-config ConfigMap 已删除。'
 }
 
 function Test-CommandExists([string]$cmd) {
@@ -3877,7 +3883,7 @@ function Resolve-Prerequisites([string]$mode) {
             # 不签 Envoy 证书(mkcert)。再拿部署期的工具卡停止,只会让没装全的机器连停都停不下来。
             if (-not $Down) {
                 if (-not (Ensure-Tool -Name 'helm' -CheckCmd 'helm' -WingetId 'Helm.Helm' -ManualUrl 'https://helm.sh/docs/intro/install/')) { $allOk = $false }
-                # [5/8] 构建 21 个服务镜像 = 宿主 Go 交叉编译,Go 缺失会在最贵的步骤中途才炸。
+                # [5/8] 构建 22 个服务镜像 = 宿主 Go 交叉编译,Go 缺失会在最贵的步骤中途才炸。
                 if (-not (Ensure-Tool -Name 'Go' -CheckCmd 'go' -WingetId 'GoLang.Go' -ManualUrl 'https://go.dev/dl/')) { $allOk = $false }
                 # [7.5/8] 集群内边缘 Envoy 的 dev 证书(deploy/envoy/cert.pem,不入库)缺失时由
                 # envoy_cert.ps1 用 mkcert 自动重签——新机器必经此路径,mkcert 缺失会中止部署。
@@ -4174,7 +4180,7 @@ function Invoke-Local {
         & "$ScriptDir/dev_all.ps1" -Down
         return
     }
-    Write-Step "local 模式:基础设施(docker) + 21 个 go 服务(宿主进程)"
+    Write-Step "local 模式:基础设施(docker) + 22 个 go 服务(宿主进程)"
     Write-Info "策划本地联调用这个;服务可在 VS Code 断点调试。"
 
     # 与 k8s 模式互斥 + 局域网绑定已在 Resolve-Prerequisites 里做完(必须早于端口占用检查)。
@@ -4398,7 +4404,7 @@ function Invoke-LocalDsOnly {
     Write-Step "只重启本机 DS(基础设施与其余 go 服务原样不动)"
 
     # 端口即判据(与 run_services.ps1 的探活口径一致)。login 是启动顺序里最后一个,
-    # 它在听就说明 21 个 go 服务这一批已经起完了。
+    # 它在听就说明 22 个 go 服务这一批已经起完了。
     $dsSpawners = @(
         @{ Name = 'hub_allocator'; Port = 20021 }
         @{ Name = 'ds_allocator';  Port = 20020 }
@@ -4418,7 +4424,7 @@ function Invoke-LocalDsOnly {
         Write-Info "那这次不是「重启 DS」而是「启动整套后端」,自动改走完整启动流程(会慢一些,属正常)。"
         return $false
     }
-    Write-Ok "后端在跑(基础设施 + 21 个 go 服务),本次只重启 DS。"
+    Write-Ok "后端在跑(基础设施 + 22 个 go 服务),本次只重启 DS。"
 
     # DS advertise 地址必须与完整启动同源:hub_allocator / ds_allocator 重启后会重新读
     # PANDORA_DS_ADVERTISE_HOST,不重设的话它们回落到 *-dev.yaml 里的写死值,
@@ -4500,7 +4506,7 @@ function Invoke-Docker {
         & "$ScriptDir/dev_down.ps1"
         return
     }
-    Write-Step "docker 模式:基础设施 + 21 个 go 服务全部容器化"
+    Write-Step "docker 模式:基础设施 + 22 个 go 服务全部容器化"
 
     # local 宿主进程会抢同一批端口,先停掉
     Write-Info "先停掉可能在跑的宿主 go 服务(避免端口冲突)..."
@@ -5046,7 +5052,7 @@ function Get-MinikubeStartArgs([string]$Profile) {
         }
         $memoryMB = [math]::Min([int][math]::Floor($ceilingMB * 0.85), 40960)
         # 下限依据:battle DS limits=requests=14Gi(INC-20260727-002 量测围栏)+ 基础设施
-        # (mysql/redis/kafka/zk/etcd/TiDB 三件套/监控)约 6~8Gi + 21 个业务服务约 2Gi。
+        # (mysql/redis/kafka/zk/etcd/TiDB 三件套/监控)约 6~8Gi + 22 个业务服务约 2Gi。
         # 注意失败机理是 cgroup 层而非调度层:docker driver 下 kubelet 容量取自 VM /proc/meminfo
         # (审计实测 47Gi),不读 --memory 的 cgroup 限额——所以不会 Pending,而是节点容器被硬钉
         # 在小内存后 kubelet/etcd/kafka/DS 被内核 OOM killer 随机杀成 CrashLoop。低于 16Gi
@@ -5094,7 +5100,7 @@ function Get-MinikubeStartArgs([string]$Profile) {
         $startArgs += "--image-repository=$($env:PANDORA_MINIKUBE_IMAGE_REPOSITORY.Trim())"
     }
     # 端口发布:把宿主 8443 发布到节点 NodePort 31443 —— 集群内边缘 Envoy(pandora-edge-envoy)
-    # 的客户端入口,不再需要 21 条 kubectl port-forward 桥。
+    # 的客户端入口,不再需要 22 条 kubectl port-forward 桥。
     # **docker/podman driver 专属参数**,别的 driver(hyperv/vmware 等)传了会直接报错:那些
     # driver 的节点有可路由 IP,客户端直连 <节点IP>:31443 即可,无需发布。
     # 默认绑 0.0.0.0(本机 + 局域网都能连),与 local 模式的默认对局域网开放保持一致;
@@ -5203,8 +5209,8 @@ function Convert-EdgeEnvoyConfigForCluster([string]$Text) {
         20001 = 'login'; 20002 = 'player'; 20003 = 'data-service'; 20004 = 'friend'; 20005 = 'chat'
         20006 = 'player-locator'; 20007 = 'leaderboard'; 20008 = 'guild'; 20009 = 'mail'; 20010 = 'team'
         20011 = 'matchmaker'; 20012 = 'trade'; 20013 = 'dialogue'; 20014 = 'push'; 20015 = 'inventory'
-        20016 = 'auction'; 20017 = 'owner'; 20018 = 'matchmaker-pve'; 20020 = 'ds-allocator'
-        20021 = 'hub-allocator'; 20022 = 'battle-result'
+        20016 = 'auction'; 20017 = 'owner'; 20018 = 'matchmaker-pve'; 20019 = 'mission'
+        20020 = 'ds-allocator'; 20021 = 'hub-allocator'; 20022 = 'battle-result'
     }
     $lines = $Text -split "`r?`n"
     $out = New-Object 'System.Collections.Generic.List[string]'
@@ -5472,7 +5478,7 @@ function Ensure-EnvoyImageInMinikube {
 
 # ===== k8s 模式(本地 minikube)=====
 # ===== k8s 模式:把 UE Linux DS 打成镜像并落进 minikube =====
-# DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)不是 21 个 go 业务镜像的一部分,
+# DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)不是 22 个 go 业务镜像的一部分,
 # 由本函数从【同级客户端仓库】的 Linux 打包产物构建。策略(2026-07-09 改为宿主构建 + load):
 #   1) 调 build-image-minikube.ps1 -BuildOnHost:自动解析同级客户端仓库
 #   1) 调 build-image-minikube.ps1 -BuildOnHost:优先从制品库取 Linux DS 包,没有时回退到
@@ -5989,7 +5995,7 @@ function Invoke-K8s {
     # -KubeContext:把强删 GameServer 钉在本机 minikube,防误删远端集群。
     Apply-AgonesManifests -InstallAgones -ForceRecreateGameServers -KubeContext $mkCtx
 
-    Write-Step "[5/8] 构建 21 个服务镜像"
+    Write-Step "[5/8] 构建 22 个服务镜像"
     Build-AllImages
 
     Write-Step "[6/8] 把镜像 load 进 minikube(强制刷新固定 :dev tag)"
@@ -6015,7 +6021,7 @@ function Invoke-K8s {
     # 先 patch template annotation，再启动/等待 writer；绝不继承上次发布的旧 annotation。
     Set-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     # 镜像 tag 固定为 :dev,重建/重 load 后 image 字符串不变 -> apply 报 unchanged,旧 Pod 不会换。
-    # 按名强制滚动重启这 21 个业务 Deployment(不碰 infra,避免重启 kafka 又触发依赖服务 CrashLoop),
+    # 按名强制滚动重启这 22 个业务 Deployment(不碰 infra,避免重启 kafka 又触发依赖服务 CrashLoop),
     # 确保跑的是刚 build 的新二进制。
     Write-Info "rollout restart 业务 Deployment(同 :dev tag 重建后强制换 Pod)..."
     foreach ($svc in (Get-ServiceList)) {
@@ -6034,7 +6040,7 @@ function Invoke-K8s {
     Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
 
     Write-Step "[7.5/8] 集群内客户端面边缘 Envoy(pandora-edge-envoy,NodePort 31443)"
-    # 2026-07-28 P2:客户端面 8443 进集群,退役宿主 compose envoy + 21 条 port-forward 桥。
+    # 2026-07-28 P2:客户端面 8443 进集群,退役宿主 compose envoy + 22 条 port-forward 桥。
     # 客户端仍连 127.0.0.1:8443:由 minikube 节点容器的端口发布(PANDORA_MINIKUBE_PORTS,
     # 创建时 --ports=127.0.0.1:8443:31443)转到 NodePort。旧集群没有该端口发布时本步照常部署,
     # e2e_k8s.ps1 会探测不到宿主 8443 发布而自动回落宿主桥接(他人路径不变)。
@@ -6146,7 +6152,7 @@ function Invoke-Online {
 
     if ($Down) {
         Write-Step "删除 online 业务服务 + Agones Fleet/RBAC($Env)"
-        # 业务 overlay(pandora 命名空间 21 个 Deployment/Service/netpol 等)
+        # 业务 overlay(pandora 命名空间 22 个 Deployment/Service/netpol 等)
         kubectl @kubectlContextArgs delete -k $overlay --ignore-not-found
         Assert-LastExit 'kubectl delete -k overlays/online'
         # 启动时 Apply-AgonesManifests 还 apply 了 Fleet(default ns)与 allocator RBAC,否则 Down 后
@@ -6522,9 +6528,9 @@ function Invoke-Online {
             throw 'online BuildPush 禁止 PANDORA_OFFLINE=1：发布必须从当前 clean commit 严格重建，不能导入/复用离线包。'
         }
         throw 'online BuildPush 仍阻断：必须先在目标 registry 启用并由平台验证 native immutable-tag/create-only 策略与发布锁。HEAD 预检存在 TOCTOU，不能作为不可变证明；本次未 build、未 push。'
-        Write-Step '预检 21 个不可变 tag 均不存在（任一鉴权/网络不确定即阻断）'
+        Write-Step '预检 22 个不可变 tag 均不存在（任一鉴权/网络不确定即阻断）'
         foreach ($name in $serviceNames) { Assert-RemoteImageTagAbsent -Reference $remoteRefs[$name] }
-        Write-Step "从当前 clean commit 严格重建并推送 21 个 Go 服务镜像到 $Registry"
+        Write-Step "从当前 clean commit 严格重建并推送 22 个 Go 服务镜像到 $Registry"
         Build-AllImages -StrictRelease
         foreach ($name in $serviceNames) {
             Assert-LocalImageRevision -Reference "pandora/${name}:dev" -Expected $currentCommit
@@ -6537,7 +6543,7 @@ function Invoke-Online {
             $goPins[$svc.Name] = $descriptor.Pinned
         }
     } else {
-        Write-Step '从 registry 解析 21 个 Go 服务镜像 digest（不按 tag 部署）'
+        Write-Step '从 registry 解析 22 个 Go 服务镜像 digest（不按 tag 部署）'
         foreach ($name in $serviceNames) {
             $descriptor = Get-RegistryImageDescriptor -Reference $remoteRefs[$name]
             $goDigests[$name] = $descriptor.Digest
@@ -6585,7 +6591,7 @@ function Invoke-Online {
     $battleCanaryReplicaApply = if ([string]::IsNullOrWhiteSpace($CanaryBattleDsImage)) { 0 } else { $BattleCanaryReplicas }
     $hubCanaryReplicaApply = if ([string]::IsNullOrWhiteSpace($CanaryHubDsImage)) { 0 } else { $HubCanaryReplicas }
 
-    Write-Step '生成独占 runtime overlay，并验证 21 个 digest pin + 5 个 writer annotation'
+    Write-Step '生成独占 runtime overlay，并验证 22 个 digest pin + 5 个 writer annotation'
     $runtimeOverlayArgs = @{
         SourceOverlay = $overlay; Registry = $registryRoot; Digests = $goDigests
         ServiceNames = $serviceNames; WriterServices = $writerServices; EnvironmentName = $Env
@@ -6717,7 +6723,7 @@ function Invoke-Online {
 
     # Secret 传播(审核 P1 #4):pandora-config 以 subPath 挂载,Secret 内容更新不会热感知;
     # 且镜像 tag 不变时 apply -k 判定 pod 模板 unchanged 不触发 rollout → Pod 继续用旧密钥/旧配置。
-    # 故显式按名 rollout restart 21 个业务 Deployment,强制重挂最新 Secret(服务支持 SIGTERM 排空,
+    # 故显式按名 rollout restart 22 个业务 Deployment,强制重挂最新 Secret(服务支持 SIGTERM 排空,
     # 滚动重启零停机,见 CLAUDE.md §9 不变量 16),再等关键服务就绪确认新配置生效。
     Write-Step "rollout restart 业务 Deployment(传播更新后的 pandora-config Secret)"
     foreach ($svc in (Get-ServiceList)) {
@@ -6831,6 +6837,7 @@ function Get-ServiceList {
         @{ Name = 'matchmaker-pve'; Dir = 'services/matchmaking/matchmaker';   Cmd = 'matchmaker' }
         @{ Name = 'trade';          Dir = 'services/economy/trade';            Cmd = 'trade' }
         @{ Name = 'dialogue';       Dir = 'services/social/dialogue';          Cmd = 'dialogue' }
+        @{ Name = 'mission';        Dir = 'services/social/mission';           Cmd = 'mission' }
         @{ Name = 'push';           Dir = 'services/runtime/push';             Cmd = 'push' }
         @{ Name = 'inventory';      Dir = 'services/economy/inventory';        Cmd = 'inventory' }
         @{ Name = 'auction';        Dir = 'services/economy/auction';          Cmd = 'auction' }
@@ -7069,7 +7076,7 @@ function Build-Images-Host {
     $stageRoot = Join-Path $ProjectRoot 'run/docker-build/prebuilt'
     if (-not (Test-Path $stageRoot)) { New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null }
 
-    # 预编译镜像只需 CA + zoneinfo。若 Dockerfile 对 21 个服务都直接 FROM 远程 golang tag，
+    # 预编译镜像只需 CA + zoneinfo。若 Dockerfile 对 22 个服务都直接 FROM 远程 golang tag，
     # BuildKit 即使已有 layer cache 仍可能逐次请求 registry manifest/token；网络抖动会在任意
     # 一个服务处 TLS timeout。循环前只准备一次本地固定 source tag，之后打包完全不访问 registry。
     $runtimeAssetsImage = 'pandora/runtime-assets:local'
@@ -7241,9 +7248,9 @@ function Resume-K8s {
     # 在旧 RollingUpdate 对象上先 patch digest 会短时启动两个 Hub ledger writer。
     # Resume 不构建镜像，节点现存 immutable image config digest 是实际 source of truth。
     Set-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
-    # Secret 以 subPath 挂载不会热感知:按名 rollout restart 全部 21 个业务 Deployment,
+    # Secret 以 subPath 挂载不会热感知:按名 rollout restart 全部 22 个业务 Deployment,
     # 让刷新后的 pandora-config Secret(advertise + 其它配置)在每个 Pod 生效(滚动重启零停机)。
-    # 必须逐个等待全部 21 个 Deployment；只等 allocator 会把其余服务的失败误报成“全部传播完成”。
+    # 必须逐个等待全部 22 个 Deployment；只等 allocator 会把其余服务的失败误报成“全部传播完成”。
     Write-Info "rollout restart 全部业务 Deployment(传播刷新后的 pandora-config Secret)..."
     foreach ($svc in (Get-ServiceList)) {
         kubectl --context $mkCtx rollout restart deploy/$($svc.Name) -n $K8sNamespace

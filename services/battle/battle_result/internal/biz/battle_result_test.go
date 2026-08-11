@@ -72,6 +72,9 @@ type fakeRepo struct {
 	deferredIDs          []int64 // DeferProgressOutbox 调用记录(fake 不真正推迟,行保持可取)
 	progressBalances     map[[3]uint64][2]uint32
 	progressActions      map[[4]uint64]data.ProgressAction
+	missionOutbox        []data.MissionFactRecord
+	nextMissionID        int64
+	missionDeferredIDs   []int64 // DeferMissionOutbox 调用记录(同上,fake 不真正推迟)
 }
 
 func newFakeRepo() *fakeRepo {
@@ -182,7 +185,7 @@ func (r *fakeRepo) ClaimProgressLegacy(_ context.Context, matchID uint64) (bool,
 	return true, nil
 }
 
-func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []data.ProgressPlayerDelta, rows []data.ProgressOutboxRecord, caps data.ProgressCaps) error {
+func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []data.ProgressPlayerDelta, rows []data.ProgressOutboxRecord, missionRows []data.MissionFactRecord, caps data.ProgressCaps) error {
 	if r.progressSettled[matchID] || r.progressStopped[matchID] {
 		// 复刻 SQL 事务侧 fencing:settled_at_ms=0 AND stopped_at_ms=0 条件
 		// (停流与正常批的 CAS 竞态,审计 P1)。
@@ -272,6 +275,37 @@ func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq
 		row.ItemConfigIDs = append([]uint32(nil), row.ItemConfigIDs...)
 		r.progressOutbox = append(r.progressOutbox, row)
 	}
+	// 任务事实出箱与水位 CAS 同事务(mission.md §5.1):fake 也在同一函数内落,
+	// 保证"上限拒收 / 水位竞争时一行不落"这条语义在单测里同样成立。
+	for _, row := range missionRows {
+		r.nextMissionID++
+		row.ID = r.nextMissionID
+		r.missionOutbox = append(r.missionOutbox, row)
+	}
+	return nil
+}
+
+// ── 任务事实转发出箱(独立表,故障域与进度出箱隔离)──
+
+func (r *fakeRepo) FetchMissionOutbox(_ context.Context, limit int) ([]data.MissionFactRecord, error) {
+	if limit <= 0 || limit > len(r.missionOutbox) {
+		limit = len(r.missionOutbox)
+	}
+	return append([]data.MissionFactRecord(nil), r.missionOutbox[:limit]...), nil
+}
+
+func (r *fakeRepo) DeleteMissionOutbox(_ context.Context, id int64) error {
+	for i, row := range r.missionOutbox {
+		if row.ID == id {
+			r.missionOutbox = append(r.missionOutbox[:i], r.missionOutbox[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (r *fakeRepo) DeferMissionOutbox(_ context.Context, id int64) error {
+	r.missionDeferredIDs = append(r.missionDeferredIDs, id)
 	return nil
 }
 

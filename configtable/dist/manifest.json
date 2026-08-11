@@ -1,8 +1,8 @@
 {
-  "version": 20260810007,
-  "generated_at_ms": 1786416345904,
+  "version": 20260811001,
+  "generated_at_ms": 1786441168528,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-r1945",
+  "source_rev": "svn-r1970",
   "tables": [
     {
       "name": "chest_drop",
@@ -31,6 +31,13 @@
       "proto": "pandora.config.v1.ChestQualityStageTableData",
       "checksum": "sha256:b62aebcab4bd76952ba9a77ecd195102ea2537d482c0e22ee889e4e2c0e10ab3",
       "rows": 6
+    },
+    {
+      "name": "condition",
+      "file": "condition.json",
+      "proto": "pandora.config.v1.ConditionTableData",
+      "checksum": "sha256:893db05cf61473192682cbcb225f8ded6c7ed6a3351f0c120091fdaa5da91fc7",
+      "rows": 3
     },
     {
       "name": "drop",
@@ -68,6 +75,13 @@
       "rows": 11
     },
     {
+      "name": "mission",
+      "file": "mission.json",
+      "proto": "pandora.config.v1.MissionTableData",
+      "checksum": "sha256:fcefdef0e2a3c57cc0a3a1673b5fa1c4c5a0f47fb4e4befcc48056f1ad252b72",
+      "rows": 3
+    },
+    {
       "name": "particle",
       "file": "particle.json",
       "proto": "pandora.config.v1.ParticleTableData",
@@ -80,6 +94,13 @@
       "proto": "pandora.config.v1.PlayerLevelExpTableData",
       "checksum": "sha256:a9641bc0c454ea00a0708b808d81b2b3b7dd9d75bbccd069b98bbddb742616c4",
       "rows": 15
+    },
+    {
+      "name": "reward",
+      "file": "reward.json",
+      "proto": "pandora.config.v1.RewardTableData",
+      "checksum": "sha256:ea8ac223863c073557b20acff7cdb885ab4dbd8bc28f258b1670355fc51dd27a",
+      "rows": 3
     },
     {
       "name": "role_attr_map",
@@ -176,7 +197,7 @@
       "name": "talent",
       "file": "talent.json",
       "proto": "pandora.config.v1.TalentTableData",
-      "checksum": "sha256:3322021267c422c3b1eab98830a4c13b0119648ef20eb68b2bdff628078e0caf",
+      "checksum": "sha256:013da1c4cb176e7518974aabcfd707fd3858afa95f1c60e736e2be34e1e83e8d",
       "rows": 8
     },
     {

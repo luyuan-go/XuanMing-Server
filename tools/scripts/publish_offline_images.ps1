@@ -105,7 +105,7 @@ if ($Version) {
     Write-Info "镜像版本注入为 $Version(覆盖默认版本;源码版本 $srcId 仍作溯源)"
 }
 # 源码版本下传给 start.ps1 的 Get-VersionInfo。必须这样传,不能让 start.ps1 自己再探一次 VCS:
-# 它原本只会 git describe / git rev-parse,在 SVN 检出下是**软回退**(不报错),结果 21 个业务镜像
+# 它原本只会 git describe / git rev-parse,在 SVN 检出下是**软回退**(不报错),结果 22 个业务镜像
 # 被静默烙上 version=dev / commit=unknown —— 编译期注入,事后无法从镜像追回是哪次提交。
 # 版本来源收敛在本脚本一处(§15.5 代码路径直达),start.ps1 只消费。
 $env:PANDORA_RELEASE_COMMIT = $srcId

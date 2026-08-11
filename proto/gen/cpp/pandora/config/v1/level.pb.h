@@ -104,6 +104,7 @@ enum LevelEntryMode : int {
   LEVEL_ENTRY_MODE_UNSPECIFIED = 0,
   LEVEL_ENTRY_MODE_MATCHMAKE = 1,
   LEVEL_ENTRY_MODE_WALK_IN = 2,
+  LEVEL_ENTRY_MODE_BOTH = 3,
   LevelEntryMode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   LevelEntryMode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -114,11 +115,11 @@ extern const uint32_t LevelEntryMode_internal_data_[];
 inline constexpr LevelEntryMode LevelEntryMode_MIN =
     static_cast<LevelEntryMode>(0);
 inline constexpr LevelEntryMode LevelEntryMode_MAX =
-    static_cast<LevelEntryMode>(2);
+    static_cast<LevelEntryMode>(3);
 [[nodiscard]] inline bool LevelEntryMode_IsValid(int value) {
-  return 0 <= value && value <= 2;
+  return 0 <= value && value <= 3;
 }
-inline constexpr int LevelEntryMode_ARRAYSIZE = 2 + 1;
+inline constexpr int LevelEntryMode_ARRAYSIZE = 3 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 LevelEntryMode_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(LevelEntryMode) {
@@ -133,7 +134,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& LevelEntryMode_Name(LevelEntryMode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<LevelEntryMode_descriptor, 0, 2>(
+  return ::google::protobuf::internal::NameOfDenseEnum<LevelEntryMode_descriptor, 0, 3>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool LevelEntryMode_Parse(
@@ -396,6 +397,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     kSideCountFieldNumber = 12,
     kExpShareModeFieldNumber = 13,
     kBattleDurationSecondsFieldNumber = 14,
+    kMinTeamSizeFieldNumber = 15,
   };
   // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
   void clear_name() ;
@@ -557,11 +559,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
   void _internal_set_battle_duration_seconds(::uint32_t value);
 
   public:
+  // uint32 min_team_size = 15 [json_name = "minTeamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260\344\270\213\351\231\220", (.pandora.config.v1.excel_default) = "0"];
+  void clear_min_team_size() ;
+  [[nodiscard]] ::uint32_t min_team_size() const;
+  void set_min_team_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_min_team_size() const;
+  void _internal_set_min_team_size(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.LevelRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
+      ::google::protobuf::internal::TcParseTable<4, 15,
                           0, 81,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -604,6 +616,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     ::uint32_t side_count_;
     int exp_share_mode_;
     ::uint32_t battle_duration_seconds_;
+    ::uint32_t min_team_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1332,6 +1345,30 @@ inline ::uint32_t LevelRow::_internal_battle_duration_seconds() const {
 inline void LevelRow::_internal_set_battle_duration_seconds(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_duration_seconds_ = value;
+}
+
+// uint32 min_team_size = 15 [json_name = "minTeamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260\344\270\213\351\231\220", (.pandora.config.v1.excel_default) = "0"];
+inline void LevelRow::clear_min_team_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_team_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t LevelRow::min_team_size() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.min_team_size)
+  return _internal_min_team_size();
+}
+inline void LevelRow::set_min_team_size(::uint32_t value) {
+  _internal_set_min_team_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.min_team_size)
+}
+inline ::uint32_t LevelRow::_internal_min_team_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.min_team_size_;
+}
+inline void LevelRow::_internal_set_min_team_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_team_size_ = value;
 }
 
 // -------------------------------------------------------------------

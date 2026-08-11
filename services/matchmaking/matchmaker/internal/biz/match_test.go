@@ -15,6 +15,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/placement"
+	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/conf"
@@ -229,6 +230,11 @@ func (r *progressHandoffRepo) GetStartOperation(
 	return r.MatchRepo.GetStartOperation(ctx, ticketID)
 }
 
+// entryUnset = StartMatch 的 entry_mode 参数留空(玩家没选进法 / 老客户端不填)。
+// 绝大多数用例测的不是入口分叉,留空即按关卡表那一种放行,与本参数上线前行为一致;
+// 入口选择本身的判定见 TestResolveEntryMode / TestStartMatchWalkInMinTeamSize。
+const entryUnset = configpb.LevelEntryMode_LEVEL_ENTRY_MODE_UNSPECIFIED
+
 func newFixture(t *testing.T, firstMatchID uint64) *fixture {
 	return newFixtureWith(t, firstMatchID, nil)
 }
@@ -262,7 +268,7 @@ func TestResolvePlayerMatchContext_StartSagaHandsOffToQueued(t *testing.T) {
 	f := newFixture(t, 9000)
 	ctx := context.Background()
 	const playerID = uint64(4201)
-	if _, err := f.uc.StartMatch(ctx, 9101, 9101, playerID, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, 9101, 9101, playerID, 0, entryUnset); err != nil {
 		t.Fatal(err)
 	}
 	starting, err := f.uc.ResolvePlayerMatchContext(ctx, playerID)
@@ -345,7 +351,7 @@ func TestGetMatchProgress_ReadsAcceptedDurableStartOperationBeforeTicketExists(t
 		playerID = uint64(4211)
 		ticketID = uint64(9111)
 	)
-	if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 7); err != nil {
+	if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 7, entryUnset); err != nil {
 		t.Fatal(err)
 	}
 	if _, found, err := f.repo.GetTicket(ctx, ticketID); err != nil || found {
@@ -391,7 +397,7 @@ func TestGetMatchProgress_ProjectsEveryDurableStartPhase(t *testing.T) {
 			ctx := context.Background()
 			playerID := uint64(4400 + i)
 			ticketID := uint64(9500 + i)
-			if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0); err != nil {
+			if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0, entryUnset); err != nil {
 				t.Fatal(err)
 			}
 			if err := f.repo.UpdateStartOperationWithLock(ctx, ticketID, f.cfg.OptimisticRetry,
@@ -423,7 +429,7 @@ func TestGetMatchProgress_ClosesStartOperationToTicketHandoffRace(t *testing.T) 
 		playerID = uint64(4501)
 		ticketID = uint64(9601)
 	)
-	if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0, entryUnset); err != nil {
 		t.Fatal(err)
 	}
 	op, found, err := f.repo.GetStartOperation(ctx, ticketID)
@@ -445,7 +451,7 @@ func TestGetMatchProgress_AuthorizesStartOperationMemberBeforeMode(t *testing.T)
 		playerID = uint64(4601)
 		ticketID = uint64(9701)
 	)
-	if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0); err != nil {
+	if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0, entryUnset); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.repo.UpdateStartOperationWithLock(ctx, ticketID, f.cfg.OptimisticRetry,
@@ -478,7 +484,7 @@ func TestCancelMatchCommitsAgainstEveryPreQueueStartPhase(t *testing.T) {
 			ctx := context.Background()
 			playerID := uint64(4300 + i)
 			ticketID := uint64(9300 + i)
-			if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0); err != nil {
+			if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0, entryUnset); err != nil {
 				t.Fatal(err)
 			}
 			op, found, err := f.repo.GetStartOperation(ctx, ticketID)
@@ -729,14 +735,14 @@ func TestStartMatch_RejectsPlayerInBattle(t *testing.T) {
 	f.locator.mu.Lock()
 	f.locator.inBattle[captain] = true
 	f.locator.mu.Unlock()
-	if _, err := f.uc.StartMatch(ctx, 7004, 7004, captain, 0); errcode.As(err) != errcode.ErrMatchInBattle {
+	if _, err := f.uc.StartMatch(ctx, 7004, 7004, captain, 0, entryUnset); errcode.As(err) != errcode.ErrMatchInBattle {
 		t.Fatalf("in-battle player must be rejected from queueing, got err=%v", err)
 	}
 	// BATTLE 投影蒸发后同一玩家可入队。
 	f.locator.mu.Lock()
 	delete(f.locator.inBattle, captain)
 	f.locator.mu.Unlock()
-	if id, err := f.uc.StartMatch(ctx, 7004, 7004, captain, 0); err != nil || id != 7004 {
+	if id, err := f.uc.StartMatch(ctx, 7004, 7004, captain, 0, entryUnset); err != nil || id != 7004 {
 		t.Fatalf("player outside battle must queue normally: id=%d err=%v", id, err)
 	}
 }
@@ -1452,7 +1458,7 @@ func TestStartMatch_HealsStaleClaim(t *testing.T) {
 		t.Fatalf("seed stale claim: ok=%v err=%v", ok, err)
 	}
 
-	id, err := f.uc.StartMatch(ctx, 7010, 7010, captain, 0)
+	id, err := f.uc.StartMatch(ctx, 7010, 7010, captain, 0, entryUnset)
 	if err != nil {
 		t.Fatalf("StartMatch should heal stale claim: %v", err)
 	}
@@ -1471,7 +1477,7 @@ func TestStartMatch_LiveClaimStillRejected(t *testing.T) {
 	f := newFixture(t, 999)
 	f.seedTicket(t, ctx, 100, []uint64{60}, 1000)
 
-	_, err := f.uc.StartMatch(ctx, 7011, 7011, 60, 0)
+	_, err := f.uc.StartMatch(ctx, 7011, 7011, 60, 0, entryUnset)
 	if code := errcode.As(err); code != errcode.ErrMatchAlreadyMatching {
 		t.Fatalf("code = %d, want ErrMatchAlreadyMatching(%d)", code, errcode.ErrMatchAlreadyMatching)
 	}
@@ -1512,7 +1518,7 @@ func TestStartMatch_InFlightClaimNotHealed(t *testing.T) {
 	}
 
 	// 请求 B(同玩家、新 ticketID)必须被拒,且 A 的 claim / 主体原样保留。
-	_, err := f.uc.StartMatch(ctx, 8200, 8200, player, 0)
+	_, err := f.uc.StartMatch(ctx, 8200, 8200, player, 0, entryUnset)
 	if code := errcode.As(err); code != errcode.ErrMatchAlreadyMatching {
 		t.Fatalf("code = %d, want ErrMatchAlreadyMatching(%d)", code, errcode.ErrMatchAlreadyMatching)
 	}
@@ -1847,7 +1853,7 @@ func TestGetMatchProgress_TicketHandleNotShadowedByAliasedForeignMatch(t *testin
 		collisionID = uint64(9711) // 同时是 playerID 的 ticket_id 和无关对局的 match_id
 	)
 
-	if _, err := f.uc.StartMatch(ctx, collisionID, collisionID, playerID, 7); err != nil {
+	if _, err := f.uc.StartMatch(ctx, collisionID, collisionID, playerID, 7, entryUnset); err != nil {
 		t.Fatal(err)
 	}
 	// 无关对局:match_id 与 playerID 的 ticket_id 逐位相同,成员里没有 playerID。

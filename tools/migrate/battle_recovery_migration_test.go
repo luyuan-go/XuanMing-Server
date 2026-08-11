@@ -11,8 +11,8 @@ func TestPandoraBattleRecoveryMigrationsStayAdditive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 9 {
-		t.Fatalf("pandora_battle latest version=%d, want 9", version)
+	if version != 10 {
+		t.Fatalf("pandora_battle latest version=%d, want 10", version)
 	}
 
 	v3 := readEmbeddedMigration(t, "migrations/pandora_battle/000003_match_release_outbox.up.sql")
@@ -128,6 +128,43 @@ func TestPandoraBattleRecoveryMigrationsStayAdditive(t *testing.T) {
 	v9down := strings.ToUpper(readEmbeddedMigration(t, "migrations/pandora_battle/000009_item_action_outcome_and_drop_route.down.sql"))
 	if strings.Contains(v9down, "DROP TABLE") || strings.Contains(v9down, "DROP COLUMN") {
 		t.Fatal("000009 down must stay no-op; dropping durable outcome/balance/routes destroys authority")
+	}
+
+	// 000010 任务事实转发出箱(mission.md §5.1)。**必须是独立表**:battle_progress_outbox
+	// 按每玩家严格 FIFO 取行(item balance 权威要求 pickup 与 consume/discard 有序),
+	// 任务行混入会让 mission 故障卡住队首、连带阻塞该玩家的掉落/经验投递 —— 把弱依赖
+	// 变成强依赖。uk 到 (match,seq,player) 为止(每事件唯一,一事实一行);退避列同进度出箱。
+	v10 := readEmbeddedMigration(t, "migrations/pandora_battle/000010_battle_mission_outbox.up.sql")
+	for _, fragment := range []string{
+		"CREATE TABLE IF NOT EXISTS `battle_mission_outbox`",
+		"`category`",
+		"`slot_value`",
+		"`amount`",
+		"UNIQUE KEY `uk_match_seq_player` (`match_id`, `seq`, `player_id`)",
+		"KEY `idx_mission_due` (`next_attempt_at_ms`, `id`)",
+	} {
+		if !strings.Contains(v10, fragment) {
+			t.Fatalf("000010 up missing contract fragment %q", fragment)
+		}
+	}
+	// 任务出箱不得**改动**既有进度出箱表(混表即破坏上面那条故障隔离契约)。
+	// 只查 DDL 不查字符串:迁移头注释正是在解释"为什么不混进 battle_progress_outbox",
+	// 那段说明必须留着 —— 按词命中会把解释本身判成违规。
+	for _, ddl := range []string{
+		"ALTER TABLE `battle_progress_outbox`",
+		"DROP TABLE IF EXISTS `battle_progress_outbox`",
+		"INSERT INTO `battle_progress_outbox`",
+	} {
+		if strings.Contains(v10, ddl) {
+			t.Fatalf("000010 must not touch battle_progress_outbox (%q); mission facts live in their own table (failure-domain isolation)", ddl)
+		}
+	}
+	v10down := readEmbeddedMigration(t, "migrations/pandora_battle/000010_battle_mission_outbox.down.sql")
+	if !strings.Contains(v10down, "DROP TABLE IF EXISTS `battle_mission_outbox`") {
+		t.Fatal("000010 down must drop battle_mission_outbox")
+	}
+	if strings.Contains(v10down, "battle_progress_outbox") {
+		t.Fatal("000010 down must roll back only battle_mission_outbox")
 	}
 }
 

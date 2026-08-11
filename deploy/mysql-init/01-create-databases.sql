@@ -54,6 +54,10 @@ CREATE DATABASE IF NOT EXISTS `pandora_owner`
     DEFAULT CHARACTER SET utf8mb4
     DEFAULT COLLATE utf8mb4_0900_ai_ci;
 
+CREATE DATABASE IF NOT EXISTS `pandora_mission`
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_0900_ai_ci;
+
 -- 把 pandora 用户授权到所有 pandora_* 库
 GRANT ALL PRIVILEGES ON `pandora_account`.* TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_player`.*  TO 'pandora'@'%';
@@ -65,5 +69,6 @@ GRANT ALL PRIVILEGES ON `pandora_leaderboard`.* TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_ops`.*     TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_bag`.*     TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_owner`.*   TO 'pandora'@'%';
+GRANT ALL PRIVILEGES ON `pandora_mission`.* TO 'pandora'@'%';
 
 FLUSH PRIVILEGES;

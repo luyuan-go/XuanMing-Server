@@ -1,0 +1,116 @@
+// Pandora 配置表:任务表 + 条件表 + 奖励表(任务域,docs/design/mission.md)。
+//
+// 源表:Pandora-Client-SVN/Table/任务/r_任务.xlsx、r_条件.xlsx、r_奖励.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/mission.json、condition.json、reward.json。
+//
+// === 来源 ===
+// 三表结构移植自 luyuan/mmorpg 的 MissionTable / ConditionTable / RewardTable,
+// 列语义一比一(逐列对照见 docs/design/mission.md §2.1);源表死列(condition_order)与
+// 未实现完的时限列(valid_duration / quantity_type)不移植。
+//
+// === 数组列纪律 ===
+// 导表器不支持 repeated/map 列((excel_col) 限标量),多值列一律「逗号分隔原文 string」
+// (role.proto skill_ids 先例)。解析与格式校验在 pkg/configtable 伴生文件做,坏格式在
+// 加载边界拒批次;跨表存在性(condition_ids / next_mission_ids / item_ids 数组元素)
+// fk 注解做不了,由消费服务 Store.AddValidator 批次级校验(含 next_mission_ids 链环检测)。
+//
+// === 双仓纪律 ===
+// 服务端必须登记 xlsx 的全部表头列(不消费也要登记,否则生成器判未登记列整批失败)。
+// 客户端将来消费本表(任务 UI)时按双仓同步纪律在客户端列登记补齐,改表双仓同批发布。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// MissionRow 任务表一行(列序 = 字段号序 = 表头 A..I)。
+message MissionRow {
+  // ID(任务主键;玩家存档以本值定位任务)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 名称(策划可读名;服务端仅日志用,展示文本归客户端表)
+  string name = 2 [(excel_col) = "名称", (excel_required) = true];
+  // 类型(与子类型组成互斥键:同 (类型,子类型) 至多一个活跃任务)
+  uint32 mission_type = 3 [(excel_col) = "类型", (excel_required) = true];
+  // 子类型(0 = 不参与类型互斥,继承 D 版 UnregisterMissionIndexes 语义)
+  uint32 mission_sub_type = 4 [(excel_col) = "子类型", (excel_default) = "0"];
+  // 条件ID(逗号数组,1~8 个;每元素须存在于条件表——AddValidator 校验)
+  string condition_ids = 5 [(excel_col) = "条件ID", (excel_required) = true];
+  // 条件目标(逗号数组;空 = 全用条件行 target_count;非空须与条件ID等长,
+  //   元素 >0 时覆盖对应条件行的 target_count)
+  string target_counts = 6 [(excel_col) = "条件目标", (excel_default) = ""];
+  // 后续任务(逗号数组;完成后自动接取,元素须存在于本表;链环在加载期拒批次)
+  string next_mission_ids = 7 [(excel_col) = "后续任务", (excel_default) = ""];
+  // 奖励ID(0 = 无奖励;>0 须存在于奖励表)
+  uint32 reward_id = 8 [(excel_col) = "奖励ID", (excel_default) = "0", (excel_fk) = "reward"];
+  // 自动发奖(>0 完成即走发放链;=0 完成后标记可领,玩家手动领取)
+  uint32 auto_reward = 9 [(excel_col) = "自动发奖", (excel_default) = "0"];
+}
+
+// MissionTableData 任务整表容器。
+message MissionTableData {
+  option (excel_file) = "任务/r_任务.xlsx";
+  // 版式:第 1 行表头、2~3 行列说明,数据自第 4 行起(对齐技能表)。
+  option (excel_data_start_row) = 4;
+
+  repeated MissionRow rows = 1;
+}
+
+// ConditionRow 条件表一行(列序 = 字段号序 = 表头 A..I)。
+//
+// 条件是跨系统通用判定件(任务首用;成就/活动将来复用):
+// 「类别相等 + 槽位过滤命中」的事实按 amount 累加进度,进度与目标按比较符判定达成。
+message ConditionRow {
+  // ID(条件主键)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 名称(策划可读名)
+  string name = 2 [(excel_col) = "名称", (excel_required) = true];
+  // 条件类别(pandora.mission.v1.MissionConditionCategory 取值:1 杀怪 2 对话NPC
+  //   3 完成条件 4 使用道具 5 交互 6 升级 7 自定义 8 完成任务 9 拾取道具)
+  uint32 condition_category = 3 [(excel_col) = "条件类别", (excel_required) = true];
+  // 槽位1~4(各为逗号数组;空 = 该槽不过滤;非空 = 事实对应槽位值须命中集合。
+  //   槽位语义随类别,如杀怪槽位1=怪物配置ID)
+  string slot1 = 4 [(excel_col) = "槽位1", (excel_default) = ""];
+  string slot2 = 5 [(excel_col) = "槽位2", (excel_default) = ""];
+  string slot3 = 6 [(excel_col) = "槽位3", (excel_default) = ""];
+  string slot4 = 7 [(excel_col) = "槽位4", (excel_default) = ""];
+  // 目标值(缺省目标;任务行「条件目标」>0 时被覆盖)
+  uint32 target_count = 8 [(excel_col) = "目标值", (excel_default) = "0"];
+  // 比较符(0:>= 1:> 2:<= 3:< 4:==;进度达标后 clamp 到目标,继承 D 版语义)
+  uint32 comparison_op = 9 [(excel_col) = "比较符", (excel_default) = "0"];
+}
+
+// ConditionTableData 条件整表容器。
+message ConditionTableData {
+  option (excel_file) = "任务/r_条件.xlsx";
+  option (excel_data_start_row) = 4;
+
+  repeated ConditionRow rows = 1;
+}
+
+// RewardRow 奖励表一行(列序 = 字段号序 = 表头 A..E)。
+//
+// 纯数据引用(D 版 reward 模块归属原则:领取状态归业务系统,本表只回答「给什么」)。
+// D 版嵌套 repeated {reward_item, reward_count} 拍平为平行数组两列。
+message RewardRow {
+  // ID(奖励主键;任务表「奖励ID」引用)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 名称(策划可读名)
+  string name = 2 [(excel_col) = "名称", (excel_required) = true];
+  // 道具ID(逗号数组;空 = 无道具;每元素须存在于道具表——AddValidator 校验)
+  string item_ids = 3 [(excel_col) = "道具ID", (excel_default) = ""];
+  // 道具数量(逗号数组;须与道具ID等长,元素 >0)
+  string item_counts = 4 [(excel_col) = "道具数量", (excel_default) = ""];
+  // 经验(0 = 无经验奖励;道具与经验可并存;经 player.AddExperience 发放)
+  uint32 exp = 5 [(excel_col) = "经验", (excel_default) = "0"];
+}
+
+// RewardTableData 奖励整表容器。
+message RewardTableData {
+  option (excel_file) = "任务/r_奖励.xlsx";
+  option (excel_data_start_row) = 4;
+
+  repeated RewardRow rows = 1;
+}

@@ -238,8 +238,34 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
   `deprecated_config_key` Warn;线上不再出现该 Warn 后才可删除旧字段。函数名 `formSoloMatch` 与
   `solo_match_found` 日志键**有意未改**(可观测性契约,被事故档案时间线引用)。详见
   [`decision-dungeon-entry-modes.md`](../../../docs/design/decision-dungeon-entry-modes.md)。
-- **未来扩展**:「PVE 匹配补人 / 机器人补位」是该分叉点上的新 formation(单边成局,凑齐 `team_size`
-  即开一队,或等真人超时后用 bot 补满),同样只加在 PVE 侧,不影响 PVP 的 versus 撮合。
+- **未来扩展**:「机器人补位」是该分叉点上的新 formation(等真人超时后用 bot 补满),
+  同样只加在 PVE 侧,不影响 PVP 的 versus 撮合。
+
+### 同一张图两个入口(关卡表 `entry_mode = BOTH`)
+
+PVE 的目标形态是**同一张副本既能排队撮合、也能人不够时自己进**,由玩家在面板上二选一:
+
+| | 排队撮合(`MATCHMAKE`) | 自己进(`WALK_IN`) |
+|---|---|---|
+| 成局条件 | 凑满 `side_count × team_size` **才**开局 | 当前这张票立即开局 |
+| `team_size` 的用法 | **凑齐目标**(必须坐满) | **上限**(超编拒绝),实到几人带几人 |
+| `min_team_size` | **不看**(排队正是为了凑人,单排天经地义) | **下限闸**,不足拒 `ERR_MATCH_TEAM_TOO_SMALL`(4009) |
+
+- **「等不及」是玩家点出来的,不是服务端猜的**:撮合永远只凑满,不做「等 N 秒自动降到下限」。
+  想少人开就改点直进 —— 少一套超时放宽的状态机,也少一类「我明明还想等」的投诉(§15.3)。
+- **入口是「表允许什么」× 「玩家选什么」的交集**,`resolveEntryMode` 求交并 fail-closed:
+  表填 `BOTH` 时请求**必须**明确选一种,留空即拒 `ERR_MATCH_ENTRY_MODE_DENIED`(4010)。
+  **不替玩家猜** —— 猜错等于玩家以为在排队实则已单刷进本(或反之),而进本会消耗次数 / CD,
+  不是重试能挽回的错误。
+- **落定的进法写进票据**(`MatchTicketStorageRecord.entry_mode`),撮合循环按票分流而不是回查表:
+  `BOTH` 的图上「这张票排队还是直进」只有玩家的选择知道,表答不出来;且 leader 交棒 / 进程重启后
+  仍要按同一口径分流。存量旧票(无该字段)回退 `isWalkInMap`,**逐值复刻旧二进制的判定**
+  (含 `BOTH` 落 `cfg.WalkIn` 这条——旧二进制不认识该枚举值),保证共存窗口内两边对同一张票的
+  分流一致(§9.21)。
+- **下限只在进场那一刻判**,不是局内不变量:开局后有人退出 / 掉线掉到下限以下,
+  **绝不允许**据此踢人或强制收局(§9.19 / §9.20)。
+- **PVP 不受影响**:PVP 关卡行 `entry_mode` 保持 `MATCHMAKE`、不填 `min_team_size`,
+  撮合与装箱路径零改动(每方仍必须恰好坐满,不会出现 3v2)。
 
 ## 关键设计点 / 不变量
 
@@ -259,7 +285,7 @@ matchmaker 是**一个二进制、按 game_mode 分实例部署**:PVE 与 PVP �
 
 | 键(`match.*`) | 默认 | 说明 |
 |---|---|---|
-| `team_size` | `5` | 一方人数(`need = 2 × team_size`);钳到 `[1, MaxLevelTeamSize]` 防 OOM/panic。副本可经关卡表 `team_size` 覆盖 |
+| `team_size` | `5` | 一方人数(`need = 2 × team_size`);钳到 `[1, MaxLevelTeamSize]` 防 OOM/panic。副本可经关卡表 `team_size` 覆盖。**直进入口下限见关卡表 `min_team_size`,无全局配置项**(下限是逐副本的玩法参数,不是部署参数) |
 | `confirm_timeout` | `15s` | 确认期时长 |
 | `match_interval` | `2s` | 后台撮合循环扫描间隔 |
 | `ticket_ttl` / `match_ttl` | `30min` | **仅显式终态后的留存时长**;非终态的票据 / claim / match 是无 TTL 的持久状态,只能被显式取消 / 失败 / `ReleaseMatch` 释放 |

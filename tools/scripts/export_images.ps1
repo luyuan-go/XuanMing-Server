@@ -5,12 +5,12 @@
 
 .DESCRIPTION
   目标机连不上 Docker Hub / 国内加速站时,不必在目标机联网构建。流程:
-    1) 本机(能联网)跑本脚本 → 构建 21 个 pandora/*:dev + 打包成 pandora-images.tar
+    1) 本机(能联网)跑本脚本 → 构建 22 个 pandora/*:dev + 打包成 pandora-images.tar
     2) U 盘 / 共享盘 把 tar 拷到目标机
     3) 目标机跑 import_images.ps1 → docker load 进本地
     4) 目标机双击一键启动 .cmd 即可(镜像已在本地,不再联网拉)
 
-  默认只打包 21 个业务镜像(pandora/*:dev)。基础设施(mysql/redis/kafka/etcd/
+  默认只打包 22 个业务镜像(pandora/*:dev)。基础设施(mysql/redis/kafka/etcd/
   prometheus/grafana/loki/alloy/envoy)一般目标机已经拉到过并在跑;若目标机是全新环境、
   基础设施也拉不下来,加 -IncludeInfra 并显式指定独立 -Out 一并打包。
 
@@ -149,12 +149,13 @@ function Get-NewestFileTimeUtc([string[]]$Paths) {
     return $newest
 }
 
-# 21 个业务服务镜像名(与 start.ps1 的 Get-ServiceList 一致)
+# 22 个业务服务镜像名(与 start.ps1 的 Get-ServiceList 一致)
 $BusinessImages = @(
     'pandora/login:dev','pandora/player:dev','pandora/data-service:dev',
     'pandora/friend:dev','pandora/chat:dev','pandora/guild:dev','pandora/mail:dev',
     'pandora/player-locator:dev','pandora/leaderboard:dev','pandora/owner:dev','pandora/team:dev',
     'pandora/matchmaker:dev','pandora/matchmaker-pve:dev','pandora/trade:dev','pandora/dialogue:dev',
+    'pandora/mission:dev',
     'pandora/push:dev','pandora/inventory:dev','pandora/auction:dev',
     'pandora/ds-allocator:dev','pandora/hub-allocator:dev','pandora/battle-result:dev'
 )
@@ -244,7 +245,7 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 
 # ---- 可选:先构建业务镜像 ----
 if ($Build) {
-    Write-Step "构建 21 个业务镜像(BuildMode=$BuildMode;离线优先:本地基础镜像 + docker.io 源)"
+    Write-Step "构建 22 个业务镜像(BuildMode=$BuildMode;离线优先:本地基础镜像 + docker.io 源)"
 
     # incontainer(方案 A):容器内跑 `go build`,基础镜像必须实测为 go1.26.5。
     # host(方案 B):start.ps1 会独立校验宿主 `go env GOVERSION` 精确等于 go1.26.5；

@@ -26,8 +26,16 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/safego"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
+	missionv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/mission/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/data"
+)
+
+// 任务条件类别(取 mission proto 枚举,改编号即编译期暴露;docs/design/mission.md §5.2)。
+const (
+	missionCategoryKillMonster = uint32(missionv1.MissionConditionCategory_MISSION_CONDITION_CATEGORY_KILL_MONSTER)
+	missionCategoryUseItem     = uint32(missionv1.MissionConditionCategory_MISSION_CONDITION_CATEGORY_USE_ITEM)
+	missionCategoryPickupItem  = uint32(missionv1.MissionConditionCategory_MISSION_CONDITION_CATEGORY_PICKUP_ITEM)
 )
 
 // ExperienceGranter 把击杀经验幂等入账到 player(AddExperience,系统 RPC)。
@@ -42,6 +50,24 @@ type ExperienceGranter interface {
 // SetExperienceGranter 注入 player 经验入账器(nil-safe,风格同 SetInstanceGranter)。
 func (u *BattleResultUsecase) SetExperienceGranter(g ExperienceGranter) {
 	u.expGranter = g
+}
+
+// MissionReporter 把战斗事实转发给 mission 服务推进任务进度
+// (ReportMissionFacts 系统 RPC,docs/design/mission.md §5.1)。
+//
+// **弱依赖**:未注入(mission_addr 未配)时 ReportProgress 根本不产生任务出箱行 ——
+// 产生了却投不出去只会让出箱表无界堆积。因此"是否转发"由本字段是否为 nil 决定,
+// 发布顺序按 §9.21 Go 先行:先上 mission 服务,再给 battle_result 配地址开转发。
+//
+// 幂等键 progress:{match_id}:{seq}:{player_id}:mission 由调用方给定,mission 侧收据表
+// (uk + 指纹)吸收 at-least-once 重放。
+type MissionReporter interface {
+	ReportMissionFact(ctx context.Context, playerID uint64, category, slotValue, amount uint32, idempotencyKey string) error
+}
+
+// SetMissionReporter 注入任务事实转发器(nil = 转发关闭,不产生出箱行)。
+func (u *BattleResultUsecase) SetMissionReporter(r MissionReporter) {
+	u.missionReporter = r
 }
 
 // MonsterExpTable 按 (怪物角色 ID, 怪物等级) 查击杀经验。
@@ -240,6 +266,7 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 	killsByPlayer := make(map[uint64]uint32)
 	var (
 		itemRows       []data.ProgressOutboxRecord
+		missionRows    []data.MissionFactRecord
 		prevSeq        uint64
 		newSeq         = lastSeq
 		prevAppliedSeq = lastSeq
@@ -247,6 +274,20 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		batchExp       uint64
 		batchItems     uint32
 	)
+	// 任务事实转发开关:reporter 未注入(mission_addr 未配)时一行不产,避免出箱无界堆积。
+	forwardMission := u.missionReporter != nil
+	// pendingAction=true 的事实落库即不可投递,等局内消费扣除结果在
+	// ResolveProgressAction 同事务里放行或删行(见 data.MissionFactRecord.PendingAction)。
+	addMissionFact := func(seq, playerID uint64, category, slotValue, amount uint32, pendingAction bool) {
+		if !forwardMission || slotValue == 0 || amount == 0 {
+			return
+		}
+		missionRows = append(missionRows, data.MissionFactRecord{
+			MatchID: matchID, Seq: seq, PlayerID: playerID,
+			Category: category, SlotValue: slotValue, Amount: amount,
+			PendingAction: pendingAction,
+		})
+	}
 	// 模式 C:漏配 / 非白名单事实原先在事件循环内**逐条**打 Warn——一张漏配的怪物经验表
 	// 会让「该怪每次击杀 × 每个玩家 × 每场对局」都刷一行。改为按 config_id 去重收集
 	// (distinct 计数 + 样例 ID),批末汇总一条:既能定位是哪个 ID 漏配,又不随击杀数刷屏。
@@ -299,6 +340,11 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			// 击杀计数在经验换算前累计:未配置经验的怪也计入单玩家击杀上限,
 			// 失陷 DS 不能靠刷未知怪 ID 绕过反作弊额度。
 			killsByPlayer[playerID] += cnt
+			// 任务事实同样在经验换算前收集:「这只怪被杀了」与「这只怪配没配经验」是两件事,
+			// role_level 漏配不该让杀怪类任务跟着不计数。未被任何任务条件引用的怪物 ID
+			// 到 mission 侧自然匹配不上,不构成放行面。
+			addMissionFact(seq, playerID, missionCategoryKillMonster,
+				fact.MonsterKill.GetMonsterConfigId(), cnt, false)
 			// 归属权重(千分比):0 / 未设置 = 整份。旧 DS 不带本字段,「最后一击」「全队共享」
 			// 两档也恒 1000,只有「伤害占比均分」会给出小于 1000 的值(battle.proto 同款注释)。
 			// >1000 = 坏批(单条事实拿到超过一整份),按 ErrInvalidArg 让 DS 丢批告警。
@@ -370,6 +416,12 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			})
 			batchItems += cnt
 			itemsByPlayer[playerID] += cnt
+			// 拾取类任务事实只收白名单内的:非白名单拾取本就被判为可疑事实(上面已 skip
+			// 掉发放),放它推进任务进度等于另开一条绕过白名单的计数通道。
+			// 不挂 pending 闸:拾取没有 battle_progress_action 结果行可等(只有
+			// consume/discard 有),且"捡到了"本身就是 DS 记录的事实,发放失败属投递问题
+			// (满包转邮件 / 退避重试),不是"这件事没发生"。
+			addMissionFact(seq, playerID, missionCategoryPickupItem, itemID, cnt, false)
 		case *battlev1.BattleProgressEvent_ItemConsume:
 			cnt := fact.ItemConsume.GetCount()
 			itemID := fact.ItemConsume.GetItemConfigId()
@@ -389,6 +441,13 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 				MatchID: matchID, Seq: seq, PlayerID: playerID,
 				Kind: data.ProgressConsumeStack, ItemConfigIDs: []uint32{itemID}, ItemCount: cnt,
 			})
+			// 「使用道具」类任务事实。丢弃(ItemDiscard)刻意不转发:扔掉不是用掉,
+			// 否则「使用 N 个 X」型任务能靠捡了再扔刷完。
+			// pendingAction=true:这一行**在扣除落定前不可投递**。局内消费可能以业务失败
+			// 终态收场(道具不足等),此时 inventory 一件没扣、UE 也保留本地物品 ——
+			// 事实照发就等于让"上报根本没发生的消耗"刷完「使用 N 个 X」(§9.6 不信 DS)。
+			// 放行 / 删行由 ResolveProgressAction 在扣除结果同一事务里完成。
+			addMissionFact(seq, playerID, missionCategoryUseItem, itemID, cnt, true)
 		case *battlev1.BattleProgressEvent_ItemDiscard:
 			cnt := fact.ItemDiscard.GetCount()
 			itemID := fact.ItemDiscard.GetItemConfigId()
@@ -491,7 +550,7 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 	}
 	rows = append(rows, itemRows...)
 
-	if err := u.repo.ApplyProgress(ctx, matchID, lastSeq, newSeq, batchExp, batchItems, playerDeltas, rows, caps); err != nil {
+	if err := u.repo.ApplyProgress(ctx, matchID, lastSeq, newSeq, batchExp, batchItems, playerDeltas, rows, missionRows, caps); err != nil {
 		if errcode.As(err) == errcode.ErrInvalidArg {
 			// 累计上限拒收告警(契约:拒收**并告警**,审计 P2):这是失陷 DS 刷产出的
 			// 第一现场信号,不能只静默返回业务错误。biz 层 InvalidArg 前置校验都在

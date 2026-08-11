@@ -1,4 +1,4 @@
-# build_release_binaries.ps1 — 把 21 个业务服务编成 Windows 预编译二进制,供【没装 Go 的机器】直接跑。
+# build_release_binaries.ps1 — 把 22 个业务服务编成 Windows 预编译二进制,供【没装 Go 的机器】直接跑。
 #
 # 解决的问题:local 模式(宿主 go 进程 + docker 基础设施)原本每次启动都要 go build,
 # 于是策划机必须装 Go 工具链 + 能联网拉模块。有了这份产物后:

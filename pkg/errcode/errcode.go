@@ -14,7 +14,7 @@
 //	8000-8999   = dialogue
 //	9000-9999   = chat / friend / locator / push / guild / group
 //	10000-10999 = data_service
-//	11000-11999 = 预留
+//	11000-11999 = mission(任务)
 //	12000-12999 = auction(全服拍卖行 / 撮合)
 //	13000-13999 = leaderboard(通用排行榜)
 //
@@ -107,6 +107,13 @@ const (
 	ErrMatchConcurrent      Code = 4006 // WATCH/MULTI/EXEC 乐观锁重试耗尽
 	ErrMatchInBattle        Code = 4007 // 玩家正在 DS 战斗中,禁止重复匹配(不变量 §1)
 	ErrMatchInvalidMap      Code = 4008 // map_id 不在关卡表或非战斗类关卡,拒绝开匹配
+	// ErrMatchTeamTooSmall 直进人数不足关卡表 min_team_size 下限。刻意与 ErrMatchTeamNotReady
+	// (队伍状态没准备好)分开:两者玩家侧的下一步动作完全不同——一个是"再拉人",一个是
+	// "让队友点准备",共用一个码客户端就没法给出正确提示。
+	ErrMatchTeamTooSmall Code = 4009
+	// ErrMatchEntryModeDenied 该关卡不允许请求所选的进法,或关卡表两种都开放而请求未明确选择。
+	// 后者是 fail-closed 的刻意选择(§17.3):不替玩家猜入口。
+	ErrMatchEntryModeDenied Code = 4010
 )
 
 // ds_allocator / hub_allocator(5000-5999)
@@ -218,6 +225,18 @@ const (
 	ErrDataVersionMismatch Code = 10001
 	ErrDataLockTimeout     Code = 10002
 	ErrDataMigrate         Code = 10003
+)
+
+// mission(11000-11999,任务域;docs/design/mission.md)
+const (
+	ErrMissionConfigNotFound   Code = 11001 // mission_config_id 不在任务表
+	ErrMissionAlreadyAccepted  Code = 11002 // 已在活跃列表(重复接取)
+	ErrMissionAlreadyCompleted Code = 11003 // 已完成(重复接取 / 放弃已完成任务)
+	ErrMissionTypeConflict     Code = 11004 // 同 (type, sub_type) 已有活跃任务(类型互斥)
+	ErrMissionNotAccepted      Code = 11005 // 不在活跃列表(放弃 / 操作目标不存在)
+	ErrMissionNotClaimable     Code = 11006 // 无可领奖励(未完成 / 自动发 / 已领取)
+	ErrMissionActiveLimit      Code = 11007 // 活跃任务数达上限(不变量 §9-18 写入侧上限)
+	ErrMissionFactsConflict    Code = 11008 // 事实上报 idempotency_key 复用到不同内容(指纹不一致)
 )
 
 // auction(12000-12999,全服拍卖行 / 撮合)

@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 )
@@ -146,12 +146,12 @@ func writeBatchWithPlayerLevel(t *testing.T, dir string, version uint64, levelRa
 			{
 				Name: "item", File: "item.json",
 				Proto: "pandora.config.v1.ItemTableData", Checksum: checksumOf(itemRaw),
-				Rows:  uint32(len(sampleItemData().GetRows())),
+				Rows: uint32(len(sampleItemData().GetRows())),
 			},
 			{
 				Name: "talent", File: "talent.json",
 				Proto: "pandora.config.v1.TalentTableData", Checksum: checksumOf(talentRaw),
-				Rows:  uint32(len(sampleTalentData().GetRows())),
+				Rows: uint32(len(sampleTalentData().GetRows())),
 			},
 		},
 	}

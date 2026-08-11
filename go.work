@@ -51,6 +51,8 @@ use ./services/social/guild
 
 use ./services/social/mail
 
+use ./services/social/mission
+
 use ./services/runtime/push
 
 use ./services/runtime/player_locator

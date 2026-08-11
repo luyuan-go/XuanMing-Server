@@ -8,7 +8,7 @@
 #   5) (可选)起容器版 UDP 回程中继(--network <minikube profile>;docker driver 下客户端连 DS 必需)
 #   6) 打印端到端验收清单(用真 UE 客户端验:登录→hub→战斗→结算回 hub)
 #
-# 前置(由 start.ps1 -Mode k8s 完成):minikube 起、Agones 装好、RBAC/Fleet apply、21 个后端 Deployment 部署。
+# 前置(由 start.ps1 -Mode k8s 完成):minikube 起、Agones 装好、RBAC/Fleet apply、22 个后端 Deployment 部署。
 #   pwsh tools/scripts/start.ps1 -Mode k8s
 #   # start.ps1 会按 live allocator 地址自动把正确的 RelayBindHost 传给本脚本
 #
@@ -539,7 +539,7 @@ try {
 # 2026-07-28 P2:退役本机 port-forward 桥。集群内已部署 pandora-edge-envoy(NodePort 31443)
 # 且 minikube 节点容器发布了宿主 8443(-Reset 重建时经 PANDORA_MINIKUBE_PORTS 携带)时,
 # 客户端仍连 127.0.0.1:8443,链路变为 宿主 8443 → 节点 31443 → 集群内 Envoy → Service,
-# 无需 21 条 kubectl port-forward + 宿主 compose envoy。两条件任一不满足(其它机器/未重建的
+# 无需 22 条 kubectl port-forward + 宿主 compose envoy。两条件任一不满足(其它机器/未重建的
 # 旧集群)自动回落宿主桥接——他人路径不变;-HostBridge 强制走旧路径。
 $edgeInCluster = $false
 if (-not $HostBridge) {

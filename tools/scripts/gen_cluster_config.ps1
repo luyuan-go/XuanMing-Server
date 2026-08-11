@@ -1277,6 +1277,7 @@ $Services = @(
     @{ Name = 'push';           Conf = 'services/runtime/push/etc/push-dev.yaml';                  Port = 20014 }
     @{ Name = 'inventory';      Conf = 'services/economy/inventory/etc/inventory-dev.yaml';        Port = 20015 }
     @{ Name = 'auction';        Conf = 'services/economy/auction/etc/auction-dev.yaml';            Port = 20016 }
+    @{ Name = 'mission';        Conf = 'services/social/mission/etc/mission-dev.yaml';             Port = 20019 }
     @{ Name = 'ds-allocator';   Conf = 'services/battle/ds_allocator/etc/ds_allocator-dev.yaml';   Port = 20020 }
     @{ Name = 'hub-allocator';  Conf = 'services/battle/hub_allocator/etc/hub_allocator-dev.yaml'; Port = 20021 }
     @{ Name = 'battle-result';  Conf = 'services/battle/battle_result/etc/battle_result-dev.yaml'; Port = 20022 }
@@ -1459,7 +1460,8 @@ function Set-ProdPushSessionGateOn([string]$text) {
 # 联调,生产必须 true(gate 漏配/权威不可达一律 fail-closed),不允许产物继承 dev 宽松档。
 $UnarySessionGateServiceNames = @(
     'friend', 'chat', 'mail', 'guild', 'trade', 'team',
-    'matchmaker', 'matchmaker-pve', 'player', 'inventory', 'leaderboard', 'hub-allocator'
+    'matchmaker', 'matchmaker-pve', 'player', 'inventory', 'leaderboard', 'hub-allocator',
+    'mission' # 2026-08-11 任务域上线:客户端面 RPC(envoy 已按 JWT 路由 MissionService)
 )
 function Set-ProdUnarySessionGateOn([string]$svcName, [string]$text) {
     $pattern = '(?m)^(session_gate:[ \t]*\r?\n[ \t]{2})require:[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
@@ -2034,7 +2036,7 @@ try {
         # 凡 dev 模板里配了 config_table 的服务都必须在此列出:容器内没有 ../../../configtable/dist,
         # 漏掉一个 = 该服务带着宿主相对路径进集群 → 启动 fail-closed 退出 → CrashLoopBackOff。
         # (2026-08-05:ds-allocator 因 08-04 新增 config_table 时未同步登记,正是这样炸的。)
-        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result', 'ds-allocator', 'inventory')) {
+        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result', 'ds-allocator', 'inventory', 'mission')) {
             $out = Set-ServiceClusterConfigTableDir $s.Name $out
         }
         if ($s.Name -in $script:MultiReplicaSnowflakeServices) {

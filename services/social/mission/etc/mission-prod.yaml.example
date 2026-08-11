@@ -1,0 +1,41 @@
+# Pandora mission 服务生产配置样例(复制为 mission-prod.yaml 后按环境填写)。
+#
+# 与 dev 的差异:
+#   - enable_reflection 关(零值)
+#   - session_gate.require 必须 true(会话现行性门,INC-20260722-004)
+#   - DSN / 地址走内网服务发现(k8s Service 短名)
+#   - config_table.dir 指向发布 active 目录(configtable_publish / ConfigMap 挂载)
+
+server:
+  grpc:
+    network: tcp
+    addr: ":20019"
+    timeout: "5s"
+    max_conn_age: "15m"
+  http:
+    network: tcp
+    addr: ":21019"
+
+node:
+  node_id: 1
+  mysql_client:
+    dsn: "pandora:<PASSWORD>@tcp(mysql:3306)/pandora_mission?charset=utf8mb4&parseTime=True&loc=UTC"
+  redis_client:
+    host: "redis:6379"
+
+session_gate:
+  require: true
+
+kafka:
+  brokers: ["kafka:9092"]
+
+config_table:
+  dir: "/app/configtable/active"
+
+mission:
+  max_active_missions: 50
+  inventory_addr: "inventory:20015"
+  player_addr: "player:20002"
+  mail_addr: "mail:20009"           # mail = 20009(infra.md 端口表);20011 是 matchmaker
+  # retention_mode: ""              # 默认 report_only;开删须人工拍板改 "delete"(§9.24)
+  # receipt_cleanup_enabled: false  # 上游 battle_progress_outbox 重试有界前不得开启

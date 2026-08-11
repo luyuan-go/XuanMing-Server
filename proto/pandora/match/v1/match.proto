@@ -37,6 +37,9 @@ syntax = "proto3";
 package pandora.match.v1;
 
 import "pandora/common/v1/errcode.proto";
+// 入口模式枚举与关卡表共用同一份定义:入口是「关卡表允许什么」× 「玩家选什么」的交集,
+// 两边各定义一个枚举必然要写一张翻译表,而那张表就是漂移的来源(§15.5 代码路径直达)。
+import "pandora/config/v1/level.proto";
 
 service MatchService {
   rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
@@ -108,6 +111,15 @@ message StartMatchRequest {
   // (向后兼容:老客户端不填 → matchmaker 回退 cfg.Match.MapId)。同一 game_mode 内不同
   // map_id 的票据分池撮合(不会被凑进同一局),透传到 AllocateBattle 决定 DS 加载哪张图。
   uint32 map_id = 2;
+  // entry_mode:玩家这一次**选哪种进法**(排队撮合 / 人不够自己进)。这是 §17.2 允许的
+  // 「选择」而非权威数据——能不能这么进由服务端按关卡表 entry_mode 列 fail-closed 判定:
+  //   - 该图只允许一种进法 → 本字段留空(0)按那一种放行;显式填了别的进法即拒。
+  //   - 该图 entry_mode=BOTH(两种都开放)→ **必须**明确填 MATCHMAKE 或 WALK_IN,
+  //     留空按 ERR_MATCH_ENTRY_MODE_NOT_ALLOWED 拒绝(不猜:猜错等于玩家以为在排队
+  //     实则已单刷,或反之)。
+  //   - 选 WALK_IN 时另受关卡表 min_team_size 下限约束(不足即 ERR_MATCH_TEAM_TOO_SMALL)。
+  // 老客户端不填 = 0,对「只允许一种进法」的现存关卡行为逐字节不变(§9.21)。
+  pandora.config.v1.LevelEntryMode entry_mode = 3;
 }
 
 message StartMatchResponse {
@@ -280,6 +292,12 @@ message MatchTicketStorageRecord {
   reserved 8 to 9;
   uint32                            map_id        = 10;  // 选择的副本编号(g_关卡.xlsx),0=默认;同 game_mode 内按此分池撮合
   string                            game_mode     = 11;  // canonical queue namespace; mutation RPC must match
+  // entry_mode:本张票据用哪种进法(StartMatch 入口解析并校验后落定的结果,非客户端原样透传)。
+  // 必须持久化在票据上而不是撮合时回查关卡表:关卡表 entry_mode=BOTH 时,「这张票是排队还是
+  // 直进」只有玩家的选择知道,表答不了;且撮合循环跨进程重启后仍要按同一口径分流(§9.16.4)。
+  // 0(UNSPECIFIED)= 滚动升级期旧 matchmaker 写入的票据 → 分流回退按关卡表 / 部署 walk_in
+  // 判定,与本字段上线前逐字节等价(§9.17 只加字段的兼容演进)。
+  pandora.config.v1.LevelEntryMode  entry_mode    = 12;
 }
 
 // MatchStorageRecord 是一场已撮合 match 的存储快照。
@@ -341,6 +359,9 @@ message MatchStartOperationStorageRecord {
   int64                             lease_deadline_ms        = 13;
   int64                             created_at_ms            = 14;
   string                            game_mode                = 15;
+  // entry_mode 随 saga 落库:StartMatch 已解析校验完成,票据由本记录构造(buildTicket),
+  // 中途重启不得重新解析(那时请求上下文已不在,重解析等于换一套判定)。0 = 旧记录,同上兼容。
+  pandora.config.v1.LevelEntryMode  entry_mode               = 16;
 }
 
 // MatchReleaseStorageRecord 是 battle_result→matchmaker 释放 outbox 的 payload。

@@ -3,7 +3,7 @@
 #
 # 契约:
 #   1. -Prod 产物中全部客户端面服务(friend/chat/mail/guild/trade/team/matchmaker/
-#      matchmaker-pve/player/inventory/leaderboard/hub-allocator)session_gate.require
+#      matchmaker-pve/player/inventory/leaderboard/hub-allocator/mission)session_gate.require
 #      必须且只能为 true —— 顶号后旧 JWT 在 exp 前必须失去全部按 player_id 定向能力,
 #      不允许任何 -Prod 产物继承 dev 宽松档。
 #   2. -Prod 产物 push.yaml require_session_gate: true(Subscribe 建流门,既有契约一并锁死)。
@@ -24,7 +24,8 @@ $OutDirs = @($OutDirProd, $OutDirDev)
 # 与 gen_cluster_config.ps1 内 $UnarySessionGateServiceNames 同步维护(漂移即测试失败)。
 $SessionGateServices = @(
     'friend', 'chat', 'mail', 'guild', 'trade', 'team',
-    'matchmaker', 'matchmaker-pve', 'player', 'inventory', 'leaderboard', 'hub-allocator'
+    'matchmaker', 'matchmaker-pve', 'player', 'inventory', 'leaderboard', 'hub-allocator',
+    'mission'
 )
 
 function Assert-True([bool]$Condition, [string]$Message) {

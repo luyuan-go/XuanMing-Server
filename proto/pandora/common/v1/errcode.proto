@@ -13,7 +13,7 @@
 //   8000-8999   = dialogue
 //   9000-9999   = chat / friend / locator / push / guild / group
 //   10000-10999 = data_service
-//   11000-11999 = 预留
+//   11000-11999 = mission(任务)
 //   12000-12999 = auction(全服拍卖行 / 撮合)
 //   13000-13999 = leaderboard(通用排行榜)
 //
@@ -92,6 +92,8 @@ enum ErrCode {
   ERR_MATCH_CONCURRENT         = 4006;  // WATCH/MULTI/EXEC 乐观锁重试耗尽
   ERR_MATCH_ALREADY_IN_BATTLE  = 4007;  // 玩家正在 DS 战斗中,禁止重复匹配(不变量 §1)
   ERR_MATCH_INVALID_MAP        = 4008;  // map_id 不在关卡表或非战斗类关卡,拒绝开匹配
+  ERR_MATCH_TEAM_TOO_SMALL     = 4009;  // 直进人数不足关卡表 min_team_size 下限(客户端提示"还差几人")
+  ERR_MATCH_ENTRY_MODE_DENIED  = 4010;  // 该关卡不允许这种进法,或表允许两种而请求未明确选择
 
   // 5000-5999 DS / Hub allocator
   ERR_DS_NO_AVAILABLE          = 5001;
@@ -183,6 +185,16 @@ enum ErrCode {
   ERR_DATA_VERSION_MISMATCH    = 10001;
   ERR_DATA_LOCK_TIMEOUT        = 10002;
   ERR_DATA_MIGRATE             = 10003;
+
+  // 11000-11999 mission(任务,docs/design/mission.md)
+  ERR_MISSION_CONFIG_NOT_FOUND    = 11001;  // mission_config_id 不在任务表
+  ERR_MISSION_ALREADY_ACCEPTED    = 11002;  // 已在活跃列表(重复接取)
+  ERR_MISSION_ALREADY_COMPLETED   = 11003;  // 已完成(重复接取 / 放弃已完成任务)
+  ERR_MISSION_TYPE_CONFLICT       = 11004;  // 同 (type, sub_type) 已有活跃任务(类型互斥)
+  ERR_MISSION_NOT_ACCEPTED        = 11005;  // 不在活跃列表(放弃 / 操作目标不存在)
+  ERR_MISSION_NOT_CLAIMABLE       = 11006;  // 无可领奖励(未完成 / 自动发 / 已领取)
+  ERR_MISSION_ACTIVE_LIMIT        = 11007;  // 活跃任务数达上限(不变量 §9-18 写入侧上限)
+  ERR_MISSION_FACTS_CONFLICT      = 11008;  // 事实上报 idempotency_key 复用到不同内容(指纹不一致)
 
   // 12000-12999 auction(全服拍卖行 / 撮合)
   ERR_AUCTION_ORDER_NOT_FOUND      = 12001;

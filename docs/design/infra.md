@@ -24,6 +24,7 @@ pandora_battle         # 战斗结算历史 / 战绩
 pandora_trade          # 交易订单 / 审计
 pandora_auction        # 全服拍卖行挂单 / 成交(按 market_id 分片)
 pandora_leaderboard    # 排行榜结算批次 / Top-N 快照 / 发奖凭证(实时排名在 Redis,不落库)
+pandora_mission        # 任务域:活跃任务 / 完成集 / 发奖流水 / 事实收据(docs/design/mission.md)
 pandora_ops            # 运营日志 / 封禁 / 客诉
 ```
 
@@ -99,6 +100,17 @@ version      INT          NOT NULL  DEFAULT 0                    -- 乐观锁
 | `leaderboard_settlement` | 结算批次头(幂等防重复结算) | PK(settlement_id), uk(settle_idempotency_key), idx(board_type, scope, scope_id) |
 | `leaderboard_snapshot` | 结算 Top-N 名次快照(归档 / 对账) | PK(settlement_id, rank), idx(settlement_id, entity_id) |
 | `leaderboard_reward_log` | 逐名次发奖记录(幂等防重复发奖) | PK(id), uk(grant_idempotency_key), idx(settlement_id) |
+
+#### `pandora_mission`
+任务域(docs/design/mission.md):MySQL 是任务状态唯一权威,无 Redis 缓存/回写;派生态(条件倒排索引/类型互斥集)不落库。
+
+| 表 | 用途 | 关键索引 |
+|---|---|---|
+| `player_mission_active` | 活跃任务(进度 pb 列;每玩家 ≤ max_active_missions) | PK(id), uk(player_id, mission_config_id) |
+| `player_mission_done` | 完成集 + 领奖状态(被任务表行数有界) | PK(id), uk(player_id, mission_config_id), idx(player_id, reward_state) |
+| `mission_reward_log` | 发奖流水 PENDING/GRANTED/FAILED(幂等防重复发奖 + 补发工作集) | PK(id), uk(grant_idempotency_key), idx(status, updated_at_ms) |
+| `mission_fact_receipts` | 事实上报幂等收据(at-least-once 吸收;清理默认关) | PK(id), uk(player_id, idempotency_key), idx(created_at) |
+| `mission_push_outbox` | 推送事务出箱(投 kafka pandora.mission.update,成功即删) | PK(id) |
 
 ### 2.4 字符集 / 引擎
 
@@ -254,6 +266,7 @@ pandora.dlq.<original_topic>     # 死信队列
 | `pandora.hub.migrate` ⭐ | 4 | 1h | hub_allocator | **push** | 大厅强制整合迁移通知(key=player_id) |
 | `pandora.presence.update` ⭐ | 4 | 1h | player_locator | **push** | 好友在线态订阅推送(key=subscriber_id,去抖合并后批量下发) |
 | `pandora.player.experience` ⭐ | 4 | 1h | player | **push** | 实时经验 / 升级推送(key=player_id,event_type=1) |
+| `pandora.mission.update` ⭐ | 4 | 1h | mission | **push** | 任务进度 / 完成 / 可领推送(key=player_id;单事件类型 topic,混跑纪律同 player.update)。推送不承担正确性,客户端 resync 回源 `ListMissions` |
 | `pandora.ds.lifecycle` | 4 | 7d | ds_allocator / hub_allocator | 监控 | DS 拉起/回收/崩溃 |
 | `pandora.battle.result` | 16 | 30d | Battle DS | battle_result | ⭐ 核心,at-least-once + 幂等落库 |
 | `pandora.trade.audit` | 4 | 90d | trade | 审计、风控 | 交易日志(append-only) |
@@ -386,6 +399,8 @@ prefix 默认 `/pandora/leader/`,可经 `match.leader.prefix` 按环境配成 `/
 | inventory | 20015 | 21015 |
 | auction | 20016 | 21016 |
 | owner | 20017 | 21017 |
+| matchmaker-pve | 20018 | 21018 |
+| mission | 20019 | 21019 |
 | ds_allocator | 20020 | 21020 |
 | hub_allocator | 20021 | 21021 |
 | battle_result | 20022 | 21022 |

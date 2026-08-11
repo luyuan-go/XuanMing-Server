@@ -167,7 +167,12 @@ type BattleRepo interface {
 	// CAS 失败 / 已结算 → ErrUnavailable(调用方重读水位收敛);超限 → ErrInvalidArg
 	// 整体回滚。上限判定必须留在事务内:事务外读-判与 CAS 分属不同快照,重试请求
 	// 会把同批 delta 重复计入后永久误拒(审计 P1,§16.1 TOCTOU)。
-	ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []ProgressPlayerDelta, rows []ProgressOutboxRecord, caps ProgressCaps) error
+	ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []ProgressPlayerDelta, rows []ProgressOutboxRecord, missionRows []MissionFactRecord, caps ProgressCaps) error
+
+	// ── 任务事实转发出箱(docs/design/mission.md §5.1;独立表,故障域与进度出箱隔离)──
+	FetchMissionOutbox(ctx context.Context, limit int) ([]MissionFactRecord, error)
+	DeleteMissionOutbox(ctx context.Context, id int64) error
+	DeferMissionOutbox(ctx context.Context, id int64) error
 	// FetchProgressOutbox 按 id 升序取最多 limit 条已到重试时点的待发放进度出箱记录。
 	FetchProgressOutbox(ctx context.Context, limit int) ([]ProgressOutboxRecord, error)
 	// FetchProgressOutboxForPlayer 忽略退避时间，取该玩家不超过 maxSeq 的最早行。

@@ -77,7 +77,7 @@ $ArtifactBinDir = Join-Path $ProjectRoot 'run/artifacts/windows/bin'
 $script:HasGo = [bool](Get-Command go -ErrorAction SilentlyContinue)
 
 # ===== 服务清单(数组顺序 = 依赖启动顺序:leaf 依赖在前,login 最后)=====
-# 全部 21 个服务(含 social/friend、social/chat、social/guild、social/mail、social/dialogue、
+# 全部 22 个服务(含 social/friend、social/chat、social/guild、social/mail、social/dialogue、
 # data/data_service、economy/trade、economy/inventory、economy/auction、runtime/leaderboard 等)。
 # 启动策略:要么全起(默认),要么用 -Service 单起某一个,不做分档启动。
 $Services = @(
@@ -92,6 +92,7 @@ $Services = @(
     @{ Name = 'guild';          Dir = 'services/social/guild';              Cmd = 'guild';          Conf = 'etc/guild-dev-tidb.yaml';     Port = 20008 }
     @{ Name = 'mail';           Dir = 'services/social/mail';               Cmd = 'mail';           Conf = 'etc/mail-dev-tidb.yaml';      Port = 20009 }
     @{ Name = 'dialogue';       Dir = 'services/social/dialogue';           Cmd = 'dialogue';       Conf = 'etc/dialogue-dev.yaml';       Port = 20013 }
+    @{ Name = 'mission';        Dir = 'services/social/mission';            Cmd = 'mission';        Conf = 'etc/mission-dev.yaml';        Port = 20019 }
     @{ Name = 'data_service';   Dir = 'services/data/data_service';         Cmd = 'data_service';   Conf = 'etc/data_service-dev.yaml';   Port = 20003 }
     @{ Name = 'trade';          Dir = 'services/economy/trade';             Cmd = 'trade';          Conf = 'etc/trade-dev.yaml';          Port = 20012 }
     @{ Name = 'inventory';      Dir = 'services/economy/inventory';         Cmd = 'inventory';      Conf = 'etc/inventory-dev.yaml';      Port = 20015 }

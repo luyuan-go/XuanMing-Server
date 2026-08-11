@@ -102,6 +102,16 @@ type BattleConf struct {
 	// RunDropPublisher 用它调 SendPersonalMail 把溢出装备转个人邮件(幂等键防重发),再删出箱行。
 	MailAddr string `yaml:"mail_addr,omitempty" json:"mail_addr,omitempty"`
 
+	// MissionAddr mission 服务 gRPC 地址(弱依赖,docs/design/mission.md §5.1)。
+	//
+	// 空 = **任务事实转发整体关闭**:ReportProgress 不产生 battle_mission_outbox 行
+	// (产生却投不出去只会让出箱无界堆积)。配置后由 RunMissionForwarder 把击杀 / 拾取 /
+	// 局内使用事实转发给 mission.ReportMissionFacts 推进任务进度。
+	//
+	// 发布顺序按 §9.21 Go 先行:先上 mission 服务(建库表 + 配置表批次就位),
+	// 再给 battle_result 配本地址开转发;反序会让转发行持续投递失败堆积。
+	MissionAddr string `yaml:"mission_addr,omitempty" json:"mission_addr,omitempty"`
+
 	// ── 战斗中实时进度通道(实时成长,docs/design/realtime-progression.md)──
 
 	// ProgressEnabled 实时进度通道开关(**默认 false=关闭**,§14.2 默认不改变现有行为)。

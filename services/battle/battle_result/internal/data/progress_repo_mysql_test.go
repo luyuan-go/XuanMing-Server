@@ -91,7 +91,7 @@ func TestApplyProgressPlayerCapAndStaleCAS_MySQL(t *testing.T) {
 	}
 
 	if err := repoA.ApplyProgress(ctx, matchID, 0, 1, 90, 0,
-		[]ProgressPlayerDelta{{PlayerID: playerID, Exp: 90}}, row(1, 90), caps); err != nil {
+		[]ProgressPlayerDelta{{PlayerID: playerID, Exp: 90}}, row(1, 90), nil, caps); err != nil {
 		t.Fatalf("建立 seq=1 初始进度: %v", err)
 	}
 	stale, err := repoA.GetProgressWatermark(ctx, matchID)
@@ -101,13 +101,13 @@ func TestApplyProgressPlayerCapAndStaleCAS_MySQL(t *testing.T) {
 
 	// 连接 B 在 A 保留旧快照期间提交，把单玩家累计精确推到上限。
 	if err := repoB.ApplyProgress(ctx, matchID, stale.LastAppliedSeq, 2, 10, 0,
-		[]ProgressPlayerDelta{{PlayerID: playerID, Exp: 10}}, row(2, 10), caps); err != nil {
+		[]ProgressPlayerDelta{{PlayerID: playerID, Exp: 10}}, row(2, 10), nil, caps); err != nil {
 		t.Fatalf("连接 B 推进 seq=2: %v", err)
 	}
 
 	// A 重放同一批；正确分类是水位竞争，而不是把已由 B 计入的 delta 再算一次后报超限。
 	err = repoA.ApplyProgress(ctx, matchID, stale.LastAppliedSeq, 2, 10, 0,
-		[]ProgressPlayerDelta{{PlayerID: playerID, Exp: 10}}, row(2, 10), caps)
+		[]ProgressPlayerDelta{{PlayerID: playerID, Exp: 10}}, row(2, 10), nil, caps)
 	if errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("旧水位重放 code=%d err=%v, want ErrUnavailable", errcode.As(err), err)
 	}
@@ -119,7 +119,7 @@ func TestApplyProgressPlayerCapAndStaleCAS_MySQL(t *testing.T) {
 		t.Fatalf("读取最新水位: %+v err=%v", fresh, err)
 	}
 	err = repoA.ApplyProgress(ctx, matchID, fresh.LastAppliedSeq, 3, 1, 0,
-		[]ProgressPlayerDelta{{PlayerID: playerID, Exp: 1}}, row(3, 1), caps)
+		[]ProgressPlayerDelta{{PlayerID: playerID, Exp: 1}}, row(3, 1), nil, caps)
 	if errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("真实单玩家超限 code=%d err=%v, want ErrInvalidArg", errcode.As(err), err)
 	}
@@ -200,19 +200,19 @@ func TestProgressItemActionAuthorityAndOutcome_MySQL(t *testing.T) {
 	caps := ProgressCaps{MatchExp: 1000, MatchItems: 100, PlayerExp: 1000, PlayerItems: 100, PlayerKills: 100}
 	pickup := ProgressOutboxRecord{Seq: 1, PlayerID: playerID, Kind: ProgressGrantStack, ItemConfigIDs: []uint32{itemID, itemID}}
 	if err := repo.ApplyProgress(ctx, matchID, 0, 1, 0, 2,
-		[]ProgressPlayerDelta{{PlayerID: playerID, Items: 2}}, []ProgressOutboxRecord{pickup}, caps); err != nil {
+		[]ProgressPlayerDelta{{PlayerID: playerID, Items: 2}}, []ProgressOutboxRecord{pickup}, nil, caps); err != nil {
 		t.Fatalf("apply pickup: %v", err)
 	}
 
 	// 跨 item 和超余额都必须整体回滚水位、action、outbox。
 	cross := ProgressOutboxRecord{Seq: 2, PlayerID: playerID, Kind: ProgressDiscardStack, ItemConfigIDs: []uint32{10002}}
-	if err := repo.ApplyProgress(ctx, matchID, 1, 2, 0, 0, nil, []ProgressOutboxRecord{cross}, caps); errcode.As(err) != errcode.ErrInvalidArg {
+	if err := repo.ApplyProgress(ctx, matchID, 1, 2, 0, 0, nil, []ProgressOutboxRecord{cross}, nil, caps); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("cross-item action err=%v", err)
 	}
 	assertActionBalanceMySQL(t, db, matchID, playerID, itemID, 2, 0, 0)
 
 	action := ProgressOutboxRecord{Seq: 2, PlayerID: playerID, Kind: ProgressConsumeStack, ItemConfigIDs: []uint32{itemID, itemID}}
-	if err := repo.ApplyProgress(ctx, matchID, 1, 2, 0, 0, nil, []ProgressOutboxRecord{action}, caps); err != nil {
+	if err := repo.ApplyProgress(ctx, matchID, 1, 2, 0, 0, nil, []ProgressOutboxRecord{action}, nil, caps); err != nil {
 		t.Fatalf("reserve action: %v", err)
 	}
 	assertActionBalanceMySQL(t, db, matchID, playerID, itemID, 2, 2, 1)
@@ -242,7 +242,7 @@ func TestProgressItemActionAuthorityAndOutcome_MySQL(t *testing.T) {
 
 	// 失败释放后下一 seq 可重新预留；成功则不释放，后续再次支出被拒。
 	action.Seq = 3
-	if err := repo.ApplyProgress(ctx, matchID, 2, 3, 0, 0, nil, []ProgressOutboxRecord{action}, caps); err != nil {
+	if err := repo.ApplyProgress(ctx, matchID, 2, 3, 0, 0, nil, []ProgressOutboxRecord{action}, nil, caps); err != nil {
 		t.Fatalf("reserve action after failure: %v", err)
 	}
 	actionRow, ok, err = repo.FetchProgressOutboxForPlayer(ctx, matchID, playerID, 3)
@@ -256,7 +256,7 @@ func TestProgressItemActionAuthorityAndOutcome_MySQL(t *testing.T) {
 	assertActionBalanceMySQL(t, db, matchID, playerID, itemID, 2, 2, 0)
 	action.Seq = 4
 	action.ItemConfigIDs = []uint32{itemID}
-	if err := repo.ApplyProgress(ctx, matchID, 3, 4, 0, 0, nil, []ProgressOutboxRecord{action}, caps); errcode.As(err) != errcode.ErrInvalidArg {
+	if err := repo.ApplyProgress(ctx, matchID, 3, 4, 0, 0, nil, []ProgressOutboxRecord{action}, nil, caps); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("successful reservation reused err=%v", err)
 	}
 }
@@ -274,7 +274,7 @@ func TestProgressItemActionConcurrentReservation_MySQL(t *testing.T) {
 	caps := ProgressCaps{MatchExp: 1000, MatchItems: 100, PlayerExp: 1000, PlayerItems: 100, PlayerKills: 100}
 	pickup := ProgressOutboxRecord{Seq: 1, PlayerID: playerID, Kind: ProgressGrantStack, ItemConfigIDs: []uint32{itemID}}
 	if err := repoA.ApplyProgress(ctx, matchID, 0, 1, 0, 1,
-		[]ProgressPlayerDelta{{PlayerID: playerID, Items: 1}}, []ProgressOutboxRecord{pickup}, caps); err != nil {
+		[]ProgressPlayerDelta{{PlayerID: playerID, Items: 1}}, []ProgressOutboxRecord{pickup}, nil, caps); err != nil {
 		t.Fatalf("apply pickup: %v", err)
 	}
 	action := []ProgressOutboxRecord{{Seq: 2, PlayerID: playerID, Kind: ProgressDiscardStack, ItemConfigIDs: []uint32{itemID}}}
@@ -283,7 +283,7 @@ func TestProgressItemActionConcurrentReservation_MySQL(t *testing.T) {
 	for _, repo := range []*MySQLBattleRepo{repoA, repoB} {
 		go func(repo *MySQLBattleRepo) {
 			<-start
-			errs <- repo.ApplyProgress(ctx, matchID, 1, 2, 0, 0, nil, action, caps)
+			errs <- repo.ApplyProgress(ctx, matchID, 1, 2, 0, 0, nil, action, nil, caps)
 		}(repo)
 	}
 	close(start)

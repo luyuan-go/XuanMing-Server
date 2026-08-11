@@ -388,7 +388,7 @@ function Get-TestContractRows([string]$Manifest, [switch]$Fleet, [switch]$DSTick
 
 $services = @(
     'login', 'player', 'data-service', 'friend', 'chat', 'guild', 'mail', 'player-locator',
-    'leaderboard', 'team', 'matchmaker', 'matchmaker-pve', 'trade', 'dialogue', 'push',
+    'leaderboard', 'owner', 'team', 'matchmaker', 'matchmaker-pve', 'trade', 'dialogue', 'mission', 'push',
     'inventory', 'auction', 'ds-allocator', 'hub-allocator', 'battle-result')
 $writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
 $digests = @{}

@@ -85,6 +85,13 @@ const (
 	// player_locator 的 fan-out worker 去抖+合并后,把「你关注的好友 A/C/F 上线了」
 	// 批量推给订阅者本人;push 服务按 key=subscriber_id 路由到其 stream。
 	TopicPresenceUpdate = "pandora.presence.update"
+
+	// TopicMissionUpdate — proto: pandora.mission.v1.MissionUpdateEvent(任务域,2026-08-11)
+	// key=player_id;**原则 3 例外**:任务进度由 battle_result 出箱等异步事实驱动,
+	// 状态机变化必须发给玩家本人。mission 服务事务出箱生产;推送不承担正确性
+	// (原则 5):客户端判重按 mission_config_id + 状态,resync 回源 ListMissions。
+	// 独立单事件类型 topic(金丝雀混跑纪律,见 TopicPlayerUpdate 注释)。
+	TopicMissionUpdate = "pandora.mission.update"
 )
 
 // 非推送 topic(服务间事件,push 不订阅;W4 ③,2026-06-06)。
@@ -129,6 +136,7 @@ func BuildDLQTopic(originalTopic string) string {
 // 让队伍聊天和世界聊天也被 push 消费(此前只订阅 chat.private,team/world 消息丢失)。
 // 2026-06-19 presence 订阅推送上线(§13.4),补 pandora.presence.update(好友在线态变更)。
 // 2026-07-21 实时成长上线,补 pandora.player.experience(经验/升级推送,key=player_id)。
+// 2026-08-11 任务域上线,补 pandora.mission.update(任务进度/完成/可领推送,key=player_id)。
 // 后续 player.update / system.notify Event message 落地后,
 // 在对应业务服 PR 里把常量加进本切片,push etc yaml 同步加 topics。
 var PushTopics = []string{
@@ -144,6 +152,7 @@ var PushTopics = []string{
 	TopicGuildEvent,
 	TopicPresenceUpdate,
 	TopicPlayerExperience,
+	TopicMissionUpdate,
 }
 
 // BroadcastTopics 是「广播类」push topic 集合:这些 topic 的 kafka key 为空(广播语义),

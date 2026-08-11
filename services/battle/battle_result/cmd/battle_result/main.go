@@ -321,6 +321,28 @@ func main() {
 			"hint", "mail_addr 未配置 → 背包满掉落留在出箱轮询重试(不丢,不转邮件)")
 	}
 
+	// 6.2.2 任务事实转发器(弱依赖,docs/design/mission.md §5.1)。
+	// MissionAddr 空 = 转发整体关闭:ReportProgress 不产生 battle_mission_outbox 行。
+	// 已启用则必须先确认出箱表存在(000010 迁移):缺表会让每次 ReportProgress 在事务里炸,
+	// 等于整条实时进度通道不可用 —— 必须 fail-fast 而不是等首个战斗事实才发现。
+	if cfg.Battle.MissionAddr != "" {
+		schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if serr := repo.ValidateMissionOutboxSchema(schemaCtx); serr != nil {
+			cancel()
+			helper.Errorw("msg", "mission_outbox_schema_check_failed", "err", serr,
+				"hint", "跑 tools/migrate 至 pandora_battle 000010,或把 mission_addr 置空关闭转发")
+			os.Exit(1)
+		}
+		cancel()
+		missionReporter := data.NewGrpcMissionReporter(cfg.Battle.MissionAddr)
+		defer func() { _ = missionReporter.Close() }()
+		uc.SetMissionReporter(missionReporter)
+		helper.Infow("msg", "mission_forward_grpc", "mission_addr", cfg.Battle.MissionAddr)
+	} else {
+		helper.Warnw("msg", "mission_forward_disabled",
+			"hint", "mission_addr 未配置 → 不产生任务出箱行,任务进度不受战斗事实驱动")
+	}
+
 	svc := service.NewBattleResultService(uc)
 	if cfg.DSAuth.AuthorityModeRedis() {
 		svc.SetBattleCredentialStateChecker(service.NewBattleCredentialStateChecker(
@@ -377,6 +399,9 @@ func main() {
 	go uc.RunOutboxPublisher(pubCtx)
 	go uc.RunDropPublisher(pubCtx)
 	go uc.RunProgressPublisher(pubCtx)
+	// 任务事实转发:独立于进度出箱(故障域隔离,见 biz/mission_forward.go 文件头);
+	// mission_addr 未配时内部直接返回,不空转。
+	go uc.RunMissionForwarder(pubCtx)
 	go uc.RunMatchReleasePublisher(pubCtx)
 	// 保留期清理:battles/stats + 已结算进度水位超期批删,只增表增长有界(§9.24,biz/retention.go)。
 	go uc.RunRetentionSweep(pubCtx)

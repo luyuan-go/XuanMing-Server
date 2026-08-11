@@ -32,6 +32,7 @@
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "pandora/common/v1/errcode.pb.h"
+#include "pandora/config/v1/level.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -944,6 +945,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchRequest final : public ::
   enum : int {
     kTeamIdFieldNumber = 1,
     kMapIdFieldNumber = 2,
+    kEntryModeFieldNumber = 3,
   };
   // uint64 team_id = 1 [json_name = "teamId"];
   void clear_team_id() ;
@@ -965,11 +967,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchRequest final : public ::
   void _internal_set_map_id(::uint32_t value);
 
   public:
+  // .pandora.config.v1.LevelEntryMode entry_mode = 3 [json_name = "entryMode"];
+  void clear_entry_mode() ;
+  [[nodiscard]] ::pandora::config::v1::LevelEntryMode entry_mode() const;
+  void set_entry_mode(::pandora::config::v1::LevelEntryMode value);
+
+  private:
+  ::pandora::config::v1::LevelEntryMode _internal_entry_mode() const;
+  void _internal_set_entry_mode(::pandora::config::v1::LevelEntryMode value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.match.v1.StartMatchRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1000,6 +1012,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchRequest final : public ::
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t team_id_;
     ::uint32_t map_id_;
+    int entry_mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4245,6 +4258,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTicketStorageRecord final : pu
     kMatchIdFieldNumber = 7,
     kAvgMmrFieldNumber = 5,
     kMapIdFieldNumber = 10,
+    kEntryModeFieldNumber = 12,
   };
   // repeated .pandora.match.v1.MatchMemberStorageRecord members = 4 [json_name = "members"];
   [[nodiscard]] int members_size()
@@ -4352,11 +4366,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTicketStorageRecord final : pu
   void _internal_set_map_id(::uint32_t value);
 
   public:
+  // .pandora.config.v1.LevelEntryMode entry_mode = 12 [json_name = "entryMode"];
+  void clear_entry_mode() ;
+  [[nodiscard]] ::pandora::config::v1::LevelEntryMode entry_mode() const;
+  void set_entry_mode(::pandora::config::v1::LevelEntryMode value);
+
+  private:
+  ::pandora::config::v1::LevelEntryMode _internal_entry_mode() const;
+  void _internal_set_entry_mode(::pandora::config::v1::LevelEntryMode value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.match.v1.MatchTicketStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           1, 67,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4394,6 +4418,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTicketStorageRecord final : pu
     ::uint64_t match_id_;
     ::int32_t avg_mmr_;
     ::uint32_t map_id_;
+    int entry_mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4564,6 +4589,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchStartOperationStorageRecord fi
     kNextAttemptAtMsFieldNumber = 11,
     kLeaseDeadlineMsFieldNumber = 13,
     kCreatedAtMsFieldNumber = 14,
+    kEntryModeFieldNumber = 16,
   };
   // repeated .pandora.match.v1.MatchMemberStorageRecord members = 5 [json_name = "members"];
   [[nodiscard]] int members_size()
@@ -4751,12 +4777,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchStartOperationStorageRecord fi
   void _internal_set_created_at_ms(::int64_t value);
 
   public:
+  // .pandora.config.v1.LevelEntryMode entry_mode = 16 [json_name = "entryMode"];
+  void clear_entry_mode() ;
+  [[nodiscard]] ::pandora::config::v1::LevelEntryMode entry_mode() const;
+  void set_entry_mode(::pandora::config::v1::LevelEntryMode value);
+
+  private:
+  ::pandora::config::v1::LevelEntryMode _internal_entry_mode() const;
+  void _internal_set_entry_mode(::pandora::config::v1::LevelEntryMode value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.match.v1.MatchStartOperationStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          1, 98,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          1, 106,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4800,6 +4836,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchStartOperationStorageRecord fi
     ::int64_t next_attempt_at_ms_;
     ::int64_t lease_deadline_ms_;
     ::int64_t created_at_ms_;
+    int entry_mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6044,6 +6081,30 @@ inline ::uint32_t StartMatchRequest::_internal_map_id() const {
 inline void StartMatchRequest::_internal_set_map_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.map_id_ = value;
+}
+
+// .pandora.config.v1.LevelEntryMode entry_mode = 3 [json_name = "entryMode"];
+inline void StartMatchRequest::clear_entry_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::pandora::config::v1::LevelEntryMode StartMatchRequest::entry_mode() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.StartMatchRequest.entry_mode)
+  return _internal_entry_mode();
+}
+inline void StartMatchRequest::set_entry_mode(::pandora::config::v1::LevelEntryMode value) {
+  _internal_set_entry_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.StartMatchRequest.entry_mode)
+}
+inline ::pandora::config::v1::LevelEntryMode StartMatchRequest::_internal_entry_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::config::v1::LevelEntryMode>(_impl_.entry_mode_);
+}
+inline void StartMatchRequest::_internal_set_entry_mode(::pandora::config::v1::LevelEntryMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_mode_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -7918,6 +7979,30 @@ inline void MatchTicketStorageRecord::set_allocated_game_mode(::std::string* PRO
   // @@protoc_insertion_point(field_set_allocated:pandora.match.v1.MatchTicketStorageRecord.game_mode)
 }
 
+// .pandora.config.v1.LevelEntryMode entry_mode = 12 [json_name = "entryMode"];
+inline void MatchTicketStorageRecord::clear_entry_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::pandora::config::v1::LevelEntryMode MatchTicketStorageRecord::entry_mode() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchTicketStorageRecord.entry_mode)
+  return _internal_entry_mode();
+}
+inline void MatchTicketStorageRecord::set_entry_mode(::pandora::config::v1::LevelEntryMode value) {
+  _internal_set_entry_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchTicketStorageRecord.entry_mode)
+}
+inline ::pandora::config::v1::LevelEntryMode MatchTicketStorageRecord::_internal_entry_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::config::v1::LevelEntryMode>(_impl_.entry_mode_);
+}
+inline void MatchTicketStorageRecord::_internal_set_entry_mode(::pandora::config::v1::LevelEntryMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_mode_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // MatchStorageRecord
@@ -9657,6 +9742,30 @@ inline void MatchStartOperationStorageRecord::set_allocated_game_mode(::std::str
     _impl_.game_mode_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.match.v1.MatchStartOperationStorageRecord.game_mode)
+}
+
+// .pandora.config.v1.LevelEntryMode entry_mode = 16 [json_name = "entryMode"];
+inline void MatchStartOperationStorageRecord::clear_entry_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::pandora::config::v1::LevelEntryMode MatchStartOperationStorageRecord::entry_mode() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStartOperationStorageRecord.entry_mode)
+  return _internal_entry_mode();
+}
+inline void MatchStartOperationStorageRecord::set_entry_mode(::pandora::config::v1::LevelEntryMode value) {
+  _internal_set_entry_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchStartOperationStorageRecord.entry_mode)
+}
+inline ::pandora::config::v1::LevelEntryMode MatchStartOperationStorageRecord::_internal_entry_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::config::v1::LevelEntryMode>(_impl_.entry_mode_);
+}
+inline void MatchStartOperationStorageRecord::_internal_set_entry_mode(::pandora::config::v1::LevelEntryMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_mode_ = value;
 }
 
 // -------------------------------------------------------------------

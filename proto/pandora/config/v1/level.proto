@@ -18,13 +18,24 @@ import "pandora/config/v1/excel.proto";
 // 从 matchmaker 部署级开关 walk_in 下沉为关卡表数据(CLAUDE.md §17.1「差异进表」):
 // 部署级开关表达不了「同一个池里,有的副本直进、有的副本要撮合」——而这正是
 // 「多人撮合进副本」需要的。撮合池归属仍由 game_mode 列决定,与本列正交。
+//
+// 本枚举有两种用法,语义不同,别混:
+//   ① 关卡表 LevelRow.entry_mode —— 这张图**允许哪些进法**(BOTH = 两种都开放);
+//   ② StartMatchRequest.entry_mode —— 玩家**这一次选哪种进法**(§17.2 客户端只传选择)。
+// 服务端按 ① fail-closed 校验 ②:选择不在允许集合内即拒,表填 BOTH 而请求没明确选择也拒
+// (不猜默认入口——猜错的后果是玩家以为在排队实则已经单刷,或反之)。
 enum LevelEntryMode {
   // 未配置:沿用该 matchmaker 部署的 walk_in 开关(旧批次表 + 新二进制的兼容路径,§9.21)。
+  // 用在请求上时表示「玩家没选」:仅当该图只允许一种进法时才按那一种放行。
   LEVEL_ENTRY_MODE_UNSPECIFIED = 0;
   // 撮合:入池按 MMR 窗口凑齐 side_count×team_size 人后装箱分方,再进确认期。
   LEVEL_ENTRY_MODE_MATCHMAKE   = 1;
   // 直进(walk-in):单张票据(单人或整队)立即成局,跳过撮合与确认,不与陌生人凑对手。
   LEVEL_ENTRY_MODE_WALK_IN     = 2;
+  // 两种都开放(只用于关卡表列,不用于请求):PVE 副本的目标形态——排队撮合凑满 team_size,
+  // 或人凑不够时玩家自己选择直进(直进受 min_team_size 下限约束)。
+  // 「等不及了」由玩家点直进表达,服务端不做「等 N 秒自动降人数」的猜测(§15.3)。
+  LEVEL_ENTRY_MODE_BOTH        = 3;
 }
 
 // LevelExpShareMode 击杀经验归属方式:这张图里「怪物经验判给谁」。
@@ -68,9 +79,11 @@ message LevelRow {
   bool disable_ui_shortcut = 6 [(excel_col) = "禁止ui快捷键开关", (excel_default) = "1"];
   // 匹配列表显示(源表空值默认 0=不显示)
   bool show_in_match_list = 7 [(excel_col) = "匹配列表显示", (excel_default) = "0"];
-  // 队伍人数(一方人数;matchmaker 按 map_id 撮合 team_size vs team_size,
-  //   本地端到端 1v1 填 1,正式 5v5 填 5;源表空值默认 0=沿用服务端全局 team_size 兜底,
-  //   仅战斗类关卡有意义,非副本行留空)
+  // 队伍人数(一方人数**上限**,也是撮合的凑齐目标;matchmaker 按 map_id 撮合
+  //   team_size vs team_size,本地端到端 1v1 填 1,正式 5v5 填 5;源表空值默认
+  //   0=沿用服务端全局 team_size 兜底,仅战斗类关卡有意义,非副本行留空)
+  // 两条入口对本列的用法不同:撮合按 side_count×team_size **凑满**才成局;
+  //   直进只把它当**上限**(超编队伍拒绝入场),实到几人就带几人进。
   uint32 team_size = 8 [(excel_col) = "队伍人数", (excel_default) = "0"];
   // 是否能退出(客户端退出按钮门控:1=允许主动退出并按失败结算返回 Hub,0=不显示退出按钮;
   //   当前仅单人 PVE 副本置 1,DS 端 RequestSoloDungeonLeave 仍对 PVE/单人 roster 做兜底校验)
@@ -107,6 +120,15 @@ message LevelRow {
   //   服务端自身不据此判定任何东西——"这一局到点了没"只有 DS 知道,后端仍按既有 battle_result
   //   / 心跳超时路径处理,不引入第二个计时权威。
   uint32 battle_duration_seconds = 14 [(excel_col) = "对局时长", (excel_default) = "0"];
+  // 队伍人数下限(**只对直进入口生效**):人没凑够时玩家自己进,至少要这么多人才准进。
+  //   0 = 未配置 → 无下限(1 人也能直进),与本列上线前逐字节等价(滚动混版下新旧表都安全)。
+  // 刻意**不对撮合入口生效**:撮合的目标恒是凑满 team_size,凑不够就继续等——「等不及」
+  //   是玩家改点直进来表达的,不是服务端替他降人数(§15.3 拒绝预设性复杂化)。
+  // 校验(加载期,pkg/configtable/level.go):填了本列就必须同时填 team_size,且
+  //   min_team_size ≤ team_size ≤ MaxLevelTeamSize;下限比上限还大的行整表拒绝。
+  // ⚠️ 只在**进场那一刻**判定,不是局内持续不变量:开局后有人退出 / 掉线导致人数掉到
+  //   下限以下,绝不允许据此踢人或强制收局(§9.19 / §9.20 不得让玩家卡死或被踢出场景)。
+  uint32 min_team_size = 15 [(excel_col) = "队伍人数下限", (excel_default) = "0"];
 }
 
 // LevelTableData 关卡表整表容器(dist/level.json 的根对象;excel_file 注解 = 导表登记)。

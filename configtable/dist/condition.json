@@ -1,0 +1,23 @@
+{
+  "rows": [
+    {
+      "id": 61001,
+      "name": "击杀任意怪物",
+      "condition_category": 1,
+      "target_count": 5
+    },
+    {
+      "id": 61002,
+      "name": "拾取任意物资",
+      "condition_category": 9,
+      "target_count": 3
+    },
+    {
+      "id": 61003,
+      "name": "完成「初出茅庐」",
+      "condition_category": 8,
+      "slot1": "60001",
+      "target_count": 1
+    }
+  ]
+}

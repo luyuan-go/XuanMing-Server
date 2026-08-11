@@ -7,7 +7,7 @@ $ServicesKustomizeDir = Join-Path $ProjectRoot 'deploy/k8s/services'
 $SignerServices = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
 $AllServices = @(
     'login', 'player', 'data-service', 'friend', 'chat', 'guild', 'mail', 'player-locator',
-    'leaderboard', 'team', 'matchmaker', 'matchmaker-pve', 'trade', 'dialogue', 'push',
+    'leaderboard', 'team', 'matchmaker', 'matchmaker-pve', 'trade', 'dialogue', 'mission', 'push', 'owner',
     'inventory', 'auction', 'ds-allocator', 'hub-allocator', 'battle-result'
 )
 

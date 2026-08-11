@@ -35,7 +35,12 @@
 | `chat_cluster`   | chat | host.docker.internal:20005 | h2c | route 15s |
 | `trade_cluster`  | trade | host.docker.internal:20012 | h2c | route 15s |
 | `leaderboard_cluster` | leaderboard | host.docker.internal:20007 | h2c | route 15s |
-| `dialogue_cluster` | dialogue | host.docker.internal:20013 | h2c | route 15s |
+| `dialogue_cluster` | dialogue | host.docker.internal:20013 | h2c | route 15s | ⚠️ **本行是漂移**:`envoy.yaml` 里并不存在该 cluster / route,dialogue 当前未接入客户端面网关(2026-08-11 核实)。要放行需照 friend 补 route + jwt_authn 规则 + cluster 三件套。 |
+| `mission_cluster` | mission | host.docker.internal:20019 | h2c | route 15s |
+
+**mission 的系统 RPC 不对客户端开放**:`ReportMissionFacts`(任务进度唯一写入通道,由
+battle_result 出箱内网直连)与 `CompleteAllMissions`(GM 批量完成)在 route 里按精确 path
+`direct_response 403`,且排在 `prefix` 路由之前;服务层另有 `systemOnly`(callerID!=0 拒)兜底。
 
 DS 面(`:8444` `pandora_ds_listener`,**不挂玩家面 jwt_authn**):DSTicket 只认证玩家→DS；
 DS→后端由 exact method 白名单、服务层 DS Bearer Guard 与 Redis active/projection 共同授权。

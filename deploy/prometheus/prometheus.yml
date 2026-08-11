@@ -64,6 +64,8 @@ scrape_configs:
         labels: { service: auction }
       - targets: ['host.docker.internal:21013']
         labels: { service: dialogue }
+      - targets: ['host.docker.internal:21019']
+        labels: { service: mission }
       # DS 调度 / Hub 调度 / 战斗结算
       - targets: ['host.docker.internal:21020']
         labels: { service: ds_allocator }

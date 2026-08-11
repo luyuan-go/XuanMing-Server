@@ -33,6 +33,20 @@ func validateLevelRow(row *configpb.LevelRow) error {
 	if ts := row.GetTeamSize(); ts > MaxLevelTeamSize {
 		return fmt.Errorf("队伍人数(team_size=%d)超过上限 %d(防撮合预分配爆内存)", ts, MaxLevelTeamSize)
 	}
+	// 直进人数下限的两条硬约束(填了才校验,0=无下限是合法的默认态):
+	//  ① 必须同时填上限。下限相对上限才有意义;上限留 0 表示"沿用服务端全局 team_size",
+	//     而全局值逐部署不同,加载期无从比对——放过去等于让一张表在不同部署里下限时而合法
+	//     时而大于上限(那会让该图任何人数都进不去,是个静默拒服务)。
+	//  ② 不得大于上限。
+	if minTS := row.GetMinTeamSize(); minTS > 0 {
+		ts := row.GetTeamSize()
+		if ts == 0 {
+			return fmt.Errorf("队伍人数下限(min_team_size=%d)已填,但队伍人数(team_size)留空沿用全局兜底;两者必须同时填", minTS)
+		}
+		if minTS > ts {
+			return fmt.Errorf("队伍人数下限(min_team_size=%d)大于队伍人数上限(team_size=%d)", minTS, ts)
+		}
+	}
 	return nil
 }
 

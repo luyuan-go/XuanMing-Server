@@ -311,7 +311,7 @@ func (*serviceBattleRepo) MarkProgressStopped(context.Context, uint64) error { r
 func (*serviceBattleRepo) ClaimProgressLegacy(context.Context, uint64) (bool, error) {
 	return true, nil
 }
-func (*serviceBattleRepo) ApplyProgress(context.Context, uint64, uint64, uint64, uint64, uint32, []data.ProgressPlayerDelta, []data.ProgressOutboxRecord, data.ProgressCaps) error {
+func (*serviceBattleRepo) ApplyProgress(context.Context, uint64, uint64, uint64, uint64, uint32, []data.ProgressPlayerDelta, []data.ProgressOutboxRecord, []data.MissionFactRecord, data.ProgressCaps) error {
 	return nil
 }
 func (*serviceBattleRepo) FetchProgressOutbox(context.Context, int) ([]data.ProgressOutboxRecord, error) {
@@ -327,6 +327,13 @@ func (*serviceBattleRepo) ResolveProgressAction(context.Context, data.ProgressOu
 	return data.ProgressAction{}, nil
 }
 func (*serviceBattleRepo) DeleteProgressOutbox(context.Context, int64) error { return nil }
+
+// 任务事实转发出箱(mission.md §5.1):service 单测不涉及,默认 no-op。
+func (*serviceBattleRepo) FetchMissionOutbox(context.Context, int) ([]data.MissionFactRecord, error) {
+	return nil, nil
+}
+func (*serviceBattleRepo) DeleteMissionOutbox(context.Context, int64) error { return nil }
+func (*serviceBattleRepo) DeferMissionOutbox(context.Context, int64) error  { return nil }
 
 // 保留期清理(§9.24):service 单测不涉及,默认 no-op。
 func (*serviceBattleRepo) SweepExpiredBattles(_ context.Context, mode dbguard.Mode, _ int64, _ int) (dbguard.Outcome, error) {

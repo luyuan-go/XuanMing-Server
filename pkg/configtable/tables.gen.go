@@ -29,6 +29,9 @@ type Tables struct {
 	// ChestQualityStage 配置表 chest_quality_stage(道具/d_宝箱品质阶段.xlsx)
 	ChestQualityStage *ChestQualityStageTable
 
+	// Condition 配置表 condition(任务/r_条件.xlsx)
+	Condition *ConditionTable
+
 	// Drop 配置表 drop(道具/d_掉落.xlsx)
 	Drop *DropTable
 
@@ -44,11 +47,17 @@ type Tables struct {
 	// Level 配置表 level(关卡/g_关卡.xlsx)
 	Level *LevelTable
 
+	// Mission 配置表 mission(任务/r_任务.xlsx)
+	Mission *MissionTable
+
 	// Particle 配置表 particle(资产/l_粒子.xlsx)
 	Particle *ParticleTable
 
 	// PlayerLevelExp 配置表 player_level_exp(角色/j_玩家等级经验.xlsx)
 	PlayerLevelExp *PlayerLevelExpTable
+
+	// Reward 配置表 reward(任务/r_奖励.xlsx)
+	Reward *RewardTable
 
 	// RoleAttrMap 配置表 role_attr_map(角色/j_角色数值属性映射.xlsx)
 	RoleAttrMap *RoleAttrMapTable
@@ -102,13 +111,16 @@ var specByName = map[string]tableSpec{
 	"chest_group":         {protoName: "pandora.config.v1.ChestGroupTableData", build: buildChestGroupTable},
 	"chest_point":         {protoName: "pandora.config.v1.ChestPointTableData", build: buildChestPointTable},
 	"chest_quality_stage": {protoName: "pandora.config.v1.ChestQualityStageTableData", build: buildChestQualityStageTable},
+	"condition":           {protoName: "pandora.config.v1.ConditionTableData", build: buildConditionTable},
 	"drop":                {protoName: "pandora.config.v1.DropTableData", build: buildDropTable},
 	"game_module":         {protoName: "pandora.config.v1.GameModuleTableData", build: buildGameModuleTable},
 	"gm_command":          {protoName: "pandora.config.v1.GmCommandTableData", build: buildGmCommandTable},
 	"item":                {protoName: "pandora.config.v1.ItemTableData", build: buildItemTable},
 	"level":               {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable},
+	"mission":             {protoName: "pandora.config.v1.MissionTableData", build: buildMissionTable},
 	"particle":            {protoName: "pandora.config.v1.ParticleTableData", build: buildParticleTable},
 	"player_level_exp":    {protoName: "pandora.config.v1.PlayerLevelExpTableData", build: buildPlayerLevelExpTable},
+	"reward":              {protoName: "pandora.config.v1.RewardTableData", build: buildRewardTable},
 	"role_attr_map":       {protoName: "pandora.config.v1.RoleAttrMapTableData", build: buildRoleAttrMapTable},
 	"role_level":          {protoName: "pandora.config.v1.RoleLevelTableData", build: buildRoleLevelTable},
 	"role":                {protoName: "pandora.config.v1.RoleTableData", build: buildRoleTable},
@@ -172,6 +184,15 @@ func validateCrossTables(dst *Tables) error {
 		}
 		if !dst.Item.Exists(v) {
 			return fmt.Errorf("表 drop 主键 %d 的 物品ID(%d)在表 item 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.Mission.All() {
+		v := row.GetRewardId()
+		if v == 0 {
+			continue // 0 = 无引用
+		}
+		if !dst.Reward.Exists(v) {
+			return fmt.Errorf("表 mission 主键 %d 的 奖励ID(%d)在表 reward 中不存在", row.GetId(), v)
 		}
 	}
 	for _, row := range dst.RoleLevel.All() {
@@ -299,6 +320,20 @@ func (tb *Tables) DropItemConfigIdRowByID(id uint32) (*configpb.ItemRow, bool) {
 		return nil, false
 	}
 	return tb.DropItemConfigIdRow(row)
+}
+
+// MissionRewardIdRow 解析 mission.奖励ID → reward 行(外键正查)。
+func (tb *Tables) MissionRewardIdRow(row *configpb.MissionRow) (*configpb.RewardRow, bool) {
+	return tb.Reward.ByID(row.GetRewardId())
+}
+
+// MissionRewardIdRowByID 按 mission 主键取行再解析 奖励ID → reward 行。
+func (tb *Tables) MissionRewardIdRowByID(id uint32) (*configpb.RewardRow, bool) {
+	row, ok := tb.Mission.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.MissionRewardIdRow(row)
 }
 
 // RoleLevelRoleIdRow 解析 role_level.角色ID → role 行(外键正查)。
@@ -449,6 +484,22 @@ func buildChestQualityStageTable(raw []byte, mt ManifestTable, dst *Tables) erro
 	return nil
 }
 
+func buildConditionTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.ConditionTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 condition 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 condition 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newConditionTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Condition = t
+	return nil
+}
+
 func buildDropTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	var data configpb.DropTableData
 	if err := unmarshalTable(raw, &data); err != nil {
@@ -529,6 +580,22 @@ func buildLevelTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	return nil
 }
 
+func buildMissionTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.MissionTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 mission 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 mission 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newMissionTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Mission = t
+	return nil
+}
+
 func buildParticleTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	var data configpb.ParticleTableData
 	if err := unmarshalTable(raw, &data); err != nil {
@@ -558,6 +625,22 @@ func buildPlayerLevelExpTable(raw []byte, mt ManifestTable, dst *Tables) error {
 		return err
 	}
 	dst.PlayerLevelExp = t
+	return nil
+}
+
+func buildRewardTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.RewardTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 reward 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 reward 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newRewardTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Reward = t
 	return nil
 }
 

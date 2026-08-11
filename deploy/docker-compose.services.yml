@@ -182,6 +182,20 @@ services:
     volumes: [ "../run/cluster/etc/dialogue.yaml:/app/etc/cluster.yaml:ro" ]
     ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20013:20013" ]
 
+  mission:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/social/mission, CMD_NAME: mission }
+    image: pandora/mission:dev
+    container_name: pandora-mission
+    # 配置表是 mission 的启动强依赖(接取校验/进度判定/发奖内容全部读表):
+    # 集群产物里 config_table.dir = /app/configtable/active,漏挂 = 加载失败 fail-closed 退出。
+    volumes:
+      - "../run/cluster/etc/mission.yaml:/app/etc/cluster.yaml:ro"
+      - "../configtable/dist:/app/configtable/active:ro"
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20019:20019" ]
+
   push:
     <<: *svc-base
     build:
@@ -221,7 +235,9 @@ services:
       args: { SERVICE_DIR: services/economy/inventory, CMD_NAME: inventory }
     image: pandora/inventory:dev
     container_name: pandora-inventory
-    volumes: [ "../run/cluster/etc/inventory.yaml:/app/etc/cluster.yaml:ro" ]
+    volumes:
+      - "../run/cluster/etc/inventory.yaml:/app/etc/cluster.yaml:ro"
+      - "../configtable/dist:/app/configtable/active:ro"
     ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20015:20015" ]
 
   auction:

@@ -42,6 +42,7 @@ images:
   - { name: pandora/matchmaker-pve, newName: registry.example.com/pandora/matchmaker-pve, newTag: latest }
   - { name: pandora/trade,          newName: registry.example.com/pandora/trade,          newTag: latest }
   - { name: pandora/dialogue,       newName: registry.example.com/pandora/dialogue,       newTag: latest }
+  - { name: pandora/mission,        newName: registry.example.com/pandora/mission,        newTag: latest }
   - { name: pandora/push,           newName: registry.example.com/pandora/push,           newTag: latest }
   - { name: pandora/inventory,      newName: registry.example.com/pandora/inventory,      newTag: latest }
   - { name: pandora/auction,        newName: registry.example.com/pandora/auction,        newTag: latest }
