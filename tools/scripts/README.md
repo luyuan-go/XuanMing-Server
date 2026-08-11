@@ -9,7 +9,7 @@
 | 脚本 | 用途 | 被谁调用 |
 |---|---|---|
 | `start.ps1` | 项目总入口,5 模式编排(local/docker/intranet/battle/k8s/online) | 根目录 `start.cmd` |
-| `play.ps1` | 策划友好入口(docker 模式,DS=mock;battle 启动已废弃,仅留 `-Battle -Stop/-Status` 清理遗留) | `策划一键停止.cmd`、`内网服务器一键停止.cmd` |
+| `play.ps1` | 策划友好入口(docker 模式,DS=mock;battle 启动已废弃,仅留 `-Battle -Stop/-Status` 清理遗留) | `策划一键停止.cmd` |
 | `dev_all.ps1` | 一键起基础设施 + 全业务 go 服务 | `start.ps1`(local) |
 | `dev_up.ps1` | 起 docker 基础设施(MySQL/Redis/Kafka/etcd/Prometheus) | `start.ps1`、`dev_all.ps1`、`play.ps1` |
 | `dev_down.ps1` | 停基础设施容器 | `start.ps1`、`dev_all.ps1`、`play.ps1` |
