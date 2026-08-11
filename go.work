@@ -37,6 +37,8 @@ use ./tools/dsticketkeys
 
 use ./tools/configtable-gen
 
+use ./tools/lexicon-import
+
 use ./services/account/login
 
 use ./services/account/player

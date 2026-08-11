@@ -39,5 +39,9 @@
 *.dylib   binary
 *.pdf     binary
 
+# 第三方敏感词源按上游字节保留；原始语料和许可证中的尾随空格不是本仓格式问题。
+configtable/lexicon/source/houbb/**   -text whitespace=-trailing-space
+configtable/lexicon/source/konsheng/** -text whitespace=-trailing-space
+
 # 离线业务镜像包较大,走 Git LFS,避免 GitHub 单文件限制。
 deploy/offline-images/pandora-images.tar filter=lfs diff=lfs merge=lfs -text
