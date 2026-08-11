@@ -2922,3 +2922,46 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
 - 7 项 P2 评估后判定可接受并文档化(见 HANDOFF §11.6):onMatchNoCapacity 重放闪 FAILED
   (需加 proto 字段,留待下批)、no-show 采样窄窗、IPv6/CGNAT 固有取舍、FirstAbandon 少罚
   (fail-open 安全)、roster 租约秒级自净、anyTicketInFormCooldown 满载成本、Envoy 桶值待压测。
+
+## 2026-08-10(续2):技能卡库表治理收口 —— v5 迁移门禁 + player 落地 retention_mode
+
+技能卡三张表(`player_skill_cards` / `player_skill_slots` / `skill_card_grants`)的持久化治理
+收口,§9.24 从"登记了"补到"机械可验证 + 默认只报告不删"。
+
+- **000005 清理索引兜底**:建表用 `CREATE TABLE IF NOT EXISTS`,对"表已存在但形态不同"是
+  **静默 no-op** —— 缺 `idx_created` 的存量表会带着缺口进 v5,而 dbcheck 拿这条索引当发布
+  门禁项,届时没有任何迁移能补回来。up 末尾补条件建索引(同 000003 写法,表本就带索引时退化
+  成 `SELECT 1`)。unique key 刻意不补:有重复数据时加 UNIQUE 会失败,那种库属开发期手搓残留。
+- **回滚风险显式化**:000005 的 down 是真删表(与 000002 同类,非 000003 那种 no-op),
+  头注写清三条 —— ①数据不可恢复(碎片无第二份台账);②fresh-init 过的库回滚后会比权威定义
+  少三张表,dbcheck 报「登记表缺失」,重新 up 恢复结构但数据不回来;③不停服顺序必须
+  先回滚服务再回滚迁移,反过来会让在线副本对着不存在的表报错。
+- **测试**:`tools/migrate/player_migration_test.go` 新增静态契约(清理索引守卫、fresh-init
+  与迁移不漂移、down 只碰本次新增三张表)+ 真库四场景 × 各跑两遍(重复迁移必须仍 clean v5):
+  `fresh_empty` / `fresh_init_schema`(先跑 mysql-init 再迁移)/ `legacy_v4`(停在 v4 且有业务
+  数据,升级后逐行核对没被动过)/ `legacy_missing_index`(缺索引库必须被守卫补上);
+  另有回滚用例(down 后既有表数据一行不少,再 up 结构完整回来)。
+- **dbcheck 漂移测试**:`cmd/dbcheck/registry_test.go` 用 `deploy/mysql-init/*.sql` 与
+  `tools/migrate/migrations/**` 里的 `CREATE TABLE` 反查内嵌 registry —— 建表脚本里有、
+  registry 里没有即 FAIL。原先这类漏登记只有拿真库跑 dbcheck 才发现。另加:swept 表必须声明
+  清理索引(豁免要写 allowlist 并说明理由)、`PendingWhere` 只能挂在 swept 上(挂别的类别是
+  静默失效的死配置)、技能卡三表的类别与索引断言。
+- **player 落地 `retention_mode`(§9.24 标准口径,本服此前没有)**:留空 = `report_only`,
+  janitor **照常跑但一行不删**,只统计超期行数打 WARN + `pandora_db_retention_pending_rows`。
+  改前是前置开关 false 就整个不跑 —— 既不删也不报,§9.24 要的待清理量彻底不可见。
+  - 真删要**两道闸**:总闸 `retention_mode: delete` + 每组前置条件确认
+    (`exp_history_cleanup_enabled` / `history_cleanup_enabled`)。分两道是因为前置条件对
+    两组不同时成立(exp_history 卡 progress 出箱无总重试期限;mmr 组卡 kafka retention 与
+    授予补扫窗口),合成一个开关就无法表达"这组已确认、那组还没有"。
+  - repo 层四个 `Purge*` 改 `Sweep*(mode, cutoff, limit) → dbguard.Outcome`,走
+    `dbguard.SweepTable`:COUNT 与 DELETE 强制共用同一 where,杜绝"报告 0 行、实际删 10 万"。
+  - `main.go` 补 `ValidateRetentionMode` 启动 fail-fast(拼错绝不猜成 delete)。
+  - report_only 下**不循环**(一轮 COUNT 即全量规模,循环只是空转);delete 下小批量删到追平。
+  - `gen_cluster_config.ps1` 的 `-Prod` 硬化从两个开关扩到三个键:产物里残留
+    `retention_mode: "delete"` 会让运维误判清理已生效,且将来新表组若直接读 `RetentionMode()`
+    而没有自己的前置闸,生产会静默开始删。契约测试同步断言 prod=report_only / dev=delete。
+- **验证**:go.work 全部模块 `go build` + `go test` 全绿(0 失败模块);一次性 mysql:8.4 容器
+  上跑真实迁移四场景 + 回滚,全过;`dbcheck -exact -pending` 对同一库跑通,唯一 FAIL 是
+  `pandora_player.player_data`(data_service 运行期 proto2mysql 自动建表,fresh-init 里本就
+  没有,与本次改动无关);`gen_cluster_prod_progress_contract_test.ps1` PASS。
+  **未跑**:TiDB 后端(pandora_player 在 MySQL;用例已按 `PANDORA_TEST_TIDB_DSN` 备好)。
