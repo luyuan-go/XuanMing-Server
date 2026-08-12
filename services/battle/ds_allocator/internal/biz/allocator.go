@@ -408,7 +408,7 @@ func (u *AllocatorUsecase) ResolveBattleTarget(
 // ratingMode 留 UNSPECIFIED = battle_result 按旧口径结算,见 BattleStorageRecord.rating_mode。
 func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32, gameMode string) (*AllocateResult, error) {
 	return u.AllocateBattleWithCombatFactions(ctx, matchID, playerIDs, nil, mapID, gameMode,
-		configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED)
+		configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED, "")
 }
 
 // AllocateBattleWithCombatFactions 为 match 申请战斗 DS，并持久化完整的 match-local
@@ -426,6 +426,7 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 	mapID uint32,
 	gameMode string,
 	ratingMode configpb.LevelRatingMode,
+	ratingPool string,
 ) (*AllocateResult, error) {
 	if matchID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id required")
@@ -465,6 +466,7 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		MapId:                mapID,
 		GameMode:             gameMode,
 		RatingMode:           ratingMode,
+		RatingPool:           ratingPool,
 		AllocatedAtMs:        claimAt,
 		LastHeartbeatMs:      claimAt,
 		PlayerCount:          int32(len(playerIDs)),
@@ -567,6 +569,7 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		MapId:                mapID,
 		GameMode:             gameMode,
 		RatingMode:           ratingMode,
+		RatingPool:           ratingPool,
 		AllocatedAtMs:        now,
 		LastHeartbeatMs:      now, // 仅作 sweep 宽限基准;ready 判定要求 LastHeartbeatMs 严格大于此(即真实心跳)
 		PlayerCount:          int32(len(playerIDs)),

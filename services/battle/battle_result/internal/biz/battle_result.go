@@ -30,6 +30,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/rating"
 	"github.com/luyuancpp/pandora/pkg/safego"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
@@ -40,11 +41,13 @@ import (
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/data"
 )
 
-// MMRReader 读玩家当前 MMR(算 Elo 期望胜率用)。
+// MMRReader 读玩家在**某段位池**下的当前 MMR(算 Elo 期望胜率用)。
 //
+// ratingPool 是本局定格的段位池:算期望胜率必须用**同一份**段位的分,拿另一池的分
+// 当输入会让 Elo 完全失真(3v3 高分玩家打 5v5 会被当成高手压分)。
 // W4 ③ player 服务未上线 → StaticMMRReader 全返 BaseMMR;player 上线后换 gRPC 实现。
 type MMRReader interface {
-	GetMMR(ctx context.Context, playerID uint64) (int, error)
+	GetMMR(ctx context.Context, playerID uint64, ratingPool string) (int, error)
 }
 
 // PlayerUpdatePusher 发 pandora.player.update 事件(kafka key=player_id,不变量 §9)。
@@ -120,7 +123,9 @@ type StaticMMRReader struct {
 func NewStaticMMRReader(base int) *StaticMMRReader { return &StaticMMRReader{base: base} }
 
 // GetMMR 恒返 base。
-func (s *StaticMMRReader) GetMMR(_ context.Context, _ uint64) (int, error) { return s.base, nil }
+func (s *StaticMMRReader) GetMMR(_ context.Context, _ uint64, _ string) (int, error) {
+	return s.base, nil
+}
 
 // BattleResultUsecase 是 battle_result 业务逻辑核心。
 type BattleResultUsecase struct {
@@ -320,6 +325,19 @@ func settlementRunsElo(terminalRelease *data.TerminalReleaseRecord) (bool, strin
 	return true, "legacy_canonical_game_mode"
 }
 
+// settlementRatingPool 取本局的段位池(结算入账的分区键)。
+//
+// 只读 canonical 定格值,绝不读 DS 请求体、也不在结算那一刻重查关卡表 —— 与
+// settlementRunsElo 同一口径(热更改表不得改写正在打的那一局的规则)。
+// 空值(旧 matchmaker / 本列上线前的对局 / legacy 内部路径)归一到默认池:
+// 段位必须有确定落点,不能因为缺一个字段就把玩家这一局的分丢掉(§9.22)。
+func settlementRatingPool(terminalRelease *data.TerminalReleaseRecord) string {
+	if terminalRelease == nil {
+		return rating.DefaultPool
+	}
+	return rating.Normalize(terminalRelease.RatingPool)
+}
+
 func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1.BattleResult, terminalRelease *data.TerminalReleaseRecord, finalProgressSeq uint64) (bool, error) {
 	if result == nil || result.GetMatchId() == 0 {
 		return false, errcode.New(errcode.ErrInvalidArg, "match_id required")
@@ -344,6 +362,9 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 		result.Outcome = battlev1.BattleOutcome_BATTLE_OUTCOME_NORMAL
 	}
 
+	// 本局段位池(结算入账的分区键):算 Elo 读同一池的分,出箱按同一池入账。
+	ratingPool := settlementRatingPool(terminalRelease)
+
 	// MMR 仅对正常结算计算(不变量 §6,覆盖 DS 上报的 mmr_delta)。
 	// ABANDONED 是补偿语义:权威路径是 ds.lifecycle → HandleAbandoned(delta 全 0,不掉段)。
 	// 此处兜底:若 battle.result 误报 / 伪造 Outcome=ABANDONED,强制 delta 全 0,
@@ -363,17 +384,19 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 				s.MmrDelta = 0
 			}
 		} else {
-			u.assignMMR(ctx, result)
+			u.assignMMR(ctx, result, ratingPool)
 		}
 		// 判据可观测:一局到底按什么算的分,事后必须能查(尤其是回落旧口径的局)。
 		if basis == "legacy_canonical_pve_coop" || basis == "legacy_canonical_game_mode" {
 			plog.With(ctx).Warnw("msg", "battle_rating_basis_legacy_fallback",
 				"match_id", result.GetMatchId(), "map_id", result.GetMapId(),
-				"game_mode", result.GetGameMode(), "run_elo", runElo, "basis", basis,
+				"game_mode", result.GetGameMode(), "rating_pool", ratingPool,
+				"run_elo", runElo, "basis", basis,
 				"hint", "本局 canonical rating_mode 未定格(旧 matchmaker / 旧批次表),按旧口径结算")
 		} else {
 			plog.With(ctx).Debugw("msg", "battle_rating_basis",
-				"match_id", result.GetMatchId(), "run_elo", runElo, "basis", basis)
+				"match_id", result.GetMatchId(), "rating_pool", ratingPool,
+				"run_elo", runElo, "basis", basis)
 		}
 	}
 
@@ -387,7 +410,7 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 			return false, err
 		}
 	}
-	outbox, err := u.buildOutbox(result, abandoned)
+	outbox, err := u.buildOutbox(result, abandoned, ratingPool)
 	if err != nil {
 		return false, err
 	}
@@ -480,7 +503,9 @@ func (u *BattleResultUsecase) HandleAbandoned(ctx context.Context, matchID uint6
 	}
 
 	// 出箱携 delta=0(不掉段)+ reason=abandon;与补偿记录同事务提交。
-	outbox, err := u.buildOutbox(result, true)
+	// ABANDONED 补偿:delta 恒 0,段位池取默认值即可(0 分入账不改任何池的分,
+	// 但事件仍需一个确定的池字段,消费侧才不会因空值走不同分支)。
+	outbox, err := u.buildOutbox(result, true, rating.DefaultPool)
 	if err != nil {
 		return err
 	}
@@ -524,13 +549,14 @@ func (u *BattleResultUsecase) ListPlayerHistory(ctx context.Context, playerID ui
 // ── 辅助 ──────────────────────────────────────────────────────────────────────
 
 // assignMMR 按两队当前 MMR 均值算 Elo delta,写回每个 stat.MmrDelta(不变量 §6)。
-func (u *BattleResultUsecase) assignMMR(ctx context.Context, result *battlev1.BattleResult) {
+func (u *BattleResultUsecase) assignMMR(ctx context.Context, result *battlev1.BattleResult, ratingPool string) {
 	var sum0, n0, sum1, n1 int
 	for _, s := range result.GetStats() {
-		m, err := u.mmr.GetMMR(ctx, s.GetPlayerId())
+		m, err := u.mmr.GetMMR(ctx, s.GetPlayerId(), ratingPool)
 		if err != nil {
 			m = u.cfg.BaseMMR
-			plog.With(ctx).Warnw("msg", "mmr_read_failed_fallback_base", "player_id", s.GetPlayerId(), "err", err)
+			plog.With(ctx).Warnw("msg", "mmr_read_failed_fallback_base",
+				"player_id", s.GetPlayerId(), "rating_pool", ratingPool, "err", err)
 		}
 		if s.GetTeam() == winnerTeamA {
 			sum0 += m
@@ -562,7 +588,7 @@ func (u *BattleResultUsecase) assignMMR(ctx context.Context, result *battlev1.Ba
 //
 //	abandoned=true → reason 全 "abandon"(delta 已置 0,不掉段)
 //	abandoned=false → 按胜负 win/lose/draw
-func (u *BattleResultUsecase) buildOutbox(result *battlev1.BattleResult, abandoned bool) ([]data.OutboxRecord, error) {
+func (u *BattleResultUsecase) buildOutbox(result *battlev1.BattleResult, abandoned bool, ratingPool string) ([]data.OutboxRecord, error) {
 	recs := make([]data.OutboxRecord, 0, len(result.GetStats()))
 	for _, s := range result.GetStats() {
 		reason := "abandon"
@@ -575,6 +601,8 @@ func (u *BattleResultUsecase) buildOutbox(result *battlev1.BattleResult, abandon
 			MmrDelta: s.GetMmrDelta(),
 			Reason:   reason,
 			TsMs:     result.GetEndedAtMs(),
+			// 段位池随事件带给 player 服务:消费侧按本值分区入账,不再自己猜。
+			RatingPool: ratingPool,
 		}
 		payload, err := proto.Marshal(evt)
 		if err != nil {

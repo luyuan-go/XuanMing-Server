@@ -126,7 +126,7 @@ func TestAllocateBattleRejectsCombatFactionDriftForExistingMatch(t *testing.T) {
 	}
 	_, err := uc.AllocateBattleWithCombatFactions(
 		t.Context(), matchID, []uint64{22, 11}, map[uint64]uint32{11: 3, 22: 9}, 8, "custom",
-		configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED)
+		configpb.LevelRatingMode_LEVEL_RATING_MODE_UNSPECIFIED, "")
 	if errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("faction drift err=%v code=%v want unavailable", err, errcode.As(err))
 	}
@@ -149,7 +149,7 @@ func TestAllocateBattlePersistsCanonicalCombatFactions(t *testing.T) {
 		value, err := uc.AllocateBattleWithCombatFactions(
 			context.Background(), matchID, []uint64{22, 11},
 			map[uint64]uint32{11: 3, 22: 9}, 8, "custom",
-			configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO)
+			configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO, "5v5_ranked")
 		done <- result{value: value, err: err}
 	}()
 	feedReadyHeartbeat(t, uc, repo, matchID, 2)

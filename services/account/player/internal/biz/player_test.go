@@ -16,6 +16,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/rating"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 	"github.com/luyuancpp/pandora/services/account/player/internal/conf"
 	"github.com/luyuancpp/pandora/services/account/player/internal/data"
@@ -23,8 +24,10 @@ import (
 
 // fakeProfile 是内存玩家档案。
 type fakeProfile struct {
-	nickname     string
-	mmr          int
+	nickname string
+	// ratings 复刻 player_mmr 的分区语义:key=rating_pool。**没打过的池没有条目**
+	// (不是 0 分),这样"首战以基线起算"与"打到 0 分"在测试里也是两种状态。
+	ratings      map[string]int
 	totalBattles int32
 	totalWins    int32
 }
@@ -83,7 +86,9 @@ func newFakeRepo() *fakeRepo {
 
 func (f *fakeRepo) EnsureProfile(_ context.Context, playerID uint64, defaultNickname string, baseMMR int) error {
 	if _, ok := f.players[playerID]; !ok {
-		f.players[playerID] = &fakeProfile{nickname: defaultNickname, mmr: baseMMR}
+		// 刻意不预置任何池的分:真实 EnsureProfile 只建 players 行,player_mmr 行
+		// 由首次结算 upsert 创建(baseMMR 只是 GetMMR 未命中时的返回值)。
+		f.players[playerID] = &fakeProfile{nickname: defaultNickname, ratings: map[string]int{}}
 	}
 	return nil
 }
@@ -96,7 +101,6 @@ func (f *fakeRepo) GetProfile(_ context.Context, playerID uint64) (*playerv1.Pla
 	return &playerv1.PlayerProfile{
 		PlayerId:     playerID,
 		Nickname:     p.nickname,
-		Mmr:          int32(p.mmr),
 		TotalBattles: p.totalBattles,
 		TotalWins:    p.totalWins,
 	}, true, nil
@@ -135,12 +139,33 @@ func (f *fakeRepo) UnlockHero(_ context.Context, playerID uint64, heroID uint32,
 	return false, nil
 }
 
-func (f *fakeRepo) GetMMR(_ context.Context, playerID uint64) (int, bool, error) {
+func (f *fakeRepo) GetMMR(_ context.Context, playerID uint64, ratingPool string) (int, bool, error) {
 	p, ok := f.players[playerID]
 	if !ok {
 		return 0, false, nil
 	}
-	return p.mmr, true, nil
+	mmr, has := p.ratings[ratingPool]
+	if !has {
+		return 0, false, nil
+	}
+	return mmr, true, nil
+}
+
+func (f *fakeRepo) ListRatings(_ context.Context, playerID uint64) ([]data.PlayerRating, error) {
+	p, ok := f.players[playerID]
+	if !ok {
+		return nil, nil
+	}
+	pools := make([]string, 0, len(p.ratings))
+	for pool := range p.ratings {
+		pools = append(pools, pool)
+	}
+	sort.Strings(pools)
+	out := make([]data.PlayerRating, 0, len(pools))
+	for _, pool := range pools {
+		out = append(out, data.PlayerRating{RatingPool: pool, MMR: p.ratings[pool]})
+	}
+	return out, nil
 }
 
 func (f *fakeRepo) ApplyMMRChange(_ context.Context, c data.MMRChange) (int, bool, error) {
@@ -152,11 +177,15 @@ func (f *fakeRepo) ApplyMMRChange(_ context.Context, c data.MMRChange) (int, boo
 	if recorded, hit := f.idem[idemKey]; hit {
 		return recorded, true, nil
 	}
-	newMMR := p.mmr + int(c.Delta)
+	old, has := p.ratings[c.RatingPool]
+	if !has {
+		old = c.Baseline // 该池首战:以基线起算(复刻 repo 语义)
+	}
+	newMMR := old + int(c.Delta)
 	if newMMR < c.Floor {
 		newMMR = c.Floor
 	}
-	p.mmr = newMMR
+	p.ratings[c.RatingPool] = newMMR
 	if c.IncBattle {
 		p.totalBattles++
 	}
@@ -645,7 +674,7 @@ func (s stubSkillCardRules) UpgradeCurve(cardID uint32) (map[uint32]uint32, uint
 func TestUpdateMMR_AppliesDelta(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUC(repo)
-	newMMR, already, err := uc.UpdateMMR(context.Background(), 100, 16, "win", "m1")
+	newMMR, already, err := uc.UpdateMMR(context.Background(), 100, 16, "win", "m1", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -664,11 +693,11 @@ func TestUpdateMMR_AppliesDelta(t *testing.T) {
 func TestUpdateMMR_Idempotent(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUC(repo)
-	first, _, err := uc.UpdateMMR(context.Background(), 100, 16, "win", "m1")
+	first, _, err := uc.UpdateMMR(context.Background(), 100, 16, "win", "m1", "")
 	if err != nil {
 		t.Fatalf("first err: %v", err)
 	}
-	second, already, err := uc.UpdateMMR(context.Background(), 100, 16, "win", "m1")
+	second, already, err := uc.UpdateMMR(context.Background(), 100, 16, "win", "m1", "")
 	if err != nil {
 		t.Fatalf("second err: %v", err)
 	}
@@ -678,8 +707,8 @@ func TestUpdateMMR_Idempotent(t *testing.T) {
 	if second != first {
 		t.Fatalf("idempotent return should equal first: first=%d second=%d", first, second)
 	}
-	if repo.players[100].mmr != 1516 {
-		t.Fatalf("mmr must not double-apply, got %d", repo.players[100].mmr)
+	if repo.players[100].ratings[rating.DefaultPool] != 1516 {
+		t.Fatalf("mmr must not double-apply, got %d", repo.players[100].ratings[rating.DefaultPool])
 	}
 	if repo.players[100].totalBattles != 1 {
 		t.Fatalf("battles must not double-count, got %d", repo.players[100].totalBattles)
@@ -688,7 +717,7 @@ func TestUpdateMMR_Idempotent(t *testing.T) {
 
 func TestUpdateMMR_RequiresKey(t *testing.T) {
 	uc := newUC(newFakeRepo())
-	_, _, err := uc.UpdateMMR(context.Background(), 100, 16, "win", "")
+	_, _, err := uc.UpdateMMR(context.Background(), 100, 16, "win", "", "")
 	if errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("empty idempotency_key should be ErrInvalidArg, got %v", err)
 	}
@@ -697,7 +726,7 @@ func TestUpdateMMR_RequiresKey(t *testing.T) {
 func TestUpdateMMR_Floor(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUC(repo)
-	newMMR, _, err := uc.UpdateMMR(context.Background(), 100, -9999, "lose", "m1")
+	newMMR, _, err := uc.UpdateMMR(context.Background(), 100, -9999, "lose", "m1", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -709,7 +738,7 @@ func TestUpdateMMR_Floor(t *testing.T) {
 func TestUpdateMMR_LoseCountsBattleNotWin(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUC(repo)
-	if _, _, err := uc.UpdateMMR(context.Background(), 100, -16, "lose", "m1"); err != nil {
+	if _, _, err := uc.UpdateMMR(context.Background(), 100, -16, "lose", "m1", ""); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if repo.players[100].totalBattles != 1 || repo.players[100].totalWins != 0 {
@@ -721,7 +750,7 @@ func TestUpdateMMR_LoseCountsBattleNotWin(t *testing.T) {
 func TestUpdateMMR_AbandonNoBattleCount(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUC(repo)
-	if _, _, err := uc.UpdateMMR(context.Background(), 100, 0, "abandon", "m1"); err != nil {
+	if _, _, err := uc.UpdateMMR(context.Background(), 100, 0, "abandon", "m1", ""); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if repo.players[100].totalBattles != 0 {
@@ -731,9 +760,12 @@ func TestUpdateMMR_AbandonNoBattleCount(t *testing.T) {
 
 func TestGetMMR_NotFoundReturnsBase(t *testing.T) {
 	uc := newUC(newFakeRepo())
-	mmr, err := uc.GetMMR(context.Background(), 999)
+	mmr, found, err := uc.GetMMR(context.Background(), 999, "")
 	if err != nil {
 		t.Fatalf("err: %v", err)
+	}
+	if found {
+		t.Fatal("未建档玩家必须 found=false(不能把基线分伪装成已定级)")
 	}
 	if mmr != 1500 {
 		t.Fatalf("unbuilt player should return base 1500, got %d", mmr)

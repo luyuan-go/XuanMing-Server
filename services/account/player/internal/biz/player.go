@@ -280,6 +280,19 @@ func (u *PlayerUsecase) GetProfile(ctx context.Context, playerID uint64) (*playe
 	// 经验派生字段装饰(实时成长):满级 → is_max_level + 级内经验按 0 展示;
 	// 曲线未配置(功能关闭)→ 不标满级,行为与历史一致。
 	p.ExpInLevel, p.IsMaxLevel = u.DecorateExperience(p.GetLevel(), p.GetExpInLevel())
+	// 分池段位(2026-08-11):段位分不在 players 表,按 rating_pool 分区存 player_mmr,
+	// 这里补一次查询组装成客户端可见结构。只含该玩家**已有记录**的池 —— 没打过的
+	// 池不占位,客户端据此区分"未定级"与"已定级但分是基线"。
+	ratings, rerr := u.repo.ListRatings(ctx, playerID)
+	if rerr != nil {
+		return nil, rerr
+	}
+	if len(ratings) > 0 {
+		p.Ratings = make([]*playerv1.PlayerRating, 0, len(ratings))
+		for _, r := range ratings {
+			p.Ratings = append(p.Ratings, &playerv1.PlayerRating{RatingPool: r.RatingPool, Mmr: int32(r.MMR)})
+		}
+	}
 	return p, nil
 }
 

@@ -32,7 +32,8 @@
       "side_count": 2,
       "exp_share_mode": 1,
       "battle_duration_seconds": 1800,
-      "rating_mode": 2
+      "rating_mode": 2,
+      "rating_pool": "5v5_ranked"
     },
     {
       "id": 5,
@@ -45,7 +46,8 @@
       "side_count": 2,
       "exp_share_mode": 1,
       "battle_duration_seconds": 1800,
-      "rating_mode": 2
+      "rating_mode": 2,
+      "rating_pool": "5v5_ranked"
     },
     {
       "id": 6,
@@ -60,7 +62,8 @@
       "side_count": 2,
       "exp_share_mode": 1,
       "battle_duration_seconds": 1800,
-      "rating_mode": 2
+      "rating_mode": 2,
+      "rating_pool": "5v5_ranked"
     },
     {
       "id": 7,
@@ -109,7 +112,8 @@
       "side_count": 2,
       "exp_share_mode": 1,
       "battle_duration_seconds": 1800,
-      "rating_mode": 2
+      "rating_mode": 2,
+      "rating_pool": "3v3_ranked"
     },
     {
       "id": 10,

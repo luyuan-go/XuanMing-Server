@@ -20,6 +20,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/rating"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
@@ -2004,10 +2005,14 @@ func TestDropTransientErrNoMailOverflow(t *testing.T) {
 type countingMMRReader struct {
 	base  int
 	calls int
+	// pools 记录每次读 MMR 用的段位池:算 Elo 必须读**本局那一份**段位,
+	// 读错池会让期望胜率完全失真(3v3 的分拿去算 5v5)。
+	pools []string
 }
 
-func (c *countingMMRReader) GetMMR(context.Context, uint64) (int, error) {
+func (c *countingMMRReader) GetMMR(_ context.Context, _ uint64, pool string) (int, error) {
 	c.calls++
+	c.pools = append(c.pools, pool)
 	return c.base, nil
 }
 
@@ -2402,4 +2407,82 @@ func TestAuthorizedPVEIdempotentReplayNoSecondSideEffects(t *testing.T) {
 			ok, saved.GetGameMode(), saved.GetMapId())
 	}
 	assertAllDeltas(t, saved, 0, 0)
+}
+
+// ── 段位分区(rating_pool,2026-08-11「3v3 与 5v5 不共用同一份段位」)────────────────
+
+// TestSettlementRatingPoolResolution 钉死分区键的解析口径:canonical 定格值优先,
+// 空值(旧 matchmaker / 旧批次表 / legacy 内部路径)归一到默认池 —— **绝不丢分**。
+func TestSettlementRatingPoolResolution(t *testing.T) {
+	cases := []struct {
+		name  string
+		proof *data.TerminalReleaseRecord
+		want  string
+	}{
+		{"定格值原样使用", &data.TerminalReleaseRecord{RatingPool: "3v3_ranked"}, "3v3_ranked"},
+		{"另一份段位是另一个池", &data.TerminalReleaseRecord{RatingPool: "5v5_ranked"}, "5v5_ranked"},
+		{"空值归一到默认池(不丢分)", &data.TerminalReleaseRecord{}, rating.DefaultPool},
+		{"首尾空白被归一", &data.TerminalReleaseRecord{RatingPool: "  5v5_ranked  "}, "5v5_ranked"},
+		{"legacy 无 canonical → 默认池", nil, rating.DefaultPool},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := settlementRatingPool(c.proof); got != c.want {
+				t.Fatalf("settlementRatingPool = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// TestSettlementReadsAndReportsOwnRatingPool 是段位分区的回归判据。
+//
+// 「3v3 与 5v5 各自算段位」要求两件事同时成立,少一件分就串了:
+//  1. 算 Elo 时读的是**本局那一份**段位(读错池 → 期望胜率失真,3v3 的分拿去算 5v5);
+//  2. 出箱事件带上同一个池(丢了池 → player 侧入账到 default,3v3 的分记进公共池)。
+//
+// 分区上线前 MMRReader 签名里没有池、PlayerUpdateEvent 里也没有池,本测试必红。
+func TestSettlementReadsAndReportsOwnRatingPool(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	uc := newCountingUsecase(repo, mmr)
+
+	proof := terminalProof(814, "battle-814", "j1", 1)
+	proof.GameMode = "5v5_ranked" // 撮合池:两张图可以同池撮合
+	proof.MapID = 9
+	proof.RatingMode = configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO
+	proof.RatingPool = "3v3_ranked" // 段位池:与撮合池正交,这才是算分的分区键
+
+	result := terminalResult(814, "battle-814")
+	already, err := uc.ReportAuthorizedResult(context.Background(), result, proof, 0)
+	if err != nil || already {
+		t.Fatalf("authorized 3v3 report already=%v err=%v", already, err)
+	}
+
+	// ① 读 MMR 必须逐人都用本局的池,一次都不能落到别的池。
+	if mmr.calls != len(result.GetStats()) {
+		t.Fatalf("MMR reader calls=%d, want %d", mmr.calls, len(result.GetStats()))
+	}
+	for i, pool := range mmr.pools {
+		if pool != "3v3_ranked" {
+			t.Fatalf("第 %d 次读 MMR 用了池 %q,应为 3v3_ranked(读错池会让 Elo 期望胜率失真)", i, pool)
+		}
+	}
+
+	// ② 出箱事件必须带同一个池,否则 player 侧会把 3v3 的分记进 default。
+	if len(repo.outbox) != 2 {
+		t.Fatalf("outbox=%d, want 2", len(repo.outbox))
+	}
+	for _, o := range repo.outbox {
+		evt := &playerv1.PlayerUpdateEvent{}
+		if err := proto.Unmarshal(o.Payload, evt); err != nil {
+			t.Fatalf("decode outbox payload: %v", err)
+		}
+		if evt.GetRatingPool() != "3v3_ranked" {
+			t.Fatalf("player %d 出箱 rating_pool=%q,应为 3v3_ranked(丢了池就会记进公共段位)",
+				evt.GetPlayerId(), evt.GetRatingPool())
+		}
+		if evt.GetMmrDelta() == 0 {
+			t.Fatalf("player %d 出箱 delta 为 0,ELO 局应有真实分变化", evt.GetPlayerId())
+		}
+	}
 }

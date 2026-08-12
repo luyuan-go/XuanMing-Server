@@ -106,6 +106,10 @@ type TerminalReleaseRecord struct {
 	// PlayerIDs/GameMode/MapID it lives only inside this authorized settlement and
 	// is not persisted in terminal_release_outbox (no DB migration).
 	RatingMode configpb.LevelRatingMode
+	// RatingPool is the canonical rating partition key frozen alongside RatingMode.
+	// Empty means "not frozen" (old matchmaker / pre-column battle) and is normalized
+	// to rating.DefaultPool at settlement so the delta always has a definite home.
+	RatingPool string
 	// ReleasedAtMs>0 是阶段1“永久 Redis terminal + UID delete 已明确成功”的
 	// MySQL durable ACK。只有该状态才允许阶段2给墓碑设 TTL并删除本行。
 	ReleasedAtMs int64

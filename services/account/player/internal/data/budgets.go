@@ -13,6 +13,13 @@ const (
 func Budgets() []dbguard.TableBudget {
 	return []dbguard.TableBudget{
 		{Table: "players", MaxRows: planPlayers * 3, MaxAvgRowBytes: 512},
+		{
+			// 段位分唯一权威:每玩家每池 1 行。池数 = 关卡表「段位池」列的取值数,
+			// 按 16 档玩法留余量(当前 2 档:5v5_ranked / 3v3_ranked)。
+			// 超限说明池名在失控增长(例如把池名当成 map 维度填),先查关卡表而不是加大本值。
+			Table: "player_mmr", MaxRows: planPlayers * 16 * 3, MaxAvgRowBytes: 128,
+			Note: "分池段位分;超限先查关卡表「段位池」列是否被当成每图一池填",
+		},
 		{Table: "player_heroes", MaxRows: planPlayers * 100 * 3, MaxAvgRowBytes: 128},
 		{Table: "player_attributes", MaxRows: planPlayers * 16 * 3, MaxAvgRowBytes: 128},
 		{Table: "player_equipment", MaxRows: planPlayers * 16 * 3, MaxAvgRowBytes: 128},

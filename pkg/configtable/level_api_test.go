@@ -1,6 +1,7 @@
 package configtable
 
 import (
+	"strings"
 	"testing"
 
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
@@ -177,18 +178,21 @@ func TestValidateRatingMode(t *testing.T) {
 
 	pvpElo := battleRow(32, "双方对抗算段位")
 	pvpElo.TeamSize, pvpElo.SideCount, pvpElo.RatingMode = 3, 2, elo
+	pvpElo.RatingPool = "3v3_ranked"
 	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{pvpElo}}); err != nil {
 		t.Fatalf("双方对抗 + ELO 应放行,得 %v", err)
 	}
 
 	defaultSides := battleRow(33, "方数留空沿用默认 2 方")
 	defaultSides.TeamSize, defaultSides.SideCount, defaultSides.RatingMode = 3, 0, elo
+	defaultSides.RatingPool = "5v5_ranked"
 	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{defaultSides}}); err != nil {
 		t.Fatalf("side_count=0(默认 2 方)+ ELO 应放行,得 %v", err)
 	}
 
 	coopElo := battleRow(34, "合作副本却要算 Elo")
 	coopElo.TeamSize, coopElo.SideCount, coopElo.RatingMode = 3, 1, elo
+	coopElo.RatingPool = "3v3_ranked"
 	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{coopElo}}); err == nil {
 		t.Fatal("side_count=1 + ELO 应被拦下(单方合作副本没有对手结构,无法算 Elo)")
 	}
@@ -257,5 +261,57 @@ func TestValidateBattleLaunchURLs(t *testing.T) {
 	bad.AssetPath = ".x"
 	if err := mustLevelTable(t, ok, bad).ValidateBattleLaunchURLs(); err == nil {
 		t.Fatal("战斗关卡拼不出 URL 必须整批拒绝")
+	}
+}
+
+// TestValidateRatingPool 段位池与计分模式必须配套(2026-08-11「3v3 与 5v5 不共用同一份段位」):
+//   - ELO 必须填池:不填则结算无处落账,只能兜底进 default 池,表现为"这张图的分和别的
+//     图混在一起算"且毫无报错 —— 正是本轮要消灭的静默错配;
+//   - 非 ELO 必须留空:填了说明配的人以为它生效了,早报早改;
+//   - 池名不设白名单(策划自由填,同值即同一份段位),但超长必须拒 —— 非严格 sql_mode 下
+//     超长会被静默截断成**另一份**段位。
+func TestValidateRatingPool(t *testing.T) {
+	elo := configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO
+	none := configpb.LevelRatingMode_LEVEL_RATING_MODE_NONE
+
+	eloNoPool := battleRow(40, "要算段位却没说算哪份")
+	eloNoPool.TeamSize, eloNoPool.SideCount, eloNoPool.RatingMode = 5, 2, elo
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{eloNoPool}}); err == nil {
+		t.Fatal("rating_mode=ELO 而 rating_pool 为空应被拦下(结算会兜底进 default 池,静默混算)")
+	}
+
+	noneWithPool := battleRow(41, "不计分却填了池")
+	noneWithPool.TeamSize, noneWithPool.SideCount, noneWithPool.RatingMode = 3, 1, none
+	noneWithPool.RatingPool = "3v3_ranked"
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{noneWithPool}}); err == nil {
+		t.Fatal("不计分的图填了 rating_pool 应被拦下(配置误解,填了也不生效)")
+	}
+
+	unsetWithPool := battleRow(42, "计分模式没填却填了池")
+	unsetWithPool.TeamSize, unsetWithPool.SideCount = 3, 2
+	unsetWithPool.RatingPool = "5v5_ranked"
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{unsetWithPool}}); err == nil {
+		t.Fatal("rating_mode 未填而 rating_pool 已填应被拦下(旧批次表兼容路径不该带池)")
+	}
+
+	// 分池是本次需求的核心:3v3 与 5v5 同为双方对抗,靠**不同池名**分开算分,
+	// 两行都合法且互不影响(池名不同即两份段位)。
+	for _, c := range []struct {
+		id   uint32
+		size uint32
+		pool string
+	}{{43, 3, "3v3_ranked"}, {44, 5, "5v5_ranked"}} {
+		row := battleRow(c.id, "对抗图")
+		row.TeamSize, row.SideCount, row.RatingMode, row.RatingPool = c.size, 2, elo, c.pool
+		if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{row}}); err != nil {
+			t.Fatalf("%dv%d + 池 %q 应放行,得 %v", c.size, c.size, c.pool, err)
+		}
+	}
+
+	tooLong := battleRow(45, "池名超长")
+	tooLong.TeamSize, tooLong.SideCount, tooLong.RatingMode = 5, 2, elo
+	tooLong.RatingPool = strings.Repeat("p", 33) // 列宽 VARCHAR(32)
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{tooLong}}); err == nil {
+		t.Fatal("超长池名应被拦下(非严格 sql_mode 会静默截断成另一份段位)")
 	}
 }

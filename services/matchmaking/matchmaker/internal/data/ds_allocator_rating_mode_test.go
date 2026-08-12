@@ -73,6 +73,7 @@ func ratingModeLevelRows() []*configpb.LevelRow {
 			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE,
 			TeamSize: 3, SideCount: 2, GameMode: "5v5_ranked",
 			RatingMode: configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO,
+			RatingPool: "5v5_ranked",
 		},
 		{
 			Id: 7, Name: "松林镇副本", AssetPath: "/Game/L/SonglinTown.SonglinTown",

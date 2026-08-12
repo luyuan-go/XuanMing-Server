@@ -87,12 +87,14 @@ var registry = map[string]map[string]tableEntry{
 		"player_skill_cards":   {Class: classBounded}, // 每玩家每卡至多 1 行,被技能卡表行数有界
 		"player_skill_slots":   {Class: classBounded}, // 每玩家至多 SkillSlotCount(4) 行
 		"player_reward_claims": {Class: classBounded},
-		"player_push_outbox":   {Class: classOutbox},
-		"mmr_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
-		"exp_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
-		"attr_point_grants":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
-		"talent_point_grants":  {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
-		"skill_card_grants":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
+		// 段位分唯一权威:每玩家每池至多 1 行,池数被关卡表行数有界(§9.24 登记豁免)。
+		"player_mmr":          {Class: classBounded},
+		"player_push_outbox":  {Class: classOutbox},
+		"mmr_history":         {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
+		"exp_history":         {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
+		"attr_point_grants":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
+		"talent_point_grants": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
+		"skill_card_grants":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, PendingWhere: "created_at < NOW()"},
 	},
 	"pandora_battle": {
 		"battles":                      {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}},                // 清理按服务端 created_at(§9.6 不信 DS ended_at_ms);与 stats 同事务批删,不支持工具直删

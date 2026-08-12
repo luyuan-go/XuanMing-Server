@@ -90,6 +90,28 @@ func (g *GrpcDSAllocator) ratingModeForMap(mapID uint32) configpb.LevelRatingMod
 	return row.GetRatingMode()
 }
 
+// ratingPoolForMap 取某副本(map_id)的段位池,与 ratingModeForMap 同一口径:
+// 拿不到表 / 没这行 / 这一列没填 → 返回空串,由 battle_result 归一到默认池。
+//
+// 这里刻意**不做归一化**(不把空串变成 "default"):归一化只在真正落账那一侧做一次
+// (rating.Normalize),这样 canonical 记录里的空值仍能被识别为"未定格",与
+// rating_mode=UNSPECIFIED 一起构成"这一局出自旧 matchmaker / 旧批次表"的证据。
+// 若在这里就填成 "default",事后再也分不清是"策划配了 default 池"还是"根本没配"。
+func (g *GrpcDSAllocator) ratingPoolForMap(mapID uint32) string {
+	if g.tables == nil {
+		return ""
+	}
+	tb := g.tables.Tables()
+	if tb == nil {
+		return ""
+	}
+	row, ok := tb.Level.ByID(mapID)
+	if !ok {
+		return ""
+	}
+	return row.GetRatingPool()
+}
+
 // NewGrpcDSAllocator 直连 ds_allocator 服务 endpoint(host:port,内网 insecure)。
 // signer 用于给每个玩家签 battle DSTicket(v2Signer 非 nil 时改签 v2 实例绑定票);
 // mapID / gameMode 透传给 ds_allocator。
@@ -209,6 +231,14 @@ func (g *GrpcDSAllocator) allocateBattle(
 			"match_id", matchID, "map_id", effectiveMapID, "game_mode", g.gameMode,
 			"hint", "关卡表 g_关卡.xlsx「计分模式」列未填,本局按旧口径结算(pve_coop 不计分 / 其余算 Elo)")
 	}
+	// 段位池与计分模式同一刻定格:ELO 局必须带上池,否则结算只能兜底进 default 池,
+	// 表现为"这张图的分和别的图混在一起算"(加载期校验已拒此配置,这里是纵深防御)。
+	ratingPool := g.ratingPoolForMap(effectiveMapID)
+	if ratingMode == configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO && ratingPool == "" {
+		plog.With(ctx).Warnw("msg", "battle_rating_pool_missing_for_elo",
+			"match_id", matchID, "map_id", effectiveMapID, "game_mode", g.gameMode,
+			"hint", "本图要算段位却没填「段位池」列,本局分会记进 default 池;查关卡表该行")
+	}
 	resp, err := g.cli.AllocateBattle(ctx, &dsv1.AllocateBattleRequest{
 		MatchId:              matchID,
 		PlayerIds:            playerIDs,
@@ -216,6 +246,7 @@ func (g *GrpcDSAllocator) allocateBattle(
 		GameMode:             g.gameMode,
 		PlayerCombatFactions: combatFactions,
 		RatingMode:           ratingMode,
+		RatingPool:           ratingPool,
 	})
 	if err != nil {
 		return nil, err

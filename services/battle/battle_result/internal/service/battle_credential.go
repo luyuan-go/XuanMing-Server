@@ -116,7 +116,7 @@ func (c *redisBattleCredentialStateChecker) AuthorizeResult(
 		// 滚动升级前的旧记录 game_mode 可能为空、rating_mode 可能是 UNSPECIFIED,
 		// biz 层按"canonical 未知"保守处理(见 settlementRunsElo)。
 		GameMode: battle.GetGameMode(), MapID: battle.GetMapId(),
-		RatingMode: battle.GetRatingMode(),
+		RatingMode: battle.GetRatingMode(), RatingPool: battle.GetRatingPool(),
 	}, nil
 }
 

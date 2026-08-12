@@ -63,7 +63,7 @@ func (s *AllocatorService) AllocateBattle(ctx context.Context, req *dsv1.Allocat
 	// 存进 canonical BattleStorageRecord 供 battle_result 结算时取用(见 biz 注释)。
 	res, err := s.uc.AllocateBattleWithCombatFactions(
 		ctx, req.GetMatchId(), req.GetPlayerIds(), combatFactionByPlayer, req.GetMapId(),
-		req.GetGameMode(), req.GetRatingMode())
+		req.GetGameMode(), req.GetRatingMode(), req.GetRatingPool())
 	if err != nil {
 		return &dsv1.AllocateBattleResponse{Code: toProtoCode(err)}, nil
 	}

@@ -40,15 +40,16 @@ func (g *GrpcMMRReader) Close() error {
 	return nil
 }
 
-// GetMMR 调 player.GetMMR 读玩家当前 MMR。
-// player 对未建档玩家返回 base_mmr + OK;非 OK / 传输错误返回 error(biz 回退 BaseMMR)。
-func (g *GrpcMMRReader) GetMMR(ctx context.Context, playerID uint64) (int, error) {
-	resp, err := g.cli.GetMMR(ctx, &playerv1.GetMMRRequest{PlayerId: playerID})
+// GetMMR 调 player.GetMMR 读玩家在某段位池下的当前 MMR。
+// player 对该池无记录的玩家返回 base_mmr + OK(found=false);非 OK / 传输错误返回
+// error(biz 回退 BaseMMR)。ratingPool 由本局定格值传入,空则由 player 侧归一到默认池。
+func (g *GrpcMMRReader) GetMMR(ctx context.Context, playerID uint64, ratingPool string) (int, error) {
+	resp, err := g.cli.GetMMR(ctx, &playerv1.GetMMRRequest{PlayerId: playerID, RatingPool: ratingPool})
 	if err != nil {
 		return 0, err
 	}
 	if resp.GetCode() != commonv1.ErrCode_OK {
-		return 0, errcode.New(errcode.Code(resp.GetCode()), "player.GetMMR code=%d player=%d", resp.GetCode(), playerID)
+		return 0, errcode.New(errcode.Code(resp.GetCode()), "player.GetMMR code=%d player=%d pool=%s", resp.GetCode(), playerID, ratingPool)
 	}
 	return int(resp.GetMmr()), nil
 }
