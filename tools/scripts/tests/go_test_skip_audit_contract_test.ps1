@@ -32,6 +32,12 @@ function New-Event([string]$Action, [string]$Package, [string]$Test, [string]$Ou
     return ([pscustomobject]$o | ConvertTo-Json -Compress)
 }
 
+function New-BuildEvent([string]$Action, [string]$ImportPath, [string]$Output) {
+    $o = [ordered]@{ ImportPath = $ImportPath; Action = $Action }
+    if ($null -ne $Output) { $o.Output = $Output }
+    return ([pscustomobject]$o | ConvertTo-Json -Compress)
+}
+
 # ── 合成一段典型的 go test -json 流 ────────────────────────────────────────────
 $pkgFriend = 'github.com/luyuancpp/pandora/services/social/friend/internal/data'
 $pkgUtil = 'github.com/luyuancpp/pandora/pkg/util'
@@ -69,6 +75,7 @@ Assert-True (($audit.Console -join "`n") -match 'ok\s') '人类可读输出被�
 Write-Host '[2] 未设置 DSN:默认告警,不阻断' -ForegroundColor Cyan
 $saveMy = $env:PANDORA_TEST_MYSQL_DSN
 $saveTi = $env:PANDORA_TEST_TIDB_DSN
+$saveTiBackend = $env:PANDORA_TIDB_TEST_DSN
 try {
     $env:PANDORA_TEST_MYSQL_DSN = ''
     $env:PANDORA_TEST_TIDB_DSN = ''
@@ -77,8 +84,8 @@ try {
     Assert-True ($policy.Warnings.Count -eq 2) "两个变量各出一条告警(实为 $($policy.Warnings.Count))"
 
     Write-Host '[3] -Require:同样的输入必须转成门禁失败' -ForegroundColor Cyan
-    $policyReq = Test-PandoraGatedSkipPolicy -GatedSkips $audit.GatedSkips -Require
-    Assert-True ($policyReq.Violations.Count -eq 2) "-Require 下 2 条门禁失败(实为 $($policyReq.Violations.Count))"
+    $policyReq = Test-PandoraGatedSkipPolicy -GatedSkips $audit.GatedSkips -RequireDbTests
+    Assert-True ($policyReq.Violations.Count -eq 3) "-RequireDbTests 下三个数据库变量均为门禁(实为 $($policyReq.Violations.Count))"
 
     Write-Host '[4] DSN 已设置却仍跳过 = 配置失效,必须硬失败' -ForegroundColor Cyan
     # 这是最要命的一种:Jenkins 里写了变量但没透传到 go test 进程,报告会显示"全绿"。
@@ -89,12 +96,15 @@ try {
     Assert-True (($policySet.Violations | Where-Object { $_ -like '*TIDB*' }).Count -eq 0) '未设置的 TiDB 仍只是告警(两条判据不混淆)'
 
     Write-Host '[5] 全部执行(零门控跳过)时既不告警也不失败' -ForegroundColor Cyan
-    $policyClean = Test-PandoraGatedSkipPolicy -GatedSkips @() -Require
-    Assert-True ($policyClean.Violations.Count -eq 0 -and $policyClean.Warnings.Count -eq 0) '零门控跳过 → 干净通过'
+    $env:PANDORA_TEST_TIDB_DSN = 'root@tcp(127.0.0.1:4000)/'
+    $env:PANDORA_TIDB_TEST_DSN = 'root@tcp(127.0.0.1:4000)/pandora_account'
+    $policyClean = Test-PandoraGatedSkipPolicy -GatedSkips @() -RequireDbTests
+    Assert-True ($policyClean.Violations.Count -eq 0 -and $policyClean.Warnings.Count -eq 0) '数据库变量齐全且零门控跳过 → 干净通过'
 }
 finally {
     $env:PANDORA_TEST_MYSQL_DSN = $saveMy
     $env:PANDORA_TEST_TIDB_DSN = $saveTi
+    $env:PANDORA_TIDB_TEST_DSN = $saveTiBackend
 }
 
 Write-Host '[6] 非 JSON 行(构建错误)必须原样透出,不得被吞' -ForegroundColor Cyan
@@ -105,6 +115,106 @@ $buildFail = @(
 $auditBuild = Get-GoTestSkipAudit -JsonLines $buildFail
 Assert-True ($auditBuild.ParseErrors.Count -eq 1) '非 JSON 行被记入 ParseErrors'
 Assert-True (($auditBuild.Console -join "`n") -match 'undefined: Bar') '编译错误仍出现在控制台输出里'
+
+Write-Host '[7] 数据库必选与 Redis/Kafka/etcd 可选必须分组' -ForegroundColor Cyan
+$groupLines = @(
+    New-Event 'output' $pkgFriend 'TestMySQL' "skip: PANDORA_TEST_MYSQL_DSN`n"
+    New-Event 'skip' $pkgFriend 'TestMySQL' $null
+    New-Event 'output' $pkgFriend 'TestTiDB' "skip: PANDORA_TEST_TIDB_DSN`n"
+    New-Event 'skip' $pkgFriend 'TestTiDB' $null
+    New-Event 'output' $pkgFriend 'TestTiDBBackend' "skip: PANDORA_TIDB_TEST_DSN`n"
+    New-Event 'skip' $pkgFriend 'TestTiDBBackend' $null
+    New-Event 'output' $pkgFriend 'TestRedis' "skip: PANDORA_TEST_REDIS_ADDR`n"
+    New-Event 'skip' $pkgFriend 'TestRedis' $null
+    New-Event 'output' $pkgFriend 'TestKafka' "skip: PANDORA_TEST_KAFKA_BROKERS`n"
+    New-Event 'skip' $pkgFriend 'TestKafka' $null
+    New-Event 'output' $pkgFriend 'TestEtcd' "skip: PANDORA_TEST_ETCD_ENDPOINTS`n"
+    New-Event 'skip' $pkgFriend 'TestEtcd' $null
+)
+$groupAudit = Get-GoTestSkipAudit -JsonLines $groupLines
+$savedGateEnv = @{}
+foreach ($name in (Get-PandoraGatedEnvNames)) {
+    $savedGateEnv[$name] = [Environment]::GetEnvironmentVariable($name)
+    [Environment]::SetEnvironmentVariable($name, '')
+}
+try {
+    $groupPolicy = Test-PandoraGatedSkipPolicy -GatedSkips $groupAudit.GatedSkips -RequireDbTests
+    $dbViolations = @($groupPolicy.Violations | Where-Object { $_ -match 'MYSQL_DSN|TIDB.*DSN' })
+    Assert-True ($dbViolations.Count -eq 3) "-RequireDbTests 只强制三个数据库门(实为 $($dbViolations.Count))"
+    Assert-True (($groupPolicy.Violations | Where-Object { $_ -match 'REDIS|KAFKA|ETCD' }).Count -eq 0) 'Redis/Kafka/etcd 缺失不升级为失败'
+    Assert-True (($groupPolicy.Warnings | Where-Object { $_ -match 'REDIS|KAFKA|ETCD' }).Count -eq 3) 'Redis/Kafka/etcd 缺失保持三条未验证告警'
+}
+finally {
+    foreach ($name in $savedGateEnv.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $savedGateEnv[$name])
+    }
+}
+
+Write-Host '[8] 环境变量必须按完整 token 精确识别' -ForegroundColor Cyan
+$redis8Names = @(
+    'PANDORA_TEST_REDIS8_ADDR'
+    'PANDORA_TEST_REDIS8_PASSWORD'
+    'PANDORA_TEST_REDIS8_CLUSTER_ADDRS'
+    'PANDORA_TEST_REDIS8_CLUSTER_PASSWORD'
+    'PANDORA_TEST_REDIS8_SENTINEL_ADDRS'
+    'PANDORA_TEST_REDIS8_SENTINEL_MASTER_NAME'
+    'PANDORA_TEST_REDIS8_SENTINEL_PASSWORD'
+)
+$exactLines = @()
+foreach ($name in $redis8Names) {
+    $testName = "TestExact_$name"
+    $exactLines += New-Event 'output' $pkgUtil $testName "missing $name`n"
+    $exactLines += New-Event 'skip' $pkgUtil $testName $null
+}
+$exactLines += New-Event 'output' $pkgUtil 'TestPrefixSuffix' 'not gates: XPANDORA_TEST_REDIS8_ADDR PANDORA_TEST_REDIS8_ADDR_SUFFIX'
+$exactLines += New-Event 'skip' $pkgUtil 'TestPrefixSuffix' $null
+$exactAudit = Get-GoTestSkipAudit -JsonLines $exactLines
+foreach ($name in $redis8Names) {
+    Assert-True (($exactAudit.GatedSkips | Where-Object { $_.Envs -contains $name }).Count -eq 1) "$name 被精确识别一次"
+}
+Assert-True (($exactAudit.GatedSkips | Where-Object { $_.Test -eq 'TestPrefixSuffix' }).Count -eq 0) '前后粘连的相似变量名不得命中'
+Assert-True (($exactAudit.GatedSkips | Where-Object { $_.Envs -contains 'PANDORA_TEST_REDIS' }).Count -eq 0) 'Redis8 变量不得误归类成旧 PANDORA_TEST_REDIS'
+
+Write-Host '[9] 多变量 gate 按整组判断,不得把已设置成员误判为透传失败' -ForegroundColor Cyan
+$multiLines = @(
+    New-Event 'output' $pkgUtil 'TestRedis8ACL' "set PANDORA_TEST_REDIS8_ADDR/PASSWORD for real Redis 8 ACL integration`n"
+    New-Event 'skip' $pkgUtil 'TestRedis8ACL' $null
+)
+$multiAudit = Get-GoTestSkipAudit -JsonLines $multiLines
+$multiGate = @($multiAudit.GatedSkips | Where-Object { $_.Test -eq 'TestRedis8ACL' })
+Assert-True ($multiGate.Count -eq 1) '一个测试只生成一个 gate 记录'
+Assert-True ($multiGate[0].Envs.Count -eq 2) 'ADDR/PASSWORD 简写还原成两个完整前置变量'
+$savedAddr = $env:PANDORA_TEST_REDIS8_ADDR
+$savedPassword = $env:PANDORA_TEST_REDIS8_PASSWORD
+try {
+    $env:PANDORA_TEST_REDIS8_ADDR = '127.0.0.1:6379'
+    $env:PANDORA_TEST_REDIS8_PASSWORD = ''
+    $multiPolicy = Test-PandoraGatedSkipPolicy -GatedSkips $multiAudit.GatedSkips -RequireDbTests:$false
+    Assert-True (($multiPolicy.Violations | Where-Object { $_ -match 'REDIS8_ADDR' }).Count -eq 0) '地址已设置、密码缺失时不得诬告地址透传失败'
+    Assert-True (($multiPolicy.Warnings | Where-Object { $_ -match 'REDIS8_PASSWORD' }).Count -eq 1) '只告警真正缺失的密码'
+
+    $env:PANDORA_TEST_REDIS8_PASSWORD = 'ephemeral-test-only'
+    $allSetPolicy = Test-PandoraGatedSkipPolicy -GatedSkips $multiAudit.GatedSkips
+    Assert-True ($allSetPolicy.Violations.Count -eq 1) '整组变量全设置仍 Skip 才判配置失效'
+}
+finally {
+    $env:PANDORA_TEST_REDIS8_ADDR = $savedAddr
+    $env:PANDORA_TEST_REDIS8_PASSWORD = $savedPassword
+}
+
+Write-Host '[10] Go 1.26 BuildEvent 必须还原编译输出并记录失败根包' -ForegroundColor Cyan
+$buildImport = 'github.com/luyuancpp/pandora/example [github.com/luyuancpp/pandora/example.test]'
+$go126Lines = @(
+    New-BuildEvent 'build-output' $buildImport "# github.com/luyuancpp/pandora/example`n"
+    New-BuildEvent 'build-output' $buildImport "example_test.go:3:11: undefined: missingSymbol`n"
+    New-BuildEvent 'build-fail' $buildImport $null
+    (([ordered]@{ Time = '2026-08-12T00:00:00Z'; Action = 'fail'; Package = 'github.com/luyuancpp/pandora/example'; Elapsed = 0; FailedBuild = $buildImport }) | ConvertTo-Json -Compress)
+)
+$go126Audit = Get-GoTestSkipAudit -JsonLines $go126Lines
+Assert-True (($go126Audit.Console -join "`n") -match 'undefined: missingSymbol') 'build-output 编译错误进入 Console'
+Assert-True ($go126Audit.ParseErrors.Count -eq 0) '合法 BuildEvent 不得伪装成 ParseError'
+Assert-True ($go126Audit.BuildFailures.Count -eq 1) 'build-fail 与 FailedBuild 去重为一个失败根包'
+Assert-True ($go126Audit.BuildFailures[0] -eq $buildImport) '失败根包使用 Go 1.26 ImportPath/FailedBuild 精确值'
 
 if ($script:Failures.Count -gt 0) {
     Write-Host "`n[FAIL] $($script:Failures.Count) 条断言未通过。" -ForegroundColor Red

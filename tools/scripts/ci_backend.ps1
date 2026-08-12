@@ -8,8 +8,12 @@
   任何模块失败立即整体失败,不吞错(AGENTS.md §8)。
 
 .PARAMETER RequireDbTests
-  把「依赖门控用例被跳过」从告警提升为门禁失败。等流水线真正挂上测试 MySQL / TiDB
-  之后打开(或设环境变量 PANDORA_CI_REQUIRE_DB_TESTS=1),此后再有人把 DSN 摘掉就会红。
+  强制 MySQL/TiDB 组的真实后端用例执行。Redis/Kafka/etcd 仍是可选组：缺环境会明确
+  告警为 SKIP，但不会被本开关误升级为数据库门禁失败。
+
+.PARAMETER CiDbStateFile
+  ci_db.ps1 -Action Up 生成的状态 JSON。只从中导入三个数据库测试 DSN；值不打印，
+  防止 Jenkins 子进程之间环境不继承导致“库已启动但 go test 看不到变量”。
 
 .EXAMPLE
   pwsh tools/scripts/ci_backend.ps1
@@ -22,13 +26,32 @@
 #>
 [CmdletBinding()]
 param(
-    [switch]$RequireDbTests
+    [switch]$RequireDbTests,
+    [string]$CiDbStateFile
 )
 
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = (Resolve-Path "$PSScriptRoot/../..").Path
 
 . (Join-Path $PSScriptRoot 'lib/go_test_skip_audit.ps1')
+
+if (-not [string]::IsNullOrWhiteSpace($CiDbStateFile)) {
+    $resolvedState = (Resolve-Path -LiteralPath $CiDbStateFile -ErrorAction Stop).Path
+    $state = Get-Content -Raw -LiteralPath $resolvedState | ConvertFrom-Json -ErrorAction Stop
+    $allowedDbEnv = @(
+        'PANDORA_TEST_MYSQL_DSN'
+        'PANDORA_TEST_TIDB_DSN'
+        'PANDORA_TIDB_TEST_DSN'
+    )
+    foreach ($envName in $allowedDbEnv) {
+        $prop = $state.environment.PSObject.Properties[$envName]
+        if ($null -eq $prop -or [string]::IsNullOrWhiteSpace([string]$prop.Value)) {
+            throw "CI DB 状态缺少 $envName：$resolvedState"
+        }
+        [Environment]::SetEnvironmentVariable($envName, [string]$prop.Value)
+    }
+    Write-Host "[INFO] 已从 CI DB 状态导入数据库测试环境（值已隐藏）：$resolvedState" -ForegroundColor Cyan
+}
 
 if (-not $RequireDbTests -and $env:PANDORA_CI_REQUIRE_DB_TESTS -in @('1', 'true', 'True', 'yes')) {
     $RequireDbTests = $true
@@ -58,7 +81,7 @@ Write-Host "[INFO] Go:$goVersion" -ForegroundColor Cyan
 
 # 依赖门控 DSN 一览:先打出来,让日志顶部就能看清本轮到底具备哪些验证能力。
 Write-Host '[INFO] 依赖门控环境变量:' -ForegroundColor Cyan
-foreach ($envName in (Get-PandoraDbGatedEnvNames)) {
+foreach ($envName in (Get-PandoraGatedEnvNames)) {
     $isSet = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($envName))
     $mark = if ($isSet) { '已设置' } else { '未设置(相关用例将被跳过)' }
     $color = if ($isSet) { 'Green' } else { 'DarkYellow' }
@@ -91,7 +114,13 @@ foreach ($m in $modules) {
         $totalPassed += $audit.Passed
         $totalSkipped += $audit.Skipped
         foreach ($g in $audit.GatedSkips) { $allGatedSkips.Add($g) }
-        if ($testExit -ne 0) { $failed += "$m(test)"; continue }
+        if ($testExit -ne 0 -or $audit.BuildFailures.Count -gt 0) {
+            if ($audit.BuildFailures.Count -gt 0) {
+                Write-Host ("[ERR ] Go 1.26 build-fail: {0}" -f ($audit.BuildFailures -join ', ')) -ForegroundColor Red
+            }
+            $failed += "$m(test)"
+            continue
+        }
     } finally { Pop-Location }
 }
 
@@ -106,11 +135,11 @@ if ($failed.Count -gt 0) {
 # 为什么这是门禁而不是日志:friend/mission 两条**确定性** 1213 死锁在真 MySQL 上必现、
 # 在 TiDB 上不现,而 CI 从不设 DSN → 相关用例全 Skip → `go test` 打 ok → 流水线长期绿。
 # 缺陷不是没被测试覆盖,是覆盖被"跳过等于通过"吃掉了。
-$policy = Test-PandoraGatedSkipPolicy -GatedSkips $allGatedSkips.ToArray() -Require:$RequireDbTests
+$policy = Test-PandoraGatedSkipPolicy -GatedSkips $allGatedSkips.ToArray() -RequireDbTests:$RequireDbTests
 if ($policy.Warnings.Count -gt 0) {
     Write-Host "`n[WARN] 依赖门控用例未执行 —— 本轮绿灯**不覆盖**下列范围:" -ForegroundColor Yellow
     $policy.Warnings | ForEach-Object { Write-Host "  ! $_" -ForegroundColor Yellow }
-    Write-Host '       挂上测试库后用 -RequireDbTests(或 PANDORA_CI_REQUIRE_DB_TESTS=1)把它转成门禁。' -ForegroundColor Yellow
+    Write-Host '       MySQL/TiDB 组可用 -RequireDbTests 强制；Redis/Kafka/etcd 可选组仍保持未验证告警。' -ForegroundColor Yellow
 }
 if ($policy.Violations.Count -gt 0) {
     Write-Host "`n[ERR ] 依赖门控门禁失败:" -ForegroundColor Red
@@ -150,6 +179,8 @@ $contractTests = @(
     # 依赖门控跳过审计本身的门禁(2026-08-11)。它守的是**本脚本上面那段审计会不会失灵**:
     # 误判成"全跑过"就等于把 friend/mission 那类只在真库复现的缺陷重新放回黑箱。
     'tools/scripts/tests/go_test_skip_audit_contract_test.ps1'
+    # Jenkins 一次性 MySQL/TiDB 生命周期、回环隔离、无库名 DSN 与 post always 清理。
+    'tools/scripts/tests/ci_db_contract_test.ps1'
 )
 $contractFailed = @()
 foreach ($rel in $contractTests) {

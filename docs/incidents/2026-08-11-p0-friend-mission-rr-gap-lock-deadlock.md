@@ -7,7 +7,7 @@
 > **首次发现时间（UTC）**：2026-08-12 02:18:30（本机本地时区 UTC-4，对应本地 2026-08-11 22:18:30）
 > **负责人**：待指定
 > **受影响服务/版本**：`friend`、`mission`；基线 commit `7a858783`（未部署，无镜像 digest）
-> **最后更新**：2026-08-11
+> **最后更新**：2026-08-12
 
 ## 0. 一句话结论
 
@@ -214,6 +214,10 @@ MySQL REPEATABLE READ 下，`SELECT ... WHERE <key>=? FOR UPDATE` **未命中记
 | friend 全量套件 × 5 次 | — | 全绿无抖动 | 同上 | — |
 | friend / mission 全量套件（MySQL + TiDB 双后端同开） | — | 全绿（16.1s / 7.1s） | MySQL 8.4.9 + TiDB v8.5.1 | — |
 | CI 跳过审计契约测试 | — | PASS（6 组断言） | `go_test_skip_audit_contract_test.ps1` | 含"DSN 已设置却仍跳过 → 硬失败"与"普通 Skip 不得误判" |
+| CI DB 生命周期契约 | — | PASS | `ci_db_contract_test.ps1` | 固定 MySQL 8.4 / TiDB 8.5.1、动态回环端口、无持久卷、Jenkins `post always` 清理 |
+| CI DB 本机真实生命周期 | — | PASS | `ci_db.ps1 Up/Down`（2026-08-12） | 4 容器约 19s 全部 healthy；TiDB 初始化完成；Down 后容器/网络/状态文件均为零 |
+| TiDB 真实后端行为探针 | — | PASS（2） | 本轮临时 TiDB v8.5.1 | `AssertTiDBBackend` 与 `accounts.account` collation 语义均执行，零 SKIP |
+| Jenkins 完整 job | — | **SKIP / 未验证** | 需提交后由 Jenkins 拉取运行 | 当前只验证了本机等价 Docker 生命周期与脚本契约，不能冒充 Jenkins build 成功 |
 | CI 审计对真实输出生效 | — | friend 模块无 DSN 时 **51 通过 / 14 门控跳过**；两个 DSN 都设置后 **65 通过 / 0 跳过** | 同上 | 量化了"CI 里 14 个用例从未执行" |
 | `go test -race` | **未执行** | **未执行** | CI 唯一入口无 `-race`，本机 `CGO_ENABLED=0` 直接报错 | 阻断项，见 A-4 |
 | 全仓同型动态普查 | — | **无结论**（阳性对照未复现） | `rr_gap_lock_deadlock_survey_test.go` | §6 未覆盖边界 2 |
@@ -234,7 +238,7 @@ MySQL REPEATABLE READ 下，`SELECT ... WHERE <key>=? FOR UPDATE` **未命中记
 | ID | 严重级别 | 行动项 | 负责人 | 状态 | 目标/关联 Incident |
 |---|---|---|---|---|---|
 | A-1 | P1 | 按域为 §6 表中 14 个文件补**真实 repo API 的跨实体并发用例**（唯一确证有效的方法）；逐域给出确诊/排除结论 | 待指定 | 未开始 | 本 Incident |
-| A-2 | P1 | Jenkins 挂测试 MySQL/TiDB 并注入 DSN，随后开启 `ci_backend.ps1 -RequireDbTests`；在此之前所有 DB 门控回归在 CI 中仍不生效 | 待指定 | 未开始 | 本 Incident |
+| A-2 | P1 | Jenkins 挂测试 MySQL/TiDB 并注入 DSN，随后开启 `ci_backend.ps1 -RequireDbTests` | Codex / Jenkins | **代码与本机生命周期已完成，待提交后 Jenkins 实跑确认**：新增隔离 compose + `ci_db.ps1`，Jenkins 已接 `Up → -RequireDbTests → post always Down`；完整 Jenkins job 当前 SKIP，不能关闭 | 本 Incident |
 | A-3 | P1 | 提交 → 构建 → 部署 → 观察窗口 | 待指定 | 未开始 | 本 Incident |
 | A-4 | P2 | `go test -race` 进 CI（需 CGO + Linux agent） | 待指定 | 未开始 | 沿用 INC-20260811-001 A-4 |
 | A-5 | P2 | 修好动态普查探针（更强屏障）或明确废弃该文件，避免留一个长期 Skip 的工具 | 待指定 | 未开始 | 本 Incident |

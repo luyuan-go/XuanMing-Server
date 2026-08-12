@@ -54,7 +54,8 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                bat 'pwsh -NoProfile -ExecutionPolicy Bypass -File tools\\scripts\\ci_backend.ps1'
+                bat 'pwsh -NoProfile -ExecutionPolicy Bypass -File tools\\scripts\\ci_db.ps1 -Action Up -StateFile run\\ci-db-state.json -RunId "%BUILD_TAG%"'
+                bat 'pwsh -NoProfile -ExecutionPolicy Bypass -File tools\\scripts\\ci_backend.ps1 -RequireDbTests -CiDbStateFile run\\ci-db-state.json'
             }
         }
 
@@ -88,6 +89,14 @@ pipeline {
                     }
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            // 只按 ci_db.ps1 生成且带 pandora-ci-db- 前缀的本轮 project 清理；
+            // 状态不存在时脚本明确 SKIP，不会碰本机 dev MySQL/TiDB。
+            bat 'pwsh -NoProfile -ExecutionPolicy Bypass -File tools\\scripts\\ci_db.ps1 -Action Down -StateFile run\\ci-db-state.json'
         }
     }
 }

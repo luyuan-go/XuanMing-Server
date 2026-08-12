@@ -1,47 +1,101 @@
 <#
 .SYNOPSIS
-  解析 `go test -json` 事件流,把「因未设置依赖 DSN 而跳过」的用例单独统计出来。
+  解析 `go test -json`，审计因外部依赖未配置而跳过的用例。
 
 .DESCRIPTION
-  存在的理由(2026-08-11):`go test` 对「全部用例都 Skip 的包」输出的是 `ok`,与真跑过
-  完全无法区分。本仓库有 26 个文件、上百个用例由 PANDORA_TEST_* 环境变量门控;CI
-  (ci_backend.ps1)从不设置这些变量,于是这些用例一次都没跑过,而流水线报告一路绿。
+  Go 1.26 会在 TestEvent 之外输出 build-output/build-fail BuildEvent。本文件同时还原
+  两类事件，避免编译错误在 JSON 模式下从 Jenkins 控制台消失。
 
-  真实代价已经发生:friend 域 `CreateRequest` 在真 MySQL 上是**确定性 1213 死锁**
-  (3/3 复现),mission 域 `ApplyFactsTx` 同样,两条都被这层"SKIP 显示成 ok"盖了很久;
-  它们在 TiDB 上不复现,而恰恰只有 TiDB 侧偶尔被人手工跑过。
+  依赖分两组：
+    - database：MySQL/TiDB，Jenkins 使用 -RequireDbTests 强制执行；
+    - optional：Redis/Kafka/etcd，未提供环境时明确告警，但不阻断数据库门禁。
 
-  本文件只提供**纯函数**(输入 JSON 行、输出统计),不执行 go test,因此可以用合成输入
-  做契约测试(tools/scripts/tests/go_test_skip_audit_contract_test.ps1),不需要数据库。
+  本文件只提供纯函数，不启动测试或外部服务。
 #>
 
-# PandoraDbGatedEnvNames 是「跳过原因里出现即判定为依赖门控」的环境变量名。
-# 新增依赖门控变量时必须同步补进来,否则新增的门控用例又会隐身。
-$script:PandoraDbGatedEnvNames = @(
-    'PANDORA_TEST_MYSQL_DSN'
-    'PANDORA_TEST_TIDB_DSN'
-    'PANDORA_TEST_REDIS_ADDR'
-    'PANDORA_TEST_REDIS'
-    'PANDORA_TEST_KAFKA_BROKERS'
-    'PANDORA_TEST_ETCD_ENDPOINTS'
+$script:PandoraGatedEnvRegistry = @(
+    [pscustomobject]@{ Name = 'PANDORA_TEST_MYSQL_DSN'; Group = 'database' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_TIDB_DSN'; Group = 'database' }
+    # pkg/mysqlx 的真实 TiDB 行为探针沿用这一个历史名称，不能漏掉。
+    [pscustomobject]@{ Name = 'PANDORA_TIDB_TEST_DSN'; Group = 'database' }
+
+    [pscustomobject]@{ Name = 'PANDORA_TEST_REDIS_ADDR'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_REDIS'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_REDIS8_ADDR'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_REDIS8_PASSWORD'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_REDIS8_CLUSTER_ADDRS'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_REDIS8_CLUSTER_PASSWORD'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_REDIS8_SENTINEL_ADDRS'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_REDIS8_SENTINEL_MASTER_NAME'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_REDIS8_SENTINEL_PASSWORD'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_KAFKA_BROKERS'; Group = 'optional' }
+    [pscustomobject]@{ Name = 'PANDORA_TEST_ETCD_ENDPOINTS'; Group = 'optional' }
 )
 
+function Get-PandoraGatedEnvRegistry {
+    return $script:PandoraGatedEnvRegistry
+}
+
+function Get-PandoraGatedEnvNames {
+    return @($script:PandoraGatedEnvRegistry | ForEach-Object { $_.Name })
+}
+
+# 兼容已有调用方；名字保留，但返回的是全部受审计依赖，不再暗示全部都是 DB 必选。
 function Get-PandoraDbGatedEnvNames {
-    return , $script:PandoraDbGatedEnvNames
+    return (Get-PandoraGatedEnvNames)
+}
+
+function Get-PandoraEnvGroup([string]$Name) {
+    $entry = $script:PandoraGatedEnvRegistry | Where-Object { $_.Name -eq $Name } | Select-Object -First 1
+    if ($null -eq $entry) { return 'optional' }
+    return $entry.Group
+}
+
+function Add-PandoraUniqueName(
+    [System.Collections.Generic.List[string]]$Names,
+    [string]$Name
+) {
+    if (-not $Names.Contains($Name)) { $Names.Add($Name) }
+}
+
+# 环境变量名按 ASCII token 边界匹配，不能让 PANDORA_TEST_REDIS 吞掉 REDIS8_ADDR。
+# 三条 Redis8 用例的既有 skip 文案使用 ADDR/PASSWORD 简写或自然语言；这里仅为这些
+# 已知、完整短语补回同一个 gate 的全部前置变量，不做模糊子串猜测。
+function Get-PandoraGateEnvNamesFromReason([string]$Reason) {
+    $names = [System.Collections.Generic.List[string]]::new()
+    foreach ($entry in $script:PandoraGatedEnvRegistry) {
+        $escaped = [regex]::Escape($entry.Name)
+        if ($Reason -match "(?<![A-Z0-9_])$escaped(?![A-Z0-9_])") {
+            Add-PandoraUniqueName $names $entry.Name
+        }
+    }
+
+    if ($Reason -match '(?<![A-Z0-9_])PANDORA_TEST_REDIS8_ADDR/PASSWORD(?![A-Z0-9_])') {
+        Add-PandoraUniqueName $names 'PANDORA_TEST_REDIS8_ADDR'
+        Add-PandoraUniqueName $names 'PANDORA_TEST_REDIS8_PASSWORD'
+    }
+    if ($Reason -match '(?<![A-Z0-9_])PANDORA_TEST_REDIS8_CLUSTER_ADDRS/PASSWORD(?![A-Z0-9_])') {
+        Add-PandoraUniqueName $names 'PANDORA_TEST_REDIS8_CLUSTER_ADDRS'
+        Add-PandoraUniqueName $names 'PANDORA_TEST_REDIS8_CLUSTER_PASSWORD'
+    }
+    if ($Reason -match '(?i)(?<![A-Z0-9_])Redis 8 sentinel integration addresses/master/password(?![A-Z0-9_])') {
+        Add-PandoraUniqueName $names 'PANDORA_TEST_REDIS8_SENTINEL_ADDRS'
+        Add-PandoraUniqueName $names 'PANDORA_TEST_REDIS8_SENTINEL_MASTER_NAME'
+        Add-PandoraUniqueName $names 'PANDORA_TEST_REDIS8_SENTINEL_PASSWORD'
+    }
+    return $names.ToArray()
 }
 
 <#
-.SYNOPSIS
-  把 `go test -json` 的行数组归并成统计结果。
-
 .OUTPUTS
   [pscustomobject] @{
-    Console      = [string[]] 逐字还原的人类可读输出(与不加 -json 时一致)
-    Passed       = [int] 通过的用例数(顶层 + 子测试)
-    Failed       = [int] 失败的用例数
-    Skipped      = [int] 跳过的用例数
-    GatedSkips   = [pscustomobject[]] @{ Package; Test; Env }  依赖门控导致的跳过
-    ParseErrors  = [string[]] 无法解析为 JSON 的行(构建错误等,原样保留)
+    Console       = [string[]]  TestEvent.Output + Go 1.26 BuildEvent.Output
+    Passed        = [int]
+    Failed        = [int]
+    Skipped       = [int]
+    GatedSkips    = [pscustomobject[]] @{ Package; Test; Envs; Env }
+    ParseErrors   = [string[]]
+    BuildFailures = [string[]]  build-fail ImportPath / TestEvent.FailedBuild 去重集合
   }
 #>
 function Get-GoTestSkipAudit {
@@ -54,24 +108,37 @@ function Get-GoTestSkipAudit {
     $console = [System.Collections.Generic.List[string]]::new()
     $parseErrors = [System.Collections.Generic.List[string]]::new()
     $gated = [System.Collections.Generic.List[pscustomobject]]::new()
-    # 每个 (包, 用例) 的累计输出:Skip 事件本身不带原因,原因在它之前的 output 事件里。
+    $buildFailures = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     $outputByTest = @{}
-    $passed = 0; $failed = 0; $skipped = 0
+    $passed = 0
+    $failed = 0
+    $skipped = 0
 
     foreach ($line in ($JsonLines | Where-Object { $null -ne $_ })) {
         $trimmed = $line.Trim()
         if (-not $trimmed) { continue }
         if (-not $trimmed.StartsWith('{')) {
-            # 构建失败等非 JSON 行必须原样透出,否则 CI 日志里看不到编译错误。
             $parseErrors.Add($line)
             $console.Add($line)
             continue
         }
         try { $ev = $trimmed | ConvertFrom-Json -ErrorAction Stop }
-        catch { $parseErrors.Add($line); $console.Add($line); continue }
+        catch {
+            $parseErrors.Add($line)
+            $console.Add($line)
+            continue
+        }
 
         $key = "$($ev.Package)::$($ev.Test)"
         switch ($ev.Action) {
+            'build-output' {
+                if ($ev.Output) { $console.Add($ev.Output.TrimEnd("`r", "`n")) }
+            }
+            'build-fail' {
+                if (-not [string]::IsNullOrWhiteSpace([string]$ev.ImportPath)) {
+                    [void]$buildFailures.Add([string]$ev.ImportPath)
+                }
+            }
             'output' {
                 if ($ev.Output) { $console.Add($ev.Output.TrimEnd("`r", "`n")) }
                 if ($ev.Test) {
@@ -79,81 +146,115 @@ function Get-GoTestSkipAudit {
                     $outputByTest[$key] += $ev.Output
                 }
             }
-            'pass' { if ($ev.Test) { $passed++ } }
-            'fail' { if ($ev.Test) { $failed++ } }
+            'pass' {
+                if ($ev.Test) { $passed++ }
+            }
+            'fail' {
+                if ($ev.Test) { $failed++ }
+                if (-not [string]::IsNullOrWhiteSpace([string]$ev.FailedBuild)) {
+                    [void]$buildFailures.Add([string]$ev.FailedBuild)
+                }
+            }
             'skip' {
-                if (-not $ev.Test) { break }   # 包级 skip(无测试文件)不计
+                if (-not $ev.Test) { break }
                 $skipped++
                 $reason = if ($outputByTest.ContainsKey($key)) { $outputByTest[$key] } else { '' }
-                foreach ($envName in $script:PandoraDbGatedEnvNames) {
-                    if ($reason -like "*$envName*") {
-                        $gated.Add([pscustomobject]@{
-                                Package = $ev.Package
-                                Test    = $ev.Test
-                                Env     = $envName
-                            })
-                        break
-                    }
+                $envs = @(Get-PandoraGateEnvNamesFromReason $reason)
+                if ($envs.Count -gt 0) {
+                    $gated.Add([pscustomobject]@{
+                            Package = $ev.Package
+                            Test    = $ev.Test
+                            Envs    = $envs
+                            # 兼容旧的单变量消费方；多前置 gate 必须读取 Envs。
+                            Env     = if ($envs.Count -eq 1) { $envs[0] } else { $null }
+                        })
                 }
             }
         }
     }
 
     return [pscustomobject]@{
-        Console     = $console.ToArray()
-        Passed      = $passed
-        Failed      = $failed
-        Skipped     = $skipped
-        GatedSkips  = $gated.ToArray()
-        ParseErrors = $parseErrors.ToArray()
+        Console       = $console.ToArray()
+        Passed        = $passed
+        Failed        = $failed
+        Skipped       = $skipped
+        GatedSkips    = $gated.ToArray()
+        ParseErrors   = $parseErrors.ToArray()
+        BuildFailures = @($buildFailures | Sort-Object)
     }
 }
 
-<#
-.SYNOPSIS
-  按「哪些 DSN 已设置」判定本次跳过是否构成门禁失败。
-
-.DESCRIPTION
-  两条判据,性质不同,不能合并:
-    ① **配置失效**(硬失败):某个 DSN 明明设置了,却仍有用例因它而跳过 —— 说明变量没传到
-       go test 进程(名字拼错 / Jenkins 没透传 / 在子 shell 里丢了)。这种情况下报告显示的
-       "全绿"是假的,必须让流水线红。
-    ② **覆盖缺口**(默认告警,-Require 时硬失败):DSN 根本没设置。这是环境能力问题而不是
-       配置错误,默认只响亮告警并打印缺口清单;等流水线真正挂上测试库后用 -Require 转成门禁。
-
-.OUTPUTS
-  [pscustomobject] @{ Violations = [string[]]; Warnings = [string[]] }
-#>
 function Test-PandoraGatedSkipPolicy {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][AllowNull()]
         [pscustomobject[]]$GatedSkips,
-        [switch]$Require
+        [switch]$RequireDbTests,
+        # 兼容旧调用；新代码应使用语义准确的 -RequireDbTests。
+        [Alias('Require')][switch]$LegacyRequireDbTests
     )
 
+    if ($LegacyRequireDbTests) { $RequireDbTests = $true }
     $violations = [System.Collections.Generic.List[string]]::new()
     $warnings = [System.Collections.Generic.List[string]]::new()
+    $skips = @($GatedSkips | Where-Object { $null -ne $_ })
 
-    $byEnv = @{}
-    foreach ($s in ($GatedSkips | Where-Object { $null -ne $_ })) {
-        if (-not $byEnv.ContainsKey($s.Env)) { $byEnv[$s.Env] = [System.Collections.Generic.List[string]]::new() }
-        $byEnv[$s.Env].Add("$($s.Package) $($s.Test)")
+    $samplesByEnv = @{}
+    foreach ($skip in $skips) {
+        $envs = if ($skip.PSObject.Properties.Name -contains 'Envs') { @($skip.Envs) } else { @($skip.Env) }
+        foreach ($name in ($envs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+            if (-not $samplesByEnv.ContainsKey($name)) {
+                $samplesByEnv[$name] = [System.Collections.Generic.List[string]]::new()
+            }
+            $samplesByEnv[$name].Add("$($skip.Package) $($skip.Test)")
+        }
     }
 
-    foreach ($envName in ($byEnv.Keys | Sort-Object)) {
-        $count = $byEnv[$envName].Count
-        $isSet = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($envName))
-        $sample = ($byEnv[$envName] | Select-Object -First 3) -join '; '
-        if ($isSet) {
-            $violations.Add("$envName 已设置,却仍有 $count 个用例因它跳过(变量没传到 go test 进程?)。例:$sample")
+    # 数据库门禁先检查环境本身，避免“解析器漏掉某条 Skip”反而让缺失 DSN 假绿。
+    if ($RequireDbTests) {
+        foreach ($entry in ($script:PandoraGatedEnvRegistry | Where-Object { $_.Group -eq 'database' })) {
+            $name = $entry.Name
+            $isSet = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))
+            if (-not $isSet) {
+                $sample = if ($samplesByEnv.ContainsKey($name)) {
+                    ($samplesByEnv[$name] | Select-Object -First 3) -join '; '
+                } else { '未观察到对应 Skip 事件（仍须 fail-closed 校验 CI 环境）' }
+                $violations.Add("$name 未设置，数据库必选门禁未满足。例:$sample")
+            }
         }
-        elseif ($Require) {
-            $violations.Add("$envName 未设置,$count 个依赖门控用例未执行(-Require 下视为门禁失败)。例:$sample")
+    }
+
+    $missingOptional = @{}
+    foreach ($skip in $skips) {
+        $envs = if ($skip.PSObject.Properties.Name -contains 'Envs') { @($skip.Envs) } else { @($skip.Env) }
+        $envs = @($envs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+        if ($envs.Count -eq 0) { continue }
+        $missing = @($envs | Where-Object {
+                [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_))
+            })
+
+        if ($missing.Count -eq 0) {
+            $violations.Add(("依赖变量均已设置，却仍跳过 {0} {1}（变量未透传或用例门控失效？）：{2}" -f `
+                        $skip.Package, $skip.Test, ($envs -join ', ')))
+            continue
         }
-        else {
-            $warnings.Add("$envName 未设置 → $count 个用例被跳过,**本轮未验证**。例:$sample")
+
+        foreach ($name in $missing) {
+            if ($RequireDbTests -and (Get-PandoraEnvGroup $name) -eq 'database') {
+                # 已由上面的“必选环境”检查统一报告，避免同一缺口重复两条 violation。
+                continue
+            }
+            if (-not $missingOptional.ContainsKey($name)) {
+                $missingOptional[$name] = [System.Collections.Generic.List[string]]::new()
+            }
+            $missingOptional[$name].Add("$($skip.Package) $($skip.Test)")
         }
+    }
+
+    foreach ($name in ($missingOptional.Keys | Sort-Object)) {
+        $items = $missingOptional[$name]
+        $sample = ($items | Select-Object -First 3) -join '; '
+        $warnings.Add("$name 未设置 → $($items.Count) 个依赖门控用例被跳过，**本轮未验证**。例:$sample")
     }
 
     return [pscustomobject]@{

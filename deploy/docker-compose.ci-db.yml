@@ -1,0 +1,89 @@
+# 后端 CI 专用一次性数据库。
+#
+# - project name、容器名、网络和宿主端口均由 tools/scripts/ci_db.ps1 按 Jenkins build
+#   唯一化，不会复用 pandora-mysql / pandora-tidb-* 或它们的数据卷；
+# - 全部端口只绑定 127.0.0.1，凭据为空，仅允许一次性本机测试实例；
+# - 不挂持久卷，Down --volumes 后不可恢复，禁止用作开发或生产数据源。
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: "no"
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --max_connections=500
+    ports:
+      - "127.0.0.1:${PANDORA_CI_MYSQL_PORT:?ci_db.ps1 must set PANDORA_CI_MYSQL_PORT}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "--silent"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 10s
+    networks: [ci-db]
+
+  pd:
+    image: pingcap/pd:v8.5.1
+    restart: "no"
+    command:
+      - --name=pd
+      - --data-dir=/data/pd
+      - --client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://pd:2379
+      - --peer-urls=http://0.0.0.0:2380
+      - --advertise-peer-urls=http://pd:2380
+      - --initial-cluster=pd=http://pd:2380
+    healthcheck:
+      test: ["CMD", "/pd-ctl", "-u", "http://127.0.0.1:2379", "health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 10s
+    networks: [ci-db]
+
+  tikv:
+    image: pingcap/tikv:v8.5.1
+    restart: "no"
+    depends_on:
+      pd:
+        condition: service_healthy
+    command:
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=tikv:20160
+      - --status-addr=0.0.0.0:20180
+      - --data-dir=/data/tikv
+      - --pd=pd:2379
+    healthcheck:
+      test: ["CMD", "/usr/bin/curl", "-fsS", "http://127.0.0.1:20180/status"]
+      interval: 2s
+      timeout: 2s
+      retries: 90
+      start_period: 15s
+    networks: [ci-db]
+
+  tidb:
+    image: pingcap/tidb:v8.5.1
+    restart: "no"
+    depends_on:
+      tikv:
+        condition: service_healthy
+    command:
+      - --store=tikv
+      - --path=pd:2379
+      - --advertise-address=tidb
+    ports:
+      - "127.0.0.1:${PANDORA_CI_TIDB_PORT:?ci_db.ps1 must set PANDORA_CI_TIDB_PORT}:4000"
+    healthcheck:
+      test: ["CMD", "/usr/bin/curl", "-fsS", "http://127.0.0.1:10080/status"]
+      interval: 2s
+      timeout: 2s
+      retries: 90
+      start_period: 20s
+    networks: [ci-db]
+
+networks:
+  ci-db:
+    driver: bridge
