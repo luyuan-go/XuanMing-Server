@@ -35,7 +35,7 @@ const (
 const listReadHardLimit = 1000
 
 // friendWriteTxIsolation 说明本文件四条写事务为什么显式用 READ COMMITTED
-// (2026-08-11;register_no.go 已有同款先例)。
+// (2026-08-11;player_no.go 已有同款先例)。
 //
 // **这是正确性要求,不是调优。** 本域的所有权威判定读都是 `SELECT ... FOR UPDATE`
 // (R9 复审 P1:RR 的一致读快照在第一条普通 SELECT 时固定,守卫锁不刷新它),而这些探针

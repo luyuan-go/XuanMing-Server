@@ -1,5 +1,5 @@
-// register_no_mysql_test.go — 注册编号补号的**真 MySQL / 真 TiDB** 双后端语义验证
-// (docs/design/register-no-and-login-surge.md §3.3,2026-08-10 落码)。
+// player_no_mysql_test.go — 角色编号补号的**真 MySQL / 真 TiDB** 双后端语义验证
+// (docs/design/player-no-and-login-surge.md §3.3,2026-08-10 落码)。
 //
 // 为什么必须有这一层、且必须两个后端都跑:方案的四条承诺全部押在真实引擎语义上,
 // fake 无法替代,且两家引擎的语义差异恰好落在承诺①的要害上——
@@ -20,7 +20,7 @@
 //	kubectl -n pandora port-forward svc/mysql 13306:3306
 //	$env:PANDORA_TEST_MYSQL_DSN='root:<pw>@tcp(127.0.0.1:13306)/?parseTime=true&loc=UTC&charset=utf8mb4'
 //	$env:PANDORA_TEST_TIDB_DSN='root:@tcp(127.0.0.1:4000)/?parseTime=true&loc=UTC&charset=utf8mb4'
-//	go test ./services/account/login/internal/data/ -count=1 -run RegisterNo_MySQLAndTiDB -v
+//	go test ./services/account/login/internal/data/ -count=1 -run PlayerNo_MySQLAndTiDB -v
 package data
 
 import (
@@ -39,43 +39,43 @@ import (
 	drivermysql "github.com/go-sql-driver/mysql"
 )
 
-const registerNoTestDBPrefix = "pandora_account_regno_it_"
+const playerNoTestDBPrefix = "pandora_account_regno_it_"
 
-var registerNoTestDBPattern = regexp.MustCompile(`^pandora_account_regno_it_[0-9]+_[0-9a-f]{16}$`)
+var playerNoTestDBPattern = regexp.MustCompile(`^pandora_account_regno_it_[0-9]+_[0-9a-f]{16}$`)
 
-// registerNoTestDDL 与 deploy/mysql-init/02-account-tables.sql / deploy/tidb-init/
-// 03-account-tidb.sql / migrations 000004 的 accounts + register_no_counter 定义一致
+// playerNoTestDDL 与 deploy/mysql-init/02-account-tables.sql / deploy/tidb-init/
+// 03-account-tidb.sql / migrations 000004 的 accounts + player_no_counter 定义一致
 // (测试只需要参与补号的列;ENGINE 子句 TiDB 接受并忽略)。
-var registerNoTestDDL = []string{
+var playerNoTestDDL = []string{
 	"CREATE TABLE `accounts` (" +
 		"`player_id`     BIGINT UNSIGNED  NOT NULL," +
 		"`account`       VARCHAR(64)      NOT NULL," +
 		"`password_hash` VARCHAR(80)      NOT NULL DEFAULT ''," +
 		"`status`        TINYINT UNSIGNED NOT NULL DEFAULT 0," +
-		"`register_no`   BIGINT UNSIGNED       NULL," +
+		"`player_no`   BIGINT UNSIGNED       NULL," +
 		"`created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP," +
 		"`updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
 		"PRIMARY KEY (`player_id`)," +
 		"UNIQUE KEY `uk_account` (`account`)," +
-		"UNIQUE KEY `uk_register_no` (`register_no`)" +
+		"UNIQUE KEY `uk_player_no` (`player_no`)" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-	"CREATE TABLE `register_no_counter` (" +
+	"CREATE TABLE `player_no_counter` (" +
 		"`id`      TINYINT UNSIGNED NOT NULL," +
 		"`next_no` BIGINT UNSIGNED  NOT NULL," +
 		"PRIMARY KEY (`id`)" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 }
 
-type registerNoBackend struct {
+type playerNoBackend struct {
 	name string
 	env  string
 }
 
-// forEachRegisterNoBackend 对 MySQL / TiDB 各跑一遍同一组断言(friend/guild 套件同款):
+// forEachPlayerNoBackend 对 MySQL / TiDB 各跑一遍同一组断言(friend/guild 套件同款):
 // 未设置对应 DSN 的后端明确 Skip,两个都没设时整组 Skip 而非静默全绿。
-func forEachRegisterNoBackend(t *testing.T, fn func(t *testing.T, db *sql.DB)) {
+func forEachPlayerNoBackend(t *testing.T, fn func(t *testing.T, db *sql.DB)) {
 	t.Helper()
-	backends := [...]registerNoBackend{
+	backends := [...]playerNoBackend{
 		{name: "mysql", env: "PANDORA_TEST_MYSQL_DSN"},
 		{name: "tidb", env: "PANDORA_TEST_TIDB_DSN"},
 	}
@@ -84,15 +84,15 @@ func forEachRegisterNoBackend(t *testing.T, fn func(t *testing.T, db *sql.DB)) {
 		t.Run(backend.name, func(t *testing.T) {
 			dsn := strings.TrimSpace(os.Getenv(backend.env))
 			if dsn == "" {
-				t.Skipf("跳过 %s register_no 集成测试:未设置 %s", backend.name, backend.env)
+				t.Skipf("跳过 %s player_no 集成测试:未设置 %s", backend.name, backend.env)
 			}
-			fn(t, newRegisterNoTestDB(t, backend.name, dsn))
+			fn(t, newPlayerNoTestDB(t, backend.name, dsn))
 		})
 	}
 }
 
-// newRegisterNoTestDB 建临时库 + 建表,返回 *sql.DB;DSN 已设置但后端不可达则硬失败。
-func newRegisterNoTestDB(t *testing.T, backend, dsn string) *sql.DB {
+// newPlayerNoTestDB 建临时库 + 建表,返回 *sql.DB;DSN 已设置但后端不可达则硬失败。
+func newPlayerNoTestDB(t *testing.T, backend, dsn string) *sql.DB {
 	t.Helper()
 	cfg, err := drivermysql.ParseDSN(dsn)
 	if err != nil {
@@ -105,8 +105,8 @@ func newRegisterNoTestDB(t *testing.T, backend, dsn string) *sql.DB {
 	if _, rerr := rand.Read(seed[:]); rerr != nil {
 		t.Fatalf("rand: %v", rerr)
 	}
-	dbName := fmt.Sprintf("%s%d_%s", registerNoTestDBPrefix, time.Now().UnixNano(), hex.EncodeToString(seed[:]))
-	if !registerNoTestDBPattern.MatchString(dbName) {
+	dbName := fmt.Sprintf("%s%d_%s", playerNoTestDBPrefix, time.Now().UnixNano(), hex.EncodeToString(seed[:]))
+	if !playerNoTestDBPattern.MatchString(dbName) {
 		t.Fatalf("生成的临时库名不合规:%s", dbName)
 	}
 
@@ -128,7 +128,7 @@ func newRegisterNoTestDB(t *testing.T, backend, dsn string) *sql.DB {
 	t.Cleanup(func() {
 		dctx, dcancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer dcancel()
-		if !registerNoTestDBPattern.MatchString(dbName) { // 二次校验,永不误删
+		if !playerNoTestDBPattern.MatchString(dbName) { // 二次校验,永不误删
 			return
 		}
 		_, _ = admin.ExecContext(dctx, "DROP DATABASE IF EXISTS `"+dbName+"`")
@@ -141,7 +141,7 @@ func newRegisterNoTestDB(t *testing.T, backend, dsn string) *sql.DB {
 		t.Fatalf("open temp db: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	for _, ddl := range registerNoTestDDL {
+	for _, ddl := range playerNoTestDDL {
 		if _, err := db.ExecContext(ctx, ddl); err != nil {
 			t.Fatalf("create table: %v", err)
 		}
@@ -160,12 +160,12 @@ func insertAccountAt(t *testing.T, db *sql.DB, playerID uint64, offsetSec int) {
 	}
 }
 
-func fetchRegisterNo(t *testing.T, db *sql.DB, playerID uint64) (uint64, bool) {
+func fetchPlayerNo(t *testing.T, db *sql.DB, playerID uint64) (uint64, bool) {
 	t.Helper()
 	var no sql.NullInt64
 	if err := db.QueryRowContext(context.Background(),
-		"SELECT register_no FROM accounts WHERE player_id = ?", playerID).Scan(&no); err != nil {
-		t.Fatalf("fetch register_no %d: %v", playerID, err)
+		"SELECT player_no FROM accounts WHERE player_id = ?", playerID).Scan(&no); err != nil {
+		t.Fatalf("fetch player_no %d: %v", playerID, err)
 	}
 	if !no.Valid {
 		return 0, false
@@ -177,18 +177,18 @@ func fetchCounter(t *testing.T, db *sql.DB) uint64 {
 	t.Helper()
 	var next uint64
 	if err := db.QueryRowContext(context.Background(),
-		"SELECT next_no FROM register_no_counter WHERE id = 1").Scan(&next); err != nil {
+		"SELECT next_no FROM player_no_counter WHERE id = 1").Scan(&next); err != nil {
 		t.Fatalf("fetch counter: %v", err)
 	}
 	return next
 }
 
-// drainRegisterNo 反复 SweepRegisterNo 到无待编号行,返回总编号数。
-func drainRegisterNo(t *testing.T, db *sql.DB, batch int) int {
+// drainPlayerNo 反复 SweepPlayerNo 到无待编号行,返回总编号数。
+func drainPlayerNo(t *testing.T, db *sql.DB, batch int) int {
 	t.Helper()
 	total := 0
 	for i := 0; i < 100; i++ { // 上限护栏,防实现 bug 死循环
-		n, err := SweepRegisterNo(context.Background(), db, batch)
+		n, err := SweepPlayerNo(context.Background(), db, batch)
 		if err != nil {
 			t.Fatalf("sweep: %v", err)
 		}
@@ -202,9 +202,9 @@ func drainRegisterNo(t *testing.T, db *sql.DB, batch int) int {
 }
 
 // ① 编号全序 = (created_at, player_id) 全序,跨多批严格连续无空洞;计数器精确推进。
-func TestRegisterNo_MySQLAndTiDB_OrderAndContinuityAcrossBatches(t *testing.T) {
-	forEachRegisterNoBackend(t, func(t *testing.T, db *sql.DB) {
-		if err := EnsureRegisterNoCounter(context.Background(), db, 1); err != nil {
+func TestPlayerNo_MySQLAndTiDB_OrderAndContinuityAcrossBatches(t *testing.T) {
+	forEachPlayerNoBackend(t, func(t *testing.T, db *sql.DB) {
+		if err := EnsurePlayerNoCounter(context.Background(), db, 1); err != nil {
 			t.Fatalf("ensure counter: %v", err)
 		}
 
@@ -219,7 +219,7 @@ func TestRegisterNo_MySQLAndTiDB_OrderAndContinuityAcrossBatches(t *testing.T) {
 		insertAccountAt(t, db, 999, -30)  // 第 7 名
 
 		// batch=3 强制跨 3 批,验证批间连续。
-		if got := drainRegisterNo(t, db, 3); got != 7 {
+		if got := drainPlayerNo(t, db, 3); got != 7 {
 			t.Fatalf("drain assigned=%d want 7", got)
 		}
 		want := []struct {
@@ -227,9 +227,9 @@ func TestRegisterNo_MySQLAndTiDB_OrderAndContinuityAcrossBatches(t *testing.T) {
 			no       uint64
 		}{{501, 1}, {503, 2}, {505, 3}, {700, 4}, {900, 5}, {902, 6}, {999, 7}}
 		for _, w := range want {
-			no, ok := fetchRegisterNo(t, db, w.playerID)
+			no, ok := fetchPlayerNo(t, db, w.playerID)
 			if !ok || no != w.no {
-				t.Fatalf("player %d register_no=%d(assigned=%v) want %d", w.playerID, no, ok, w.no)
+				t.Fatalf("player %d player_no=%d(assigned=%v) want %d", w.playerID, no, ok, w.no)
 			}
 		}
 		if next := fetchCounter(t, db); next != 8 {
@@ -239,18 +239,18 @@ func TestRegisterNo_MySQLAndTiDB_OrderAndContinuityAcrossBatches(t *testing.T) {
 }
 
 // ② 水位滞后:窗口内的行本轮不编号;窗口外的行照常编,且后补的行接续编号不乱序。
-func TestRegisterNo_MySQLAndTiDB_WatermarkLagHoldsFreshRows(t *testing.T) {
-	forEachRegisterNoBackend(t, func(t *testing.T, db *sql.DB) {
-		if err := EnsureRegisterNoCounter(context.Background(), db, 1); err != nil {
+func TestPlayerNo_MySQLAndTiDB_WatermarkLagHoldsFreshRows(t *testing.T) {
+	forEachPlayerNoBackend(t, func(t *testing.T, db *sql.DB) {
+		if err := EnsurePlayerNoCounter(context.Background(), db, 1); err != nil {
 			t.Fatalf("ensure counter: %v", err)
 		}
 
 		insertAccountAt(t, db, 1001, -60) // 窗口外 → 本轮编 1
 		insertAccountAt(t, db, 1002, 0)   // 刚打戳,窗口内 → 本轮必须跳过
-		if got := drainRegisterNo(t, db, RegisterNoBatchSize); got != 1 {
+		if got := drainPlayerNo(t, db, PlayerNoBatchSize); got != 1 {
 			t.Fatalf("drain assigned=%d want 1(窗口内行被提前编号 = 迟可见封窗失效)", got)
 		}
-		if _, ok := fetchRegisterNo(t, db, 1002); ok {
+		if _, ok := fetchPlayerNo(t, db, 1002); ok {
 			t.Fatalf("player 1002 仍在水位窗口内却已编号")
 		}
 
@@ -259,11 +259,11 @@ func TestRegisterNo_MySQLAndTiDB_WatermarkLagHoldsFreshRows(t *testing.T) {
 			"UPDATE accounts SET created_at = NOW() - INTERVAL 30 SECOND WHERE player_id = 1002"); err != nil {
 			t.Fatalf("age row: %v", err)
 		}
-		if got := drainRegisterNo(t, db, RegisterNoBatchSize); got != 1 {
+		if got := drainPlayerNo(t, db, PlayerNoBatchSize); got != 1 {
 			t.Fatalf("second drain assigned=%d want 1", got)
 		}
-		if no, ok := fetchRegisterNo(t, db, 1002); !ok || no != 2 {
-			t.Fatalf("player 1002 register_no=%d want 2", no)
+		if no, ok := fetchPlayerNo(t, db, 1002); !ok || no != 2 {
+			t.Fatalf("player 1002 player_no=%d want 2", no)
 		}
 	})
 }
@@ -272,9 +272,9 @@ func TestRegisterNo_MySQLAndTiDB_WatermarkLagHoldsFreshRows(t *testing.T) {
 // 总量精确、无重号、无空洞。这是"多副本各自跑、无需 leader election"的全部依据,
 // 也是 2026-08-10 TiDB start_ts 快照缺陷的针对性回归(修复前 TiDB 端必现
 // "affected=0 第二写者"误报,修复后两端全绿)。
-func TestRegisterNo_MySQLAndTiDB_ConcurrentSweepersSerialize(t *testing.T) {
-	forEachRegisterNoBackend(t, func(t *testing.T, db *sql.DB) {
-		if err := EnsureRegisterNoCounter(context.Background(), db, 1); err != nil {
+func TestPlayerNo_MySQLAndTiDB_ConcurrentSweepersSerialize(t *testing.T) {
+	forEachPlayerNoBackend(t, func(t *testing.T, db *sql.DB) {
+		if err := EnsurePlayerNoCounter(context.Background(), db, 1); err != nil {
 			t.Fatalf("ensure counter: %v", err)
 		}
 		const rows = 200
@@ -290,7 +290,7 @@ func TestRegisterNo_MySQLAndTiDB_ConcurrentSweepersSerialize(t *testing.T) {
 			go func(w int) {
 				defer wg.Done()
 				for {
-					n, err := SweepRegisterNo(context.Background(), db, 50)
+					n, err := SweepPlayerNo(context.Background(), db, 50)
 					if err != nil {
 						errs[w] = err
 						return
@@ -314,14 +314,14 @@ func TestRegisterNo_MySQLAndTiDB_ConcurrentSweepersSerialize(t *testing.T) {
 		// 全序断言:编号 1..rows 恰好各出现一次,且顺序 = created_at 序(即 player_id 序,时间戳递增构造)。
 		var cnt int
 		if err := db.QueryRowContext(context.Background(),
-			"SELECT COUNT(DISTINCT register_no) FROM accounts WHERE register_no BETWEEN 1 AND ?", rows).Scan(&cnt); err != nil {
+			"SELECT COUNT(DISTINCT player_no) FROM accounts WHERE player_no BETWEEN 1 AND ?", rows).Scan(&cnt); err != nil {
 			t.Fatalf("count distinct: %v", err)
 		}
 		if cnt != rows {
 			t.Fatalf("distinct 编号=%d want %d(有重号或空洞)", cnt, rows)
 		}
-		firstNo, ok := fetchRegisterNo(t, db, 2000)
-		lastNo, ok2 := fetchRegisterNo(t, db, uint64(2000+rows-1))
+		firstNo, ok := fetchPlayerNo(t, db, 2000)
+		lastNo, ok2 := fetchPlayerNo(t, db, uint64(2000+rows-1))
 		if !ok || !ok2 || firstNo != 1 || lastNo != uint64(rows) {
 			t.Fatalf("边界错序:earliest=%d(want 1) latest=%d(want %d)", firstNo, lastNo, rows)
 		}
@@ -332,43 +332,43 @@ func TestRegisterNo_MySQLAndTiDB_ConcurrentSweepersSerialize(t *testing.T) {
 }
 
 // ④ 起始号只在计数器首次初始化生效:INSERT IGNORE 幂等,二次 Ensure 换起始号不生效。
-func TestRegisterNo_MySQLAndTiDB_EnsureCounterIdempotentStart(t *testing.T) {
-	forEachRegisterNoBackend(t, func(t *testing.T, db *sql.DB) {
+func TestPlayerNo_MySQLAndTiDB_EnsureCounterIdempotentStart(t *testing.T) {
+	forEachPlayerNoBackend(t, func(t *testing.T, db *sql.DB) {
 		ctx := context.Background()
-		if err := EnsureRegisterNoCounter(ctx, db, 100001); err != nil {
+		if err := EnsurePlayerNoCounter(ctx, db, 100001); err != nil {
 			t.Fatalf("ensure counter: %v", err)
 		}
-		if err := EnsureRegisterNoCounter(ctx, db, 777); err != nil { // 改配置重启,不得覆盖
+		if err := EnsurePlayerNoCounter(ctx, db, 777); err != nil { // 改配置重启,不得覆盖
 			t.Fatalf("re-ensure counter: %v", err)
 		}
 		if next := fetchCounter(t, db); next != 100001 {
 			t.Fatalf("counter next_no=%d want 100001(起始号被二次初始化覆盖)", next)
 		}
 		insertAccountAt(t, db, 3001, -60)
-		if got := drainRegisterNo(t, db, RegisterNoBatchSize); got != 1 {
+		if got := drainPlayerNo(t, db, PlayerNoBatchSize); got != 1 {
 			t.Fatalf("drain assigned=%d want 1", got)
 		}
-		if no, ok := fetchRegisterNo(t, db, 3001); !ok || no != 100001 {
-			t.Fatalf("player 3001 register_no=%d want 100001", no)
+		if no, ok := fetchPlayerNo(t, db, 3001); !ok || no != 100001 {
+			t.Fatalf("player 3001 player_no=%d want 100001", no)
 		}
 	})
 }
 
 // ⑤ 迁移未跑(缺列)时 Ensure 必须失败(启动探针 fail-soft 的依据),且不产生半初始化状态。
-func TestRegisterNo_MySQLAndTiDB_EnsureFailsWithoutMigration(t *testing.T) {
-	forEachRegisterNoBackend(t, func(t *testing.T, db *sql.DB) {
+func TestPlayerNo_MySQLAndTiDB_EnsureFailsWithoutMigration(t *testing.T) {
+	forEachPlayerNoBackend(t, func(t *testing.T, db *sql.DB) {
 		ctx := context.Background()
 		// 模拟 000004 未跑:删掉列与计数器表。
-		if _, err := db.ExecContext(ctx, "ALTER TABLE accounts DROP INDEX uk_register_no"); err != nil {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE accounts DROP INDEX uk_player_no"); err != nil {
 			t.Fatalf("drop index: %v", err)
 		}
-		if _, err := db.ExecContext(ctx, "ALTER TABLE accounts DROP COLUMN register_no"); err != nil {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE accounts DROP COLUMN player_no"); err != nil {
 			t.Fatalf("drop column: %v", err)
 		}
-		if _, err := db.ExecContext(ctx, "DROP TABLE register_no_counter"); err != nil {
+		if _, err := db.ExecContext(ctx, "DROP TABLE player_no_counter"); err != nil {
 			t.Fatalf("drop counter: %v", err)
 		}
-		if err := EnsureRegisterNoCounter(ctx, db, 1); err == nil {
+		if err := EnsurePlayerNoCounter(ctx, db, 1); err == nil {
 			t.Fatalf("缺列时 Ensure 应失败(探针失效会让补号任务在未迁移库上每 5s 报错)")
 		}
 	})

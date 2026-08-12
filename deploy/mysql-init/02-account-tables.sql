@@ -20,25 +20,25 @@ CREATE TABLE IF NOT EXISTS `accounts` (
     `account`       VARCHAR(64)      NOT NULL,
     `password_hash` VARCHAR(80)      NOT NULL COMMENT 'bcrypt(client_digest),含 cost 前缀,固定 60 字节',
     `status`        TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=normal,1=banned,2=disabled',
-    `register_no`   BIGINT UNSIGNED       NULL COMMENT '注册编号(展示专用,禁作身份键/外键/幂等键;绑定角色实体——今 player_id 即角色身份,卖角色过户时随角色走、值不变,故一账号建 N 角色 = N 个编号;NULL=待补号,login 补号任务按 created_at+player_id 序异步分配,register-no-and-login-surge.md §3.3/§3.6.1)',
+    `player_no`   BIGINT UNSIGNED       NULL COMMENT '角色编号(展示专用,禁作身份键/外键/幂等键;绑定角色实体——今 player_id 即角色身份,卖角色过户时随角色走、值不变,故一账号建 N 角色 = N 个编号;NULL=待补号,login 补号任务按 created_at+player_id 序异步分配,player-no-and-login-surge.md §3.3/§3.6.1)',
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`),
     UNIQUE KEY `uk_account` (`account`),
-    UNIQUE KEY `uk_register_no` (`register_no`)
+    UNIQUE KEY `uk_player_no` (`player_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 账号身份表';
 
--- register_no_counter:注册编号全局发号计数器,恒 1 行(id=1)。
+-- player_no_counter:角色编号全局发号计数器,恒 1 行(id=1)。
 -- 补号事务先 FOR UPDATE 锁本行再批量编号:行锁即全局互斥,多 login 副本并发安全,
 -- 无需 leader election(同 social 库 guild counter 先例)。§9.24 登记豁免(权威闸,不清理)。
--- next_no 首次初始化 = login 配置 register_no_start(拍板项 A③,默认 1);已初始化后改配置无效。
-CREATE TABLE IF NOT EXISTS `register_no_counter` (
+-- next_no 首次初始化 = login 配置 player_no_start(拍板项 A③,默认 1);已初始化后改配置无效。
+CREATE TABLE IF NOT EXISTS `player_no_counter` (
     `id`      TINYINT UNSIGNED NOT NULL,
-    `next_no` BIGINT UNSIGNED  NOT NULL COMMENT '下一个待发注册编号',
+    `next_no` BIGINT UNSIGNED  NOT NULL COMMENT '下一个待发角色编号',
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 注册编号全局发号计数器(单行 id=1;发号权威闸)';
+  COMMENT='Pandora 角色编号全局发号计数器(单行 id=1;发号权威闸)';
 
 CREATE TABLE IF NOT EXISTS `account_devices` (
     `id`            BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,

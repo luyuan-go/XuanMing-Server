@@ -449,7 +449,7 @@ func (r *MySQLMissionRepo) SweepReceipts(ctx context.Context, modeRaw string, re
 // inTx 是任务域所有写事务的唯一入口。
 //
 // **显式 READ COMMITTED 是正确性要求,不是调优**(2026-08-11 真 MySQL 8.4 实测抓获;
-// friend 域同因同批修,login/register_no.go 有更早的同款先例)。
+// friend 域同因同批修,login/player_no.go 有更早的同款先例)。
 //
 // 症状:24 个**不同玩家**并发 Accept(彼此不共享任何守卫行、任何业务行)必炸 1213,
 // 报在 `upsert active mission=...`。根因不是锁序 —— 守卫行确实是本事务第一把锁,

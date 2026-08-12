@@ -39,13 +39,13 @@ type AccountRepo interface {
 	// TouchDevice 记录最近一次登录设备(account_devices upsert)。失败由 biz 层只记日志。
 	TouchDevice(ctx context.Context, playerID uint64, deviceID string) error
 
-	// GetRegisterNo 读**当前角色**的注册编号(展示专用,register-no-and-login-surge.md §3;
+	// GetPlayerNo 读**当前角色**的角色编号(展示专用,player-no-and-login-surge.md §3;
 	// 编号绑定角色实体而非账号,见 §3.6.1——今 player_id 即角色身份)。
 	// 0 = 补号任务尚未分配(客户端显示「生成中」)。错误策略按入口分流:
 	// Login 主路径必须 fail-soft(失败置 0 只记日志,绝不因展示字段拒登录——存量库未跑
-	// 000004 迁移时靠该口径兜住);GetRegisterNo 补拉 RPC 必须把查询错误翻译成非 OK,
+	// 000004 迁移时靠该口径兜住);GetPlayerNo 补拉 RPC 必须把查询错误翻译成非 OK,
 	// 不得伪装为 0。刻意不合并进 FindByAccount:列缺失不能把登录整链打挂。
-	GetRegisterNo(ctx context.Context, playerID uint64) (uint64, error)
+	GetPlayerNo(ctx context.Context, playerID uint64) (uint64, error)
 }
 
 // =====================================================================
@@ -102,17 +102,17 @@ WHERE (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
 	return cnt > 0, nil
 }
 
-// GetRegisterNo PK 点查注册编号(登录路径 +1 次毫秒级往返,不进 5s 预算的服务扇出账,
+// GetPlayerNo PK 点查角色编号(登录路径 +1 次毫秒级往返,不进 5s 预算的服务扇出账,
 // 压测审核【必修-1】口径不受影响)。NULL / 行不存在均返回 0(未分配)。
-func (r *MySQLAccountRepo) GetRegisterNo(ctx context.Context, playerID uint64) (uint64, error) {
+func (r *MySQLAccountRepo) GetPlayerNo(ctx context.Context, playerID uint64) (uint64, error) {
 	var no sql.NullInt64
 	err := r.db.QueryRowContext(ctx,
-		`SELECT register_no FROM accounts WHERE player_id = ? LIMIT 1`, playerID).Scan(&no)
+		`SELECT player_no FROM accounts WHERE player_id = ? LIMIT 1`, playerID).Scan(&no)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInternal, "mysql get register_no: %v", err)
+		return 0, errcode.New(errcode.ErrInternal, "mysql get player_no: %v", err)
 	}
 	if !no.Valid {
 		return 0, nil

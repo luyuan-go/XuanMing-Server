@@ -7,14 +7,32 @@
   publish_offline_images.ps1 的职责,由流水线在测试全绿后单独调用。
   任何模块失败立即整体失败,不吞错(AGENTS.md §8)。
 
+.PARAMETER RequireDbTests
+  把「依赖门控用例被跳过」从告警提升为门禁失败。等流水线真正挂上测试 MySQL / TiDB
+  之后打开(或设环境变量 PANDORA_CI_REQUIRE_DB_TESTS=1),此后再有人把 DSN 摘掉就会红。
+
 .EXAMPLE
   pwsh tools/scripts/ci_backend.ps1
+
+.EXAMPLE
+  # 带真实数据库跑(依赖门控用例才会真正执行):
+  $env:PANDORA_TEST_MYSQL_DSN = 'root:pandora_dev_root@tcp(127.0.0.1:3307)/'
+  $env:PANDORA_TEST_TIDB_DSN  = 'root:@tcp(127.0.0.1:4000)/'
+  pwsh tools/scripts/ci_backend.ps1 -RequireDbTests
 #>
 [CmdletBinding()]
-param()
+param(
+    [switch]$RequireDbTests
+)
 
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = (Resolve-Path "$PSScriptRoot/../..").Path
+
+. (Join-Path $PSScriptRoot 'lib/go_test_skip_audit.ps1')
+
+if (-not $RequireDbTests -and $env:PANDORA_CI_REQUIRE_DB_TESTS -in @('1', 'true', 'True', 'yes')) {
+    $RequireDbTests = $true
+}
 
 # ---- 解析 go.work 的 use 清单(支持单行 use 与 use ( ... ) 块) ----
 $goWork = Join-Path $ProjectRoot 'go.work'
@@ -38,7 +56,20 @@ Write-Host "[INFO] go.work 模块数:$($modules.Count)" -ForegroundColor Cyan
 $goVersion = (go env GOVERSION 2>$null | Out-String).Trim()
 Write-Host "[INFO] Go:$goVersion" -ForegroundColor Cyan
 
+# 依赖门控 DSN 一览:先打出来,让日志顶部就能看清本轮到底具备哪些验证能力。
+Write-Host '[INFO] 依赖门控环境变量:' -ForegroundColor Cyan
+foreach ($envName in (Get-PandoraDbGatedEnvNames)) {
+    $isSet = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($envName))
+    $mark = if ($isSet) { '已设置' } else { '未设置(相关用例将被跳过)' }
+    $color = if ($isSet) { 'Green' } else { 'DarkYellow' }
+    Write-Host ("       {0,-30} {1}" -f $envName, $mark) -ForegroundColor $color
+}
+
 $failed = @()
+$allGatedSkips = [System.Collections.Generic.List[pscustomobject]]::new()
+$totalPassed = 0
+$totalSkipped = 0
+
 foreach ($m in $modules) {
     $dir = Join-Path $ProjectRoot ($m -replace '^\./', '' -replace '/', '\')
     if (-not (Test-Path -LiteralPath $dir)) { $failed += "$m(目录不存在)"; continue }
@@ -47,8 +78,20 @@ foreach ($m in $modules) {
     try {
         go build ./...
         if ($LASTEXITCODE -ne 0) { $failed += "$m(build)"; continue }
-        go test ./... -count=1
-        if ($LASTEXITCODE -ne 0) { $failed += "$m(test)"; continue }
+
+        # -json 而非裸 go test:裸输出对「全部用例都 Skip 的包」只会打一个 ok,
+        # 与真跑过无法区分(见 lib/go_test_skip_audit.ps1 头注释)。
+        # Console 字段把人类可读输出逐字还原,所以日志观感与改造前一致。
+        $raw = & go test ./... -count=1 -json 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { [string]$_ }
+        }
+        $testExit = $LASTEXITCODE
+        $audit = Get-GoTestSkipAudit -JsonLines $raw
+        $audit.Console | ForEach-Object { Write-Host $_ }
+        $totalPassed += $audit.Passed
+        $totalSkipped += $audit.Skipped
+        foreach ($g in $audit.GatedSkips) { $allGatedSkips.Add($g) }
+        if ($testExit -ne 0) { $failed += "$m(test)"; continue }
     } finally { Pop-Location }
 }
 
@@ -57,7 +100,27 @@ if ($failed.Count -gt 0) {
     $failed | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
     exit 1
 }
-Write-Host "`n[ OK ] 全部 $($modules.Count) 个模块 build + test 通过。" -ForegroundColor Green
+
+# ---- 依赖门控跳过审计(2026-08-11)----
+#
+# 为什么这是门禁而不是日志:friend/mission 两条**确定性** 1213 死锁在真 MySQL 上必现、
+# 在 TiDB 上不现,而 CI 从不设 DSN → 相关用例全 Skip → `go test` 打 ok → 流水线长期绿。
+# 缺陷不是没被测试覆盖,是覆盖被"跳过等于通过"吃掉了。
+$policy = Test-PandoraGatedSkipPolicy -GatedSkips $allGatedSkips.ToArray() -Require:$RequireDbTests
+if ($policy.Warnings.Count -gt 0) {
+    Write-Host "`n[WARN] 依赖门控用例未执行 —— 本轮绿灯**不覆盖**下列范围:" -ForegroundColor Yellow
+    $policy.Warnings | ForEach-Object { Write-Host "  ! $_" -ForegroundColor Yellow }
+    Write-Host '       挂上测试库后用 -RequireDbTests(或 PANDORA_CI_REQUIRE_DB_TESTS=1)把它转成门禁。' -ForegroundColor Yellow
+}
+if ($policy.Violations.Count -gt 0) {
+    Write-Host "`n[ERR ] 依赖门控门禁失败:" -ForegroundColor Red
+    $policy.Violations | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+    exit 1
+}
+
+$gatedCount = $allGatedSkips.Count
+Write-Host ("`n[ OK ] 全部 {0} 个模块 build + test 通过(用例 通过={1} 跳过={2},其中依赖门控跳过={3})。" -f `
+        $modules.Count, $totalPassed, $totalSkipped, $gatedCount) -ForegroundColor Green
 
 # ---- 集群配置生成器契约测试(R11 复审 P0-3)----
 #
@@ -84,6 +147,9 @@ $contractTests = @(
     'tools/scripts/tests/gen_cluster_team_resume_auth_contract_test.ps1'
     # 策划一键导表失败时的 SVN 归因(取版本号 / 判未提交)。判错方向 = 把人指到错的地方。
     'tools/scripts/tests/configtable_gen_svn_status_test.ps1'
+    # 依赖门控跳过审计本身的门禁(2026-08-11)。它守的是**本脚本上面那段审计会不会失灵**:
+    # 误判成"全跑过"就等于把 friend/mission 那类只在真库复现的缺陷重新放回黑箱。
+    'tools/scripts/tests/go_test_skip_audit_contract_test.ps1'
 )
 $contractFailed = @()
 foreach ($rel in $contractTests) {

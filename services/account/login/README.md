@@ -6,7 +6,7 @@
 > 本 README 是**模块级说明**(职责 / 端口 / RPC / 存储 / 调用链 / 起动)。**设计判断 / 决策记录**见 `docs/design`
 > 的 [`go-services.md §2.1`](../../../docs/design/go-services.md)、[`battle-reconnect.md`](../../../docs/design/battle-reconnect.md)、
 > [`session-generation-rollout.md`](../../../docs/design/session-generation-rollout.md)、
-> [`register-no-and-login-surge.md`](../../../docs/design/register-no-and-login-surge.md)、
+> [`player-no-and-login-surge.md`](../../../docs/design/player-no-and-login-surge.md)、
 > [`decision-revisit-ds-callback-auth.md`](../../../docs/design/decision-revisit-ds-callback-auth.md)。
 >
 > 代码行号锚点截至当前 HEAD,以**函数名**为准(行号会随改动漂移)。
@@ -14,8 +14,8 @@
 ## 职责与边界
 
 - **职责**:账号登录 / 登出;签发 Session Token + Hub DS 票据;断线重连回原 Battle DS;选角落库(`player_roles` 权威);
-  DS 票据签发 / 校验(JWT + Redis JTI 防重放);注册编号异步补号(`accounts.register_no`,
-  纯展示字段,`docs/design/register-no-and-login-surge.md` §3.3)。
+  DS 票据签发 / 校验(JWT + Redis JTI 防重放);角色编号异步补号(`accounts.player_no`,
+  纯展示字段,`docs/design/player-no-and-login-surge.md` §3.3)。
 - **权威态**:login 是**账号数据 + 会话代际 + 已选角色**的权威(MySQL `pandora_account`);会话现行性(顶号 fencing)
   权威在 **Redis session**(`pandora:sess:<player_id>`)+ MySQL 单调 `generation`(登录定序)。
 - **不是权威、只查询**(不变量 §22):玩家当前位置查 player_locator(presence 投影,30s TTL,不复制);玩家是否在活跃对局
@@ -45,14 +45,14 @@ proto 见 `proto/pandora/login/v1/login.proto`。
 | RPC | 调用方 | 语义 | 鉴权 |
 |---|---|---|---|
 | `Login(account, password_hash, device_id)` | 客户端 | 校验密码 → 签 session + 解析 Hub/Battle 落点 + resume;**立即完成型**,response 含完整进场数据 | 账号密码自证(Envoy 对本 path 不强制 JWT) |
-| `GetRegisterNo()` | 客户端(登录响应编号为 0 时补拉) | 空请求;只查当前 JWT 玩家自己的展示编号。`code=OK, register_no=0`=仍在补号窗口,非错误 | Envoy JWT `player_id`;刻意不做 sjti 现行性复核(只读、零副作用、不发凭据) |
+| `GetPlayerNo()` | 客户端(登录响应编号为 0 时补拉) | 空请求;只查当前 JWT 玩家自己的展示编号。`code=OK, player_no=0`=仍在补号窗口,非错误 | Envoy JWT `player_id`;刻意不做 sjti 现行性复核(只读、零副作用、不发凭据) |
 | `GetResumeContext(session_token)` | 客户端(冷启动 / 前台恢复) | 纯读当前应进 HUB / BATTLE 路由(不做任何 placement mutation) | session_token 验签 + 会话现行性门 |
 | `SelectRole(role_id)` | 客户端 | 选角落库(`player_roles` 覆盖式)+ 重签当前有效 Hub 票 | Envoy JWT `player_id` + payload jti 现行性门 |
 | `Logout(session_token)` | 客户端 | CAS 删本代 Redis session + MySQL 墓碑 + 弱释放 owner;容错(验签失败也返 OK) | session_token(容错) |
 | `IssueDSTicket(ds_type, target_id, session_token)` | 客户端(结算回大厅 / 断线重连) | `hub`=复用 AssignHub 拿当前有效大厅地址 + 新票;`battle`=经 roster 权威门现签重连票 | Envoy JWT `player_id` + session token 现行性门 |
 | `VerifyDSTicket(ticket, ds_pod_name, admission_id)` | UE DS(经 `:8444`) | 验签 + exp + JTI 防重放 +(redis authority)active/binding/admission 门 | off/legacy=内部信任;redis=DS Bearer Guard + Redis active |
 
-> **立即完成型(协议原则 1,见 [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md))**:`Login` / `GetRegisterNo` / `SelectRole` /
+> **立即完成型(协议原则 1,见 [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md))**:`Login` / `GetPlayerNo` / `SelectRole` /
 > `IssueDSTicket` 的 response 必须携带完整业务数据(session / 票据 / 直连地址 / resume),客户端**不等任何后续 push**。
 > 错误一律翻译成各 RPC response 的 `code`(`errcode.*` → proto enum,不抛 gRPC error),客户端永远看 `code` 字段。
 
@@ -124,15 +124,15 @@ Login(account, password_hash, device_id)
   滚动兼容期被清理，不再参与恢复。失败 RPC 返回可重试错误；下一次 Login 用更高
   generation 原子推进两处权威自愈。
 
-### 2. GetRegisterNo —— 首次会话异步补号后的只读补拉
+### 2. GetPlayerNo —— 首次会话异步补号后的只读补拉
 
-`LoginService.GetRegisterNo`(`service/login.go`)→ 从 ctx 读取 Envoy 由 JWT `sub` 注入的
-`player_id` → `LoginUsecase.GetRegisterNo` → `AccountRepo.GetRegisterNo` PK 点查。
+`LoginService.GetPlayerNo`(`service/login.go`)→ 从 ctx 读取 Envoy 由 JWT `sub` 注入的
+`player_id` → `LoginUsecase.GetPlayerNo` → `AccountRepo.GetPlayerNo` PK 点查。
 
 - 请求 message 刻意为空,不接受客户端自报 `player_id`;玩家只能查自己的编号。
 - 该 full path 必须同时进入 Envoy `jwt_authn.rules`;只加 route 不加 rule 会默认放行但不验签,
   上游拿不到 `x-pandora-player-id`,最终一律 `ERR_UNAUTHORIZED`。
-- `code=OK, register_no=0` 是补号尚未完成的正常态;客户端保持“生成中”并稍后重试,
+- `code=OK, player_no=0` 是补号尚未完成的正常态;客户端保持“生成中”并稍后重试,
   拿到非 0 后立即停止。仓储查询错误返回非 OK,客户端不得把错误写回成 0。
 - 刻意不做 sjti 现行性复核:它只读、只能读自己、零副作用且不签发任何凭据;
   对比 `SelectRole` 会签发 Hub 票据,所以后者必须复核。

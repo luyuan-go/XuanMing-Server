@@ -96,8 +96,8 @@ func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*l
 		// 选角权威化(2026-07-08):玩家当前已选角色(0=从未选过),客户端选角界面预选中用。
 		SelectedRoleId: res.SelectedRoleID,
 		ResumeContext:  resumeContextToProto(res.Resume),
-		// 注册编号(展示专用,register-no-and-login-surge.md §3):0=补号中,客户端显示「生成中」。
-		RegisterNo: res.RegisterNo,
+		// 角色编号(展示专用,player-no-and-login-surge.md §3):0=补号中,客户端显示「生成中」。
+		PlayerNo: res.PlayerNo,
 	}, nil
 }
 
@@ -130,26 +130,26 @@ func resumeContextToProto(in biz.ResumeContextResult) *loginv1.ResumeContext {
 	}
 }
 
-// GetRegisterNo 立即完成型:查本人注册编号(展示专用,register-no-and-login-surge.md §3)。
+// GetPlayerNo 立即完成型:查本人角色编号(展示专用,player-no-and-login-surge.md §3)。
 //
 // player_id 从 ctx 读(Envoy jwt_authn 验 session 后注入 x-pandora-player-id,
 // 与 SelectRole 同纪律),请求体为空、不信任自报身份——玩家只能查自己的编号。
 // ⚠️ 该 path 必须列在 envoy.yaml 的 jwt_authn rules 里:未列到的 path 默认放行不验签,
 // 上游拿不到 x-pandora-player-id,这里会一律 ErrUnauthorized。
 //
-// code=OK 且 register_no=0 表示「仍在补号窗口内」(约 15s),不是错误:客户端继续显示
+// code=OK 且 player_no=0 表示「仍在补号窗口内」(约 15s),不是错误:客户端继续显示
 // 「生成中」并稍后重试;拿到非 0 后编号永不再变,应停止轮询。
-func (s *LoginService) GetRegisterNo(ctx context.Context, _ *loginv1.GetRegisterNoRequest) (*loginv1.GetRegisterNoResponse, error) {
+func (s *LoginService) GetPlayerNo(ctx context.Context, _ *loginv1.GetPlayerNoRequest) (*loginv1.GetPlayerNoResponse, error) {
 	playerID, _ := ctx.Value(plog.CtxKeyPlayerID).(uint64)
 	if playerID == 0 {
-		plog.With(ctx).Warnw("msg", "get_register_no_no_player_id")
-		return &loginv1.GetRegisterNoResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+		plog.With(ctx).Warnw("msg", "get_player_no_no_player_id")
+		return &loginv1.GetPlayerNoResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
-	no, err := s.loginUC.GetRegisterNo(ctx, playerID)
+	no, err := s.loginUC.GetPlayerNo(ctx, playerID)
 	if err != nil {
-		return &loginv1.GetRegisterNoResponse{Code: toProtoCode(err)}, nil
+		return &loginv1.GetPlayerNoResponse{Code: toProtoCode(err)}, nil
 	}
-	return &loginv1.GetRegisterNoResponse{Code: commonv1.ErrCode_OK, RegisterNo: no}, nil
+	return &loginv1.GetPlayerNoResponse{Code: commonv1.ErrCode_OK, PlayerNo: no}, nil
 }
 
 // SelectRole 立即完成型(选角权威化 2026-07-08,见 login.proto SelectRole 注释)。

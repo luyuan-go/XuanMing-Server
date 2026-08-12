@@ -3197,3 +3197,39 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   「查无此人」——客服与交易纠纷拿编号追溯时查不到任何记录(编号既不回收也不指向任何行)。
   要编号永久可追溯需选**软删除**;取决于角色删除的产品形态(可否恢复/冷却期),不属编号方案职责。
 - **验证**:login `go build`/`go vet`/`go test ./... -count=1` 全绿。
+
+### 同日续:字段改名 register_no → player_no(一次性改完)
+
+**理由**:编号已绑定角色实体(§3.6.1),而「register(注册)」在通行语境是**账号**动作,角色是
+**创建**出来的——留旧名会持续把人往「账号级编号」引。改后与既有体系配对:
+`player_id`(角色实体 ID)/ `player_no`(角色展示序号)/ `role_id`(职业配置 ID)。
+**刻意不叫 `role_no`**:`role_id` 已被 CfgRole.Id 占用,再来一个 role_* 比不改更糊涂。
+**此刻改成本最低**:生产零注册路径无存量数据、dev 库可重建、客户端尚未正式消费该字段。
+
+**改名范围**(24 个文件,标识符零残留):列 `player_no`、唯一索引 `uk_player_no`、计数器表
+`player_no_counter`、Go(SweepPlayerNo/EnsurePlayerNoCounter/GetPlayerNo/PlayerNoBatchSize/
+PlayerNoWatermarkLag/配置 `player_no_start`)、proto(LoginResponse.player_no、
+GetPlayerNoRequest/Response、rpc GetPlayerNo、HTTP `/v1/player-no/get`)、envoy jwt_authn
+rules path、日志 msg、文件名(data/player_no.go、docs/design/player-no-and-login-surge.md)。
+中文措辞统一「注册编号」→「角色编号」。**PROGRESS/HANDOFF 历史条目保持原样**(历史即历史)。
+
+**迁移 `000005_rename_player_no`**:四步条件执行(RENAME COLUMN → RENAME INDEX →
+RENAME TABLE → MODIFY COMMENT),全部幂等。**000004 保持原样**(README:迁移一旦执行即
+immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致:`deploy/*-init` 建的新库
+直接是 player_no(四步全跳过),迁移建的库由本版改名。用 `RENAME COLUMN` 而非
+`CHANGE old new <type>`——后者需完整重复列定义,漏写 UNSIGNED/NULL 会**静默**改变列语义。
+
+**踩到并已加警示的坑**:批量改中文词时误伤了 down.sql 的 `@old_comment`——它必须与 000004
+的 COMMENT **逐字一致**(含旧词与旧文档名),是回滚的匹配目标而非改名产物;被换掉后条件
+判断永远不成立,每次回滚白发一次 DDL。已在该处加注释警示。
+
+**验证**:①临时库跑通 000004→000005 全链,列/索引/表全改名且 `bigint unsigned`+唯一性
+(NON_UNIQUE=0)不变;②重复跑 000005 幂等(输出 SELECT 1 跳过);③down 三样全还原;
+④dev 活库应用后数据完好(编号 1/2/3 与计数器 next_no=6 原样,印证只动元数据);
+⑤login/migrate/friend/mission `go build`+`go vet` 全绿;⑥login `go test ./...` 全绿;
+⑦真 MySQL + 真 TiDB 双后端 `PlayerNo_MySQLAndTiDB_*` 5 组×2 后端全绿。
+
+**当前环境状态(重要)**:dev 库已改名,但 **login pod 仍跑旧镜像**(找 register_no)→
+补号任务每 5s 一条 `register_no_sweep_failed` Warn,**pod 1/1 Running 登录不受影响**
+(fail-soft 承诺实测成立)。**待 Codex**:①构建部署新 login 镜像后 Warn 自动消失、编号恢复;
+②cpp pb 同步(rpc 与字段均改名,标 [proto]);③UE 侧字段名与 UI 文案随之更新。

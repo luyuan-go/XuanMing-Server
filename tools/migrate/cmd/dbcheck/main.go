@@ -75,7 +75,7 @@ var registry = map[string]map[string]tableEntry{
 		"player_session_generations": {Class: classBounded}, // 每玩家 1 行(登录定序+SetRole fencing 权威),被玩家数有界
 		"account_devices":            {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_last_login", Columns: []string{"last_login_at"}}}, PendingWhere: "last_login_at < DATE_SUB(NOW(), INTERVAL 0 DAY)"},
 		"account_bans":               {Class: classExempt}, // 运营合规审计,量级 = 运营操作数
-		"register_no_counter":        {Class: classExempt}, // 注册编号全局发号计数器,恒 1 行(发号权威闸;register-no-and-login-surge.md §3.3)
+		"player_no_counter":          {Class: classExempt}, // 角色编号全局发号计数器,恒 1 行(发号权威闸;player-no-and-login-surge.md §3.3)
 	},
 	"pandora_player": {
 		"players":              {Class: classBounded},

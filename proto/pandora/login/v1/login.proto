@@ -44,19 +44,19 @@ service LoginService {
     };
   }
 
-  // GetRegisterNo 立即完成型,查本人注册编号(展示专用,2026-08-10)。
+  // GetPlayerNo 立即完成型,查本人角色编号(展示专用,2026-08-10)。
   //
-  // 为什么需要它:编号由 login 补号任务**异步**分配(register-no-and-login-surge.md §3),
-  // 而本项目「首登即注册」——注册与登录是同一个请求,登录响应里的 register_no 必然是 0。
+  // 为什么需要它:编号由 login 补号任务**异步**分配(player-no-and-login-surge.md §3),
+  // 而本项目「首登即注册」——注册与登录是同一个请求,登录响应里的 player_no 必然是 0。
   // 若只靠 Login 下发,新玩家整个首次会话都只能看到「生成中」(编号约 15s 后才落库,
   // 客户端却已无处可取)。本 RPC 让客户端在拿到 0 时补拉,是异步生成的标准配套。
   //
   // player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含
   // player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
   // 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
-  rpc GetRegisterNo(GetRegisterNoRequest) returns (GetRegisterNoResponse) {
+  rpc GetPlayerNo(GetPlayerNoRequest) returns (GetPlayerNoResponse) {
     option (google.api.http) = {
-      post: "/v1/register-no/get"
+      post: "/v1/player-no/get"
       body: "*"
     };
   }
@@ -137,13 +137,13 @@ message LoginResponse {
   // uint32 配置表 ID(CfgRole.Id,非 snowflake 业务 ID,CLAUDE.md §9.12)。
   uint32 selected_role_id = 11;
   ResumeContext resume_context = 12;
-  // ===== 注册编号(2026-08-10,docs/design/register-no-and-login-surge.md §3)=====
-  // 展示专用的自增注册编号(按注册先后严格连续,全服全局一套)。由 login 补号任务
+  // ===== 角色编号(2026-08-10,docs/design/player-no-and-login-surge.md §3)=====
+  // 展示专用的自增角色编号(按注册先后严格连续,全服全局一套)。由 login 补号任务
   // 异步分配:**0 = 尚未分配**(注册后 ~15s 的补号窗口,客户端显示「生成中」即可)。
   //
   // ⚠️ 「首登即注册」使**首次登录的响应必然是 0**(注册与登录是同一个请求)。客户端
   // 不能只靠本字段,否则新玩家整个首次会话都停在「生成中」——须在拿到 0 后调
-  // GetRegisterNo 补拉(§3.7;拿到非 0 即停)。
+  // GetPlayerNo 补拉(§3.7;拿到非 0 即停)。
   //
   // 语义(§3.6.1,卖角色业务决定):编号**绑定角色实体**而非账号——今 player_id 即角色
   // 身份,一账号建 N 个角色就有 N 个编号;角色过户(卖角色)时随角色走、值不变,
@@ -151,7 +151,7 @@ message LoginResponse {
   //
   // 纯展示字段,客户端不得当身份 ID 用(身份永远是 player_id);服务端也禁止任何服务
   // 拿它当键 / 外键 / 路由键 / 幂等键(设计文档 §3.3 红线)。
-  uint64 register_no = 13;
+  uint64 player_no = 13;
 }
 
 enum ResumeRoute {
@@ -348,20 +348,20 @@ message VerifyDSTicketResponse {
 
 // ===== 选角(2026-07-08)=====
 
-// GetRegisterNoRequest 刻意为空:唯一入参 player_id 只能来自 JWT sub
+// GetPlayerNoRequest 刻意为空:唯一入参 player_id 只能来自 JWT sub
 // (Envoy 注入 x-pandora-player-id),不接受请求体自报——玩家只能查自己的编号。
-message GetRegisterNoRequest {}
+message GetPlayerNoRequest {}
 
-message GetRegisterNoResponse {
+message GetPlayerNoResponse {
   pandora.common.v1.ErrCode code = 1;
-  // register_no: 当前角色的注册编号(展示专用)。**0 = 仍在补号窗口内**(约 15s:补号周期
+  // player_no: 当前角色的角色编号(展示专用)。**0 = 仍在补号窗口内**(约 15s:补号周期
   // 5s + 水位安全滞后 10s),不是错误——客户端应继续显示「生成中」并稍后重试;
   // 拿到非 0 后编号永不再变,应停止轮询。禁作身份键使用(身份永远是 player_id)。
   //
   // 语义(§3.6.1,卖角色业务决定):编号**绑定角色实体**而非账号——今 player_id 即角色身份,
   // 一账号建 N 个角色就有 N 个编号;角色过户(卖角色)时编号随角色走、值不变,
   // 它是角色的资历凭证(编号小=老角色)。故 UI 上应呈现为「该角色的编号」,不是「你的账号编号」。
-  uint64 register_no = 2;
+  uint64 player_no = 2;
 }
 
 message SelectRoleRequest {

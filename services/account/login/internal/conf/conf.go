@@ -71,12 +71,12 @@ type LoginConf struct {
 	// 量级 = 运营操作数,§9.24 登记豁免)。
 	DeviceRetentionDays int `yaml:"device_retention_days,omitempty" json:"device_retention_days,omitempty"`
 
-	// RegisterNoStart 注册编号起始号(register-no-and-login-surge.md 拍板项 A③,默认 1)。
-	// 只在 register_no_counter 首次初始化(INSERT IGNORE)时生效;计数器行已存在后改本值
+	// PlayerNoStart 角色编号起始号(player-no-and-login-surge.md 拍板项 A③,默认 1)。
+	// 只在 player_no_counter 首次初始化(INSERT IGNORE)时生效;计数器行已存在后改本值
 	// 无效——编号严格连续,不允许事后改起点。补号任务本身无开关:批大小/水位滞后是
-	// data 层常量(RegisterNoBatchSize / RegisterNoWatermarkLag),迁移未跑时启动探针
+	// data 层常量(PlayerNoBatchSize / PlayerNoWatermarkLag),迁移未跑时启动探针
 	// fail-soft 停用补号(ERROR 日志),不影响登录主链。
-	RegisterNoStart uint64 `yaml:"register_no_start,omitempty" json:"register_no_start,omitempty"`
+	PlayerNoStart uint64 `yaml:"player_no_start,omitempty" json:"player_no_start,omitempty"`
 
 	// SessionGenerationEnforce 是 SetRole 会话代际强制门(R7 收口,滚动发布分阶段激活)。
 	// false(默认):Login 照常把单调代际写进 MySQL(emit/双写),SetRole 只做 Redis
@@ -247,8 +247,8 @@ func (c *Config) Defaults() {
 	if c.Login.DeviceRetentionDays <= 0 {
 		c.Login.DeviceRetentionDays = 90
 	}
-	if c.Login.RegisterNoStart == 0 {
-		c.Login.RegisterNoStart = 1
+	if c.Login.PlayerNoStart == 0 {
+		c.Login.PlayerNoStart = 1
 	}
 	if c.Login.MockHubDSAddr == "" {
 		c.Login.MockHubDSAddr = "127.0.0.1:7777"

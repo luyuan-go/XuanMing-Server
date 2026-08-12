@@ -62,10 +62,10 @@ type LoginResult struct {
 	// 0 = 从未选过角。客户端登录后进选角界面用此值预选中;确认后调 SelectRole。
 	SelectedRoleID uint32
 
-	// RegisterNo 注册编号(展示专用,register-no-and-login-surge.md §3)。
+	// PlayerNo 角色编号(展示专用,player-no-and-login-surge.md §3)。
 	// 0 = 补号任务尚未分配(客户端显示「生成中」);读取 fail-soft,失败也是 0。
-	RegisterNo uint64
-	Resume     ResumeContextResult
+	PlayerNo uint64
+	Resume   ResumeContextResult
 }
 
 type ResumeContextResult struct {
@@ -328,11 +328,11 @@ func (u *LoginUsecase) strictBattleGateProfile() bool {
 // 客户端仍会叠加自己的退避 + jitter,这里只是下界提示。
 const loginWaitRetryAfterMs uint32 = 1000
 
-// registerNoReadTimeout 是登录主链上纯展示 PK 点查的独立短预算。
+// playerNoReadTimeout 是登录主链上纯展示 PK 点查的独立短预算。
 // 同服务单语句 MySQL 记账的健康 P99 只有毫秒级(touchDeviceTimeout 注释),
 // 250ms 已给跨节点 TiDB 点查留出数十倍余量，同时只占 prod 5s 登录预算的 5%。
 // 超时只取消子 ctx、降级为 0，不得取消父登录 ctx；真实 P99 待洪峰压测复核。
-const registerNoReadTimeout = 250 * time.Millisecond
+const playerNoReadTimeout = 250 * time.Millisecond
 
 // waitLogin 把**会话已建立之后**的暂时性失败收敛成携带新 session 的 WAIT。
 //
@@ -464,14 +464,14 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// hubFenceMatchID:tryBattleReconnect 判定「终局后 TTL 残留」继续走 Hub 时带回的
 	// 原对局 match_id(Battle→Hub 回流 fence),签进 hub 票据 source_match_id claim。
 	// 会话已是当前一代:此后的每一步暂时失败都必须带着它返回 WAIT,而不是丢弃(§9.23)。
-	// 注册编号(展示专用):fail-soft——查失败只打日志置 0(客户端显示「生成中」),
+	// 角色编号(展示专用):fail-soft——查失败只打日志置 0(客户端显示「生成中」),
 	// 绝不因展示字段拒登录;存量库未跑 pandora_account 000004 迁移时同样落此分支。
-	registerNoCtx, registerNoCancel := context.WithTimeout(ctx, registerNoReadTimeout)
-	registerNo, rnErr := u.repo.GetRegisterNo(registerNoCtx, playerID)
-	registerNoCancel()
+	playerNoCtx, playerNoCancel := context.WithTimeout(ctx, playerNoReadTimeout)
+	playerNo, rnErr := u.repo.GetPlayerNo(playerNoCtx, playerID)
+	playerNoCancel()
 	if rnErr != nil {
-		h.Warnw("msg", "register_no_read_failed", "err", rnErr, "player_id", playerID)
-		registerNo = 0
+		h.Warnw("msg", "player_no_read_failed", "err", rnErr, "player_id", playerID)
+		playerNo = 0
 	}
 
 	base := &LoginResult{
@@ -480,7 +480,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		SessionExpMs: sessExpMs,
 		RegionID:     regionID,
 		CellID:       cellID,
-		RegisterNo:   registerNo,
+		PlayerNo:     playerNo,
 	}
 	// 交付前置终检:凭 base 交付 session 同样要过 fenceLoginDelivery(见下方 R5 复审 P0-5
 	// 注释)。抽成闭包,WAIT 与正常返回共用同一道门,避免 WAIT 路径成为绕过终检的后门。
@@ -509,7 +509,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 			if ferr := u.fenceLoginDelivery(ctx, playerID, sessJTI); ferr != nil {
 				return nil, ferr
 			}
-			res.RegisterNo = registerNo // 重连路径同样带出注册编号(展示字段,与路由无关)
+			res.PlayerNo = playerNo // 重连路径同样带出角色编号(展示字段,与路由无关)
 			return res, nil
 		}
 		hubFenceMatchID = terminalFence
@@ -1805,7 +1805,7 @@ func (u *LoginUsecase) RequireCurrentSessionJTI(ctx context.Context, playerID ui
 	return u.requireCurrentSession(ctx, playerID, jti)
 }
 
-// GetRegisterNo 查**当前角色**的注册编号(展示专用,register-no-and-login-surge.md §3)。
+// GetPlayerNo 查**当前角色**的角色编号(展示专用,player-no-and-login-surge.md §3)。
 //
 // 入参名为 playerID 是历史口径:今天 player_id 一身兼两职(账号身份 + 角色身份)。
 // 编号语义上绑定**角色实体**(§3.6.1,卖角色业务决定:一账号建 N 角色 = N 个编号,
@@ -1820,9 +1820,9 @@ func (u *LoginUsecase) RequireCurrentSessionJTI(ctx context.Context, playerID ui
 // 刻意不做会话现行性(sjti)复核:本 RPC 只读且只能读自己,零副作用、不发凭据、不改归属,
 // 顶号场景下旧设备读到自己的展示编号无任何安全含义。加 fencing 只会让「被顶号后界面
 // 显示异常」多一种表现,不增加任何保护(对比 SelectRole 必须复核——它签发 hub 票据)。
-func (u *LoginUsecase) GetRegisterNo(ctx context.Context, playerID uint64) (uint64, error) {
+func (u *LoginUsecase) GetPlayerNo(ctx context.Context, playerID uint64) (uint64, error) {
 	if playerID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
-	return u.repo.GetRegisterNo(ctx, playerID)
+	return u.repo.GetPlayerNo(ctx, playerID)
 }

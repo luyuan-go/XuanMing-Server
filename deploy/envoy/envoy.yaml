@@ -159,12 +159,12 @@ static_resources:
                   path: "/pandora.login.v1.LoginService/SelectRole"
                 requires:
                   provider_name: "pandora_session"
-              # login.GetRegisterNo 查本人注册编号(2026-08-10):需要 SessionToken,
+              # login.GetPlayerNo 查本人角色编号(2026-08-10):需要 SessionToken,
               # player_id 从 sub claim 注入 x-pandora-player-id,请求体为空不含自报身份。
               # 必须列在此处——rules 未列到的 path 默认放行(不验签),那样上游拿不到
               # x-pandora-player-id,服务端会一律 ErrUnauthorized。
               - match:
-                  path: "/pandora.login.v1.LoginService/GetRegisterNo"
+                  path: "/pandora.login.v1.LoginService/GetPlayerNo"
                 requires:
                   provider_name: "pandora_session"
               # push.Subscribe 必须带 SessionToken(玩家长连接订阅,W3 ④ kafka 路由依赖 player_id)

@@ -1,6 +1,6 @@
-# 注册编号(register_no)与开服登录/注册洪峰应对
+# 角色编号(player_no)与开服登录/注册洪峰应对
 
-> 2026-08-09。触发:策划要求给玩家一个**自增的注册编号**(对标梦幻西游的玩家编号),
+> 2026-08-09。触发:策划要求给玩家一个**自增的角色编号**(对标梦幻西游的玩家编号),
 > 与既有 snowflake `player_id` 并存。讨论过程中暴露出更大的前置问题:开服首日
 > 「首登即注册」洪峰打在哪里、现有防线是什么、缺口是什么。本文一并定案。
 > 状态:**设计稿,待拍板**(§6 拍板清单:策划三问 + bcrypt cost + 排队立项)。
@@ -15,7 +15,7 @@
    要素),过户时随角色走、值不变——故**一账号建 N 个角色 = N 个编号**。今天 `player_id`
    一身兼两职(账号身份+角色身份),现实现按 `player_id` 编号即已正确,代码零改动。
    ⚠️ 本文早期版本曾写「编号必须跟 account_id 走」,**该结论已作废**,勿据此推导。
-1. **注册编号方案**:`accounts` 加 `register_no` 列(注册时留空)+ 全局计数器表 +
+1. **角色编号方案**:`accounts` 加 `player_no` 列(注册时留空)+ 全局计数器表 +
    **异步批量补号任务**(单事务「锁计数器行 → 批量编号 → 推进计数器」,多副本天然互斥,
    无需 leader election)。**发号序列**严格连续、严格按创建先后;登录/注册关键路径**零改动、零新热点**。
    (删角色不回收编号 → 存活集合可有洞、最大号 = 累计创建数,§3.6.2)
@@ -23,10 +23,10 @@
    TiDB `AUTO_INCREMENT`(本仓已论证否决,见 §2.4)。
 2. **架构定性**:本项目是**全区全服单一逻辑世界**,不是分区分服;region/cell 是部署维度不外露
    (scale-cellular-20m.md 不变量「客户端最小视图」),账号命名空间全局一套(`uk_account`)。
-   所以「注册编号」语义上等价于一个巨服的服内序号——梦幻西游靠分服号段回避的全局问题,
+   所以「角色编号」语义上等价于一个巨服的服内序号——梦幻西游靠分服号段回避的全局问题,
    我们必须正面解,但解出来的结果也更强(真·全局连续,永无合服重编号)。
 3. **关键现状**:生产环境**今天不存在注册写路径**(`dev_auto_register`/`dev_skip_password`
-   prod 均 false,「正式注册流程不属 login 职责」且本仓无注册服务)。注册编号方案对
+   prod 均 false,「正式注册流程不属 login 职责」且本仓无注册服务)。角色编号方案对
    「谁写 accounts」零假设——补号任务只看表,未来正式注册流程接入时无需改造。
 4. **洪峰防线现状**:有 BBR 自适应限流(prod 机械强制 14 服务)、client 熔断、KillSwitch、
    TiDB schema 打散;**没有** Envoy 边缘速率闸、**没有**登录排队/开服放量机制、
@@ -38,7 +38,7 @@
 
 ### 1.1 需求
 
-策划希望看到**注册编号**:自增、可读、反映注册先后。与 `player_id`(snowflake,
+策划希望看到**角色编号**:自增、可读、反映注册先后。与 `player_id`(snowflake,
 uint64,无业务含义)并存,不替代。
 
 **编号的归属主体是「角色」**(2026-08-10 用户拍板,§3.6.1):本项目角色可交易(卖角色),
@@ -93,10 +93,10 @@ uint64,无业务含义)并存,不替代。
   账号库是逻辑单点(单一 schema)恰好满足。初稿此处写的「注册是账号事件」是被推翻前提的
   残留论证,结论(挂账号库)不变但理由作废。
 
-  **由此导出的改造期硬约束**(多角色立项时必须先答):`register_no` + `uk_register_no`
+  **由此导出的改造期硬约束**(多角色立项时必须先答):`player_no` + `uk_player_no`
   随 `player_id` 落到角色表后,**角色表本身落在哪个库**决定唯一性怎么保:
-  - 角色表仍在**全局单点库** → 现状不变,`uk_register_no` 继续是全局唯一索引兜底;
-  - 角色表进**按 player_id 分片的玩家库** → `uk_register_no` 退化为**分片内**唯一,
+  - 角色表仍在**全局单点库** → 现状不变,`uk_player_no` 继续是全局唯一索引兜底;
+  - 角色表进**按 player_id 分片的玩家库** → `uk_player_no` 退化为**分片内**唯一,
     数据库层不再能兜住跨分片重号。此时全局唯一性**只**由补号事务(计数器行锁 + 严格
     连续分配)保证,uk 从「防第二写者的硬兜底」降级为「分片内软兜底」——**必须显式接受
     这一降级并在改造文档中记录**,不能默认 uk 还在保护全局唯一(§16.1 检查后执行)。
@@ -105,7 +105,7 @@ uint64,无业务含义)并存,不替代。
 social TiDB/总线/matchmaker 但**未点名账号库落点**。若未来按 region 切账号库(国服/海外),
 要同时新解:①账号名唯一性跨 region(全局唯一性层或账号名带 region 命名空间);
 ②编号计数器落点——**那才是「独立编号权威(服务/小库)」的真实需求出现点**(§3.4 用户
-提案在该终态是对的形状),迁移路径干净:计数器+补号任务整体搬走,消费方只认 `register_no`
+提案在该终态是对的形状),迁移路径干净:计数器+补号任务整体搬走,消费方只认 `player_no`
 字段。现状账号库是全服单点 TiDB,本方案按此设计。
 
 ---
@@ -123,8 +123,8 @@ social TiDB/总线/matchmaker 但**未点名账号库落点**。若未来按 reg
 - 但压测例外:robot/stress 每 VU 首登靠 `devAutoRegister` 自动建号(vu.go),
   即**压测环境会真实打注册路径**——这是补号任务的天然验证通道。
 
-设计含义:注册编号**挂在表上而不是挂在某条代码路径上**。补号任务只认
-「`accounts` 里 `register_no IS NULL` 的行」,无论行是 dev 懒注册、未来的正式注册服务、
+设计含义:角色编号**挂在表上而不是挂在某条代码路径上**。补号任务只认
+「`accounts` 里 `player_no IS NULL` 的行」,无论行是 dev 懒注册、未来的正式注册服务、
 还是运营导入写进来的,一视同仁。正式注册流程立项时**不需要**为编号做任何事。
 
 ### 2.2 一次登录的服务端账单(洪峰的分母)
@@ -171,7 +171,7 @@ guild 代码用法 =「INSERT..ON DUPLICATE 占位 → `SELECT..FOR UPDATE` 锁�
 
 ---
 
-## 3. 注册编号方案
+## 3. 角色编号方案
 
 ### 3.1 语义先拍板(策划三问)
 
@@ -182,7 +182,7 @@ guild 代码用法 =「INSERT..ON DUPLICATE 占位 → `SELECT..FOR UPDATE` 锁�
 | ⓪ **归属主体** | 账号 vs **角色** | ✅ **角色**(用户拍板,§3.6.1):项目卖角色/可过户,编号是角色资历凭证,随角色走;一账号建 N 角色 = N 个编号。代码零改动(今 `player_id` 即角色身份) |
 | ① 要不要严格连续无空洞 | 严格连续(编号≈第 N 个创建,最大号≈累计总量) vs 大致递增有洞 | ✅ **分配时刻严格连续**(「自增编号」的直觉语义,实现代价不更高,见 §3.2)。**删角色不回收编号**(已拍板,§3.6.2)→ 删除会留洞,故「严格连续」的准确表述是**发号序列连续**、存活集合可有洞;最大号 = **累计创建**角色数 |
 | ② 给谁看 | 仅 GM/运营后台 vs 客户端玩家可见 | ✅ **客户端玩家可见**(用户拍板)。服务端 + UE 本地链路已落码;编译/E2E 边界见 §3.5 |
-| ③ 起始号 | 1 vs 好看号段(如 100001) | ✅ login 配置 `register_no_start`,**默认 1**;只在计数器首次初始化生效,之后改配置无效 |
+| ③ 起始号 | 1 vs 好看号段(如 100001) | ✅ login 配置 `player_no_start`,**默认 1**;只在计数器首次初始化生效,之后改配置无效 |
 
 ### 3.2 选型:为什么是「异步批量补号」
 
@@ -202,15 +202,15 @@ guild 代码用法 =「INSERT..ON DUPLICATE 占位 → `SELECT..FOR UPDATE` 锁�
 ```sql
 -- accounts 加列(NULL = 未编号;uk 兜底防双号,MySQL/TiDB unique 均允许多 NULL)
 ALTER TABLE accounts
-    ADD COLUMN register_no BIGINT UNSIGNED NULL COMMENT '注册编号(展示专用,禁作身份键/外键;NULL=待补号)',
-    ADD UNIQUE KEY uk_register_no (register_no);
+    ADD COLUMN player_no BIGINT UNSIGNED NULL COMMENT '角色编号(展示专用,禁作身份键/外键;NULL=待补号)',
+    ADD UNIQUE KEY uk_player_no (player_no);
 
 -- 全局计数器(单行;next_no = 下一个待发号)
-CREATE TABLE IF NOT EXISTS register_no_counter (
+CREATE TABLE IF NOT EXISTS player_no_counter (
     id       TINYINT UNSIGNED NOT NULL,
     next_no  BIGINT UNSIGNED  NOT NULL,
     PRIMARY KEY (id)
-) COMMENT='注册编号全局计数器(单行 id=1;补号事务 FOR UPDATE 锁行即互斥)';
+) COMMENT='角色编号全局计数器(单行 id=1;补号事务 FOR UPDATE 锁行即互斥)';
 ```
 
 **补号任务**(挂 login 既有后台任务循环,与 `PurgeStaleDevices` 并列——§16.10 不新建
@@ -219,13 +219,13 @@ CREATE TABLE IF NOT EXISTS register_no_counter (
 ```
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED;                   -- ⓪ 正确性要求,见要点
 BEGIN;
-SELECT next_no FROM register_no_counter WHERE id=1 FOR UPDATE;   -- ① 锁计数器 = 全局互斥
-SELECT player_id FROM accounts WHERE register_no IS NULL
+SELECT next_no FROM player_no_counter WHERE id=1 FOR UPDATE;   -- ① 锁计数器 = 全局互斥
+SELECT player_id FROM accounts WHERE player_no IS NULL
     AND created_at < NOW() - INTERVAL 10 SECOND                   -- ② 水位安全滞后(见要点)
     ORDER BY created_at, player_id LIMIT 500;                     --    + 稳定顺序取批(不加行锁,见要点)
-UPDATE accounts SET register_no = <next_no + rank>
-    WHERE player_id = ? AND register_no IS NULL;                  -- ③ 批内按序编号(复核仍为 NULL)
-UPDATE register_no_counter SET next_no = next_no + <批大小>;      -- ④ 推进计数器
+UPDATE accounts SET player_no = <next_no + rank>
+    WHERE player_id = ? AND player_no IS NULL;                  -- ③ 批内按序编号(复核仍为 NULL)
+UPDATE player_no_counter SET next_no = next_no + <批大小>;      -- ④ 推进计数器
 COMMIT;                                                           -- 回滚则①-④一起消失,无空洞
 ```
 
@@ -250,34 +250,34 @@ COMMIT;                                                           -- 回滚则�
   回滚——两副本互相打回,fail-closed 护栏成了误报源。InnoDB RR 无症状纯属侥幸:read view
   迟到首个一致性读(② 在拿锁之后)才建。RC 下两端都是逐语句新快照,② 发生在拿锁之后即
   必然包含锁前驱批次的提交,affected=0 恢复「真第二写者」语义。刻意不用「给 ② 加
-  `FOR UPDATE`」的修法:InnoDB 下会在 `uk_register_no` 的 NULL 范围产生间隙锁,正是下条
-  要规避的(RC 还顺带免除该间隙锁)。回归:register_no_mysql_test.go ③(修复前 TiDB 必炸)。
-- **不锁账号行(落码修正,2026-08-10)**:取批 SELECT 不加 `FOR UPDATE`——register_no
-  只有本事务(已被计数器锁串行化)写,行锁冗余;且 InnoDB 下扫 `uk_register_no` 的 NULL
-  范围会产生间隙锁,反向阻塞并发注册 INSERT。以 ③ 的 `AND register_no IS NULL` +
+  `FOR UPDATE`」的修法:InnoDB 下会在 `uk_player_no` 的 NULL 范围产生间隙锁,正是下条
+  要规避的(RC 还顺带免除该间隙锁)。回归:player_no_mysql_test.go ③(修复前 TiDB 必炸)。
+- **不锁账号行(落码修正,2026-08-10)**:取批 SELECT 不加 `FOR UPDATE`——player_no
+  只有本事务(已被计数器锁串行化)写,行锁冗余;且 InnoDB 下扫 `uk_player_no` 的 NULL
+  范围会产生间隙锁,反向阻塞并发注册 INSERT。以 ③ 的 `AND player_no IS NULL` +
   RowsAffected==1 复核兜底,复核失败说明计数器锁外存在第二写者,整批回滚 fail-closed。
 - **积压语义**:洪峰下任务落后只表现为「新玩家编号晚几秒~几分钟可见」;查询侧对
-  `register_no IS NULL` 显示「分配中」。
+  `player_no IS NULL` 显示「分配中」。
 - **回填不需要独立步骤(落码简化,2026-08-10)**:存量账号就是「待编号行」,补号任务
   首轮按同一全序自然追平(单轮 drain 上限 20 批 = 1 万行,大存量分多轮);`next_no` 由
-  login 启动期 `INSERT IGNORE` 初始化为配置 `register_no_start`(= 策划三问③,默认 1,
+  login 启动期 `INSERT IGNORE` 初始化为配置 `player_no_start`(= 策划三问③,默认 1,
   计数器已存在后改配置无效)。单一代码路径,无迁移/在线双实现(§15.2)。
-- **查询/下发**:pb 字段 `uint64 register_no`(§5.12 非负默认无符号;0=未分配,
+- **查询/下发**:pb 字段 `uint64 player_no`(§5.12 非负默认无符号;0=未分配,
   与「NULL=待补号」对应,天然满足 proto3 零值语义)。仅当策划三问②选「客户端可见」时
   才加进客户端可见结构并同步 UE。
 
-**红线**(2026-08-10 精确化:原表述「见到 `WHERE register_no =` 直接拒」过粗,会误伤
-客服反查这一**预期用法**):`register_no` 是**纯展示字段**,身份永远是 `player_id`(§9.11)。
+**红线**(2026-08-10 精确化:原表述「见到 `WHERE player_no =` 直接拒」过粗,会误伤
+客服反查这一**预期用法**):`player_no` 是**纯展示字段**,身份永远是 `player_id`(§9.11)。
 边界按「翻译」与「当键」划分:
 
 | | 允许 | 禁止 |
 |---|---|---|
-| 形态 | **一次性翻译**:`register_no` → `player_id`,结果只在本次请求内用,不落库、不传给下游当参数 | **当键使用**:业务表存 `register_no` 列、拿它做 JOIN / 外键 / 幂等键 / 路由键 / 缓存键 |
-| 典型 | 客服工单:玩家报编号 → 运营工具反查 `player_id` → 用 `player_id` 查各业务库流水(§3.6) | 订单表存 `register_no`、按 `register_no` 分片、用它做发放幂等键 |
-| 为何 | 一次索引点查(`uk_register_no`),等价于「查号码簿」;下游只见 `player_id`,零传播 | 见下方四条 |
+| 形态 | **一次性翻译**:`player_no` → `player_id`,结果只在本次请求内用,不落库、不传给下游当参数 | **当键使用**:业务表存 `player_no` 列、拿它做 JOIN / 外键 / 幂等键 / 路由键 / 缓存键 |
+| 典型 | 客服工单:玩家报编号 → 运营工具反查 `player_id` → 用 `player_id` 查各业务库流水(§3.6) | 订单表存 `player_no`、按 `player_no` 分片、用它做发放幂等键 |
+| 为何 | 一次索引点查(`uk_player_no`),等价于「查号码簿」;下游只见 `player_id`,零传播 | 见下方四条 |
 
 **禁止「当键」的四条理由**(任一条都足以致命):
-1. **有未分配窗口**:新注册后约 15s 内 `register_no` 为 NULL/0(补号周期 + 水位滞后),
+1. **有未分配窗口**:新注册后约 15s 内 `player_no` 为 NULL/0(补号周期 + 水位滞后),
    业务逻辑依赖它会在这个窗口静默失败;`player_id` 注册瞬间即有。
 2. **可重编**:迁移回滚、账号库拆分/region 化都可能重分配编号(§1.3 前瞻);
    `player_id` 是 snowflake,永久不变。
@@ -285,8 +285,8 @@ COMMIT;                                                           -- 回滚则�
 4. **跨库**:编号在 `pandora_account`,流水在 inventory / trade / battle / social 各库
    (全部以 `player_id` 为键且有索引,已核)——业务库根本不该知道这个字段存在。
 
-review 判据改为:**`register_no` 出现在 `pandora_account` 以外的任何表定义、或出现在
-非运营工具的服务间参数里,直接拒**;运营工具里的 `WHERE register_no = ?` 是正当用法。
+review 判据改为:**`player_no` 出现在 `pandora_account` 以外的任何表定义、或出现在
+非运营工具的服务间参数里,直接拒**;运营工具里的 `WHERE player_no = ?` 是正当用法。
 
 ### 3.4 变体评估:独立 ID 服务 + 逐个异步申请 + 映射表(2026-08-09 用户提案)
 
@@ -296,7 +296,7 @@ review 判据改为:**`register_no` 出现在 `pandora_account` 以外的任何�
 | 维度 | 提案 | §3.3 方案 | 评估 |
 |---|---|---|---|
 | 异步 + 「生成中」占位 | ✅ | ✅(「分配中」) | **完全一致**——两个方案独立收敛到同一结论:编号必须退出创建关键路径 |
-| 存储形态 | 独立映射表(`register_no` PK ↔ `player_id` uk) | `accounts` 加列 | **等价可选**。映射表优点:不动 accounts DDL、不依赖「谁写 accounts」;缺点:发现待编号行不能再用 `register_no IS NULL` 索引扫,需按 `(created_at, player_id)` 水位游标推进 + 时钟偏差安全滞后(处理 `created_at < now()-10s` 的行),多一套水位状态。加列方案的发现查询天然正确、零状态 |
+| 存储形态 | 独立映射表(`player_no` PK ↔ `player_id` uk) | `accounts` 加列 | **等价可选**。映射表优点:不动 accounts DDL、不依赖「谁写 accounts」;缺点:发现待编号行不能再用 `player_no IS NULL` 索引扫,需按 `(created_at, player_id)` 水位游标推进 + 时钟偏差安全滞后(处理 `created_at < now()-10s` 的行),多一套水位状态。加列方案的发现查询天然正确、零状态 |
 | 分发机制 | 每次创建**逐个请求**ID 服务(push) | 后台任务**批量扫表**(pull) | push 有先天缺陷:INSERT 与「发申请」是无事务的双写,进程在两步之间崩溃/ID 服务不可用 → 该玩家永远没编号,**必须再配一个兜底扫描**才完整;而兜底扫描自身已是完备方案。即 push 不能替代 pull,只能叠在 pull 上换「编号秒级可见」的低延迟——展示场景不需要,按 §15.3 暂不建,留作未来优化位 |
 | 部署形态 | 新增独立服务 | 挂 login 既有后台循环 | 单客户、单功能、无独立状态的「服务」不满足 §15.4 复杂度举证;且编号权威属账号域,留在 login(pandora_account 权威)不新增权威边界。**否决独立服务,保留任务形态** |
 
@@ -317,14 +317,14 @@ review 判据改为:**`register_no` 出现在 `pandora_account` 以外的任何�
 
 | # | 事项 | 落点 | 状态 |
 |---|---|---|---|
-| 1 | DDL:加列 + uk + 计数器表 | deploy/mysql-init/02、deploy/tidb-init/03(TiDB 版 `uk_register_no` 尾部热点在补号 QPS 量级下无碍,不需打散)、tools/migrate pandora_account `000004_register_no`(条件幂等,含 down);角色归属注释对存量库由新增 `000005_register_no_comment` 同步,不改写已发布迁移 | ✅ |
+| 1 | DDL:加列 + uk + 计数器表 | deploy/mysql-init/02、deploy/tidb-init/03(TiDB 版 `uk_player_no` 尾部热点在补号 QPS 量级下无碍,不需打散)、tools/migrate pandora_account `000004_player_no`(条件幂等,含 down);角色归属注释对存量库由新增 `000005_player_no_comment` 同步,不改写已发布迁移 | ✅ |
 | 2 | 回填 | **无独立步骤**:补号任务首轮自然追平(§3.3 要点);`next_no` 起始由 login 启动期初始化 | ✅(简化) |
-| 3 | 补号任务 | login `internal/data/register_no.go`(事务)+ `cmd/login/main.go`(5s ticker,drain 上限 20 批,启动探针 fail-soft)+ conf `register_no_start` | ✅ |
-| 4 | 真 MySQL / 真 TiDB 双后端测试 | `internal/data/register_no_mysql_test.go`:全序/跨批连续、水位滞后、双 sweeper 并发无重号无空洞(= TiDB start_ts 快照缺陷回归,见 §3.3 隔离级别要点)、起始号幂等、缺迁移探针失败(PANDORA_TEST_MYSQL_DSN / PANDORA_TEST_TIDB_DSN 双门控,friend/guild 同款) | ✅ |
-| 5 | 容量/清单登记 | dbcheck registry + login budgets.go + CLAUDE.md §9.24 豁免段:`register_no_counter` 恒 1 行权威闸 | ✅ |
-| 6 | 展示链路(A② 已拍板 2026-08-10:**客户端玩家可见**) | 服务端已落码:proto `LoginResponse.register_no = 13`、`AccountRepo.GetRegisterNo`(**fail-soft**:独立 250ms 查询预算,失败/超时置 0 且不取消登录父 ctx;刻意不并进 FindByAccount——列缺失不能打挂登录整链)、biz 主路径与 battle 重连路径都带出、service 组装 `RegisterNo`。0 = 补号中,客户端显示「生成中」 | ✅ 服务端 |
-| 7 | UE 展示与交付验证(Codex,2026-08-10) | 服务端 C++ pb 以 `[proto]` 提交 `bea78b83`,客户端通过官方 `GenClientProto.ps1 -UpdateLock` 同步并以 `-VerifyOnly` 复验;登录解码→会话态→RoleInfo 全链带出 `register_no`,0 显示「生成中」;login `go build/vet/test`、`Pandora` 与 `PandoraEditor` Development 编译全绿 | ✅ 生成/编译;PIE 与真实登录 E2E 未跑 |
-| 8 | 首次会话补拉闭环(2026-08-10 实测后补) | 服务端新增空请求 `LoginService.GetRegisterNo`、JWT 身份与 Envoy exact rule、`0/OK` 和错误分流;客户端以官方生成器同步协议,登录后用 CoreTicker 补拉并以 attempt / SessionGeneration / PlayerId 围栏保护写回;见 §3.7 | 🟡 服务端和 UE 客户端本地落码、`-UpdateLock` / `-VerifyOnly`、本任务源码编译及 PandoraTests DLL 链接已完成;完整 PandoraEditor 链接被无关 MyMainView 并行改动阻断,新测试 DLL 因旧主 DLL 缺本轮导出而加载失败,三组 Automation 未执行;Envoy 运行态与真实登录 E2E 未验收 |
+| 3 | 补号任务 | login `internal/data/player_no.go`(事务)+ `cmd/login/main.go`(5s ticker,drain 上限 20 批,启动探针 fail-soft)+ conf `player_no_start` | ✅ |
+| 4 | 真 MySQL / 真 TiDB 双后端测试 | `internal/data/player_no_mysql_test.go`:全序/跨批连续、水位滞后、双 sweeper 并发无重号无空洞(= TiDB start_ts 快照缺陷回归,见 §3.3 隔离级别要点)、起始号幂等、缺迁移探针失败(PANDORA_TEST_MYSQL_DSN / PANDORA_TEST_TIDB_DSN 双门控,friend/guild 同款) | ✅ |
+| 5 | 容量/清单登记 | dbcheck registry + login budgets.go + CLAUDE.md §9.24 豁免段:`player_no_counter` 恒 1 行权威闸 | ✅ |
+| 6 | 展示链路(A② 已拍板 2026-08-10:**客户端玩家可见**) | 服务端已落码:proto `LoginResponse.player_no = 13`、`AccountRepo.GetPlayerNo`(**fail-soft**:独立 250ms 查询预算,失败/超时置 0 且不取消登录父 ctx;刻意不并进 FindByAccount——列缺失不能打挂登录整链)、biz 主路径与 battle 重连路径都带出、service 组装 `PlayerNo`。0 = 补号中,客户端显示「生成中」 | ✅ 服务端 |
+| 7 | UE 展示与交付验证(Codex,2026-08-10) | 服务端 C++ pb 以 `[proto]` 提交 `bea78b83`,客户端通过官方 `GenClientProto.ps1 -UpdateLock` 同步并以 `-VerifyOnly` 复验;登录解码→会话态→RoleInfo 全链带出 `player_no`,0 显示「生成中」;login `go build/vet/test`、`Pandora` 与 `PandoraEditor` Development 编译全绿 | ✅ 生成/编译;PIE 与真实登录 E2E 未跑 |
+| 8 | 首次会话补拉闭环(2026-08-10 实测后补) | 服务端新增空请求 `LoginService.GetPlayerNo`、JWT 身份与 Envoy exact rule、`0/OK` 和错误分流;客户端以官方生成器同步协议,登录后用 CoreTicker 补拉并以 attempt / SessionGeneration / PlayerId 围栏保护写回;见 §3.7 | 🟡 服务端和 UE 客户端本地落码、`-UpdateLock` / `-VerifyOnly`、本任务源码编译及 PandoraTests DLL 链接已完成;完整 PandoraEditor 链接被无关 MyMainView 并行改动阻断,新测试 DLL 因旧主 DLL 缺本轮导出而加载失败,三组 Automation 未执行;Envoy 运行态与真实登录 E2E 未验收 |
 
 ### 3.6 客服/运营按编号反查玩家(2026-08-10 用户提出,**待落地**)
 
@@ -335,7 +335,7 @@ review 判据改为:**`register_no` 出现在 `pandora_account` 以外的任何�
 **链路形状**(三跳,全部是索引点查):
 
 ```
-玩家报编号 → ① accounts WHERE register_no=?  → player_id   (uk_register_no,pandora_account)
+玩家报编号 → ① accounts WHERE player_no=?  → player_id   (uk_player_no,pandora_account)
            → ② 各业务库 WHERE player_id=?     → 流水/订单/战报/邮件
            → ③ 结果只回显给客服,player_id 不落进任何新表
 ```
@@ -350,9 +350,9 @@ player `GetProfile`)。
 
 **今天的缺口(两个,都不大)**:
 
-1. **反查方法不存在**:`AccountRepo` 只有 `GetRegisterNo(player_id) → register_no`
-   (正向,给登录下发用);没有 `FindByRegisterNo(register_no) → player_id`。
-   索引 `uk_register_no` 已经建好,补一个方法即可,**不需要任何 schema 改动**。
+1. **反查方法不存在**:`AccountRepo` 只有 `GetPlayerNo(player_id) → player_no`
+   (正向,给登录下发用);没有 `FindByPlayerNo(player_no) → player_id`。
+   索引 `uk_player_no` 已经建好,补一个方法即可,**不需要任何 schema 改动**。
 2. **没有「查询类」运营接口**——但**运维通道本身已存在**,别重复造:
    - `GmService`(`proto/pandora/gm/v1/gm.proto`,2026-07-07,与 ds_allocator 同进程):
      已有的 GM / 运维指令通道,**内部接口不经 Envoy 暴露给玩家客户端**。但它是**写向**的
@@ -365,11 +365,11 @@ player `GetProfile`)。
    - 客户端面隔离的现成模式:owner 服务那样在 Envoy 客户端入口
      `direct_response: 403` 挡掉(deploy/envoy/envoy.yaml「内部系统接口,不对客户端开放」)。
 
-   即缺的不是「通道」而是「查询接口 + 前端」;`FindByRegisterNo` 应挂 login(账号库权威
+   即缺的不是「通道」而是「查询接口 + 前端」;`FindByPlayerNo` 应挂 login(账号库权威
    在此),按上述既有约定以内部/运营面暴露,不要塞进 `GmService`(那是战斗内写指令通道,
    职责与生命周期都不同)。
 
-**落地建议**(等运营后台立项时一并做,§15.3 不提前建):`FindByRegisterNo` 放 login
+**落地建议**(等运营后台立项时一并做,§15.3 不提前建):`FindByPlayerNo` 放 login
 (账号库权威在此),作内部 RPC 暴露,鉴权 + 脱敏 + 不经 Envoy 对客户端开放(CLAUDE.md §5.11
 对「运维/调试 RPC」的既有要求)。**注意查不到的两种情形要分开回话**:编号不存在(打错了)
 vs 编号存在但玩家刚注册还没补号——后者客服看到的是玩家界面显示「生成中」,不是查询故障。
@@ -387,14 +387,14 @@ vs 编号存在但玩家刚注册还没补号——后者客服看到的是玩�
 - 过户时编号必须**跟着角色走**。若编号挂账号,角色卖给新账号后编号即变,角色资历凭空蒸发;
 - 推论:编号**不能**是账号的派生属性,必须是角色行上的独立列(现实现已满足)。
 
-**现状即正确形态,代码零改动**:今天 `register_no` 挂 `accounts` 表,而该表 PK 是
+**现状即正确形态,代码零改动**:今天 `player_no` 挂 `accounts` 表,而该表 PK 是
 `player_id`——`player_id` 承担的正是角色身份(`players`/`player_roles` PK 同为它)。
-改造时 `player_id` 下沉为角色实体 ID,`register_no` 随之落到角色表,天然「一角色一编号」。
+改造时 `player_id` 下沉为角色实体 ID,`player_no` 随之落到角色表,天然「一角色一编号」。
 
 改造时的落点(两处,均小):
-① `register_no` + `uk_register_no` 随 `player_id` 落到**角色表**;`accounts` 分裂出的纯账号表
+① `player_no` + `uk_player_no` 随 `player_id` 落到**角色表**;`accounts` 分裂出的纯账号表
    (PK=`account_id`)**不带**该列;
-② 补号任务扫描目标改为角色表的 `register_no IS NULL`;`GetRegisterNo` RPC 仍按 `player_id`
+② 补号任务扫描目标改为角色表的 `player_no IS NULL`;`GetPlayerNo` RPC 仍按 `player_id`
    (=角色 ID)查,**无需改签名**——它本来就是「查当前角色的编号」。
 
 **由此新生的待拍板项(§6 已登记)**:
@@ -406,16 +406,16 @@ vs 编号存在但玩家刚注册还没补号——后者客服看到的是玩�
 
 ### 3.6.2 删角色不回收编号(2026-08-10 用户拍板)
 
-**决定**:角色被删除后,其 `register_no` **永不回收**、永不再分配给任何其它角色。
+**决定**:角色被删除后,其 `player_no` **永不回收**、永不再分配给任何其它角色。
 
 **理由**:编号是**历史事实**(「全服第 N 个被创建的角色」)。回收会让两个不同角色在不同
 时间持有同一编号——在**卖角色**业务里这是直接的欺诈载体(买家按编号认老号,回收后
 新角色可冒充已注销的老号资历),且交易纠纷追溯将失去唯一锚点。
 
 **机制保证(现实现已天然满足,无需新增代码)**:
-- 计数器 `register_no_counter.next_no` **只增不减**——补号事务只做 `next_no = next_no + N`,
+- 计数器 `player_no_counter.next_no` **只增不减**——补号事务只做 `next_no = next_no + N`,
   无任何回退路径;发号序列因此单调,**物理上不可能重发已发过的号**;
-- 补号任务只处理 `register_no IS NULL` 的行,已编号行永不重编;删除的行不会被重新扫到;
+- 补号任务只处理 `player_no IS NULL` 的行,已编号行永不重编;删除的行不会被重新扫到;
 - 故「不回收」不依赖任何删除逻辑的配合:**无论角色行是物理删还是软删,都不会重号**。
 
 **代价(须让策划知道口径)**:
@@ -424,31 +424,70 @@ vs 编号存在但玩家刚注册还没补号——后者客服看到的是玩�
 - 编号在存活集合上**有洞**(§3.1 ① 的准确表述:发号序列连续,存活集合可有洞)。
 
 **运维红线**:任何「重置计数器」「按存活角色回填编号」的操作都会打破上述保证并制造重号,
-一律禁止。计数器只允许由补号事务推进;`register_no_counter` 已登记 §9.24 豁免(不清理)。
+一律禁止。计数器只允许由补号事务推进;`player_no_counter` 已登记 §9.24 豁免(不清理)。
 
 **衍生问题(与本拍板独立,留给多角色改造立项时定)**:删角色若采用**物理删除**,该编号将
 「查无此人」——客服/交易纠纷拿编号追溯时查不到任何记录(编号既不回收也不指向任何行)。
 若希望编号永久可追溯,需在改造时选择**软删除**(保留角色行 + 删除标记)。本文不预判,
 因为它取决于角色删除的产品形态(是否可恢复、是否有冷却期),不属编号方案职责。
 
+### 3.6.3 字段改名 register_no → player_no(2026-08-10 用户拍板)
+
+**决定**:列 / 表 / 索引 / RPC / proto 字段一律由 `register_no` 改为 `player_no`。
+
+**理由**:编号已拍板绑定角色实体(§3.6.1),而「register(注册)」在通行语境里是**账号**动作
+——角色是**创建**出来的。留 `register_no` 会持续把人往「账号级编号」引:注释能防一时,
+名字防一世。改后与既有命名体系配对成立:
+
+| 标识 | 含义 | 给谁看 |
+|---|---|---|
+| `player_id` | 角色实体 ID(snowflake) | 系统 |
+| `player_no` | 角色展示序号(本方案) | 策划 / 玩家 / 客服 |
+| `role_id` | 职业配置 ID(CfgRole.Id) | 配置表 |
+
+**刻意不叫 `role_no`**:`role_id` 已被职业配置占用,再来一个 `role_*` 会让「职业」与
+「角色序号」两个概念在命名上纠缠,比改名前更糟。
+
+**为什么此刻改**:生产**零注册路径**(§2.1)无存量数据,dev 库可重建,客户端尚未正式消费
+该字段——现在是改名成本的最低点,每拖一天要碰的地方就多一处。
+
+**改名清单**(全部已落码):列 `player_no`、唯一索引 `uk_player_no`、计数器表
+`player_no_counter`、Go(`SweepPlayerNo` / `EnsurePlayerNoCounter` / `GetPlayerNo` /
+`PlayerNoBatchSize` / `PlayerNoWatermarkLag` / 配置 `player_no_start`)、
+proto(`LoginResponse.player_no`、`GetPlayerNoRequest/Response`、rpc `GetPlayerNo`、
+HTTP `/v1/player-no/get`)、envoy jwt_authn rules path、日志 msg(`player_no_assigned` 等)、
+文件名(`data/player_no.go`、本文档)。中文措辞统一为「角色编号」。
+
+**迁移 `000005_rename_player_no`**(已在临时库验证 up / 重复跑幂等 / down 回滚三项):
+- 四步条件执行:RENAME COLUMN → RENAME INDEX → RENAME TABLE → MODIFY COMMENT;
+- **000004 保持原样**(README 明定迁移一旦执行即 immutable),故两条路径最终一致:
+  用 `deploy/*-init` 建的新库直接就是 `player_no`(本版四步全跳过);用迁移建的库由本版改名;
+- 用 `RENAME COLUMN` 而非 `CHANGE old new <type>`:后者需完整重复列定义,漏写
+  `UNSIGNED`/`NULL` 会**静默**改变列语义;RENAME 不碰类型,是本场景唯一无脑安全的写法;
+- 只改元数据,不重建表、不触碰行数据(dev 库实测:改名后编号 1/2/3 与计数器值原样)。
+
+⚠️ **down.sql 里的 `@old_comment` 必须与 000004 的 COMMENT 逐字一致**(含旧词「注册编号」
+与旧文档名),它是回滚的匹配目标而非本次改名的产物——批量改词时若把它一起换掉,条件判断
+将永远不成立,每次回滚白发一次 DDL。该处已加注释警示(本次改名中真的误伤过一次)。
+
 ### 3.7 首登必见「生成中」缺陷与补拉 RPC(2026-08-10 实测暴露,已修)
 
-**现象**:dev 实测(账号 `test123`)客户端角色界面恒显示「注册编号 生成中」,而库里
-`register_no=1` 早已落好。
+**现象**:dev 实测(账号 `test123`)客户端角色界面恒显示「角色编号 生成中」,而库里
+`player_no=1` 早已落好。
 
 **根因**(不是 bug 在补号任务,任务完全按设计工作):
 
 | 时刻 | 事件 |
 |---|---|
-| 12:08:57 | 首登=注册,`accounts` 落行;此刻 `register_no` 尚为 NULL → `LoginResponse.register_no=0` |
-| 12:09:12 | 补号任务编号成功(`register_no_assigned rows=1`),恰好 15s = 5s 周期 + 10s 水位滞后 |
+| 12:08:57 | 首登=注册,`accounts` 落行;此刻 `player_no` 尚为 NULL → `LoginResponse.player_no=0` |
+| 12:09:12 | 补号任务编号成功(`player_no_assigned rows=1`),恰好 15s = 5s 周期 + 10s 水位滞后 |
 | 之后 | 客户端**无处再取**:编号只在 Login 响应里下发一次,界面「刷新」按钮刷的是角色数据 |
 
 **这不是边缘情况,是 100% 必现**:本项目「首登即注册」(§2.1),注册与登录是同一个请求,
-**任何新玩家的首次会话里 `register_no` 必然是 0**。原设计注释写的「0=未分配,下次登录
+**任何新玩家的首次会话里 `player_no` 必然是 0**。原设计注释写的「0=未分配,下次登录
 即有值」低估了它——等于「每个新玩家第一次进游戏都看不到自己的编号」,产品上不可接受。
 
-**修法(已落码)**:加 `LoginService.GetRegisterNo` 补拉 RPC——异步生成 + 客户端补拉是
+**修法(已落码)**:加 `LoginService.GetPlayerNo` 补拉 RPC——异步生成 + 客户端补拉是
 标准配套,而不是把发号塞回登录路径(那正是 §3.2 否决的方案 A)。要点:
 - **入参为空**:`player_id` 只从 JWT sub 取(Envoy 注入 `x-pandora-player-id`,同 SelectRole
   纪律),玩家只能查自己;该 path **必须**列进 `envoy.yaml` 的 `jwt_authn rules`
@@ -459,8 +498,8 @@ vs 编号存在但玩家刚注册还没补号——后者客服看到的是玩�
 - **刻意不做会话现行性(sjti)复核**:只读、只能读自己、零副作用、不发凭据;顶号后旧
   设备读到自己的展示编号无安全含义。对比 SelectRole 必须复核——它签发 hub 票据。
 
-**测试**:`internal/service/login_register_no_rpc_test.go` 四条(正常补拉 / 0 是 OK 非错误 /
-无 player_id 硬拒 / repo 故障透传);`login_register_no_test.go`(Codex)覆盖 Login 响应带出。
+**测试**:`internal/service/login_player_no_rpc_test.go` 四条(正常补拉 / 0 是 OK 非错误 /
+无 player_id 硬拒 / repo 故障透传);`login_player_no_test.go`(Codex)覆盖 Login 响应带出。
 
 **客户端实现(已落码)**:
 - 官方 `GenClientProto.ps1 -UpdateLock` 已把协议锁推进到服务端 `11320853`,随后
@@ -469,8 +508,8 @@ vs 编号存在但玩家刚注册还没补号——后者客服看到的是玩�
   0.75s jitter 单飞补拉;`OK+0` 保持“生成中”,非 0 写回即停。真实错误显式停轮询并显示失败,
   玩家可点角色界面刷新按钮重试,不得以 0 掩盖。
 - 回调以 attempt、`SessionGeneration`、`PlayerId` 三重围栏防止登出/切号后的迟到写回;
-  专用写回入口不推进会话世代。UI 分别展示实际编号、“注册编号 生成中”和
-  “注册编号 获取失败，点击刷新”。
+  专用写回入口不推进会话世代。UI 分别展示实际编号、“角色编号 生成中”和
+  “角色编号 获取失败，点击刷新”。
 - 新增三类 Automation:codec 契约、当前会话写回围栏、RPC/source 契约。
 
 **当前交付边界**:服务端源码链与 Go 生成物已进入稳定提交 `11320853`,但该提交标题遗漏了
@@ -485,7 +524,7 @@ loaded):新测试 DLL 引用了本轮新增导出,旧主 DLL 不具备。因此�
 仍须在该无关阻断清除后跑通完整 UE 目标,并完成“首登生成中 → 无需重登变为非 0”的
 真实 Envoy/JWT E2E;生成成功或测试 DLL 链接成功均不能代替这两道门禁。
 
-**待复核边界**:当前 `AccountRepo.GetRegisterNo` 把 `sql.ErrNoRows` 与 `register_no IS NULL`
+**待复核边界**:当前 `AccountRepo.GetPlayerNo` 把 `sql.ErrNoRows` 与 `player_no IS NULL`
 都映射为 `0,nil`。在“有效 JWT 的账号行必然存在”不变量下,正常补号窗口语义成立;若未来允许
 账号行删除或出现数据损坏,缺行也会表现为 `OK+0`。届时必须把缺行改成非 OK,不能让客户端永久空等。
 
@@ -559,12 +598,12 @@ bcrypt/DB 之前挡住流量的层。
 
 | # | 待拍板 | 责任方 | 依赖 |
 |---|---|---|---|
-| A | 策划三问:①严格连续 ②给谁看 ③起始号;④存储形态 | 策划/用户 | **全部已定**(2026-08-10):①严格连续+④加列已落码;②用户拍板=客户端玩家可见,服务端与 UE 本地链路已落码(完整编译/E2E 边界见 §3.5 第 6/7/8 项);③= login 配置 `register_no_start`(默认 1,计数器初始化前可改) |
+| A | 策划三问:①严格连续 ②给谁看 ③起始号;④存储形态 | 策划/用户 | **全部已定**(2026-08-10):①严格连续+④加列已落码;②用户拍板=客户端玩家可见,服务端与 UE 本地链路已落码(完整编译/E2E 边界见 §3.5 第 6/7/8 项);③= login 配置 `player_no_start`(默认 1,计数器初始化前可改) |
 | B | bcrypt cost:维持 4(明示接受弱点)或升 10(账单进容量口径,存量懒升级) | 用户 | 与 C 联动 |
 | C | 登录排队/放量立项 + Envoy local_ratelimit 优先级提级 | 用户 | §5.4 洪峰压测数据 |
 | D | 洪峰压测专项排期 | 用户 | robot/stress 现有能力即可开跑 |
 | ~~E~~ | **删角色不回收编号** | 用户 | ✅ **已拍板(2026-08-10)**,详见 §3.6.2 |
-| F | **账号是否也要独立编号**(与角色编号并存):若策划要「这个**账号**是第几个注册的」,须在账号表另起一个计数器与列,**不得复用** `register_no`;现不预留(§15.3) | 策划/用户 | 同上 |
+| F | **账号是否也要独立编号**(与角色编号并存):若策划要「这个**账号**是第几个注册的」,须在账号表另起一个计数器与列,**不得复用** `player_no`;现不预留(§15.3) | 策划/用户 | 同上 |
 
 ## 7. 关联
 

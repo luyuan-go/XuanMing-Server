@@ -130,10 +130,10 @@ rg -n "dsn:|require_tidb:" run/cluster/etc/login.yaml `
 
 kubectl -n pandora exec deploy/mysql -- `
   mysql -upandora -ppandora_dev_pwd -D pandora_account -N `
-  -e "SELECT VERSION(), DATABASE(); SHOW COLUMNS FROM accounts LIKE 'register_no'; SELECT account, player_id, register_no FROM accounts WHERE account='test123';"
+  -e "SELECT VERSION(), DATABASE(); SHOW COLUMNS FROM accounts LIKE 'player_no'; SELECT account, player_id, player_no FROM accounts WHERE account='test123';"
 ```
 
-若在 `:4000` 的 TiDB 里看到“没有 `register_no` 列”,但运行中的 K8s login 实际连
+若在 `:4000` 的 TiDB 里看到“没有 `player_no` 列”,但运行中的 K8s login 实际连
 `mysql:3306`,这只是查错了并存数据库,不能据此判定迁移缺失。反过来要验证 TiDB 时,必须用
 `login-dev-tidb.yaml` 启 login,并把检查与集成测试 DSN 一起切到 TiDB。
 

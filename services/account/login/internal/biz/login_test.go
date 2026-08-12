@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	testSecret     = "pandora-dev-jwt-secret-change-me-32!" // 36 字节,满足 HS256 ≥32
-	testRegisterNo = uint64(100001)
+	testSecret   = "pandora-dev-jwt-secret-change-me-32!" // 36 字节,满足 HS256 ≥32
+	testPlayerNo = uint64(100001)
 )
 
 // mustBcrypt 用 DevCost 哈希明文密码,失败 fatal。
@@ -45,8 +45,8 @@ type fakeAccountRepo struct {
 	playerID     uint64
 	passwordHash string
 	banned       bool
-	registerNo   uint64
-	registerNoFn func(context.Context) (uint64, error)
+	playerNo     uint64
+	playerNoFn   func(context.Context) (uint64, error)
 }
 
 func (f *fakeAccountRepo) FindByAccount(_ context.Context, _ string) (uint64, string, error) {
@@ -57,11 +57,11 @@ func (f *fakeAccountRepo) CheckBanned(_ context.Context, _ uint64, _ string) (bo
 	return f.banned, nil
 }
 func (f *fakeAccountRepo) TouchDevice(_ context.Context, _ uint64, _ string) error { return nil }
-func (f *fakeAccountRepo) GetRegisterNo(ctx context.Context, _ uint64) (uint64, error) {
-	if f.registerNoFn != nil {
-		return f.registerNoFn(ctx)
+func (f *fakeAccountRepo) GetPlayerNo(ctx context.Context, _ uint64) (uint64, error) {
+	if f.playerNoFn != nil {
+		return f.playerNoFn(ctx)
 	}
-	return f.registerNo, nil
+	return f.playerNo, nil
 }
 
 // fakeSessionRepo 记住 Set 写入的 jti 并在 GetJTI 返回真实值:R5 复审 P0-5 起 Login
@@ -264,7 +264,7 @@ func newTestUsecaseWithNotifier(t *testing.T, hub data.HubAssigner, notifier dat
 	}
 	// bcrypt 哈希一个固定密码 "pw",让 passwd.Verify 通过。
 	hash := mustBcrypt(t, "pw")
-	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash, registerNo: testRegisterNo}
+	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash, playerNo: testPlayerNo}
 	sf := snowflake.NewNode(1)
 	uc := NewLoginUsecase(repo, newFakeSessionRepo(), notifier, hub, &fakeRoleRepo{roleID: 7}, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, nil, false)
 	ticketUC := NewTicketUsecase(signer, verifier, nil)
@@ -390,18 +390,18 @@ func TestLogin_HubAssignerSuccess(t *testing.T) {
 	if res.HubTicketExpMs <= 0 {
 		t.Errorf("HubTicketExpMs = %d, want >0 (parsed from ticket)", res.HubTicketExpMs)
 	}
-	if res.RegisterNo != testRegisterNo {
-		t.Errorf("RegisterNo = %d, want %d", res.RegisterNo, testRegisterNo)
+	if res.PlayerNo != testPlayerNo {
+		t.Errorf("PlayerNo = %d, want %d", res.PlayerNo, testPlayerNo)
 	}
 	if hub.gotPlayerID != 42 || hub.gotRegion != "cn" || hub.gotTeamID != 0 {
 		t.Errorf("AssignHub args = (%d,%q,%d), want (42,\"cn\",0)", hub.gotPlayerID, hub.gotRegion, hub.gotTeamID)
 	}
 }
 
-func TestLogin_RegisterNoTimeoutDoesNotCancelParentLogin(t *testing.T) {
+func TestLogin_PlayerNoTimeoutDoesNotCancelParentLogin(t *testing.T) {
 	uc := newTestUsecase(t, nil)
 	repo := uc.repo.(*fakeAccountRepo)
-	repo.registerNoFn = func(ctx context.Context) (uint64, error) {
+	repo.playerNoFn = func(ctx context.Context) (uint64, error) {
 		<-ctx.Done()
 		return 0, ctx.Err()
 	}
@@ -419,8 +419,8 @@ func TestLogin_RegisterNoTimeoutDoesNotCancelParentLogin(t *testing.T) {
 	if elapsed := time.Since(started); elapsed >= time.Second {
 		t.Fatalf("展示查询未在短预算内降级: elapsed=%v", elapsed)
 	}
-	if res.RegisterNo != 0 {
-		t.Fatalf("RegisterNo = %d, want 0 after timeout", res.RegisterNo)
+	if res.PlayerNo != 0 {
+		t.Fatalf("PlayerNo = %d, want 0 after timeout", res.PlayerNo)
 	}
 }
 
@@ -629,7 +629,7 @@ func (r *devFakeRepo) CheckBanned(_ context.Context, _ uint64, _ string) (bool, 
 	return false, nil
 }
 func (r *devFakeRepo) TouchDevice(_ context.Context, _ uint64, _ string) error { return nil }
-func (r *devFakeRepo) GetRegisterNo(_ context.Context, _ uint64) (uint64, error) {
+func (r *devFakeRepo) GetPlayerNo(_ context.Context, _ uint64) (uint64, error) {
 	return 0, nil // 展示字段:单测不关心编号,0=未分配即可
 }
 
@@ -823,8 +823,8 @@ func TestLogin_BattleReconnect_ReturnsBattleAndSkipsHub(t *testing.T) {
 	if res.MatchID != 9001 {
 		t.Errorf("MatchID = %d, want 9001", res.MatchID)
 	}
-	if res.RegisterNo != testRegisterNo {
-		t.Errorf("RegisterNo = %d, want %d", res.RegisterNo, testRegisterNo)
+	if res.PlayerNo != testPlayerNo {
+		t.Errorf("PlayerNo = %d, want %d", res.PlayerNo, testPlayerNo)
 	}
 	if res.HubDSAddr != "" || res.HubTicket != "" {
 		t.Errorf("battle reconnect should skip hub, got addr=%q ticket_len=%d", res.HubDSAddr, len(res.HubTicket))
