@@ -21,6 +21,8 @@ import (
 const (
 	accountV6UpPath   = "migrations/pandora_account/000006_reconcile_player_no.up.sql"
 	accountV6DownPath = "migrations/pandora_account/000006_reconcile_player_no.down.sql"
+	accountV7UpPath   = "migrations/pandora_account/000007_player_no_expand_compat.up.sql"
+	accountV7DownPath = "migrations/pandora_account/000007_player_no_expand_compat.down.sql"
 
 	canonicalPlayerNoComment = "角色编号(展示专用,禁作身份键/外键/幂等键;绑定角色实体——今 player_id 即角色身份,卖角色过户时随角色走、值不变,故一账号建 N 角色 = N 个编号;NULL=待补号,login 补号任务按 created_at+player_id 序异步分配,player-no-and-login-surge.md §3.3/§3.6.1)"
 	canonicalNextNoComment   = "下一个待发角色编号"
@@ -32,8 +34,8 @@ func TestPandoraAccountV6PlayerNoReconcileContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 6 {
-		t.Fatalf("pandora_account latest version=%d,期望=6", version)
+	if version < 6 {
+		t.Fatalf("pandora_account latest version=%d,期望至少包含 v6", version)
 	}
 
 	up := readEmbeddedMigration(t, accountV6UpPath)
@@ -77,9 +79,60 @@ func TestPandoraAccountV6PlayerNoReconcileContract(t *testing.T) {
 		"deploy/mysql-init/02-account-tables.sql": readRepoFile(t, "../../deploy/mysql-init/02-account-tables.sql"),
 		"deploy/tidb-init/03-account-tidb.sql":    readRepoFile(t, "../../deploy/tidb-init/03-account-tidb.sql"),
 	} {
-		for _, fragment := range []string{canonicalPlayerNoComment, canonicalNextNoComment, canonicalCounterComment} {
+		for _, fragment := range []string{canonicalNextNoComment, canonicalCounterComment} {
 			if !strings.Contains(content, fragment) {
 				t.Errorf("%s 与 000006 canonical schema 漂移,缺少 %q", path, fragment)
+			}
+		}
+	}
+}
+
+func TestPandoraAccountV7PlayerNoExpandCompatibilityContract(t *testing.T) {
+	version, err := latestMigrationVersion("pandora_account")
+	if err != nil {
+		t.Fatalf("latestMigrationVersion: %v", err)
+	}
+	if version != 7 {
+		t.Fatalf("pandora_account latest version=%d,期望=7", version)
+	}
+
+	up := readEmbeddedMigration(t, accountV7UpPath)
+	for _, fragment := range []string{
+		"ADD COLUMN `register_no` BIGINT UNSIGNED",
+		"ADD UNIQUE KEY `uk_register_no` (`register_no`)",
+		"CREATE TABLE IF NOT EXISTS `register_no_counter`",
+		"GREATEST(p.`next_no`,r.`next_no`)",
+		"SET `register_no` = `player_no`",
+		"SET `player_no` = `register_no`",
+		"__pandora_player_no_expand_data_conflict__",
+		"__pandora_player_no_expand_counter_conflict__",
+	} {
+		if !strings.Contains(up, fragment) {
+			t.Errorf("000007 up 缺少不停服 expand 契约片段 %q", fragment)
+		}
+	}
+	for _, forbidden := range []string{
+		"ALTER TABLE `ACCOUNTS` DROP COLUMN", "ALTER TABLE `ACCOUNTS` DROP INDEX",
+		"DROP TABLE `REGISTER_NO_COUNTER`", "RENAME COLUMN", "RENAME INDEX", "RENAME TABLE",
+	} {
+		if strings.Contains(strings.ToUpper(up), forbidden) {
+			t.Errorf("000007 expand 禁止破坏 legacy schema,发现 %q", forbidden)
+		}
+	}
+	if statements := executableStatements(readEmbeddedMigration(t, accountV7DownPath)); len(statements) != 0 {
+		t.Fatalf("000007 down 必须 no-op,禁止回退时删除任一代对象: %v", statements)
+	}
+
+	for path, content := range map[string]string{
+		"deploy/mysql-init/02-account-tables.sql": readRepoFile(t, "../../deploy/mysql-init/02-account-tables.sql"),
+		"deploy/tidb-init/03-account-tidb.sql":    readRepoFile(t, "../../deploy/tidb-init/03-account-tidb.sql"),
+	} {
+		for _, fragment := range []string{
+			"`player_no`", "`register_no`", "uk_player_no", "uk_register_no",
+			"CREATE TABLE IF NOT EXISTS `player_no_counter`", "CREATE TABLE IF NOT EXISTS `register_no_counter`",
+		} {
+			if !strings.Contains(content, fragment) {
+				t.Errorf("%s 缺少 Stable/Canary 共存对象 %q", path, fragment)
 			}
 		}
 	}

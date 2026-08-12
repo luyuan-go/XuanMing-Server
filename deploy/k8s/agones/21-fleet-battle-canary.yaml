@@ -54,8 +54,8 @@ spec:
               # Agones 自动注入 SDK sidecar；DS 内 UPandoraAgonesSubsystem 走 sidecar HTTP 调 Ready/Health/Shutdown。
               # 镜像一律钉**不可变 tag**,与 20-fleet-battle.yaml 同改同收(P1-4,§9.21;
               # 推导与换版流程见该文件注释)。canary 轨换新版本时改本行为新的不可变 tag。
-              # 2026-08-11 与 stable 同步换到 Jenkins client-dev #111 快照
-              # r1971-dirty-20260811-080436;精确 PandoraServer/BUILD_INFO sha256、svnversion
+              # 2026-08-12 与 stable 同步换到完整发布快照
+              # r1977-dirty-20260812-031503;精确 PandoraServer/BUILD_INFO sha256、svnversion
               # 与「tag 不是源码 revision 凭据」的告诫,均记在 20-fleet-battle.yaml 该行注释。
               # ⚠️ 上一轮 r1918 → r1949 只改了 stable 两份、canary 两份漏改,后果不止「灰度轨跑旧版」:
               # start.ps1 的 Build-DsImagesForMinikube 扫**全部** *fleet*.yaml 收集钉定 tag,发现宿主
@@ -64,7 +64,7 @@ spec:
               # 一键启动整条链就断在这里。四份 Fleet 同版是硬约束(§9.21),不是风格问题。
               # 注:canary 与 stable 钉同一 tag = 灰度轨当前无差异版本,只作容量/轨道演练;
               # 真正灰度时本行必须换成与 stable **不同** digest 的新镜像。
-              image: pandora/battle-ds:r1971-dirty-20260811-080436
+              image: pandora/battle-ds:r1977-dirty-20260812-031503
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

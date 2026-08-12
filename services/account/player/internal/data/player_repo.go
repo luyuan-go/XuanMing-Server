@@ -3,11 +3,13 @@
 // 库表(deploy/mysql-init/04-player-tables.sql):
 //
 //	pandora_player.players        玩家档案(PK player_id,uk nickname)
+//	pandora_player.player_mmr     分池段位(PK player_id+rating_pool)
 //	pandora_player.player_heroes  英雄解锁(uk player_id+hero_id)
 //	pandora_player.mmr_history    MMR 变化历史 + 幂等键(uk player_id+idempotency_key)
 //
 // 幂等:ApplyMMRChange 在一个事务里 INSERT mmr_history;命中 1062 唯一键冲突 → 视为
-// 已处理(already=true),读回该幂等键已记录的 new_mmr 返回,不重复改 players.mmr。
+// 已处理(already=true),读回该幂等键已记录的 new_mmr 返回,不重复落分。滚动升级 expand
+// 期间 default 池还会双写 players.mmr，供旧副本共存；显式池只写 player_mmr。
 // players 表是结构化列(docs CLAUDE.md §5.9 不强制 proto 化),直接映射 proto 字段。
 package data
 

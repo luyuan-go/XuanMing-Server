@@ -176,8 +176,8 @@ func TestPandoraPlayerExperienceMigrationIsInitSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 7 {
-		t.Fatalf("pandora_player latest version=%d, want 7", version)
+	if version != 8 {
+		t.Fatalf("pandora_player latest version=%d, want 8", version)
 	}
 	v2 := readEmbeddedMigration(t, "migrations/pandora_player/000002_experience.up.sql")
 	for _, fragment := range []string{

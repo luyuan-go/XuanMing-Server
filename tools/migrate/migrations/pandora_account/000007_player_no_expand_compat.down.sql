@@ -1,0 +1,2 @@
+-- expand compatibility 不可回退：删除任一列/索引/counter 都会破坏仍在运行的 Stable/Canary。
+-- contract 必须由未来独立迁移在所有旧二进制退场且经过观测窗后执行；本版 down 有意 no-op。

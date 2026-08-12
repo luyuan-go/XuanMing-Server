@@ -4,8 +4,8 @@
 -- (01-create-databases.sql 先建库 + grant,本文件接着建表)。
 --
 -- 表清单(对齐 docs/design/infra.md §2.1 pandora_player):
---   players       玩家档案(player_id PK,昵称 / 等级 / 战绩计数 / 出战英雄 / 属性点;段位见 player_mmr)
---   player_mmr    分池段位分(PK player_id+rating_pool,段位唯一权威)
+--   players       玩家档案(player_id PK,昵称 / 等级 / 战绩计数 / 出战英雄 / 属性点;mmr 为滚动升级兼容投影)
+--   player_mmr    分池段位分(PK player_id+rating_pool,新玩法段位权威)
 --   player_heroes 英雄解锁记录(uk player_id+hero_id)
 --   mmr_history   MMR 变化历史 + 幂等键(uk player_id+idempotency_key,含 rating_pool,不变量 §2)
 --   player_attributes 属性加点已分配点(uk player_id+attr_key)
@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS `players` (
     `nickname`      VARCHAR(64)      NOT NULL COMMENT '玩家昵称,uk_nickname 唯一',
     `level`         INT              NOT NULL DEFAULT 1,
     `exp`           BIGINT UNSIGNED  NOT NULL DEFAULT 0 COMMENT '级内经验(实时成长;满级恒 0)',
+    `mmr`           INT              NOT NULL DEFAULT 1500 COMMENT '旧副本兼容投影(default 池);contract 前保留',
     `avatar`        VARCHAR(255)     NOT NULL DEFAULT '',
     `total_battles` INT              NOT NULL DEFAULT 0,
     `total_wins`    INT              NOT NULL DEFAULT 0,
@@ -36,7 +37,8 @@ CREATE TABLE IF NOT EXISTS `players` (
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `last_seen_at`  DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`),
-    UNIQUE KEY `uk_nickname` (`nickname`)
+    UNIQUE KEY `uk_nickname` (`nickname`),
+    KEY `idx_mmr` (`mmr`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 玩家档案表';
 
@@ -53,7 +55,8 @@ CREATE TABLE IF NOT EXISTS `player_heroes` (
   COMMENT='Pandora 玩家英雄解锁记录';
 
 
--- player_mmr 是段位分的**唯一权威**(2026-08-11 段位分区)。
+-- player_mmr 是新玩法的分池段位权威(2026-08-11 段位分区)。滚动升级 expand 期间
+-- players.mmr 继续作为旧副本可读写的 default 池兼容投影；仅独立 contract 可删除。
 --
 -- 为什么不是 players 表的一列:产品口径「3v3 与 5v5 不共用同一份段位」要求一个玩家
 -- 持有多份分,单列表达不了。分区键 rating_pool 由关卡表「段位池」列决定(matchmaker
@@ -71,7 +74,7 @@ CREATE TABLE IF NOT EXISTS `player_mmr` (
     PRIMARY KEY (`player_id`, `rating_pool`),
     KEY `idx_pool_mmr` (`rating_pool`, `mmr`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 玩家分池段位分(段位唯一权威;PK=player_id+rating_pool)';
+  COMMENT='Pandora 玩家分池段位分(新玩法权威;default 在 expand 期双写旧投影;PK=player_id+rating_pool)';
 -- idx_pool_mmr 服务"某池 TopN / 排名"查询(leaderboard 竞技分榜按池取数),
 -- 前缀是 rating_pool 保证单池扫描不跨池。
 

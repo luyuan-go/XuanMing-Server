@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/rating"
 )
 
 const mmrTestTimeout = 20 * time.Second
@@ -33,6 +34,8 @@ func TestApplyMMRChangeIdempotency_MySQL(t *testing.T) {
 	change := MMRChange{
 		PlayerID:       playerID,
 		IdempotencyKey: "match-70001-a",
+		RatingPool:     rating.DefaultPool,
+		Baseline:       1500,
 		Delta:          25,
 		Reason:         "win",
 		Floor:          0,
@@ -86,6 +89,8 @@ func TestApplyMMRChangeFloorClamp_MySQL(t *testing.T) {
 	newMMR, _, err := repo.ApplyMMRChange(ctx, MMRChange{
 		PlayerID:       playerID,
 		IdempotencyKey: "match-70002-crash",
+		RatingPool:     rating.DefaultPool,
+		Baseline:       1500,
 		Delta:          -5000,
 		Reason:         "lose",
 		Floor:          0,
@@ -142,6 +147,8 @@ func TestApplyMMRChangeConcurrentSameKey_MySQL(t *testing.T) {
 			got, already, err := repo.ApplyMMRChange(ctx, MMRChange{
 				PlayerID:       playerID,
 				IdempotencyKey: "match-70003-shared",
+				RatingPool:     rating.DefaultPool,
+				Baseline:       1500,
 				Delta:          30,
 				Reason:         "win",
 				Floor:          0,
@@ -196,6 +203,8 @@ func TestApplyMMRChangeUnknownPlayer_MySQL(t *testing.T) {
 	_, _, err := repo.ApplyMMRChange(ctx, MMRChange{
 		PlayerID:       uint64(70_004),
 		IdempotencyKey: "match-70004",
+		RatingPool:     rating.DefaultPool,
+		Baseline:       1500,
 		Delta:          10,
 		Reason:         "win",
 	})
@@ -207,5 +216,89 @@ func TestApplyMMRChangeUnknownPlayer_MySQL(t *testing.T) {
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM players`); got != 0 {
 		t.Fatalf("拒绝路径隐式建了 %d 行 players, want 0", got)
+	}
+}
+
+// TestApplyMMRChangeRatingPoolExpandCompatibility_MySQL 钉住 expand 双向兼容：
+// 旧副本只写 default 旧列时，新副本必须能读到；新副本结算 default 必须双写，
+// 而显式 3v3/5v5 池绝不能污染旧列、互相串分。
+func TestApplyMMRChangeRatingPoolExpandCompatibility_MySQL(t *testing.T) {
+	db := newPlayerSchemaDB(t)
+	repo := NewMySQLPlayerRepo(db)
+	ctx, cancel := context.WithTimeout(context.Background(), mmrTestTimeout)
+	defer cancel()
+
+	const playerID = uint64(70_005)
+	seedPlayerProfile(t, repo, playerID, 1500)
+	if got, found, err := repo.GetMMR(ctx, playerID, rating.DefaultPool); err != nil || found || got != 0 {
+		t.Fatalf("未打过 default=(%d,%v,%v), want 0/false/nil", got, found, err)
+	}
+	if ratings, err := repo.ListRatings(ctx, playerID); err != nil || len(ratings) != 0 {
+		t.Fatalf("未打过时 ratings=%+v err=%v, want empty/nil", ratings, err)
+	}
+
+	// 模拟旧副本的原 SQL：mmr_history 不写新列(由 DEFAULT 'default' 补齐)，
+	// players.mmr 是它唯一会更新的段位值。
+	if _, err := db.ExecContext(ctx, `INSERT INTO mmr_history
+(player_id, idempotency_key, delta, reason, old_mmr, new_mmr)
+VALUES (?, 'old-stable-match', 40, 'win', 1500, 1540)`, playerID); err != nil {
+		t.Fatalf("模拟旧副本写历史: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE players SET mmr = 1540 WHERE player_id = ?`, playerID); err != nil {
+		t.Fatalf("模拟旧副本写 mmr: %v", err)
+	}
+
+	got, found, err := repo.GetMMR(ctx, playerID, rating.DefaultPool)
+	if err != nil || !found || got != 1540 {
+		t.Fatalf("新副本读取旧写 default=(%d,%v,%v), want 1540/true/nil", got, found, err)
+	}
+	ratings, err := repo.ListRatings(ctx, playerID)
+	if err != nil {
+		t.Fatalf("列出旧写 default: %v", err)
+	}
+	if len(ratings) != 1 || ratings[0].RatingPool != rating.DefaultPool || ratings[0].MMR != 1540 {
+		t.Fatalf("旧写 default 档案投影=%+v, want [{default 1540}]", ratings)
+	}
+	profile, found, err := repo.GetProfile(ctx, playerID)
+	if err != nil || !found || profile == nil {
+		t.Fatalf("旧客户端 profile=(%v,%v,%v), want non-nil/true/nil", profile, found, err)
+	}
+	if profile.GetMmr() != 1540 {
+		t.Fatalf("旧客户端 profile.mmr=%d, want 1540", profile.GetMmr())
+	}
+
+	newDefault, _, err := repo.ApplyMMRChange(ctx, MMRChange{
+		PlayerID: playerID, IdempotencyKey: "new-default-match", RatingPool: rating.DefaultPool,
+		Baseline: 1500, Delta: 10, Reason: "win",
+	})
+	if err != nil || newDefault != 1550 {
+		t.Fatalf("新版 default 双写结果=%d err=%v, want 1550/nil", newDefault, err)
+	}
+	legacyMMR, _, _ := playerCounters(t, db, playerID)
+	if legacyMMR != 1550 {
+		t.Fatalf("新版 default 未更新旧投影:mmr=%d, want 1550", legacyMMR)
+	}
+
+	new3v3, _, err := repo.ApplyMMRChange(ctx, MMRChange{
+		PlayerID: playerID, IdempotencyKey: "new-3v3-match", RatingPool: "3v3",
+		Baseline: 1500, Delta: 25, Reason: "win",
+	})
+	if err != nil || new3v3 != 1525 {
+		t.Fatalf("新版 3v3 分池结果=%d err=%v, want 1525/nil", new3v3, err)
+	}
+	legacyMMR, _, _ = playerCounters(t, db, playerID)
+	if legacyMMR != 1550 {
+		t.Fatalf("3v3 污染旧 default 投影:mmr=%d, want 1550", legacyMMR)
+	}
+	profile, found, err = repo.GetProfile(ctx, playerID)
+	if err != nil || !found || profile == nil {
+		t.Fatalf("分池后旧客户端 profile=(%v,%v,%v), want non-nil/true/nil", profile, found, err)
+	}
+	if profile.GetMmr() != 1550 {
+		t.Fatalf("分池后旧客户端 profile.mmr=%d, want default 1550", profile.GetMmr())
+	}
+	poolMMR, found, err := repo.GetMMR(ctx, playerID, "3v3")
+	if err != nil || !found || poolMMR != 1525 {
+		t.Fatalf("读取 3v3=(%d,%v,%v), want 1525/true/nil", poolMMR, found, err)
 	}
 }

@@ -48,12 +48,14 @@ CREATE TABLE IF NOT EXISTS `accounts` (
     `account`       VARCHAR(64)      NOT NULL,
     `password_hash` VARCHAR(80)      NOT NULL COMMENT 'bcrypt(client_digest),含 cost 前缀,固定 60 字节',
     `status`        TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=normal,1=banned,2=disabled',
-    `player_no`   BIGINT UNSIGNED       NULL COMMENT '角色编号(展示专用,禁作身份键/外键/幂等键;绑定角色实体——今 player_id 即角色身份,卖角色过户时随角色走、值不变,故一账号建 N 角色 = N 个编号;NULL=待补号,login 补号任务按 created_at+player_id 序异步分配,player-no-and-login-surge.md §3.3/§3.6.1)',
+    `player_no`     BIGINT UNSIGNED       NULL COMMENT '角色编号新名(expand 双写期;展示专用,禁作身份键/外键/幂等键)',
+    `register_no`   BIGINT UNSIGNED       NULL COMMENT '角色编号旧名(expand 双写期兼容 Stable;禁止删除)',
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */,
     UNIQUE KEY `uk_account` (`account`),
-    UNIQUE KEY `uk_player_no` (`player_no`)
+    UNIQUE KEY `uk_player_no` (`player_no`),
+    UNIQUE KEY `uk_register_no` (`register_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   SHARD_ROW_ID_BITS = 4 PRE_SPLIT_REGIONS = 4
   COMMENT='Pandora 账号身份表(uk_account 必须大小写不敏感,见文件头)';
@@ -69,6 +71,15 @@ CREATE TABLE IF NOT EXISTS `player_no_counter` (
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 角色编号全局发号计数器(单行 id=1;发号权威闸)';
+
+-- register_no_counter 是滚动发布 expand 兼容对象。TiDB 不支持可写 view，故保留真实表；
+-- 新版同一悲观事务固定双锁、双推进，旧 Stable 原 SQL 无需修改。
+CREATE TABLE IF NOT EXISTS `register_no_counter` (
+    `id`      TINYINT UNSIGNED NOT NULL,
+    `next_no` BIGINT UNSIGNED  NOT NULL COMMENT '下一个待发角色编号(旧名兼容)',
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 角色编号全局发号计数器(旧名兼容;expand 双锁双写)';
 
 -- account_devices:每次登录一次 upsert(TouchDevice),写 QPS = 全服登录 QPS。
 -- 真实写路径走 uk_player_device(按 player_id 天然打散,无尾部热点);代理主键仅占位 → AUTO_RANDOM。

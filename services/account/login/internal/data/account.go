@@ -105,19 +105,30 @@ WHERE (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
 // GetPlayerNo PK 点查角色编号(登录路径 +1 次毫秒级往返,不进 5s 预算的服务扇出账,
 // 压测审核【必修-1】口径不受影响)。NULL / 行不存在均返回 0(未分配)。
 func (r *MySQLAccountRepo) GetPlayerNo(ctx context.Context, playerID uint64) (uint64, error) {
-	var no sql.NullInt64
+	var playerNo, legacyNo sql.NullInt64
 	err := r.db.QueryRowContext(ctx,
-		`SELECT player_no FROM accounts WHERE player_id = ? LIMIT 1`, playerID).Scan(&no)
+		`SELECT player_no, register_no FROM accounts WHERE player_id = ? LIMIT 1`, playerID).Scan(&playerNo, &legacyNo)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	if err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "mysql get player_no: %v", err)
 	}
-	if !no.Valid {
+	if playerNo.Valid && legacyNo.Valid && playerNo.Int64 != legacyNo.Int64 {
+		return 0, errcode.New(errcode.ErrInternal,
+			"mysql get player_no: player/register 双列冲突 player_id=%d player_no=%d register_no=%d",
+			playerID, playerNo.Int64, legacyNo.Int64)
+	}
+	if playerNo.Valid {
+		return uint64(playerNo.Int64), nil
+	}
+	if legacyNo.Valid {
+		return uint64(legacyNo.Int64), nil
+	}
+	if !playerNo.Valid {
 		return 0, nil
 	}
-	return uint64(no.Int64), nil
+	return uint64(playerNo.Int64), nil
 }
 
 func (r *MySQLAccountRepo) TouchDevice(ctx context.Context, playerID uint64, deviceID string) error {

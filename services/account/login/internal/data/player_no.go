@@ -61,7 +61,7 @@ const (
 	PlayerNoWatermarkLag = 10 * time.Second
 )
 
-// EnsurePlayerNoCounter 启动期探针 + 计数器幂等初始化。
+// EnsurePlayerNoCounter 启动期探针 + 双代计数器幂等初始化。
 //
 // 探针:SELECT player_no 验证库已收敛到 000006 的目标列;未迁移的存量库在此一次性失败,
 // 调用方停用补号任务(展示功能 fail-soft,不拦 login 启动——对比 sql_mode 断言那类
@@ -72,14 +72,41 @@ func EnsurePlayerNoCounter(ctx context.Context, db *sql.DB, startNo uint64) erro
 	if startNo == 0 {
 		startNo = 1
 	}
-	var probe sql.NullInt64
-	err := db.QueryRowContext(ctx, "SELECT player_no FROM accounts LIMIT 1").Scan(&probe)
+	var playerProbe, legacyProbe sql.NullInt64
+	err := db.QueryRowContext(ctx, "SELECT player_no, register_no FROM accounts LIMIT 1").Scan(&playerProbe, &legacyProbe)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return errcode.New(errcode.ErrInternal, "player_no 列探针失败(pandora_account 000006 迁移链未收敛?): %v", err)
+		return errcode.New(errcode.ErrInternal, "player_no 双列探针失败(pandora_account 000007 expand 未完成?): %v", err)
 	}
-	if _, err := db.ExecContext(ctx,
-		"INSERT IGNORE INTO player_no_counter (id, next_no) VALUES (1, ?)", startNo); err != nil {
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "player_no ensure begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, "INSERT IGNORE INTO player_no_counter (id, next_no) VALUES (1, ?)", startNo); err != nil {
 		return errcode.New(errcode.ErrInternal, "init player_no_counter: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT IGNORE INTO register_no_counter (id, next_no) VALUES (1, ?)", startNo); err != nil {
+		return errcode.New(errcode.ErrInternal, "init register_no_counter: %v", err)
+	}
+	var playerNext, legacyNext uint64
+	if err := tx.QueryRowContext(ctx, "SELECT next_no FROM player_no_counter WHERE id=1 FOR UPDATE").Scan(&playerNext); err != nil {
+		return errcode.New(errcode.ErrInternal, "lock player_no_counter: %v", err)
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT next_no FROM register_no_counter WHERE id=1 FOR UPDATE").Scan(&legacyNext); err != nil {
+		return errcode.New(errcode.ErrInternal, "lock register_no_counter: %v", err)
+	}
+	next := playerNext
+	if legacyNext > next {
+		next = legacyNext
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE player_no_counter SET next_no=? WHERE id=1", next); err != nil {
+		return errcode.New(errcode.ErrInternal, "sync player_no_counter: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE register_no_counter SET next_no=? WHERE id=1", next); err != nil {
+		return errcode.New(errcode.ErrInternal, "sync register_no_counter: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return errcode.New(errcode.ErrInternal, "player_no ensure commit: %v", err)
 	}
 	return nil
 }
@@ -101,28 +128,44 @@ func SweepPlayerNo(ctx context.Context, db *sql.DB, batch int) (int, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var next uint64
+	var playerNext, legacyNext uint64
 	if err := tx.QueryRowContext(ctx,
-		"SELECT next_no FROM player_no_counter WHERE id = 1 FOR UPDATE").Scan(&next); err != nil {
+		"SELECT next_no FROM player_no_counter WHERE id = 1 FOR UPDATE").Scan(&playerNext); err != nil {
 		return 0, errcode.New(errcode.ErrInternal,
 			"player_no counter lock(计数器未初始化? 见 EnsurePlayerNoCounter): %v", err)
 	}
+	if err := tx.QueryRowContext(ctx,
+		"SELECT next_no FROM register_no_counter WHERE id = 1 FOR UPDATE").Scan(&legacyNext); err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "register_no compatibility counter lock: %v", err)
+	}
+	next := playerNext
+	if legacyNext > next {
+		next = legacyNext
+	}
 
 	rows, err := tx.QueryContext(ctx,
-		`SELECT player_id FROM accounts
-		 WHERE player_no IS NULL AND created_at < NOW() - INTERVAL ? SECOND
+		`SELECT player_id, COALESCE(player_no, register_no, 0),
+		        player_no IS NOT NULL, register_no IS NOT NULL
+		   FROM accounts
+		 WHERE (player_no IS NULL OR register_no IS NULL) AND created_at < NOW() - INTERVAL ? SECOND
 		 ORDER BY created_at, player_id LIMIT ?`, lagSec, batch)
 	if err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "player_no select pending: %v", err)
 	}
-	ids := make([]uint64, 0, batch)
+	type pendingPlayerNo struct {
+		playerID  uint64
+		existing  uint64
+		playerHas bool
+		legacyHas bool
+	}
+	pending := make([]pendingPlayerNo, 0, batch)
 	for rows.Next() {
-		var pid uint64
-		if err := rows.Scan(&pid); err != nil {
+		var row pendingPlayerNo
+		if err := rows.Scan(&row.playerID, &row.existing, &row.playerHas, &row.legacyHas); err != nil {
 			_ = rows.Close()
 			return 0, errcode.New(errcode.ErrInternal, "player_no scan pending: %v", err)
 		}
-		ids = append(ids, pid)
+		pending = append(pending, row)
 	}
 	if err := rows.Close(); err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "player_no close pending: %v", err)
@@ -130,33 +173,48 @@ func SweepPlayerNo(ctx context.Context, db *sql.DB, batch int) (int, error) {
 	if err := rows.Err(); err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "player_no iterate pending: %v", err)
 	}
-	if len(ids) == 0 {
+	if len(pending) == 0 {
 		return 0, nil // 空转:defer Rollback 收尾,只读事务无副作用
 	}
 
-	for i, pid := range ids {
+	newAssignments := uint64(0)
+	for _, row := range pending {
+		assigned := row.existing
+		if !row.playerHas && !row.legacyHas {
+			assigned = next + newAssignments
+			newAssignments++
+		}
 		res, err := tx.ExecContext(ctx,
-			"UPDATE accounts SET player_no = ? WHERE player_id = ? AND player_no IS NULL",
-			next+uint64(i), pid)
+			`UPDATE accounts SET player_no = ?, register_no = ?
+			 WHERE player_id = ?
+			   AND (player_no IS NULL OR player_no = ?)
+			   AND (register_no IS NULL OR register_no = ?)
+			   AND (player_no IS NULL OR register_no IS NULL)`,
+			assigned, assigned, row.playerID, assigned, assigned)
 		if err != nil {
-			return 0, errcode.New(errcode.ErrInternal, "player_no assign player_id=%d: %v", pid, err)
+			return 0, errcode.New(errcode.ErrInternal, "player_no assign player_id=%d: %v", row.playerID, err)
 		}
 		n, err := res.RowsAffected()
 		if err != nil {
-			return 0, errcode.New(errcode.ErrInternal, "player_no assign affected player_id=%d: %v", pid, err)
+			return 0, errcode.New(errcode.ErrInternal, "player_no assign affected player_id=%d: %v", row.playerID, err)
 		}
 		if n != 1 {
 			return 0, errcode.New(errcode.ErrInternal,
-				"player_no assign player_id=%d affected=%d(计数器锁外存在第二写者,整批回滚)", pid, n)
+				"player_no assign player_id=%d affected=%d(计数器锁外存在第二写者或双列冲突,整批回滚)", row.playerID, n)
 		}
 	}
 
+	newNext := next + newAssignments
 	if _, err := tx.ExecContext(ctx,
-		"UPDATE player_no_counter SET next_no = next_no + ? WHERE id = 1", len(ids)); err != nil {
+		"UPDATE player_no_counter SET next_no = ? WHERE id = 1", newNext); err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "player_no advance counter: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		"UPDATE register_no_counter SET next_no = ? WHERE id = 1", newNext); err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "register_no compatibility advance counter: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "player_no sweep commit: %v", err)
 	}
-	return len(ids), nil
+	return len(pending), nil
 }

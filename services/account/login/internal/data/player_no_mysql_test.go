@@ -52,14 +52,21 @@ var playerNoTestDDL = []string{
 		"`account`       VARCHAR(64)      NOT NULL," +
 		"`password_hash` VARCHAR(80)      NOT NULL DEFAULT ''," +
 		"`status`        TINYINT UNSIGNED NOT NULL DEFAULT 0," +
-		"`player_no`   BIGINT UNSIGNED       NULL," +
+		"`player_no`     BIGINT UNSIGNED       NULL," +
+		"`register_no`   BIGINT UNSIGNED       NULL," +
 		"`created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP," +
 		"`updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
 		"PRIMARY KEY (`player_id`)," +
 		"UNIQUE KEY `uk_account` (`account`)," +
-		"UNIQUE KEY `uk_player_no` (`player_no`)" +
+		"UNIQUE KEY `uk_player_no` (`player_no`)," +
+		"UNIQUE KEY `uk_register_no` (`register_no`)" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 	"CREATE TABLE `player_no_counter` (" +
+		"`id`      TINYINT UNSIGNED NOT NULL," +
+		"`next_no` BIGINT UNSIGNED  NOT NULL," +
+		"PRIMARY KEY (`id`)" +
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+	"CREATE TABLE `register_no_counter` (" +
 		"`id`      TINYINT UNSIGNED NOT NULL," +
 		"`next_no` BIGINT UNSIGNED  NOT NULL," +
 		"PRIMARY KEY (`id`)" +
@@ -372,4 +379,107 @@ func TestPlayerNo_MySQLAndTiDB_EnsureFailsWithoutMigration(t *testing.T) {
 			t.Fatalf("缺列时 Ensure 应失败(探针失效会让补号任务在未迁移库上每 5s 报错)")
 		}
 	})
+}
+
+// ⑥ Stable 旧版与 Canary 新版必须共享同一发号事务域。旧版只认识 register_no 三件套，
+// 新版只认识 player_no 三件套；两边各补一批后，两个展示列必须一致且号码仍连续唯一，
+// 两张计数器也必须保持同一 next_no。该测试是改名滚动发布的公开 Repo seam。
+func TestPlayerNo_MySQLAndTiDB_StableCanaryShareOneAllocator(t *testing.T) {
+	forEachPlayerNoBackend(t, func(t *testing.T, db *sql.DB) {
+		ctx := context.Background()
+		if err := EnsurePlayerNoCounter(ctx, db, 1); err != nil {
+			t.Fatalf("ensure dual counter: %v", err)
+		}
+		if _, err := db.ExecContext(ctx, `INSERT IGNORE INTO register_no_counter(id,next_no)
+			SELECT id,next_no FROM player_no_counter`); err != nil {
+			t.Fatalf("seed legacy counter: %v", err)
+		}
+		for i := 0; i < 20; i++ {
+			insertAccountAt(t, db, uint64(9000+i), -120-i)
+		}
+
+		canaryAssigned, err := SweepPlayerNo(ctx, db, 10)
+		if err != nil {
+			t.Fatalf("new canary sweep: %v", err)
+		}
+		legacyAssigned, err := sweepLegacyRegisterNoForCompatibilityTest(ctx, db, 10)
+		if err != nil {
+			t.Fatalf("legacy stable sweep: %v", err)
+		}
+		reconciled, err := SweepPlayerNo(ctx, db, 10)
+		if err != nil {
+			t.Fatalf("new canary reconcile legacy writes: %v", err)
+		}
+		if legacyAssigned+canaryAssigned != 20 || reconciled != legacyAssigned {
+			t.Fatalf("双版本新分配=%d want 20,reconciled=%d want %d", legacyAssigned+canaryAssigned, reconciled, legacyAssigned)
+		}
+
+		var rows, distinctNos, mismatches int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*), COUNT(DISTINCT player_no),
+			SUM(CASE WHEN player_no <> register_no OR player_no IS NULL OR register_no IS NULL THEN 1 ELSE 0 END)
+			FROM accounts`).Scan(&rows, &distinctNos, &mismatches); err != nil {
+			t.Fatalf("verify dual columns: %v", err)
+		}
+		if rows != 20 || distinctNos != 20 || mismatches != 0 {
+			t.Fatalf("共存分配不一致 rows=%d distinct=%d mismatches=%d", rows, distinctNos, mismatches)
+		}
+		var playerNext, registerNext uint64
+		if err := db.QueryRowContext(ctx, "SELECT next_no FROM player_no_counter WHERE id=1").Scan(&playerNext); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.QueryRowContext(ctx, "SELECT next_no FROM register_no_counter WHERE id=1").Scan(&registerNext); err != nil {
+			t.Fatal(err)
+		}
+		if playerNext != 21 || registerNext != 21 {
+			t.Fatalf("双计数器水位漂移 player=%d register=%d want=21", playerNext, registerNext)
+		}
+	})
+}
+
+// sweepLegacyRegisterNoForCompatibilityTest 是已发布 Stable 二进制 SQL 的行为副本，
+// 只用于从 Repo 公共边界验证新 schema/新版写入能否与旧写入共存。
+func sweepLegacyRegisterNoForCompatibilityTest(ctx context.Context, db *sql.DB, batch int) (int, error) {
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var next uint64
+	if err := tx.QueryRowContext(ctx, "SELECT next_no FROM register_no_counter WHERE id=1 FOR UPDATE").Scan(&next); err != nil {
+		return 0, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT player_id FROM accounts
+		WHERE register_no IS NULL AND created_at < NOW() - INTERVAL 10 SECOND
+		ORDER BY created_at, player_id LIMIT ?`, batch)
+	if err != nil {
+		return 0, err
+	}
+	var ids []uint64
+	for rows.Next() {
+		var id uint64
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	for i, id := range ids {
+		res, err := tx.ExecContext(ctx, "UPDATE accounts SET register_no=? WHERE player_id=? AND register_no IS NULL", next+uint64(i), id)
+		if err != nil {
+			return 0, err
+		}
+		if affected, err := res.RowsAffected(); err != nil || affected != 1 {
+			return 0, fmt.Errorf("legacy assign affected=%d err=%v", affected, err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE register_no_counter SET next_no=next_no+? WHERE id=1", len(ids)); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return len(ids), nil
 }

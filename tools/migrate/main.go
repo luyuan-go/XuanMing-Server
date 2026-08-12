@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -43,6 +44,9 @@ const (
 	advisoryLockWrapperGrace      = time.Second
 	maximumSecretFileBytes        = 64 << 10
 	schemaMigrationsTable         = "schema_migrations"
+	// pandoraPlayerV7SHA256 固定已发布 000007 的 LF 规范化正文。quarantine 只有在
+	// 镜像内仍是这一份精确 SQL 时才可运行，防止“同版本不同内容”被自动洗成 clean。
+	pandoraPlayerV7SHA256 = "576b73ea3eee0e3dedd3ce22d5c6e7f7a4f278aa8e787cb9e74e292eea4f2e4f"
 )
 
 var (
@@ -92,6 +96,13 @@ type commandConfig struct {
 
 type migrationVersionReader interface {
 	Version() (version uint, dirty bool, err error)
+}
+
+type migrationRepairDriver interface {
+	Version() (version int, dirty bool, err error)
+	Lock() error
+	Unlock() error
+	SetVersion(version int, dirty bool) error
 }
 
 func main() {
@@ -511,6 +522,10 @@ func migrateTarget(target migrationTarget, requireTLS bool) error {
 	// 否则 wrapper 先返回时底层 goroutine 仍占同一连接，后续 Version 查询会并发撞连接。
 	m.LockTimeout = advisoryLockTimeout(target)
 
+	if _, err := repairPandoraPlayerV7Dirty(target, driver, cfg); err != nil {
+		closeMigration(m)
+		return err
+	}
 	if err := rejectDirtyOrNewer(m, target.expectedMigrationVersion); err != nil {
 		closeMigration(m)
 		return err
@@ -520,6 +535,22 @@ func migrateTarget(target migrationTarget, requireTLS bool) error {
 		// 此时底层 Lock goroutine 可能仍在 I/O；不要再对同一连接 Version/Close。
 		// migrateTarget 只在专用 worker 进程中运行，返回后进程立即退出并由 OS 回收连接。
 		return fmt.Errorf("等待 migration advisory lock 超时，worker 停止且发布阻断: %w", applyErr)
+	}
+	// 首次从 nil/v4/v6 升级时，已发布 000007 可能在本次 Up 内才触发 MySQL 1845。
+	// 只允许同一个精确 quarantine 验证并收敛该 dirty 中间态，再重试正常 Up；其他
+	// 任意迁移失败仍原样阻断，绝不借此变成通用自动 force。
+	if applyErr != nil && !errors.Is(applyErr, migrate.ErrNoChange) {
+		repaired, repairErr := repairPandoraPlayerV7Dirty(target, driver, cfg)
+		if repairErr != nil {
+			closeMigration(m)
+			return fmt.Errorf("执行 up 失败且 quarantine 拒绝（原始错误=%v）: %w", applyErr, repairErr)
+		}
+		if repaired {
+			applyErr = m.Up()
+			if errors.Is(applyErr, migrate.ErrLockTimeout) {
+				return fmt.Errorf("quarantine 后等待 migration advisory lock 超时，worker 停止且发布阻断: %w", applyErr)
+			}
+		}
 	}
 	version, dirty, versionErr := m.Version()
 	closeErr := closeMigration(m)
@@ -536,6 +567,142 @@ func migrateTarget(target migrationTarget, requireTLS bool) error {
 		return fmt.Errorf("关闭迁移连接: %w", closeErr)
 	}
 	log.Printf("[migrate] 目标=%s 验收通过 version=%d dirty=false", target.Name, version)
+	return nil
+}
+
+// repairPandoraPlayerV7Dirty 是一次性、精确形态的 quarantine，不是通用 force。
+//
+// 已发布 000007 在 MySQL 8.4 上会先成功创建 player_mmr、给 mmr_history 加池列，
+// 随后因 `DROP players.mmr, ALGORITHM=INSTANT` 不受支持而报 1845。golang-migrate
+// 此时留下 version=7 dirty=true；000008 无法越过 dirty 状态。本函数仅在以下条件全部
+// 成立时把它修成 expand 终态并标 v7 clean，再由普通 Up 跑 000008：
+//   - migration_set / database 精确是 pandora_player；
+//   - schema_migrations 精确为 7 dirty；
+//   - 镜像内 000007 正文 SHA-256 与已发布值一致；
+//   - 中间 schema 精确命中“新表/新列已成功，旧列/旧索引仍在”的 1845 后置形态。
+//
+// 任一偏差都 fail-closed，禁止任意 skip / 任意 force。修复全程持同一 migration
+// advisory lock，避免另一个 Job 在校验与标 clean 之间并发介入。
+func repairPandoraPlayerV7Dirty(target migrationTarget, driver migrationRepairDriver, cfg *mysql.Config) (repaired bool, err error) {
+	version, dirty, verr := driver.Version()
+	if verr != nil {
+		return false, fmt.Errorf("pandora_player v7 quarantine 读取版本: %w", verr)
+	}
+	if !dirty || version != 7 {
+		return false, nil
+	}
+	if target.MigrationSet != "pandora_player" ||
+		(target.Database != "pandora_player" && !strings.HasPrefix(target.Database, "pandora_player_mig_it_")) {
+		return false, fmt.Errorf("迁移前验收失败: version=7 dirty=true，quarantine 仅允许 pandora_player 精确目标，禁止自动 force")
+	}
+	if target.expectedMigrationVersion < 8 {
+		return false, fmt.Errorf("pandora_player v7 quarantine 要求镜像至少含 000008，当前 expected_version=%d", target.expectedMigrationVersion)
+	}
+	if err := verifyEmbeddedPandoraPlayerV7(); err != nil {
+		return false, err
+	}
+	if err := driver.Lock(); err != nil {
+		return false, fmt.Errorf("pandora_player v7 quarantine 获取 migration lock: %w", err)
+	}
+	defer func() {
+		if unlockErr := driver.Unlock(); unlockErr != nil {
+			err = errors.Join(err, fmt.Errorf("pandora_player v7 quarantine 释放 migration lock: %w", unlockErr))
+		}
+	}()
+
+	// 拿锁后重新读版本，锁外观察只能用于快路径，不能作为修复授权依据。
+	version, dirty, verr = driver.Version()
+	if verr != nil {
+		return false, fmt.Errorf("pandora_player v7 quarantine 锁内读取版本: %w", verr)
+	}
+	if version != 7 || !dirty {
+		return false, fmt.Errorf("pandora_player v7 quarantine 锁内版本漂移: version=%d dirty=%v", version, dirty)
+	}
+	// migratemysql driver 独占主 *sql.DB 的单连接；另开同 DSN 的只读校验连接，
+	// advisory lock 已阻止其它迁移 Job 介入，且所有 session 安全参数仍由同一 cfg 带入。
+	checkDB, openErr := sql.Open("mysql", cfg.FormatDSN())
+	if openErr != nil {
+		return false, fmt.Errorf("pandora_player v7 quarantine 打开校验连接: %w", openErr)
+	}
+	defer func() { err = errors.Join(err, checkDB.Close()) }()
+	if err := validatePandoraPlayerV7DirtyShape(checkDB); err != nil {
+		return false, fmt.Errorf("pandora_player v7 quarantine 形态拒绝: %w", err)
+	}
+	if err := driver.SetVersion(7, false); err != nil {
+		return false, fmt.Errorf("pandora_player v7 quarantine 标记 clean: %w", err)
+	}
+	log.Printf("[migrate] 目标=%s 命中 pandora_player 000007/MySQL-1845 精确 quarantine，已验证中间 schema 并标记 version=7 dirty=false；继续 000008 expand", target.Name)
+	return true, nil
+}
+
+func verifyEmbeddedPandoraPlayerV7() error {
+	raw, err := fs.ReadFile(migrationsFS,
+		"migrations/pandora_player/000007_rating_pool_partition.up.sql")
+	if err != nil {
+		return fmt.Errorf("pandora_player v7 quarantine 读取已发布迁移: %w", err)
+	}
+	normalized := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	got := fmt.Sprintf("%x", sha256.Sum256([]byte(normalized)))
+	if got != pandoraPlayerV7SHA256 {
+		return fmt.Errorf("pandora_player v7 quarantine 校验和不匹配: got=%s want=%s，禁止自动修复", got, pandoraPlayerV7SHA256)
+	}
+	return nil
+}
+
+func validatePandoraPlayerV7DirtyShape(db *sql.DB) error {
+	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
+	defer cancel()
+
+	wantColumns := []struct {
+		table, column, dataType, columnType, nullable, columnDefault string
+	}{
+		{"players", "mmr", "int", "int", "NO", "1500"},
+		{"mmr_history", "rating_pool", "varchar", "varchar(32)", "NO", "default"},
+		{"player_mmr", "player_id", "bigint", "bigint unsigned", "NO", ""},
+		{"player_mmr", "rating_pool", "varchar", "varchar(32)", "NO", ""},
+		{"player_mmr", "mmr", "int", "int", "NO", "1500"},
+	}
+	for _, want := range wantColumns {
+		var dataType, columnType, nullable string
+		var columnDefault sql.NullString
+		err := db.QueryRowContext(ctx, `SELECT DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`, want.table, want.column).
+			Scan(&dataType, &columnType, &nullable, &columnDefault)
+		if err != nil {
+			return fmt.Errorf("缺列 %s.%s: %w", want.table, want.column, err)
+		}
+		gotDefault := ""
+		if columnDefault.Valid {
+			gotDefault = columnDefault.String
+		}
+		if !strings.EqualFold(dataType, want.dataType) ||
+			!strings.EqualFold(columnType, want.columnType) || nullable != want.nullable || gotDefault != want.columnDefault {
+			return fmt.Errorf("列 %s.%s 形态=%s/%s nullable=%s default=%q，期望=%s/%s/%s/%q",
+				want.table, want.column, dataType, columnType, nullable, gotDefault,
+				want.dataType, want.columnType, want.nullable, want.columnDefault)
+		}
+	}
+
+	wantIndexes := []struct {
+		table, index, columns string
+	}{
+		{"players", "idx_mmr", "mmr"},
+		{"player_mmr", "PRIMARY", "player_id,rating_pool"},
+		{"player_mmr", "idx_pool_mmr", "rating_pool,mmr"},
+	}
+	for _, want := range wantIndexes {
+		var columns sql.NullString
+		if err := db.QueryRowContext(ctx, `SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',')
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`, want.table, want.index).
+			Scan(&columns); err != nil {
+			return fmt.Errorf("读取索引 %s.%s: %w", want.table, want.index, err)
+		}
+		if !columns.Valid || !strings.EqualFold(columns.String, want.columns) {
+			return fmt.Errorf("索引 %s.%s 列=%q，期望=%q", want.table, want.index, columns.String, want.columns)
+		}
+	}
 	return nil
 }
 

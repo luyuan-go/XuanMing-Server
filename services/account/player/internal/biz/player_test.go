@@ -25,6 +25,8 @@ import (
 // fakeProfile 是内存玩家档案。
 type fakeProfile struct {
 	nickname string
+	// legacyMMR 复刻 players.mmr：建档即带基线，供旧客户端的 PlayerProfile.mmr #4。
+	legacyMMR int
 	// ratings 复刻 player_mmr 的分区语义:key=rating_pool。**没打过的池没有条目**
 	// (不是 0 分),这样"首战以基线起算"与"打到 0 分"在测试里也是两种状态。
 	ratings      map[string]int
@@ -88,7 +90,7 @@ func (f *fakeRepo) EnsureProfile(_ context.Context, playerID uint64, defaultNick
 	if _, ok := f.players[playerID]; !ok {
 		// 刻意不预置任何池的分:真实 EnsureProfile 只建 players 行,player_mmr 行
 		// 由首次结算 upsert 创建(baseMMR 只是 GetMMR 未命中时的返回值)。
-		f.players[playerID] = &fakeProfile{nickname: defaultNickname, ratings: map[string]int{}}
+		f.players[playerID] = &fakeProfile{nickname: defaultNickname, legacyMMR: baseMMR, ratings: map[string]int{}}
 	}
 	return nil
 }
@@ -101,6 +103,7 @@ func (f *fakeRepo) GetProfile(_ context.Context, playerID uint64) (*playerv1.Pla
 	return &playerv1.PlayerProfile{
 		PlayerId:     playerID,
 		Nickname:     p.nickname,
+		Mmr:          int32(p.legacyMMR),
 		TotalBattles: p.totalBattles,
 		TotalWins:    p.totalWins,
 	}, true, nil
@@ -186,6 +189,9 @@ func (f *fakeRepo) ApplyMMRChange(_ context.Context, c data.MMRChange) (int, boo
 		newMMR = c.Floor
 	}
 	p.ratings[c.RatingPool] = newMMR
+	if c.RatingPool == rating.DefaultPool {
+		p.legacyMMR = newMMR
+	}
 	if c.IncBattle {
 		p.totalBattles++
 	}
@@ -769,6 +775,49 @@ func TestGetMMR_NotFoundReturnsBase(t *testing.T) {
 	}
 	if mmr != 1500 {
 		t.Fatalf("unbuilt player should return base 1500, got %d", mmr)
+	}
+}
+
+// TestGetProfileProjectsLegacyMMRAndPartitionedRatings 同时守住两代客户端：旧客户端
+// 继续读 deprecated mmr #4(default 兼容投影)，新客户端读 ratings；未打过任何池时
+// 旧字段仍按历史建档语义显示基线，但 ratings 必须为空，不能伪造“已定级”。
+func TestGetProfileProjectsLegacyMMRAndPartitionedRatings(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+
+	fresh, err := uc.GetProfile(context.Background(), 201)
+	if err != nil {
+		t.Fatalf("读取新建档案: %v", err)
+	}
+	if fresh.GetMmr() != 1500 || len(fresh.GetRatings()) != 0 {
+		t.Fatalf("新建档案 mmr=%d ratings=%+v, want 1500/empty", fresh.GetMmr(), fresh.GetRatings())
+	}
+
+	if _, _, err := uc.UpdateMMR(context.Background(), 201, 25, "win", "default-match", ""); err != nil {
+		t.Fatalf("default 入账: %v", err)
+	}
+	if _, _, err := uc.UpdateMMR(context.Background(), 201, 40, "win", "3v3-match", "3v3"); err != nil {
+		t.Fatalf("3v3 入账: %v", err)
+	}
+	profile, err := uc.GetProfile(context.Background(), 201)
+	if err != nil {
+		t.Fatalf("读取分池档案: %v", err)
+	}
+	if profile.GetMmr() != 1525 {
+		t.Fatalf("旧客户端 mmr #4=%d, want default 1525", profile.GetMmr())
+	}
+	want := map[string]int32{rating.DefaultPool: 1525, "3v3": 1540}
+	if len(profile.GetRatings()) != len(want) {
+		t.Fatalf("新客户端 ratings=%+v, want 2 pools", profile.GetRatings())
+	}
+	for _, got := range profile.GetRatings() {
+		if expected, ok := want[got.GetRatingPool()]; !ok || got.GetMmr() != expected {
+			t.Fatalf("新客户端 rating=%+v, want=%v", got, want)
+		}
+		delete(want, got.GetRatingPool())
+	}
+	if len(want) != 0 {
+		t.Fatalf("新客户端缺 rating pools=%v", want)
 	}
 }
 

@@ -1,13 +1,13 @@
 package main
 
-// player_migration_test.go — pandora_player 000005/000006 的迁移契约与真库验收。
+// player_migration_test.go — pandora_player 000005..000008 的迁移契约与真库验收。
 //
-// 分工:000002..000006 的**静态片段断言**历史上落在
+// 分工:000002..000007 的**静态片段断言**历史上落在
 // battle_recovery_migration_test.go 的 TestPandoraPlayerExperienceMigrationIsInitSafe
-// (含 latest=6 版本门禁),这里主要补真库路径与 fresh-init 漂移断言。
+// (含 latest 版本门禁),这里主要补真库路径与 fresh-init 漂移断言。
 //
 //	① 000005 独有的两条静态契约:清理索引的条件补齐守卫、down 只碰本次新增的三张表;
-//	② **真库**验收 —— fresh-init / 存量升级 / 重复迁移 / 回滚,四条路径各自跑通。
+//	② **真库**验收 —— fresh-init / 存量升级 / v7 补偿 / 重复迁移 / 回滚各路径跑通。
 //
 // 真库用例默认 skip,设 PANDORA_TEST_MYSQL_DSN(和可选 PANDORA_TEST_TIDB_DSN)才跑。
 // 静态用例永远跑,是 CI 里能拦住漂移的那一层。
@@ -121,6 +121,56 @@ func TestPandoraPlayerV6DownTouchesOnlyInstanceProjection(t *testing.T) {
 	}
 }
 
+// TestPandoraPlayerV8RestoresRollingCompatibility 钉住修复迁移只能做 expand。
+// 000007 已发布不可改；旧副本依赖 players.mmr，所以补偿版本必须恢复旧列/索引、
+// 回填可恢复的 default 投影，且 up/down 都不能在滚动升级窗口删除兼容面。
+func TestPandoraPlayerV8RestoresRollingCompatibility(t *testing.T) {
+	// quarantine 只认已发布 000007 的冻结正文；这条静态回归不依赖真库 DSN，
+	// 防止后续误改旧迁移却让真实后端用例因 SKIP 漏报。
+	if err := verifyEmbeddedPandoraPlayerV7(); err != nil {
+		t.Fatalf("000007 immutable checksum: %v", err)
+	}
+	up := readEmbeddedMigration(t,
+		"migrations/pandora_player/000008_rating_pool_expand_compat.up.sql")
+	for _, fragment := range []string{
+		"information_schema.COLUMNS",
+		"ADD COLUMN `mmr` INT NOT NULL DEFAULT 1500",
+		"ALGORITHM=INSTANT",
+		"JOIN `player_mmr` AS pm",
+		"pm.`rating_pool` = 'default'",
+		"p.`last_seen_at` = p.`last_seen_at`",
+		"information_schema.STATISTICS",
+		"ADD KEY `idx_mmr` (`mmr`)",
+		"ALGORITHM=INPLACE",
+	} {
+		if !strings.Contains(up, fragment) {
+			t.Errorf("000008 up 缺少滚动兼容片段 %q", fragment)
+		}
+	}
+	if strings.Contains(strings.ToUpper(up), "DROP COLUMN") ||
+		strings.Contains(strings.ToUpper(up), "DROP TABLE") {
+		t.Fatal("000008 expand 不得 DROP 列或表")
+	}
+	freshInit := readRepoFile(t, playerFreshInitPath)
+	for _, fragment := range []string{
+		"`mmr`           INT              NOT NULL DEFAULT 1500",
+		"KEY `idx_mmr` (`mmr`)",
+		"CREATE TABLE IF NOT EXISTS `player_mmr`",
+		"`rating_pool`     VARCHAR(32)      NOT NULL DEFAULT 'default'",
+	} {
+		if !strings.Contains(freshInit, fragment) {
+			t.Errorf("fresh-init 缺少 v8 兼容终态片段 %q", fragment)
+		}
+	}
+
+	down := readEmbeddedMigration(t,
+		"migrations/pandora_player/000008_rating_pool_expand_compat.down.sql")
+	statements := executableStatements(down)
+	if len(statements) != 1 || statements[0] != "SELECT 1" {
+		t.Fatalf("000008 down 必须 no-op，实际=%v", statements)
+	}
+}
+
 // executableStatements 去掉注释与空行后按分号切出语句(只用于静态断言,不求 SQL 解析完备)。
 func executableStatements(sqlText string) []string {
 	var out []string
@@ -150,16 +200,22 @@ func readRepoFile(t *testing.T, path string) string {
 type playerMigrationScenario struct {
 	name    string
 	prepare func(t *testing.T, ctx context.Context, db *sql.DB, target migrationTarget) func(*testing.T)
+	// expectFailure 只用于 fail-closed 反向场景；空表示迁移必须成功。
+	expectFailure string
 }
 
-// TestPandoraPlayerMigratesToLatestAcrossBackends 覆盖四条真实路径:
+// TestPandoraPlayerMigratesToLatestAcrossBackends 覆盖正向与反向真实路径:
 //
 //	fresh_empty          空库直接迁移(全新环境)
 //	fresh_init_schema    先跑 deploy/mysql-init 建表再迁移(docker-init 形态,迁移必须幂等)
-//	legacy_v4            存量库停在 v4 且有业务数据,增量升到 latest(数据一行不能动)
+//	legacy_v4            存量库停在 v4 且有业务数据,增量升到 latest(除已定口径的旧 mmr 重置外不动)
+//	legacy_v6            已到前一稳定版本,正常跑 v7 时也能精确修复 MySQL 1845 dirty
 //	legacy_missing_index 存量库已有 skill_card_grants 但缺 idx_created(条件补齐守卫必须补上)
+//	legacy_v7_clean      已 clean v7 且已有分池数据,由 v8 恢复兼容投影
+//	v7_dirty_exact       MySQL 1845 的精确中间态,quarantine 修复后继续 v8
+//	v7_dirty_mismatch    dirty=7 但 schema 不符,必须 fail-closed
 //
-// 每条路径都跑**两遍** migrateTarget:第二遍必须仍是 clean latest=6(重复迁移安全)。
+// 每条路径都跑**两遍** migrateTarget:第二遍必须仍是 clean latest=8(重复迁移安全)。
 func TestPandoraPlayerMigratesToLatestAcrossBackends(t *testing.T) {
 	scenarios := []playerMigrationScenario{
 		{
@@ -170,7 +226,12 @@ func TestPandoraPlayerMigratesToLatestAcrossBackends(t *testing.T) {
 		},
 		{name: "fresh_init_schema", prepare: preparePlayerFreshInitSchema},
 		{name: "legacy_v4", prepare: preparePlayerLegacyV4},
+		{name: "legacy_v6", prepare: preparePlayerLegacyV6},
 		{name: "legacy_missing_index", prepare: preparePlayerLegacyMissingIndex},
+		{name: "legacy_v7_clean", prepare: preparePlayerLegacyV7},
+		{name: "v7_dirty_exact", prepare: preparePlayerV7DirtyExact},
+		{name: "v7_dirty_mismatch", prepare: preparePlayerV7DirtyMismatch,
+			expectFailure: "pandora_player v7 quarantine 形态拒绝"},
 	}
 	forEachPlayerBackend(t, func(t *testing.T, dsn string, isTiDB bool) {
 		for _, scenario := range scenarios {
@@ -181,12 +242,21 @@ func TestPandoraPlayerMigratesToLatestAcrossBackends(t *testing.T) {
 				defer cancel()
 				verify := scenario.prepare(t, ctx, db, target)
 
-				if err := migrateTarget(target, false); err != nil {
+				err := migrateTarget(target, false)
+				if scenario.expectFailure != "" {
+					if err == nil || !strings.Contains(err.Error(), scenario.expectFailure) {
+						t.Fatalf("migrateTarget 反向场景 err=%v,期望包含 %q", err, scenario.expectFailure)
+					}
+					assertPlayerMigrationVersionState(t, ctx, db, 7, true)
+					return
+				}
+				if err != nil {
 					t.Fatalf("migrateTarget 首跑: %v", err)
 				}
 				assertPlayerSkillCardSchema(t, ctx, db)
-				assertPlayerMigrationVersion(t, ctx, db, 6)
+				assertPlayerMigrationVersion(t, ctx, db, 8)
 				assertPlayerEquipmentInstanceSchema(t, ctx, db)
+				assertPlayerRatingExpandSchema(t, ctx, db)
 				if verify != nil {
 					verify(t)
 				}
@@ -197,8 +267,9 @@ func TestPandoraPlayerMigratesToLatestAcrossBackends(t *testing.T) {
 					t.Fatalf("migrateTarget 重跑: %v", err)
 				}
 				assertPlayerSkillCardSchema(t, ctx, db)
-				assertPlayerMigrationVersion(t, ctx, db, 6)
+				assertPlayerMigrationVersion(t, ctx, db, 8)
 				assertPlayerEquipmentInstanceSchema(t, ctx, db)
+				assertPlayerRatingExpandSchema(t, ctx, db)
 				if verify != nil {
 					verify(t)
 				}
@@ -425,6 +496,22 @@ func preparePlayerLegacyV4(t *testing.T, ctx context.Context, db *sql.DB, target
 	return func(t *testing.T) { assertPlayerLegacyRowsIntact(t, ctx, db) }
 }
 
+// preparePlayerLegacyV6 单独覆盖从 v6 正常启动 runner 的路径。MySQL 会在本次 Up
+// 内产生 v7 dirty 后由精确 quarantine 恢复；TiDB 则直接完成 v7，两者都只能经 v8
+// 到达同一个 expand 终态。
+func preparePlayerLegacyV6(t *testing.T, ctx context.Context, db *sql.DB, target migrationTarget) func(*testing.T) {
+	t.Helper()
+	migrator := newPlayerMigrator(t, target)
+	if err := migrator.Migrate(6); err != nil {
+		t.Fatalf("预置存量库到 v6: %v", err)
+	}
+	if err := closeMigration(migrator); err != nil {
+		t.Fatalf("关闭 v6 预置迁移器: %v", err)
+	}
+	assertPlayerMigrationVersion(t, ctx, db, 6)
+	return nil
+}
+
 // preparePlayerLegacyMissingIndex 复现"表已存在但缺清理索引"的库:
 // `CREATE TABLE IF NOT EXISTS` 会静默跳过这张表,只有 up 里的条件补齐能救它。
 func preparePlayerLegacyMissingIndex(t *testing.T, ctx context.Context, db *sql.DB, target migrationTarget) func(*testing.T) {
@@ -445,6 +532,99 @@ func preparePlayerLegacyMissingIndex(t *testing.T, ctx context.Context, db *sql.
 		t.Fatal("预置失败:这张表本该缺 idx_created")
 	}
 	return verify
+}
+
+// preparePlayerLegacyV7 复现 000007 已执行的库：players.mmr 已不存在，新副本已可能
+// 写入 default 与显式池。v8 必须把 default 恢复为旧副本投影，且不破坏任何分池行。
+func preparePlayerLegacyV7(t *testing.T, ctx context.Context, db *sql.DB, target migrationTarget) func(*testing.T) {
+	t.Helper()
+	migrator := newPlayerMigrator(t, target)
+	if err := migrator.Migrate(6); err != nil {
+		t.Fatalf("预置存量库到 v6: %v", err)
+	}
+	// 构造“已由另一引擎/人工受控处置成功执行并 clean 的 v7”。不改嵌入迁移；
+	// 测试临时库只把已知 MySQL 8.4 不支持的 DROP 算法换为 INPLACE。
+	v7 := readEmbeddedMigration(t, "migrations/pandora_player/000007_rating_pool_partition.up.sql")
+	const instantDrop = "ALTER TABLE `players` DROP COLUMN `mmr`, ALGORITHM=INSTANT"
+	const inplaceDrop = "ALTER TABLE `players` DROP COLUMN `mmr`, ALGORITHM=INPLACE"
+	if strings.Count(v7, instantDrop) != 1 {
+		t.Fatalf("000007 已发布 DROP 锚点数量异常，无法构造 clean v7 夹具")
+	}
+	if _, err := db.ExecContext(ctx, strings.Replace(v7, instantDrop, inplaceDrop, 1)); err != nil {
+		t.Fatalf("预置 clean v7 schema: %v", err)
+	}
+	if err := migrator.Force(7); err != nil {
+		t.Fatalf("预置 clean v7 version: %v", err)
+	}
+	if err := closeMigration(migrator); err != nil {
+		t.Fatalf("关闭 v7 预置迁移器: %v", err)
+	}
+	assertPlayerMigrationVersion(t, ctx, db, 7)
+	if _, err := db.ExecContext(ctx, `
+INSERT INTO players (player_id, nickname, level) VALUES (7101, 'Player_7101', 5);
+INSERT INTO player_mmr (player_id, rating_pool, mmr) VALUES
+  (7101, 'default', 1675),
+  (7101, '3v3', 1540);`); err != nil {
+		t.Fatalf("写入 v7 分池存量: %v", err)
+	}
+	return func(t *testing.T) {
+		var legacyMMR int
+		if err := db.QueryRowContext(ctx, "SELECT mmr FROM players WHERE player_id = 7101").Scan(&legacyMMR); err != nil {
+			t.Fatalf("读取 v8 default 兼容投影: %v", err)
+		}
+		if legacyMMR != 1675 {
+			t.Errorf("v8 default 兼容投影=%d,期望 1675", legacyMMR)
+		}
+		var poolRows int
+		if err := db.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM player_mmr WHERE player_id = 7101 AND ((rating_pool = 'default' AND mmr = 1675) OR (rating_pool = '3v3' AND mmr = 1540))").
+			Scan(&poolRows); err != nil {
+			t.Fatalf("读取 v8 分池存量: %v", err)
+		}
+		if poolRows != 2 {
+			t.Errorf("v8 后分池存量匹配行=%d,期望 2", poolRows)
+		}
+	}
+}
+
+// preparePlayerV7DirtyExact 真实执行到 v7。MySQL 8.4 会命中已知 1845 并留下精确
+// dirty 中间态；TiDB 的 DROP 能成功，因此显式 Force(7) 仅用于测试夹具制造同一中间态：
+// 先恢复旧列/索引，再置 dirty，验证 quarantine 在两种后端上采用同一 fail-closed 规则。
+func preparePlayerV7DirtyExact(t *testing.T, ctx context.Context, db *sql.DB, target migrationTarget) func(*testing.T) {
+	t.Helper()
+	migrator := newPlayerMigrator(t, target)
+	err := migrator.Migrate(7)
+	if err == nil {
+		// TiDB 正常完成 v7；只在隔离临时库内构造 MySQL 1845 的精确中间 schema。
+		if _, qerr := db.ExecContext(ctx,
+			"ALTER TABLE players ADD COLUMN mmr INT NOT NULL DEFAULT 1500 AFTER exp"); qerr != nil {
+			t.Fatalf("TiDB 夹具恢复 v7 旧列: %v", qerr)
+		}
+		if _, qerr := db.ExecContext(ctx,
+			"ALTER TABLE players ADD KEY idx_mmr (mmr)"); qerr != nil {
+			t.Fatalf("TiDB 夹具恢复 v7 旧索引: %v", qerr)
+		}
+		if _, qerr := db.ExecContext(ctx, "UPDATE schema_migrations SET dirty = 1 WHERE version = 7"); qerr != nil {
+			t.Fatalf("TiDB 夹具标 v7 dirty: %v", qerr)
+		}
+	} else if !strings.Contains(err.Error(), "Error 1845") {
+		t.Fatalf("预置 v7 dirty 得到非预期错误: %v", err)
+	}
+	if err := closeMigration(migrator); err != nil {
+		t.Fatalf("关闭 v7 dirty 预置迁移器: %v", err)
+	}
+	assertPlayerMigrationVersionState(t, ctx, db, 7, true)
+	return nil
+}
+
+func preparePlayerV7DirtyMismatch(t *testing.T, ctx context.Context, db *sql.DB, target migrationTarget) func(*testing.T) {
+	t.Helper()
+	preparePlayerV7DirtyExact(t, ctx, db, target)
+	// 只破坏一个精确前置条件；quarantine 必须拒绝而不是“尽量修”。
+	if _, err := db.ExecContext(ctx, "ALTER TABLE players DROP INDEX idx_mmr"); err != nil {
+		t.Fatalf("构造 v7 dirty 形态不符: %v", err)
+	}
+	return nil
 }
 
 // stripUseStatements 去掉 mysql-init 脚本里的 `USE \`db\`;`(测试 DSN 已经指定了库,
@@ -599,15 +779,54 @@ func assertPlayerEquipmentInstanceSchema(t *testing.T, ctx context.Context, db *
 	}
 }
 
+// assertPlayerRatingExpandSchema 断言 v8 / fresh-init 都保留旧副本需要的兼容面，
+// 同时保留新副本的分池表与历史分区列。
+func assertPlayerRatingExpandSchema(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	var dataType, nullable string
+	var columnDefault sql.NullString
+	if err := db.QueryRowContext(ctx,
+		`SELECT DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'players' AND COLUMN_NAME = 'mmr'`).
+		Scan(&dataType, &nullable, &columnDefault); err != nil {
+		t.Fatalf("迁移后缺 players.mmr 兼容列: %v", err)
+	}
+	if !strings.EqualFold(dataType, "int") || nullable != "NO" || !columnDefault.Valid || columnDefault.String != "1500" {
+		t.Errorf("players.mmr 形态=%s nullable=%s default=%v,期望 int/NO/1500",
+			dataType, nullable, columnDefault)
+	}
+	if got := indexColumns(t, ctx, db, "players", "idx_mmr"); strings.Join(got, ",") != "mmr" {
+		t.Errorf("索引 players.idx_mmr 列=%v,期望=[mmr]", got)
+	}
+	if !tableExists(t, ctx, db, "player_mmr") {
+		t.Error("迁移后缺 player_mmr 分池表")
+	}
+	var hasHistoryPool int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM information_schema.COLUMNS
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mmr_history' AND COLUMN_NAME = 'rating_pool'`).
+		Scan(&hasHistoryPool); err != nil {
+		t.Fatalf("探测 mmr_history.rating_pool: %v", err)
+	}
+	if hasHistoryPool != 1 {
+		t.Errorf("mmr_history.rating_pool 列数=%d,期望 1", hasHistoryPool)
+	}
+}
+
 func assertPlayerMigrationVersion(t *testing.T, ctx context.Context, db *sql.DB, want uint) {
+	t.Helper()
+	assertPlayerMigrationVersionState(t, ctx, db, want, false)
+}
+
+func assertPlayerMigrationVersionState(t *testing.T, ctx context.Context, db *sql.DB, want uint, wantDirty bool) {
 	t.Helper()
 	var version uint
 	var dirty bool
 	if err := db.QueryRowContext(ctx, "SELECT version, dirty FROM schema_migrations LIMIT 1").Scan(&version, &dirty); err != nil {
 		t.Fatalf("读取 schema_migrations: %v", err)
 	}
-	if version != want || dirty {
-		t.Fatalf("schema_migrations version=%d dirty=%v, 期望 version=%d dirty=false", version, dirty, want)
+	if version != want || dirty != wantDirty {
+		t.Fatalf("schema_migrations version=%d dirty=%v, 期望 version=%d dirty=%v", version, dirty, want, wantDirty)
 	}
 }
 
