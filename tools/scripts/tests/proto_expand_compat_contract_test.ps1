@@ -30,10 +30,11 @@ function Assert-Pattern {
     }
 }
 
-# Login expand：26201c1 已发布 register_no #13 / GetRegisterNo；新名只能用新编号/RPC 扩展。
+# Login expand：最新正式描述符与旧客户端锁固定 register_no #13；新 player_no 只能使用
+# additive #14。服务端双写两者，使 4e 期间的 JSON 调用方仍能读取 playerNo。
 Assert-Pattern 'proto/pandora/login/v1/login.proto' 'rpc\s+GetRegisterNo\s*\(' '旧 GetRegisterNo RPC 必须保留'
 Assert-Pattern 'proto/pandora/login/v1/login.proto' 'uint64\s+register_no\s*=\s*13\s*\[deprecated\s*=\s*true\]' 'register_no 必须保留在 #13'
-Assert-Pattern 'proto/pandora/login/v1/login.proto' 'uint64\s+player_no\s*=\s*14\s*;' 'player_no 必须使用新编号 #14'
+Assert-Pattern 'proto/pandora/login/v1/login.proto' 'uint64\s+player_no\s*=\s*14\s*;' 'player_no 必须使用 additive #14'
 
 # Player expand：旧客户端仍读单值 mmr #4；新客户端读分池列表 #52。
 Assert-Pattern 'proto/pandora/player/v1/player.proto' 'int32\s+mmr\s*=\s*4\s*\[deprecated\s*=\s*true\]' 'PlayerProfile.mmr #4 只能 deprecated，不能删除'
@@ -48,5 +49,15 @@ Assert-Pattern 'proto/gen/cpp/pandora/login/v1/login.pb.h' 'kRegisterNoFieldNumb
 Assert-Pattern 'proto/gen/cpp/pandora/login/v1/login.pb.h' 'kPlayerNoFieldNumber\s*=\s*14' 'C++ LoginResponse.player_no #14'
 Assert-Pattern 'proto/gen/cpp/pandora/player/v1/player.pb.h' 'kMmrFieldNumber\s*=\s*4' 'C++ PlayerProfile.mmr #4'
 Assert-Pattern 'proto/gen/cpp/pandora/player/v1/player.pb.h' 'kRatingsFieldNumber\s*=\s*52' 'C++ PlayerProfile.ratings #52'
+
+# Match 计分规则必须在 StartMatch 时冻结并贯穿三类持久记录；只放进 AllocateBattleRequest
+# 会在配置热更或进程重启后重新取值，造成排队池与结算池撕裂。
+Assert-Pattern 'proto/pandora/match/v1/match.proto' 'MatchTicketStorageRecord[\s\S]*LevelRatingMode\s+rating_mode\s*=\s*13\s*;[\s\S]*string\s+rating_pool\s*=\s*14\s*;' 'Ticket 必须冻结 rating mode / pool'
+Assert-Pattern 'proto/pandora/match/v1/match.proto' 'MatchStorageRecord[\s\S]*LevelRatingMode\s+rating_mode\s*=\s*17\s*;[\s\S]*string\s+rating_pool\s*=\s*18\s*;' 'Match 必须继承冻结 rating mode / pool'
+Assert-Pattern 'proto/pandora/match/v1/match.proto' 'MatchStartOperationStorageRecord[\s\S]*LevelRatingMode\s+rating_mode\s*=\s*17\s*;[\s\S]*string\s+rating_pool\s*=\s*18\s*;' 'Start saga 必须持久化 rating mode / pool'
+Assert-Pattern 'proto/gen/go/pandora/match/v1/match.pb.go' 'protobuf:"varint,13,opt,name=rating_mode,json=ratingMode,proto3,enum=pandora\.config\.v1\.LevelRatingMode"' 'Go Ticket.rating_mode #13'
+Assert-Pattern 'proto/gen/go/pandora/match/v1/match.pb.go' 'protobuf:"bytes,18,opt,name=rating_pool,json=ratingPool,proto3"' 'Go Match / Start rating_pool #18'
+Assert-Pattern 'proto/gen/cpp/pandora/match/v1/match.pb.h' 'kRatingModeFieldNumber\s*=\s*13' 'C++ Ticket.rating_mode #13'
+Assert-Pattern 'proto/gen/cpp/pandora/match/v1/match.pb.h' 'kRatingPoolFieldNumber\s*=\s*18' 'C++ Match / Start.rating_pool #18'
 
 Write-Host '[OK] proto expand compatibility contract' -ForegroundColor Green

@@ -465,9 +465,10 @@ type LoginResponse struct {
 	// 纯展示字段,客户端不得当身份 ID 用(身份永远是 player_id);服务端也禁止任何服务
 	// 拿它当键 / 外键 / 路由键 / 幂等键(设计文档 §3.3 红线)。
 	//
-	// register_no #13 是已发布 JSON / 生成 API 的滚动升级兼容字段；新服务在迁移期
-	// 与 player_no #14 双写。新客户端优先读 #14，缺失时回退 #13；旧客户端继续读 #13。
-	// 最后一个旧客户端和外部 JSON 调用方排空后，才可 reserved #13。
+	// register_no #13 是旧客户端锁与当前正式描述符的兼容字段；新服务在迁移期与
+	// player_no #14 双写。旧 protobuf 二进制仍按 wire #13 读取相同值；4e 期间生成的
+	// JSON 调用方则读取同时输出的 playerNo #14。新代码只读 #14，最后一个旧调用方
+	// 排空后，才可在独立 contract 版本 reserved #13。
 	//
 	// Deprecated: Marked as deprecated in pandora/login/v1/login.proto.
 	RegisterNo    uint64 `protobuf:"varint,13,opt,name=register_no,json=registerNo,proto3" json:"register_no,omitempty"`

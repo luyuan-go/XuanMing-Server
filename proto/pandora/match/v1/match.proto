@@ -298,6 +298,12 @@ message MatchTicketStorageRecord {
   // 0(UNSPECIFIED)= 滚动升级期旧 matchmaker 写入的票据 → 分流回退按关卡表 / 部署 walk_in
   // 判定,与本字段上线前逐字节等价(§9.17 只加字段的兼容演进)。
   pandora.config.v1.LevelEntryMode  entry_mode    = 12;
+  // rating_mode / rating_pool 由 StartMatch 对 effective map 的同一配置批次快照解析后冻结。
+  // 二者是 MMR 权威读取、排队分区和战斗结算的共同契约；撮合 worker / DS 分配不得在
+  // 热更后重新查当前关卡表。UNSPECIFIED / 空串仅表示滚动升级遗留记录，必须显式修复或
+  // fail-closed 重排，禁止把它解释成 MMR=0 或当前热表值。
+  pandora.config.v1.LevelRatingMode rating_mode   = 13;
+  string                            rating_pool   = 14;
 }
 
 // MatchStorageRecord 是一场已撮合 match 的存储快照。
@@ -322,6 +328,10 @@ message MatchStorageRecord {
   int64                             allocation_next_attempt_at_ms = 14;
   MatchBattleTargetStorageRecord    battle_target = 15;
   string                            game_mode = 16; // canonical worker/route namespace
+  // 从组成票据继承的冻结计分契约。所有票据必须同 mode / pool 才能成局；分配与结算
+  // 透传本值，不得回查热表。旧记录的 0 / 空值必须显式兼容处理，不能静默按零分运行。
+  pandora.config.v1.LevelRatingMode rating_mode = 17;
+  string                            rating_pool = 18;
 }
 
 message MatchPlayerPlacementBindingStorageRecord {
@@ -362,6 +372,10 @@ message MatchStartOperationStorageRecord {
   // entry_mode 随 saga 落库:StartMatch 已解析校验完成,票据由本记录构造(buildTicket),
   // 中途重启不得重新解析(那时请求上下文已不在,重解析等于换一套判定)。0 = 旧记录,同上兼容。
   pandora.config.v1.LevelEntryMode  entry_mode               = 16;
+  // 与 map_id / entry_mode 在同一 StartMatch 判定中冻结，后续 saga 重启只能复用。
+  // ELO 必须带非空 rating_pool；0 / 空只允许作为待修复的 legacy 记录，禁止当 MMR=0。
+  pandora.config.v1.LevelRatingMode rating_mode              = 17;
+  string                            rating_pool              = 18;
 }
 
 // MatchReleaseStorageRecord 是 battle_result→matchmaker 释放 outbox 的 payload。
