@@ -162,6 +162,13 @@ data:
                     route: { cluster: mail_cluster, timeout: 15s, idle_timeout: 60s }
                   - match: { path: "/pandora.mail.v1.MailService/MarkMailClaimed" }
                     route: { cluster: mail_cluster, timeout: 15s, idle_timeout: 60s }
+                  # DS 反查玩家社交归属(队友判定与铭牌上色的唯一权威来源)。
+                  # 只放这两个精确方法,不放整个 Service 前缀:DS 只需要"同队/同会与否"这一个事实,
+                  # 放整前缀等于把队伍/公会的写接口一并暴露给 DS 网段。
+                  - match: { path: "/pandora.team.v1.TeamService/GetPlayerTeam" }
+                    route: { cluster: team_cluster, timeout: 5s, idle_timeout: 60s }
+                  - match: { path: "/pandora.guild.v1.GuildService/GetPlayerGuild" }
+                    route: { cluster: guild_cluster, timeout: 5s, idle_timeout: 60s }
       clusters:
       # 回环 admin(仅供 :9902 健康监听器转发 /ready,不对 Pod 外暴露)
       - name: local_admin_cluster
@@ -288,6 +295,38 @@ data:
             - endpoint:
                 address:
                   socket_address: { address: mail.pandora.svc.cluster.local, port_value: 20009 }
+      - name: team_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: team_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: team.pandora.svc.cluster.local, port_value: 20010 }
+      - name: guild_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: guild_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: guild.pandora.svc.cluster.local, port_value: 20008 }
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -76,6 +76,10 @@ var registry = map[string]map[string]tableEntry{
 		"account_devices":            {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_last_login", Columns: []string{"last_login_at"}}}, PendingWhere: "last_login_at < DATE_SUB(NOW(), INTERVAL 0 DAY)"},
 		"account_bans":               {Class: classExempt}, // 运营合规审计,量级 = 运营操作数
 		"player_no_counter":          {Class: classExempt}, // 角色编号全局发号计数器,恒 1 行(发号权威闸;player-no-and-login-surge.md §3.3)
+		// 同一个发号权威闸的旧名副本:000006 曾把它 RENAME 掉,破坏了滚动升级期
+		// Stable/Canary 共存,000007 expand 重新建回并与 player_no_counter 双锁双写。
+		// 恒 1 行,contract 迁移(所有旧 login 二进制退场后)之前不得删除。
+		"register_no_counter": {Class: classExempt},
 	},
 	"pandora_player": {
 		"players":              {Class: classBounded},

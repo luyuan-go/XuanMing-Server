@@ -152,6 +152,10 @@ spec:
                 # bag 域 journal 直写(bag-domain.md phase 2 拾取入包;同一 DS 面 Envoy)
                 - name: PANDORA_BAG_SERVICE_ADDR
                   value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_TEAM_SERVICE_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_GUILD_SERVICE_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_DS_ALLOCATOR_TLS
                   value: "0"
                 # DSTicket v2(方案 B,RS256 纯本地验票,决策文档 §7):DS 只持公钥 JWKS,无任何玩家票

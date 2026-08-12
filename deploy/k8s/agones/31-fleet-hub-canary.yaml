@@ -88,6 +88,10 @@ spec:
                   value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_MAIL_SERVICE_ADDR
                   value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_TEAM_SERVICE_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_GUILD_SERVICE_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_DS_ALLOCATOR_TLS
                   value: "0"
                 # DSTicket v2(方案 B)公钥 JWKS 配置,与 battle Fleet 完全同款(见 20-fleet-battle.yaml 注释):

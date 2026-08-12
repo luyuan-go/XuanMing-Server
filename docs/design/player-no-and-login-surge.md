@@ -482,6 +482,50 @@ HTTP `/v1/player-no/get`)、envoy jwt_authn rules path、日志 msg(`player_no_a
 与旧文档名),它是回滚的匹配目标而非本次改名的产物——批量改词时若把它一起换掉,条件判断
 将永远不成立,每次回滚白发一次 DDL。该处已加注释警示(本次改名中真的误伤过一次)。
 
+### 3.6.4 改名违反滚动升级,000007 expand 回补(2026-08-12,推翻 §3.6.3 的落地方式)
+
+**§3.6.3 的改名决定本身不变**(编号绑角色实体,`player_no` 是最终名),被推翻的是**它的落地
+方式**:`000006` 用 `RENAME COLUMN` / `RENAME INDEX` / `RENAME TABLE` + `DROP` 一次性把
+legacy 三件套换掉,这是 **contract**,不是 expand。CLAUDE.md §9.21 要求「已有 RPC / 字段 /
+语义不得原地禁用或硬切;删除能力必须走 expand → migrate → contract」——迁移一执行,还没排空的
+旧 login 副本(Stable)读写的 `register_no` / `uk_register_no` / `register_no_counter` **当场消失**,
+补号事务直接报错。改名成本最低点的判断(§3.6.3「生产零注册路径、无存量数据」)只说明**数据**
+没风险,不能推出**二进制共存**没风险。事故档案:[INC-20260812-001](../incidents/2026-08-12-p0-published-migration-rolling-upgrade-break.md)。
+
+**`000006` 已发布即 immutable,只能向前修**。`000007_player_no_expand_compat` 是纯加法:
+
+| 对象 | expand 后状态 |
+|---|---|
+| `accounts.player_no` | 新名,新副本读写 |
+| `accounts.register_no` | 旧名**重新建回**,与新名双写同值 |
+| `uk_player_no` / `uk_register_no` | 两个单列唯一索引并存 |
+| `player_no_counter` / `register_no_counter` | 两张计数器表并存,同一 `next_no` |
+
+**双写与锁序(唯一正确写法)**:新版 `SweepPlayerNo` 在**同一个事务**里固定先
+`SELECT ... FOR UPDATE` 锁 `player_no_counter`、再锁 `register_no_counter`,取
+`next = MAX(两张表的 next_no)` 起算,一次 UPDATE 同时写两列,收尾把两张表推到同一 `newNext`。
+旧 Stable 只锁 `register_no_counter`(单锁),因此两代二进制在这张表上天然串行化,**不存在
+反向持锁路径,不会死锁**;`MAX` 水位保证任何一代已发出的号都不会被另一代重发。
+新版还会把旧版只写了 `register_no` 的行**回补** `player_no`(同值,不消耗新号),所以
+`SweepPlayerNo` 的返回值语义已从「本批新分配数」变成「本批处理行数(新分配 + 回补)」。
+
+**读路径**:`GetPlayerNo` 同时取两列,优先 `player_no`,缺失回落 `register_no`;两列都有值
+且**不相等**时返回 `ErrInternal`(不猜权威值)。登录主链对该错误 fail-soft(置 0,客户端显示
+「生成中」),只有 §3.7 的补拉 RPC 会把它翻成非 OK。
+
+**启动探针**:`EnsurePlayerNoCounter` 现在探 `SELECT player_no, register_no`,并在同一事务里
+幂等初始化 + 对齐两张计数器水位。**部署顺序硬约束:必须先跑 000007 迁移,再滚 login 新版**;
+顺序反了新版探针失败 → 补号任务停用(fail-soft,不拦启动),且**不会自愈**,必须重启进程。
+
+**contract 的退出条件(尚未满足,不得提前做)**:
+1. 所有旧 login 二进制排空(按 §9.21 确认无旧 Pod、无旧 release track);
+2. 经过一个独立观测窗;
+3. 另立一个更高版本迁移执行 `DROP`,`000007.down.sql` 有意 no-op —— 回滚服务版本**不等于**
+   旧副本已排空,回滚时删兼容面会立刻打死仍在跑的旧副本。
+
+**登记面**:`register_no_counter` 已登记 CLAUDE.md §9.24 豁免清单 + `dbcheck` registry
+(恒 1 行,发号权威闸,不清理)。
+
 ### 3.7 首登必见「生成中」缺陷与补拉 RPC(2026-08-10 实测暴露,已修)
 
 **现象**:dev 实测(账号 `test123`)客户端角色界面恒显示「角色编号 生成中」,而库里
