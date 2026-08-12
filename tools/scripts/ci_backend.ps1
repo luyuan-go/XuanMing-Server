@@ -38,10 +38,21 @@ $ProjectRoot = (Resolve-Path "$PSScriptRoot/../..").Path
 if (-not [string]::IsNullOrWhiteSpace($CiDbStateFile)) {
     $resolvedState = (Resolve-Path -LiteralPath $CiDbStateFile -ErrorAction Stop).Path
     $state = Get-Content -Raw -LiteralPath $resolvedState | ConvertFrom-Json -ErrorAction Stop
+    # 数据库组:缺一个就 throw。它们是 -RequireDbTests 的硬门禁对象。
     $allowedDbEnv = @(
         'PANDORA_TEST_MYSQL_DSN'
         'PANDORA_TEST_TIDB_DSN'
         'PANDORA_TIDB_TEST_DSN'
+    )
+    # 可选依赖组(ci-db 状态 v2 起提供):缺失只降级为"本轮未验证"告警,不阻断,
+    # 这样 v1 状态文件与临时精简栈仍能跑。**仍是白名单**——状态文件不能注入
+    # 这两张表之外的任何变量。
+    $allowedOptionalEnv = @(
+        'PANDORA_TEST_REDIS_ADDR'
+        'PANDORA_TEST_REDIS8_ADDR'
+        'PANDORA_TEST_REDIS8_PASSWORD'
+        'PANDORA_TEST_ETCD_ENDPOINTS'
+        'PANDORA_TEST_KAFKA_BROKERS'
     )
     foreach ($envName in $allowedDbEnv) {
         $prop = $state.environment.PSObject.Properties[$envName]
@@ -50,7 +61,17 @@ if (-not [string]::IsNullOrWhiteSpace($CiDbStateFile)) {
         }
         [Environment]::SetEnvironmentVariable($envName, [string]$prop.Value)
     }
+    $importedOptional = @()
+    foreach ($envName in $allowedOptionalEnv) {
+        $prop = $state.environment.PSObject.Properties[$envName]
+        if ($null -eq $prop -or [string]::IsNullOrWhiteSpace([string]$prop.Value)) { continue }
+        [Environment]::SetEnvironmentVariable($envName, [string]$prop.Value)
+        $importedOptional += $envName
+    }
     Write-Host "[INFO] 已从 CI DB 状态导入数据库测试环境（值已隐藏）：$resolvedState" -ForegroundColor Cyan
+    if ($importedOptional.Count -gt 0) {
+        Write-Host ("[INFO] 同时导入可选依赖环境（值已隐藏）：{0}" -f ($importedOptional -join ', ')) -ForegroundColor Cyan
+    }
 }
 
 if (-not $RequireDbTests -and $env:PANDORA_CI_REQUIRE_DB_TESTS -in @('1', 'true', 'True', 'yes')) {

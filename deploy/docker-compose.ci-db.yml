@@ -84,6 +84,162 @@ services:
       start_period: 20s
     networks: [ci-db]
 
+  # ===== Redis 8(无认证):pkg/offlinewatch、player_locator 等 11 个门控用例 =====
+  # 与下面的 redis8 分开两个实例:这些用例会真写键,而 redis8 的 ACL 审计用例要 SCAN
+  # 全库并断言键空间形态,共用一个实例会互相污染。
+  redis:
+    image: redis:8.8.0-alpine
+    restart: "no"
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - "127.0.0.1:${PANDORA_CI_REDIS_PORT:?ci_db.ps1 must set PANDORA_CI_REDIS_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 3s
+    networks: [ci-db]
+
+  # ===== Redis 8(专用只读 ACL 身份):ds_allocator / hub_allocator 的 7 个门控用例 =====
+  # ACL 必须与 poduidpreflight.validateCanonicalReadOnlyACL 的契约**逐字**一致,
+  # 否则 ProveReadOnlyAndIdentify 会以"ACL 与激活期只读契约不符"失败:
+  #   flags   恰好 {on, sanitize-payload}
+  #   密码    恰好 1 个
+  #   命令    -@all 起,后接下面这份精确白名单(见 canonicalReadOnlyACLCommands)
+  #   键      恰好 %R~pandora:ds:battle:*(只读前缀,写权限一律不给)
+  #   频道    空(resetchannels)
+  #   选择器  0 个
+  # 改动这里之前先读 services/battle/ds_allocator/internal/poduidpreflight/redis_security.go。
+  redis8:
+    image: redis:8.8.0-alpine
+    restart: "no"
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      # 这台实例有两类消费者,配置必须同时满足:
+      #   ① ds_allocator/poduidpreflight —— 用专用**只读** ACL 身份连,且要求
+      #      "未认证连接必须被拒"(否则报 Redis accepted unauthenticated PING);
+      #   ② hub_allocator/internal/data —— 用 default 身份**读写**做写者 fence 回归,
+      #      只传 password 不传 username。
+      # 因此:给 default 设 requirepass(满足①的强制认证、保留②的读写),
+      # 再加一个同口令的专用只读身份给①。两者共用 PANDORA_TEST_REDIS8_PASSWORD。
+      - --requirepass
+      - "${PANDORA_CI_REDIS8_PASSWORD}"
+      - --user
+      - pandora-pod-uid-release-preflight-ro
+      - "on"
+      - ">${PANDORA_CI_REDIS8_PASSWORD:?ci_db.ps1 must set PANDORA_CI_REDIS8_PASSWORD}"
+      - sanitize-payload
+      - resetchannels
+      - "%R~pandora:ds:battle:*"
+      - -@all
+      - +ping
+      - +get
+      - +scan
+      - +info
+      - +acl|whoami
+      - +acl|dryrun
+      - +acl|getuser
+      - +cluster|myid
+      - +cluster|shards
+      - +cluster|slots
+      - +cluster|info
+      - +cluster|nodes
+    ports:
+      - "127.0.0.1:${PANDORA_CI_REDIS8_PORT:?ci_db.ps1 must set PANDORA_CI_REDIS8_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning",
+             "-a", "${PANDORA_CI_REDIS8_PASSWORD}", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 3s
+    networks: [ci-db]
+
+  # ===== etcd 3.6:mission 的 TestPushWriterLeaseRealElection =====
+  etcd:
+    image: quay.io/coreos/etcd:v3.6.12
+    restart: "no"
+    environment:
+      ETCD_UNSUPPORTED_ARCH: ""
+    command:
+      - /usr/local/bin/etcd
+      - --name=ci-etcd
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=ci-etcd=http://etcd:2380
+      - --initial-cluster-token=pandora-ci-etcd
+      - --initial-cluster-state=new
+    ports:
+      - "127.0.0.1:${PANDORA_CI_ETCD_PORT:?ci_db.ps1 must set PANDORA_CI_ETCD_PORT}:2379"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+      start_period: 5s
+    networks: [ci-db]
+
+  # ===== Kafka(Zookeeper 模式,与 dev 栈同一条兼容线)=====
+  # EXTERNAL 监听端口必须**等于**宿主动态端口:advertised listener 会原样发回客户端,
+  # 端口不一致时 metadata 里给的地址在宿主上连不通(容器内外端口必须同号)。
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.9.7
+    restart: "no"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD-SHELL", "echo srvr | nc -w 2 localhost 2181 | grep -q 'Zookeeper version'"]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+      start_period: 5s
+    networks: [ci-db]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.9.7
+    restart: "no"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:${PANDORA_CI_KAFKA_PORT:?ci_db.ps1 must set PANDORA_CI_KAFKA_PORT}"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:9092,EXTERNAL://127.0.0.1:${PANDORA_CI_KAFKA_PORT}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 4
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    ports:
+      - "127.0.0.1:${PANDORA_CI_KAFKA_PORT}:${PANDORA_CI_KAFKA_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 40
+      start_period: 20s
+    networks: [ci-db]
+
 networks:
   ci-db:
     driver: bridge

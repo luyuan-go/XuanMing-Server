@@ -39,6 +39,36 @@ function Get-FreeLoopbackPort {
     }
 }
 
+# Get-FreeLoopbackPorts 一次性拿 N 个互不相同的空闲端口。逐个调用 Get-FreeLoopbackPort
+# 可能重复(内核在前一个 listener 关闭后会复用同一号),必须去重。
+function Get-FreeLoopbackPorts([int]$Count) {
+    $ports = [System.Collections.Generic.List[int]]::new()
+    $guard = 0
+    while ($ports.Count -lt $Count) {
+        if (++$guard -gt 200) { throw "无法分配 $Count 个互不相同的空闲回环端口。" }
+        $p = Get-FreeLoopbackPort
+        if (-not $ports.Contains($p)) { $ports.Add($p) }
+    }
+    return $ports.ToArray()
+}
+
+# CI 专用一次性口令。Redis 8 的只读 ACL 契约要求"恰好一个密码",而该身份能读到
+# 实例上其它用户的密码哈希(见 redis_security.go 的 SECURITY BOUNDARY 注释),
+# 所以每轮现生成高熵值,只进状态文件、不落仓库、不打印。
+function New-CiSecret {
+    $bytes = [byte[]]::new(24)
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    return ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '')
+}
+
+# Compose 里所有 ${PANDORA_CI_*} 都是 `:?` 必填形态,Up 与 Down 必须**同样**填齐,
+# 否则 down 会因为变量缺失直接报错、把本轮容器留在机器上。
+function Set-CiComposeEnv([hashtable]$Values) {
+    foreach ($name in $Values.Keys) {
+        [Environment]::SetEnvironmentVariable($name, [string]$Values[$name])
+    }
+}
+
 function ConvertTo-SafeProject([string]$Value) {
     $clean = (($Value ?? '') -replace '[^A-Za-z0-9_-]', '-').Trim('-').ToLowerInvariant()
     if ([string]::IsNullOrWhiteSpace($clean)) { $clean = [guid]::NewGuid().ToString('N') }
@@ -69,8 +99,17 @@ if ($Action -eq 'Down') {
         exit 0
     }
     $state = Read-State
-    $env:PANDORA_CI_MYSQL_PORT = [string]$state.mysql_port
-    $env:PANDORA_CI_TIDB_PORT = [string]$state.tidb_port
+    # v1 状态文件没有后面这些字段;给占位值只是为了让 compose 变量插值通过,
+    # down 按 project 名清理,与端口号无关。
+    Set-CiComposeEnv @{
+        PANDORA_CI_MYSQL_PORT     = $state.mysql_port
+        PANDORA_CI_TIDB_PORT      = $state.tidb_port
+        PANDORA_CI_REDIS_PORT     = ($state.redis_port  ?? 0)
+        PANDORA_CI_REDIS8_PORT    = ($state.redis8_port ?? 0)
+        PANDORA_CI_ETCD_PORT      = ($state.etcd_port   ?? 0)
+        PANDORA_CI_KAFKA_PORT     = ($state.kafka_port  ?? 0)
+        PANDORA_CI_REDIS8_PASSWORD = 'unused-for-down'
+    }
     try {
         Invoke-Compose @('down', '--volumes', '--remove-orphans', '--timeout', '30') ([string]$state.project)
     }
@@ -92,26 +131,51 @@ if (-not (Test-Path -LiteralPath $stateDir)) {
 }
 
 $project = ConvertTo-SafeProject $RunId
-$mysqlPort = Get-FreeLoopbackPort
-do { $tidbPort = Get-FreeLoopbackPort } while ($tidbPort -eq $mysqlPort)
-$env:PANDORA_CI_MYSQL_PORT = [string]$mysqlPort
-$env:PANDORA_CI_TIDB_PORT = [string]$tidbPort
+$ports = Get-FreeLoopbackPorts 6
+$mysqlPort = $ports[0]
+$tidbPort = $ports[1]
+$redisPort = $ports[2]
+$redis8Port = $ports[3]
+$etcdPort = $ports[4]
+$kafkaPort = $ports[5]
+$redis8Password = New-CiSecret
+Set-CiComposeEnv @{
+    PANDORA_CI_MYSQL_PORT      = $mysqlPort
+    PANDORA_CI_TIDB_PORT       = $tidbPort
+    PANDORA_CI_REDIS_PORT      = $redisPort
+    PANDORA_CI_REDIS8_PORT     = $redis8Port
+    PANDORA_CI_ETCD_PORT       = $etcdPort
+    PANDORA_CI_KAFKA_PORT      = $kafkaPort
+    PANDORA_CI_REDIS8_PASSWORD = $redis8Password
+}
 
 try {
     Invoke-Compose @('up', '-d', '--wait', '--wait-timeout', [string]$TimeoutSeconds) $project
 
     $state = [ordered]@{
-        contract   = 'pandora-ci-db-v1'
-        project    = $project
-        compose    = $ComposeFile
-        mysql_port = $mysqlPort
-        tidb_port  = $tidbPort
+        contract    = 'pandora-ci-db-v2'
+        project     = $project
+        compose     = $ComposeFile
+        mysql_port  = $mysqlPort
+        tidb_port   = $tidbPort
+        redis_port  = $redisPort
+        redis8_port = $redis8Port
+        etcd_port   = $etcdPort
+        kafka_port  = $kafkaPort
         environment = [ordered]@{
             PANDORA_TEST_MYSQL_DSN = "root@tcp(127.0.0.1:$mysqlPort)/?parseTime=true&loc=UTC&charset=utf8mb4"
             PANDORA_TEST_TIDB_DSN  = "root@tcp(127.0.0.1:$tidbPort)/?parseTime=true&loc=UTC&charset=utf8mb4"
             # pkg/mysqlx 的探针必须连接初始化好的 pandora_account，故使用同一临时 TiDB
             # 的显式库 DSN；其它测试继续使用上面的无库名 DSN并自建随机库。
             PANDORA_TIDB_TEST_DSN  = "root@tcp(127.0.0.1:$tidbPort)/pandora_account?parseTime=true&loc=UTC&charset=utf8mb4"
+            # v2 起补齐 Redis / Kafka / etcd:此前这三组共 21 个门控用例在 CI 里
+            # 一次都没跑过(hub_allocator 写者 fence、ds_allocator 只读 ACL、
+            # push 单写者选举全在黑箱里),而"跳过等于通过"正是 INC-20260811-002 的成因。
+            PANDORA_TEST_REDIS_ADDR      = "127.0.0.1:$redisPort"
+            PANDORA_TEST_REDIS8_ADDR     = "127.0.0.1:$redis8Port"
+            PANDORA_TEST_REDIS8_PASSWORD = $redis8Password
+            PANDORA_TEST_ETCD_ENDPOINTS  = "127.0.0.1:$etcdPort"
+            PANDORA_TEST_KAFKA_BROKERS   = "127.0.0.1:$kafkaPort"
         }
     }
 
