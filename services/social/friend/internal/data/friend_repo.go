@@ -34,6 +34,34 @@ const (
 // 仅防历史脏数据 / 极端场景下的无界扫描与返回。
 const listReadHardLimit = 1000
 
+// friendWriteTxIsolation 说明本文件四条写事务为什么显式用 READ COMMITTED
+// (2026-08-11;register_no.go 已有同款先例)。
+//
+// **这是正确性要求,不是调优。** 本域的所有权威判定读都是 `SELECT ... FOR UPDATE`
+// (R9 复审 P1:RR 的一致读快照在第一条普通 SELECT 时固定,守卫锁不刷新它),而这些探针
+// 绝大多数**查不到行**(首次申请 / 首次拉黑)。RR 下未命中的锁定读锁的不是"某一行"而是
+// **该键所在的间隙**,于是:
+//
+//	TRX A 持 uk_requester_target 某间隙的 X 锁,等在同一间隙插入;
+//	TRX B 持同一间隙的 X 锁,也等在同一间隙插入;   → 1213 死锁
+//
+// 间隙锁彼此相容,所以 N 个事务都能拿到;冲突发生在随后的 insert intention。真 MySQL 8.4
+// 实测:16 个并发申请(**互不相同的 requester 与 target**,没有任何共享行)必炸,
+// InnoDB 死锁日志两侧都是 `lock_mode X` + `insert intention waiting`。这一形状**不是锁序
+// 问题**,重排守卫顺序解决不了 —— 它们根本没有共享的守卫行。
+//
+// 为什么降到 RC 是安全的:本域的并发正确性从设计之初就**不依赖 gap 锁**。守卫行
+// (`friend_player_guards` / `friend_pair_guards`)之所以存在,正是因为 TiDB 没有 gap 锁、
+// `COUNT ... FOR UPDATE` 在零行时一把锁都不加(R5 复审 P1-2)。也就是说:限额的权威性
+// 来自守卫行 + 守卫锁内的锁定读,唯一性来自唯一键,两者在 RC 下都成立;RR 的 gap 锁在
+// MySQL 侧是**纯多余的副作用**,只贡献死锁。RC 还让锁定读读到最新已提交(比 RR 更"当前"),
+// R9 要修的陈旧快照问题只会更稳。
+//
+// 前置:binlog_format=ROW(MySQL 8.4 默认)。
+var _ = friendWriteTxIsolation // 仅作文档锚点,供上面四处 BeginTx 注释指向
+
+const friendWriteTxIsolation = "READ COMMITTED"
+
 // FriendRequestRow 是一行好友请求(data → biz 内部结构,不外泄客户端)。
 type FriendRequestRow struct {
 	RequestID   uint64
@@ -184,7 +212,7 @@ func (r *MySQLFriendRepo) CountFriends(ctx context.Context, playerID uint64) (in
 }
 
 func (r *MySQLFriendRepo) CreateRequest(ctx context.Context, newRequestID, requesterID, targetID uint64, maxIncoming int) (uint64, bool, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted}) // RC 而非默认 RR,理由见 friendWriteTxIsolation
 	if err != nil {
 		return 0, false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
 	}
@@ -200,6 +228,31 @@ func (r *MySQLFriendRepo) CreateRequest(ctx context.Context, newRequestID, reque
 	//(block/好友存在性探针、限额 COUNT)一律用锁定读(FOR UPDATE = 当前读,InnoDB
 	// 与 TiDB 悲观事务都读最新已提交);写者已被守卫串行化,锁冲突面可控。
 	if gerr := acquirePairGuard(ctx, tx, requesterID, targetID); gerr != nil {
+		return 0, false, gerr
+	}
+	// player 守卫必须在**任何锁定读之前**取(2026-08-11,真 MySQL 8.4 实测 1213 死锁)。
+	//
+	// 原实现把它放在 checkIncomingLimit 里(即三条 FOR UPDATE 探针之后),依据是
+	// 「本事务持有的行锁只属于本 pair,与只共享单个玩家的其它事务无共同行」——**这条前提
+	// 不成立**:探针查的行绝大多数不存在(首次申请),InnoDB RR 下 `FOR UPDATE` 未命中
+	// 记录时锁的不是"本 pair 的行"而是**该键所在的间隙**,N 个不同 requester 指向同一
+	// target 时全部落在 `uk_requester_target` 的同一个 supremum 间隙里,于是"只属于本 pair"
+	// 的假设被打穿。InnoDB 死锁日志逐字印证了这个环:
+	//
+	//   TRX A 持 friend_requests.uk_requester_target supremum 的 X 间隙锁,等 guards 主键行;
+	//   TRX B 持 guards 主键行,等 friend_requests 同一间隙的 insert intention。
+	//
+	// 间隙锁彼此相容(N 个事务都能拿到),真正的排他点是 guards 行——谁先拿到谁就要去插
+	// friend_requests,而插入意向被其余事务尚未释放的间隙锁挡住,形成环。8 个并发申请必炸,
+	// 且**只在 MySQL 上炸**(TiDB 无 gap 锁,所以 TiDB 侧一直是绿的,双后端跑才看得见)。
+	//
+	// 修法是把守卫提到探针之前:所有间隙锁都在守卫的串行化**内部**取得,同一 target 上
+	// 同时最多一个事务持有这些间隙锁,环不成立。守卫锁序(pair → player)保持不变,
+	// AcceptRequest / Block 也是这个顺序,不引入新的跨路径反序。
+	//
+	// 无条件取(不再受 maxIncoming>0 门控):间隙锁的暴露与限额是否开启无关,
+	// 关掉限额不该把锁序纪律一起关掉。
+	if gerr := acquirePlayerGuard(ctx, tx, targetID); gerr != nil {
 		return 0, false, gerr
 	}
 	var probeX int
@@ -223,9 +276,9 @@ WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) L
 		return 0, false, errcode.New(errcode.ErrInternal, "check friendship %d-%d: %v", requesterID, targetID, ferr)
 	}
 
-	// 请求行锁在 pair 守卫之后、player 守卫(checkIncomingLimit)之前:本事务持有的
-	// 行锁只属于本 pair,与只共享单个玩家的其它事务无共同行 → 与「player 守卫恒升序」
-	// 组合不构成环,锁序安全(详见守卫段注释)。
+	// 请求行锁在两把守卫之后取。**这里曾经写着"行锁只属于本 pair 故锁序安全"并把
+	// player 守卫排在后面 —— 那是本文件 2026-08-11 修掉的死锁根因**,原因见上方守卫段:
+	// 未命中的 FOR UPDATE 锁的是间隙不是行,间隙是跨 pair 共享的。
 	var existingID uint64
 	var status int32
 	err = tx.QueryRowContext(ctx,
@@ -298,7 +351,7 @@ FROM friend_requests WHERE request_id = ? LIMIT 1`
 }
 
 func (r *MySQLFriendRepo) AcceptRequest(ctx context.Context, requestID, accepterID uint64, maxFriends int) (bool, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted}) // RC 而非默认 RR,理由见 friendWriteTxIsolation
 	if err != nil {
 		return false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
 	}
@@ -423,7 +476,7 @@ WHERE requester_id = ? AND target_id = ? AND status = ?`,
 }
 
 func (r *MySQLFriendRepo) RejectRequest(ctx context.Context, requestID, rejecterID uint64) (bool, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted}) // RC 而非默认 RR,理由见 friendWriteTxIsolation
 	if err != nil {
 		return false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
 	}
@@ -508,7 +561,7 @@ FROM friendships WHERE player_id = ? ORDER BY created_at DESC LIMIT ?`
 }
 
 func (r *MySQLFriendRepo) Block(ctx context.Context, playerID, targetID uint64, maxBlocks int) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted}) // RC 而非默认 RR,理由见 friendWriteTxIsolation
 	if err != nil {
 		return errcode.New(errcode.ErrInternal, "begin tx: %v", err)
 	}
@@ -522,6 +575,15 @@ func (r *MySQLFriendRepo) Block(ctx context.Context, playerID, targetID uint64, 
 
 	// 0. 黑名单上限校验(不变量 §9.18):先确认未重复拉黑(幂等命中不占新名额)再校量。
 	// 探针/COUNT 用锁定读(R9 复审 P1:普通 SELECT 在 RR 陈旧快照下会漏看守卫等待期间提交的写)。
+	//
+	// player 守卫**必须在存在性探针之前**取(2026-08-11,与 CreateRequest 同一根因):
+	// 探针未命中时锁的是 `blocks` 的间隙而非某一行,同一玩家并发拉黑多个目标时,16 个事务
+	// 共享同一间隙、又都要抢同一把守卫 → 谁抢到守卫谁去 INSERT,插入意向被其余事务的
+	// 间隙锁挡住成环。原实现只在"新拉黑"分支里取守卫,那时间隙锁已在手,太晚了。
+	// 无条件取(不再受 maxBlocks>0 与"是否新拉黑"门控):锁序纪律与限额开关无关。
+	if gerr := acquirePlayerGuard(ctx, tx, playerID); gerr != nil {
+		return gerr
+	}
 	if maxBlocks > 0 {
 		var existsX int
 		eerr := tx.QueryRowContext(ctx,
@@ -530,11 +592,8 @@ func (r *MySQLFriendRepo) Block(ctx context.Context, playerID, targetID uint64, 
 			return errcode.New(errcode.ErrInternal, "check block %d->%d: %v", playerID, targetID, eerr)
 		}
 		if errors.Is(eerr, sql.ErrNoRows) {
-			// 新拉黑 → 先锁本玩家守卫行(R5 复审 P1-2:TiDB 无 gap 锁,原 COUNT ...
-			// FOR UPDATE 挡不住并发插入),守卫锁内的**锁定读** COUNT 即权威,防并发超限。
-			if gerr := acquirePlayerGuard(ctx, tx, playerID); gerr != nil {
-				return gerr
-			}
+			// 新拉黑 → 守卫锁内的**锁定读** COUNT 即权威,防并发超限
+			// (R5 复审 P1-2:TiDB 无 gap 锁,原 COUNT ... FOR UPDATE 挡不住并发插入)。
 			var cnt int
 			if cerr := tx.QueryRowContext(ctx,
 				`SELECT COUNT(*) FROM blocks WHERE player_id = ? FOR UPDATE`, playerID).Scan(&cnt); cerr != nil {
@@ -664,9 +723,9 @@ func checkIncomingLimit(ctx context.Context, tx *sql.Tx, targetID uint64, maxInc
 	if maxIncoming <= 0 {
 		return nil
 	}
-	if err := acquirePlayerGuard(ctx, tx, targetID); err != nil {
-		return err
-	}
+	// 前置条件:调用方**已在任何锁定读之前**取得 target 的 player 守卫。
+	// 这里刻意不再自取——2026-08-11 的 1213 死锁根因正是"守卫在此处才取",
+	// 那时三条 FOR UPDATE 探针的间隙锁已经拿在手里,取得再早也来不及(见 CreateRequest 注释)。
 	var cnt int
 	if err := tx.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM friend_requests WHERE target_id = ? AND status = ? FOR UPDATE`,

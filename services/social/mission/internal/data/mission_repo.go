@@ -446,8 +446,28 @@ func (r *MySQLMissionRepo) SweepReceipts(ctx context.Context, modeRaw string, re
 
 // ── 事务与杂项 ─────────────────────────────────────────────────────────────
 
+// inTx 是任务域所有写事务的唯一入口。
+//
+// **显式 READ COMMITTED 是正确性要求,不是调优**(2026-08-11 真 MySQL 8.4 实测抓获;
+// friend 域同因同批修,login/register_no.go 有更早的同款先例)。
+//
+// 症状:24 个**不同玩家**并发 Accept(彼此不共享任何守卫行、任何业务行)必炸 1213,
+// 报在 `upsert active mission=...`。根因不是锁序 —— 守卫行确实是本事务第一把锁,
+// 而是 RR 下 `loadState(forUpdate=true)` 对**零行**取的是「键所在的间隙」而非某一行:
+// 表空时全部 player_id 落进 player_mission_active 主键的同一个 supremum 间隙,
+// N 个事务各自拿到相容的间隙锁,随后各自的 INSERT 都要 insert intention → 互相挡成环。
+// 玩家彼此无关却互相打死,且并发越高越必然。
+//
+// 为什么降到 RC 安全:本域的并发正确性**从设计之初就不依赖 gap 锁** —— 守卫行
+// (mission_player_guards)存在的理由正是「TiDB 没有 gap 锁,零行 FOR UPDATE 一把锁都不加」
+// (见 acquirePlayerGuard 注释)。限额与类型互斥的权威性来自守卫行 + 守卫锁内的锁定读,
+// 幂等来自 mission_fact_receipts 的唯一键,这三者在 RC 下全部成立。RR 的 gap 锁在 MySQL
+// 侧是纯副作用,只贡献死锁;RC 的锁定读还更"当前"(总读最新已提交)。
+//
+// 回归钉在 mission_guard_lock_order_mysql_test.go(改回 nil 即必红)。
+// 前置:binlog_format=ROW(MySQL 8.4 默认)。
 func (r *MySQLMissionRepo) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
