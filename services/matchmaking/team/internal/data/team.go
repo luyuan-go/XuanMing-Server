@@ -35,6 +35,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -125,6 +126,8 @@ type ApplicationRecord struct {
 
 // TeamRepo 是 team 数据层抽象。biz 层只依赖此接口,不依赖 redis。
 type TeamRepo interface {
+	// ScanPlayerIndex 增量扫描「有队伍的玩家」全集,供离线兜底提名(见实现注释)。
+	ScanPlayerIndex(ctx context.Context, cursor uint64, count int64) ([]uint64, uint64, error)
 	// Get 读取队伍。not found 时返回 false(不报错)。
 	Get(ctx context.Context, teamID uint64) (*teamv1.TeamStorageRecord, bool, error)
 
@@ -779,4 +782,35 @@ func unmarshalTeam(teamID uint64, payload []byte) (*teamv1.TeamStorageRecord, er
 		return nil, fmt.Errorf("team %d id mismatch: %d", teamID, rec.TeamId)
 	}
 	return rec, nil
+}
+
+// ScanPlayerIndex 增量扫描 player→team 归属索引,返回一批**有队伍的玩家**。
+//
+// 用途:offlinewatch 的兜底候选源(见 biz/offline_leave.go 的 teamRosterSource)。
+// 事件链与读路径兜底在「整支队伍一起掉线」时会同时失效,那时只有主动扫描能发现残留。
+//
+// 用 SCAN 而不是另建一个活跃玩家集合:这份索引**本来就是**「有队伍的玩家」全集,
+// 再维护一个平行集合就是 §9.22 的重复影子状态(还要在建队/离队/解散/TTL 过期四处
+// 保持一致,漏一处就漂移)。SCAN 是增量游标、不阻塞,配合 count 上限足够。
+//
+// cursor 由调用方持有并在轮次间传递;返回 0 表示一轮遍历结束(下轮从头开始)。
+func (r *RedisTeamRepo) ScanPlayerIndex(ctx context.Context, cursor uint64, count int64) ([]uint64, uint64, error) {
+	keys, next, err := r.rdb.Scan(ctx, cursor, "pandora:team:player:*", count).Result()
+	if err != nil {
+		return nil, 0, errcode.New(errcode.ErrInternal, "redis scan player index: %v", err)
+	}
+	ids := make([]uint64, 0, len(keys))
+	for _, k := range keys {
+		// key 形如 pandora:team:player:<player_id>
+		idx := strings.LastIndexByte(k, ':')
+		if idx < 0 || idx+1 >= len(k) {
+			continue
+		}
+		pid, perr := strconv.ParseUint(k[idx+1:], 10, 64)
+		if perr != nil || pid == 0 {
+			continue // 脏 key 跳过,不让一条坏数据卡住整轮兜底
+		}
+		ids = append(ids, pid)
+	}
+	return ids, next, nil
 }

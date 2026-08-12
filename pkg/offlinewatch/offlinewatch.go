@@ -123,6 +123,12 @@ type Options struct {
 	// RetryBackoff presence 查询 / Handler 失败或业务暂缓时,推迟多久再试。默认 = Interval。
 	RetryBackoff time.Duration
 
+	// RosterScanBatch 是每轮兜底提名的批量上限。默认 200。
+	//
+	// 与 Budget 分开:Budget 管「到期项」(有依据、要动手),本值管「提名候选」
+	// (只是拿去 Observe 判一判)。两者共享同一轮时间预算,调大要一起看下游压力。
+	RosterScanBatch int
+
 	// AttemptTimeout 限制单个玩家「最终 presence 复核 + Handler」一次尝试的总时长。
 	// 默认 5s。PresenceReader 与 Handler 都必须遵守 ctx;本包不会在超时后遗弃仍在写的
 	// goroutine,否则会制造后台僵尸写与下一轮重试并发执行。
@@ -151,6 +157,9 @@ func (o *Options) normalize() error {
 	if o.AttemptTimeout <= 0 {
 		o.AttemptTimeout = 5 * time.Second
 	}
+	if o.RosterScanBatch <= 0 {
+		o.RosterScanBatch = 200
+	}
 	return nil
 }
 
@@ -163,6 +172,9 @@ type Watcher struct {
 
 	dueKey      string
 	evidenceKey string
+
+	// roster 是可选的兜底候选源(见 RosterSource)。nil = 不启用。
+	roster RosterSource
 
 	// now 可注入,单测用受控时钟驱动 Sweep(不 sleep 真实时间)。
 	now func() time.Time
@@ -374,6 +386,9 @@ func (w *Watcher) Sweep(ctx context.Context) {
 		return
 	}
 	if len(due) == 0 {
+		// **队列空恰恰是缺口场景**:整队一起掉线时既没有 kafka 事件、也没人打开面板,
+		// 到期项自然为空。兜底提名必须在这条分支也跑,否则那些玩家永远排不进来。
+		w.sweepRoster(ctx)
 		return
 	}
 
@@ -481,6 +496,9 @@ func (w *Watcher) Sweep(ctx context.Context) {
 		"deferred", deferred, "failed", failed,
 		// 扫到预算上限说明还有积压,下轮继续;持续打满要么调大 Budget 要么查下游慢在哪。
 		"budget_saturated", len(due) >= w.opts.Budget)
+
+	// 处理完到期项后再提名一批兜底候选,共享同一轮时间预算。
+	w.sweepRoster(ctx)
 }
 
 // readPresence 分批读 locator 的两份事实。任一批失败即整体失败(不返回半份结果)。
@@ -686,4 +704,55 @@ func chunkIDs(ids []uint64, size int) [][]uint64 {
 		out = append(out, ids[start:end])
 	}
 	return out
+}
+
+// RosterSource 是**可选**的兜底候选来源:每轮 Sweep 顺带拉一小批「本服务当前关心的玩家」
+// 交给 Observe 判定并排期。
+//
+// # 为什么必须有它(2026-08-12 实测发现的缺口)
+//
+// 排期原本只有两条触发链,它们在同一种情况下会**同时失效**:
+//   - kafka 离场事件:依赖 Hub DS 走完 Logout 调 ReportDisconnect。Hub DS 整机崩溃 /
+//     被 OOM kill / 网络分区时压根不会调,事件永远不会产生;
+//   - 读路径 Observe:依赖有活人调 GetMyTeam 打开面板。
+//
+// 于是「整支队伍一起掉线」就成了永久残留:没有事件,也没人打开面板,那些玩家永远
+// 排不进复查队列。last-seen / last_alive_ms 解决的是「**能不能判**」,这里解决的是
+// 「**谁来触发判**」—— 两者缺一都不成立。真实现场:两名玩家的 hubmeta 只有
+// last_alive_ms 没有 left_at_ms(印证 Hub 侧没走 Logout),而调度队列是空的。
+//
+// 实现方自己维护游标做**增量**扫描,一轮只返回一小批;返回空切片表示本轮无候选。
+// 判定与排期仍全部由 Observe 负责,本接口只负责"提名候选",不做任何判断。
+type RosterSource interface {
+	NextBatch(ctx context.Context, limit int) ([]uint64, error)
+}
+
+// SetRosterSource 注入兜底候选源。nil = 不启用(行为与历史一致)。
+//
+// 刻意复用 Sweep 已有的 ticker 而不是新起一个循环(§16.10:不得为此新建第二套
+// timer 状态机);扫描量由 RosterScanBatch 封顶,与到期项共享同一轮的时间预算。
+func (w *Watcher) SetRosterSource(src RosterSource) { w.roster = src }
+
+// sweepRoster 是每轮 Sweep 末尾的兜底提名。全程 best-effort:
+// 失败只记日志,绝不影响本轮到期项的处理(那才是主路径)。
+func (w *Watcher) sweepRoster(ctx context.Context) {
+	if w.roster == nil {
+		return
+	}
+	ids, err := w.roster.NextBatch(ctx, w.opts.RosterScanBatch)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "offlinewatch_roster_scan_failed",
+			"namespace", w.opts.Namespace, "err", err)
+		return
+	}
+	if len(ids) == 0 {
+		return
+	}
+	if err := w.Observe(ctx, ids); err != nil {
+		plog.With(ctx).Warnw("msg", "offlinewatch_roster_observe_failed",
+			"namespace", w.opts.Namespace, "count", len(ids), "err", err)
+		return
+	}
+	plog.With(ctx).Debugw("msg", "offlinewatch_roster_observed",
+		"namespace", w.opts.Namespace, "count", len(ids))
 }

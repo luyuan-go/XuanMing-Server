@@ -210,6 +210,9 @@ func main() {
 		// 读路径兜底(GetMyTeam 顺手复查),与下面的事件链是两条独立触发源:
 		// 事件丢了靠它补,没人看队伍时靠事件。少接一条就会有清不掉的残留。
 		uc.SetPresenceInspector(watcher)
+		// 兜底候选源:整支队伍一起掉线时,事件链(Hub 崩溃没有 Logout)与读路径
+		// (没人打开面板)会同时失效,只有主动提名能发现残留(见 biz.teamRosterSource)。
+		watcher.SetRosterSource(biz.NewTeamRosterSource(repo))
 
 		if len(cfg.Kafka.Brokers) == 0 {
 			// 允许:没有 kafka 时退化成「纯兜底」——玩家打开面板才复查。

@@ -163,7 +163,18 @@ migrate Job (backoffLimit=0)
 - `CLAUDE.md` §9.21：已有条款即本事故判据，本次未新增条款，改为在设计文档落地说明——
   见 `docs/design/player-no-and-login-surge.md` **§3.6.4**（改名的正确落地方式 + contract 退出条件）。
 - `CLAUDE.md` §9.24：新增 `register_no_counter` 登记。
-- 待补机械门禁见 §10 A-2。
+- **expand-only 机械门禁**(A-2，已落码)：`tools/migrate/expand_only_contract_test.go`。
+  遍历全部 `*.up.sql`(剥行注释后判)，命中 `DROP COLUMN` / `DROP TABLE` / `DROP INDEX|KEY` /
+  `RENAME COLUMN|INDEX|TABLE` 即失败，除非二选一：①文件头写 `-- CONTRACT:` **且**写明
+  「旧副本排空判据」；②登记在 `grandfatheredContractMigrations`(仅限本门禁上线前已对
+  origin 暴露、按 `tools/migrate/README` 不可再修改的历史迁移，**只减不增**)。
+  配套 `TestGrandfatheredContractListIsExact` 反向断言清单里每条都**确实还是**破坏性迁移
+  且真实存在，防止这张表退化成永久豁免后门。
+  已收录的 5 条历史违规：`pandora_account/000005`、`pandora_account/000006`、
+  `pandora_player/000007`(本事故两条)、`pandora_leaderboard/000003`、
+  `pandora_trade/000004`(后两条是 json→pb 表示法切换，同样未经 expand 窗口)。
+  **变异验证**：摘掉任一条 grandfathered 登记后两条门禁立即转红(`... 含破坏性 DDL DROP COLUMN`
+  / `... 在嵌入迁移里不存在`)，还原后转绿 —— 门禁不是空转的。
 
 ## 8. 验证矩阵
 
@@ -192,7 +203,7 @@ migrate Job (backoffLimit=0)
 | ID | 严重级别 | 行动项 | 负责人 | 状态 | 目标/关联 Incident |
 |---|---|---|---|---|---|
 | A-1 | P1 | **contract 迁移不得原样重放 `DROP players.mmr, ALGORITHM=INSTANT`**：`idx_mmr` 在列上，必先删索引或改算法，否则复现同一个 1845 dirty | 待指定 | 未开始 | 本 Incident |
-| A-2 | P1 | 加 **expand-only 机械门禁**：迁移契约测试断言 up.sql 不得出现 `DROP COLUMN`/`DROP TABLE`/`RENAME *`，除非文件头显式标注 `-- CONTRACT:` 并写明旧副本排空判据 | 待指定 | 未开始 | 本 Incident |
+| A-2 | P1 | 加 **expand-only 机械门禁**：迁移契约测试断言 up.sql 不得出现 `DROP COLUMN`/`DROP TABLE`/`RENAME *`，除非文件头显式标注 `-- CONTRACT:` 并写明旧副本排空判据 | — | **已落码** | `tools/migrate/expand_only_contract_test.go`；见 §7.3 |
 | A-3 | P1 | **contract 时必须反向回填 `player_mmr ← players.mmr`**：旧副本结算只写 `players.mmr` 不写 `player_mmr`，删列瞬间玩家 default 段位会回退到最后一次新副本写入的值。`000008` 注释只写了「以后删」，没写这一步 | 待指定 | 未开始 | 本 Incident |
 | A-4 | P2 | `000008` 的兼容回填是一条不分批的多表 UPDATE，会对**每个已有 default 记录的玩家**的 `players` 行加记录锁并持到语句提交（真库实测 15 万行 ≈ 18s / 150001 把锁），期间这些玩家的 `ApplyMMRChange` `SELECT ... FOR UPDATE` 会等到 `innodb_lock_wait_timeout`(targets 配 15s) 后批量报 1205。**在受支持发布路径上该语句恒 0 行**（000007 必 1845 失败 → v7 代码从未上线），风险只存在于「按当前 `04-player-tables.sql` 全新初始化且 v7 代码跑过」的库。修法只能是按主键游标分批 + 每批独立提交，或在文件头写明该取舍（加 `WHERE p.mmr <> pm.mmr` **无效**：RR 下锁在判谓词之前就加） | 待指定 | 未开始 | 本 Incident |
 | A-5 | P1 | **本轮审查未跑完**：5 个维度中 `migrate-quarantine` / `ci-and-proto` / `cross-cutting` 三个 agent 因连接中断未返回；9 条进入对抗复核的发现里 4 条的复核 agent 同样中断。已完成的 2 个维度共提出 19 条，仅 3 条完成裁决（1 成立 / 2 推翻）。**其余 16 条既未确认也未证伪**，其中至少 `SweepPlayerNo` 返回值语义变化导致 `player_no_assigned rows` 失真、`EXISTS(mmr_history)` 判据与保留期清理的相互作用、`change.Baseline` 在 default 池成为死参数、`idx_mmr` 无现役查询使用四条需要复跑 | 待指定 | 未开始 | 本 Incident |

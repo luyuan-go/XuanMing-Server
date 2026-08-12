@@ -745,3 +745,59 @@ func TestDedupeIDs(t *testing.T) {
 		}
 	}
 }
+
+// ── 兜底候选源:整队一起掉线的缺口 ──────────────────────────────────────────
+
+type stubRoster struct {
+	batches [][]uint64
+	calls   int
+}
+
+func (s *stubRoster) NextBatch(_ context.Context, _ int) ([]uint64, error) {
+	if s.calls >= len(s.batches) {
+		s.calls++
+		return nil, nil
+	}
+	b := s.batches[s.calls]
+	s.calls++
+	return b, nil
+}
+
+// 2026-08-12 实测缺口:Hub DS 整机崩溃时既没有 kafka 离场事件(没走 Logout),
+// 整队又都掉线没人打开面板 —— 两条触发链同时失效,到期队列恒空,那些玩家永远
+// 排不进复查。**修复前本用例必然失败**:队列空时 Sweep 直接 return,兜底不会跑。
+func TestSweep_队列空时仍跑兜底提名(t *testing.T) {
+	const now = 10_000_000
+	// locator 仍能回答「最后一次被观测在线」(心跳推的 last_alive_ms),所以判得出来;
+	// 缺的从来不是判定能力,而是有人来触发判定。
+	reader := &fakeReader{lastSeen: map[uint64]int64{42: now - 200_000}}
+	h := &recordingHandler{}
+	w, _ := newTestWatcher(t, reader, h, now)
+	w.SetRosterSource(&stubRoster{batches: [][]uint64{{42}}})
+
+	// 队列本来就是空的(没有任何事件把他排进来)。
+	if len(dueMembers(t, w)) != 0 {
+		t.Fatal("前置条件:队列应为空")
+	}
+
+	w.Sweep(ctx0()) // 第一轮:兜底提名 → Observe 排期
+	if _, ok := dueMembers(t, w)["42"]; !ok {
+		t.Fatal("整队掉线时,兜底提名必须把残留成员排进复查队列,否则永远清不掉")
+	}
+
+	w.Sweep(ctx0()) // 第二轮:到期项被处理
+	if len(h.seen) != 1 || h.seen[0] != 42 {
+		t.Fatalf("排期后应当在下一轮被处理, got=%v", h.seen)
+	}
+}
+
+// 没注入候选源时行为完全不变(nil-safe)。
+func TestSweep_未注入兜底源时不变(t *testing.T) {
+	w, _ := newTestWatcher(t, &fakeReader{}, &recordingHandler{}, 10_000_000)
+	w.Sweep(ctx0()) // 不得 panic
+	if len(dueMembers(t, w)) != 0 {
+		t.Fatal("未注入候选源时不得凭空产生调度项")
+	}
+}
+
+func ctx0() context.Context { return context.Background() }

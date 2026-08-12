@@ -51,6 +51,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/offlinewatch"
+	"github.com/luyuancpp/pandora/services/matchmaking/team/internal/data"
 )
 
 // PresenceInspector 是 team 对离线复查骨架的最小依赖面(*offlinewatch.Watcher 满足)。
@@ -382,4 +383,41 @@ func (u *TeamUsecase) BeginTeamMatch(
 // rosterLockedForMatch 判断此刻是否有未过期的组票租约。只在 team 的乐观锁**内**调用。
 func rosterLockedForMatch(team *teamv1.TeamStorageRecord) bool {
 	return team.GetMatchLockUntilMs() > time.Now().UnixMilli()
+}
+
+// ── 兜底候选源:整队一起掉线时唯一能发现残留的路径 ──────────────────────────
+
+// teamRosterSource 实现 offlinewatch.RosterSource:增量提名「有队伍的玩家」。
+//
+// # 为什么必须有它(2026-08-12 实测发现)
+//
+// 排期原本只有两条触发链,它们在同一种情况下**同时失效**:
+//   - kafka 离场事件:依赖 Hub DS 走完 Logout 调 ReportDisconnect —— Hub DS 整机崩溃时不会调;
+//   - GetMyTeam 读路径:依赖有活人打开组队面板 —— 整队都掉线时没人打开。
+//
+// 现场证据:两名玩家的 hubmeta 只有 last_alive_ms、没有 left_at_ms(印证 Hub 侧没走 Logout),
+// 他们仍挂在队伍里,而调度队列是空的 —— 永久残留。
+//
+// last_alive_ms 解决的是「**能不能判**」,本类型解决的是「**谁来触发判**」,缺一不可。
+// 注意本类型只负责**提名**,判定与排期全部由 Observe 走 locator 权威完成:
+// 它不看时间、不做任何判断,因此不存在「用本地时钟猜离线」的风险。
+type teamRosterSource struct {
+	repo   data.TeamRepo
+	cursor uint64
+}
+
+// NextBatch 每轮取一小段游标。游标只存进程内:它是纯调度提示,重启从头扫一遍即可,
+// 不写进任何权威或派生存储(§16.10 禁止把调度状态寄生到业务数据上)。
+func (s *teamRosterSource) NextBatch(ctx context.Context, limit int) ([]uint64, error) {
+	ids, next, err := s.repo.ScanPlayerIndex(ctx, s.cursor, int64(limit))
+	if err != nil {
+		return nil, err
+	}
+	s.cursor = next // next==0 表示一轮遍历结束,下轮自然从头开始
+	return ids, nil
+}
+
+// NewTeamRosterSource 构造兜底候选源。
+func NewTeamRosterSource(repo data.TeamRepo) offlinewatch.RosterSource {
+	return &teamRosterSource{repo: repo}
 }

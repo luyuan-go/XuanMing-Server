@@ -3261,4 +3261,20 @@ immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致
   - **登记面收口(本次唯一的真红)**:`register_no_counter` 建了表却没登记 → `TestFreshInitTablesAreRegistered` / `TestMigrationTablesAreRegistered` **双红**(先红后绿实测)。已同步补 `CLAUDE.md` §9.24 豁免清单 + `tools/migrate/cmd/dbcheck` registry(恒 1 行,发号权威闸,不清理)。
   - **两条初审发现被真库实测推翻,记下来别再重报**:①「新代码把 000007 版 Stable 刚落的 default 分覆盖回退」——**「000007 版 Stable」物理上不存在**,那份代码的 `EnsureProfile` 仍 `INSERT INTO players(...,mmr,...)` 而同 commit 建表脚本已无该列,上线即 1054,且它自带的真库 CI 门禁会先判它红;真正共存的是 pre-000007 版,读写的正是 `players.mmr`,与新口径**双向兼容**。②「000007 双计数器合并 UPDATE 会被 login 补号事务锁死打成 dirty」——`SweepPlayerNo` 每批必提交(实测 500 行≈277ms),真库压测 59 次探针 0 次 1205,等待不随副本数无界增长(6→16 副本,最大等待 5.2s→6.5s)。
   - **验证**:`go build`/`go vet`/`go test`(login+player+migrate 全模块)绿;dbcheck 登记契约先红后绿。**未验证**:①真库迁移 7 场景矩阵(用例已备,需 `PANDORA_TEST_MYSQL_DSN`/`PANDORA_TEST_TIDB_DSN`);②`go test -race`;③滚动窗口内新旧副本共存的玩家 E2E。
-  - **剩余风险(全部未开始,见事故档案 §10)**:A-1 未来 contract **不得原样重放** `DROP players.mmr, ALGORITHM=INSTANT`(否则复现同一个 1845);A-2 缺 **expand-only 机械门禁**(迁移契约测试应断言 up.sql 不得出现 `DROP COLUMN`/`DROP TABLE`/`RENAME *`,除非文件头显式标注 contract 并写明排空判据);A-3 **contract 时必须反向回填 `player_mmr ← players.mmr`**——旧副本结算只写旧列不写 `player_mmr`,删列瞬间玩家 default 段位会回退到最后一次新副本写入的值,000008 注释只写了「以后删」漏了这一步;A-4 `000008` 回填是不分批多表 UPDATE(真库实测 15 万行≈18s/150001 把记录锁,期间这些玩家结算等锁超时报 1205),受支持路径上恒 0 行故降 P2,但加 `WHERE p.mmr <> pm.mmr` **无效**(RR 下锁在判谓词之前就加),只能主键游标分批;A-5 **本轮审查未跑完**(5 维度中 3 个 agent 连接中断,19 条发现仅 3 条完成裁决,16 条既未确认也未证伪);A-6 `0fdb15f1` 把 4 份 Agones Fleet 版本 yaml(r1971→r1977)与本次修复混在同一提交推上 origin/main 且 commit message 不合 §4 格式;A-7 其余 migration set 未做同型 contract 扫描。
+  - **剩余风险(全部未开始,见事故档案 §10)**:A-1 未来 contract **不得原样重放** `DROP players.mmr, ALGORITHM=INSTANT`(否则复现同一个 1845);A-2 **已落码**(`tools/migrate/expand_only_contract_test.go`:遍历全部 up.sql,命中 DROP/RENAME 即红,除非文件头写 `-- CONTRACT:` 且写明「旧副本排空判据」,或登记在只减不增的 grandfathered 清单;配套反向断言防清单腐化;已收录 5 条历史违规;摘掉任一条即转红的变异验证已做);A-3 **contract 时必须反向回填 `player_mmr ← players.mmr`**——旧副本结算只写旧列不写 `player_mmr`,删列瞬间玩家 default 段位会回退到最后一次新副本写入的值,000008 注释只写了「以后删」漏了这一步;A-4 `000008` 回填是不分批多表 UPDATE(真库实测 15 万行≈18s/150001 把记录锁,期间这些玩家结算等锁超时报 1205),受支持路径上恒 0 行故降 P2,但加 `WHERE p.mmr <> pm.mmr` **无效**(RR 下锁在判谓词之前就加),只能主键游标分批;A-5 **本轮审查未跑完**(5 维度中 3 个 agent 连接中断,19 条发现仅 3 条完成裁决,16 条既未确认也未证伪);A-6 `0fdb15f1` 把 4 份 Agones Fleet 版本 yaml(r1971→r1977)与本次修复混在同一提交推上 origin/main 且 commit message 不合 §4 格式;A-7 其余 migration set 未做同型 contract 扫描。
+- **同日九修:线上实测发现「整队一起掉线 → 永久不退队」的真缺口(用户报「离线很久没退队」)**。
+  排障从头到尾查错过两次地方(先查了自己起的 docker-compose Redis、又把 kubectl port-forward
+  当成服务进程),真环境是 k8s(pandora-agones)。**现场证据**:两名玩家仍挂在队伍
+  23028424935505920 里,位置 key 已过期;hubmeta 只有 `last_alive_ms`、**没有 `left_at_ms`**
+  (印证 Hub 侧没走 Logout);而 `pandora:offlinewatch:{team}:due` **完全为空**。
+  **根因**:排期只有两条触发链,它们在同一种情况下同时失效 —— ①kafka 离场事件依赖
+  Hub DS 走完 Logout 调 ReportDisconnect,整机崩溃时不会调;②GetMyTeam 读路径兜底依赖
+  有活人打开组队面板,整队都掉线时没人打开。此前记的「H2 已由 last_alive_ms 兜底」**不完整**:
+  那解决的是「**能不能判**」,没解决「**谁来触发判**」。
+  **修法**:pkg/offlinewatch 加可选 `RosterSource`(业务提名候选),由 team 实现
+  `teamRosterSource` 增量 SCAN 既有的 `pandora:team:player:*` 归属索引 —— 那份索引本来就是
+  「有队伍的玩家」全集,再建一个平行集合就是 §9.22 重复影子状态(还要在建队/离队/解散/TTL
+  四处保持一致)。提名只负责"报名单",判定与排期仍全部由 Observe 走 locator 权威完成,
+  因此不存在"用本地时钟猜离线"。复用 Sweep 已有 ticker(§16.10 不新建第二套 timer),
+  **关键是队列空的分支也必须跑兜底** —— 那恰恰是缺口场景。游标只存进程内(纯调度提示,
+  重启从头扫)。新增 2 条回归(队列空时仍跑兜底提名 / 未注入时行为不变),前者在修复前必然失败。
