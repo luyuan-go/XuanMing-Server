@@ -404,16 +404,41 @@ func rosterLockedForMatch(team *teamv1.TeamStorageRecord) bool {
 type teamRosterSource struct {
 	repo   data.TeamRepo
 	cursor uint64
+
+	// 以下三项只用于**观测一轮完整遍历要多久** —— 那是判断 RosterScanBatch 够不够大的
+	// 唯一现场依据(见 offlinewatch.Options.RosterScanBatch 的公式)。纯进程内,
+	// 重启即清空,不写任何存储(§16.10 调度状态不得寄生到业务数据上)。
+	sweepStartedAt time.Time
+	scannedInRound int
+	rounds         int
 }
 
 // NextBatch 每轮取一小段游标。游标只存进程内:它是纯调度提示,重启从头扫一遍即可,
-// 不写进任何权威或派生存储(§16.10 禁止把调度状态寄生到业务数据上)。
+// 不写进任何权威或派生存储(§16.10)。
+//
+// 游标回到 0 表示「本次完整遍历结束」,此时打一条 Info 记录这一轮的耗时与候选数 ——
+// 运维据此核对「全量扫描周期 <= threshold」是否成立;不成立就得调大 RosterScanBatch,
+// 否则残留成员会等远超阈值的时间才被复查。
 func (s *teamRosterSource) NextBatch(ctx context.Context, limit int) ([]uint64, error) {
+	if s.sweepStartedAt.IsZero() {
+		s.sweepStartedAt = time.Now()
+	}
 	ids, next, err := s.repo.ScanPlayerIndex(ctx, s.cursor, int64(limit))
 	if err != nil {
 		return nil, err
 	}
-	s.cursor = next // next==0 表示一轮遍历结束,下轮自然从头开始
+	s.cursor = next
+	s.scannedInRound += len(ids)
+
+	if next == 0 { // 一轮遍历结束
+		s.rounds++
+		elapsed := time.Since(s.sweepStartedAt)
+		plog.With(ctx).Infow("msg", "team_roster_full_scan_completed",
+			"round", s.rounds, "scanned", s.scannedInRound, "elapsed", elapsed.String(),
+			"hint", "elapsed 必须明显小于 offline_leave.threshold;否则调大 offlinewatch RosterScanBatch")
+		s.sweepStartedAt = time.Time{}
+		s.scannedInRound = 0
+	}
 	return ids, nil
 }
 

@@ -703,6 +703,30 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`, want.tab
 			return fmt.Errorf("索引 %s.%s 列=%q，期望=%q", want.table, want.index, columns.String, want.columns)
 		}
 	}
+
+	// 列与索引形态**不足以**认定这是 1845 中间态:000008 的终态 schema 与它逐列逐索引完全
+	// 相同(000008 恰好把 000007 想删的列和索引原样加了回来)。唯一能把两者分开的事实是数据——
+	// 000007 只 CREATE player_mmr 而**不回填**(存量段位重置口径,见 PROGRESS 2026-08-11),
+	// 所以真正的 1845 中间态下 player_mmr 恒为 0 行。
+	//
+	// 少了这一条,任何"schema 已是 v8、schema_migrations 却被弄回 (7,dirty)"的库(备份恢复、
+	// 跨环境拷库时连 schema_migrations 一起拷、人工 `migrate force 7`)都会被判成中间态并标
+	// clean,随后 000008 的 `UPDATE players p JOIN player_mmr pm ... SET p.mmr = pm.mmr`
+	// 不再是 0 行,而是把**滞后的影子值**盖回 expand 期指定给旧 Stable 副本读写的兼容权威
+	// players.mmr —— 即提前触发 INC-20260812-001 A-3 的段位回退,且是静默的。
+	//
+	// player_mmr 非空时一律 fail-closed:那正是"无法确定该库处于哪个状态"的情形,
+	// 交人处置远好过自动改玩家段位。
+	var poolRows int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM `player_mmr`").Scan(&poolRows); err != nil {
+		return fmt.Errorf("读取 player_mmr 行数: %w", err)
+	}
+	if poolRows != 0 {
+		return fmt.Errorf("player_mmr 已有 %d 行，不是 000007/1845 中间态"+
+			"(该迁移不回填,中间态恒 0 行);此库更可能是 schema 已到 v8 而 schema_migrations 被弄回 (7,dirty)。"+
+			"继续 quarantine 会让 000008 的兼容回填用滞后的 player_mmr 值覆写 players.mmr(段位静默回退),"+
+			"故 fail-closed 交人处置", poolRows)
+	}
 	return nil
 }
 

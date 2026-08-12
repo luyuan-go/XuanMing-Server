@@ -22,6 +22,7 @@ import (
 
 // stubRepo 内存版 LocationRepo,只供单测用。
 type stubRepo struct {
+	lastAlive      map[uint64]int64
 	store          map[uint64]data.LocationRecord
 	lastSeen       map[uint64]int64
 	meta           map[uint64]data.HubPresenceFence
@@ -739,4 +740,14 @@ func TestFence_LoginPendingAllowedWhenNotBattle(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TouchAlive 在 stub 里等价于「按节流写 last_alive」——单测不模拟节流,
+// 直接覆盖即可:节流本身在 data 层的真 Redis 用例里验证。
+func (s *stubRepo) TouchAlive(_ context.Context, playerID uint64, atMs int64, _ time.Duration) error {
+	if s.lastAlive == nil {
+		s.lastAlive = map[uint64]int64{}
+	}
+	s.lastAlive[playerID] = atMs
+	return nil
 }

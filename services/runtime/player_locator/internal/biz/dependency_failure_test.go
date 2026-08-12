@@ -72,3 +72,7 @@ func TestLocationRead_DependencyFailureNeverMasqueradesAsOffline(t *testing.T) {
 		}
 	})
 }
+
+func (r failingLocationRepo) TouchAlive(context.Context, uint64, int64, time.Duration) error {
+	return r.err
+}

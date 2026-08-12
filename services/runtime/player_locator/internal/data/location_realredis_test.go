@@ -205,3 +205,61 @@ func TestRealRedis_心跳兜底与不凭空建Meta(t *testing.T) {
 		t.Fatalf("left_at_ms 必须优先于 last_alive_ms: got=%d want=%d", got[withMeta], leftAt)
 	}
 }
+
+// TouchAlive 的节流分支:BATTLE 心跳每 5s 每人一次,不节流会让 Redis 写量按 6 倍放大。
+// **节流掉的只能是「写时间戳」,TTL 必须每次都续** —— 漏续会让 meta 先于在线状态过期,
+// 反而丢掉判定依据。这条只能在真 Redis 上验(miniredis 的 PTTL / Lua 语义不保证一致)。
+func TestRealRedis_TouchAlive节流但仍续TTL(t *testing.T) {
+	repo, client := newRealRedis(t)
+	ctx := context.Background()
+	pid := realRedisPlayerBase + 6
+	fence := connFence("assign-A", "adm-1", 1)
+	if ok, err := repo.ActivateHubPresence(ctx, pid, fence, time.Hour); err != nil || !ok {
+		t.Fatalf("commit: ok=%v err=%v", ok, err)
+	}
+
+	first := time.Now().UnixMilli()
+	if err := repo.TouchAlive(ctx, pid, first, time.Hour); err != nil {
+		t.Fatalf("首次 TouchAlive: %v", err)
+	}
+	got, err := repo.BatchGetLastSeen(ctx, []uint64{pid})
+	if err != nil || got[pid] != first {
+		t.Fatalf("首次应写入: got=%d want=%d err=%v", got[pid], first, err)
+	}
+
+	// 节流窗口内的第二次:时间戳不得推进。
+	within := first + AliveTouchThrottle.Milliseconds()/2
+	if err := repo.TouchAlive(ctx, pid, within, 2*time.Hour); err != nil {
+		t.Fatalf("节流内 TouchAlive: %v", err)
+	}
+	if got, _ := repo.BatchGetLastSeen(ctx, []uint64{pid}); got[pid] != first {
+		t.Fatalf("节流窗口内不得推进时间戳: got=%d want=%d", got[pid], first)
+	}
+	// 但 TTL 必须已被续到新值(2h),否则 meta 会先于在线状态过期。
+	ttl, err := client.TTL(ctx, hubMetaKey(pid)).Result()
+	if err != nil || ttl <= time.Hour {
+		t.Fatalf("节流也必须续 TTL(否则 meta 先过期,判定依据丢失): ttl=%v err=%v", ttl, err)
+	}
+
+	// 超过节流窗口:必须推进。
+	beyond := first + AliveTouchThrottle.Milliseconds() + 1
+	if err := repo.TouchAlive(ctx, pid, beyond, time.Hour); err != nil {
+		t.Fatalf("超窗 TouchAlive: %v", err)
+	}
+	if got, _ := repo.BatchGetLastSeen(ctx, []uint64{pid}); got[pid] != beyond {
+		t.Fatalf("超过节流窗口必须推进: got=%d want=%d", got[pid], beyond)
+	}
+}
+
+// 没有 meta 的玩家(从没走过 fenced 路径)不得被凭空建 key —— 同 RefreshHubLocations。
+func TestRealRedis_TouchAlive不凭空建Meta(t *testing.T) {
+	repo, client := newRealRedis(t)
+	ctx := context.Background()
+	pid := realRedisPlayerBase + 7
+	if err := repo.TouchAlive(ctx, pid, time.Now().UnixMilli(), time.Hour); err != nil {
+		t.Fatalf("TouchAlive: %v", err)
+	}
+	if n, err := client.Exists(ctx, hubMetaKey(pid)).Result(); err != nil || n != 0 {
+		t.Fatalf("不得为无 meta 玩家建 key(会成为无法接受 HUB 写的毒 key): exists=%d err=%v", n, err)
+	}
+}

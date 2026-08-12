@@ -575,3 +575,5 @@ func TestLocatorService_ActiveCredentialBeforeAnySideEffect(t *testing.T) {
 		}
 	})
 }
+
+func (s *sideEffectRepo) TouchAlive(context.Context, uint64, int64, time.Duration) error { return nil }

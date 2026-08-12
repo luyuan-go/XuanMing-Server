@@ -232,6 +232,8 @@ func TestPandoraPlayerMigratesToLatestAcrossBackends(t *testing.T) {
 		{name: "v7_dirty_exact", prepare: preparePlayerV7DirtyExact},
 		{name: "v7_dirty_mismatch", prepare: preparePlayerV7DirtyMismatch,
 			expectFailure: "pandora_player v7 quarantine 形态拒绝"},
+		{name: "v7_dirty_but_pool_data_exists", prepare: preparePlayerV7DirtyWithPoolData,
+			expectFailure: "不是 000007/1845 中间态"},
 	}
 	forEachPlayerBackend(t, func(t *testing.T, dsn string, isTiDB bool) {
 		for _, scenario := range scenarios {
@@ -623,6 +625,26 @@ func preparePlayerV7DirtyMismatch(t *testing.T, ctx context.Context, db *sql.DB,
 	// 只破坏一个精确前置条件；quarantine 必须拒绝而不是“尽量修”。
 	if _, err := db.ExecContext(ctx, "ALTER TABLE players DROP INDEX idx_mmr"); err != nil {
 		t.Fatalf("构造 v7 dirty 形态不符: %v", err)
+	}
+	return nil
+}
+
+// preparePlayerV7DirtyWithPoolData 复现 INC-20260812-001 里那条 P1:**列与索引形态区分不了
+// 「000007 半途 1845」和「已经到 v8 的库」**——000008 恰好把 000007 想删的列/索引原样加回来,
+// 两者 schema 逐列逐索引相同。于是任何让 schema_migrations 退回 (7,dirty) 的操作(备份恢复、
+// 跨环境拷库带上 schema_migrations、人工 `migrate force 7`)都会被判成中间态并标 clean,
+// 随后 000008 的兼容回填把**滞后的** player_mmr 值盖回 players.mmr —— 而 players.mmr 正是
+// expand 期指定给旧 Stable 副本读写的兼容权威,等于静默把玩家段位回退。
+//
+// 唯一能把两者分开的事实是数据:000007 只 CREATE player_mmr 而不回填,真中间态恒 0 行。
+// 本场景在中间态上塞进真实分池行,quarantine 必须 fail-closed 交人处置。
+func preparePlayerV7DirtyWithPoolData(t *testing.T, ctx context.Context, db *sql.DB, target migrationTarget) func(*testing.T) {
+	t.Helper()
+	preparePlayerV7DirtyExact(t, ctx, db, target)
+	if _, err := db.ExecContext(ctx, `
+INSERT INTO players (player_id, nickname, level, mmr) VALUES (7201, 'Player_7201', 9, 1620);
+INSERT INTO player_mmr (player_id, rating_pool, mmr) VALUES (7201, 'default', 900);`); err != nil {
+		t.Fatalf("构造「schema 已到 v8 且有真实分池数据」的夹具: %v", err)
 	}
 	return nil
 }

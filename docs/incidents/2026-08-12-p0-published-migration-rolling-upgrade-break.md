@@ -155,6 +155,7 @@ migrate Job (backoffLimit=0)
 | login 双锁双写（先锁 `player_no_counter` 再锁 `register_no_counter`，取 MAX 水位，双列同写） | 已落码 | `services/account/login/internal/data/player_no.go` | `TestPlayerNo_MySQLAndTiDB_StableCanaryShareOneAllocator` |
 | `pandora_player/000008` expand：加回 `players.mmr` + `idx_mmr`，从 `player_mmr` 回填 default | 已落码 | `000008_rating_pool_expand_compat.up.sql` | `TestPandoraPlayerV8RestoresRollingCompatibility` + 真库 7 场景矩阵 |
 | player 服务 default 池以 `players.mmr` 为兼容权威并双写 | 已落码 | `services/account/player/internal/data/mmr_repo.go` | `TestApplyMMRChangeRatingPoolExpandCompatibility_MySQL` |
+| **quarantine 增加 `player_mmr` 行数守卫**：列/索引形态区分不了「000007 半途 1845」与「已到 v8 的库」（000008 恰好把 000007 想删的列和索引原样加回来，两者 schema 逐列逐索引相同）。唯一判据是数据——000007 只 CREATE 不回填，真中间态恒 0 行。非空即 fail-closed | 已落码 | `tools/migrate/main.go`（`validatePandoraPlayerV7DirtyShape` 末段） | `v7_dirty_but_pool_data_exists` 场景，**真 MySQL 8.4 先红后绿**：摘掉守卫时 `migrateTarget` 返回 `err=<nil>`（静默洗白并覆写 `players.mmr`），加回后 fail-closed |
 | `register_no_counter` 登记 §9.24 + dbcheck registry | 已落码 | `CLAUDE.md` §9.24、`tools/migrate/cmd/dbcheck/main.go` | `go test ./tools/migrate/...` 转绿（修前 `TestFreshInitTablesAreRegistered` / `TestMigrationTablesAreRegistered` 双红） |
 | CI 强制 MySQL 8.4 + TiDB 8.5.1 真库回归 | 已落码 | `392ae6e1`（`ci_db.ps1` / `docker-compose.ci-db.yml` / `Jenkinsfile`） | `ci_db_contract_test.ps1` |
 
@@ -206,9 +207,34 @@ migrate Job (backoffLimit=0)
 | A-2 | P1 | 加 **expand-only 机械门禁**：迁移契约测试断言 up.sql 不得出现 `DROP COLUMN`/`DROP TABLE`/`RENAME *`，除非文件头显式标注 `-- CONTRACT:` 并写明旧副本排空判据 | — | **已落码** | `tools/migrate/expand_only_contract_test.go`；见 §7.3 |
 | A-3 | P1 | **contract 时必须反向回填 `player_mmr ← players.mmr`**：旧副本结算只写 `players.mmr` 不写 `player_mmr`，删列瞬间玩家 default 段位会回退到最后一次新副本写入的值。`000008` 注释只写了「以后删」，没写这一步 | 待指定 | 未开始 | 本 Incident |
 | A-4 | P2 | `000008` 的兼容回填是一条不分批的多表 UPDATE，会对**每个已有 default 记录的玩家**的 `players` 行加记录锁并持到语句提交（真库实测 15 万行 ≈ 18s / 150001 把锁），期间这些玩家的 `ApplyMMRChange` `SELECT ... FOR UPDATE` 会等到 `innodb_lock_wait_timeout`(targets 配 15s) 后批量报 1205。**在受支持发布路径上该语句恒 0 行**（000007 必 1845 失败 → v7 代码从未上线），风险只存在于「按当前 `04-player-tables.sql` 全新初始化且 v7 代码跑过」的库。修法只能是按主键游标分批 + 每批独立提交，或在文件头写明该取舍（加 `WHERE p.mmr <> pm.mmr` **无效**：RR 下锁在判谓词之前就加） | 待指定 | 未开始 | 本 Incident |
-| A-5 | P1 | **本轮审查未跑完**：5 个维度中 `migrate-quarantine` / `ci-and-proto` / `cross-cutting` 三个 agent 因连接中断未返回；9 条进入对抗复核的发现里 4 条的复核 agent 同样中断。已完成的 2 个维度共提出 19 条，仅 3 条完成裁决（1 成立 / 2 推翻）。**其余 16 条既未确认也未证伪**，其中至少 `SweepPlayerNo` 返回值语义变化导致 `player_no_assigned rows` 失真、`EXISTS(mmr_history)` 判据与保留期清理的相互作用、`change.Baseline` 在 default 池成为死参数、`idx_mmr` 无现役查询使用四条需要复跑 | 待指定 | 未开始 | 本 Incident |
+| A-8 | P2 | **expand 窗口内老副本会把显式池结算吞进 `players.mmr`（=default 投影）**：pre-000007 副本不认识 `rating_pool`，对任何池的 `player.update` 都只 `UPDATE players SET mmr=?` 并写一条 `rating_pool` 由列 DEFAULT 补成 `'default'` 的 `mmr_history`。现网 4 个 ELO 关卡**全部**配非 default 池，所以 player 单独回滚到 Stable 期间为 **100% 排位局**记错池，而 `mmr_history` 幂等键不含池 → 重投也补不回来。**可恢复**（`mmr_history JOIN battles → map_id → 关卡表段位池` 可确定性判出全部错池行）。欠账：①写明修复口径；②`mmr_repo_mysql_test.go` 自称钉住「显式池不串分」，实际只模拟了老副本写 default 一场，旧→新方向的显式池组合从未覆盖，不满足 §9.21「验证 Stable↔Canary 组合」 | 待指定 | 未开始 | 本 Incident（与 A-3 并列） |
+| A-9 | P2 | **quarantine 目标库白名单与 `validMigrationDatabaseMapping` 冲突**：前者只认 `database == "pandora_player"` 或 `pandora_player_mig_it_` 前缀，后者（`main.go:385`）与 `tools/migrate/README` 明面允许 `<migration_set>_<后缀>` 分片库名。若将来给 player 引入分片/额外物理库，MySQL 8.4 上全新建库会卡在 v7 dirty 且 quarantine 拒绝介入，自动化发布链路永久阻断（需 DBA 手工 `UPDATE schema_migrations SET dirty=0`，非不可恢复）。**当前不可触发**：全仓 player 库名恒为精确 `pandora_player`（infra.md 只批准 auction 分片）。正确修法是在 `loadTargets` 阶段就对 `pandora_player` 拒绝前缀库名，把矛盾提前到清单校验 | 待指定 | 未开始 | 本 Incident |
+| A-5 | P1 | **审查两轮都没跑完**：`migrate-quarantine` 第二轮补回（产出本文档 §7.2 那条 P1 与 A-9），但 **`ci-and-proto` 与 `cross-cutting` 两轮均因连接中断未返回**，复核 agent 两轮各挂 4 条 / 4 条。累计 27 条发现，仅 9 条进入复核、3 条成立、2 条推翻，**18 条既未确认也未证伪**（清单见 §10 附注）。**尚未有任何一次完整的跨切面扫描**：其余 migration set 的同型 contract、proto 新字段是否真有读写方与 fail-closed 分支、cpp pb 与 UE 仓库的同步断裂、CI 容器版本与 skip 白名单，全部零覆盖 | 待指定 | 未开始 | 本 Incident |
 | A-6 | P2 | `0fdb15f1` 把 4 份 Agones Fleet 版本 yaml（battle / battle-canary / hub / hub-canary，`r1971→r1977`）与本次 expand 修复混在同一提交推上 `origin/main`，未单独验证版本一致性 | 待指定 | 未开始 | 本 Incident |
 | A-7 | P3 | `pandora_social` / `pandora_auction` / `pandora_battle` 等其余 migration set 未做同型 contract 扫描 | 待指定 | 未开始 | 本 Incident |
+
+**A-5 附注:18 条未裁决发现**(按初判严重度)。它们既未被确认也未被证伪，**不得**当成"已审查通过"：
+
+| 初判 | 发现 | 位置 |
+|---|---|---|
+| P1 | quarantine 让 MySQL 与 TiDB 在同一 v8 版本上产出不同玩家段位数据，MySQL 侧没执行 000007 声明的"存量重置"口径 | `tools/migrate/main.go` |
+| P2 | `EnsurePlayerNoCounter` 改成持双行 `FOR UPDATE` 的同步启动事务且用无超时 ctx，一次锁等待失败就让该副本**终生**停用补号并拖慢 Pod 就绪 | `login/internal/data/player_no.go` |
+| P2 | 000007 的数据冲突 guard 排在所有 DDL 之后，主升级路径上恒等于 0（形同虚设）；真正会炸的 `ADD UNIQUE KEY` 反而排在它前面 | `pandora_account/000007...up.sql` |
+| P2 | 回填方向(`player_mmr→players.mmr`)与运行期权威方向相反，重跑 000008 up 会清掉老副本写入的分 | `pandora_player/000008...up.sql` |
+| P2 | `EXISTS(mmr_history rating_pool='default')` 判据推翻 000007 的存量重置口径，并会被保留期清理反转 | `player/internal/data/mmr_repo.go` |
+| P2 | 该 `EXISTS` 在结算热路径上做无可用索引的全历史扫描 | 同上 |
+| P2 | §9.22 唯一权威口径三处自相矛盾；contract 无编号、无排空判据 | `deploy/mysql-init/04-player-tables.sql` |
+| P2 | 形态白名单漏掉 `player_mmr.updated_at`，残缺表被判为"精确 1845 形态"并标 clean | `tools/migrate/main.go` |
+| P2 | quarantine 后第二次 `m.Up()` 覆盖 `applyErr`，原始 1845 证据丢失且库落到 quarantine 自己救不了的 v8 dirty | 同上 |
+| P2 | `idx_mmr` 无任何现役查询使用，且它正是 000007 触发 1845 的成因 | `pandora_player/000008...up.sql` |
+| P3 | `SweepPlayerNo` 返回值改成 `len(pending)` 后，`player_no_assigned` 的 `rows` 不再是"本批新发号数" | `login/internal/data/player_no.go` |
+| P3 | `GetPlayerNo` 末尾两条分支是死代码 | `login/internal/data/account.go` |
+| P3 | fresh-init 的 `player_no` 列注释与迁移链终态不一致，而守护这一致性的测试断言在本次被删掉 | `deploy/mysql-init/02-account-tables.sql` |
+| P3 | `change.Baseline` 在 default 池成为死参数，`base_mmr` 配置与迁移硬编码的 1500 会静默分叉 | `player/internal/data/mmr_repo.go` |
+| P3 | `fakeRepo` 未复刻 default 池新语义，biz 层测试对本次改动的核心风险完全不敏感 | `player/internal/biz/player_test.go` |
+| P3 | quarantine 成功路径会被 defer 里的 Unlock/Close 错误染成失败，而 `SetVersion` 已经提交 | `tools/migrate/main.go` |
+| P3 | 测试库前缀 `pandora_player_mig_it_` 是编译进生产二进制的自动 force 后门，没有任何 environment 门 | 同上 |
+| — | 「000008 回填是不分批 JOIN UPDATE」两轮复核**结论相反**（第一轮成立降 P2 并附真库实测，第二轮判推翻）。已按第一轮的实测口径记为 A-4，判定待复跑 | `pandora_player/000008...up.sql` |
 
 ## 11. 关闭审核
 

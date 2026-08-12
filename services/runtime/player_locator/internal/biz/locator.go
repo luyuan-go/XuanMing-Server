@@ -277,6 +277,18 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 				"player %d hub presence superseded before meta commit", in.PlayerID)
 		}
 	}
+	// 非 HUB 的在线状态(MATCHING / BATTLE)走的是本路径而不是 RefreshHubLocations,
+	// 必须在这里推 last_alive_ms —— 否则玩家一进战斗 meta 就不再更新,
+	// 「打完一局直接退游戏」(最常见的退出方式)的离线时刻会停在很早的 Hub 阶段。
+	// 已带 30s 节流(见 data.AliveTouchThrottle),BATTLE 心跳的绝大多数调用只读不写。
+	// best-effort:失败只告警,退化成「时刻偏早」,方向安全(见 BatchGetLastSeen 注释)。
+	if in.State == LocationStateMatching || in.State == LocationStateBattle {
+		if terr := u.repo.TouchAlive(ctx, in.PlayerID, time.Now().UnixMilli(), u.lastSeenRetention); terr != nil {
+			plog.With(ctx).Warnw("msg", "location_touch_alive_failed",
+				"player_id", in.PlayerID, "state", in.State, "err", terr)
+		}
+	}
+
 	// presence fan-out(§13.4):写成功后通知 hub,内部转粗粒度 + 去抖 + 合并 + 只推订阅者。
 	if u.presence != nil {
 		u.presence.Notify(in.PlayerID, in.State)

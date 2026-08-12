@@ -73,12 +73,17 @@ Assert-True (($audit.GatedSkips | Where-Object { $_.Test -eq 'TestOnlyOnLinux' }
 Assert-True (($audit.Console -join "`n") -match 'ok\s') '人类可读输出被逐字还原(日志观感不变)'
 
 Write-Host '[2] 未设置 DSN:默认告警,不阻断' -ForegroundColor Cyan
-$saveMy = $env:PANDORA_TEST_MYSQL_DSN
-$saveTi = $env:PANDORA_TEST_TIDB_DSN
-$saveTiBackend = $env:PANDORA_TIDB_TEST_DSN
+# Test-PandoraGatedSkipPolicy 会**读进程环境变量**,所以本段必须先把受审计的门控变量
+# 全部清空,再由 [4]/[5] 按需逐个设回去 —— 否则断言结果取决于"谁在跑这个脚本"。
+# 这不是假设性风险:ci_backend.ps1(2026-08-12 起)会先把 CI DB 的三个 DSN 导入本进程
+# 环境,再在同一进程里跑本契约测试;漏清任何一个,本地全绿而 Jenkins 必红。
+# 用注册表遍历而不是逐个写死:将来再加一个数据库门控变量时不会重蹈覆辙。
+$savedBlockEnv = @{}
+foreach ($name in (Get-PandoraGatedEnvNames)) {
+    $savedBlockEnv[$name] = [Environment]::GetEnvironmentVariable($name)
+    [Environment]::SetEnvironmentVariable($name, '')
+}
 try {
-    $env:PANDORA_TEST_MYSQL_DSN = ''
-    $env:PANDORA_TEST_TIDB_DSN = ''
     $policy = Test-PandoraGatedSkipPolicy -GatedSkips $audit.GatedSkips
     Assert-True ($policy.Violations.Count -eq 0) '未设置 DSN 时不阻断流水线'
     Assert-True ($policy.Warnings.Count -eq 2) "两个变量各出一条告警(实为 $($policy.Warnings.Count))"
@@ -102,9 +107,9 @@ try {
     Assert-True ($policyClean.Violations.Count -eq 0 -and $policyClean.Warnings.Count -eq 0) '数据库变量齐全且零门控跳过 → 干净通过'
 }
 finally {
-    $env:PANDORA_TEST_MYSQL_DSN = $saveMy
-    $env:PANDORA_TEST_TIDB_DSN = $saveTi
-    $env:PANDORA_TIDB_TEST_DSN = $saveTiBackend
+    foreach ($name in $savedBlockEnv.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $savedBlockEnv[$name])
+    }
 }
 
 Write-Host '[6] 非 JSON 行(构建错误)必须原样透出,不得被吞' -ForegroundColor Cyan

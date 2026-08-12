@@ -112,6 +112,9 @@ type LocationRepo interface {
 	// 返回 map 只含有记录的玩家;缺席 = UNKNOWN(从未记录 / 已超 retention),
 	// 调用方不得当成 0 或「刚离开」(§9.22 不确定不得冒充默认值)。
 	BatchGetLastSeen(ctx context.Context, playerIDs []uint64) (map[uint64]int64, error)
+	// TouchAlive 推进 last_alive_ms(带节流)。给非 HUB 在线状态(BATTLE/MATCHING)用,
+	// 它们走 SetLocation 而不是 RefreshHubLocations,少了这条 meta 会停在 Hub 阶段。
+	TouchAlive(ctx context.Context, playerID uint64, atMs int64, retention time.Duration) error
 	Delete(ctx context.Context, playerID uint64) error
 }
 
@@ -447,8 +450,18 @@ func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod stri
 // 结果就是给 legacy 玩家造出一个永远无法接受 HUB 写的毒 key。EXISTS 守卫挡住这一点。
 //
 // 同理只续期不新建:key 不存在说明这个玩家从没走过带 fence 的路径，没有 meta 可维护。
+//
+// 节流(2026-08-12):BATTLE 心跳是每 5s 每人一次的热路径,而 180s 级别的判定不需要
+// 秒级精度的 last_alive。节流掉的只是「写时间戳」——**TTL 每次都必须续**,
+// 漏续会让 meta 先于玩家在线状态过期,反而丢掉判定依据。
 var touchHubAliveScript = redis.NewScript(`
 if redis.call('EXISTS', KEYS[1]) ~= 1 then return 0 end
+local now = tonumber(ARGV[1])
+local prev = tonumber(redis.call('HGET', KEYS[1], 'last_alive_ms'))
+if prev and (now - prev) < tonumber(ARGV[3]) then
+  redis.call('PEXPIRE', KEYS[1], ARGV[2])
+  return 0
+end
 redis.call('HSET', KEYS[1], 'last_alive_ms', ARGV[1])
 redis.call('PEXPIRE', KEYS[1], ARGV[2])
 return 1`)
@@ -651,6 +664,33 @@ func (r *RedisLocationRepo) Delete(ctx context.Context, playerID uint64) error {
 	}
 	if err := r.rdb.Unlink(ctx, locKey(playerID)).Err(); err != nil && !errors.Is(err, redis.Nil) {
 		return errcode.New(errcode.ErrInternal, "redis location del: %v", err)
+	}
+	return nil
+}
+
+// AliveTouchThrottle 是 last_alive_ms 的最小写入间隔。
+//
+// 取 30s 的依据:消费方的最短阈值是 team 的 180s,30s 误差占 1/6,判定不受影响;
+// 而 BATTLE 心跳每 5s 每人一次,不节流会让这条链的 Redis 写量按 6 倍放大且毫无收益。
+// 调大要与最短阈值一起看(节流值必须远小于阈值,否则会把判定时刻拖后到失真)。
+const AliveTouchThrottle = 30 * time.Second
+
+// TouchAlive 把玩家 meta 的 last_alive_ms 推到 atMs(带 AliveTouchThrottle 节流)。
+//
+// 与 RefreshHubLocations 里那次内联调用的区别只是入口:那条是 Hub 心跳的批量路径,
+// 这条给**非 HUB 在线状态**用(BATTLE / MATCHING —— 它们走 SetLocation 而不是
+// RefreshHubLocations)。少了这条,玩家一进战斗 meta 就不再更新,
+// 「打完一局直接退游戏」的离线时刻会停留在很早的 Hub 阶段(判定偏早)。
+//
+// best-effort:meta 不存在(从没走过 fenced 路径)时是 no-op,不会凭空建毒 key。
+func (r *RedisLocationRepo) TouchAlive(ctx context.Context, playerID uint64, atMs int64, retention time.Duration) error {
+	if playerID == 0 || atMs <= 0 || retention <= 0 {
+		return errcode.New(errcode.ErrInvalidArg, "valid player, timestamp and retention required")
+	}
+	if err := touchHubAliveScript.Run(ctx, r.rdb,
+		[]string{hubMetaKey(playerID)}, atMs, retention.Milliseconds(),
+		AliveTouchThrottle.Milliseconds()).Err(); err != nil && !errors.Is(err, redis.Nil) {
+		return errcode.New(errcode.ErrInternal, "redis touch alive: %v", err)
 	}
 	return nil
 }

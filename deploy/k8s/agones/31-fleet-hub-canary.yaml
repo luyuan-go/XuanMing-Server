@@ -65,7 +65,7 @@ spec:
               # 旧 tag 去制品库重建镜像,把 stage 降级覆盖,一键启动在降级守卫处 fail-closed 中断。
               # 注:canary 与 stable 钉同一 tag = 灰度轨当前无差异版本;真正灰度时本行必须换成
               # 与 stable **不同** digest 的新镜像。
-              image: pandora/hub-ds:r1977-dirty-20260812-031503
+              image: pandora/hub-ds:r1981-jenkins-20260812-070505
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

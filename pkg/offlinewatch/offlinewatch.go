@@ -123,10 +123,19 @@ type Options struct {
 	// RetryBackoff presence 查询 / Handler 失败或业务暂缓时,推迟多久再试。默认 = Interval。
 	RetryBackoff time.Duration
 
-	// RosterScanBatch 是每轮兜底提名的批量上限。默认 200。
+	// RosterScanBatch 是每轮兜底提名的批量上限。默认 2000。
 	//
 	// 与 Budget 分开:Budget 管「到期项」(有依据、要动手),本值管「提名候选」
-	// (只是拿去 Observe 判一判)。两者共享同一轮时间预算,调大要一起看下游压力。
+	// (只是拿去 Observe 判一判)。两者共享同一轮时间预算。
+	//
+	// **取值必须让全量扫描周期 <= Threshold**,否则残留成员最坏要等一个远超阈值的时间
+	// 才轮得到复查(阈值 180s 却两小时才扫到,等于没生效):
+	//
+	//	RosterScanBatch >= 候选总量 / (Threshold / Interval)
+	//
+	// 例:10 万有队伍的玩家、Threshold=180s、Interval=15s → 12 轮扫完 → 每轮 >= 8334。
+	// 默认 2000 覆盖到约 2.4 万候选;超过这个规模**必须**按上式调大,
+	// 并用 RosterSource 侧的「完整遍历一轮」日志核对实际周期(见 team 的 teamRosterSource)。
 	RosterScanBatch int
 
 	// AttemptTimeout 限制单个玩家「最终 presence 复核 + Handler」一次尝试的总时长。
@@ -158,7 +167,7 @@ func (o *Options) normalize() error {
 		o.AttemptTimeout = 5 * time.Second
 	}
 	if o.RosterScanBatch <= 0 {
-		o.RosterScanBatch = 200
+		o.RosterScanBatch = 2000
 	}
 	return nil
 }

@@ -3278,3 +3278,39 @@ immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致
   因此不存在"用本地时钟猜离线"。复用 Sweep 已有 ticker(§16.10 不新建第二套 timer),
   **关键是队列空的分支也必须跑兜底** —— 那恰恰是缺口场景。游标只存进程内(纯调度提示,
   重启从头扫)。新增 2 条回归(队列空时仍跑兜底提名 / 未注入时行为不变),前者在修复前必然失败。
+- **同日九修·更正根因(原判断被证据推翻)**:上条写「hubmeta 只有 last_alive_ms 没有 left_at_ms,
+  印证 Hub 侧没走 Logout」——**跳步了**。查 locator 全量日志后,那两名玩家的真实轨迹是
+  `state=3(HUB)×1 → state=4(MATCHING)×1 → state=5(BATTLE)×79`,**最后停在 BATTLE**,
+  `disconnect_reported` 零条。
+  真因不是 Hub DS 崩溃,而是:`ReportDisconnect` 是 **Hub DS 专用**接口(守卫要求 state==HUB),
+  玩家**从战斗里离开**时根本不存在 Hub Logout —— 这是设计如此不是故障。于是
+  「组队 → 匹配 → 进战斗 → 战斗中/战斗后掉线」这条**主流路径**天然没有任何离场事件,
+  队伍又不会因进战斗而解散,残留必然发生。
+  **这把 periodic resync 的定位从「边缘兜底」抬成「主路径必需」**:Hub 崩溃罕见,
+  「打完一局直接退游戏」天天发生;没有 resync,本功能对最常见的退出方式根本不生效。
+  附带精度问题(已评估,非正确性问题):last_alive_ms 由 Hub 心跳推,玩家进战斗后 meta 不再更新,
+  故判定用的时刻偏早。方向安全 —— classify 永远先判 online,BATTLE 期间 online=true 不会被碰;
+  只有位置 key 真过期后才用到该时刻,那时确已离线,后果是「早一点被摘掉」而非「误摘在线玩家」。
+  **线上验证**:重新构建 + load + rollout 后,两名残留玩家的 `pandora:team:player:*` 归属在
+  一到两轮 sweep 内清空,队伍 23028424935505920 已不存在。
+- **同日十修:按「最标准」补齐两处(用户拍板)**。
+  ①**Battle/Matching 心跳补 last_alive_ms**:此前只挂在 Hub 心跳(RefreshHubLocations)上,
+  玩家一进战斗 meta 就不再更新,于是「打完一局直接退游戏」这条最常见路径的离线时刻会停在
+  很早的 Hub 阶段(判定偏早)。新增 `LocationRepo.TouchAlive`,在 SetLocation 的
+  MATCHING/BATTLE 分支调用。**带 30s 节流**(`data.AliveTouchThrottle`):BATTLE 心跳是
+  每 5s 每人一次的热路径,不节流 Redis 写量按 6 倍放大而毫无收益;节流掉的只是「写时间戳」,
+  **TTL 每次都必须续** —— 漏续会让 meta 先于在线状态过期,反而丢掉判定依据(已按此写 Lua 并实测)。
+  ②**RosterScanBatch 从拍脑袋的 200 改为按规模推导**:默认提到 2000,注释写死公式
+  `RosterScanBatch >= 候选总量 / (Threshold / Interval)` —— 原来的 200/15s 在 10 万候选下
+  要 125 分钟才扫完一轮,而阈值只有 180s,等于没生效。同时给 teamRosterSource 加
+  「完整遍历一轮」的耗时日志(`team_roster_full_scan_completed`),让「扫描周期 <= 阈值」
+  这条约束在现场可核对,而不是只写在注释里。
+  验证:真 Redis 10/10 全过(含新增的节流分支两条:节流窗口内不推进时间戳但必须续 TTL、
+  不给无 meta 玩家凭空建毒 key);全量单测绿;team + player-locator 已重新构建、load、rollout。
+  过程记录:`go mod download` 又因网络抖动失败一次,重试即过(非代码问题);
+  本地 Redis 容器在诊断期间被清掉两次,验证改用一次性临时实例(跑完即删,不碰测试环境)。
+- 2026-08-12(续:审查补跑 + quarantine 静默覆写玩家段位的 P1 修复)。上一条的 A-2 门禁落地后重跑审查,补回 `migrate-quarantine` 维度,抓到一条**真库可复现**的 P1。
+  - **P1:quarantine 的"精确 1845 形态"根本区分不了两种库**。`validatePandoraPlayerV7DirtyShape` 只比对列与索引 —— 而 000008 恰好把 000007 想删的 `players.mmr` 和 `idx_mmr` **原样加了回来**,于是「000007 半途 1845 的中间态」与「已经跑到 v8 的终态」**逐列逐索引完全相同**。任何让 `schema_migrations` 退回 `(7,dirty)` 的操作(备份恢复、跨环境拷库连 schema_migrations 一起拷、人工 `migrate force 7`)都会被判成中间态标 clean,随后 000008 的兼容回填 `UPDATE players p JOIN player_mmr pm SET p.mmr=pm.mmr` 不再是 0 行,而是把**滞后的影子值**盖回 `players.mmr` —— 而它正是 expand 期指定给旧 Stable 副本读写的兼容权威,等于**静默把玩家段位回退**,提前触发 A-3。真 MySQL 8.4 实测:players.mmr 1620/1480 被无声改成 900/800,日志只打「验收通过 version=8」。
+  - **修法(唯一能把两者分开的是数据,不是 schema)**:000007 只 `CREATE player_mmr` 而**不回填**(存量段位重置口径),所以真中间态下 `player_mmr` **恒 0 行**。已在形态校验末尾加行数守卫,非空一律 fail-closed 交人处置——那正是「无法确定该库处于哪个状态」的情形,交人远好过自动改玩家段位。新增 `v7_dirty_but_pool_data_exists` 场景,**真 MySQL 8.4 先红后绿**:摘掉守卫时 `migrateTarget` 返回 `err=<nil>`(静默洗白),加回后拒绝。
+  - **另两条成立(已记事故档 A-8/A-9,未修)**:①expand 窗口内 pre-000007 老副本会把**显式池**结算吞进 `players.mmr`(它不认识 rating_pool,mmr_history 的池由列 DEFAULT 补成 'default')——现网 4 个 ELO 关卡**全部**配非 default 池,所以 player 单独回滚到 Stable 期间是 **100% 排位局**记错池;幂等键不含池故重投补不回来,但**可恢复**(`mmr_history JOIN battles → map_id → 关卡表段位池`)。同时暴露 `mmr_repo_mysql_test.go` 自称钉住「显式池不串分」其实只测了旧→新的 default 一场,不满足 §9.21「验证 Stable↔Canary 组合」。②quarantine 的目标库白名单只认精确 `pandora_player`,与 `validMigrationDatabaseMapping`/README 明面允许的 `<set>_<后缀>` 分片库名冲突;当前不可触发(player 无分片),将来引入分片会卡死自动化发布链路。
+  - **审查两轮都没跑完(A-5 升级)**:`ci-and-proto` 与 `cross-cutting` 两轮**均**因连接中断未返回,复核 agent 两轮各挂 4 条。累计 27 条发现只有 9 条进复核、3 条成立、2 条推翻,**18 条既未确认也未证伪**(清单已逐条落进事故档 §10 附注)。**跨切面扫描至今零覆盖**:其余 migration set 的同型 contract、proto 新字段有没有真接线与 fail-closed 分支、cpp pb 与 UE 仓库的同步断裂、CI 容器版本与 skip 白名单,全都没查过。另有一条(000008 不分批回填)两轮复核**结论相反**,按第一轮的真库实测口径记为 A-4 待复跑。
