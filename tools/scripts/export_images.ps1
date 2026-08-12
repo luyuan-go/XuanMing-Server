@@ -340,8 +340,34 @@ if (-not $Build) {
 }
 
 Write-Step "导出 $($images.Count) 个镜像 → $Out(可能几分钟,镜像较大)"
-docker save -o $Out @images
-if ($LASTEXITCODE -ne 0) { throw "docker save 失败。" }
+
+# 批量 `docker save a b c` 在**两个镜像的 RootFS 层链完全相同、只有 config 不同**时,
+# 会静默只保留其中一个(实测:matchmaker 与 matchmaker-pve 由同一份文件系统 + 不同
+# 启动参数构建,层链逐条相同,`docker save mm mm-pve` 只产出 mm-pve,反序则只产出 mm;
+# 而 player/player-locator 这类层链不同的镜像并排保存则两个都在)。
+# 这不是偶发:凡是本仓库里"同一二进制、不同 CMD"的镜像对都会命中。
+# 先探测层链碰撞,命中就直接走逐镜像合并,既不产生吓人的 WARN,也不白跑一次全量
+# save(#25 里这一次白跑约 13s)。下面原有的产物核对与回退保留为安全网。
+$layerChains = @{}
+$collisionPairs = @()
+foreach ($img in $images) {
+    $chain = (docker image inspect --format '{{join .RootFS.Layers ","}}' $img 2>$null)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($chain)) { continue }
+    if ($layerChains.ContainsKey($chain)) {
+        $collisionPairs += "$($layerChains[$chain]) == $img"
+    }
+    else { $layerChains[$chain] = $img }
+}
+
+if ($collisionPairs.Count -gt 0) {
+    Write-Info "检测到层链完全相同的镜像对,批量 docker save 会丢其中一个,直接用逐镜像合并:"
+    $collisionPairs | ForEach-Object { Write-Info "  - $_" }
+    Save-MergedDockerArchive -Images $images -OutPath $Out
+}
+else {
+    docker save -o $Out @images
+    if ($LASTEXITCODE -ne 0) { throw "docker save 失败。" }
+}
 
 $exportedTags = @(Get-ArchiveRepoTags -Archive $Out)
 $missingTags = @($images | Where-Object { $exportedTags -notcontains $_ })

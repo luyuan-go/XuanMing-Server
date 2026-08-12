@@ -179,14 +179,11 @@ type Lease struct {
 	// 可写截止必须来自 Term.RemainingTTL 的服务端实证，不能从配置值自报。
 	leaseTTLSec int64
 
-	// consecutiveCampaignErrs:连续竞选失败次数(当选即清零;复审 P0-6 可观测)。
-	consecutiveCampaignErrs atomic.Uint64
-	// lastCampaignErr:最近一次竞选失败原因(atomic.Value[string];当选清空)。
-	lastCampaignErr atomic.Value
-	// consecutiveActivationErrs/lastActivationErr:当选后激活钩子(Config.OnElected)
-	// 连续失败次数与最近原因(激活成功清零;R10 P0-4 接流前硬门可观测)。
-	consecutiveActivationErrs atomic.Uint64
-	lastActivationErr         atomic.Value
+	// campaign:连续竞选失败次数 + 最近原因(当选即清零;复审 P0-6 可观测)。
+	campaign atomicTally
+	// activation:当选后激活钩子(Config.OnElected)的连续失败次数 + 最近原因
+	// (激活成功清零;R10 P0-4 接流前硬门可观测)。
+	activation atomicTally
 	// activationRunning 把不尊重 ctx 的激活钩子限制为最多一个后台执行体。Go 无法
 	// 强杀 goroutine；超时后本副本会立即让位，后续竞选在旧钩子退出前不再叠加泄漏。
 	activationRunning atomic.Bool
@@ -208,25 +205,68 @@ type holdState struct {
 	selfFenced atomic.Bool
 }
 
+// errTally 把"连续失败次数"与"最近一次原因"绑成**一个**不可变值。
+//
+// 为什么不能是两个独立 atomic:Health() 顺序 Load 两个字段时,可以读到一个任何瞬间
+// 都不成立的撕裂组合 —— 计数已经加到 1、原因却还是空串(写入方是 Add 再 Store 两步)。
+// 该撕裂在 CPU 超订时约 1% 复现(20 核跑 40 进程,600 次迭代撞 6 次),表现为
+// TestTransientTTLProofFailureKeepsTermUntilDeadline 无理由变红,整仓连跑
+// (ci_backend.ps1 的 33 模块)正是超订形态。运维告警读的也是这个快照,撕裂会让
+// "持续失败"看起来没有原因。改成整体换指针后,读者要么看到旧值、要么看到新值。
+type errTally struct {
+	count  uint64
+	reason string
+}
+
+func (t *errTally) counts() uint64 {
+	if t == nil {
+		return 0
+	}
+	return t.count
+}
+
+func (t *errTally) last() string {
+	if t == nil {
+		return ""
+	}
+	return t.reason
+}
+
+// bump 原子推进"计数 +1 且原因换成本次" —— 两个字段必须一起换,故用 CAS 循环而不是
+// 分别写。写者不止一个 goroutine 时也安全,不依赖"只有主循环会写"这种假设。
+func (t *atomicTally) bump(reason string) uint64 {
+	for {
+		old := t.p.Load()
+		next := &errTally{count: old.counts() + 1, reason: reason}
+		if t.p.CompareAndSwap(old, next) {
+			return next.count
+		}
+	}
+}
+
+func (t *atomicTally) reset() { t.p.Store(&errTally{}) }
+
+func (t *atomicTally) load() *errTally { return t.p.Load() }
+
+type atomicTally struct{ p atomic.Pointer[errTally] }
+
 // Health 返回竞选/激活健康度快照(复审 P0-6 + R10 P0-2:无限重试不得 fail-silent,
 // 运维观测端点可轮询此接口把「长期无主」暴露为告警)。计数持续增长 = etcd 不可达 /
 // 配置错误 / 激活动作(如继任者 fence 推扫)持续失败。
 func (l *Lease) Health() HealthSnapshot {
 	token, held := l.Current()
-	snap := HealthSnapshot{
+	// 每个 tally 一次 Load 拿到整块快照;计数与原因天然自洽。
+	campaign := l.campaign.load()
+	activation := l.activation.load()
+	return HealthSnapshot{
 		Held:                      held,
 		Token:                     token,
-		ConsecutiveCampaignErrs:   l.consecutiveCampaignErrs.Load(),
-		ConsecutiveActivationErrs: l.consecutiveActivationErrs.Load(),
+		ConsecutiveCampaignErrs:   campaign.counts(),
+		LastCampaignErr:           campaign.last(),
+		ConsecutiveActivationErrs: activation.counts(),
+		LastActivationErr:         activation.last(),
 		EscalateAfter:             campaignErrEscalateAfter,
 	}
-	if v, ok := l.lastCampaignErr.Load().(string); ok {
-		snap.LastCampaignErr = v
-	}
-	if v, ok := l.lastActivationErr.Load().(string); ok {
-		snap.LastActivationErr = v
-	}
-	return snap
 }
 
 // Current 返回 (fencing token, 是否持有领导权)。数据层把 token 写进同 slot fence key
@@ -341,8 +381,7 @@ func (l *Lease) runWithActivationTimeout(ctx context.Context, election string,
 			}
 			// 复审 P0-6:连续失败计数 + 升级日志。重试本身不变(热备语义),但长期
 			// 无主必须从 Warn 升级 Error 以触发日志告警;Health() 供探针/运维轮询。
-			fails := l.consecutiveCampaignErrs.Add(1)
-			l.lastCampaignErr.Store(err.Error())
+			fails := l.campaign.bump(err.Error())
 			if fails >= campaignErrEscalateAfter {
 				klog.Errorf("[writerlease] campaign failing persistently election=%s identity=%s consecutive=%d err=%v — no writer may be active, check etcd connectivity/config",
 					election, l.identity, fails, err)
@@ -354,8 +393,7 @@ func (l *Lease) runWithActivationTimeout(ctx context.Context, election string,
 			}
 			continue
 		}
-		l.consecutiveCampaignErrs.Store(0)
-		l.lastCampaignErr.Store("")
+		l.campaign.reset()
 		// 接流前硬门(R10 P0-4):当选 ≠ 可写。激活钩子(继任者 fence 水位推扫等)
 		// 必须先跑成功,本副本才对外宣告持有领导权;失败就让位重选,期间 Current()
 		// 保持不持有,写请求继续被拒(可重试),绝不出现"已接流但继任未完成"的窗口。
@@ -398,8 +436,7 @@ func (l *Lease) runWithActivationTimeout(ctx context.Context, election string,
 }
 
 func (l *Lease) recordActivationFailure(election string, token uint64, err error) {
-	fails := l.consecutiveActivationErrs.Add(1)
-	l.lastActivationErr.Store(err.Error())
+	fails := l.activation.bump(err.Error())
 	if fails >= campaignErrEscalateAfter {
 		klog.Errorf("[writerlease] activation/lease proof failing persistently election=%s identity=%s token=%d consecutive=%d err=%v — no stable writer, check storage/etcd",
 			election, l.identity, token, fails, err)
@@ -413,8 +450,7 @@ func (l *Lease) recordActivationFailure(election string, token uint64, err error
 // 与 recordActivationFailure 共用计数器(两者都表现为"写者不稳定"),但**不让位**：
 // Degraded() 在 Held 为真时恒为 false，因此持有期内的重试不会误报无主。
 func (l *Lease) recordProofRetry(election string, token uint64, err error) {
-	fails := l.consecutiveActivationErrs.Add(1)
-	l.lastActivationErr.Store(err.Error())
+	fails := l.activation.bump(err.Error())
 	if fails >= campaignErrEscalateAfter {
 		klog.Errorf("[writerlease] lease proof failing persistently inside the local safety deadline election=%s identity=%s token=%d consecutive=%d err=%v — will self-fence when the deadline passes, check etcd latency",
 			election, l.identity, token, fails, err)
@@ -432,8 +468,7 @@ func (l *Lease) deadlinePassed(state *holdState) bool {
 }
 
 func (l *Lease) markHoldStable() {
-	l.consecutiveActivationErrs.Store(0)
-	l.lastActivationErr.Store("")
+	l.activation.reset()
 }
 
 // prepareHold 完成本届从“etcd 当选”到“可对外写”的全部前置门禁。业务激活钩子与
