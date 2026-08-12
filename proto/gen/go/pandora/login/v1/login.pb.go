@@ -452,9 +452,18 @@ type LoginResponse struct {
 	ResumeContext  *ResumeContext `protobuf:"bytes,12,opt,name=resume_context,json=resumeContext,proto3" json:"resume_context,omitempty"`
 	// ===== 注册编号(2026-08-10,docs/design/register-no-and-login-surge.md §3)=====
 	// 展示专用的自增注册编号(按注册先后严格连续,全服全局一套)。由 login 补号任务
-	// 异步分配:0 = 尚未分配(注册后 ~15s 的补号窗口,客户端显示「生成中」即可,
-	// 下次登录/刷新即有值)。纯展示字段,客户端不得当身份 ID 用(身份永远是 player_id);
-	// 服务端也禁止任何服务拿它当键(设计文档 §3.3 红线)。
+	// 异步分配:**0 = 尚未分配**(注册后 ~15s 的补号窗口,客户端显示「生成中」即可)。
+	//
+	// ⚠️ 「首登即注册」使**首次登录的响应必然是 0**(注册与登录是同一个请求)。客户端
+	// 不能只靠本字段,否则新玩家整个首次会话都停在「生成中」——须在拿到 0 后调
+	// GetRegisterNo 补拉(§3.7;拿到非 0 即停)。
+	//
+	// 语义(§3.6.1,卖角色业务决定):编号**绑定角色实体**而非账号——今 player_id 即角色
+	// 身份,一账号建 N 个角色就有 N 个编号;角色过户(卖角色)时随角色走、值不变,
+	// 是角色的资历凭证(编号小=老角色)。UI 呈现为「该角色的编号」,不是「账号编号」。
+	//
+	// 纯展示字段,客户端不得当身份 ID 用(身份永远是 player_id);服务端也禁止任何服务
+	// 拿它当键 / 外键 / 路由键 / 幂等键(设计文档 §3.3 红线)。
 	RegisterNo    uint64 `protobuf:"varint,13,opt,name=register_no,json=registerNo,proto3" json:"register_no,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1475,9 +1484,13 @@ func (*GetRegisterNoRequest) Descriptor() ([]byte, []int) {
 type GetRegisterNoResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Code  v1.ErrCode             `protobuf:"varint,1,opt,name=code,proto3,enum=pandora.common.v1.ErrCode" json:"code,omitempty"`
-	// register_no: 玩家注册编号(展示专用)。**0 = 仍在补号窗口内**(约 15s:补号周期
+	// register_no: 当前角色的注册编号(展示专用)。**0 = 仍在补号窗口内**(约 15s:补号周期
 	// 5s + 水位安全滞后 10s),不是错误——客户端应继续显示「生成中」并稍后重试;
 	// 拿到非 0 后编号永不再变,应停止轮询。禁作身份键使用(身份永远是 player_id)。
+	//
+	// 语义(§3.6.1,卖角色业务决定):编号**绑定角色实体**而非账号——今 player_id 即角色身份,
+	// 一账号建 N 个角色就有 N 个编号;角色过户(卖角色)时编号随角色走、值不变,
+	// 它是角色的资历凭证(编号小=老角色)。故 UI 上应呈现为「该角色的编号」,不是「你的账号编号」。
 	RegisterNo    uint64 `protobuf:"varint,2,opt,name=register_no,json=registerNo,proto3" json:"register_no,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS `accounts` (
     `account`       VARCHAR(64)      NOT NULL,
     `password_hash` VARCHAR(80)      NOT NULL COMMENT 'bcrypt(client_digest),含 cost 前缀,固定 60 字节',
     `status`        TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=normal,1=banned,2=disabled',
-    `register_no`   BIGINT UNSIGNED       NULL COMMENT '注册编号(展示专用,禁作身份键/外键;NULL=待补号,login 补号任务按 created_at+player_id 序异步分配,register-no-and-login-surge.md §3.3)',
+    `register_no`   BIGINT UNSIGNED       NULL COMMENT '注册编号(展示专用,禁作身份键/外键/幂等键;绑定角色实体——今 player_id 即角色身份,卖角色过户时随角色走、值不变,故一账号建 N 角色 = N 个编号;NULL=待补号,login 补号任务按 created_at+player_id 序异步分配,register-no-and-login-surge.md §3.3/§3.6.1)',
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`),

@@ -1805,7 +1805,11 @@ func (u *LoginUsecase) RequireCurrentSessionJTI(ctx context.Context, playerID ui
 	return u.requireCurrentSession(ctx, playerID, jti)
 }
 
-// GetRegisterNo 查玩家注册编号(展示专用,register-no-and-login-surge.md §3)。
+// GetRegisterNo 查**当前角色**的注册编号(展示专用,register-no-and-login-surge.md §3)。
+//
+// 入参名为 playerID 是历史口径:今天 player_id 一身兼两职(账号身份 + 角色身份)。
+// 编号语义上绑定**角色实体**(§3.6.1,卖角色业务决定:一账号建 N 角色 = N 个编号,
+// 过户时随角色走),故多角色改造后本方法签名不变——它查的一直是「当前角色的编号」。
 //
 // 存在理由:编号由补号任务异步分配,而「首登即注册」使 Login 响应里的编号必然是 0;
 // 没有本查询,新玩家整个首次会话都停在「生成中」。客户端拿到 0 时补拉即可。

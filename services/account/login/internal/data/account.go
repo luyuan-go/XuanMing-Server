@@ -39,7 +39,8 @@ type AccountRepo interface {
 	// TouchDevice 记录最近一次登录设备(account_devices upsert)。失败由 biz 层只记日志。
 	TouchDevice(ctx context.Context, playerID uint64, deviceID string) error
 
-	// GetRegisterNo 读玩家注册编号(展示专用,register-no-and-login-surge.md §3)。
+	// GetRegisterNo 读**当前角色**的注册编号(展示专用,register-no-and-login-surge.md §3;
+	// 编号绑定角色实体而非账号,见 §3.6.1——今 player_id 即角色身份)。
 	// 0 = 补号任务尚未分配(客户端显示「生成中」)。错误策略按入口分流:
 	// Login 主路径必须 fail-soft(失败置 0 只记日志,绝不因展示字段拒登录——存量库未跑
 	// 000004 迁移时靠该口径兜住);GetRegisterNo 补拉 RPC 必须把查询错误翻译成非 OK,
