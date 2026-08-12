@@ -83,9 +83,11 @@ message PlayerProfile {
   uint64 player_id     = 1;
   string nickname      = 2;
   int32  level         = 3;
-  // 4 曾是单值 `int32 mmr`(全局一份段位分)。2026-08-11 段位按 rating_pool 分区后
-  // 一个玩家有多份分,单值字段无法表达且没有正确的填法,故退役——见下方 ratings。
-  reserved 4;
+  // mmr #4 是已发布客户端读取的单值段位兼容字段。段位分池 expand 窗口内不能原地删除；
+  // 新服务须继续填充本字段（旧全局口径 / 默认池兼容视图），新客户端改读 ratings #52。
+  // 等最后一个旧客户端版本排空并完成 Stable/Canary 混跑验证后，才能另行 contract：
+  // reserved 4 + reserved "mmr"。在此之前只允许 deprecated，不允许删除或改号。
+  int32  mmr           = 4 [deprecated = true];
   string avatar        = 5;
   int64  created_at_ms = 6;
   int64  last_seen_ms  = 7;
