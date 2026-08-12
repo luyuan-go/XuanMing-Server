@@ -204,7 +204,8 @@ func TestCheckInstancesOwnedRequiresExactPair(t *testing.T) {
 	}
 	queries[1].ItemConfigID = 10027 // 也是装备，但与实例真实 config 不一致。
 	owned, err := uc.CheckInstancesOwned(context.Background(), 7, queries)
-	if err != nil || len(owned) != 1 || owned[0] != insts[0].InstanceID {
+	if err != nil || len(owned) != 1 || owned[0].InstanceID != insts[0].InstanceID ||
+		owned[0].ItemConfigID != 10003 {
 		t.Fatalf("exact pair subset owned=%v err=%v", owned, err)
 	}
 	if _, err := uc.CheckInstancesOwned(context.Background(), 7, []data.InstanceOwnershipQuery{

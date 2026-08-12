@@ -188,12 +188,35 @@ func (r *MySQLLeaderboardRepo) ClaimReward(ctx context.Context, rec *RewardLogRe
 	return false, errcode.New(errcode.ErrInternal, "insert reward_log key=%s: %v", rec.GrantIdemKey, err)
 }
 
+// MarkReward 更新发奖状态。
+//
+// **失败标记必须带 `status <> GRANTED` 条件**(2026-08-11,INC-20260811-001 §6 同型扫描
+// 命中,与 mission 域同款缺陷):多副本补扫是刻意允许的(正确性靠下游幂等键,§15.3 不为此
+// 加 claim/lease),但无条件 UPDATE 会让 A 副本发放成功写 GRANTED 的同时,B 副本因下游
+// 瞬时不可用把同一行打回 FAILED。后果三层:
+//   - 已发放的行重回补发工作集,每轮重放一次;
+//   - "陈年 FAILED = 发放链有 bug" 这个审计信号被淹没;
+//   - 下游幂等记录过保留期(90 天)后再重放,就从"幂等吸收"变成**真重复发放**。
+//
+// 成功标记仍为无条件更新:终态推进幂等,重复写 GRANTED 无害。
 func (r *MySQLLeaderboardRepo) MarkReward(ctx context.Context, grantIdemKey string, status int8, updatedAtMs int64) error {
-	const upd = `UPDATE leaderboard_reward_log SET status = ?, updated_at_ms = ? WHERE grant_idempotency_key = ?`
-	if _, err := r.db.ExecContext(ctx, upd, status, updatedAtMs, grantIdemKey); err != nil {
+	upd, args := buildMarkRewardSQL(grantIdemKey, status, updatedAtMs)
+	if _, err := r.db.ExecContext(ctx, upd, args...); err != nil {
 		return errcode.New(errcode.ErrInternal, "mark reward key=%s: %v", grantIdemKey, err)
 	}
 	return nil
+}
+
+// buildMarkRewardSQL 拼发奖状态更新语句(抽出来是为了可断言,对齐本文件
+// buildSaveSnapshotSQL 的既有写法)。失败标记带 `status <> GRANTED` 守卫,成功标记不带。
+func buildMarkRewardSQL(grantIdemKey string, status int8, updatedAtMs int64) (string, []any) {
+	upd := `UPDATE leaderboard_reward_log SET status = ?, updated_at_ms = ? WHERE grant_idempotency_key = ?`
+	args := []any{status, updatedAtMs, grantIdemKey}
+	if status != RewardGranted {
+		upd += ` AND status <> ?`
+		args = append(args, RewardGranted)
+	}
+	return upd, args
 }
 
 func (r *MySQLLeaderboardRepo) ListUngrantedRewards(ctx context.Context, olderThanMs int64, limit int) ([]RewardLogRecord, error) {

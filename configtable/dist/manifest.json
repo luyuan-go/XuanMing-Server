@@ -1,6 +1,6 @@
 {
-  "version": 20260811002,
-  "generated_at_ms": 1786442218511,
+  "version": 20260811004,
+  "generated_at_ms": 1786464512308,
   "generator": "configtable-gen@0.1.0",
   "source_rev": "svn-r1945",
   "tables": [
@@ -40,11 +40,25 @@
       "rows": 3
     },
     {
+      "name": "dialogue",
+      "file": "dialogue.json",
+      "proto": "pandora.config.v1.DialogueTableData",
+      "checksum": "sha256:5ee8902a05b1e89f0da3ec1721f45158b93ecac2a5f3bafe0ee4ebb05795a9a4",
+      "rows": 4
+    },
+    {
       "name": "drop",
       "file": "drop.json",
       "proto": "pandora.config.v1.DropTableData",
       "checksum": "sha256:72fcc7aaa5f40b064bb80b89035101a2973115517b955c0e67c314ef9025b9e7",
       "rows": 85
+    },
+    {
+      "name": "equipment_affix",
+      "file": "equipment_affix.json",
+      "proto": "pandora.config.v1.EquipmentAffixTableData",
+      "checksum": "sha256:218b276afa5fa735cc5ebe120fa14da4621395031c731595a79082aa0049f62c",
+      "rows": 18
     },
     {
       "name": "game_module",
@@ -64,7 +78,7 @@
       "name": "item",
       "file": "item.json",
       "proto": "pandora.config.v1.ItemTableData",
-      "checksum": "sha256:f96b1ac4eca174d74719fff5874412199c6cd26c9da322f031c0669cebeafab0",
+      "checksum": "sha256:2e0a5c5ca7abe7f940523ffdf6b6981c9c0dec0abcc77406efc9f005307d9f4f",
       "rows": 65
     },
     {
@@ -106,8 +120,8 @@
       "name": "role_attr_map",
       "file": "role_attr_map.json",
       "proto": "pandora.config.v1.RoleAttrMapTableData",
-      "checksum": "sha256:58fd26249b5cea8b6336f323d3ba0abfdb66e0e9de978546ca6c9581e7e948d3",
-      "rows": 4
+      "checksum": "sha256:390f7650dbe32cdfd16c94adf56425c156b03a05d494ff249ced2e0980097be5",
+      "rows": 5
     },
     {
       "name": "role_level",

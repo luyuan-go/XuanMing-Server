@@ -21,6 +21,35 @@ import (
 	"github.com/luyuancpp/pandora/services/economy/inventory/internal/data"
 )
 
+const (
+	// checkpoint 是被攻破 DS 可写的 MEDIUMBLOB；业务上随身组最多三个段，空间恢复
+	// 的绝对格位上限与 UE RecoveryAbsoluteMaxGridCount 保持一致。整体字节闸再兜住
+	// protobuf unknown fields 与单元素深度，避免合法行数下的单行无界增长。
+	// BagCheckpointMaxBytes 是 service 在 proto.Marshal 前就必须使用的公共字节闸。
+	BagCheckpointMaxBytes     = 256 * 1024
+	bagCheckpointMaxSections  = 3
+	bagCheckpointMaxGridCount = 4096
+	bagMaxAttrsPerItem        = 64
+	bagMaxUEItemCount         = uint32(1<<31 - 1)
+	bagMaxUEInstanceID        = uint64(1<<63 - 1)
+	// 装备词条跨 DS/UE 的硬安全包络：3/9 是 flat，7 是 basis points。
+	// 正式 equipment_affix 当前远低于此上限；包络只防受损 DS 造未知/负数/
+	// 超大值，不把 checkpoint 上的历史合法 roll 绑死到当前调优区间。
+	bagMaxFlatEquipmentAttrValue = int64(1_000_000)
+	bagMaxMoveSpeedBasisPoints   = int64(10_000) // 单词条最多 +100% 倍率。
+)
+
+func validBagGameplayAttr(attrID uint32, value int64) bool {
+	switch attrID {
+	case 3, 9: // Atk / Defense flat
+		return value > 0 && value <= bagMaxFlatEquipmentAttrValue
+	case 7: // MoveSpeedRate basis points
+		return value > 0 && value <= bagMaxMoveSpeedBasisPoints
+	default:
+		return false
+	}
+}
+
 // OwnerAuthorizer 校验并解析写授权(五要件②,查询 §9.22 owner authority;phase 2)。
 //
 // 判定:玩家当前 owner 记录必须 ADMITTED、租约在效、且(callerPod 非空时)
@@ -174,8 +203,8 @@ func (u *BagUsecase) validateOpShape(entry *bagv1.BagJournalEntry) error {
 		if err := u.checkItemsLen(op.Consume.GetConsumeItems(), seq); err != nil {
 			return err
 		}
-		if len(op.Consume.GetProduceItems()) > u.cfg.MaxItemsPerOp {
-			return errcode.New(errcode.ErrBagQuotaExceeded, "produce items exceed max seq=%d", seq)
+		if len(op.Consume.GetProduceItems()) > 0 {
+			return u.checkItemsLen(op.Consume.GetProduceItems(), seq)
 		}
 		return nil
 	default:
@@ -192,6 +221,57 @@ func (u *BagUsecase) checkItemsLen(items []*bagv1.BagItem, seq uint64) error {
 		return errcode.New(errcode.ErrBagQuotaExceeded,
 			"items %d exceed max %d seq=%d", len(items), u.cfg.MaxItemsPerOp, seq)
 	}
+	seenInstances := make(map[uint64]struct{}, len(items))
+	for itemIndex, item := range items {
+		if item == nil || item.GetItemConfigId() == 0 || item.GetCount() == 0 {
+			return errcode.New(errcode.ErrInvalidArg,
+				"invalid item seq=%d index=%d config=%d count=%d",
+				seq, itemIndex, item.GetItemConfigId(), item.GetCount())
+		}
+		if item.GetCount() > bagMaxUEItemCount {
+			return errcode.New(errcode.ErrBagQuotaExceeded,
+				"item count=%d exceeds UE int32 max seq=%d index=%d", item.GetCount(), seq, itemIndex)
+		}
+		instanceID := item.GetInstanceId()
+		if (instanceID == 0 && (item.GetIdentified() || len(item.GetAttrs()) > 0)) ||
+			(!item.GetIdentified() && len(item.GetAttrs()) > 0) {
+			return errcode.New(errcode.ErrInvalidArg,
+				"item instance/identified attrs mismatch seq=%d index=%d", seq, itemIndex)
+		}
+		if instanceID != 0 {
+			if instanceID > bagMaxUEInstanceID {
+				return errcode.New(errcode.ErrBagQuotaExceeded,
+					"instance_id=%d exceeds UE int64 max seq=%d", instanceID, seq)
+			}
+			if item.GetCount() != 1 {
+				return errcode.New(errcode.ErrInvalidArg,
+					"instance_id=%d must carry count=1 seq=%d", instanceID, seq)
+			}
+			if _, duplicate := seenInstances[instanceID]; duplicate {
+				return errcode.New(errcode.ErrInvalidArg,
+					"duplicate instance_id=%d seq=%d", instanceID, seq)
+			}
+			seenInstances[instanceID] = struct{}{}
+		}
+		if len(item.GetAttrs()) > bagMaxAttrsPerItem {
+			return errcode.New(errcode.ErrBagQuotaExceeded,
+				"attrs=%d exceed max %d seq=%d index=%d",
+				len(item.GetAttrs()), bagMaxAttrsPerItem, seq, itemIndex)
+		}
+		seenAttrs := make(map[uint32]struct{}, len(item.GetAttrs()))
+		for attrIndex, attr := range item.GetAttrs() {
+			if attr == nil || !validBagGameplayAttr(attr.GetAttrId(), attr.GetValue()) {
+				return errcode.New(errcode.ErrInvalidArg,
+					"unsupported/out-of-range attr seq=%d item=%d attr=%d id=%d value=%d",
+					seq, itemIndex, attrIndex, attr.GetAttrId(), attr.GetValue())
+			}
+			if _, duplicate := seenAttrs[attr.GetAttrId()]; duplicate {
+				return errcode.New(errcode.ErrInvalidArg,
+					"duplicate attr_id=%d seq=%d item=%d", attr.GetAttrId(), seq, itemIndex)
+			}
+			seenAttrs[attr.GetAttrId()] = struct{}{}
+		}
+	}
 	return nil
 }
 
@@ -205,13 +285,131 @@ func (u *BagUsecase) SaveCheckpoint(ctx context.Context, playerID, ownerEpoch ui
 	if aerr != nil {
 		return aerr
 	}
-	for _, sec := range record.GetSections() {
-		if !carryGroupBagType(sec.GetBagType()) {
-			return errcode.New(errcode.ErrBagSectionNotAllowed,
-				"checkpoint must not carry backend-resident bag_type=%d", sec.GetBagType())
-		}
+	if err := validateBagCheckpoint(record, snapshot); err != nil {
+		return err
 	}
 	return u.repo.SaveCheckpoint(ctx, playerID, epoch, snapshot, coveredSeq)
+}
+
+// validateBagCheckpoint 只校验信任边界和可恢复结构，不重算 DS 权威布局/MaxStack。
+// 特别地，slot 可以 >= capacity、items 可以 > capacity：这是 §3.2 journal 重放后
+// “临时格超容、只出不进”的合法恢复态，服务端必须原样保存，不能把玩家资产挡在场外。
+func validateBagCheckpoint(record *bagv1.BagStorageRecord, snapshot []byte) error {
+	if record == nil {
+		return errcode.New(errcode.ErrInvalidArg, "checkpoint snapshot required")
+	}
+	if len(snapshot) > BagCheckpointMaxBytes {
+		return errcode.New(errcode.ErrBagQuotaExceeded,
+			"checkpoint bytes %d exceed max %d", len(snapshot), BagCheckpointMaxBytes)
+	}
+	sections := record.GetSections()
+	if len(sections) > bagCheckpointMaxSections {
+		return errcode.New(errcode.ErrBagQuotaExceeded,
+			"checkpoint sections %d exceed max %d", len(sections), bagCheckpointMaxSections)
+	}
+
+	seenSections := make(map[uint32]struct{}, len(sections))
+	seenInstances := make(map[uint64]struct{})
+	for sectionIndex, sec := range sections {
+		if sec == nil {
+			return errcode.New(errcode.ErrInvalidArg, "nil checkpoint section index=%d", sectionIndex)
+		}
+		bagType := sec.GetBagType()
+		if !carryGroupBagType(bagType) {
+			return errcode.New(errcode.ErrBagSectionNotAllowed,
+				"checkpoint must not carry backend-resident bag_type=%d", bagType)
+		}
+		if _, duplicate := seenSections[bagType]; duplicate {
+			return errcode.New(errcode.ErrInvalidArg, "duplicate checkpoint bag_type=%d", bagType)
+		}
+		seenSections[bagType] = struct{}{}
+		if sec.GetGeneration() != 0 {
+			return errcode.New(errcode.ErrInvalidArg,
+				"fixed checkpoint bag_type=%d must carry generation=0", bagType)
+		}
+		// capacity=0 is accepted during mixed-version rollout; LoadBag sends authoritative
+		// effective capacity separately and UE falls back to its configured base when absent.
+		if sec.GetCapacity() > bagCheckpointMaxGridCount {
+			return errcode.New(errcode.ErrBagQuotaExceeded,
+				"checkpoint bag_type=%d capacity=%d exceeds max %d",
+				bagType, sec.GetCapacity(), bagCheckpointMaxGridCount)
+		}
+		if len(sec.GetItems()) > bagCheckpointMaxGridCount {
+			return errcode.New(errcode.ErrBagQuotaExceeded,
+				"checkpoint bag_type=%d items=%d exceed max %d",
+				bagType, len(sec.GetItems()), bagCheckpointMaxGridCount)
+		}
+
+		seenSlots := make(map[uint32]struct{}, len(sec.GetItems()))
+		for itemIndex, item := range sec.GetItems() {
+			if item == nil {
+				return errcode.New(errcode.ErrInvalidArg,
+					"nil checkpoint item bag_type=%d index=%d", bagType, itemIndex)
+			}
+			if item.GetItemConfigId() == 0 || item.GetCount() == 0 {
+				return errcode.New(errcode.ErrInvalidArg,
+					"invalid checkpoint item bag_type=%d index=%d config=%d count=%d",
+					bagType, itemIndex, item.GetItemConfigId(), item.GetCount())
+			}
+			if item.GetCount() > bagMaxUEItemCount {
+				return errcode.New(errcode.ErrBagQuotaExceeded,
+					"checkpoint item count=%d exceeds UE int32 max bag_type=%d index=%d",
+					item.GetCount(), bagType, itemIndex)
+			}
+			if item.GetSlot() >= bagCheckpointMaxGridCount {
+				return errcode.New(errcode.ErrBagQuotaExceeded,
+					"checkpoint slot=%d exceeds max %d bag_type=%d",
+					item.GetSlot(), bagCheckpointMaxGridCount-1, bagType)
+			}
+			if _, duplicate := seenSlots[item.GetSlot()]; duplicate {
+				return errcode.New(errcode.ErrInvalidArg,
+					"duplicate checkpoint slot=%d bag_type=%d", item.GetSlot(), bagType)
+			}
+			seenSlots[item.GetSlot()] = struct{}{}
+
+			instanceID := item.GetInstanceId()
+			if (instanceID == 0 && (item.GetIdentified() || len(item.GetAttrs()) > 0)) ||
+				(!item.GetIdentified() && len(item.GetAttrs()) > 0) {
+				return errcode.New(errcode.ErrInvalidArg,
+					"checkpoint item instance/identified attrs mismatch bag_type=%d index=%d",
+					bagType, itemIndex)
+			}
+			if instanceID != 0 {
+				if instanceID > bagMaxUEInstanceID {
+					return errcode.New(errcode.ErrBagQuotaExceeded,
+						"checkpoint instance_id=%d exceeds UE int64 max", instanceID)
+				}
+				if item.GetCount() != 1 {
+					return errcode.New(errcode.ErrInvalidArg,
+						"checkpoint instance_id=%d must carry count=1", instanceID)
+				}
+				if _, duplicate := seenInstances[instanceID]; duplicate {
+					return errcode.New(errcode.ErrInvalidArg,
+						"duplicate checkpoint instance_id=%d", instanceID)
+				}
+				seenInstances[instanceID] = struct{}{}
+			}
+			if len(item.GetAttrs()) > bagMaxAttrsPerItem {
+				return errcode.New(errcode.ErrBagQuotaExceeded,
+					"checkpoint attrs=%d exceed max %d instance_id=%d",
+					len(item.GetAttrs()), bagMaxAttrsPerItem, instanceID)
+			}
+			seenAttrs := make(map[uint32]struct{}, len(item.GetAttrs()))
+			for attrIndex, attr := range item.GetAttrs() {
+				if attr == nil || !validBagGameplayAttr(attr.GetAttrId(), attr.GetValue()) {
+					return errcode.New(errcode.ErrInvalidArg,
+						"unsupported/out-of-range checkpoint attr instance_id=%d index=%d id=%d value=%d",
+						instanceID, attrIndex, attr.GetAttrId(), attr.GetValue())
+				}
+				if _, duplicate := seenAttrs[attr.GetAttrId()]; duplicate {
+					return errcode.New(errcode.ErrInvalidArg,
+						"duplicate checkpoint attr_id=%d instance_id=%d", attr.GetAttrId(), instanceID)
+				}
+				seenAttrs[attr.GetAttrId()] = struct{}{}
+			}
+		}
+	}
+	return nil
 }
 
 // GetSections 读后端驻留段(仓库/活动段;活动段按 current generation 过滤)。

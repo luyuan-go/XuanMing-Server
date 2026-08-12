@@ -589,9 +589,21 @@ $DsSecretServiceNames = @('login', 'ds-allocator', 'hub-allocator', 'battle-resu
 # DSTicket v2(方案 B)签发方清单(与决策文档 §7.2 私钥暴露面一致):恰好等于玩家面 jwt 清单。
 $DsTicketServiceNames = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
 $PlacementSecretBindings = @()
+# login→matchmaker 的内部服务鉴权(internalrpcauth,HMAC + Redis nonce 防重放)是
+# **成对**的:验签端是 matchmaker.match.match_resume_auth_secret,签名端是
+# login.matchmaker.auth_secret。两端必须同值,只改一端 = login 查不动 matchmaker 权威。
+#
+# 2026-08-11 补 login 绑定(此前只绑两个 matchmaker):漏了它的后果是运维用
+# `-MatchResumeAuth <生产密钥>` 生成产物时,matchmaker 拿到生产密钥而 **login 留着 dev 密钥**,
+# 于是 ①login→matchmaker 的 ResolvePlayerMatchContext 全部被拒 —— 那是 2026-07-15 P0 修复
+# 的兜底路径(locator presence 未命中 BATTLE 时改查耐久权威,READY 局投影蒸发也能路由回原局),
+# 静默失效;②dev 密钥被带进生产。
+# 这条漂移此前一直被 gen_cluster_b1 里那条恒红的 placement 断言遮蔽(它一抛,后面 14 条
+# 断言包括本条全都不再执行),2026-08-11 隔离未实现能力后才暴露出来。
 $MatchResumeAuthSecretBindings = @(
     @{ Service = 'matchmaker'; Section = 'match'; Child = 'match_resume_auth_secret' },
-    @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'match_resume_auth_secret' }
+    @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'match_resume_auth_secret' },
+    @{ Service = 'login'; Section = 'matchmaker'; Child = 'auth_secret' }
 )
 # Team→Matchmaker 那把 key 的两端必须成对改写:验签端(matchmaker.match.team_resume_auth_secret)
 # 与签名端(team.team.match_resume_auth_secret)。只写一端 = 全部 team 调用被拒。
@@ -1463,6 +1475,47 @@ $UnarySessionGateServiceNames = @(
     'matchmaker', 'matchmaker-pve', 'player', 'inventory', 'leaderboard', 'hub-allocator',
     'mission' # 2026-08-11 任务域上线:客户端面 RPC(envoy 已按 JWT 路由 MissionService)
 )
+# PushWriterLeaseServiceNames 是「推送出箱发布器必须单写者选举」的服务清单。
+#
+# 判据只有一条:该服务有一个**全局未分区**的推送出箱表,发布器整表 FIFO 取行,且推送
+# payload 是**客户端可见的全量/绝对值快照**(后到即覆盖)。满足这三条时,两个副本并发
+# 发布会让旧帧后到覆盖新帧,而事件里没有 revision 可供客户端判旧。
+#   · mission:mission_push_outbox → MissionUpdateEvent.progressed(逐任务全量进度快照)
+#   · player :player_push_outbox  → PlayerExperienceEvent(level / exp_in_level 绝对值)
+#
+# ⚠️ battle_result 的 player_update_outbox **刻意不在列**:它的下游是 player 服务、靠
+# mmr_history 唯一键幂等去重,乱序与重复天然无害,且没有客户端可见的覆盖语义。为形式
+# 统一给它加选举是拿复杂度换整齐(§15.3),差异是有据的,不是漂移。
+$script:PushWriterLeaseServiceNames = @('mission', 'player')
+
+# 集群产物机械强制推送发布器单写者选举(2026-08-11)。
+#
+# 注意本条**不是 -Prod 专属**:凡集群产物都适用。两个服务的 Deployment 都是 RollingUpdate
+# (§9.16/§9.21 不停服硬要求),replicas=1 + maxSurge 也意味着**每次发版都有新旧两副本
+# 并存窗口**。
+#
+# dev 模板写 mode: "off" 是对的(单进程无 etcd 也要起得来),但产物**不允许继承**这个
+# 宽松档 —— 与 session_gate.require 同款纪律。进程侧另有 fail-closed 门禁兜底
+# (main.go 读 PANDORA_DEPLOY_STRATEGY:RollingUpdate × 非 enforce 直接退出),
+# 两道闸缺一不可:这里保证产物是对的,那里保证产物被改坏时炸得出来。
+function Set-ClusterPushWriterLeaseEnforce([string]$svcName, [string]$text) {
+    $modePattern = '(?m)^([ \t]{2}push_writer_lease:[ \t]*\r?\n[ \t]{4})mode:[ \t]*"[^"]*"[ \t]*(?:#.*)?$'
+    $modeCount = [regex]::Matches($text, $modePattern).Count
+    if ($modeCount -ne 1) {
+        throw "[FATAL] mission 模板 push_writer_lease.mode 锚点异常(count=$modeCount),拒绝生成集群产物。"
+    }
+    $text = [regex]::Replace($text, $modePattern, '${1}mode: "enforce"', 1)
+
+    # enforce 必须带 etcd_endpoints,否则进程启动即 fail-closed。dev 模板里该行是注释掉的,
+    # 这里整行替换成集群地址(Convert-DevToCluster 只改已存在的 host:port,不会凭空插入键)。
+    $epPattern = '(?m)^([ \t]{4})#[ \t]*etcd_endpoints:.*$'
+    $epCount = [regex]::Matches($text, $epPattern).Count
+    if ($epCount -ne 1) {
+        throw "[FATAL] mission 模板 push_writer_lease.etcd_endpoints 注释锚点异常(count=$epCount),拒绝生成集群产物。"
+    }
+    return [regex]::Replace($text, $epPattern, '${1}etcd_endpoints: ["etcd:2379"]', 1)
+}
+
 function Set-ProdUnarySessionGateOn([string]$svcName, [string]$text) {
     $pattern = '(?m)^(session_gate:[ \t]*\r?\n[ \t]{2})require:[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
     $anchorCount = [regex]::Matches($text, $pattern).Count
@@ -2037,13 +2090,15 @@ try {
         # 凡 dev 模板里配了 config_table 的服务都必须在此列出:容器内没有 ../../../configtable/dist,
         # 漏掉一个 = 该服务带着宿主相对路径进集群 → 启动 fail-closed 退出 → CrashLoopBackOff。
         # (2026-08-05:ds-allocator 因 08-04 新增 config_table 时未同步登记,正是这样炸的。)
-        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result', 'ds-allocator', 'inventory', 'mission')) {
+        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player', 'battle-result', 'ds-allocator', 'inventory', 'mission', 'dialogue')) {
             $out = Set-ServiceClusterConfigTableDir $s.Name $out
         }
         if ($s.Name -in $script:MultiReplicaSnowflakeServices) {
             $out = Set-ClusterSnowflakeEtcd $s.Name $out
         }
         if ($s.Name -eq 'auction') { $out = Set-AuctionCrossInstanceLock $out }
+        # 非 -Prod 也要强制:集群产物一律 RollingUpdate,滚动窗口就有并发发布器。
+        if ($s.Name -in $script:PushWriterLeaseServiceNames) { $out = Set-ClusterPushWriterLeaseEnforce $s.Name $out }
         if ($Prod -and $s.Name -eq 'battle-result') { $out = Set-ProdBattleResultProgressOff $out }
         if ($Prod -and $s.Name -eq 'push') { $out = Set-ProdPushSessionGateOn $out }
         if ($Prod -and $s.Name -eq 'login') { $out = Set-ProdLoginHubHeadlessAddr $out }

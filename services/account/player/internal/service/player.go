@@ -306,10 +306,7 @@ func (s *PlayerService) SetEquipment(ctx context.Context, req *playerv1.SetEquip
 	if code != commonv1.ErrCode_OK {
 		return &playerv1.SetEquipmentResponse{Code: code}, nil
 	}
-	slots := make([]data.EquipmentSlot, 0, len(req.GetEquipment()))
-	for _, e := range req.GetEquipment() {
-		slots = append(slots, data.EquipmentSlot{Slot: e.GetSlot(), ItemConfigID: e.GetItemConfigId()})
-	}
+	slots := toDataEquipment(req.GetEquipment())
 	if err := s.uc.SetEquipment(ctx, playerID, slots); err != nil {
 		return &playerv1.SetEquipmentResponse{Code: toProtoCode(err)}, nil
 	}
@@ -326,11 +323,28 @@ func (s *PlayerService) GetEquipment(ctx context.Context, req *playerv1.GetEquip
 	if err != nil {
 		return &playerv1.GetEquipmentResponse{Code: toProtoCode(err)}, nil
 	}
-	out := make([]*playerv1.LoadoutEquipment, 0, len(slots))
-	for _, sl := range slots {
-		out = append(out, &playerv1.LoadoutEquipment{Slot: sl.Slot, ItemConfigId: sl.ItemConfigID})
-	}
+	out := toProtoEquipment(slots)
 	return &playerv1.GetEquipmentResponse{Code: commonv1.ErrCode_OK, Equipment: out}, nil
+}
+
+func toDataEquipment(in []*playerv1.LoadoutEquipment) []data.EquipmentSlot {
+	out := make([]data.EquipmentSlot, 0, len(in))
+	for _, e := range in {
+		out = append(out, data.EquipmentSlot{
+			Slot: e.GetSlot(), ItemConfigID: e.GetItemConfigId(), InstanceID: e.GetInstanceId(),
+		})
+	}
+	return out
+}
+
+func toProtoEquipment(in []data.EquipmentSlot) []*playerv1.LoadoutEquipment {
+	out := make([]*playerv1.LoadoutEquipment, 0, len(in))
+	for _, e := range in {
+		out = append(out, &playerv1.LoadoutEquipment{
+			Slot: e.Slot, ItemConfigId: e.ItemConfigID, InstanceId: e.InstanceID,
+		})
+	}
+	return out
 }
 
 // GrantTalentPoints 幂等授予天赋点(系统接口:升级 / 活动授予;客户端不得自助)。

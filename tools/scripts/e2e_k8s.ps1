@@ -656,6 +656,7 @@ if ($NoRelay) {
     $relayName  = 'pandora-udp-relay'
     $relayRange = '7000-8000'
     $relayDir   = Join-Path $ProjectRoot 'tools/udp-relay'
+    $offlineMode = ($env:PANDORA_OFFLINE -eq '1')
 
     # 4.1 解析 minikube 节点 IP 作为转发目标(容器在 profile 对应 docker 网络内可达)
     $relayTarget = (& minikube -p $MinikubeProfile ip 2>$null | Out-String).Trim()
@@ -692,10 +693,21 @@ if ($NoRelay) {
         Write-Ok "docker 网络 '$MinikubeDockerNetwork' subnet 校验通过: TARGET_HOST $relayTarget ∈ $($ipv4Subnets -join ', ')"
     }
 
-    # 4.3 构建中继镜像(纯标准库,很快)
-    Write-Info "  docker build $relayImage ..."
-    docker build -t $relayImage $relayDir
-    if ($LASTEXITCODE -ne 0) { Write-Err "中继镜像构建失败"; exit 1 }
+    # 4.3 构建中继镜像(纯标准库,很快)。一键启动的纯离线模式已经承诺跳过所有
+    # docker build；这里必须沿用该合约，否则 BuildKit 即使命中本地层也会访问
+    # Docker Hub 解析 golang 基础镜像，导致整套 K8s 已 Ready 后在收尾阶段失败。
+    if ($offlineMode) {
+        docker image inspect $relayImage *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err "纯离线模式缺少 UDP relay 镜像 $relayImage；请先在联网构建机运行一次 K8s E2E 并导入该镜像。"
+            exit 1
+        }
+        Write-Ok "纯离线模式:复用已有 UDP relay 镜像 $relayImage"
+    } else {
+        Write-Info "  docker build $relayImage ..."
+        docker build -t $relayImage $relayDir
+        if ($LASTEXITCODE -ne 0) { Write-Err "中继镜像构建失败"; exit 1 }
+    }
 
     # 4.4 构建完成后再最终复核 Secret，随后才停止旧 relay；失败时保留原有可用链路。
     try {

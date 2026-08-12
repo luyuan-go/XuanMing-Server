@@ -21,49 +21,12 @@ server:
 node:
   node_id: 1
 
+# 对话树的唯一权威是与 UE 同源的配置表(源表 对话/d_对话.xlsx)。
+# 缺目录 / 缺表 / checksum 异常 / 起始节点缺失重复 / 后继节点悬空一律拒启,
+# 不回退到 yaml 内联树(2026-08-11 起 trees 段已整块删除,勿加回)。
+config_table:
+  dir: "../../../configtable/dist"
+
 dialogue:
   # session_ttl: 单次对话会话空闲存活时间(默认 5m)
   session_ttl: "5m"
-
-  # trees: NPC 对话树(MOBA 早期:简单 if-else,不上行为树)。
-  # 选项 visible 省略 = 可见;next_node 为空或指向不存在节点 = 结束对话。
-  trees:
-    - npc_id: 1001
-      speaker: "商店老板"
-      start_node: "greet"
-      nodes:
-        - node_id: "greet"
-          text: "欢迎光临,冒险者!需要点什么?"
-          options:
-            - option_id: "shop"
-              text: "看看你的货品"
-              next_node: "shop"
-            - option_id: "rumor"
-              text: "最近有什么新鲜事?"
-              next_node: "rumor"
-            - option_id: "bye"
-              text: "没事,告辞"
-              # next_node 省略 = 结束对话
-        - node_id: "shop"
-          text: "这把钢剑削铁如泥,要不要试试?"
-          options:
-            - option_id: "back"
-              text: "我再想想"
-              next_node: "greet"
-            - option_id: "leave"
-              text: "下次再来"
-              # 结束对话
-        - node_id: "rumor"
-          text: "听说东边山洞里有宝藏,不过也有怪物出没。"
-          # 无选项 = 终止节点,展示后对话结束
-
-    - npc_id: 1002
-      speaker: "守卫"
-      start_node: "hello"
-      nodes:
-        - node_id: "hello"
-          text: "止步!这里是禁区。"
-          options:
-            - option_id: "leave"
-              text: "抱歉,我这就走"
-              # 结束对话

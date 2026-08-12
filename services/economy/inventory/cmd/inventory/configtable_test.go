@@ -21,12 +21,7 @@ func realDistDir(t *testing.T) string {
 }
 
 func defaultIdentifyConf() conf.InventoryConf {
-	return conf.InventoryConf{DefaultIdentifyRule: &conf.IdentifyRule{
-		AttrCount: 1,
-		Pool: []conf.IdentifyAttrRoll{
-			{AttrID: 3, Min: 1, Max: 1},
-		},
-	}}
+	return conf.InventoryConf{}
 }
 
 func TestRealItemTableInventoryContract(t *testing.T) {
@@ -38,6 +33,12 @@ func TestRealItemTableInventoryContract(t *testing.T) {
 	tables := store.Tables()
 	if got := tables.Item.Count(); got != 65 {
 		t.Fatalf("item row count drifted: got=%d want=65", got)
+	}
+	if got := tables.EquipmentAffix.Count(); got != 18 {
+		t.Fatalf("equipment affix row count drifted: got=%d want=18", got)
+	}
+	if got := tables.RoleAttrMap.Count(); got != 5 {
+		t.Fatalf("role attr row count drifted: got=%d want=5", got)
 	}
 	var equipment, sellable, battleUsable int
 	for _, row := range tables.Item.All() {
@@ -70,25 +71,34 @@ func TestRealItemTableInventoryContract(t *testing.T) {
 	if _, ok := catalog.Lookup(3001); ok {
 		t.Fatal("removed demo id 3001 must not exist in real catalog")
 	}
+	affixRule, ok := catalog.IdentifyRule(10003) // 品质 2 → 池 3
+	if !ok || affixRule.AttrCount != 2 || len(affixRule.Pool) != 3 {
+		t.Fatalf("10003 affix rule mismatch: %+v ok=%v", affixRule, ok)
+	}
+	if _, ok := catalog.IdentifyRule(10001); ok {
+		t.Fatal("non-equipment must not expose an identify rule")
+	}
 	if got := len(itemMaxStacksFromTables(tables)); got != 65 {
 		t.Fatalf("max-stack projection count=%d want=65", got)
 	}
 
 	// Compile-time guard: catalog remains the biz-facing seam, not a command-only helper.
 	var _ biz.ItemCatalog = catalog
+	var _ biz.IdentifyCatalog = catalog
 }
 
-func TestIdentifyDefaultOnlyReferencesRealRoleAttributes(t *testing.T) {
+func TestFormalAffixValidatorRejectsUnsupportedGameplayAttribute(t *testing.T) {
 	store := configtable.NewStore()
 	store.AddValidator(validateInventoryTables(defaultIdentifyConf()))
 	if _, err := store.Load(realDistDir(t), 0); err != nil {
-		t.Fatalf("approved Atk pool must validate: %v", err)
+		t.Fatalf("formal affix tables must validate: %v", err)
 	}
-	bad := defaultIdentifyConf()
-	bad.DefaultIdentifyRule.Pool[0].AttrID = 999999
-	store = configtable.NewStore()
-	store.AddValidator(validateInventoryTables(bad))
-	if _, err := store.Load(realDistDir(t), 0); err == nil {
-		t.Fatal("unknown role_attr_map id must fail table load")
+	tables := store.Tables()
+	row := tables.EquipmentAffix.All()[0]
+	original := row.AttrId
+	row.AttrId = 1 // Hp 存在于 role_attr_map，但当前只展示，不能偷偷进入战斗池。
+	defer func() { row.AttrId = original }()
+	if err := validateInventoryTables(defaultIdentifyConf())(tables); err == nil {
+		t.Fatal("attribute without gameplay apply/reconcile semantics must fail table validation")
 	}
 }

@@ -380,7 +380,11 @@ func (s *InventoryService) CheckInstancesOwned(ctx context.Context, req *invento
 	if err != nil {
 		return &inventoryv1.CheckInstancesOwnedResponse{Code: toProtoCode(err)}, nil
 	}
+	ownedIDs := make([]uint64, 0, len(owned))
+	for _, inst := range owned {
+		ownedIDs = append(ownedIDs, inst.InstanceID)
+	}
 	return &inventoryv1.CheckInstancesOwnedResponse{
-		Code: commonv1.ErrCode_OK, OwnedInstanceIds: owned,
+		Code: commonv1.ErrCode_OK, OwnedInstanceIds: ownedIDs, OwnedInstances: toProtoInstances(owned),
 	}, nil
 }

@@ -1,0 +1,39 @@
+{
+  "rows": [
+    {
+      "id": 10011,
+      "npc_id": 1001,
+      "speaker": "商店老板",
+      "text": "欢迎光临,冒险者!需要点什么?",
+      "is_start": true,
+      "option1_text": "看看你的货品",
+      "option1_next": 10012,
+      "option2_text": "最近有什么新鲜事?",
+      "option2_next": 10013,
+      "option3_text": "没事,告辞"
+    },
+    {
+      "id": 10012,
+      "npc_id": 1001,
+      "speaker": "商店老板",
+      "text": "这把钢剑削铁如泥,要不要试试?",
+      "option1_text": "我再想想",
+      "option1_next": 10011,
+      "option2_text": "下次再来"
+    },
+    {
+      "id": 10013,
+      "npc_id": 1001,
+      "speaker": "商店老板",
+      "text": "听说东边山洞里有宝藏,不过也有怪物出没。"
+    },
+    {
+      "id": 10021,
+      "npc_id": 1002,
+      "speaker": "守卫",
+      "text": "止步!这里是禁区。",
+      "is_start": true,
+      "option1_text": "抱歉,我这就走"
+    }
+  ]
+}

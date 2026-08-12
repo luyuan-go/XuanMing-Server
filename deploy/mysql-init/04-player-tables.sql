@@ -102,12 +102,14 @@ CREATE TABLE IF NOT EXISTS `player_equipment` (
     `player_id`       BIGINT UNSIGNED  NOT NULL,
     `slot`            INT UNSIGNED     NOT NULL COMMENT '出战装备预设槽位序号',
     `item_config_id`  INT UNSIGNED     NOT NULL COMMENT '装备配置 ID(uint32)',
+    `instance_id`     BIGINT UNSIGNED  NULL COMMENT '唯一装备实例 ID(uint64);NULL 仅兼容 000006 前旧预设,新写必须非空',
     `updated_at`      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_player_slot` (`player_id`, `slot`),
+    UNIQUE KEY `uk_player_instance` (`player_id`, `instance_id`),
     KEY `idx_player` (`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 玩家出战装备预设(大厅态;开战前转初始 GameplayEffect)';
+  COMMENT='Pandora 玩家出战装备预设(精确实例;大厅态;开战前转初始 GameplayEffect)';
 
 CREATE TABLE IF NOT EXISTS `player_talents` (
     `id`         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,

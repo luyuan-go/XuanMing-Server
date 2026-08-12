@@ -6855,7 +6855,7 @@ function Get-VersionInfo {
         }
     }
     # 源码版本由上游注入(publish_offline_images.ps1 已按 SVN/git 判定并算好)。
-    # 这里刻意不再自己探一次 VCS:后端代码同时存在于团队 SVN(^/trunk/Server)与个人 git 仓库,
+    # 这里刻意不再自己探一次 VCS:标准 CI 从 GitHub 构建,但仍兼容历史 SVN 工作副本；
     # 从 SVN 检出构建时上面的 git 分支全部软失败,若不接受注入就会静默烙上 dev/unknown。
     # 只在 git 没能给出结果时采用,保证 git 轨行为完全不变。
     if ($env:PANDORA_RELEASE_COMMIT) {

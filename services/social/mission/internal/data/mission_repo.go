@@ -21,6 +21,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -35,6 +36,9 @@ import (
 )
 
 const dbLabel = "pandora_mission"
+
+// errPushOutboxRaced 见 DeletePushOutbox:删行命中 0 行 = 另一副本已抢先投递并删除。
+var errPushOutboxRaced = errors.New("mission_push_outbox 行已被其它副本删除(多副本并发发布,推送可能乱序)")
 
 // progressPayloadLimit 进度 blob 写入侧字节闸(列 VARBINARY(256),§9.24 深度三上限之③;
 // ①单槽 uint32 ②槽数 ≤8 由配置表校验兜)。
@@ -58,10 +62,21 @@ var pushPayloadLimit = dbguard.PayloadLimit{
 // MySQLMissionRepo 实现 biz.MissionRepo。
 type MySQLMissionRepo struct {
 	db *sql.DB
+	// doneReadLimit 只读路径完成集截断行数;0 = 用包级默认 doneReadLimit。
+	// 只为测试可注入(真造 2000 行太慢),生产恒走默认值。
+	doneReadLimitOverride int
 }
 
 // NewMySQLMissionRepo 构造。
 func NewMySQLMissionRepo(db *sql.DB) *MySQLMissionRepo { return &MySQLMissionRepo{db: db} }
+
+// effectiveDoneReadLimit 返回生效的只读截断行数。
+func (r *MySQLMissionRepo) effectiveDoneReadLimit() int {
+	if r.doneReadLimitOverride > 0 {
+		return r.doneReadLimitOverride
+	}
+	return doneReadLimit
+}
 
 var _ biz.MissionRepo = (*MySQLMissionRepo)(nil)
 
@@ -152,10 +167,24 @@ type queryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
+// doneReadLimit 是**只读路径**(LoadPlayer → ListMissions)对完成集的单次返回上限
+// (§9.18 读取侧上限)。
+//
+// 为什么只加在只读路径:事务路径(MutatePlayer / ApplyFactsTx)用 st.Done 判「已完成
+// 不可重复接取」与领奖 CAS —— 那里一旦截断,超出截断窗口的已完成任务会被判成可重新
+// 接取,**把一个展示问题升级成重复发奖**。所以事务路径刻意保持全量,由
+// configtable.MaxMissionRows 的写入侧硬上限兜住规模(§9.18 要求写入侧上限与读取侧
+// 上限同时存在,不是二选一)。
+const doneReadLimit = 2000
+
 func (r *MySQLMissionRepo) loadState(ctx context.Context, q queryer, playerID uint64, forUpdate bool) (*biz.PlayerState, error) {
 	lock := ""
+	doneLimit := ""
 	if forUpdate {
 		lock = " FOR UPDATE"
+	} else {
+		// 只读路径按 mission_config_id 稳定序截断,与 biz 侧 sortedDone 同序。
+		doneLimit = fmt.Sprintf(" ORDER BY mission_config_id LIMIT %d", r.effectiveDoneReadLimit())
 	}
 	st := &biz.PlayerState{
 		PlayerID: playerID,
@@ -195,7 +224,7 @@ func (r *MySQLMissionRepo) loadState(ctx context.Context, q queryer, playerID ui
 	}
 
 	drows, err := q.QueryContext(ctx,
-		"SELECT mission_config_id, reward_state, completed_at_ms FROM player_mission_done WHERE player_id = ?"+lock,
+		"SELECT mission_config_id, reward_state, completed_at_ms FROM player_mission_done WHERE player_id = ?"+doneLimit+lock,
 		playerID)
 	if err != nil {
 		return nil, fmt.Errorf("load done: %w", err)
@@ -381,9 +410,21 @@ func (r *MySQLMissionRepo) FetchPushOutbox(ctx context.Context, limit int) ([]*b
 }
 
 // DeletePushOutbox 见 biz.MissionRepo。
+//
+// 命中 0 行 = **另一个副本已经投过并删掉了这一行**,也就是两个 RunPushPublisher 正在
+// 同一张出箱表上打架:两边各自持有一份内存快照,投递顺序会交错,同玩家的旧进度快照
+// 可能在新快照之后到达客户端(progressed 是逐任务全量快照,后到即覆盖)。
+// 旧实现丢弃 Result,这件事在日志与 metric 里完全不可见 —— 先让它可见,
+// 这也是验证「单写者是否真的生效」的唯一手段。
 func (r *MySQLMissionRepo) DeletePushOutbox(ctx context.Context, id uint64) error {
-	_, err := r.db.ExecContext(ctx, "DELETE FROM mission_push_outbox WHERE id = ?", id)
-	return err
+	res, err := r.db.ExecContext(ctx, "DELETE FROM mission_push_outbox WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	if n, aerr := res.RowsAffected(); aerr == nil && n == 0 {
+		return errPushOutboxRaced
+	}
+	return nil
 }
 
 // ── 保留期清理(§9.24)──────────────────────────────────────────────────────

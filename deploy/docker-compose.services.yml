@@ -179,7 +179,9 @@ services:
       args: { SERVICE_DIR: services/social/dialogue, CMD_NAME: dialogue }
     image: pandora/dialogue:dev
     container_name: pandora-dialogue
-    volumes: [ "../run/cluster/etc/dialogue.yaml:/app/etc/cluster.yaml:ro" ]
+    volumes:
+      - "../run/cluster/etc/dialogue.yaml:/app/etc/cluster.yaml:ro"
+      - "../configtable/dist:/app/configtable/active:ro"
     ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:20013:20013" ]
 
   mission:

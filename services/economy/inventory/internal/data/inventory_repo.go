@@ -126,8 +126,10 @@ type InventoryRepo interface {
 	// ListInstances 读玩家全部装备实例(按 instance_id 升序;未建档 → 空)。
 	ListInstances(ctx context.Context, playerID uint64) ([]ItemInstance, error)
 
-	// CheckInstancesOwned 精确返回 instance_id + item_config_id 都与玩家当前实例行一致的 ID 子集。
-	CheckInstancesOwned(ctx context.Context, playerID uint64, queries []InstanceOwnershipQuery) ([]uint64, error)
+	// CheckInstancesOwned 精确返回 instance_id + item_config_id 都与玩家当前实例行一致的
+	// 权威实例快照（按 instance_id 升序）。返回详情而非仅 ID，使 player.GetLoadout
+	// 能把 identified/attributes 保真带到 DS，避免战斗链二次跨域查询。
+	CheckInstancesOwned(ctx context.Context, playerID uint64, queries []InstanceOwnershipQuery) ([]ItemInstance, error)
 
 	// GrantInstances 幂等发放装备实例(事务:INSERT ledger 命中 uk → 回放已发实例;
 	// 否则锁玩家实例行校验 count+n<=capacity,给每件分配最低空闲格并 INSERT)。

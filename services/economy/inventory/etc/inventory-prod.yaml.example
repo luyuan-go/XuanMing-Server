@@ -40,11 +40,8 @@ inventory:
   escrow_retention_days: 90
   capacity: 200
 
-  # 缺专用装备词条表时仅用 UE 已能对称生效的 Atk(3)+1；专属规则优先。
-  default_identify_rule:
-    attr_count: 1
-    pool:
-      - { attr_id: 3, min: 1, max: 1 }
+  # 装备鉴定规则由 configtable equipment_affix + item.identify_pool_id 同源热更；
+  # 缺表/缺池拒启，不允许生产回退到 YAML 默认词条。
 
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):生产强制档,顶号后旧 JWT 立即失效;
 # 权威端点漏配拒启,权威不可达 fail-closed。与 gen_cluster_config.ps1 -Prod 产物一致。

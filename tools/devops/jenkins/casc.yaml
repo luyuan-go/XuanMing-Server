@@ -42,7 +42,7 @@ unclassified:
 #   - script: >
 #       pipelineJob('backend-dev') {
 #         definition { cpsScmFlowDefinition {
-#           scm { git { remote { url('${BACKEND_GIT_URL}'); credentials('git-cred') } branch('*/main') } }
+#           scm { git { remote { url('${BACKEND_GIT_URL}') } branch('*/main') } }
 #           scriptPath('Jenkinsfile'); lightweight(true)
 #         }}
 #       }

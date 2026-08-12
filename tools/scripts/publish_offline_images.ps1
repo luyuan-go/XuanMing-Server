@@ -41,9 +41,8 @@ function Write-Info($m) { Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Write-Ok($m)   { Write-Host "[ OK ] $m" -ForegroundColor Green }
 
 # ---- 1) 版本戳(自适应 SVN / git) ----
-# 后端代码同时存在于团队 SVN(^/trunk/Server,与 ^/trunk/Client 同级)和个人 git 仓库。
-# CI 构建的是 SVN 权威源,开发者本机可能在 git 工作副本里跑,故两种都要支持。
-# SVN 优先:它是团队权威源;且 r<rev> 与客户端包命名一致,前后端版本戳统一。
+# 后端 CI 以 GitHub main 为权威源；历史 SVN 工作副本仍可用于本机兼容构建，故两种都识别。
+# 在同一目录同时被两种 VCS 识别时保留 SVN 优先，避免改变既有兼容行为；标准 CI 路径只会命中 git。
 Push-Location $ProjectRoot
 try {
     # 判定用**命令退出码**,不探测 .svn / .git 目录是否存在:
@@ -194,7 +193,7 @@ try {
         version      = $folderVer
         channel      = $channel     # snapshot(dev) / release(发布版本)
         app_version  = $Version    # 注入镜像的发布版本号(v0.1.0);空=未指定,走 git describe 默认
-        vcs          = $vcs      # svn(团队权威源 ^/trunk/Server) / git(个人仓库)
+        vcs          = $vcs      # 标准 CI 为 git；svn 仅保留历史工作副本兼容
         source_rev   = $srcId    # SVN 为 r<rev>,git 为 g<sha>;与客户端包命名一致
         dirty        = $dirty
         image_count  = $imagesManifest.Count

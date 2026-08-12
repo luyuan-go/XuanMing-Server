@@ -10,6 +10,7 @@ syntax = "proto3";
 package pandora.player.v1;
 
 import "pandora/common/v1/errcode.proto";
+import "pandora/inventory/v1/inventory.proto";
 
 service PlayerService {
   rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
@@ -270,10 +271,18 @@ message GetAttributesResponse {
 }
 
 // LoadoutEquipment 是出战装备预设的一个槽位(大厅态;开战前转成初始 GameplayEffect,ds-arch §0.5)。
-// slot 是槽位序号(0..N-1,配置约定);item_config_id 是装备配置 ID(uint32,§12)。
+// slot 是装备部位编号(>0,与道具表 equip_slot 同一编号空间);item_config_id 是装备配置 ID(uint32,§12)。
+// instance_id 精确定位玩家拥有的唯一装备实例(uint64,§11)。0 仅用于读取上线前的旧预设:
+// 新 SetEquipment 写入必须携带非 0 instance_id,GetLoadout 不会把 instance_id=0 的旧预设
+// 转成战斗初始效果,避免同配置多实例时错用词条。
+// identified/attributes 是 inventory 域在 GetLoadout 时按 exact pair 返回的权威快照;
+// 不从 SetEquipment 请求信任或持久化这两个字段。DS 必须只用此快照施加装备词条。
 message LoadoutEquipment {
   uint32 slot           = 1;
   uint32 item_config_id = 2;
+  uint64 instance_id    = 3;
+  bool identified = 4;
+  repeated pandora.inventory.v1.ItemAttribute attributes = 5;
 }
 
 // TalentNode 是天赋树某节点的已点等级(客户端可见结构)。
@@ -286,7 +295,7 @@ message TalentNode {
 // SetEquipment 全量替换出战装备预设(功能开关关闭时返回 ERR_PLAYER_FEATURE_DISABLED)。
 message SetEquipmentRequest {
   uint64 player_id = 1;
-  repeated LoadoutEquipment equipment = 2;  // 槽位唯一;item_config_id 须 > 0
+  repeated LoadoutEquipment equipment = 2;  // 槽位/instance_id 各自唯一;两类 ID 均须 > 0
 }
 
 message SetEquipmentResponse {

@@ -113,6 +113,21 @@ battle:
   # 可堆叠掉落走 GrantItems，装备走 GrantInstances；真实 dist 契约当前为 33/25。
   # 旧 drop_whitelist 字段仅保留单测/旧版本配置兼容，正式配置不得再手抄。
 
+  # mission_addr: mission 服务 gRPC 地址(任务事实转发,§9.21 Go 先行)。
+  #
+  # 与 inventory_addr 那种"未配也不丢"的弱依赖**语义不同**:任务事实是**未配即不产**——
+  # 未配时 ReportProgress 一行 battle_mission_outbox 都不写(产了投不出去只会让出箱
+  # 无界堆积),所以**已经发生的战斗事实无法事后补齐**,不是"配好地址重启就补发"。
+  # 未配 = 杀怪/拾取/局内用道具三类事实一条都进不了任务域,凡带这三类条件的任务
+  # 进度恒为 0、永远无法完成。
+  #
+  # 前置(不满足会 fail-fast,不是静默降级):
+  #   ① tools/migrate 跑到 pandora_battle 000010 建 battle_mission_outbox,
+  #      否则启动期 ValidateMissionOutboxSchema 失败 → os.Exit(1) → CrashLoop;
+  #   ② 按 §9.21 Go 先行:先确认 mission(20019)已在线,再给本服配地址,
+  #      反序会让转发行持续投递失败堆积。
+  mission_addr: "127.0.0.1:20019"
+
   # ── 战报保留期(§9.24 登记例外:180 天)──────────────────────────────────
   # 产品口径:MySQL 里最多只存最近六个月的战报,超过六个月的就没有数据
   # (2026-08-03 用户指令)。这条同时决定玩家能查到多久以前的战报(ListPlayerHistory

@@ -121,6 +121,35 @@ func (u *PlayerUsecase) experienceCurve() []uint64 {
 
 // RunPushOutboxPublisher 启动后台玩家推送出箱发布循环,直到 ctx 取消
 // (发布器纪律对齐 battle_result.RunOutboxPublisher:FIFO、失败中断本轮保序、成功才删行)。
+// PushWriterLease 是推送出箱发布器的领导权来源(*writerlease.Lease 满足)。
+//
+// **边界**:只保证「同一时刻一个副本发布」以取得**保序**,不是防脑裂,故出箱的写不需要
+// 把 fencing token 带进事务 —— 发布器不携带跨轮次权威意图(每轮从 MySQL 重读,动作只是
+// 投 kafka + 删行,权威态 player_level / exp 全程不被触碰)。迟到的旧 leader 做的是与新
+// leader 逐字相同的重放,唯一危害是投递顺序交错,而那正是本选举要消除的。
+type PushWriterLease interface {
+	// Current 返回 (fencing token, 是否持有领导权)。本接口只消费第二个返回值。
+	Current() (uint64, bool)
+}
+
+// SetPushWriterLease 注入发布器领导权来源;nil = 不选举(本副本无条件发布)。
+// 只允许在启动装配期调用(RunPushOutboxPublisher 之前)。
+func (u *PlayerUsecase) SetPushWriterLease(l PushWriterLease) { u.pushLease = l }
+
+// pushIsLeader 判定本轮是否由本副本发布,并把领导权跃迁打成日志(未注入恒为 true)。
+func (u *PlayerUsecase) pushIsLeader(ctx context.Context) bool {
+	if u.pushLease == nil {
+		return true
+	}
+	_, held := u.pushLease.Current()
+	if held != u.pushLeaseHeld {
+		u.pushLeaseHeld = held
+		plog.With(ctx).Infow("msg", "push_outbox_leadership_changed", "held", held,
+			"hint", "held=false 时本副本热备不发布;出箱由当选副本排空")
+	}
+	return held
+}
+
 func (u *PlayerUsecase) RunPushOutboxPublisher(ctx context.Context) {
 	if u.expPusher == nil {
 		plog.With(ctx).Infow("msg", "push_outbox_publisher_disabled",
@@ -138,6 +167,11 @@ func (u *PlayerUsecase) RunPushOutboxPublisher(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "push_outbox_publisher_stopped")
 			return
 		case <-ticker.C:
+			// 领导权逐轮判定(§9.21 同一未分区权威的单写者循环)。
+			// 失主后本副本立刻停止发布,不"补完"在飞的行 —— 那正是交错的来源。
+			if !u.pushIsLeader(ctx) {
+				continue
+			}
 			// panic 兜底(压测审核【必修-6】同类点位):单轮 panic 只丢本轮,出箱行下轮重试。
 			safego.Run(ctx, "player_push_outbox_publisher", func() {
 				// 排空循环:满批说明还有积压,立即继续下一批,不等下个 tick

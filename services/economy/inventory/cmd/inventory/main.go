@@ -102,9 +102,13 @@ func main() {
 		helper.Warnw("msg", "configtable_load_warning", "warning", warning)
 	}
 	cfg.Bag.ItemMaxStacks = itemMaxStacksFromTables(ctStore.Tables())
+	identifyPools := make(map[uint32]struct{})
+	for _, row := range ctStore.Tables().EquipmentAffix.All() {
+		identifyPools[row.GetPoolId()] = struct{}{}
+	}
 	helper.Infow("msg", "inventory_item_table_loaded", "dir", cfg.ConfigTable.Dir,
 		"version", ctRes.Version, "items", ctStore.Tables().Item.Count(),
-		"identify_default_pool", len(cfg.Inventory.DefaultIdentifyRule.Pool))
+		"identify_pools", len(identifyPools), "identify_candidates", ctStore.Tables().EquipmentAffix.Count())
 
 	// 校验背包域配置(段容量 / 堆叠上限;非法配置 fail-fast,bag-domain.md §5.2)。
 	if verr := cfg.Bag.Validate(); verr != nil {
@@ -162,7 +166,8 @@ func main() {
 		sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
 		defer func() { _ = sfCloser.Close() }()
 		uc.SetSnowflake(sf)
-		helper.Infow("msg", "instance_bag_enabled", "capacity", cfg.Inventory.Capacity, "identify_rules", len(cfg.Inventory.IdentifyRules))
+		helper.Infow("msg", "instance_bag_enabled", "capacity", cfg.Inventory.Capacity,
+			"identify_pools", len(identifyPools))
 	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)

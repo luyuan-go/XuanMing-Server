@@ -19,6 +19,11 @@
       "id": 7,
       "code_name": "MoveSpeedRate",
       "show_name": "移动速度倍率"
+    },
+    {
+      "id": 9,
+      "code_name": "Defense",
+      "show_name": "防御"
     }
   ]
 }

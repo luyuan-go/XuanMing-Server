@@ -26,8 +26,12 @@ func TestBagLegacyMigration_MySQL(t *testing.T) {
 	// legacy 存量:堆叠 250(拆 99+99+52)+ 5;实例 2 件(一件已鉴定带词条)。
 	mustExec(t, inv.db, `INSERT INTO player_items (player_id, item_config_id, count) VALUES (?, 10001, 250), (?, 10002, 5)`,
 		playerOK, playerOK)
+	attrsPB, err := encodeInstanceAttrs(ctx, "player_item_instance", []ItemAttribute{{AttrID: 7, Value: 42}})
+	if err != nil {
+		t.Fatalf("编码存量实例词条: %v", err)
+	}
 	mustExec(t, inv.db, `INSERT INTO player_item_instance (instance_id, player_id, item_config_id, identified, attributes, bound)
-VALUES (9001, ?, 20001, 1, '[{"attr_id":7,"value":42}]', 0), (9002, ?, 20001, 0, NULL, 0)`, playerOK, playerOK)
+VALUES (9001, ?, 20001, 1, ?, 0), (9002, ?, 20001, 0, NULL, 0)`, playerOK, attrsPB, playerOK)
 	// bound 实例玩家:fail-closed 拒迁。
 	mustExec(t, inv.db, `INSERT INTO player_item_instance (instance_id, player_id, item_config_id, identified, attributes, bound)
 VALUES (9101, ?, 20002, 0, NULL, 1)`, playerBound)

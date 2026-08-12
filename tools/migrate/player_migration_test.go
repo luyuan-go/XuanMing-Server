@@ -1,10 +1,10 @@
 package main
 
-// player_migration_test.go — pandora_player 000005_skill_cards 的迁移契约与真库验收。
+// player_migration_test.go — pandora_player 000005/000006 的迁移契约与真库验收。
 //
-// 分工:000002/000003/000004/000005 的**静态片段断言**历史上落在
+// 分工:000002..000006 的**静态片段断言**历史上落在
 // battle_recovery_migration_test.go 的 TestPandoraPlayerExperienceMigrationIsInitSafe
-// (含 v5 版本门禁 `version != 5`),那里不重复;本文件补两类它没覆盖的东西:
+// (含 latest=6 版本门禁),这里主要补真库路径与 fresh-init 漂移断言。
 //
 //	① 000005 独有的两条静态契约:清理索引的条件补齐守卫、down 只碰本次新增的三张表;
 //	② **真库**验收 —— fresh-init / 存量升级 / 重复迁移 / 回滚,四条路径各自跑通。
@@ -64,6 +64,8 @@ func TestPandoraPlayerV5CleanupIndexIsGuaranteed(t *testing.T) {
 	// (同一张表在 init 和 migration 里长得不一样,只有其中一条路径的库会被 dbcheck 拦下)。
 	freshInit := readRepoFile(t, playerFreshInitPath)
 	for _, fragment := range []string{
+		"`instance_id`     BIGINT UNSIGNED  NULL",
+		"UNIQUE KEY `uk_player_instance` (`player_id`, `instance_id`)",
 		"CREATE TABLE IF NOT EXISTS `player_skill_cards`",
 		"CREATE TABLE IF NOT EXISTS `player_skill_slots`",
 		"CREATE TABLE IF NOT EXISTS `skill_card_grants`",
@@ -102,6 +104,23 @@ func TestPandoraPlayerV5DownTouchesOnlyNewTables(t *testing.T) {
 	}
 }
 
+func TestPandoraPlayerV6DownTouchesOnlyInstanceProjection(t *testing.T) {
+	statements := executableStatements(readEmbeddedMigration(t,
+		"migrations/pandora_player/000006_equipment_instance_id.down.sql"))
+	want := map[string]bool{
+		"ALTER TABLE `player_equipment` DROP INDEX `uk_player_instance`, ALGORITHM=INPLACE": true,
+		"ALTER TABLE `player_equipment` DROP COLUMN `instance_id`, ALGORITHM=INSTANT":       true,
+	}
+	if len(statements) != len(want) {
+		t.Fatalf("000006 down 语句=%v,期望恰好删除本次索引与列", statements)
+	}
+	for _, statement := range statements {
+		if !want[statement] {
+			t.Errorf("000006 down 出现越界语句 %q", statement)
+		}
+	}
+}
+
 // executableStatements 去掉注释与空行后按分号切出语句(只用于静态断言,不求 SQL 解析完备)。
 func executableStatements(sqlText string) []string {
 	var out []string
@@ -133,15 +152,15 @@ type playerMigrationScenario struct {
 	prepare func(t *testing.T, ctx context.Context, db *sql.DB, target migrationTarget) func(*testing.T)
 }
 
-// TestPandoraPlayerMigratesToV5AcrossBackends 覆盖四条真实路径:
+// TestPandoraPlayerMigratesToLatestAcrossBackends 覆盖四条真实路径:
 //
 //	fresh_empty          空库直接迁移(全新环境)
 //	fresh_init_schema    先跑 deploy/mysql-init 建表再迁移(docker-init 形态,迁移必须幂等)
-//	legacy_v4            存量库停在 v4 且有业务数据,增量升到 v5(数据一行不能动)
+//	legacy_v4            存量库停在 v4 且有业务数据,增量升到 latest(数据一行不能动)
 //	legacy_missing_index 存量库已有 skill_card_grants 但缺 idx_created(条件补齐守卫必须补上)
 //
-// 每条路径都跑**两遍** migrateTarget:第二遍必须仍是 clean version=5(重复迁移安全)。
-func TestPandoraPlayerMigratesToV5AcrossBackends(t *testing.T) {
+// 每条路径都跑**两遍** migrateTarget:第二遍必须仍是 clean latest=6(重复迁移安全)。
+func TestPandoraPlayerMigratesToLatestAcrossBackends(t *testing.T) {
 	scenarios := []playerMigrationScenario{
 		{
 			name: "fresh_empty",
@@ -166,7 +185,8 @@ func TestPandoraPlayerMigratesToV5AcrossBackends(t *testing.T) {
 					t.Fatalf("migrateTarget 首跑: %v", err)
 				}
 				assertPlayerSkillCardSchema(t, ctx, db)
-				assertPlayerMigrationVersion(t, ctx, db, 5)
+				assertPlayerMigrationVersion(t, ctx, db, 6)
+				assertPlayerEquipmentInstanceSchema(t, ctx, db)
 				if verify != nil {
 					verify(t)
 				}
@@ -177,7 +197,8 @@ func TestPandoraPlayerMigratesToV5AcrossBackends(t *testing.T) {
 					t.Fatalf("migrateTarget 重跑: %v", err)
 				}
 				assertPlayerSkillCardSchema(t, ctx, db)
-				assertPlayerMigrationVersion(t, ctx, db, 5)
+				assertPlayerMigrationVersion(t, ctx, db, 6)
+				assertPlayerEquipmentInstanceSchema(t, ctx, db)
 				if verify != nil {
 					verify(t)
 				}
@@ -195,8 +216,12 @@ func TestPandoraPlayerV5RollbackKeepsLegacyData(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
-		if err := migrateTarget(target, false); err != nil {
-			t.Fatalf("migrateTarget: %v", err)
+		upToV5 := newPlayerMigrator(t, target)
+		if err := upToV5.Migrate(5); err != nil {
+			t.Fatalf("迁移到 000005: %v", err)
+		}
+		if err := closeMigration(upToV5); err != nil {
+			t.Fatalf("关闭 v5 迁移器: %v", err)
 		}
 		seedPlayerLegacyRows(t, ctx, db)
 		if _, err := db.ExecContext(ctx,
@@ -221,8 +246,12 @@ func TestPandoraPlayerV5RollbackKeepsLegacyData(t *testing.T) {
 		assertPlayerLegacyRowsIntact(t, ctx, db)
 
 		// 再 up 回去:结构必须完整重建(dbcheck 的"登记表缺失"才能重新变绿)。
-		if err := migrateTarget(target, false); err != nil {
-			t.Fatalf("回滚后重新 up: %v", err)
+		reupV5 := newPlayerMigrator(t, target)
+		if err := reupV5.Migrate(5); err != nil {
+			t.Fatalf("回滚后重新 up 到 v5: %v", err)
+		}
+		if err := closeMigration(reupV5); err != nil {
+			t.Fatalf("关闭重建 v5 迁移器: %v", err)
 		}
 		assertPlayerSkillCardSchema(t, ctx, db)
 		assertPlayerMigrationVersion(t, ctx, db, 5)
@@ -442,7 +471,9 @@ INSERT INTO player_talents (player_id, talent_id, level, spent_points) VALUES
   (7001, 101, 3, 3),
   (7001, 102, 2, 2);
 INSERT INTO talent_point_grants (player_id, idempotency_key, points) VALUES
-  (7001, 'level_up:12', 1);`); err != nil {
+  (7001, 'level_up:12', 1);
+INSERT INTO player_equipment (player_id, slot, item_config_id) VALUES
+  (7001, 1, 10003);`); err != nil {
 		t.Fatalf("写入存量业务数据: %v", err)
 	}
 }
@@ -488,6 +519,31 @@ func assertPlayerLegacyRowsIntact(t *testing.T, ctx context.Context, db *sql.DB)
 	if len(want) != 0 {
 		t.Errorf("player_talents 缺行: %v", want)
 	}
+	var slot, itemConfigID uint32
+	if err := db.QueryRowContext(ctx,
+		"SELECT slot, item_config_id FROM player_equipment WHERE player_id = 7001").Scan(&slot, &itemConfigID); err != nil {
+		t.Fatalf("读取 player_equipment 存量行: %v", err)
+	}
+	if slot != 1 || itemConfigID != 10003 {
+		t.Errorf("player_equipment 存量行漂移: slot=%d item=%d", slot, itemConfigID)
+	}
+	var hasInstanceColumn int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM information_schema.COLUMNS
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'player_equipment' AND COLUMN_NAME = 'instance_id'`).
+		Scan(&hasInstanceColumn); err != nil {
+		t.Fatalf("探测 player_equipment.instance_id: %v", err)
+	}
+	if hasInstanceColumn > 0 {
+		var instanceID sql.NullInt64
+		if err := db.QueryRowContext(ctx,
+			"SELECT instance_id FROM player_equipment WHERE player_id = 7001").Scan(&instanceID); err != nil {
+			t.Fatalf("读取 player_equipment.instance_id: %v", err)
+		}
+		if instanceID.Valid {
+			t.Errorf("v6 不得猜测回填旧预设 instance_id,实际=%d", instanceID.Int64)
+		}
+	}
 }
 
 // assertPlayerSkillCardSchema 断言 v5 结构齐备:三张表 + 每条业务/清理索引。
@@ -519,6 +575,27 @@ func assertPlayerSkillCardSchema(t *testing.T, ctx context.Context, db *sql.DB) 
 		if strings.Join(got, ",") != strings.Join(want.columns, ",") {
 			t.Errorf("索引 %s.%s 列=%v, 期望=%v", want.table, want.index, got, want.columns)
 		}
+	}
+}
+
+// assertPlayerEquipmentInstanceSchema 断言 v6 的 nullable expand 列与单玩家实例唯一键齐备。
+func assertPlayerEquipmentInstanceSchema(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	var dataType, columnType, nullable string
+	if err := db.QueryRowContext(ctx,
+		`SELECT DATA_TYPE, COLUMN_TYPE, IS_NULLABLE FROM information_schema.COLUMNS
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'player_equipment' AND COLUMN_NAME = 'instance_id'`).
+		Scan(&dataType, &columnType, &nullable); err != nil {
+		t.Fatalf("迁移后缺 player_equipment.instance_id: %v", err)
+	}
+	if !strings.EqualFold(dataType, "bigint") || !strings.Contains(strings.ToLower(columnType), "unsigned") || nullable != "YES" {
+		t.Errorf("player_equipment.instance_id 形态=%s/%s nullable=%s,期望 bigint unsigned/YES",
+			dataType, columnType, nullable)
+	}
+	got := indexColumns(t, ctx, db, "player_equipment", "uk_player_instance")
+	want := []string{"player_id", "instance_id"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("索引 player_equipment.uk_player_instance 列=%v,期望=%v", got, want)
 	}
 }
 

@@ -107,10 +107,11 @@ version      INT          NOT NULL  DEFAULT 0                    -- 乐观锁
 | 表 | 用途 | 关键索引 |
 |---|---|---|
 | `player_mission_active` | 活跃任务(进度 pb 列;每玩家 ≤ max_active_missions) | PK(id), uk(player_id, mission_config_id) |
-| `player_mission_done` | 完成集 + 领奖状态(被任务表行数有界) | PK(id), uk(player_id, mission_config_id), idx(player_id, reward_state) |
+| `player_mission_done` | 完成集 + 领奖状态(每玩家每任务至多 1 行;规模 = 任务表行数,由 `configtable.MaxMissionRows`=2000 加载期拒批次兜住) | PK(id), uk(player_id, mission_config_id), idx(player_id, reward_state) |
 | `mission_reward_log` | 发奖流水 PENDING/GRANTED/FAILED(幂等防重复发奖 + 补发工作集) | PK(id), uk(grant_idempotency_key), idx(status, updated_at_ms) |
 | `mission_fact_receipts` | 事实上报幂等收据(at-least-once 吸收;清理默认关) | PK(id), uk(player_id, idempotency_key), idx(created_at) |
-| `mission_push_outbox` | 推送事务出箱(投 kafka pandora.mission.update,成功即删) | PK(id) |
+| `mission_push_outbox` | 推送事务出箱(投 kafka pandora.mission.update,成功即删;**全局未分区**,发布器由 `push_writer_lease` 选举保证单写者,§9.21) | PK(id) |
+| `mission_player_guards` | 每玩家写守卫行(TiDB 无 gap 锁:`FOR UPDATE` 零行时不加锁,接取上限与类型互斥须先锁本行再进临界区;同 `friend_player_guards`) | PK(player_id) |
 
 ### 2.4 字符集 / 引擎
 

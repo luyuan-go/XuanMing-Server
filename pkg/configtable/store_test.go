@@ -53,7 +53,7 @@ func sampleItemData() *configpb.ItemTableData {
 		{Id: 10001, Name: "测试消耗品", Type: configpb.ItemType_ITEM_TYPE_CONSUMABLE,
 			MaxStackSize: 99, Usable: true, UseHealHp: 50},
 		{Id: 10003, Name: "测试装备", Type: configpb.ItemType_ITEM_TYPE_EQUIPMENT,
-			MaxStackSize: 1, EquipSlot: 1},
+			MaxStackSize: 1, EquipSlot: 1, IdentifyPoolId: 1},
 	}}
 }
 

@@ -437,14 +437,14 @@ func (f *fakeRepo) ListInstances(_ context.Context, playerID uint64) ([]data.Ite
 	return out, nil
 }
 
-func (f *fakeRepo) CheckInstancesOwned(_ context.Context, playerID uint64, queries []data.InstanceOwnershipQuery) ([]uint64, error) {
-	var out []uint64
+func (f *fakeRepo) CheckInstancesOwned(_ context.Context, playerID uint64, queries []data.InstanceOwnershipQuery) ([]data.ItemInstance, error) {
+	var out []data.ItemInstance
 	for _, q := range queries {
 		if inst := f.instances[playerID][q.InstanceID]; inst != nil && inst.ItemConfigID == q.ItemConfigID {
-			out = append(out, q.InstanceID)
+			out = append(out, *inst)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	sort.Slice(out, func(i, j int) bool { return out[i].InstanceID < out[j].InstanceID })
 	return out, nil
 }
 
@@ -700,13 +700,19 @@ func (f *fakeRepo) ConsumeTransferEscrow(_ context.Context, toPlayerID uint64, i
 	return consumed, nil
 }
 
+// newUC 构造只做堆叠道具的 usecase。规则来自注入的 catalog(生产是 configtable item
+// 表适配器),这里用假表覆盖本文件用到的全部配置 ID:2001 大厅可用、3001 单价 10 可卖,
+// 其余仅作可堆叠道具存在。LobbyUsable 在生产适配器里恒 false,此处置真是为了单独驱动
+// UseItem 自身的分支,两者的契约差异由 cmd/inventory 的 catalog 测试守住。
 func newUC(repo data.InventoryRepo) *InventoryUsecase {
-	return NewInventoryUsecase(repo, conf.InventoryConf{
-		ItemRules: []conf.ItemRule{
-			{ItemConfigID: 2001, Usable: true},
-			{ItemConfigID: 3001, Sellable: true, SellUnitPrice: 10},
-		},
+	uc := NewInventoryUsecase(repo, conf.InventoryConf{})
+	uc.SetItemCatalog(mapItemCatalog{
+		2001: {LobbyUsable: true, MaxStack: 99},
+		3001: {SellUnitPrice: 10, MaxStack: 99},
+		7001: {MaxStack: 99},
+		8002: {MaxStack: 99},
 	})
+	return uc
 }
 
 func TestGrantItems_Idempotent(t *testing.T) {
@@ -1266,7 +1272,7 @@ func (g *seqGen) GenerateInto(dst []uint64) {
 }
 
 // newInstanceUC 构造带实例背包(容量 4)+ 鉴定规则(道具 5001 从 3 属性池抽 2 条)的 usecase,
-// 注入确定性 snowflake + 确定性随机源(randIntn 恒返 0 → 洗牌不变、每条取区间下界),便于断言。
+// 注入确定性 snowflake + 确定性随机源(randIntn 恒返 0 → 每轮选剩余第一条、数值取下界),便于断言。
 func newInstanceUC() *InventoryUsecase {
 	uc := NewInventoryUsecase(newFakeRepo(), conf.InventoryConf{
 		Capacity: 4,
@@ -1343,23 +1349,23 @@ func TestIdentifyItem_RollsAttributesAndIdempotent(t *testing.T) {
 	if !got.Identified {
 		t.Fatalf("identified flag must be set")
 	}
-	// randIntn 恒 0:Fisher-Yates 对 [0,1,2] 洗成 [1,2,0],取前 2 条 → pool[1]{102},pool[2]{103};
-	// 每条取区间下界(102→5,103→1)。
+	// 旧 YAML 兼容规则按等权加权不放回；randIntn 恒 0 时依次取 pool[0]/pool[1]，
+	// 每条数值取区间下界(101→10,102→5)。
 	if len(got.Attributes) != 2 {
 		t.Fatalf("want 2 rolled attrs, got %d", len(got.Attributes))
 	}
-	if got.Attributes[0].AttrID != 102 || got.Attributes[0].Value != 5 {
-		t.Fatalf("attr0 want {102,5}, got %+v", got.Attributes[0])
+	if got.Attributes[0].AttrID != 101 || got.Attributes[0].Value != 10 {
+		t.Fatalf("attr0 want {101,10}, got %+v", got.Attributes[0])
 	}
-	if got.Attributes[1].AttrID != 103 || got.Attributes[1].Value != 1 {
-		t.Fatalf("attr1 want {103,1}, got %+v", got.Attributes[1])
+	if got.Attributes[1].AttrID != 102 || got.Attributes[1].Value != 5 {
+		t.Fatalf("attr1 want {102,5}, got %+v", got.Attributes[1])
 	}
 	// 幂等:再次鉴定回放同属性,不 re-roll。
 	again, err := uc.IdentifyItem(ctx, 100, id)
 	if err != nil {
 		t.Fatalf("re-identify err: %v", err)
 	}
-	if len(again.Attributes) != 2 || again.Attributes[0].Value != 5 {
+	if len(again.Attributes) != 2 || again.Attributes[0].Value != 10 {
 		t.Fatalf("re-identify must replay, got %+v", again.Attributes)
 	}
 }

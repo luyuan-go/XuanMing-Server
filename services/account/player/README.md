@@ -59,9 +59,9 @@
 | `GetMMR` | 客户端 / battle_result reader | 读当前段位 MMR(未建档返回 `base_mmr`,不建行) |
 | `GetActiveHero` | 客户端 | 读出战英雄(未选定返回 0) |
 | `GetAttributes` | 客户端 | 读已分配属性点 + 未分配点 |
-| `GetEquipment` | 客户端 | 读出战装备预设 |
+| `GetEquipment` | 客户端 | 读出战装备预设；存量旧行以 `instance_id=0` 只读回显并引导重选 |
 | `GetTalents` | 客户端 | 读已点天赋 + 可点天赋点 |
-| `GetLoadout` | 客户端 / matchmaker·DS 开局快照注入 | 组装开战前快照(英雄+属性+装备+天赋) |
+| `GetLoadout` | 客户端 / matchmaker·DS 开局快照注入 | 组装开战前快照；装备按 exact instance 复核并携带权威鉴定词条 |
 | `GetRewardClaims` | 客户端 | 查某来源已领取的 reward_id 列表 |
 
 **客户端自助写 RPC(`selfPlayerID`)**
@@ -195,8 +195,13 @@ loadRewardRecord → Unmarshal RewardClaimStorageRecord(保留 stored 原 messag
 
 ### 5. GetLoadout —— 开战前快照聚合(双模)
 
-`GetLoadout`(`internal/biz/player.go:486`)聚合出战英雄 + 属性点 + 装备预设 + 天赋成 `PlayerLoadout`,
-供匹配 / 进战下发。`resolvePlayerID` 双模:内部直连(matchmaker / DS 开局快照注入)信任请求体,客户端只读自己。
+`GetLoadout`(`internal/biz/player.go`)聚合出战英雄 + 属性点 + 装备预设 + 天赋成 `PlayerLoadout`,
+供匹配 / 进战下发。装备预设不盲信库里的旧快照：开战前经 inventory
+`CheckInstancesOwned(instance_id+item_config_id)` 重新核验当前归属，并把同一回包的
+`identified+attributes[]` 保真写进 `LoadoutEquipment`。存量 `instance_id=0`、实例已转移、
+详情缺失（包括命中旧 inventory 仅回 IDs）或鉴定不变量破坏时全部 fail-closed，
+不会产生错词条初始效果。`resolvePlayerID` 双模:内部直连(matchmaker / DS 开局快照注入)
+信任请求体,客户端只读自己。滚动发布先后顺序见 `docs/design/ds-arch.md` §0.5。
 
 ## 存储
 
@@ -209,7 +214,7 @@ loadRewardRecord → Unmarshal RewardClaimStorageRecord(保留 stored 原 messag
 | `mmr_history` | uk `player_id+idempotency_key` | MMR 变更历史 + 幂等键(不变量 §2) |
 | `player_attributes` | `player_id+attr_key` | 已分配属性点 |
 | `attr_point_grants` | uk `player_id+idempotency_key` | 属性点授予幂等收据 |
-| `player_equipment` | `player_id+slot` | 出战装备预设 |
+| `player_equipment` | uk `player_id+slot` / `player_id+instance_id` | 出战装备精确实例预设；`instance_id` nullable 仅为滚动升级及存量旧行 |
 | `player_talents` | `player_id+talent_id` | 已点天赋等级 + 该节点实际消耗点数(`spent_points`,可点数按它求和,不按等级和反推) |
 | `talent_point_grants` | uk `player_id+idempotency_key` | 天赋点授予幂等收据 |
 | `player_skill_cards` | uk `player_id+card_id` | 技能卡持有状态(等级 + 碎片余量) |

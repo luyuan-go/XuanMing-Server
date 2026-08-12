@@ -2,31 +2,17 @@ package data
 
 import (
 	"context"
-	"database/sql"
-	"os"
 	"testing"
 	"time"
-
-	_ "github.com/go-sql-driver/mysql"
 )
 
 // TestTerminalReleaseMySQLTwoPhaseCAS 是可选真实 MySQL 集成测。默认跳过；CI/本地用
-// PANDORA_TEST_MYSQL_DSN 指向已执行 pandora_battle migrations 的隔离测试库。
+// PANDORA_TEST_MYSQL_DSN 指向不带 database 的测试实例；夹具创建随机库并重放正式
+// battle schema，避免与同包其他 MySQL 测试的 DSN 契约冲突或污染共享库。
 func TestTerminalReleaseMySQLTwoPhaseCAS(t *testing.T) {
-	dsn := os.Getenv("PANDORA_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("PANDORA_TEST_MYSQL_DSN not set")
-	}
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := openBattleRetentionDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		t.Fatal(err)
-	}
 	repo := NewMySQLBattleRepo(db)
 	if err := repo.ValidateTerminalReleaseSchema(ctx); err != nil {
 		t.Fatalf("exact schema probe: %v", err)

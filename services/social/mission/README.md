@@ -61,6 +61,23 @@ PANDORA_TEST_MYSQL_DSN='root:<pw>@tcp(127.0.0.1:13306)/?parseTime=true&loc=UTC&c
 
 DSN **必须不带库名**:用例自建随机临时库(`pandora_mission_it_*`)并在结束时删掉,
 重放的是 `deploy/mysql-init/16-mission-tables.sql` 本身(杜绝测试内另抄一份 DDL 的漂移)。
+
+### 真实 etcd 用例(推送发布器单写者;同样**裸跑会 Skip**)
+
+`internal/biz/push_writer_lease_smoke_test.go` 验的是 `push_writer_lease.mode=enforce`
+这条分支**真的能跑**:连上 etcd、真选出 leader、第二个副本在持有期内拿不到领导权。
+这层不能用 fake 替代 —— fake 租约只能验 `pushIsLeader()` 的分支逻辑,验不了
+`writerlease.Start()` 的接线(配置字段填错、Election 名写错都只会在部署时才炸)。
+
+```bash
+docker run -d --name pandora-etcd-smoke -p 2379:2379 quay.io/coreos/etcd:v3.6.12 \
+  /usr/local/bin/etcd --name=smoke --data-dir=/etcd-data \
+  --listen-client-urls=http://0.0.0.0:2379 --advertise-client-urls=http://127.0.0.1:2379
+PANDORA_TEST_ETCD_ENDPOINTS='127.0.0.1:2379' go test ./services/social/mission/internal/biz/ -count=1 -run PushWriterLeaseRealElection -v
+```
+
+⚠️ Git Bash 会把容器内路径 `/usr/local/bin/etcd` 改写成 Windows 路径导致启动失败,
+本机请用 PowerShell 跑上面这条 `docker run`(或加 `MSYS_NO_PATHCONV=1`)。
 上游 battle 侧的任务出箱 FIFO / USE_ITEM 扣除闸同款门控,见
 `services/battle/battle_result/internal/data/mission_outbox_mysql_test.go`(`-run MissionOutbox`)。
 

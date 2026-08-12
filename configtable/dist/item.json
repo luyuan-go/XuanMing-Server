@@ -9,7 +9,10 @@
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10001",
       "description": "真空封装的高热量口粮。局内使用可回复少量生命，是搜打撤最基础的生存补给。",
       "usable": true,
-      "use_heal_hp": 50
+      "use_heal_hp": 50,
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10002,
@@ -19,7 +22,10 @@
       "max_stack_size": 99,
       "sell_price": 25,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10002",
-      "description": "松林腐蚀体剥离的硬化组织。主世界可回收炼制装备与药剂的基础材料。"
+      "description": "松林腐蚀体剥离的硬化组织。主世界可回收炼制装备与药剂的基础材料。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10003,
@@ -30,7 +36,13 @@
       "sell_price": 180,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10003",
       "description": "臂部武器。刃口布满锈斑，仍足以切开腐肉。死亡时有概率掉落。",
-      "equip_slot": 1
+      "equip_slot": 1,
+      "identify_pool_id": 3,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_sword_dungeon_02.SM_PROP_weapon_sword_dungeon_02",
+      "equip_socket": "hand_r",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10004,
@@ -39,7 +51,10 @@
       "quality": 3,
       "max_stack_size": 99,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10004",
-      "description": "任务道具。松林世界的通行徽记，可交付阵营兑换声望与限定物资，不可出售。"
+      "description": "任务道具。松林世界的通行徽记，可交付阵营兑换声望与限定物资，不可出售。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10005,
@@ -49,7 +64,10 @@
       "max_stack_size": 999,
       "sell_price": 50,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10005",
-      "description": "故障世界析出的硬通货碎片。撤离后可兑换物资、外观与进阶材料。"
+      "description": "故障世界析出的硬通货碎片。撤离后可兑换物资、外观与进阶材料。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10006,
@@ -60,7 +78,10 @@
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10006",
       "description": "过滤后的安全水源。局内使用少量回血，堆叠友好、适合长线搜刮。",
       "usable": true,
-      "use_heal_hp": 40
+      "use_heal_hp": 40,
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10007,
@@ -72,7 +93,10 @@
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10007",
       "description": "浸透止血剂的军用绷带。局内使用中量回血，精英怪与宝箱常见掉落。",
       "usable": true,
-      "use_heal_hp": 100
+      "use_heal_hp": 100,
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10008,
@@ -84,7 +108,10 @@
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10008",
       "description": "便携喷雾急救剂。快速回复较多生命，适合撤离前的最后一搏。",
       "usable": true,
-      "use_heal_hp": 180
+      "use_heal_hp": 180,
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10009,
@@ -96,7 +123,10 @@
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10009",
       "description": "高浓度兴奋剂针剂。爆发性回满大半生命，紫品质稀有补给。",
       "usable": true,
-      "use_heal_hp": 320
+      "use_heal_hp": 320,
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10010,
@@ -105,7 +135,10 @@
       "max_stack_size": 99,
       "sell_price": 12,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10010",
-      "description": "技能释放材料（白）。使用技能时消耗，品质影响技能倍率的最低档。"
+      "description": "技能释放材料（白）。使用技能时消耗，品质影响技能倍率的最低档。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10011,
@@ -115,7 +148,10 @@
       "max_stack_size": 99,
       "sell_price": 28,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10011",
-      "description": "技能释放材料（绿）。松林小怪与精英的常规产出来源。"
+      "description": "技能释放材料（绿）。松林小怪与精英的常规产出来源。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10012,
@@ -125,7 +161,10 @@
       "max_stack_size": 50,
       "sell_price": 70,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10012",
-      "description": "技能释放材料（蓝）。精英与小 Boss 更高概率掉落，倍率更稳。"
+      "description": "技能释放材料（蓝）。精英与小 Boss 更高概率掉落，倍率更稳。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10013,
@@ -135,7 +174,10 @@
       "max_stack_size": 20,
       "sell_price": 180,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10013",
-      "description": "技能释放材料（紫）。Boss / 熔岩领主级别产出，用于关键技能释放。"
+      "description": "技能释放材料（紫）。Boss / 熔岩领主级别产出，用于关键技能释放。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10014,
@@ -145,7 +187,10 @@
       "max_stack_size": 10,
       "sell_price": 450,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10014",
-      "description": "技能释放材料（橙）。北冥巨妖级稀有掉落，极高技能消耗倍率。"
+      "description": "技能释放材料（橙）。北冥巨妖级稀有掉落，极高技能消耗倍率。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10015,
@@ -154,7 +199,10 @@
       "max_stack_size": 99,
       "sell_price": 18,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10015",
-      "description": "近战腐蚀体折断的骨刺。廉价白品材料，适合批量制造入门装备。"
+      "description": "近战腐蚀体折断的骨刺。廉价白品材料，适合批量制造入门装备。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10016,
@@ -164,7 +212,10 @@
       "max_stack_size": 99,
       "sell_price": 35,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10016",
-      "description": "远程腐蚀体的射腺残片。绿品制造材料，也可卖出换取金币。"
+      "description": "远程腐蚀体的射腺残片。绿品制造材料，也可卖出换取金币。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10017,
@@ -173,7 +224,10 @@
       "max_stack_size": 99,
       "sell_price": 15,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10017",
-      "description": "小型腐蚀体体内的不稳定晶核。数量多、单价低，是制造填料。"
+      "description": "小型腐蚀体体内的不稳定晶核。数量多、单价低，是制造填料。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10018,
@@ -183,7 +237,10 @@
       "max_stack_size": 50,
       "sell_price": 80,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10018",
-      "description": "双头犬的厚实毛皮。蓝品护甲与手套的核心原料。"
+      "description": "双头犬的厚实毛皮。蓝品护甲与手套的核心原料。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10019,
@@ -193,7 +250,10 @@
       "max_stack_size": 50,
       "sell_price": 95,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10019",
-      "description": "熔岩领主体表剥落的灼热岩片。用于锻造高耐热装备。"
+      "description": "熔岩领主体表剥落的灼热岩片。用于锻造高耐热装备。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10020,
@@ -203,7 +263,10 @@
       "max_stack_size": 50,
       "sell_price": 110,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10020",
-      "description": "蛇怪脱落的鳞甲。韧性极高，适合躯干与腿部防具。"
+      "description": "蛇怪脱落的鳞甲。韧性极高，适合躯干与腿部防具。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10021,
@@ -213,7 +276,10 @@
       "max_stack_size": 30,
       "sell_price": 160,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10021",
-      "description": "剧毒蛇怪的毒囊。紫品炼金与淬毒材料，处理时需极度小心。"
+      "description": "剧毒蛇怪的毒囊。紫品炼金与淬毒材料，处理时需极度小心。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10022,
@@ -223,7 +289,10 @@
       "max_stack_size": 20,
       "sell_price": 320,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10022",
-      "description": "北冥巨妖触须中的高强度纤维。橙品核心装备的顶级原料。"
+      "description": "北冥巨妖触须中的高强度纤维。橙品核心装备的顶级原料。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10023,
@@ -233,7 +302,10 @@
       "max_stack_size": 20,
       "sell_price": 200,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10023",
-      "description": "世界故障析出的模因残页。用于实验室合成封印物胚子。"
+      "description": "世界故障析出的模因残页。用于实验室合成封印物胚子。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10024,
@@ -243,7 +315,10 @@
       "max_stack_size": 10,
       "sell_price": 500,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10024",
-      "description": "维系分世界坐标的锚定石碎块。橙品稀有材料，撤离高价值目标。"
+      "description": "维系分世界坐标的锚定石碎块。橙品稀有材料，撤离高价值目标。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10025,
@@ -252,7 +327,10 @@
       "max_stack_size": 99,
       "sell_price": 10,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10025",
-      "description": "随处可见的金属废件。白品通用填料，任何制造配方都能消化。"
+      "description": "随处可见的金属废件。白品通用填料，任何制造配方都能消化。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10026,
@@ -262,7 +340,10 @@
       "max_stack_size": 99,
       "sell_price": 40,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10026",
-      "description": "可中和腐蚀的粉末。绿品炼金辅料，也是部分任务交付物。"
+      "description": "可中和腐蚀的粉末。绿品炼金辅料，也是部分任务交付物。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10027,
@@ -272,7 +353,13 @@
       "sell_price": 60,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10027",
       "description": "手部护具（白）。用废布与皮带拼凑，聊胜于无。",
-      "equip_slot": 2
+      "equip_slot": 2,
+      "identify_pool_id": 1,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_shield_dungeon_01.SM_PROP_weapon_shield_dungeon_01",
+      "equip_socket": "hand_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10028,
@@ -282,7 +369,13 @@
       "sell_price": 65,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10028",
       "description": "腿部护具（白）。缝补痕迹明显，仍能挡住擦伤。",
-      "equip_slot": 3
+      "equip_slot": 3,
+      "identify_pool_id": 1,
+      "equip_mesh": "/Game/ParagonBoris/FX/Meshes/Heroes/SM_Boots_Wings.SM_Boots_Wings",
+      "equip_socket": "foot_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10029,
@@ -292,7 +385,13 @@
       "sell_price": 70,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10029",
       "description": "躯干护具（白）。多层叠布，勉强挡开尖刺。",
-      "equip_slot": 4
+      "equip_slot": 4,
+      "identify_pool_id": 1,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_RecallTorsoContour.SM_RecallTorsoContour",
+      "equip_socket": "spine_03",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10030,
@@ -302,7 +401,13 @@
       "sell_price": 55,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10030",
       "description": "头部护具（白）。防尘为主，几乎没有防护加成。",
-      "equip_slot": 5
+      "equip_slot": 5,
+      "identify_pool_id": 1,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_MasteryCrown_Base.SM_MasteryCrown_Base",
+      "equip_socket": "head",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10031,
@@ -312,7 +417,13 @@
       "sell_price": 80,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10031",
       "description": "核心装置（白）。勉强维持技能盘基础供能。",
-      "equip_slot": 6
+      "equip_slot": 6,
+      "identify_pool_id": 1,
+      "equip_mesh": "/Game/ParagonDekker/FX/Meshes/Hero_Specific/SM_Dekker_Ult_Core.SM_Dekker_Ult_Core",
+      "equip_socket": "spine_02",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10032,
@@ -323,7 +434,13 @@
       "sell_price": 140,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10032",
       "description": "臂部武器（绿）。松林巡逻队制式短矛，穿透尚可。",
-      "equip_slot": 1
+      "equip_slot": 1,
+      "identify_pool_id": 2,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_sword_dungeon_01.SM_PROP_weapon_sword_dungeon_01",
+      "equip_socket": "hand_r",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10033,
@@ -334,7 +451,13 @@
       "sell_price": 120,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10033",
       "description": "手部护具（绿）。防滑掌心，适合近战拉扯。",
-      "equip_slot": 2
+      "equip_slot": 2,
+      "identify_pool_id": 2,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_shield_dungeon_01.SM_PROP_weapon_shield_dungeon_01",
+      "equip_socket": "hand_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10034,
@@ -345,7 +468,13 @@
       "sell_price": 125,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10034",
       "description": "腿部护具（绿）。兼顾奔跑与跪姿射击稳定性。",
-      "equip_slot": 3
+      "equip_slot": 3,
+      "identify_pool_id": 2,
+      "equip_mesh": "/Game/ParagonBoris/FX/Meshes/Heroes/SM_Boots_Wings.SM_Boots_Wings",
+      "equip_socket": "foot_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10035,
@@ -356,7 +485,13 @@
       "sell_price": 150,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10035",
       "description": "躯干护具（绿）。轻型复合材料，不拖累机动。",
-      "equip_slot": 4
+      "equip_slot": 4,
+      "identify_pool_id": 2,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_RecallTorsoContour.SM_RecallTorsoContour",
+      "equip_socket": "spine_03",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10036,
@@ -367,7 +502,13 @@
       "sell_price": 130,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10036",
       "description": "头部护具（绿）。滤光镜片，提高昏暗环境感知。",
-      "equip_slot": 5
+      "equip_slot": 5,
+      "identify_pool_id": 2,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_MasteryCrown_Base.SM_MasteryCrown_Base",
+      "equip_socket": "head",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10037,
@@ -378,7 +519,13 @@
       "sell_price": 160,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10037",
       "description": "核心装置（绿）。稳定输出技能所需基础能量。",
-      "equip_slot": 6
+      "equip_slot": 6,
+      "identify_pool_id": 2,
+      "equip_mesh": "/Game/ParagonDekker/FX/Meshes/Hero_Specific/SM_Dekker_Ult_Core.SM_Dekker_Ult_Core",
+      "equip_socket": "spine_02",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10038,
@@ -389,7 +536,13 @@
       "sell_price": 280,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10038",
       "description": "臂部武器（蓝）。以腐蚀骨刺淬锋，撕裂效果显著。",
-      "equip_slot": 1
+      "equip_slot": 1,
+      "identify_pool_id": 3,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_sword_dungeon_02.SM_PROP_weapon_sword_dungeon_02",
+      "equip_socket": "hand_r",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10039,
@@ -400,7 +553,13 @@
       "sell_price": 260,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10039",
       "description": "手部护具（蓝）。双头犬毛皮缝制，兼具抓力与抗击打。",
-      "equip_slot": 2
+      "equip_slot": 2,
+      "identify_pool_id": 3,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_shield_dungeon_02.SM_PROP_weapon_shield_dungeon_02",
+      "equip_socket": "hand_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10040,
@@ -411,7 +570,13 @@
       "sell_price": 270,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10040",
       "description": "腿部护具（蓝）。熔岩碎片镶边，耐热抗冲击。",
-      "equip_slot": 3
+      "equip_slot": 3,
+      "identify_pool_id": 3,
+      "equip_mesh": "/Game/ParagonBoris/FX/Meshes/Heroes/SM_Boots_Wings.SM_Boots_Wings",
+      "equip_socket": "foot_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10041,
@@ -422,7 +587,13 @@
       "sell_price": 300,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10041",
       "description": "躯干护具（蓝）。蛇鳞甲片叠层，韧性极佳。",
-      "equip_slot": 4
+      "equip_slot": 4,
+      "identify_pool_id": 3,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_RecallTorsoContour.SM_RecallTorsoContour",
+      "equip_socket": "spine_03",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10042,
@@ -433,7 +604,13 @@
       "sell_price": 250,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10042",
       "description": "头部护具（蓝）。隔绝毒雾与低语，保持冷静。",
-      "equip_slot": 5
+      "equip_slot": 5,
+      "identify_pool_id": 3,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_MasteryCrown_Base.SM_MasteryCrown_Base",
+      "equip_socket": "head",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10043,
@@ -444,7 +621,13 @@
       "sell_price": 320,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10043",
       "description": "核心装置（蓝）。与技能盘产生轻微共鸣，提升续航。",
-      "equip_slot": 6
+      "equip_slot": 6,
+      "identify_pool_id": 3,
+      "equip_mesh": "/Game/ParagonDekker/FX/Meshes/Hero_Specific/SM_Dekker_Ult_Core.SM_Dekker_Ult_Core",
+      "equip_socket": "spine_02",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10044,
@@ -455,7 +638,13 @@
       "sell_price": 520,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10044",
       "description": "臂部武器（紫）。淬入剧毒囊精华，伤口持续腐蚀。",
-      "equip_slot": 1
+      "equip_slot": 1,
+      "identify_pool_id": 4,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_sword_dungeon_02.SM_PROP_weapon_sword_dungeon_02",
+      "equip_socket": "hand_r",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10045,
@@ -466,7 +655,13 @@
       "sell_price": 480,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10045",
       "description": "手部护具（紫）。触感灵敏，便于拆弹与精密操作。",
-      "equip_slot": 2
+      "equip_slot": 2,
+      "identify_pool_id": 4,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_shield_dungeon_02.SM_PROP_weapon_shield_dungeon_02",
+      "equip_socket": "hand_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10046,
@@ -477,7 +672,13 @@
       "sell_price": 500,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10046",
       "description": "腿部护具（紫）。北冥潮汐纹路，增强爆发位移。",
-      "equip_slot": 3
+      "equip_slot": 3,
+      "identify_pool_id": 4,
+      "equip_mesh": "/Game/ParagonBoris/FX/Meshes/Heroes/SM_Boots_Wings.SM_Boots_Wings",
+      "equip_socket": "foot_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10047,
@@ -488,7 +689,13 @@
       "sell_price": 560,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10047",
       "description": "躯干护具（紫）。厚重却奇怪地不拖累动作。",
-      "equip_slot": 4
+      "equip_slot": 4,
+      "identify_pool_id": 4,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_RecallTorsoContour.SM_RecallTorsoContour",
+      "equip_socket": "spine_03",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10048,
@@ -499,7 +706,13 @@
       "sell_price": 490,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10048",
       "description": "头部护具（紫）。据说能短暂听见世界故障的低语。",
-      "equip_slot": 5
+      "equip_slot": 5,
+      "identify_pool_id": 4,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_MasteryCrown_Base.SM_MasteryCrown_Base",
+      "equip_socket": "head",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10049,
@@ -510,7 +723,13 @@
       "sell_price": 600,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10049",
       "description": "核心装置（紫）。以锚定石为基，大幅强化技能稳定性。",
-      "equip_slot": 6
+      "equip_slot": 6,
+      "identify_pool_id": 4,
+      "equip_mesh": "/Game/ParagonDekker/FX/Meshes/Hero_Specific/SM_Dekker_Ult_Core.SM_Dekker_Ult_Core",
+      "equip_socket": "spine_02",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10050,
@@ -521,7 +740,13 @@
       "sell_price": 1200,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10050",
       "description": "臂部武器（橙）。北冥巨妖骨脊锻造，传说级搜刮目标。",
-      "equip_slot": 1
+      "equip_slot": 1,
+      "identify_pool_id": 5,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_sword_dungeon_03.SM_PROP_weapon_sword_dungeon_03",
+      "equip_socket": "hand_r",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10051,
@@ -532,7 +757,13 @@
       "sell_price": 1100,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10051",
       "description": "手部护具（橙）。触须纤维编织，近乎无视物理摩擦。",
-      "equip_slot": 2
+      "equip_slot": 2,
+      "identify_pool_id": 5,
+      "equip_mesh": "/Game/Fantastic_Dungeon_Pack/meshes/props/tools/SM_PROP_weapon_shield_dungeon_03.SM_PROP_weapon_shield_dungeon_03",
+      "equip_socket": "hand_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10052,
@@ -543,7 +774,13 @@
       "sell_price": 1150,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10052",
       "description": "腿部护具（橙）。踏水如地，撤离路上的机动王牌。",
-      "equip_slot": 3
+      "equip_slot": 3,
+      "identify_pool_id": 5,
+      "equip_mesh": "/Game/ParagonBoris/FX/Meshes/Heroes/SM_Boots_Wings.SM_Boots_Wings",
+      "equip_socket": "foot_l",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10053,
@@ -554,7 +791,13 @@
       "sell_price": 1300,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10053",
       "description": "躯干护具（橙）。北冥领主的威压具现，防御与气场并存。",
-      "equip_slot": 4
+      "equip_slot": 4,
+      "identify_pool_id": 5,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_RecallTorsoContour.SM_RecallTorsoContour",
+      "equip_socket": "spine_03",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10054,
@@ -565,7 +808,13 @@
       "sell_price": 1180,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10054",
       "description": "头部护具（橙）。戴上后仿佛能看穿迷雾中的敌人。",
-      "equip_slot": 5
+      "equip_slot": 5,
+      "identify_pool_id": 5,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_MasteryCrown_Base.SM_MasteryCrown_Base",
+      "equip_socket": "head",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10055,
@@ -576,7 +825,13 @@
       "sell_price": 1500,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10055",
       "description": "核心装置（橙）。完整世界锚定石驱动，技能盘的终极心脏。",
-      "equip_slot": 6
+      "equip_slot": 6,
+      "identify_pool_id": 5,
+      "equip_mesh": "/Game/ParagonDekker/FX/Meshes/Hero_Specific/SM_Dekker_Ult_Core.SM_Dekker_Ult_Core",
+      "equip_socket": "spine_02",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10056,
@@ -587,7 +842,13 @@
       "sell_price": 3000,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10056",
       "description": "头部护具（红）。极低概率自 Boss 掉落，全服广播级稀有。",
-      "equip_slot": 5
+      "equip_slot": 5,
+      "identify_pool_id": 6,
+      "equip_mesh": "/Game/ParagonMinions/FX/Meshes/Shapes/SM_MasteryCrown_Base.SM_MasteryCrown_Base",
+      "equip_socket": "head",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10057,
@@ -596,7 +857,10 @@
       "quality": 2,
       "max_stack_size": 99,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10057",
-      "description": "任务道具。冰蓝色徽记，刻着「为了联盟」。可交付换取阵营奖励。"
+      "description": "任务道具。冰蓝色徽记，刻着「为了联盟」。可交付换取阵营奖励。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10058,
@@ -605,7 +869,10 @@
       "quality": 2,
       "max_stack_size": 99,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10058",
-      "description": "任务道具。赤红色徽记，刻着「为了部落」。可交付换取阵营奖励。"
+      "description": "任务道具。赤红色徽记，刻着「为了部落」。可交付换取阵营奖励。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10059,
@@ -614,7 +881,10 @@
       "quality": 4,
       "max_stack_size": 10,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10059",
-      "description": "任务道具。击败高危故障体后取得，用于主线修复世界任务。"
+      "description": "任务道具。击败高危故障体后取得，用于主线修复世界任务。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10060,
@@ -623,7 +893,10 @@
       "quality": 1,
       "max_stack_size": 20,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10060",
-      "description": "任务道具。防火墙先知签发的委托，完成后可回收换取物资。"
+      "description": "任务道具。防火墙先知签发的委托，完成后可回收换取物资。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10061,
@@ -633,7 +906,10 @@
       "max_stack_size": 99,
       "sell_price": 100,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10061",
-      "description": "一小袋灵币等价物。撤离后自动折算为账户灵币。"
+      "description": "一小袋灵币等价物。撤离后自动折算为账户灵币。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10062,
@@ -643,7 +919,10 @@
       "max_stack_size": 50,
       "sell_price": 300,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10062",
-      "description": "中型灵币等价物。精英与宝箱常见的硬通货打包。"
+      "description": "中型灵币等价物。精英与宝箱常见的硬通货打包。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10063,
@@ -653,7 +932,10 @@
       "max_stack_size": 20,
       "sell_price": 800,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10063",
-      "description": "大型灵币等价物。Boss 级掉落，撤离价值极高。"
+      "description": "大型灵币等价物。Boss 级掉落，撤离价值极高。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10064,
@@ -663,7 +945,10 @@
       "max_stack_size": 10,
       "sell_price": 1500,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10064",
-      "description": "高价值贵重品。可在赏金商人处兑换限定奖励与外观。"
+      "description": "高价值贵重品。可在赏金商人处兑换限定奖励与外观。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     },
     {
       "id": 10065,
@@ -673,7 +958,10 @@
       "max_stack_size": 5,
       "sell_price": 5000,
       "icon": "/Game/UI/Icon/ItemReal/T_Item_10065",
-      "description": "传说级贵重品。可兑换一次额外保险槽临时额度，红品炫耀物。"
+      "description": "传说级贵重品。可兑换一次额外保险槽临时额度，红品炫耀物。",
+      "equip_scale_x": 1,
+      "equip_scale_y": 1,
+      "equip_scale_z": 1
     }
   ]
 }

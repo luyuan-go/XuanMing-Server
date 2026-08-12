@@ -8,6 +8,7 @@
 configuration-as-code
 job-dsl
 workflow-aggregator
+workflow-scm-step
 pipeline-model-definition
 pipeline-stage-view
 git

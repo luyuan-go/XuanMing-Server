@@ -28,7 +28,7 @@ enum ItemType {
   ITEM_TYPE_CURRENCY    = 5; // 货币
 }
 
-// ItemRow 道具表一行(列序 = 字段号序 = 表头 A..K)。
+// ItemRow 道具表一行(列序 = 字段号序 = 表头 A..W)。
 message ItemRow {
   // ID(主键,即全链路 item_config_id)
   uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
@@ -54,6 +54,21 @@ message ItemRow {
   //   服务端 SetEquipment 用它做「是不是装备 + 部位是否匹配」两项权威校验,
   //   客户端 UMyBagComponent::ServerEquipItem 用同一列做副本内穿戴校验)
   uint32 equip_slot = 11 [(excel_col) = "装备部位", (excel_default) = "0"];
+  // 装备鉴定词条池 ID。装备必须 >0，非装备必须为 0；池定义见 equipment_affix.proto。
+  uint32 identify_pool_id = 12 [(excel_col) = "鉴定池ID", (excel_default) = "0"];
+  // 角色身上装备外观。mesh/socket 必须同时为空或同时非空；空表示当前没有合格的独立美术资产。
+  // 这些字段只供 UE 渲染，服务端仍加载并校验同一源表以阻止两端表头漂移。
+  string equip_mesh = 13 [(excel_col) = "装备模型", (excel_prefix) = "/"];
+  string equip_socket = 14 [(excel_col) = "装备挂点"];
+  float equip_offset_x = 15 [(excel_col) = "装备偏移X", (excel_default) = "0"];
+  float equip_offset_y = 16 [(excel_col) = "装备偏移Y", (excel_default) = "0"];
+  float equip_offset_z = 17 [(excel_col) = "装备偏移Z", (excel_default) = "0"];
+  float equip_yaw = 18 [(excel_col) = "装备旋转Yaw", (excel_default) = "0"];
+  float equip_pitch = 19 [(excel_col) = "装备旋转Pitch", (excel_default) = "0"];
+  float equip_roll = 20 [(excel_col) = "装备旋转Roll", (excel_default) = "0"];
+  float equip_scale_x = 21 [(excel_col) = "装备缩放X", (excel_default) = "1"];
+  float equip_scale_y = 22 [(excel_col) = "装备缩放Y", (excel_default) = "1"];
+  float equip_scale_z = 23 [(excel_col) = "装备缩放Z", (excel_default) = "1"];
 }
 
 // ItemTableData 道具整表容器(dist/item.json 的根对象;excel_file 注解 = 导表登记)。

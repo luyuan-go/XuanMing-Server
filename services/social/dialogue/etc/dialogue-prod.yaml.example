@@ -3,10 +3,11 @@
 # - gRPC :20013 / HTTP :21013(仅 /metrics)
 # - prod: enable_reflection 不写(零值 false)= 关闭 grpc reflection
 #
-# 阶段限制:当前对话树内联在配置、会话为单实例内存。生产若多实例:
-#   1) 对话树改接配置中心 / mysql dialogue_trees(json blob)热更;
-#   2) SessionStore 换 Redis 版(biz / service 不动)。
-# 上述两项落地前,prod 单实例运行,对话树仍可走本文件内联。
+# 对话树来自配置表(源表 对话/d_对话.xlsx),已按 §9.15 走标准热更流水线;
+# 改文案 = 改表 + 重发批次 + ReloadConfigTable,不改本文件、不重启。
+#
+# 阶段限制:会话仍是单实例内存。生产若多实例,需把 SessionStore 换 Redis 版
+# (biz / service 不动);在那之前 prod 单实例运行。
 
 server:
   grpc:
@@ -21,7 +22,9 @@ server:
 node:
   node_id: 1
 
+# 对话树唯一权威(与 UE 同源的发布批次目录)。留空拒启,不存在「没配就没有对话」这条路。
+config_table:
+  dir: "/app/configtable/active"
+
 dialogue:
   session_ttl: "5m"
-  # trees: 生产对话树。示例见 dialogue-dev.yaml;此处按运营文案填充。
-  trees: []

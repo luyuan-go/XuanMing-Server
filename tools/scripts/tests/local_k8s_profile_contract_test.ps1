@@ -257,6 +257,12 @@ Assert-True ($e2eSource.Contains("[ValidateSet('127.0.0.1', '0.0.0.0')]")) `
     'RelayBindHost 只能是两种受支持的安全绑定'
 Assert-True ($e2eSource.Contains('$PSBoundParameters.ContainsKey(''RelayBindHost'')')) `
     'LAN 开放必须区分参数是否由调用方显式传入'
+Assert-True ($e2eSource.Contains("`$offlineMode = (`$env:PANDORA_OFFLINE -eq '1')")) `
+    'e2e_k8s.ps1 必须继承一键启动的 PANDORA_OFFLINE=1，禁止离线收尾再次访问 Docker Hub'
+Assert-True ($e2eSource.Contains('纯离线模式:复用已有 UDP relay 镜像')) `
+    '离线模式已有 relay 镜像时必须复用，不能无条件 docker build'
+Assert-True ($e2eSource.Contains('纯离线模式缺少 UDP relay 镜像')) `
+    '离线模式缺少 relay 镜像时必须明确失败，不能偷偷联网或假绿'
 foreach ($contractText in @('get secret pandora-config', 'ds-allocator.yaml', 'hub-allocator.yaml')) {
     Assert-True ($e2eSource.Contains($contractText)) "live allocator guard 缺少 $contractText"
 }

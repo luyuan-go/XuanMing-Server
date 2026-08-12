@@ -130,6 +130,11 @@ func (s *BagService) SaveCheckpoint(ctx context.Context, req *bagv1.SaveCheckpoi
 	if record == nil {
 		return &bagv1.SaveCheckpointResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	// 先用 protobuf 的无分配尺寸计算挡住超限载荷，避免为已知会被 biz 拒绝的
+	// checkpoint 再分配一份 >256KiB 的序列化缓冲。biz 仍保留同一字节闸作第二道防线。
+	if proto.Size(record) > biz.BagCheckpointMaxBytes {
+		return &bagv1.SaveCheckpointResponse{Code: commonv1.ErrCode_ERR_BAG_QUOTA_EXCEEDED}, nil
+	}
 	blob, merr := proto.Marshal(record)
 	if merr != nil {
 		return &bagv1.SaveCheckpointResponse{Code: commonv1.ErrCode_ERR_INTERNAL}, nil

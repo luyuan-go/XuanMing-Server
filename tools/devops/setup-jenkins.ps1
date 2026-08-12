@@ -56,8 +56,8 @@ $jUrl    = "http://localhost:$jPort"
 # 接线参数（占位符 -> 实际值）
 $repoRoot = (Resolve-Path (Join-Path $here '..\..')).Path
 $subst = @{
-    # 前后端都从 SVN 拉：^/trunk/Server 与 ^/trunk/Client 同仓同级，是团队权威源。
-    # CI 必须构建权威源而不是任何人的个人 git 仓库，否则测的不是团队真实代码。
+    # backend-dev 构建后端 GitHub main；客户端和 artifacts-sync 的流水线定义仍从 SVN 拉。
+    '@@BACKEND_GIT_URL@@'            = Cfg 'BACKEND_GIT_URL' 'https://github.com/luyuan-go/XuanMing-Server.git'
     '@@SVN_SERVER_URL@@'            = Cfg 'SVN_SERVER_URL' 'http://infinity-svn/svn/Pandora-Moba/trunk/Server'
     '@@SVN_CLIENT_URL@@'            = Cfg 'SVN_CLIENT_URL' 'http://infinity-svn/svn/Pandora-Moba/trunk/Client'
     '@@SVN_CREDENTIALS_ID@@'        = Cfg 'SVN_CREDENTIALS_ID' 'svn-cred'
@@ -86,10 +86,14 @@ function JGet($path) { Invoke-RestMethod -Uri "$jUrl$path" -Headers $authHeader 
 Info '检查 Jenkins ...'
 try { $null = JGet '/api/json' } catch { throw "连不上 $jUrl（$($_.Exception.Message)）。先跑 up.ps1。" }
 $plugins = JGet '/pluginManager/api/json?depth=1'
-$decl = $plugins.plugins | Where-Object { $_.shortName -eq 'pipeline-model-definition' -and $_.active }
-if ($decl) { Ok "声明式 Pipeline 插件已激活（共 $($plugins.plugins.Count) 个插件）" }
+$requiredPlugins = @('pipeline-model-definition', 'git', 'workflow-scm-step')
+$inactivePlugins = @($requiredPlugins | Where-Object {
+    $name = $_
+    -not ($plugins.plugins | Where-Object { $_.shortName -eq $name -and $_.active })
+})
+if ($inactivePlugins.Count -eq 0) { Ok "Pipeline / Git SCM 插件已激活（共 $($plugins.plugins.Count) 个插件）" }
 else {
-    Fail '声明式 Pipeline 插件未激活 —— 此时 Jenkinsfile 的 pipeline{} 块会被静默忽略，构建"成功"但零 stage。'
+    Fail "Jenkins 必需插件未激活：$($inactivePlugins -join ', ')"
     Fail '处理：docker compose -f docker-compose.stack.yml restart jenkins；仍不行则 up.ps1 -Pull 重建镜像。'
     throw '前置未满足，中止。'
 }

@@ -2,6 +2,7 @@ package configtable
 
 import (
 	"fmt"
+	"math"
 
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 )
@@ -43,6 +44,56 @@ func validateItemRow(row *configpb.ItemRow) error {
 	// 在这里挡住 = 把「客户端运行时才报错」提前成「坏表拒绝加载」。
 	if hasSlot && row.GetMaxStackSize() != 1 {
 		return fmt.Errorf("装备部位 > 0 的道具堆叠上限必须为 1,实为 %d", row.GetMaxStackSize())
+	}
+	if isEquipType != (row.GetIdentifyPoolId() > 0) {
+		return fmt.Errorf("鉴定池不一致:装备必须配置 identify_pool_id>0,非装备必须为0,实为 %d",
+			row.GetIdentifyPoolId())
+	}
+
+	// 可见模型必须成对配置。资源是否真实存在、角色是否具备对应 Socket/Bone 由 UE
+	// LoadObject/DoesSocketExist 再次 fail-closed；服务端这里只挡住半截路径和坏变换。
+	hasMesh := row.GetEquipMesh() != ""
+	hasSocket := row.GetEquipSocket() != ""
+	if hasMesh != hasSocket {
+		return fmt.Errorf("装备模型(equip_mesh)与挂点(equip_socket)必须同时为空或同时非空")
+	}
+	if !isEquipType && (hasMesh || hasSocket) {
+		return fmt.Errorf("非装备不得配置装备模型/挂点")
+	}
+	finiteBounded := func(name string, value float32, limit float64) error {
+		v := float64(value)
+		if math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > limit {
+			return fmt.Errorf("%s 必须为有限数且绝对值 <= %g,实为 %v", name, limit, value)
+		}
+		return nil
+	}
+	type namedFloat struct {
+		name  string
+		value float32
+	}
+	for _, field := range []namedFloat{
+		{"装备偏移X", row.GetEquipOffsetX()}, {"装备偏移Y", row.GetEquipOffsetY()}, {"装备偏移Z", row.GetEquipOffsetZ()},
+	} {
+		if err := finiteBounded(field.name, field.value, 100_000); err != nil {
+			return err
+		}
+	}
+	for _, field := range []namedFloat{
+		{"装备旋转Yaw", row.GetEquipYaw()}, {"装备旋转Pitch", row.GetEquipPitch()}, {"装备旋转Roll", row.GetEquipRoll()},
+	} {
+		if err := finiteBounded(field.name, field.value, 36_000); err != nil {
+			return err
+		}
+	}
+	for _, field := range []namedFloat{
+		{"装备缩放X", row.GetEquipScaleX()}, {"装备缩放Y", row.GetEquipScaleY()}, {"装备缩放Z", row.GetEquipScaleZ()},
+	} {
+		if err := finiteBounded(field.name, field.value, 100); err != nil {
+			return err
+		}
+		if hasMesh && field.value <= 0 {
+			return fmt.Errorf("%s 必须 > 0,实为 %v", field.name, field.value)
+		}
 	}
 
 	// 配成「可使用但回血 0」的消耗品在副本内点了没有任何效果,属策划配置事故,不静默放行。

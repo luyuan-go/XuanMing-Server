@@ -285,6 +285,9 @@ message CheckInstancesOwnedResponse {
   pandora.common.v1.ErrCode code = 1;
   // 请求中 instance_id + item_config_id 都精确匹配当前归属的实例 ID 子集（去重、升序）。
   repeated uint64 owned_instance_ids = 2;
+  // 与 owned_instance_ids 同一精确匹配子集的权威实例快照（去重、按 instance_id 升序）。
+  // 新 player.GetLoadout 必须拿到该详情才生成战斗快照；旧 inventory 副本仅回字段 2 时必须 fail-closed。
+  repeated ItemInstance owned_instances = 3;
 }
 
 // UseItemRequest 大厅态使用消耗品(数量不足 → ERR_INVENTORY_INSUFFICIENT;

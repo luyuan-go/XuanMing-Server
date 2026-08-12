@@ -55,7 +55,7 @@ player:
   # loadout_customize_enabled: 出战装备预设 / 天赋树自定义开关。
   # 2026-07-25 三项权威校验补齐后放开:
   #   - isEquip / slotMatch 读 config_table 道具表(零 RPC);
-  #   - ownEquipment 经 inventory.CheckItemsOwned 系统 RPC(依赖下面的 inventory_addr);
+  #   - ownEquipment 经 inventory.CheckInstancesOwned 系统 RPC 精确校验实例归属(依赖下面的 inventory_addr);
   #   - SetTalents 读 config_table 专精表校验等级上限 / 前置 / 总消耗。
   # 任一依赖缺失(表未加载 / inventory_addr 未配)一律 fail-closed 拒绝,不会退化成放行。
   loadout_customize_enabled: true
@@ -75,6 +75,16 @@ player:
   # 满批自动连续排空,吞吐不受 interval 钉死)
   push_outbox_interval: "1s"
   push_outbox_batch: 128
+
+  # 推送出箱发布器的单写者选举(§9.21「同一未分区权威的单写者循环」)。
+  #
+  # dev 单进程,mode 留空(=off)即可;**集群档必须 enforce** —— Deployment 是
+  # RollingUpdate,滚动期新旧两 Pod 共存,两个发布器并发会让 PlayerExperienceEvent
+  # (level / exp_in_level 是绝对值快照,不是增量)旧帧后到覆盖新帧,玩家看到等级经验
+  # 条倒退。main.go 有机械门禁:受管 k8s 内 RollingUpdate × 非 enforce 直接 fail-closed。
+  push_writer_lease:
+    mode: "off"
+    # etcd_endpoints: ["127.0.0.1:2379"]
   # retention_mode: 保留期清理总闸(§9.24)。**缺省 = report_only**:janitor 照常跑,
   # 每轮只统计超期行数并 WARN + pandora_db_retention_pending_rows,一行都不删。
   # 真删要这里写 "delete" **且**对应组的 *_cleanup_enabled 也为 true(两道闸)。

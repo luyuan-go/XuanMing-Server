@@ -1,0 +1,34 @@
+// Pandora 配置表：装备鉴定词条池。
+//
+// 源表：Pandora-Client-SVN/Table/道具/d_装备词条.xlsx。
+// 产物：configtable/dist/equipment_affix.json。
+// 每个池由多行候选组成；同池 attr_count 必须一致，鉴定按 weight 加权且不放回抽取。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+message EquipmentAffixRow {
+  // 候选行唯一 ID。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 词条池 ID；由 item.identify_pool_id 引用。
+  uint32 pool_id = 2 [(excel_col) = "词条池ID", (excel_required) = true, (excel_multi_key) = true];
+  // 该池每次鉴定抽取的不同属性数量；同池每行必须相同。
+  uint32 attr_count = 3 [(excel_col) = "抽取数量", (excel_required) = true];
+  // role_attr_map 属性 ID。
+  uint32 attr_id = 4 [(excel_col) = "属性ID", (excel_required) = true, (excel_fk) = "role_attr_map"];
+  // 加权不放回抽样权重，必须 >0。
+  uint32 weight = 5 [(excel_col) = "权重", (excel_required) = true];
+  // 数值闭区间。int64 按 proto JSON 规范在 dist 中编码为字符串。
+  int64 min_value = 6 [(excel_col) = "最小值", (excel_required) = true];
+  int64 max_value = 7 [(excel_col) = "最大值", (excel_required) = true];
+}
+
+message EquipmentAffixTableData {
+  option (excel_file) = "道具/d_装备词条.xlsx";
+  option (excel_data_start_row) = 4;
+
+  repeated EquipmentAffixRow rows = 1;
+}

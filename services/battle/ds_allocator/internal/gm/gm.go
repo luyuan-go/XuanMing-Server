@@ -1,9 +1,10 @@
 // Package gm 是 GM / 运维指令下发服务(pandora.gm.v1.GmService),与 ds_allocator 同进程。
 //
 // 送达模型(队列 + 轮询,见 proto pandora/gm/v1/gm.proto):
-//   - SendCommand:运维 / GM 工具下发指令 → 按 match_id 入 Redis 队列(LPUSH)。
+//   - SendCommand:运维 / GM 工具下发指令 → 按 match_id 入 Redis 队列(LPUSH);
+//     gmctl 显式要求等待时,在有界 deadline 内等 DS 执行 Ack。
 //   - PollCommands:战斗 DS 复用心跳节奏轮询拉取自己这局的指令(RPOP,取即出队,FIFO)。
-//   - AckCommand:DS 回报执行结果(仅审计日志,不影响队列)。
+//   - AckCommand:DS 回报执行结果(审计 + 唤醒对应的等待型 SendCommand,不影响队列)。
 //
 // 为什么宿主在 ds_allocator:它已持有 match_id→战斗 DS 的注册表,DS 也已与之心跳直连,
 // GmService 复用同一 gRPC 端口,内部接口不经 Envoy 暴露给玩家客户端。
@@ -11,6 +12,7 @@
 // Redis key(hashtag 锁同一 slot,Redis Cluster 兼容):
 //
 //	pandora:gm:queue:{<match_id>} → LIST，每个元素是一条 GmCommand proto bytes。
+//	pandora:gm:ack:{<match_id>}:<idempotency_key>:{result,signal} → 有 TTL 的执行结果/阻塞唤醒。
 //
 // 送达语义:RPOP 取即出队,属 **at-most-once(尽力而为)**——DS 拉取后若在执行前宕机
 // 该指令会丢失,不自动重投。GM 调试指令可容忍偶发丢失,失败由运维重发。指令带
@@ -21,12 +23,18 @@ package gm
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
@@ -48,9 +56,49 @@ const (
 	maxQueueLen = 256
 	// queueTTL 队列 key 存活时长;每次入队刷新,对局结束后无人续则自动清理,防僵尸队列。
 	queueTTL = 30 * time.Minute
+	// executionAckWaitTimeout 是远程 GM 命令等待 DS 执行 Ack 的服务端上界。
+	// Battle DS 复用 5s 心跳轮询,取 15s 覆盖三个轮询周期;调用方 deadline 更短时以调用方为准。
+	executionAckWaitTimeout = 15 * time.Second
+	// executionAckTTL 覆盖等待窗口及 Ack 回包丢失后的有界重试,且避免临时结果无限增长。
+	executionAckTTL = 10 * time.Minute
+	// executionAckBlockSlice 是单次 Redis BLPOP 的最大阻塞片段。公共 Redis client
+	// 为保持旧服务语义不启用 ContextTimeoutEnabled,因此用 1s 阻塞片段有界感知
+	// 调用方 cancel;每个片段仍由 Redis 事件唤醒,不做状态忙轮询。
+	executionAckBlockSlice = time.Second
 	// maxBagType 背包类型上限(0=人物背包 1=仓库 2=装备栏 3=临时格),越界拒掉。
 	maxBagType = 3
+	// maxAckMessageBytes 限制 DS 自由文本失败原因的 Redis/日志体积。
+	maxAckMessageBytes = 512
+	// maxAckIdempotencyKeyBytes 覆盖服务端生成的 36 字节 UUID,并防止异常长 Redis key。
+	maxAckIdempotencyKeyBytes = 64
+
+	waitExecutionAckMetadataKey    = "x-pandora-gm-wait-execution-ack"
+	waitExecutionAckMetadataValue  = "1"
+	executionAckMessageMetadataKey = "x-pandora-gm-execution-message-bin"
+	executionAckPendingValue       = "pending"
 )
+
+type executionAck struct {
+	OK      bool   `json:"ok"`
+	Message string `json:"message,omitempty"`
+}
+
+// storeExecutionAckScript 以首次 Ack 为准原子地将 pending 转成终态并唤醒等待者。
+// result/signal 与指令队列共用 match_id hashtag,可在 Redis Cluster 同 slot 执行。
+// 没有 pending 表示旧的非等待调用或过期 Ack,保持只审计的旧行为。
+var storeExecutionAckScript = redis.NewScript(`
+local current = redis.call('GET', KEYS[1])
+if not current then
+  return false
+end
+if current == ARGV[1] then
+  redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+  redis.call('LPUSH', KEYS[2], ARGV[2])
+  redis.call('PEXPIRE', KEYS[2], ARGV[3])
+  return ARGV[2]
+end
+return current
+`)
 
 // BattleLivenessChecker 查某对局是否存在活跃战斗镜像(SendCommand 前置校验目标对局有效)。
 // *data.RedisBattleRepo 天然满足(GetBattle);为 nil 时跳过校验(保留旧行为,便于单测)。
@@ -61,6 +109,18 @@ type BattleLivenessChecker interface {
 // queueKey 返回某对局的 GM 指令队列 key(hashtag 锁 slot,Cluster 兼容)。
 func queueKey(matchID uint64) string {
 	return "pandora:gm:queue:{" + strconv.FormatUint(matchID, 10) + "}"
+}
+
+func executionAckKeyPrefix(matchID uint64, idempotencyKey string) string {
+	return "pandora:gm:ack:{" + strconv.FormatUint(matchID, 10) + "}:" + idempotencyKey
+}
+
+func executionAckResultKey(matchID uint64, idempotencyKey string) string {
+	return executionAckKeyPrefix(matchID, idempotencyKey) + ":result"
+}
+
+func executionAckSignalKey(matchID uint64, idempotencyKey string) string {
+	return executionAckKeyPrefix(matchID, idempotencyKey) + ":signal"
 }
 
 // Service 实现 gmv1.GmServiceServer。
@@ -98,7 +158,9 @@ func (s *Service) EnableRedisAuthority(repo data.BattleAuthRepo) error {
 	return nil
 }
 
-// SendCommand 运维 / GM 工具下发一条 GM 指令(立即完成型:入队即返回 idempotency_key)。
+// SendCommand 运维 / GM 工具下发一条 GM 指令。
+// 默认保持兼容行为:入队即返回;带 x-pandora-gm-wait-execution-ack=1 的内部调用
+// 则在有界 deadline 内等到 DS Ack,只把真实执行成功映射为 OK。
 //
 // ⚠️ 非业务幂等:idempotency_key 每次现生成,重复调用会入队多条(各自新 key)→ 重复发放。
 // 防重复发放靠调用方不重复下发,本服务不代劳(见包注释「送达语义」)。
@@ -153,11 +215,17 @@ func (s *Service) SendCommand(ctx context.Context, req *gmv1.SendCommandRequest)
 	}
 
 	key := queueKey(req.GetMatchId())
+	waitForExecutionAck := shouldWaitForExecutionAck(ctx)
 	// LPUSH 入队 + LTRIM 限长(保留最新 maxQueueLen 条,超出丢最旧)+ EXPIRE 续命,一次 pipeline。
 	pipe := s.rdb.TxPipeline()
 	pipe.LPush(ctx, key, payload)
 	pipe.LTrim(ctx, key, 0, maxQueueLen-1)
 	pipe.Expire(ctx, key, queueTTL)
+	if waitForExecutionAck {
+		// 与入队同一 MULTI/EXEC:不存在 DS 先取走并 Ack、pending 却还没有可见的窗口。
+		pipe.Set(ctx, executionAckResultKey(req.GetMatchId(), cmd.IdempotencyKey),
+			executionAckPendingValue, executionAckTTL)
+	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		s.helper.Errorw("msg", "gm_command_enqueue_failed", "err", err,
 			"match_id", req.GetMatchId(), "idempotency_key", cmd.IdempotencyKey)
@@ -166,7 +234,13 @@ func (s *Service) SendCommand(ctx context.Context, req *gmv1.SendCommandRequest)
 
 	s.helper.Infow("msg", "gm_command_enqueued",
 		"match_id", req.GetMatchId(), "idempotency_key", cmd.IdempotencyKey, "type", "add_item")
-	return &gmv1.SendCommandResponse{Code: commonv1.ErrCode_OK, IdempotencyKey: cmd.IdempotencyKey}, nil
+
+	resp := &gmv1.SendCommandResponse{Code: commonv1.ErrCode_OK, IdempotencyKey: cmd.IdempotencyKey}
+	if !waitForExecutionAck {
+		return resp, nil
+	}
+	resp.Code = s.waitForExecutionAck(ctx, req.GetMatchId(), cmd.IdempotencyKey)
+	return resp, nil
 }
 
 // PollCommands 战斗 DS 拉取自己这局待执行指令(RPOP,取即出队,FIFO)。
@@ -237,9 +311,11 @@ func (s *Service) PollCommands(ctx context.Context, req *gmv1.PollCommandsReques
 	return &gmv1.PollCommandsResponse{Code: commonv1.ErrCode_OK, Commands: commands}, nil
 }
 
-// AckCommand 战斗 DS 回报执行结果(仅审计,不影响队列)。
+// AckCommand 战斗 DS 回报执行结果。旧的非等待 SendCommand 仍只记审计;
+// 等待型调用则以首次 Ack 为不可变终态,唤醒对应的 SendCommand。
 func (s *Service) AckCommand(ctx context.Context, req *gmv1.AckCommandRequest) (*gmv1.AckCommandResponse, error) {
-	if req.GetMatchId() == 0 || req.GetIdempotencyKey() == "" {
+	if req.GetMatchId() == 0 || req.GetIdempotencyKey() == "" ||
+		len(req.GetIdempotencyKey()) > maxAckIdempotencyKeyBytes {
 		return &gmv1.AckCommandResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
 	if s.modelB {
@@ -255,14 +331,168 @@ func (s *Service) AckCommand(ctx context.Context, req *gmv1.AckCommandRequest) (
 	}); err != nil {
 		return &gmv1.AckCommandResponse{Code: commonv1.ErrCode(errcode.As(err))}, nil
 	}
-	if req.GetOk() {
+	ack := executionAck{OK: req.GetOk(), Message: boundedAckMessage(req.GetMessage())}
+	payload, err := json.Marshal(ack)
+	if err != nil {
+		s.helper.Errorw("msg", "gm_command_ack_marshal_failed", "err", err,
+			"match_id", req.GetMatchId(), "idempotency_key", req.GetIdempotencyKey())
+		return &gmv1.AckCommandResponse{Code: commonv1.ErrCode_ERR_INTERNAL}, nil
+	}
+
+	stored, err := storeExecutionAckScript.Run(ctx, s.rdb, []string{
+		executionAckResultKey(req.GetMatchId(), req.GetIdempotencyKey()),
+		executionAckSignalKey(req.GetMatchId(), req.GetIdempotencyKey()),
+	}, executionAckPendingValue, payload, executionAckTTL.Milliseconds()).Text()
+	if err != nil && err != redis.Nil {
+		s.helper.Errorw("msg", "gm_command_ack_store_failed", "err", err,
+			"match_id", req.GetMatchId(), "idempotency_key", req.GetIdempotencyKey())
+		return &gmv1.AckCommandResponse{Code: commonv1.ErrCode_ERR_INTERNAL}, nil
+	}
+	if err == nil && stored != string(payload) {
+		var first executionAck
+		if uerr := json.Unmarshal([]byte(stored), &first); uerr != nil {
+			s.helper.Errorw("msg", "gm_command_ack_state_corrupt", "err", uerr,
+				"match_id", req.GetMatchId(), "idempotency_key", req.GetIdempotencyKey())
+			return &gmv1.AckCommandResponse{Code: commonv1.ErrCode_ERR_INTERNAL}, nil
+		}
+		s.helper.Warnw("msg", "gm_command_ack_conflict",
+			"match_id", req.GetMatchId(), "idempotency_key", req.GetIdempotencyKey(),
+			"first_ok", first.OK, "retry_ok", ack.OK)
+		return &gmv1.AckCommandResponse{Code: commonv1.ErrCode_ERR_INVALID_STATE}, nil
+	}
+
+	if ack.OK {
 		s.helper.Infow("msg", "gm_command_acked",
 			"match_id", req.GetMatchId(), "idempotency_key", req.GetIdempotencyKey(), "ok", true)
 	} else {
 		s.helper.Warnw("msg", "gm_command_acked",
-			"match_id", req.GetMatchId(), "idempotency_key", req.GetIdempotencyKey(), "ok", false, "reason", req.GetMessage())
+			"match_id", req.GetMatchId(), "idempotency_key", req.GetIdempotencyKey(), "ok", false, "reason", ack.Message)
 	}
 	return &gmv1.AckCommandResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+func shouldWaitForExecutionAck(ctx context.Context) bool {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return false
+	}
+	for _, value := range md.Get(waitExecutionAckMetadataKey) {
+		if value == waitExecutionAckMetadataValue {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) waitForExecutionAck(ctx context.Context, matchID uint64, idempotencyKey string) commonv1.ErrCode {
+	waitCtx, cancel := context.WithTimeout(ctx, executionAckWaitTimeout)
+	defer cancel()
+
+	resultKey := executionAckResultKey(matchID, idempotencyKey)
+	signalKey := executionAckSignalKey(matchID, idempotencyKey)
+	payload, err := s.rdb.Get(waitCtx, resultKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			s.helper.Errorw("msg", "gm_command_execution_marker_missing",
+				"match_id", matchID, "idempotency_key", idempotencyKey)
+			return commonv1.ErrCode_ERR_INTERNAL
+		}
+		return s.executionAckWaitErrorCode(waitCtx, matchID, idempotencyKey, err)
+	}
+
+	if payload == executionAckPendingValue {
+		for {
+			if waitErr := waitCtx.Err(); waitErr != nil {
+				return s.executionAckWaitErrorCode(waitCtx, matchID, idempotencyKey, waitErr)
+			}
+			wait := executionAckBlockSlice
+			if deadline, ok := waitCtx.Deadline(); ok {
+				remaining := time.Until(deadline)
+				if remaining <= 0 {
+					return s.executionAckWaitErrorCode(waitCtx, matchID, idempotencyKey, context.DeadlineExceeded)
+				}
+				if remaining < wait {
+					// Redis BLPOP 的最小单位是 1s;向上取整,返回后再以 context
+					// 权威 deadline 判定超时,最多额外占用不超过一个片段。
+					wait = executionAckBlockSlice
+				}
+			}
+			popped, popErr := s.rdb.BLPop(waitCtx, wait, signalKey).Result()
+			if popErr == redis.Nil {
+				// 一个阻塞片段内无事件:只重查 context deadline/cancel,
+				// 不 GET/轮询 Ack 状态。
+				continue
+			}
+			if popErr != nil {
+				return s.executionAckWaitErrorCode(waitCtx, matchID, idempotencyKey, popErr)
+			}
+			if len(popped) != 2 {
+				s.helper.Errorw("msg", "gm_command_execution_signal_invalid",
+					"match_id", matchID, "idempotency_key", idempotencyKey, "parts", len(popped))
+				return commonv1.ErrCode_ERR_INTERNAL
+			}
+			payload = popped[1]
+			break
+		}
+	}
+
+	var ack executionAck
+	if err := json.Unmarshal([]byte(payload), &ack); err != nil {
+		s.helper.Errorw("msg", "gm_command_execution_result_corrupt", "err", err,
+			"match_id", matchID, "idempotency_key", idempotencyKey)
+		return commonv1.ErrCode_ERR_INTERNAL
+	}
+	if !ack.OK {
+		// SendCommandResponse 的现有 proto 没有 message 字段;用内部 gRPC binary trailer
+		// 透传已限长失败原因,旧客户端忽略 trailer 仍保持兼容。
+		if ack.Message != "" {
+			_ = grpc.SetTrailer(ctx, metadata.Pairs(executionAckMessageMetadataKey, ack.Message))
+		}
+		s.helper.Warnw("msg", "gm_command_execution_failed",
+			"match_id", matchID, "idempotency_key", idempotencyKey, "reason", ack.Message)
+		return commonv1.ErrCode_ERR_INVALID_STATE
+	}
+	s.helper.Infow("msg", "gm_command_execution_confirmed",
+		"match_id", matchID, "idempotency_key", idempotencyKey)
+	return commonv1.ErrCode_OK
+}
+
+func (s *Service) executionAckWaitErrorCode(
+	ctx context.Context,
+	matchID uint64,
+	idempotencyKey string,
+	err error,
+) commonv1.ErrCode {
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
+		s.helper.Warnw("msg", "gm_command_execution_wait_canceled",
+			"match_id", matchID, "idempotency_key", idempotencyKey)
+		return commonv1.ErrCode_ERR_CANCELED
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) || err == redis.Nil {
+		s.helper.Warnw("msg", "gm_command_execution_wait_timeout",
+			"match_id", matchID, "idempotency_key", idempotencyKey)
+		return commonv1.ErrCode_ERR_TIMEOUT
+	}
+	s.helper.Errorw("msg", "gm_command_execution_wait_failed", "err", err,
+		"match_id", matchID, "idempotency_key", idempotencyKey)
+	return commonv1.ErrCode_ERR_INTERNAL
+}
+
+func boundedAckMessage(message string) string {
+	message = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, message)
+	if len(message) <= maxAckMessageBytes {
+		return message
+	}
+	b := []byte(message)[:maxAckMessageBytes]
+	for len(b) > 0 && !utf8.Valid(b) {
+		b = b[:len(b)-1]
+	}
+	return string(b)
 }
 
 func (s *Service) modelBCredential(

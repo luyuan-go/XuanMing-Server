@@ -45,9 +45,34 @@ type AttrPoint struct {
 }
 
 // EquipmentSlot 是出战装备预设的一个槽位。
+// InstanceID=0 仅表示 000006 上线前的存量只读行；所有新写必须携带精确实例 ID。
 type EquipmentSlot struct {
 	Slot         uint32
 	ItemConfigID uint32
+	InstanceID   uint64
+}
+
+// EquipmentAttributeSnapshot 是 inventory 域按 exact pair 返回的一条权威鉴定词条。
+// player 不保存/不重新 roll，只在 GetLoadout 组装战斗快照时保真转发。
+type EquipmentAttributeSnapshot struct {
+	AttrID uint32
+	Value  int64
+}
+
+// OwnedEquipmentInstance 是 inventory.CheckInstancesOwned 的权威实例快照。
+type OwnedEquipmentInstance struct {
+	InstanceID   uint64
+	ItemConfigID uint32
+	Identified   bool
+	Attributes   []EquipmentAttributeSnapshot
+}
+
+// InstanceOwnershipResult 同时保留滚动升级兼容的 ID 子集与新版详情。
+// 旧 inventory 副本只会填 OwnedInstanceIDs：SetEquipment 仍可 exact pair 核权，
+// GetLoadout 则必须等 OwnedInstances 齐全才生成战斗快照。
+type InstanceOwnershipResult struct {
+	OwnedInstanceIDs []uint64
+	OwnedInstances   []OwnedEquipmentInstance
 }
 
 // TalentLevel 是天赋树某节点的已点等级与该节点实际消耗的天赋点。
@@ -117,7 +142,7 @@ type PlayerRepo interface {
 	GetAttributes(ctx context.Context, playerID uint64) (attrs []AttrPoint, unspent int, err error)
 
 	// ── 出战装备预设 / 天赋树 ────────────────────────────────────
-	// SetEquipment 全量替换出战装备预设(事务:删旧 + 插新)。
+	// SetEquipment 全量替换出战装备预设(事务:删旧 + 插新;新写 instance_id 必须非 0)。
 	SetEquipment(ctx context.Context, playerID uint64, slots []EquipmentSlot) error
 	// GetEquipment 读出战装备预设(按 slot 排序)。
 	GetEquipment(ctx context.Context, playerID uint64) ([]EquipmentSlot, error)

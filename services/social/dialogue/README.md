@@ -12,9 +12,11 @@
 ## 职责与边界
 
 - **职责**:运行 NPC 对话树。三个 unary RPC:开启对话 / 选择选项推进 / 结束对话。
-- **对话树权威**:对话树是**服务端权威配置**,当前最小版本内联在 `dialogue-dev.yaml`
-  (`ConfigTreeProvider` 内存只读,进程启动构建后不再变更)。客户端只拿渲染用的
+- **对话树权威**:对话树是**策划配置表**,唯一权威是与 UE 同源的 `configtable/dist/dialogue.json`
+  (源表 `对话/d_对话.xlsx`),经 `config_table.dir` 按 §9.15 标准流水线加载 + 热更;
+  `dialogueTreesFromStore` 每次现取当前批次组树,不在本服再缓存一份(§9.22)。客户端只拿渲染用的
   `DialogueState`,选择只回传 `option_id`,不能伪造节点 / 文本 / 可见性。
+  2026-08-11 前对话树内联在 `dialogue-dev.yaml`,已整块删除(YAML 双数据源必然与 UE 漂移)。
 - **会话权属**:`dialogue_id` 由服务端 snowflake 生成;会话状态(当前节点)由服务端持有,
   **当前为单实例进程内存**(`MemorySessionStore`),**不跨实例、进程重启即丢**。
   会话归属用 JWT `player_id` 校验,非本人会话一律按「不存在」处理(R5,不泄露他人会话)。
@@ -150,7 +152,7 @@ StartDialogue ──► [会话存活: 当前 NodeID] ──ChooseOption(有后�
 | `server.grpc.addr` | `:20013` | gRPC 监听(`Defaults()` 填)|
 | `server.http.addr` | `:21013` | HTTP 监听,仅 `/metrics`(`Defaults()` 填)|
 | `dialogue.session_ttl` | `5m` | 单次对话会话空闲存活时间;超时被惰性 / 主动清理 |
-| `dialogue.trees[]` | 无 | 内联对话树:`npc_id` / `speaker` / `start_node` / `nodes[]`;`node` 含 `node_id` / `text` / `options[]`;`option` 含 `option_id` / `text` / `visible`(省略=可见)/ `next_node`(空或指向不存在节点=结束对话)。启动期 `buildTrees`(`main.go:139`)做去重 + 起始节点存在性校验,不合法直接 fatal |
+| `config_table.dir` | 必填 | 与 UE 同源的 `configtable/dist`。对话树从这里读;缺目录 / 缺表 / checksum 异常 / `ValidateDialogueTable` 不过(起始节点缺失重复、后继悬空、跨 NPC 跳转)一律拒启 |
 | `node.node_id` | `1` | snowflake 发号器 node 段(`dialogue_id` 生成);多副本须各自唯一 |
 | `snowflake.node_id_source` | `static` | `""`/`static` 静态(默认,单副本 / dev);`etcd` 走 etcd 自动抢占(多副本,失租自动退出)|
 | `cell_route.mode` | 空 | 空=单 Cell 不路由;`static`/`etcd`=多 Cell,经 `etcdtable.WireRouter` 注入 `SetCellRouter` |

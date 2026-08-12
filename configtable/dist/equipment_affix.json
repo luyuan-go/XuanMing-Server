@@ -1,0 +1,166 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "pool_id": 1,
+      "attr_count": 1,
+      "attr_id": 3,
+      "weight": 50,
+      "min_value": "1",
+      "max_value": "3"
+    },
+    {
+      "id": 2,
+      "pool_id": 1,
+      "attr_count": 1,
+      "attr_id": 9,
+      "weight": 40,
+      "min_value": "1",
+      "max_value": "3"
+    },
+    {
+      "id": 3,
+      "pool_id": 1,
+      "attr_count": 1,
+      "attr_id": 7,
+      "weight": 10,
+      "min_value": "10",
+      "max_value": "25"
+    },
+    {
+      "id": 4,
+      "pool_id": 2,
+      "attr_count": 1,
+      "attr_id": 3,
+      "weight": 45,
+      "min_value": "2",
+      "max_value": "5"
+    },
+    {
+      "id": 5,
+      "pool_id": 2,
+      "attr_count": 1,
+      "attr_id": 9,
+      "weight": 40,
+      "min_value": "2",
+      "max_value": "5"
+    },
+    {
+      "id": 6,
+      "pool_id": 2,
+      "attr_count": 1,
+      "attr_id": 7,
+      "weight": 15,
+      "min_value": "20",
+      "max_value": "40"
+    },
+    {
+      "id": 7,
+      "pool_id": 3,
+      "attr_count": 2,
+      "attr_id": 3,
+      "weight": 40,
+      "min_value": "4",
+      "max_value": "8"
+    },
+    {
+      "id": 8,
+      "pool_id": 3,
+      "attr_count": 2,
+      "attr_id": 9,
+      "weight": 40,
+      "min_value": "4",
+      "max_value": "8"
+    },
+    {
+      "id": 9,
+      "pool_id": 3,
+      "attr_count": 2,
+      "attr_id": 7,
+      "weight": 20,
+      "min_value": "30",
+      "max_value": "60"
+    },
+    {
+      "id": 10,
+      "pool_id": 4,
+      "attr_count": 2,
+      "attr_id": 3,
+      "weight": 38,
+      "min_value": "7",
+      "max_value": "12"
+    },
+    {
+      "id": 11,
+      "pool_id": 4,
+      "attr_count": 2,
+      "attr_id": 9,
+      "weight": 37,
+      "min_value": "7",
+      "max_value": "12"
+    },
+    {
+      "id": 12,
+      "pool_id": 4,
+      "attr_count": 2,
+      "attr_id": 7,
+      "weight": 25,
+      "min_value": "50",
+      "max_value": "100"
+    },
+    {
+      "id": 13,
+      "pool_id": 5,
+      "attr_count": 2,
+      "attr_id": 3,
+      "weight": 35,
+      "min_value": "12",
+      "max_value": "20"
+    },
+    {
+      "id": 14,
+      "pool_id": 5,
+      "attr_count": 2,
+      "attr_id": 9,
+      "weight": 35,
+      "min_value": "12",
+      "max_value": "20"
+    },
+    {
+      "id": 15,
+      "pool_id": 5,
+      "attr_count": 2,
+      "attr_id": 7,
+      "weight": 30,
+      "min_value": "80",
+      "max_value": "150"
+    },
+    {
+      "id": 16,
+      "pool_id": 6,
+      "attr_count": 3,
+      "attr_id": 3,
+      "weight": 34,
+      "min_value": "20",
+      "max_value": "35"
+    },
+    {
+      "id": 17,
+      "pool_id": 6,
+      "attr_count": 3,
+      "attr_id": 9,
+      "weight": 33,
+      "min_value": "20",
+      "max_value": "35"
+    },
+    {
+      "id": 18,
+      "pool_id": 6,
+      "attr_count": 3,
+      "attr_id": 7,
+      "weight": 33,
+      "min_value": "120",
+      "max_value": "250"
+    }
+  ]
+}

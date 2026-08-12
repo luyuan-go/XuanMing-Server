@@ -32,8 +32,14 @@ type Tables struct {
 	// Condition 配置表 condition(任务/r_条件.xlsx)
 	Condition *ConditionTable
 
+	// Dialogue 配置表 dialogue(对话/d_对话.xlsx)
+	Dialogue *DialogueTable
+
 	// Drop 配置表 drop(道具/d_掉落.xlsx)
 	Drop *DropTable
+
+	// EquipmentAffix 配置表 equipment_affix(道具/d_装备词条.xlsx)
+	EquipmentAffix *EquipmentAffixTable
 
 	// GameModule 配置表 game_module(程序/y_游戏模块.xlsx)
 	GameModule *GameModuleTable
@@ -112,7 +118,9 @@ var specByName = map[string]tableSpec{
 	"chest_point":         {protoName: "pandora.config.v1.ChestPointTableData", build: buildChestPointTable},
 	"chest_quality_stage": {protoName: "pandora.config.v1.ChestQualityStageTableData", build: buildChestQualityStageTable},
 	"condition":           {protoName: "pandora.config.v1.ConditionTableData", build: buildConditionTable},
+	"dialogue":            {protoName: "pandora.config.v1.DialogueTableData", build: buildDialogueTable},
 	"drop":                {protoName: "pandora.config.v1.DropTableData", build: buildDropTable},
+	"equipment_affix":     {protoName: "pandora.config.v1.EquipmentAffixTableData", build: buildEquipmentAffixTable},
 	"game_module":         {protoName: "pandora.config.v1.GameModuleTableData", build: buildGameModuleTable},
 	"gm_command":          {protoName: "pandora.config.v1.GmCommandTableData", build: buildGmCommandTable},
 	"item":                {protoName: "pandora.config.v1.ItemTableData", build: buildItemTable},
@@ -184,6 +192,15 @@ func validateCrossTables(dst *Tables) error {
 		}
 		if !dst.Item.Exists(v) {
 			return fmt.Errorf("表 drop 主键 %d 的 物品ID(%d)在表 item 中不存在", row.GetId(), v)
+		}
+	}
+	for _, row := range dst.EquipmentAffix.All() {
+		v := row.GetAttrId()
+		if v == 0 {
+			return fmt.Errorf("表 equipment_affix 主键 %d 的 属性ID 为 0(必填外键)", row.GetId())
+		}
+		if !dst.RoleAttrMap.Exists(v) {
+			return fmt.Errorf("表 equipment_affix 主键 %d 的 属性ID(%d)在表 role_attr_map 中不存在", row.GetId(), v)
 		}
 	}
 	for _, row := range dst.Mission.All() {
@@ -320,6 +337,20 @@ func (tb *Tables) DropItemConfigIdRowByID(id uint32) (*configpb.ItemRow, bool) {
 		return nil, false
 	}
 	return tb.DropItemConfigIdRow(row)
+}
+
+// EquipmentAffixAttrIdRow 解析 equipment_affix.属性ID → role_attr_map 行(外键正查)。
+func (tb *Tables) EquipmentAffixAttrIdRow(row *configpb.EquipmentAffixRow) (*configpb.RoleAttrMapRow, bool) {
+	return tb.RoleAttrMap.ByID(row.GetAttrId())
+}
+
+// EquipmentAffixAttrIdRowByID 按 equipment_affix 主键取行再解析 属性ID → role_attr_map 行。
+func (tb *Tables) EquipmentAffixAttrIdRowByID(id uint32) (*configpb.RoleAttrMapRow, bool) {
+	row, ok := tb.EquipmentAffix.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.EquipmentAffixAttrIdRow(row)
 }
 
 // MissionRewardIdRow 解析 mission.奖励ID → reward 行(外键正查)。
@@ -500,6 +531,22 @@ func buildConditionTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	return nil
 }
 
+func buildDialogueTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.DialogueTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 dialogue 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 dialogue 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newDialogueTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.Dialogue = t
+	return nil
+}
+
 func buildDropTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	var data configpb.DropTableData
 	if err := unmarshalTable(raw, &data); err != nil {
@@ -513,6 +560,22 @@ func buildDropTable(raw []byte, mt ManifestTable, dst *Tables) error {
 		return err
 	}
 	dst.Drop = t
+	return nil
+}
+
+func buildEquipmentAffixTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.EquipmentAffixTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 equipment_affix 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 equipment_affix 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newEquipmentAffixTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.EquipmentAffix = t
 	return nil
 }
 

@@ -46,6 +46,9 @@ func (c *fakeCatalog) RewardByID(id uint32) (*configpb.RewardRow, bool) {
 }
 func (c *fakeCatalog) IsEquipment(itemConfigID uint32) bool { return c.equipment[itemConfigID] }
 
+// Snapshot 让假件同时充当 CatalogSource:单测里配置批次恒定,快照即自身。
+func (c *fakeCatalog) Snapshot() Catalog { return c }
+
 // fakeRepo 在内存里复刻事务语义:fn 出错即整体丢弃突变(不落任何状态)。
 type fakeRepo struct {
 	state       *PlayerState
@@ -56,6 +59,17 @@ type fakeRepo struct {
 	failMutate  error
 	marked      map[uint64]bool // id → granted
 	ungrantedIn []*RewardLogRow
+
+	pushOutbox     []*PushOutboxRow
+	deleteVanishes bool // true = DeletePushOutbox 命中 0 行(另一副本已抢先删)
+}
+
+// fakePusher 记录投递顺序(单写者用例判"热备副本一行不发")。
+type fakePusher struct{ sent [][]byte }
+
+func (p *fakePusher) PushMissionUpdate(_ context.Context, _ uint64, payload []byte) error {
+	p.sent = append(p.sent, payload)
+	return nil
 }
 
 func newFakeRepo(playerID uint64) *fakeRepo {
@@ -129,10 +143,28 @@ func (r *fakeRepo) MarkReward(_ context.Context, id uint64, granted bool, _ int6
 	r.marked[id] = granted
 	return nil
 }
-func (r *fakeRepo) FetchPushOutbox(context.Context, int) ([]*PushOutboxRow, error) { return nil, nil }
-func (r *fakeRepo) DeletePushOutbox(context.Context, uint64) error                 { return nil }
-func (r *fakeRepo) SweepRewardLog(context.Context, string, int, int) error         { return nil }
-func (r *fakeRepo) SweepReceipts(context.Context, string, int, int) error          { return nil }
+func (r *fakeRepo) FetchPushOutbox(_ context.Context, limit int) ([]*PushOutboxRow, error) {
+	if len(r.pushOutbox) <= limit {
+		return r.pushOutbox, nil
+	}
+	return r.pushOutbox[:limit], nil
+}
+
+func (r *fakeRepo) DeletePushOutbox(_ context.Context, id uint64) error {
+	if r.deleteVanishes {
+		return errors.New("row already deleted by another replica")
+	}
+	out := r.pushOutbox[:0]
+	for _, row := range r.pushOutbox {
+		if row.ID != id {
+			out = append(out, row)
+		}
+	}
+	r.pushOutbox = out
+	return nil
+}
+func (r *fakeRepo) SweepRewardLog(context.Context, string, int, int) error { return nil }
+func (r *fakeRepo) SweepReceipts(context.Context, string, int, int) error  { return nil }
 
 func cloneState(st *PlayerState) *PlayerState {
 	out := &PlayerState{
@@ -221,7 +253,7 @@ func mission(id, mtype, subType uint32, condIDs, targets, next string, rewardID,
 func newTestUsecase(t *testing.T, cat *fakeCatalog, repo *fakeRepo,
 	items ItemGranter, exp ExpGranter, mail OverflowMailSender) *MissionUsecase {
 	t.Helper()
-	cfg := conf.MissionConf{MaxActiveMissions: 3, MaxFactsPerReport: 64}
+	cfg := conf.MissionConf{MaxActiveMissions: 3, MaxFactsPerReport: 64, PushPublishBatch: 128}
 	uc := NewMissionUsecase(repo, cat, items, exp, mail, nil, cfg, klog.NewStdLogger(discard{}))
 	uc.SetNowFunc(func() int64 { return 1_700_000_000_000 })
 	return uc
@@ -617,7 +649,7 @@ func TestDeliverRoutesEquipmentAndOverflowMail(t *testing.T) {
 	}
 	row.RewardPB = pb
 
-	if derr := uc.deliver(context.Background(), row); derr != nil {
+	if derr := uc.deliver(context.Background(), cat, row); derr != nil {
 		t.Fatalf("deliver: %v", derr)
 	}
 	if len(items.instances) != 2 {
@@ -657,7 +689,7 @@ func TestDeliverRejectsOversizedEquipmentCount(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	row := &RewardLogRow{ID: 11, PlayerID: testPlayer, MissionConfigID: 1, Key: "k", RewardPB: pb}
-	if derr := uc.deliver(context.Background(), row); derr == nil {
+	if derr := uc.deliver(context.Background(), cat, row); derr == nil {
 		t.Fatal("超上限的装备数量必须拒发(否则按数量展开切片 → OOM)")
 	}
 	if len(items.instances) != 0 {
@@ -677,7 +709,7 @@ func TestDeliverRejectsOversizedEquipmentCount(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	row = &RewardLogRow{ID: 12, PlayerID: testPlayer, MissionConfigID: 1, Key: "k2", RewardPB: pb}
-	if derr := uc.deliver(context.Background(), row); derr == nil {
+	if derr := uc.deliver(context.Background(), cat, row); derr == nil {
 		t.Fatal("合计超上限的装备数量必须拒发")
 	}
 
@@ -691,7 +723,7 @@ func TestDeliverRejectsOversizedEquipmentCount(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	row = &RewardLogRow{ID: 13, PlayerID: testPlayer, MissionConfigID: 1, Key: "k3", RewardPB: pb}
-	if derr := uc.deliver(context.Background(), row); derr != nil {
+	if derr := uc.deliver(context.Background(), cat, row); derr != nil {
 		t.Fatalf("恰好等于上限应放行: %v", derr)
 	}
 	if len(items.instances) != int(configtable.MaxRewardEquipmentInstances) {
@@ -703,7 +735,8 @@ func TestDeliverRejectsOversizedEquipmentCount(t *testing.T) {
 func TestGrantOneMarksFailedOnPartialFailure(t *testing.T) {
 	repo := newFakeRepo(testPlayer)
 	items := &fakeItemGranter{failStacks: true}
-	uc := newTestUsecase(t, baseCatalog(), repo, items, &fakeExpGranter{}, nil)
+	cat := baseCatalog()
+	uc := newTestUsecase(t, cat, repo, items, &fakeExpGranter{}, nil)
 
 	record := &missionv1.MissionRewardStorageRecord{
 		Items: []*missionv1.MissionRewardItem{{ItemConfigId: 9001, Count: 1}},
@@ -714,7 +747,7 @@ func TestGrantOneMarksFailedOnPartialFailure(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	row := &RewardLogRow{ID: 7, PlayerID: testPlayer, MissionConfigID: 1, Key: "k", RewardPB: pb}
-	if gerr := uc.grantOne(context.Background(), row); gerr == nil {
+	if gerr := uc.grantOne(context.Background(), cat, row); gerr == nil {
 		t.Fatal("道具发放失败应返回错误")
 	}
 	if granted, ok := repo.marked[7]; !ok || granted {
@@ -754,7 +787,7 @@ func TestDeliverUsesFrozenRouteAcrossCatalogFlip(t *testing.T) {
 	items := &fakeItemGranter{}
 	uc := newTestUsecase(t, cat, repo, items, &fakeExpGranter{}, nil)
 
-	entry, err := uc.buildRewardLog(testPlayer, cat.missions[1])
+	entry, err := uc.buildRewardLog(cat, testPlayer, cat.missions[1])
 	if err != nil {
 		t.Fatalf("buildRewardLog: %v", err)
 	}
@@ -769,7 +802,7 @@ func TestDeliverUsesFrozenRouteAcrossCatalogFlip(t *testing.T) {
 		ID: 1, PlayerID: testPlayer, MissionConfigID: entry.MissionConfigID,
 		Key: entry.Key, RewardPB: entry.RewardPB,
 	}
-	if derr := uc.deliver(context.Background(), row); derr != nil {
+	if derr := uc.deliver(context.Background(), cat, row); derr != nil {
 		t.Fatalf("deliver: %v", derr)
 	}
 
@@ -789,7 +822,7 @@ func TestDeliverFrozenRouteHoldsForEquipmentToStackFlip(t *testing.T) {
 	items := &fakeItemGranter{}
 	uc := newTestUsecase(t, cat, repo, items, &fakeExpGranter{}, nil)
 
-	entry, err := uc.buildRewardLog(testPlayer, cat.missions[1])
+	entry, err := uc.buildRewardLog(cat, testPlayer, cat.missions[1])
 	if err != nil || entry == nil {
 		t.Fatalf("buildRewardLog: %v entry=%v", err, entry)
 	}
@@ -797,7 +830,7 @@ func TestDeliverFrozenRouteHoldsForEquipmentToStackFlip(t *testing.T) {
 
 	row := &RewardLogRow{ID: 2, PlayerID: testPlayer, MissionConfigID: entry.MissionConfigID,
 		Key: entry.Key, RewardPB: entry.RewardPB}
-	if derr := uc.deliver(context.Background(), row); derr != nil {
+	if derr := uc.deliver(context.Background(), cat, row); derr != nil {
 		t.Fatalf("deliver: %v", derr)
 	}
 	if len(items.stacks) != 0 {
@@ -867,5 +900,148 @@ func TestHotAddedConditionIsNotSkipped(t *testing.T) {
 	}
 	if _, done := repo.state.Done[20]; !done {
 		t.Fatal("两个条件都做完后应完成")
+	}
+}
+
+// ── 比较符 GT:钳位必须落在「最小达标值」(本次修复的回归判据)────────────────
+
+// 旧实现把达标进度无脑钳回 target,于是 GT 条件被钳成不达标:
+// target=5 的 GT 条件,进度推到 6 达标 → 钳回 5 → 再判 `5 > 5` 为假 → 任务不完成,
+// 而进度已写死在 5;下一条事实推到 6 又被钳回 5 —— **永久活锁,任务 100% 完不成**。
+// 钳位的不变量是「钳位不得改变达标与否」,GT 的最小达标值是 target+1。
+//
+// 把 ConditionClampIfFulfilled 改回 `return target`,本用例必红。
+func TestGreaterThanConditionCompletesInsteadOfLivelocking(t *testing.T) {
+	cat := &fakeCatalog{
+		missions: map[uint32]*configpb.MissionRow{
+			1: mission(1, 10, 0, "101", "", "", 0, 0),
+		},
+		conditions: map[uint32]*configpb.ConditionRow{
+			101: {
+				Id: 101, Name: "杀怪超过5只", ConditionCategory: 1,
+				TargetCount: 5, ComparisonOp: configtable.ConditionCompareGT, Slot1: "9",
+			},
+		},
+	}
+	repo := newFakeRepo(testPlayer)
+	uc := newTestUsecase(t, cat, repo, &fakeItemGranter{}, &fakeExpGranter{}, nil)
+	ctx := context.Background()
+
+	if _, err := uc.Accept(ctx, testPlayer, 1); err != nil {
+		t.Fatalf("接取: %v", err)
+	}
+	// 逐只上报,直到超过目标。6 只就该完成(6 > 5)。
+	for i := 0; i < 8; i++ {
+		facts := []Fact{{Category: 1, SlotValues: []uint32{9}, Amount: 1}}
+		if _, err := uc.ReportFacts(ctx, testPlayer, facts, fmt.Sprintf("k%d", i)); err != nil {
+			t.Fatalf("第 %d 次上报: %v", i+1, err)
+		}
+		if _, done := repo.state.Done[1]; done {
+			if am := repo.state.Active[1]; am != nil {
+				t.Fatalf("完成后不应仍在活跃列表")
+			}
+			return // 完成即通过
+		}
+	}
+	am := repo.state.Active[1]
+	t.Fatalf("杀了 8 只(目标 >5)任务仍未完成,进度钉死在 %v —— 钳位把达标打回了未达标", am.Progress)
+}
+
+// GE 对照组:钳位行为逐字节不变(最小达标值 = target)。
+func TestGreaterEqualConditionClampsToTargetUnchanged(t *testing.T) {
+	cat := &fakeCatalog{
+		missions: map[uint32]*configpb.MissionRow{
+			1: mission(1, 10, 0, "101", "", "", 0, 0),
+		},
+		conditions: map[uint32]*configpb.ConditionRow{
+			101: {Id: 101, Name: "杀5只", ConditionCategory: 1, TargetCount: 5, Slot1: "9"},
+		},
+	}
+	repo := newFakeRepo(testPlayer)
+	uc := newTestUsecase(t, cat, repo, &fakeItemGranter{}, &fakeExpGranter{}, nil)
+	ctx := context.Background()
+
+	if _, err := uc.Accept(ctx, testPlayer, 1); err != nil {
+		t.Fatalf("接取: %v", err)
+	}
+	// 单次 amount=8 超冲:必须钳到 5 且判定完成。
+	if _, err := uc.ReportFacts(ctx, testPlayer,
+		[]Fact{{Category: 1, SlotValues: []uint32{9}, Amount: 8}}, "k"); err != nil {
+		t.Fatalf("上报: %v", err)
+	}
+	if _, done := repo.state.Done[1]; !done {
+		t.Fatal("GE 目标 5、上报 8,应完成")
+	}
+}
+
+// ── 推送发布器单写者(本次修复的回归判据)────────────────────────────────────
+
+// fakePushLease 可切换的领导权来源。
+type fakePushLease struct{ held bool }
+
+func (l *fakePushLease) Current() (uint64, bool) { return 1, l.held }
+
+// 未当选的副本一行都不许发:出箱是全局未分区表,两个发布器并发投递会交错,
+// 而 progressed 是逐任务全量快照(后到即覆盖),客户端进度条会回退。
+func TestPushPublisherOnlyRunsOnLeader(t *testing.T) {
+	repo := newFakeRepo(testPlayer)
+	repo.pushOutbox = []*PushOutboxRow{
+		{ID: 1, PlayerID: testPlayer, Payload: []byte("a")},
+		{ID: 2, PlayerID: testPlayer, Payload: []byte("b")},
+	}
+	pusher := &fakePusher{}
+	uc := newTestUsecase(t, baseCatalog(), repo, &fakeItemGranter{}, &fakeExpGranter{}, nil)
+	uc.pusher = pusher
+
+	lease := &fakePushLease{held: false}
+	uc.SetPushWriterLease(lease)
+
+	if uc.pushIsLeader() {
+		t.Fatal("未当选副本不得被判为 leader")
+	}
+	// 热备副本这一拍什么都不做。
+	if len(pusher.sent) != 0 {
+		t.Fatalf("热备副本不得投递,got %d", len(pusher.sent))
+	}
+
+	// 当选后才真正排空。
+	lease.held = true
+	if !uc.pushIsLeader() {
+		t.Fatal("当选副本必须被判为 leader")
+	}
+	uc.publishPushBatch(context.Background())
+	if len(pusher.sent) != 2 {
+		t.Fatalf("当选副本应排空 2 行,got %d", len(pusher.sent))
+	}
+	if len(repo.pushOutbox) != 0 {
+		t.Fatalf("投递成功的行应被删除,剩 %d", len(repo.pushOutbox))
+	}
+}
+
+// 未注入租约时恒为 leader(单进程 dev / 单副本 Recreate 的历史形态,行为不变)。
+func TestPushPublisherWithoutLeaseAlwaysPublishes(t *testing.T) {
+	repo := newFakeRepo(testPlayer)
+	uc := newTestUsecase(t, baseCatalog(), repo, &fakeItemGranter{}, &fakeExpGranter{}, nil)
+	if !uc.pushIsLeader() {
+		t.Fatal("未注入租约时必须恒为 leader,否则 dev 单进程一行都发不出去")
+	}
+}
+
+// 删行命中 0 行 = 另一副本抢先删了 → 必须报错中断本轮,而不是当成投递成功静默继续。
+// 这是"两个发布器在打架"唯一可观测的信号。
+func TestPushPublisherStopsWhenRowVanished(t *testing.T) {
+	repo := newFakeRepo(testPlayer)
+	repo.pushOutbox = []*PushOutboxRow{
+		{ID: 1, PlayerID: testPlayer, Payload: []byte("a")},
+		{ID: 2, PlayerID: testPlayer, Payload: []byte("b")},
+	}
+	repo.deleteVanishes = true // 模拟另一副本已删
+	pusher := &fakePusher{}
+	uc := newTestUsecase(t, baseCatalog(), repo, &fakeItemGranter{}, &fakeExpGranter{}, nil)
+	uc.pusher = pusher
+
+	uc.publishPushBatch(context.Background())
+	if len(pusher.sent) != 1 {
+		t.Fatalf("撞上竞争应在第一行后立即中断本轮,got %d 行被投递", len(pusher.sent))
 	}
 }

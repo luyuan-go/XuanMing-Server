@@ -431,9 +431,18 @@ func TestUseItemEmptiedRowDeleted(t *testing.T) {
 func TestCheckInstancesOwnedExactPair_MySQL(t *testing.T) {
 	f := openInventoryMySQLFixture(t)
 	repo := NewMySQLInventoryRepo(f.db)
+	attrs, err := encodeInstanceAttrs(context.Background(), "player_item_instance", []ItemAttribute{
+		{AttrID: 21, Value: 37}, {AttrID: 8, Value: 12},
+	})
+	if err != nil {
+		t.Fatalf("encode attrs: %v", err)
+	}
+	// 9001 是绑定实例：bound 只禁止出售/丢弃/转移，不影响本人穿戴，exact ownership
+	// 不得把它过滤掉；鉴定状态/词条也必须按原值返回。
 	if _, err := f.db.Exec(`INSERT INTO player_item_instance
-(instance_id, player_id, item_config_id, slot_index) VALUES
-(9001, 701, 10003, 0), (9002, 701, 10003, 1), (9003, 702, 10003, 0)`); err != nil {
+(instance_id, player_id, item_config_id, identified, attributes, slot_index, bound) VALUES
+(9001, 701, 10003, 1, ?, 0, 1), (9002, 701, 10003, 0, NULL, 1, 0),
+(9003, 702, 10003, 0, NULL, 0, 0)`, attrs); err != nil {
 		t.Fatalf("seed instances: %v", err)
 	}
 	owned, err := repo.CheckInstancesOwned(context.Background(), 701, []InstanceOwnershipQuery{
@@ -445,8 +454,11 @@ func TestCheckInstancesOwnedExactPair_MySQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckInstancesOwned: %v", err)
 	}
-	if len(owned) != 1 || owned[0] != 9001 {
-		t.Fatalf("owned=%v want=[9001]", owned)
+	if len(owned) != 1 || owned[0].InstanceID != 9001 || owned[0].ItemConfigID != 10003 ||
+		!owned[0].Identified || !owned[0].Bound || len(owned[0].Attributes) != 2 ||
+		owned[0].Attributes[0] != (ItemAttribute{AttrID: 21, Value: 37}) ||
+		owned[0].Attributes[1] != (ItemAttribute{AttrID: 8, Value: 12}) {
+		t.Fatalf("owned detail not preserved: %+v", owned)
 	}
 }
 

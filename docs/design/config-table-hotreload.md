@@ -264,6 +264,8 @@ pwsh tools\scripts\configtable_sync.ps1 -Write    # 确认后自动改 proto,并
   整表不变量校验,并拒绝降低最高等级。**2026-07-25 起同时强依赖 `item` + `talent` 两表**:
   加载校验器要求两表存在且 `talent` 整树校验(前置存在 / 前置等级不超上限 / 依赖无环)通过,
   缺表或坏树整批不切换。运行期 `SetEquipment` 用 `item.MatchesSlot` 做 isEquip + slotMatch,
+  并经 inventory `CheckInstancesOwned` 校验 `instance_id+item_config_id` 精确归属；`GetLoadout`
+  在开战快照前复核同一 exact pair，
   `SetTalents` 用 `talent.ValidateAllocation` 做等级上限 + 前置 + 总消耗(Σ 等级 × 每级消耗);
   两条写路径在表不可用时一律 fail-closed 拒绝,不退化成放行。Compose 只读挂 `configtable/dist`;K8s 由
   `pandora-configtable` ConfigMap 整目录挂到 `/app/configtable/active`。YAML `exp_curve` 已删除。

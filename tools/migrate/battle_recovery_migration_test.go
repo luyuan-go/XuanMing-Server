@@ -176,8 +176,8 @@ func TestPandoraPlayerExperienceMigrationIsInitSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 5 {
-		t.Fatalf("pandora_player latest version=%d, want 5", version)
+	if version != 6 {
+		t.Fatalf("pandora_player latest version=%d, want 6", version)
 	}
 	v2 := readEmbeddedMigration(t, "migrations/pandora_player/000002_experience.up.sql")
 	for _, fragment := range []string{
@@ -244,6 +244,27 @@ func TestPandoraPlayerExperienceMigrationIsInitSafe(t *testing.T) {
 		if !strings.Contains(v5, fragment) {
 			t.Fatalf("000005 up missing contract fragment %q", fragment)
 		}
+	}
+
+	// 000006 把配置级装备预设 expand 为精确唯一实例。存量行不可猜测回填，故列必须
+	// nullable；新服务写入与 GetLoadout 的 fail-closed 由 player 模块测试守护。
+	v6 := readEmbeddedMigration(t, "migrations/pandora_player/000006_equipment_instance_id.up.sql")
+	for _, fragment := range []string{
+		"information_schema.COLUMNS",
+		"ADD COLUMN `instance_id` BIGINT UNSIGNED NULL",
+		"ALGORITHM=INSTANT",
+		"information_schema.STATISTICS",
+		"ADD UNIQUE KEY `uk_player_instance` (`player_id`, `instance_id`)",
+		"ALGORITHM=INPLACE",
+	} {
+		if !strings.Contains(v6, fragment) {
+			t.Fatalf("000006 up missing contract fragment %q", fragment)
+		}
+	}
+	v6down := readEmbeddedMigration(t, "migrations/pandora_player/000006_equipment_instance_id.down.sql")
+	if !strings.Contains(v6down, "DROP INDEX `uk_player_instance`") ||
+		!strings.Contains(v6down, "DROP COLUMN `instance_id`") {
+		t.Fatal("000006 down must remove only its unique index and instance_id column")
 	}
 }
 

@@ -83,7 +83,7 @@ func newItemTableForTest(t *testing.T, rows ...*configpb.ItemRow) *ItemTable {
 
 func TestItemTableSlotQueries(t *testing.T) {
 	tbl := newItemTableForTest(t,
-		&configpb.ItemRow{Id: 1, Name: "剑", Type: configpb.ItemType_ITEM_TYPE_EQUIPMENT, MaxStackSize: 1, EquipSlot: 1},
+		&configpb.ItemRow{Id: 1, Name: "剑", Type: configpb.ItemType_ITEM_TYPE_EQUIPMENT, MaxStackSize: 1, EquipSlot: 1, IdentifyPoolId: 1},
 		&configpb.ItemRow{Id: 2, Name: "药", Type: configpb.ItemType_ITEM_TYPE_CONSUMABLE, MaxStackSize: 99, Usable: true, UseHealHp: 10},
 	)
 

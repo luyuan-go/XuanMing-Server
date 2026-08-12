@@ -13,6 +13,8 @@
       <parameters>
         <string>ARTIFACT_ROOT_OVERRIDE</string>
         <string>PUBLISH_IMAGES</string>
+        <string>PUSH_REGISTRY</string>
+        <string>REGISTRY_HOST</string>
       </parameters>
       <options/>
     </org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction>
@@ -67,26 +69,30 @@
     </org.jenkinsci.plugins.workflow.job.properties.DisableConcurrentBuildsJobProperty>
   </properties>
   <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps@4209.v83c4e257f1e9">
-    <scm class="hudson.scm.SubversionSCM" plugin="subversion">
-      <locations>
-        <hudson.scm.SubversionSCM_-ModuleLocation>
-          <remote>@@SVN_SERVER_URL@@</remote>
-          <credentialsId>@@SVN_CREDENTIALS_ID@@</credentialsId>
-          <local>.</local>
-          <depthOption>infinity</depthOption>
-          <ignoreExternalsOption>true</ignoreExternalsOption>
-          <cancelProcessOnExternalsFail>true</cancelProcessOnExternalsFail>
-        </hudson.scm.SubversionSCM_-ModuleLocation>
-      </locations>
-      <quietOperation>true</quietOperation>
-      <workspaceUpdater class="hudson.scm.subversion.UpdateUpdater"/>
-      <excludedRegions/>
-      <includedRegions/>
-      <excludedUsers/>
-      <excludedRevprop/>
-      <excludedCommitMessages/>
-      <ignoreDirPropChanges>false</ignoreDirPropChanges>
-      <filterChangelog>false</filterChangelog>
+    <scm class="hudson.plugins.git.GitSCM" plugin="git">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>@@BACKEND_GIT_URL@@</url>
+          <refspec>+refs/heads/main:refs/remotes/origin/main</refspec>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>*/main</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <submoduleCfg class="empty-list"/>
+      <extensions>
+        <hudson.plugins.git.extensions.impl.CloneOption>
+          <shallow>true</shallow>
+          <noTags>true</noTags>
+          <reference></reference>
+          <depth>1</depth>
+          <honorRefspec>true</honorRefspec>
+        </hudson.plugins.git.extensions.impl.CloneOption>
+      </extensions>
     </scm>
     <scriptPath>Jenkinsfile</scriptPath>
     <lightweight>true</lightweight>

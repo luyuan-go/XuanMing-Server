@@ -105,10 +105,32 @@ Assert-Throws {
 $matchmakerSource = Get-Content -LiteralPath (Join-Path $ProjectRoot 'services/matchmaking/matchmaker/cmd/matchmaker/main.go') -Raw
 Assert-True ($matchmakerSource.Contains('ds_allocator_requires_ds_ticket_v2')) `
     '真实 ds_allocator 链必须 fail-closed 要求 Model-B RS256 signer'
-Assert-True (-not $matchmakerSource.Contains('legacySigner')) `
-    'matchmaker 真实 DS 票据链不得静默构造 legacy HS256 signer'
-Assert-True ($matchmakerSource.Contains('NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, nil, v2Signer')) `
-    'matchmaker 必须只把 RS256 signer 注入真实 DS 分配器'
+# 2026-08-11 修正死契约:本条原先是**字面量禁用** `-not $matchmakerSource.Contains('legacySigner')`,
+# 写于 3ba27c3c(2026-07-13);而 2f369c22(2026-08-04)引入了 Windows 本机联调档
+# `match.ds_local_profile=local-off-v1` —— 它**显式声明**、与 v2 私钥互斥、构造时打 WARN,
+# 是被设计文档认可的例外(hub_allocator / ds_allocator 在 mode=local 下只接受 legacy,
+# 强签 RS256 会让 DS 把每个玩家拒在 PreLogin)。字面量禁用于是恒红三周,
+# 而它真正要守的性质其实一直成立。
+#
+# 要守的从来不是"这个标识符不许出现",而是**不得静默回退**:legacy signer 只能在显式
+# 声明本机档时构造,且未声明时必须 fail-closed 退出。故改为断言这三件结构事实。
+$legacyAssignments = [regex]::Matches($matchmakerSource, '(?m)^\s*legacySigner\s*=\s*s\s*$').Count
+Assert-True ($legacyAssignments -eq 1) `
+    "matchmaker 只允许有一处 legacy signer 赋值(实为 $legacyAssignments 处);多处 = 存在未经审视的第二条回退路径"
+Assert-True ($matchmakerSource -match '(?s)case\s+cfg\.Match\.DSLocalProfile\s*==\s*auth\.DSLocalProfileOffV1:.*?legacySigner\s*=\s*s') `
+    'legacy HS256 signer 只能在显式声明 match.ds_local_profile=local-off-v1 的分支里构造'
+Assert-True ($matchmakerSource -match '(?s)legacySigner\s*=\s*s.*?default:.*?ds_allocator_requires_ds_ticket_v2') `
+    '未声明本机档时必须走 default 分支 fail-closed 退出,不得静默回退 legacy'
+Assert-True ($matchmakerSource.Contains('ds_ticket_profile_conflict')) `
+    'v2 私钥与本机档必须互斥拒启(同时配置 = 姿态自相矛盾,不得靠优先级猜)'
+# 2026-08-11 同一处死契约:原断言写死实参字面量 `..., nil, v2Signer`(3ba27c3c,2026-07-13),
+# 而 2f369c22(2026-08-04)把第二个实参从字面 nil 改成变量 legacySigner —— 在生产档它**就是**
+# nil(只在 local-off-v1 分支被赋值,default 分支 fail-closed 退出,上面三条断言已钉死),
+# 语义完全等价,断言却因为比对字面量而恒红。
+# 改为断言**注入顺序与两个 signer 都到位**:v2Signer 必须被注入真实分配器,
+# 且 legacy 位在 v2 位之前(顺序写反 = 把 HS256 票当 RS256 用)。
+Assert-True ($matchmakerSource -match 'NewGrpcDSAllocator\(cfg\.Match\.DSAllocatorAddr,\s*(?:nil|legacySigner),\s*v2Signer,') `
+    'matchmaker 必须按 (legacy, v2) 顺序把 RS256 signer 注入真实 DS 分配器'
 $dsAuthSource = Get-Content -LiteralPath (Join-Path $ProjectRoot 'pkg/middleware/dsauth.go') -Raw
 Assert-True ($dsAuthSource.Contains('(*auth.DSCallbackSigner, error)') -and
     $dsAuthSource.Contains('(*auth.DSCallbackVerifier, error)') -and

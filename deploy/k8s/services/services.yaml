@@ -68,6 +68,11 @@ kind: Deployment
 metadata: { name: player, namespace: pandora, labels: { app: player } }
 spec:
   replicas: 1
+  # RollingUpdate(默认)= 不停服硬要求(§9.16/§9.21)。replicas:1 不等于单进程:
+  # maxSurge 让每次发版都有新旧两 Pod 并存,而 player_push_outbox 是全局未分区表,
+  # 两个发布器并发会让 PlayerExperienceEvent(绝对值快照)旧帧后到覆盖新帧 → 玩家
+  # 等级/经验条倒退。故 player.push_writer_lease.mode 在集群档必须 enforce。
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
   selector: { matchLabels: { app: player } }
   template:
     metadata:
@@ -76,11 +81,16 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "21002"
         prometheus.io/path: /metrics
+        # 机械门禁:必须与本 Deployment 的 spec.strategy.type 逐字一致
+        # (cmd/player/push_writer_lease_manifest_test.go 钉住)。
+        pandora.dev/deploy-strategy: "RollingUpdate"
     spec:
       containers:
         - name: player
           image: pandora/player:dev
           imagePullPolicy: IfNotPresent
+          env:
+            - { name: PANDORA_DEPLOY_STRATEGY, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/deploy-strategy']" } } }
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20002 } ]
           readinessProbe: { grpc: { port: 20002 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
@@ -448,9 +458,13 @@ spec:
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20013 } ]
           readinessProbe: { grpc: { port: 20013 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
-          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: dialogue.yaml, readOnly: true } ]
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: dialogue.yaml, readOnly: true }
+            - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: configtable, configMap: { name: pandora-configtable } }
 ---
 apiVersion: v1
 kind: Service
@@ -462,6 +476,12 @@ kind: Deployment
 metadata: { name: mission, namespace: pandora, labels: { app: mission } }
 spec:
   replicas: 1
+  # RollingUpdate(默认)= 不停服硬要求(§9.16/§9.21)。注意 replicas:1 并不意味着
+  # 「同时只有一个进程」——滚动期 maxSurge 会让新旧两个 Pod 共存,mission_push_outbox
+  # 是全局未分区表,两个发布器并发会让同玩家的旧进度快照后到并覆盖新的。
+  # 因此 mission.push_writer_lease.mode 在集群档必须是 enforce(下方 annotation +
+  # main.go 机械门禁共同保证:非 enforce 时进程直接 fail-closed 退出)。
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
   selector: { matchLabels: { app: mission } }
   template:
     metadata:
@@ -470,11 +490,17 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "21019"
         prometheus.io/path: /metrics
+        # 机械门禁:必须与本 Deployment 的 spec.strategy.type 逐字一致
+        # (cmd/mission/push_writer_lease_manifest_test.go 钉住)。进程读它做 fail-closed
+        # 校验:RollingUpdate × push_writer_lease.mode!=enforce 直接启动失败。
+        pandora.dev/deploy-strategy: "RollingUpdate"
     spec:
       containers:
         - name: mission
           image: pandora/mission:dev
           imagePullPolicy: IfNotPresent
+          env:
+            - { name: PANDORA_DEPLOY_STRATEGY, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/deploy-strategy']" } } }
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20019 } ]
           readinessProbe: { grpc: { port: 20019 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }

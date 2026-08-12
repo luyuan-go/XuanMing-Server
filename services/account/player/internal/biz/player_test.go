@@ -558,24 +558,41 @@ func (s stubTalentRules) ValidateAllocation(levels map[uint32]uint32) (map[uint3
 
 // stubOwnership 是拥有权查询的测试替身;owned 为 nil 表示"请求什么就持有什么"。
 type stubOwnership struct {
-	owned map[uint32]bool
-	err   error
+	owned   map[uint64]uint32 // instance_id -> item_config_id
+	details map[uint64]data.OwnedEquipmentInstance
+	idsOnly bool // 模拟滚动升级中仅回字段 2 的旧 inventory 副本
+	err     error
 }
 
-func (s stubOwnership) CheckItemsOwned(_ context.Context, _ uint64, ids []uint32) ([]uint32, error) {
+func (s stubOwnership) CheckInstancesOwned(
+	_ context.Context, _ uint64, equipment []data.EquipmentSlot,
+) (data.InstanceOwnershipResult, error) {
 	if s.err != nil {
-		return nil, s.err
+		return data.InstanceOwnershipResult{}, s.err
 	}
-	if s.owned == nil {
-		return ids, nil
-	}
-	var out []uint32
-	for _, id := range ids {
-		if s.owned[id] {
-			out = append(out, id)
+	result := data.InstanceOwnershipResult{}
+	for _, e := range equipment {
+		owned := s.owned == nil
+		if s.owned != nil {
+			owned = s.owned[e.InstanceID] == e.ItemConfigID
 		}
+		if !owned {
+			continue
+		}
+		result.OwnedInstanceIDs = append(result.OwnedInstanceIDs, e.InstanceID)
+		if s.idsOnly {
+			continue
+		}
+		detail, ok := s.details[e.InstanceID]
+		if !ok && s.details != nil {
+			continue
+		}
+		if !ok {
+			detail = data.OwnedEquipmentInstance{InstanceID: e.InstanceID, ItemConfigID: e.ItemConfigID}
+		}
+		result.OwnedInstances = append(result.OwnedInstances, detail)
 	}
-	return out, nil
+	return result, nil
 }
 
 // newUCLoadout 构造开启出战养成的 usecase,并注入三项权威校验依赖的测试替身。
@@ -598,7 +615,7 @@ func newUCLoadout(repo data.PlayerRepo) *PlayerUsecase {
 		// 曲线断档的卡(上限 3 但只铺到 2 级):用来钉"缺档不得当免费升级放行"。
 		7003: {maxLevel: 3, curve: map[uint32]uint32{2: 5}},
 	}}
-	uc.SetItemOwnershipChecker(stubOwnership{})
+	uc.SetInstanceOwnershipChecker(stubOwnership{})
 	return uc
 }
 
@@ -975,7 +992,7 @@ func TestGetLoadout_Snapshot(t *testing.T) {
 
 func TestSetEquipment_FeatureDisabled(t *testing.T) {
 	uc := newUCHero(newFakeRepo()) // LoadoutCustomizeEnabled=false
-	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001}})
+	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001, InstanceID: 9001}})
 	if errcode.As(err) != errcode.ErrPlayerFeatureDisabled {
 		t.Fatalf("disabled toggle should be ErrPlayerFeatureDisabled, got %v", err)
 	}
@@ -983,7 +1000,10 @@ func TestSetEquipment_FeatureDisabled(t *testing.T) {
 
 func TestSetEquipment_DuplicateSlot(t *testing.T) {
 	uc := newUCLoadout(newFakeRepo())
-	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001}, {Slot: 0, ItemConfigID: 1002}})
+	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{
+		{Slot: 1, ItemConfigID: 1001, InstanceID: 9001},
+		{Slot: 1, ItemConfigID: 1001, InstanceID: 9002},
+	})
 	if errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("duplicate slot should be ErrInvalidArg, got %v", err)
 	}
@@ -991,7 +1011,7 @@ func TestSetEquipment_DuplicateSlot(t *testing.T) {
 
 func TestSetEquipment_RequiresItemConfig(t *testing.T) {
 	uc := newUCLoadout(newFakeRepo())
-	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 0}})
+	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 0, InstanceID: 9001}})
 	if errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("zero item_config_id should be ErrInvalidArg, got %v", err)
 	}
@@ -1000,7 +1020,10 @@ func TestSetEquipment_RequiresItemConfig(t *testing.T) {
 func TestSetEquipment_SuccessThenGet(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUCLoadout(repo)
-	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001}, {Slot: 2, ItemConfigID: 1002}}); err != nil {
+	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{
+		{Slot: 1, ItemConfigID: 1001, InstanceID: 9001},
+		{Slot: 2, ItemConfigID: 1002, InstanceID: 9002},
+	}); err != nil {
 		t.Fatalf("set equipment err: %v", err)
 	}
 	slots, err := uc.GetEquipment(context.Background(), 100)
@@ -1064,7 +1087,7 @@ func TestSetTalents_SuccessThenResetAndLoadout(t *testing.T) {
 	if err := uc.SelectHero(context.Background(), 100, 7); err != nil {
 		t.Fatalf("select err: %v", err)
 	}
-	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001}}); err != nil {
+	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 1, ItemConfigID: 1001, InstanceID: 9001}}); err != nil {
 		t.Fatalf("set equipment err: %v", err)
 	}
 	if _, err := uc.GrantTalentPoints(context.Background(), 100, 5, "g1"); err != nil {

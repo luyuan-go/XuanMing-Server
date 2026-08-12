@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -31,6 +32,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/dbguard"
+	"github.com/luyuancpp/pandora/pkg/dsauthfence/writerlease"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
@@ -198,6 +200,12 @@ func main() {
 			"hint", "先执行 pandora_player migration 000002_experience(players.exp / exp_history / player_push_outbox)")
 		os.Exit(1)
 	}
+	if err := repo.ValidateEquipmentSchema(schemaCtx); err != nil {
+		schemaCancel()
+		helper.Errorw("msg", "player_equipment_schema_invalid", "err", err,
+			"hint", "先执行 pandora_player migration 000006_equipment_instance_id")
+		os.Exit(1)
+	}
 	if err := repo.ValidateExperienceLevels(schemaCtx, levelTable.MaxLevel()); err != nil {
 		schemaCancel()
 		helper.Errorw("msg", "player_experience_level_invalid", "err", err,
@@ -208,16 +216,16 @@ func main() {
 	uc := biz.NewPlayerUsecase(repo, cfg.Player)
 	uc.SetConfigTables(ctStore)
 
-	// 出战装备预设的拥有权校验器(2026-07-25):经 inventory 系统 RPC CheckItemsOwned 判定。
+	// 出战装备预设的精确实例归属校验器:经 inventory 系统 RPC CheckInstancesOwned 判定。
 	// 未配 inventory_addr 时不接线 —— SetEquipment 随即 fail-closed 拒绝(见 biz 说明),
 	// 不会退化成"不校验就放行",因此这里只警告不退出;真正的门在 loadout_customize_enabled。
 	if cfg.Player.InventoryAddr != "" {
-		checker := data.NewGrpcItemOwnershipChecker(cfg.Player.InventoryAddr)
+		checker := data.NewGrpcInstanceOwnershipChecker(cfg.Player.InventoryAddr)
 		defer func() { _ = checker.Close() }()
-		uc.SetItemOwnershipChecker(checker)
-		helper.Infow("msg", "item_ownership_checker_grpc", "inventory_addr", cfg.Player.InventoryAddr)
+		uc.SetInstanceOwnershipChecker(checker)
+		helper.Infow("msg", "instance_ownership_checker_grpc", "inventory_addr", cfg.Player.InventoryAddr)
 	} else if cfg.Player.LoadoutCustomizeEnabled {
-		helper.Warnw("msg", "item_ownership_checker_missing",
+		helper.Warnw("msg", "instance_ownership_checker_missing",
 			"hint", "loadout_customize_enabled=true 但未配 player.inventory_addr → SetEquipment 将一律拒绝")
 	}
 
@@ -257,6 +265,69 @@ func main() {
 			helper.Infow("msg", "player_push_producer_ready", "topic", kafkax.TopicPlayerExperience)
 		}
 	}
+	// 推送出箱发布器的写者继任租约(单写者选举;推导见 conf.PushWriterLeaseConf)。
+	//
+	// 只包 RunPushOutboxPublisher:两个 janitor 的 DELETE 天然幂等、多副本并跑安全,
+	// 按 §9.21「可并行 worker 不得为金丝雀强行全局串行化」不得一起包进来。
+	pushLeaseMode, plErr := cfg.Player.PushWriterLease.ResolveMode()
+	if plErr != nil {
+		helper.Errorw("msg", "player_push_writer_lease_mode_invalid", "err", plErr)
+		os.Exit(1)
+	}
+	// 机械门禁(与 mission / ds_allocator / hub_allocator 同款):进程看不到 spec.strategy,
+	// 由 Deployment 把策略作为 annotation 注入 env,再由 push_writer_lease_manifest_test.go
+	// 钉住 annotation 与真实 strategy 一致。
+	deployStrategy := strings.TrimSpace(os.Getenv("PANDORA_DEPLOY_STRATEGY"))
+	inManagedK8s := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_HOST")) != ""
+	switch {
+	case deployStrategy != "":
+		if strings.EqualFold(deployStrategy, "RollingUpdate") && pushLeaseMode != conf.PushWriterLeaseEnforce {
+			helper.Errorw("msg", "player_push_writer_lease_rollingupdate_without_enforce",
+				"strategy", deployStrategy, "mode", pushLeaseMode,
+				"hint", "RollingUpdate × push_writer_lease.mode!=enforce = 滚动重叠期两个发布器并发;"+
+					"PlayerExperienceEvent 携带绝对值快照(level/exp_in_level),旧快照后到会让玩家"+
+					"等级经验条倒退。要么把 player.push_writer_lease.mode 改 enforce,要么改回单副本 Recreate")
+			os.Exit(1)
+		}
+		helper.Infow("msg", "player_push_writer_lease_strategy_checked",
+			"strategy", deployStrategy, "mode", pushLeaseMode)
+	case inManagedK8s:
+		helper.Errorw("msg", "player_push_writer_lease_strategy_annotation_missing", "mode", pushLeaseMode,
+			"hint", "受管 k8s 内必须注入 PANDORA_DEPLOY_STRATEGY(取自 Deployment 的 "+
+				"pandora.dev/deploy-strategy annotation),否则无法机械校验 RollingUpdate×非 enforce 组合")
+		os.Exit(1)
+	default:
+		helper.Warnw("msg", "player_push_writer_lease_strategy_unknown", "mode", pushLeaseMode,
+			"hint", "非 k8s 环境(本机裸跑/dev):跳过部署策略机械校验")
+	}
+	if pushLeaseMode == conf.PushWriterLeaseEnforce {
+		if len(cfg.Player.PushWriterLease.EtcdEndpoints) == 0 {
+			helper.Errorw("msg", "player_push_writer_lease_endpoints_missing",
+				"hint", "push_writer_lease.mode=enforce 必须配 etcd_endpoints,否则选举无从谈起")
+			os.Exit(1)
+		}
+		hostname, _ := os.Hostname()
+		pushLease, wlErr := writerlease.Start(context.Background(), writerlease.Config{
+			Endpoints:   cfg.Player.PushWriterLease.EtcdEndpoints,
+			Election:    "player/push_publisher",
+			Identity:    fmt.Sprintf("%s/%d", hostname, os.Getpid()),
+			LeaseTTLSec: cfg.Player.PushWriterLease.LeaseTTLSec,
+			DialTimeout: cfg.Player.PushWriterLease.DialTimeout.Std(),
+			// 无 OnElected:接任不推进任何 fence 水位(发布器不携带跨轮次权威意图)。
+		})
+		if wlErr != nil {
+			helper.Errorw("msg", "player_push_writer_lease_start_failed", "err", wlErr)
+			os.Exit(1)
+		}
+		defer func() { _ = pushLease.Close() }()
+		uc.SetPushWriterLease(pushLease)
+		helper.Infow("msg", "player_push_writer_lease_started",
+			"election", "player/push_publisher", "mode", pushLeaseMode)
+	} else {
+		helper.Warnw("msg", "player_push_writer_lease_disabled",
+			"hint", "mode=off:单发布者只由部署形态保证,只允许单进程 / 单副本 Recreate")
+	}
+
 	go uc.RunPushOutboxPublisher(pubCtx)
 	go uc.RunExpHistoryJanitor(pubCtx)
 	// 容量巡检(§9.24):启动即跑一轮拿基线,之后每小时一轮。超预算只打 ERROR 日志 + metric,

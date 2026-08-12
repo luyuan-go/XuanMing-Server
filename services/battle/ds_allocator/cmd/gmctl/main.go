@@ -4,8 +4,9 @@
 // (PollCommands/AckCommand),但此前无任何进程调用 SendCommand。本 CLI 让运维能真正把
 // 「给对局内某玩家发道具」指令下发到目标战斗 DS,构成可用闭环(CLAUDE.md §14 接线完整性)。
 //
-// 送达语义:at-most-once(尽力而为,见 proto pandora/gm/v1/gm.proto)。GM 调试指令可容忍
-// 偶发丢失。⚠️ 本命令**非幂等**:每次执行服务端都现生成新 idempotency_key,入队一条
+// 送达语义:at-most-once(尽力而为,见 proto pandora/gm/v1/gm.proto)。gmctl 会等到
+// DS execution Ack,只有 Ack.ok=true 才以 0 退出;超时表示结果未知,不等于未执行。
+// ⚠️ 本命令**非幂等**:每次执行服务端都现生成新 idempotency_key,入队一条
 // 全新指令——若上一次其实已生效而盲目重跑,会**重复发放**。idempotency_key 只防「同一条
 // 已入队指令」被 DS 重复执行,不防运维重复下发。重跑前请先确认上一次是否真未生效。
 //
@@ -27,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	gmv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/gm/v1"
@@ -34,7 +36,11 @@ import (
 
 const (
 	defaultAddr = "127.0.0.1:20020"
-	dialTimeout = 10 * time.Second
+	// commandTimeout 覆盖服务端 15s 执行 Ack 等待上界及 RPC 余量。
+	commandTimeout = 20 * time.Second
+	// 不改 proto 也不破坏旧调用方:只有 gmctl 显式要求等到 DS 执行 Ack。
+	waitExecutionAckMetadataKey    = "x-pandora-gm-wait-execution-ack"
+	executionAckMessageMetadataKey = "x-pandora-gm-execution-message-bin"
 	// maxUint32Config 道具 config_id 上限(proto uint32),--config 是 uint 防截断越界转。
 	maxUint32Config = uint(^uint32(0))
 	// maxInt32Count 发放数量上限(proto int32),防 --count 转 int32 溢出。
@@ -103,9 +109,11 @@ func runAddItem(args []string) int {
 	}
 	defer func() { _ = conn.Close() }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx, waitExecutionAckMetadataKey, "1")
 
+	var trailer metadata.MD
 	resp, err := gmv1.NewGmServiceClient(conn).SendCommand(ctx, &gmv1.SendCommandRequest{
 		MatchId: *match,
 		Payload: &gmv1.SendCommandRequest_AddItem{AddItem: &gmv1.AddItemCommand{
@@ -114,17 +122,37 @@ func runAddItem(args []string) int {
 			Count:    int32(*count),
 			BagType:  int32(*bag),
 		}},
-	})
+	}, grpc.Trailer(&trailer))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "SendCommand 失败:%v\n", err)
+		if ctx.Err() == context.DeadlineExceeded {
+			fmt.Fprintln(os.Stderr, "等待 DS 执行确认超时:结果未知,请先对账,不要盲目重发")
+		} else {
+			fmt.Fprintf(os.Stderr, "SendCommand 失败:%v\n", err)
+		}
 		return 1
 	}
 	if resp.GetCode() != commonv1.ErrCode_OK {
-		fmt.Fprintf(os.Stderr, "SendCommand 被拒:code=%s\n", resp.GetCode())
+		switch resp.GetCode() {
+		case commonv1.ErrCode_ERR_TIMEOUT, commonv1.ErrCode_ERR_CANCELED:
+			fmt.Fprintf(os.Stderr,
+				"等待 DS 执行确认未完成:code=%s idempotency_key=%s;结果未知,请先对账,不要盲目重发\n",
+				resp.GetCode(), resp.GetIdempotencyKey())
+		case commonv1.ErrCode_ERR_INVALID_STATE:
+			if messages := trailer.Get(executionAckMessageMetadataKey); len(messages) > 0 && messages[0] != "" {
+				fmt.Fprintf(os.Stderr, "DS 执行命令失败:code=%s idempotency_key=%s reason=%q\n",
+					resp.GetCode(), resp.GetIdempotencyKey(), messages[0])
+			} else {
+				fmt.Fprintf(os.Stderr, "DS 执行命令失败:code=%s idempotency_key=%s\n",
+					resp.GetCode(), resp.GetIdempotencyKey())
+			}
+		default:
+			fmt.Fprintf(os.Stderr, "SendCommand 被拒:code=%s idempotency_key=%s\n",
+				resp.GetCode(), resp.GetIdempotencyKey())
+		}
 		return 1
 	}
 
-	fmt.Printf("已入队:match=%d player=%d config=%d count=%d bag=%d idempotency_key=%s\n",
+	fmt.Printf("DS 执行成功:match=%d player=%d config=%d count=%d bag=%d idempotency_key=%s\n",
 		*match, *player, *config, *count, *bag, resp.GetIdempotencyKey())
 	return 0
 }

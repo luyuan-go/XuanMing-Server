@@ -61,12 +61,8 @@ inventory:
   # 启动、行为与没配一模一样。唯一判据是启动日志出现 `instance_bag_enabled capacity=200`。
   capacity: 200
 
-  # 当前没有专用装备词条表。开发安全默认只使用 UE 已能对称生效的 Atk(3)+1；
-  # Hp(1)/Shield(5) 缺 Max 语义、MoveSpeedRate(7) 单位未定，暂不得进入默认池。
-  default_identify_rule:
-    attr_count: 1
-    pool:
-      - { attr_id: 3, min: 1, max: 1 }
+  # 装备鉴定规则由 configtable equipment_affix + item.identify_pool_id 同源热更；
+  # YAML 不再保留生产默认池，缺表/缺池在启动与热更边界 fail-closed。
 
 # 背包域(pandora.bag.v1,bag-domain.md;phase 1 由本进程承载)。
 # dsn 为空 = 未启用(不注册 BagService)。dev 直接开启联调;

@@ -64,7 +64,7 @@
 | `ConsumeBattleItem` | battle_result(内部) | 按进度事实幂等扣局内消耗品 | **拒玩家 JWT** |
 | `DiscardBattleItem` | battle_result(内部) | 按进度事实幂等丢弃可堆叠物；副本装备不支持 | **拒玩家 JWT** |
 | `CheckItemsOwned` | player(内部,兼容) | 按配置 ID 查询持有子集 | **拒玩家 JWT** |
-| `CheckInstancesOwned` | player(内部) | 按 `instance_id+item_config_id` 精确查询实例归属子集 | **拒玩家 JWT** |
+| `CheckInstancesOwned` | player(内部) | 按 `instance_id+item_config_id` 精确查询归属；兼容回 IDs 并同时回鉴定详情快照 | **拒玩家 JWT** |
 | `SettleAuctionMatch` | auction(内部) | 原子结算拍卖成交(双方 escrow 对转) | **拒玩家 JWT** |
 | `SettlePlayerTrade` | trade(内部) | 原子结算点对点交易(无预冻,双方活跃余额扣转) | **拒玩家 JWT** |
 | `FreezeForOrder` | auction(内部) | 挂单冻结资产进 escrow(SELL 冻道具 / BUY 冻金币) | **拒玩家 JWT** |
@@ -131,8 +131,9 @@ internal/
 ```
 service.UseItem (inventory.go:104)
   └─ callerPlayerID  取 JWT 身份,校验 req.player_id==调用者(inventory.go:34)
-       └─ biz.UseItem (biz/inventory.go:290)
-            ├─ cfg.RuleOf(item) 校验 Usable(不可用 → ErrInventoryItemNotUsable)
+       └─ biz.UseItem (biz/inventory.go:397)
+            ├─ itemDefinition(item) 现查 configtable item 表快照,校验 LobbyUsable
+            │     (catalog 未注入或表里没这行 → fail-closed → ErrInventoryItemNotUsable)
             └─ repo.UseItem (data/inventory_repo.go:405)  —— 一个 MySQL 事务
                  ├─ claimLedger (inventory_repo.go:280)
                  │     INSERT inventory_ledger(player,key,op,fingerprint)
@@ -257,7 +258,7 @@ authorizeOwner (biz/bag.go:80)
 | 幂等键防复用 | key 绑请求内容指纹,换内容 → `ErrInventoryIdempotencyConflict` | `*Fingerprint` |
 | 并发不超扣 | 扣减在 `SELECT ... FOR UPDATE` 锁行内校验数量 | `deductItemTx` / `deductGoldTx` |
 | 结算不死锁 | 双方流水 + 资产行按 `player_id`(道具再按 `item_config_id`)升序加锁 | `SettleAuctionMatch` / `SettlePlayerTrade` |
-| 数值不信 DS | 出售单价 / 鉴定属性 / 容量档价服务端裁决(§9.6) | `cfg.RuleOf` / `rollIdentifyAttrs` / `CapacityPurchaseRuleOf` |
+| 数值不信 DS | 出售单价 / 鉴定属性 / 容量档价服务端裁决(§9.6) | `itemDefinition`(configtable item 表) / `rollIdentifyAttrs` / `CapacityPurchaseRuleOf` |
 | 溢出安全 | `单价×数量` int64 溢出直接拒,防反加金币 | `safeMulInt64` |
 | 实例全局唯一 | 实例只经同事务在 `player_item_instance` / `mail_transfer_escrow` 间搬移 | `inventory_transfer.go` |
 | 背包 owner fencing | 每笔背包写查 owner 权威,epoch/身份不符或失租拒 | `authorizeOwner` |
@@ -277,8 +278,6 @@ authorizeOwner (biz/bag.go:80)
 | `ledger_retention_days` | `90` | `inventory_ledger` 幂等流水保留天数(≫ 一切重试窗口;≥ mail 可领窗口) |
 | `escrow_retention_days` | `90` | closed `auction_escrow` 保留天数(active 永不清) |
 | `capacity` | `0` | 装备实例背包格容量;`<=0` = 未启用实例背包(`GrantInstances` 拒) |
-| `default_identify_rule` | 必填(配置表路径) | 无专属词条表时的开发安全默认；当前仅 `Atk(3)+1` |
-| `identify_rules` | `[]` | 装备专属鉴定池，优先于默认规则；属性 ID 必须存在于 `role_attr_map` |
 
 ### `bag.*`(`dsn` 为空 = 背包域未启用,不注册 BagService,安全默认)
 
@@ -306,11 +305,13 @@ authorizeOwner (biz/bag.go:80)
 | `session_gate.require` | `false`(dev) | 客户端面请求 jti 必须是 login 会话当前一代;prod 生成器机械置 `true`(漏配拒启) |
 | `node.mysql_client.dsn` | 必填 | `pandora_trade` 库(强依赖,空则启动失败) |
 | `node.redis_client` | — | 会话现行性门只读 login 会话权威 `pandora:sess`(共享实例) |
-| `config_table.dir` | 必填 | 与 UE 同源的 `configtable/dist`；缺目录/表/checksum/属性引用均拒启 |
+| `config_table.dir` | 必填 | 与 UE 同源的 `configtable/dist`；缺 `item/equipment_affix/role_attr_map`、checksum、池引用或玩法语义均拒启 |
 
-> 当前没有专用装备词条表。默认鉴定只给 `Atk(3)+1`，因为 UE 已能对称应用/卸除；`Hp(1)`、
-> `Shield(5)` 缺 Max 语义，`MoveSpeedRate(7)` 的 int64 单位未定义，显式规则中的这些属性目前只保证
-> 展示/存储保真，不应作为默认有效词条。配置表 validator 会校验引用真实存在，但不会凭空定义数值语义。
+装备鉴定不再读取 YAML。`item.identify_pool_id` 指向 `equipment_affix`，每个池按 `weight` 加权不放回
+抽取固定 `attr_count` 条并在 `[min_value,max_value]` 闭区间 roll；Store 整批热更后只影响下一次首次鉴定，
+已经落库的实例不重 roll。当前正式玩法单位为：`Atk(3)` 与 `Defense(9)` 整数平加，
+`MoveSpeedRate(7)` 以万分比存储(`value/10000`)；`Hp(1)`/`Shield(5)` 仍只展示，不允许进入正式池。
+启动/热更 validator 会拒绝重复属性、零权重、越界数值、孤儿池和没有 UE 应用/卸载对账语义的属性。
 
 ## 本地启动
 

@@ -51,3 +51,16 @@ mission:
   # allow_noop_reward: true    # 仅骨架联调(不起 inventory/player 时)放开;奖励滞留 PENDING
   # retention_mode: ""         # 默认 report_only 只报告不删;真删须显式 "delete"(§9.24)
   # receipt_cleanup_enabled: false  # 收据清理组级闸,默认关(上游重试无界,删收据会双计)
+
+  # 推送出箱发布器的单写者选举(§9.21「同一未分区权威的单写者循环」)。
+  #
+  # dev 是单进程,mode 留空(=off)即可;**集群档必须是 enforce** —— mission 的
+  # Deployment 是 RollingUpdate,滚动期新旧两个 Pod 共存,两个发布器并发会让同玩家的
+  # 旧进度快照后到并覆盖新的(MissionUpdateEvent.progressed 是逐任务全量快照,事件里
+  # 没有任何 revision 可供客户端判旧)。main.go 有机械门禁:受管 k8s 内检测到
+  # RollingUpdate 而 mode!=enforce 会 fail-closed 退出,不留无保护并发发布组合。
+  #
+  # etcd_endpoints 在 enforce 下必填(dev 起本机 etcd 时可用 127.0.0.1:2379 自测)。
+  push_writer_lease:
+    mode: "off"
+    # etcd_endpoints: ["127.0.0.1:2379"]

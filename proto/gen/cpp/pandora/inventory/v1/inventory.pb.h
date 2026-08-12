@@ -752,7 +752,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UseItemResponse final : public ::go
     kRemainingFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // int64 remaining = 2 [json_name = "remaining"];
+  // int64 remaining = 2;
   void clear_remaining() ;
   [[nodiscard]] ::int64_t remaining() const;
   void set_remaining(::int64_t value);
@@ -762,7 +762,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UseItemResponse final : public ::go
   void _internal_set_remaining(::int64_t value);
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -967,7 +967,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UseItemRequest final : public ::goo
     kCountFieldNumber = 3,
     kItemConfigIdFieldNumber = 2,
   };
-  // string idempotency_key = 4 [json_name = "idempotencyKey"];
+  // string idempotency_key = 4;
   void clear_idempotency_key() ;
   [[nodiscard]] const ::std::string& idempotency_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -982,7 +982,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UseItemRequest final : public ::goo
   ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -992,7 +992,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UseItemRequest final : public ::goo
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // int64 count = 3 [json_name = "count"];
+  // int64 count = 3;
   void clear_count() ;
   [[nodiscard]] ::int64_t count() const;
   void set_count(::int64_t value);
@@ -1002,7 +1002,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UseItemRequest final : public ::goo
   void _internal_set_count(::int64_t value);
 
   public:
-  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 2;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -1207,7 +1207,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferClaimItem final : public ::
     kInstanceIdFieldNumber = 1,
     kItemConfigIdFieldNumber = 2,
   };
-  // uint64 instance_id = 1 [json_name = "instanceId"];
+  // uint64 instance_id = 1;
   void clear_instance_id() ;
   [[nodiscard]] ::uint64_t instance_id() const;
   void set_instance_id(::uint64_t value);
@@ -1217,7 +1217,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferClaimItem final : public ::
   void _internal_set_instance_id(::uint64_t value);
 
   public:
-  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 2;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -1419,7 +1419,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeResponse final : p
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -1620,7 +1620,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchResponse final : 
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -1828,7 +1828,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchRequest final : p
     kBuyOrderIdFieldNumber = 8,
     kItemConfigIdFieldNumber = 4,
   };
-  // uint64 match_id = 1 [json_name = "matchId"];
+  // uint64 match_id = 1;
   void clear_match_id() ;
   [[nodiscard]] ::uint64_t match_id() const;
   void set_match_id(::uint64_t value);
@@ -1838,7 +1838,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchRequest final : p
   void _internal_set_match_id(::uint64_t value);
 
   public:
-  // uint64 seller_id = 2 [json_name = "sellerId"];
+  // uint64 seller_id = 2;
   void clear_seller_id() ;
   [[nodiscard]] ::uint64_t seller_id() const;
   void set_seller_id(::uint64_t value);
@@ -1848,7 +1848,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchRequest final : p
   void _internal_set_seller_id(::uint64_t value);
 
   public:
-  // uint64 buyer_id = 3 [json_name = "buyerId"];
+  // uint64 buyer_id = 3;
   void clear_buyer_id() ;
   [[nodiscard]] ::uint64_t buyer_id() const;
   void set_buyer_id(::uint64_t value);
@@ -1858,7 +1858,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchRequest final : p
   void _internal_set_buyer_id(::uint64_t value);
 
   public:
-  // int64 quantity = 5 [json_name = "quantity"];
+  // int64 quantity = 5;
   void clear_quantity() ;
   [[nodiscard]] ::int64_t quantity() const;
   void set_quantity(::int64_t value);
@@ -1868,7 +1868,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchRequest final : p
   void _internal_set_quantity(::int64_t value);
 
   public:
-  // int64 unit_price = 6 [json_name = "unitPrice"];
+  // int64 unit_price = 6;
   void clear_unit_price() ;
   [[nodiscard]] ::int64_t unit_price() const;
   void set_unit_price(::int64_t value);
@@ -1878,7 +1878,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchRequest final : p
   void _internal_set_unit_price(::int64_t value);
 
   public:
-  // uint64 sell_order_id = 7 [json_name = "sellOrderId"];
+  // uint64 sell_order_id = 7;
   void clear_sell_order_id() ;
   [[nodiscard]] ::uint64_t sell_order_id() const;
   void set_sell_order_id(::uint64_t value);
@@ -1888,7 +1888,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchRequest final : p
   void _internal_set_sell_order_id(::uint64_t value);
 
   public:
-  // uint64 buy_order_id = 8 [json_name = "buyOrderId"];
+  // uint64 buy_order_id = 8;
   void clear_buy_order_id() ;
   [[nodiscard]] ::uint64_t buy_order_id() const;
   void set_buy_order_id(::uint64_t value);
@@ -1898,7 +1898,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettleAuctionMatchRequest final : p
   void _internal_set_buy_order_id(::uint64_t value);
 
   public:
-  // uint32 item_config_id = 4 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 4;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -2108,7 +2108,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemResponse final : public ::g
     kGoldFieldNumber = 3,
     kCodeFieldNumber = 1,
   };
-  // int64 remaining = 2 [json_name = "remaining"];
+  // int64 remaining = 2;
   void clear_remaining() ;
   [[nodiscard]] ::int64_t remaining() const;
   void set_remaining(::int64_t value);
@@ -2118,7 +2118,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemResponse final : public ::g
   void _internal_set_remaining(::int64_t value);
 
   public:
-  // int64 gold = 3 [json_name = "gold"];
+  // int64 gold = 3;
   void clear_gold() ;
   [[nodiscard]] ::int64_t gold() const;
   void set_gold(::int64_t value);
@@ -2128,7 +2128,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemResponse final : public ::g
   void _internal_set_gold(::int64_t value);
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -2334,7 +2334,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemRequest final : public ::go
     kCountFieldNumber = 3,
     kItemConfigIdFieldNumber = 2,
   };
-  // string idempotency_key = 4 [json_name = "idempotencyKey"];
+  // string idempotency_key = 4;
   void clear_idempotency_key() ;
   [[nodiscard]] const ::std::string& idempotency_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -2349,7 +2349,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemRequest final : public ::go
   ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -2359,7 +2359,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemRequest final : public ::go
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // int64 count = 3 [json_name = "count"];
+  // int64 count = 3;
   void clear_count() ;
   [[nodiscard]] ::int64_t count() const;
   void set_count(::int64_t value);
@@ -2369,7 +2369,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemRequest final : public ::go
   void _internal_set_count(::int64_t value);
 
   public:
-  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 2;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -2574,7 +2574,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellInstanceResponse final : public
     kGoldFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // int64 gold = 2 [json_name = "gold"];
+  // int64 gold = 2;
   void clear_gold() ;
   [[nodiscard]] ::int64_t gold() const;
   void set_gold(::int64_t value);
@@ -2584,7 +2584,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellInstanceResponse final : public
   void _internal_set_gold(::int64_t value);
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -2789,7 +2789,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellInstanceRequest final : public 
     kInstanceIdFieldNumber = 2,
     kItemConfigIdFieldNumber = 3,
   };
-  // string idempotency_key = 4 [json_name = "idempotencyKey"];
+  // string idempotency_key = 4;
   void clear_idempotency_key() ;
   [[nodiscard]] const ::std::string& idempotency_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -2804,7 +2804,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellInstanceRequest final : public 
   ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -2814,7 +2814,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellInstanceRequest final : public 
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // uint64 instance_id = 2 [json_name = "instanceId"];
+  // uint64 instance_id = 2;
   void clear_instance_id() ;
   [[nodiscard]] ::uint64_t instance_id() const;
   void set_instance_id(::uint64_t value);
@@ -2824,7 +2824,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellInstanceRequest final : public 
   void _internal_set_instance_id(::uint64_t value);
 
   public:
-  // uint32 item_config_id = 3 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 3;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -3028,7 +3028,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseTransferEscrowResponse final
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -3229,7 +3229,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseTransferEscrowRequest final 
   enum : int {
     kInstanceIdsFieldNumber = 1,
   };
-  // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
+  // repeated uint64 instance_ids = 1;
   [[nodiscard]] int instance_ids_size()
       const;
   private:
@@ -3441,7 +3441,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseEscrowResponse final : publi
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -3643,7 +3643,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseEscrowRequest final : public
     kPlayerIdFieldNumber = 1,
     kOrderIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -3653,7 +3653,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseEscrowRequest final : public
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // uint64 order_id = 2 [json_name = "orderId"];
+  // uint64 order_id = 2;
   void clear_order_id() ;
   [[nodiscard]] ::uint64_t order_id() const;
   void set_order_id(::uint64_t value);
@@ -3855,7 +3855,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MoveInstanceResponse final : public
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -4058,7 +4058,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MoveInstanceRequest final : public 
     kInstanceIdFieldNumber = 2,
     kToSlotIndexFieldNumber = 3,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -4068,7 +4068,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MoveInstanceRequest final : public 
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // uint64 instance_id = 2 [json_name = "instanceId"];
+  // uint64 instance_id = 2;
   void clear_instance_id() ;
   [[nodiscard]] ::uint64_t instance_id() const;
   void set_instance_id(::uint64_t value);
@@ -4078,7 +4078,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MoveInstanceRequest final : public 
   void _internal_set_instance_id(::uint64_t value);
 
   public:
-  // int32 to_slot_index = 3 [json_name = "toSlotIndex"];
+  // int32 to_slot_index = 3;
   void clear_to_slot_index() ;
   [[nodiscard]] ::int32_t to_slot_index() const;
   void set_to_slot_index(::int32_t value);
@@ -4282,7 +4282,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemStack final : public ::google::
     kCountFieldNumber = 2,
     kItemConfigIdFieldNumber = 1,
   };
-  // int64 count = 2 [json_name = "count"];
+  // int64 count = 2;
   void clear_count() ;
   [[nodiscard]] ::int64_t count() const;
   void set_count(::int64_t value);
@@ -4292,7 +4292,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemStack final : public ::google::
   void _internal_set_count(::int64_t value);
 
   public:
-  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 1;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -4495,7 +4495,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemGrant final : public ::google::
     kCountFieldNumber = 2,
     kItemConfigIdFieldNumber = 1,
   };
-  // int64 count = 2 [json_name = "count"];
+  // int64 count = 2;
   void clear_count() ;
   [[nodiscard]] ::int64_t count() const;
   void set_count(::int64_t value);
@@ -4505,7 +4505,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemGrant final : public ::google::
   void _internal_set_count(::int64_t value);
 
   public:
-  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 1;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -4708,7 +4708,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemAttribute final : public ::goog
     kValueFieldNumber = 2,
     kAttrIdFieldNumber = 1,
   };
-  // int64 value = 2 [json_name = "value"];
+  // int64 value = 2;
   void clear_value() ;
   [[nodiscard]] ::int64_t value() const;
   void set_value(::int64_t value);
@@ -4718,7 +4718,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemAttribute final : public ::goog
   void _internal_set_value(::int64_t value);
 
   public:
-  // uint32 attr_id = 1 [json_name = "attrId"];
+  // uint32 attr_id = 1;
   void clear_attr_id() ;
   [[nodiscard]] ::uint32_t attr_id() const;
   void set_attr_id(::uint32_t value);
@@ -4921,7 +4921,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InstanceOwnershipQuery final : publ
     kInstanceIdFieldNumber = 1,
     kItemConfigIdFieldNumber = 2,
   };
-  // uint64 instance_id = 1 [json_name = "instanceId"];
+  // uint64 instance_id = 1;
   void clear_instance_id() ;
   [[nodiscard]] ::uint64_t instance_id() const;
   void set_instance_id(::uint64_t value);
@@ -4931,7 +4931,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InstanceOwnershipQuery final : publ
   void _internal_set_instance_id(::uint64_t value);
 
   public:
-  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 2;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -5134,7 +5134,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdentifyItemRequest final : public 
     kPlayerIdFieldNumber = 1,
     kInstanceIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -5144,7 +5144,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdentifyItemRequest final : public 
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // uint64 instance_id = 2 [json_name = "instanceId"];
+  // uint64 instance_id = 2;
   void clear_instance_id() ;
   [[nodiscard]] ::uint64_t instance_id() const;
   void set_instance_id(::uint64_t value);
@@ -5347,7 +5347,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantItemsResponse final : public :
     kGoldFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // int64 gold = 2 [json_name = "gold"];
+  // int64 gold = 2;
   void clear_gold() ;
   [[nodiscard]] ::int64_t gold() const;
   void set_gold(::int64_t value);
@@ -5357,7 +5357,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantItemsResponse final : public :
   void _internal_set_gold(::int64_t value);
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -5561,7 +5561,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesRequest final : publi
     kIdempotencyKeyFieldNumber = 3,
     kPlayerIdFieldNumber = 1,
   };
-  // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
+  // repeated uint32 item_config_ids = 2;
   [[nodiscard]] int item_config_ids_size()
       const;
   private:
@@ -5581,7 +5581,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesRequest final : publi
   ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_item_config_ids();
 
   public:
-  // string idempotency_key = 3 [json_name = "idempotencyKey"];
+  // string idempotency_key = 3;
   void clear_idempotency_key() ;
   [[nodiscard]] const ::std::string& idempotency_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -5596,7 +5596,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesRequest final : publi
   ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -5800,7 +5800,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetInventoryRequest final : public 
   enum : int {
     kPlayerIdFieldNumber = 1,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -6001,7 +6001,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderResponse final : publ
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -6207,7 +6207,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderRequest final : publi
     kQuantityFieldNumber = 5,
     kUnitPriceFieldNumber = 6,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -6217,7 +6217,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderRequest final : publi
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // uint64 order_id = 2 [json_name = "orderId"];
+  // uint64 order_id = 2;
   void clear_order_id() ;
   [[nodiscard]] ::uint64_t order_id() const;
   void set_order_id(::uint64_t value);
@@ -6227,7 +6227,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderRequest final : publi
   void _internal_set_order_id(::uint64_t value);
 
   public:
-  // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
+  // .pandora.inventory.v1.EscrowSide side = 3;
   void clear_side() ;
   [[nodiscard]] ::pandora::inventory::v1::EscrowSide side() const;
   void set_side(::pandora::inventory::v1::EscrowSide value);
@@ -6237,7 +6237,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderRequest final : publi
   void _internal_set_side(::pandora::inventory::v1::EscrowSide value);
 
   public:
-  // uint32 item_config_id = 4 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 4;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -6247,7 +6247,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderRequest final : publi
   void _internal_set_item_config_id(::uint32_t value);
 
   public:
-  // int64 quantity = 5 [json_name = "quantity"];
+  // int64 quantity = 5;
   void clear_quantity() ;
   [[nodiscard]] ::int64_t quantity() const;
   void set_quantity(::int64_t value);
@@ -6257,7 +6257,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderRequest final : publi
   void _internal_set_quantity(::int64_t value);
 
   public:
-  // int64 unit_price = 6 [json_name = "unitPrice"];
+  // int64 unit_price = 6;
   void clear_unit_price() ;
   [[nodiscard]] ::int64_t unit_price() const;
   void set_unit_price(::int64_t value);
@@ -6466,7 +6466,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesRequest final : p
     kSourcePlayerIdFieldNumber = 1,
     kToPlayerIdFieldNumber = 2,
   };
-  // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
+  // repeated uint64 instance_ids = 3;
   [[nodiscard]] int instance_ids_size()
       const;
   private:
@@ -6486,7 +6486,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesRequest final : p
   ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_instance_ids();
 
   public:
-  // string escrow_key = 4 [json_name = "escrowKey"];
+  // string escrow_key = 4;
   void clear_escrow_key() ;
   [[nodiscard]] const ::std::string& escrow_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -6501,7 +6501,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesRequest final : p
   ::std::string* PROTOBUF_NONNULL _internal_mutable_escrow_key();
 
   public:
-  // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
+  // uint64 source_player_id = 1;
   void clear_source_player_id() ;
   [[nodiscard]] ::uint64_t source_player_id() const;
   void set_source_player_id(::uint64_t value);
@@ -6511,7 +6511,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesRequest final : p
   void _internal_set_source_player_id(::uint64_t value);
 
   public:
-  // uint64 to_player_id = 2 [json_name = "toPlayerId"];
+  // uint64 to_player_id = 2;
   void clear_to_player_id() ;
   [[nodiscard]] ::uint64_t to_player_id() const;
   void set_to_player_id(::uint64_t value);
@@ -6716,7 +6716,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowResponse final :
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -6922,7 +6922,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowRequest final : 
     kRemainingQuantityFieldNumber = 5,
     kUnitPriceFieldNumber = 6,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -6932,7 +6932,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowRequest final : 
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // uint64 order_id = 2 [json_name = "orderId"];
+  // uint64 order_id = 2;
   void clear_order_id() ;
   [[nodiscard]] ::uint64_t order_id() const;
   void set_order_id(::uint64_t value);
@@ -6942,7 +6942,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowRequest final : 
   void _internal_set_order_id(::uint64_t value);
 
   public:
-  // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
+  // .pandora.inventory.v1.EscrowSide side = 3;
   void clear_side() ;
   [[nodiscard]] ::pandora::inventory::v1::EscrowSide side() const;
   void set_side(::pandora::inventory::v1::EscrowSide value);
@@ -6952,7 +6952,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowRequest final : 
   void _internal_set_side(::pandora::inventory::v1::EscrowSide value);
 
   public:
-  // uint32 item_config_id = 4 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 4;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -6962,7 +6962,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowRequest final : 
   void _internal_set_item_config_id(::uint32_t value);
 
   public:
-  // uint64 remaining_quantity = 5 [json_name = "remainingQuantity"];
+  // uint64 remaining_quantity = 5;
   void clear_remaining_quantity() ;
   [[nodiscard]] ::uint64_t remaining_quantity() const;
   void set_remaining_quantity(::uint64_t value);
@@ -6972,7 +6972,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowRequest final : 
   void _internal_set_remaining_quantity(::uint64_t value);
 
   public:
-  // uint64 unit_price = 6 [json_name = "unitPrice"];
+  // uint64 unit_price = 6;
   void clear_unit_price() ;
   [[nodiscard]] ::uint64_t unit_price() const;
   void set_unit_price(::uint64_t value);
@@ -7179,7 +7179,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardItemResponse final : public 
     kRemainingFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // int64 remaining = 2 [json_name = "remaining"];
+  // int64 remaining = 2;
   void clear_remaining() ;
   [[nodiscard]] ::int64_t remaining() const;
   void set_remaining(::int64_t value);
@@ -7189,7 +7189,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardItemResponse final : public 
   void _internal_set_remaining(::int64_t value);
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -7394,7 +7394,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardItemRequest final : public :
     kCountFieldNumber = 3,
     kItemConfigIdFieldNumber = 2,
   };
-  // string idempotency_key = 4 [json_name = "idempotencyKey"];
+  // string idempotency_key = 4;
   void clear_idempotency_key() ;
   [[nodiscard]] const ::std::string& idempotency_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -7409,7 +7409,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardItemRequest final : public :
   ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -7419,7 +7419,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardItemRequest final : public :
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // int64 count = 3 [json_name = "count"];
+  // int64 count = 3;
   void clear_count() ;
   [[nodiscard]] ::int64_t count() const;
   void set_count(::int64_t value);
@@ -7429,7 +7429,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardItemRequest final : public :
   void _internal_set_count(::int64_t value);
 
   public:
-  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 2;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -7633,7 +7633,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardInstanceResponse final : pub
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -7835,7 +7835,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardInstanceRequest final : publ
     kPlayerIdFieldNumber = 1,
     kInstanceIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -7845,7 +7845,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardInstanceRequest final : publ
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // uint64 instance_id = 2 [json_name = "instanceId"];
+  // uint64 instance_id = 2;
   void clear_instance_id() ;
   [[nodiscard]] ::uint64_t instance_id() const;
   void set_instance_id(::uint64_t value);
@@ -8048,7 +8048,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardBattleItemResponse final : p
     kRemainingFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // int64 remaining = 2 [json_name = "remaining"];
+  // int64 remaining = 2;
   void clear_remaining() ;
   [[nodiscard]] ::int64_t remaining() const;
   void set_remaining(::int64_t value);
@@ -8058,7 +8058,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardBattleItemResponse final : p
   void _internal_set_remaining(::int64_t value);
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -8263,7 +8263,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardBattleItemRequest final : pu
     kCountFieldNumber = 3,
     kItemConfigIdFieldNumber = 2,
   };
-  // string idempotency_key = 4 [json_name = "idempotencyKey"];
+  // string idempotency_key = 4;
   void clear_idempotency_key() ;
   [[nodiscard]] const ::std::string& idempotency_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -8278,7 +8278,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardBattleItemRequest final : pu
   ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -8288,7 +8288,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardBattleItemRequest final : pu
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // int64 count = 3 [json_name = "count"];
+  // int64 count = 3;
   void clear_count() ;
   [[nodiscard]] ::int64_t count() const;
   void set_count(::int64_t value);
@@ -8298,7 +8298,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardBattleItemRequest final : pu
   void _internal_set_count(::int64_t value);
 
   public:
-  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 2;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -8502,7 +8502,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeTransferEscrowResponse final
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -8704,7 +8704,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeTransferEscrowRequest final 
     kInstanceIdsFieldNumber = 2,
     kToPlayerIdFieldNumber = 1,
   };
-  // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
+  // repeated uint64 instance_ids = 2;
   [[nodiscard]] int instance_ids_size()
       const;
   private:
@@ -8724,7 +8724,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeTransferEscrowRequest final 
   ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_instance_ids();
 
   public:
-  // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+  // uint64 to_player_id = 1;
   void clear_to_player_id() ;
   [[nodiscard]] ::uint64_t to_player_id() const;
   void set_to_player_id(::uint64_t value);
@@ -8928,7 +8928,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeBattleItemResponse final : p
     kRemainingFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // int64 remaining = 2 [json_name = "remaining"];
+  // int64 remaining = 2;
   void clear_remaining() ;
   [[nodiscard]] ::int64_t remaining() const;
   void set_remaining(::int64_t value);
@@ -8938,7 +8938,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeBattleItemResponse final : p
   void _internal_set_remaining(::int64_t value);
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -9143,7 +9143,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeBattleItemRequest final : pu
     kCountFieldNumber = 3,
     kItemConfigIdFieldNumber = 2,
   };
-  // string idempotency_key = 4 [json_name = "idempotencyKey"];
+  // string idempotency_key = 4;
   void clear_idempotency_key() ;
   [[nodiscard]] const ::std::string& idempotency_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -9158,7 +9158,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeBattleItemRequest final : pu
   ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -9168,7 +9168,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeBattleItemRequest final : pu
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // int64 count = 3 [json_name = "count"];
+  // int64 count = 3;
   void clear_count() ;
   [[nodiscard]] ::int64_t count() const;
   void set_count(::int64_t value);
@@ -9178,7 +9178,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeBattleItemRequest final : pu
   void _internal_set_count(::int64_t value);
 
   public:
-  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 2;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -9382,7 +9382,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTransferInstancesResponse fina
   enum : int {
     kCodeFieldNumber = 1,
   };
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -9584,7 +9584,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckItemsOwnedResponse final : pub
     kOwnedItemConfigIdsFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // repeated uint32 owned_item_config_ids = 2 [json_name = "ownedItemConfigIds"];
+  // repeated uint32 owned_item_config_ids = 2;
   [[nodiscard]] int owned_item_config_ids_size()
       const;
   private:
@@ -9604,7 +9604,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckItemsOwnedResponse final : pub
   ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_owned_item_config_ids();
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -9808,7 +9808,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckItemsOwnedRequest final : publ
     kItemConfigIdsFieldNumber = 2,
     kPlayerIdFieldNumber = 1,
   };
-  // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
+  // repeated uint32 item_config_ids = 2;
   [[nodiscard]] int item_config_ids_size()
       const;
   private:
@@ -9828,7 +9828,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckItemsOwnedRequest final : publ
   ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_item_config_ids();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -9874,230 +9874,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckItemsOwnedRequest final : publ
     ::google::protobuf::RepeatedField<::uint32_t> item_config_ids_;
     ::google::protobuf::internal::CachedSize _item_config_ids_cached_byte_size_;
     ::uint64_t player_id_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
-};
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckInstancesOwnedResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.CheckInstancesOwnedResponse) */ {
- public:
-  inline CheckInstancesOwnedResponse() : CheckInstancesOwnedResponse(nullptr) {}
-  ~CheckInstancesOwnedResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(CheckInstancesOwnedResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(CheckInstancesOwnedResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr CheckInstancesOwnedResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline CheckInstancesOwnedResponse(const CheckInstancesOwnedResponse& from) : CheckInstancesOwnedResponse(nullptr, from) {}
-  inline CheckInstancesOwnedResponse(CheckInstancesOwnedResponse&& from) noexcept : CheckInstancesOwnedResponse(nullptr, ::std::move(from)) {}
-  inline CheckInstancesOwnedResponse& operator=(const CheckInstancesOwnedResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline CheckInstancesOwnedResponse& operator=(CheckInstancesOwnedResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const CheckInstancesOwnedResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CheckInstancesOwnedResponse>(&CheckInstancesOwnedResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 14;
-  friend void swap(CheckInstancesOwnedResponse& a, CheckInstancesOwnedResponse& b) { a.Swap(&b); }
-  inline void Swap(CheckInstancesOwnedResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(CheckInstancesOwnedResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] CheckInstancesOwnedResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<CheckInstancesOwnedResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const CheckInstancesOwnedResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const CheckInstancesOwnedResponse& from) { CheckInstancesOwnedResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(CheckInstancesOwnedResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.CheckInstancesOwnedResponse"; }
-
-  explicit CheckInstancesOwnedResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  CheckInstancesOwnedResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CheckInstancesOwnedResponse& from);
-  CheckInstancesOwnedResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CheckInstancesOwnedResponse&& from) noexcept
-      : CheckInstancesOwnedResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kOwnedInstanceIdsFieldNumber = 2,
-    kCodeFieldNumber = 1,
-  };
-  // repeated uint64 owned_instance_ids = 2 [json_name = "ownedInstanceIds"];
-  [[nodiscard]] int owned_instance_ids_size()
-      const;
-  private:
-  int _internal_owned_instance_ids_size() const;
-
-  public:
-  void clear_owned_instance_ids() ;
-  [[nodiscard]] ::uint64_t owned_instance_ids(int index) const;
-  void set_owned_instance_ids(int index, ::uint64_t value);
-  void add_owned_instance_ids(::uint64_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& owned_instance_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_owned_instance_ids();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_owned_instance_ids() const;
-  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_owned_instance_ids();
-
-  public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-  void clear_code() ;
-  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
-  void set_code(::pandora::common::v1::ErrCode value);
-
-  private:
-  ::pandora::common::v1::ErrCode _internal_code() const;
-  void _internal_set_code(::pandora::common::v1::ErrCode value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.CheckInstancesOwnedResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          0, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const CheckInstancesOwnedResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedField<::uint64_t> owned_instance_ids_;
-    ::google::protobuf::internal::CachedSize _owned_instance_ids_cached_byte_size_;
-    int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10260,7 +10036,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeRequest final : pu
     kBuyerIdFieldNumber = 3,
     kPriceFieldNumber = 6,
   };
-  // repeated .pandora.inventory.v1.ItemGrant seller_items = 4 [json_name = "sellerItems"];
+  // repeated .pandora.inventory.v1.ItemGrant seller_items = 4;
   [[nodiscard]] int seller_items_size()
       const;
   private:
@@ -10281,7 +10057,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeRequest final : pu
   ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemGrant>* PROTOBUF_NONNULL _internal_mutable_seller_items();
 
   public:
-  // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5 [json_name = "buyerItems"];
+  // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5;
   [[nodiscard]] int buyer_items_size()
       const;
   private:
@@ -10302,7 +10078,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeRequest final : pu
   ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemGrant>* PROTOBUF_NONNULL _internal_mutable_buyer_items();
 
   public:
-  // uint64 order_id = 1 [json_name = "orderId"];
+  // uint64 order_id = 1;
   void clear_order_id() ;
   [[nodiscard]] ::uint64_t order_id() const;
   void set_order_id(::uint64_t value);
@@ -10312,7 +10088,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeRequest final : pu
   void _internal_set_order_id(::uint64_t value);
 
   public:
-  // uint64 seller_id = 2 [json_name = "sellerId"];
+  // uint64 seller_id = 2;
   void clear_seller_id() ;
   [[nodiscard]] ::uint64_t seller_id() const;
   void set_seller_id(::uint64_t value);
@@ -10322,7 +10098,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeRequest final : pu
   void _internal_set_seller_id(::uint64_t value);
 
   public:
-  // uint64 buyer_id = 3 [json_name = "buyerId"];
+  // uint64 buyer_id = 3;
   void clear_buyer_id() ;
   [[nodiscard]] ::uint64_t buyer_id() const;
   void set_buyer_id(::uint64_t value);
@@ -10332,7 +10108,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeRequest final : pu
   void _internal_set_buyer_id(::uint64_t value);
 
   public:
-  // int64 price = 6 [json_name = "price"];
+  // int64 price = 6;
   void clear_price() ;
   [[nodiscard]] ::int64_t price() const;
   void set_price(::int64_t value);
@@ -10538,7 +10314,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstanceAttributesStorageRecord
   enum : int {
     kAttributesFieldNumber = 1,
   };
-  // repeated .pandora.inventory.v1.ItemAttribute attributes = 1 [json_name = "attributes"];
+  // repeated .pandora.inventory.v1.ItemAttribute attributes = 1;
   [[nodiscard]] int attributes_size()
       const;
   private:
@@ -10755,7 +10531,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstance final : public ::googl
     kBoundFieldNumber = 6,
     kSlotIndexFieldNumber = 5,
   };
-  // repeated .pandora.inventory.v1.ItemAttribute attributes = 4 [json_name = "attributes"];
+  // repeated .pandora.inventory.v1.ItemAttribute attributes = 4;
   [[nodiscard]] int attributes_size()
       const;
   private:
@@ -10776,7 +10552,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstance final : public ::googl
   ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemAttribute>* PROTOBUF_NONNULL _internal_mutable_attributes();
 
   public:
-  // uint64 instance_id = 1 [json_name = "instanceId"];
+  // uint64 instance_id = 1;
   void clear_instance_id() ;
   [[nodiscard]] ::uint64_t instance_id() const;
   void set_instance_id(::uint64_t value);
@@ -10786,7 +10562,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstance final : public ::googl
   void _internal_set_instance_id(::uint64_t value);
 
   public:
-  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  // uint32 item_config_id = 2;
   void clear_item_config_id() ;
   [[nodiscard]] ::uint32_t item_config_id() const;
   void set_item_config_id(::uint32_t value);
@@ -10796,7 +10572,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstance final : public ::googl
   void _internal_set_item_config_id(::uint32_t value);
 
   public:
-  // bool identified = 3 [json_name = "identified"];
+  // bool identified = 3;
   void clear_identified() ;
   [[nodiscard]] bool identified() const;
   void set_identified(bool value);
@@ -10806,7 +10582,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstance final : public ::googl
   void _internal_set_identified(bool value);
 
   public:
-  // bool bound = 6 [json_name = "bound"];
+  // bool bound = 6;
   void clear_bound() ;
   [[nodiscard]] bool bound() const;
   void set_bound(bool value);
@@ -10816,7 +10592,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemInstance final : public ::googl
   void _internal_set_bound(bool value);
 
   public:
-  // int32 slot_index = 5 [json_name = "slotIndex"];
+  // int32 slot_index = 5;
   void clear_slot_index() ;
   [[nodiscard]] ::int32_t slot_index() const;
   void set_slot_index(::int32_t value);
@@ -11025,7 +10801,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantItemsRequest final : public ::
     kPlayerIdFieldNumber = 1,
     kGoldFieldNumber = 3,
   };
-  // repeated .pandora.inventory.v1.ItemGrant items = 2 [json_name = "items"];
+  // repeated .pandora.inventory.v1.ItemGrant items = 2;
   [[nodiscard]] int items_size()
       const;
   private:
@@ -11046,7 +10822,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantItemsRequest final : public ::
   ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemGrant>* PROTOBUF_NONNULL _internal_mutable_items();
 
   public:
-  // string idempotency_key = 4 [json_name = "idempotencyKey"];
+  // string idempotency_key = 4;
   void clear_idempotency_key() ;
   [[nodiscard]] const ::std::string& idempotency_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -11061,7 +10837,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantItemsRequest final : public ::
   ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -11071,7 +10847,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantItemsRequest final : public ::
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // int64 gold = 3 [json_name = "gold"];
+  // int64 gold = 3;
   void clear_gold() ;
   [[nodiscard]] ::int64_t gold() const;
   void set_gold(::int64_t value);
@@ -11277,7 +11053,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTransferInstancesRequest final
     kIdempotencyKeyFieldNumber = 3,
     kToPlayerIdFieldNumber = 1,
   };
-  // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
+  // repeated .pandora.inventory.v1.TransferClaimItem items = 2;
   [[nodiscard]] int items_size()
       const;
   private:
@@ -11298,7 +11074,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTransferInstancesRequest final
   ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::TransferClaimItem>* PROTOBUF_NONNULL _internal_mutable_items();
 
   public:
-  // string idempotency_key = 3 [json_name = "idempotencyKey"];
+  // string idempotency_key = 3;
   void clear_idempotency_key() ;
   [[nodiscard]] const ::std::string& idempotency_key() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -11313,7 +11089,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTransferInstancesRequest final
   ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
 
   public:
-  // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+  // uint64 to_player_id = 1;
   void clear_to_player_id() ;
   [[nodiscard]] ::uint64_t to_player_id() const;
   void set_to_player_id(::uint64_t value);
@@ -11517,7 +11293,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckInstancesOwnedRequest final : 
     kInstancesFieldNumber = 2,
     kPlayerIdFieldNumber = 1,
   };
-  // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2 [json_name = "instances"];
+  // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2;
   [[nodiscard]] int instances_size()
       const;
   private:
@@ -11538,7 +11314,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckInstancesOwnedRequest final : 
   ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::InstanceOwnershipQuery>* PROTOBUF_NONNULL _internal_mutable_instances();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -11744,7 +11520,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Inventory final : public ::google::
     kGoldFieldNumber = 2,
     kCapacityFieldNumber = 4,
   };
-  // repeated .pandora.inventory.v1.ItemStack items = 3 [json_name = "items"];
+  // repeated .pandora.inventory.v1.ItemStack items = 3;
   [[nodiscard]] int items_size()
       const;
   private:
@@ -11765,7 +11541,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Inventory final : public ::google::
   ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemStack>* PROTOBUF_NONNULL _internal_mutable_items();
 
   public:
-  // repeated .pandora.inventory.v1.ItemInstance instances = 5 [json_name = "instances"];
+  // repeated .pandora.inventory.v1.ItemInstance instances = 5;
   [[nodiscard]] int instances_size()
       const;
   private:
@@ -11786,7 +11562,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Inventory final : public ::google::
   ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>* PROTOBUF_NONNULL _internal_mutable_instances();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
+  // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
   void set_player_id(::uint64_t value);
@@ -11796,7 +11572,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Inventory final : public ::google::
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // int64 gold = 2 [json_name = "gold"];
+  // int64 gold = 2;
   void clear_gold() ;
   [[nodiscard]] ::int64_t gold() const;
   void set_gold(::int64_t value);
@@ -11806,7 +11582,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Inventory final : public ::google::
   void _internal_set_gold(::int64_t value);
 
   public:
-  // int32 capacity = 4 [json_name = "capacity"];
+  // int32 capacity = 4;
   void clear_capacity() ;
   [[nodiscard]] ::int32_t capacity() const;
   void set_capacity(::int32_t value);
@@ -12012,7 +11788,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdentifyItemResponse final : public
     kInstanceFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // .pandora.inventory.v1.ItemInstance instance = 2 [json_name = "instance"];
+  // .pandora.inventory.v1.ItemInstance instance = 2;
   [[nodiscard]] bool has_instance()
       const;
   void clear_instance() ;
@@ -12028,7 +11804,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdentifyItemResponse final : public
   ::pandora::inventory::v1::ItemInstance* PROTOBUF_NONNULL _internal_mutable_instance();
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -12231,7 +12007,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesResponse final : publ
     kInstancesFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // repeated .pandora.inventory.v1.ItemInstance instances = 2 [json_name = "instances"];
+  // repeated .pandora.inventory.v1.ItemInstance instances = 2;
   [[nodiscard]] int instances_size()
       const;
   private:
@@ -12252,7 +12028,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesResponse final : publ
   ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>* PROTOBUF_NONNULL _internal_mutable_instances();
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -12455,7 +12231,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesResponse final : 
     kItemsFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+  // repeated .pandora.bag.v1.BagItem items = 2;
   [[nodiscard]] int items_size()
       const;
   private:
@@ -12476,7 +12252,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesResponse final : 
   ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL _internal_mutable_items();
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -12520,6 +12296,253 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesResponse final : 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::pandora::bag::v1::BagItem > items_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckInstancesOwnedResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.CheckInstancesOwnedResponse) */ {
+ public:
+  inline CheckInstancesOwnedResponse() : CheckInstancesOwnedResponse(nullptr) {}
+  ~CheckInstancesOwnedResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CheckInstancesOwnedResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CheckInstancesOwnedResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CheckInstancesOwnedResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CheckInstancesOwnedResponse(const CheckInstancesOwnedResponse& from) : CheckInstancesOwnedResponse(nullptr, from) {}
+  inline CheckInstancesOwnedResponse(CheckInstancesOwnedResponse&& from) noexcept : CheckInstancesOwnedResponse(nullptr, ::std::move(from)) {}
+  inline CheckInstancesOwnedResponse& operator=(const CheckInstancesOwnedResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CheckInstancesOwnedResponse& operator=(CheckInstancesOwnedResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CheckInstancesOwnedResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CheckInstancesOwnedResponse>(&CheckInstancesOwnedResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(CheckInstancesOwnedResponse& a, CheckInstancesOwnedResponse& b) { a.Swap(&b); }
+  inline void Swap(CheckInstancesOwnedResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CheckInstancesOwnedResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CheckInstancesOwnedResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CheckInstancesOwnedResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CheckInstancesOwnedResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CheckInstancesOwnedResponse& from) { CheckInstancesOwnedResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CheckInstancesOwnedResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.CheckInstancesOwnedResponse"; }
+
+  explicit CheckInstancesOwnedResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CheckInstancesOwnedResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CheckInstancesOwnedResponse& from);
+  CheckInstancesOwnedResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CheckInstancesOwnedResponse&& from) noexcept
+      : CheckInstancesOwnedResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOwnedInstanceIdsFieldNumber = 2,
+    kOwnedInstancesFieldNumber = 3,
+    kCodeFieldNumber = 1,
+  };
+  // repeated uint64 owned_instance_ids = 2;
+  [[nodiscard]] int owned_instance_ids_size()
+      const;
+  private:
+  int _internal_owned_instance_ids_size() const;
+
+  public:
+  void clear_owned_instance_ids() ;
+  [[nodiscard]] ::uint64_t owned_instance_ids(int index) const;
+  void set_owned_instance_ids(int index, ::uint64_t value);
+  void add_owned_instance_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& owned_instance_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_owned_instance_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_owned_instance_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_owned_instance_ids();
+
+  public:
+  // repeated .pandora.inventory.v1.ItemInstance owned_instances = 3;
+  [[nodiscard]] int owned_instances_size()
+      const;
+  private:
+  int _internal_owned_instances_size() const;
+
+  public:
+  void clear_owned_instances() ;
+  [[nodiscard]] const ::pandora::inventory::v1::ItemInstance& owned_instances(int index) const;
+  [[nodiscard]] ::pandora::inventory::v1::ItemInstance* PROTOBUF_NONNULL mutable_owned_instances(int index);
+  ::pandora::inventory::v1::ItemInstance* PROTOBUF_NONNULL add_owned_instances();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>&
+  owned_instances() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>* PROTOBUF_NONNULL
+  mutable_owned_instances();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>& _internal_owned_instances() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>* PROTOBUF_NONNULL _internal_mutable_owned_instances();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1;
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.CheckInstancesOwnedResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CheckInstancesOwnedResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> owned_instance_ids_;
+    ::google::protobuf::internal::CachedSize _owned_instance_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::inventory::v1::ItemInstance > owned_instances_;
     int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -12679,7 +12702,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetInventoryResponse final : public
     kInventoryFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // .pandora.inventory.v1.Inventory inventory = 2 [json_name = "inventory"];
+  // .pandora.inventory.v1.Inventory inventory = 2;
   [[nodiscard]] bool has_inventory()
       const;
   void clear_inventory() ;
@@ -12695,7 +12718,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetInventoryResponse final : public
   ::pandora::inventory::v1::Inventory* PROTOBUF_NONNULL _internal_mutable_inventory();
 
   public:
-  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  // .pandora.common.v1.ErrCode code = 1;
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
   void set_code(::pandora::common::v1::ErrCode value);
@@ -12762,7 +12785,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetInventoryResponse final : public
 
 // ItemStack
 
-// uint32 item_config_id = 1 [json_name = "itemConfigId"];
+// uint32 item_config_id = 1;
 inline void ItemStack::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -12786,7 +12809,7 @@ inline void ItemStack::_internal_set_item_config_id(::uint32_t value) {
   _impl_.item_config_id_ = value;
 }
 
-// int64 count = 2 [json_name = "count"];
+// int64 count = 2;
 inline void ItemStack::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = ::int64_t{0};
@@ -12814,7 +12837,7 @@ inline void ItemStack::_internal_set_count(::int64_t value) {
 
 // ItemGrant
 
-// uint32 item_config_id = 1 [json_name = "itemConfigId"];
+// uint32 item_config_id = 1;
 inline void ItemGrant::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -12838,7 +12861,7 @@ inline void ItemGrant::_internal_set_item_config_id(::uint32_t value) {
   _impl_.item_config_id_ = value;
 }
 
-// int64 count = 2 [json_name = "count"];
+// int64 count = 2;
 inline void ItemGrant::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = ::int64_t{0};
@@ -12866,7 +12889,7 @@ inline void ItemGrant::_internal_set_count(::int64_t value) {
 
 // Inventory
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void Inventory::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -12890,7 +12913,7 @@ inline void Inventory::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// int64 gold = 2 [json_name = "gold"];
+// int64 gold = 2;
 inline void Inventory::clear_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_ = ::int64_t{0};
@@ -12914,7 +12937,7 @@ inline void Inventory::_internal_set_gold(::int64_t value) {
   _impl_.gold_ = value;
 }
 
-// repeated .pandora.inventory.v1.ItemStack items = 3 [json_name = "items"];
+// repeated .pandora.inventory.v1.ItemStack items = 3;
 inline int Inventory::_internal_items_size() const {
   return _internal_items().size();
 }
@@ -12969,7 +12992,7 @@ Inventory::_internal_mutable_items() {
   return &_impl_.items_;
 }
 
-// int32 capacity = 4 [json_name = "capacity"];
+// int32 capacity = 4;
 inline void Inventory::clear_capacity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.capacity_ = 0;
@@ -12993,7 +13016,7 @@ inline void Inventory::_internal_set_capacity(::int32_t value) {
   _impl_.capacity_ = value;
 }
 
-// repeated .pandora.inventory.v1.ItemInstance instances = 5 [json_name = "instances"];
+// repeated .pandora.inventory.v1.ItemInstance instances = 5;
 inline int Inventory::_internal_instances_size() const {
   return _internal_instances().size();
 }
@@ -13052,7 +13075,7 @@ Inventory::_internal_mutable_instances() {
 
 // ItemAttribute
 
-// uint32 attr_id = 1 [json_name = "attrId"];
+// uint32 attr_id = 1;
 inline void ItemAttribute::clear_attr_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.attr_id_ = 0u;
@@ -13076,7 +13099,7 @@ inline void ItemAttribute::_internal_set_attr_id(::uint32_t value) {
   _impl_.attr_id_ = value;
 }
 
-// int64 value = 2 [json_name = "value"];
+// int64 value = 2;
 inline void ItemAttribute::clear_value() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.value_ = ::int64_t{0};
@@ -13104,7 +13127,7 @@ inline void ItemAttribute::_internal_set_value(::int64_t value) {
 
 // ItemInstanceAttributesStorageRecord
 
-// repeated .pandora.inventory.v1.ItemAttribute attributes = 1 [json_name = "attributes"];
+// repeated .pandora.inventory.v1.ItemAttribute attributes = 1;
 inline int ItemInstanceAttributesStorageRecord::_internal_attributes_size() const {
   return _internal_attributes().size();
 }
@@ -13163,7 +13186,7 @@ ItemInstanceAttributesStorageRecord::_internal_mutable_attributes() {
 
 // ItemInstance
 
-// uint64 instance_id = 1 [json_name = "instanceId"];
+// uint64 instance_id = 1;
 inline void ItemInstance::clear_instance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_id_ = ::uint64_t{0u};
@@ -13187,7 +13210,7 @@ inline void ItemInstance::_internal_set_instance_id(::uint64_t value) {
   _impl_.instance_id_ = value;
 }
 
-// uint32 item_config_id = 2 [json_name = "itemConfigId"];
+// uint32 item_config_id = 2;
 inline void ItemInstance::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -13211,7 +13234,7 @@ inline void ItemInstance::_internal_set_item_config_id(::uint32_t value) {
   _impl_.item_config_id_ = value;
 }
 
-// bool identified = 3 [json_name = "identified"];
+// bool identified = 3;
 inline void ItemInstance::clear_identified() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.identified_ = false;
@@ -13235,7 +13258,7 @@ inline void ItemInstance::_internal_set_identified(bool value) {
   _impl_.identified_ = value;
 }
 
-// repeated .pandora.inventory.v1.ItemAttribute attributes = 4 [json_name = "attributes"];
+// repeated .pandora.inventory.v1.ItemAttribute attributes = 4;
 inline int ItemInstance::_internal_attributes_size() const {
   return _internal_attributes().size();
 }
@@ -13290,7 +13313,7 @@ ItemInstance::_internal_mutable_attributes() {
   return &_impl_.attributes_;
 }
 
-// int32 slot_index = 5 [json_name = "slotIndex"];
+// int32 slot_index = 5;
 inline void ItemInstance::clear_slot_index() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.slot_index_ = 0;
@@ -13314,7 +13337,7 @@ inline void ItemInstance::_internal_set_slot_index(::int32_t value) {
   _impl_.slot_index_ = value;
 }
 
-// bool bound = 6 [json_name = "bound"];
+// bool bound = 6;
 inline void ItemInstance::clear_bound() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bound_ = false;
@@ -13342,7 +13365,7 @@ inline void ItemInstance::_internal_set_bound(bool value) {
 
 // GetInventoryRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void GetInventoryRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -13370,7 +13393,7 @@ inline void GetInventoryRequest::_internal_set_player_id(::uint64_t value) {
 
 // GetInventoryResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void GetInventoryResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -13394,7 +13417,7 @@ inline void GetInventoryResponse::_internal_set_code(::pandora::common::v1::ErrC
   _impl_.code_ = value;
 }
 
-// .pandora.inventory.v1.Inventory inventory = 2 [json_name = "inventory"];
+// .pandora.inventory.v1.Inventory inventory = 2;
 inline bool GetInventoryResponse::has_inventory() const {
   bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
   PROTOBUF_ASSUME(!value || _impl_.inventory_ != nullptr);
@@ -13496,7 +13519,7 @@ inline void GetInventoryResponse::set_allocated_inventory(::pandora::inventory::
 
 // GrantItemsRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void GrantItemsRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -13520,7 +13543,7 @@ inline void GrantItemsRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// repeated .pandora.inventory.v1.ItemGrant items = 2 [json_name = "items"];
+// repeated .pandora.inventory.v1.ItemGrant items = 2;
 inline int GrantItemsRequest::_internal_items_size() const {
   return _internal_items().size();
 }
@@ -13575,7 +13598,7 @@ GrantItemsRequest::_internal_mutable_items() {
   return &_impl_.items_;
 }
 
-// int64 gold = 3 [json_name = "gold"];
+// int64 gold = 3;
 inline void GrantItemsRequest::clear_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_ = ::int64_t{0};
@@ -13599,7 +13622,7 @@ inline void GrantItemsRequest::_internal_set_gold(::int64_t value) {
   _impl_.gold_ = value;
 }
 
-// string idempotency_key = 4 [json_name = "idempotencyKey"];
+// string idempotency_key = 4;
 inline void GrantItemsRequest::clear_idempotency_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.idempotency_key_.ClearToEmpty();
@@ -13667,7 +13690,7 @@ inline void GrantItemsRequest::set_allocated_idempotency_key(::std::string* PROT
 
 // GrantItemsResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void GrantItemsResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -13691,7 +13714,7 @@ inline void GrantItemsResponse::_internal_set_code(::pandora::common::v1::ErrCod
   _impl_.code_ = value;
 }
 
-// int64 gold = 2 [json_name = "gold"];
+// int64 gold = 2;
 inline void GrantItemsResponse::clear_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_ = ::int64_t{0};
@@ -13719,7 +13742,7 @@ inline void GrantItemsResponse::_internal_set_gold(::int64_t value) {
 
 // CheckItemsOwnedRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void CheckItemsOwnedRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -13743,7 +13766,7 @@ inline void CheckItemsOwnedRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
+// repeated uint32 item_config_ids = 2;
 inline int CheckItemsOwnedRequest::_internal_item_config_ids_size() const {
   return _internal_item_config_ids().size();
 }
@@ -13798,7 +13821,7 @@ CheckItemsOwnedRequest::_internal_mutable_item_config_ids() {
 
 // CheckItemsOwnedResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void CheckItemsOwnedResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -13822,7 +13845,7 @@ inline void CheckItemsOwnedResponse::_internal_set_code(::pandora::common::v1::E
   _impl_.code_ = value;
 }
 
-// repeated uint32 owned_item_config_ids = 2 [json_name = "ownedItemConfigIds"];
+// repeated uint32 owned_item_config_ids = 2;
 inline int CheckItemsOwnedResponse::_internal_owned_item_config_ids_size() const {
   return _internal_owned_item_config_ids().size();
 }
@@ -13877,7 +13900,7 @@ CheckItemsOwnedResponse::_internal_mutable_owned_item_config_ids() {
 
 // InstanceOwnershipQuery
 
-// uint64 instance_id = 1 [json_name = "instanceId"];
+// uint64 instance_id = 1;
 inline void InstanceOwnershipQuery::clear_instance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_id_ = ::uint64_t{0u};
@@ -13901,7 +13924,7 @@ inline void InstanceOwnershipQuery::_internal_set_instance_id(::uint64_t value) 
   _impl_.instance_id_ = value;
 }
 
-// uint32 item_config_id = 2 [json_name = "itemConfigId"];
+// uint32 item_config_id = 2;
 inline void InstanceOwnershipQuery::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -13929,7 +13952,7 @@ inline void InstanceOwnershipQuery::_internal_set_item_config_id(::uint32_t valu
 
 // CheckInstancesOwnedRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void CheckInstancesOwnedRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -13953,7 +13976,7 @@ inline void CheckInstancesOwnedRequest::_internal_set_player_id(::uint64_t value
   _impl_.player_id_ = value;
 }
 
-// repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2 [json_name = "instances"];
+// repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2;
 inline int CheckInstancesOwnedRequest::_internal_instances_size() const {
   return _internal_instances().size();
 }
@@ -14012,11 +14035,11 @@ CheckInstancesOwnedRequest::_internal_mutable_instances() {
 
 // CheckInstancesOwnedResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void CheckInstancesOwnedResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::pandora::common::v1::ErrCode CheckInstancesOwnedResponse::code() const {
   // @@protoc_insertion_point(field_get:pandora.inventory.v1.CheckInstancesOwnedResponse.code)
@@ -14024,7 +14047,7 @@ inline ::pandora::common::v1::ErrCode CheckInstancesOwnedResponse::code() const 
 }
 inline void CheckInstancesOwnedResponse::set_code(::pandora::common::v1::ErrCode value) {
   _internal_set_code(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:pandora.inventory.v1.CheckInstancesOwnedResponse.code)
 }
 inline ::pandora::common::v1::ErrCode CheckInstancesOwnedResponse::_internal_code() const {
@@ -14036,7 +14059,7 @@ inline void CheckInstancesOwnedResponse::_internal_set_code(::pandora::common::v
   _impl_.code_ = value;
 }
 
-// repeated uint64 owned_instance_ids = 2 [json_name = "ownedInstanceIds"];
+// repeated uint64 owned_instance_ids = 2;
 inline int CheckInstancesOwnedResponse::_internal_owned_instance_ids_size() const {
   return _internal_owned_instance_ids().size();
 }
@@ -14087,11 +14110,66 @@ CheckInstancesOwnedResponse::_internal_mutable_owned_instance_ids() {
   return &_impl_.owned_instance_ids_;
 }
 
+// repeated .pandora.inventory.v1.ItemInstance owned_instances = 3;
+inline int CheckInstancesOwnedResponse::_internal_owned_instances_size() const {
+  return _internal_owned_instances().size();
+}
+inline int CheckInstancesOwnedResponse::owned_instances_size() const {
+  return _internal_owned_instances_size();
+}
+inline void CheckInstancesOwnedResponse::clear_owned_instances() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_instances_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::pandora::inventory::v1::ItemInstance& CheckInstancesOwnedResponse::owned_instances(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.CheckInstancesOwnedResponse.owned_instances)
+  return _internal_owned_instances().Get(index);
+}
+inline ::pandora::inventory::v1::ItemInstance* PROTOBUF_NONNULL CheckInstancesOwnedResponse::mutable_owned_instances(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.inventory.v1.CheckInstancesOwnedResponse.owned_instances)
+  return _internal_mutable_owned_instances()->Mutable(index);
+}
+inline ::pandora::inventory::v1::ItemInstance* PROTOBUF_NONNULL CheckInstancesOwnedResponse::add_owned_instances()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::inventory::v1::ItemInstance* _add =
+      _internal_mutable_owned_instances()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:pandora.inventory.v1.CheckInstancesOwnedResponse.owned_instances)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>& CheckInstancesOwnedResponse::owned_instances() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.inventory.v1.CheckInstancesOwnedResponse.owned_instances)
+  return _internal_owned_instances();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>* PROTOBUF_NONNULL
+CheckInstancesOwnedResponse::mutable_owned_instances() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.inventory.v1.CheckInstancesOwnedResponse.owned_instances)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_owned_instances();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>&
+CheckInstancesOwnedResponse::_internal_owned_instances() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owned_instances_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::ItemInstance>* PROTOBUF_NONNULL
+CheckInstancesOwnedResponse::_internal_mutable_owned_instances() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.owned_instances_;
+}
+
 // -------------------------------------------------------------------
 
 // UseItemRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void UseItemRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -14115,7 +14193,7 @@ inline void UseItemRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// uint32 item_config_id = 2 [json_name = "itemConfigId"];
+// uint32 item_config_id = 2;
 inline void UseItemRequest::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -14139,7 +14217,7 @@ inline void UseItemRequest::_internal_set_item_config_id(::uint32_t value) {
   _impl_.item_config_id_ = value;
 }
 
-// int64 count = 3 [json_name = "count"];
+// int64 count = 3;
 inline void UseItemRequest::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = ::int64_t{0};
@@ -14163,7 +14241,7 @@ inline void UseItemRequest::_internal_set_count(::int64_t value) {
   _impl_.count_ = value;
 }
 
-// string idempotency_key = 4 [json_name = "idempotencyKey"];
+// string idempotency_key = 4;
 inline void UseItemRequest::clear_idempotency_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.idempotency_key_.ClearToEmpty();
@@ -14231,7 +14309,7 @@ inline void UseItemRequest::set_allocated_idempotency_key(::std::string* PROTOBU
 
 // UseItemResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void UseItemResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -14255,7 +14333,7 @@ inline void UseItemResponse::_internal_set_code(::pandora::common::v1::ErrCode v
   _impl_.code_ = value;
 }
 
-// int64 remaining = 2 [json_name = "remaining"];
+// int64 remaining = 2;
 inline void UseItemResponse::clear_remaining() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remaining_ = ::int64_t{0};
@@ -14283,7 +14361,7 @@ inline void UseItemResponse::_internal_set_remaining(::int64_t value) {
 
 // ConsumeBattleItemRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void ConsumeBattleItemRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -14307,7 +14385,7 @@ inline void ConsumeBattleItemRequest::_internal_set_player_id(::uint64_t value) 
   _impl_.player_id_ = value;
 }
 
-// uint32 item_config_id = 2 [json_name = "itemConfigId"];
+// uint32 item_config_id = 2;
 inline void ConsumeBattleItemRequest::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -14331,7 +14409,7 @@ inline void ConsumeBattleItemRequest::_internal_set_item_config_id(::uint32_t va
   _impl_.item_config_id_ = value;
 }
 
-// int64 count = 3 [json_name = "count"];
+// int64 count = 3;
 inline void ConsumeBattleItemRequest::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = ::int64_t{0};
@@ -14355,7 +14433,7 @@ inline void ConsumeBattleItemRequest::_internal_set_count(::int64_t value) {
   _impl_.count_ = value;
 }
 
-// string idempotency_key = 4 [json_name = "idempotencyKey"];
+// string idempotency_key = 4;
 inline void ConsumeBattleItemRequest::clear_idempotency_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.idempotency_key_.ClearToEmpty();
@@ -14423,7 +14501,7 @@ inline void ConsumeBattleItemRequest::set_allocated_idempotency_key(::std::strin
 
 // ConsumeBattleItemResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void ConsumeBattleItemResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -14447,7 +14525,7 @@ inline void ConsumeBattleItemResponse::_internal_set_code(::pandora::common::v1:
   _impl_.code_ = value;
 }
 
-// int64 remaining = 2 [json_name = "remaining"];
+// int64 remaining = 2;
 inline void ConsumeBattleItemResponse::clear_remaining() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remaining_ = ::int64_t{0};
@@ -14475,7 +14553,7 @@ inline void ConsumeBattleItemResponse::_internal_set_remaining(::int64_t value) 
 
 // DiscardBattleItemRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void DiscardBattleItemRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -14499,7 +14577,7 @@ inline void DiscardBattleItemRequest::_internal_set_player_id(::uint64_t value) 
   _impl_.player_id_ = value;
 }
 
-// uint32 item_config_id = 2 [json_name = "itemConfigId"];
+// uint32 item_config_id = 2;
 inline void DiscardBattleItemRequest::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -14523,7 +14601,7 @@ inline void DiscardBattleItemRequest::_internal_set_item_config_id(::uint32_t va
   _impl_.item_config_id_ = value;
 }
 
-// int64 count = 3 [json_name = "count"];
+// int64 count = 3;
 inline void DiscardBattleItemRequest::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = ::int64_t{0};
@@ -14547,7 +14625,7 @@ inline void DiscardBattleItemRequest::_internal_set_count(::int64_t value) {
   _impl_.count_ = value;
 }
 
-// string idempotency_key = 4 [json_name = "idempotencyKey"];
+// string idempotency_key = 4;
 inline void DiscardBattleItemRequest::clear_idempotency_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.idempotency_key_.ClearToEmpty();
@@ -14615,7 +14693,7 @@ inline void DiscardBattleItemRequest::set_allocated_idempotency_key(::std::strin
 
 // DiscardBattleItemResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void DiscardBattleItemResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -14639,7 +14717,7 @@ inline void DiscardBattleItemResponse::_internal_set_code(::pandora::common::v1:
   _impl_.code_ = value;
 }
 
-// int64 remaining = 2 [json_name = "remaining"];
+// int64 remaining = 2;
 inline void DiscardBattleItemResponse::clear_remaining() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remaining_ = ::int64_t{0};
@@ -14667,7 +14745,7 @@ inline void DiscardBattleItemResponse::_internal_set_remaining(::int64_t value) 
 
 // SellItemRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void SellItemRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -14691,7 +14769,7 @@ inline void SellItemRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// uint32 item_config_id = 2 [json_name = "itemConfigId"];
+// uint32 item_config_id = 2;
 inline void SellItemRequest::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -14715,7 +14793,7 @@ inline void SellItemRequest::_internal_set_item_config_id(::uint32_t value) {
   _impl_.item_config_id_ = value;
 }
 
-// int64 count = 3 [json_name = "count"];
+// int64 count = 3;
 inline void SellItemRequest::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = ::int64_t{0};
@@ -14739,7 +14817,7 @@ inline void SellItemRequest::_internal_set_count(::int64_t value) {
   _impl_.count_ = value;
 }
 
-// string idempotency_key = 4 [json_name = "idempotencyKey"];
+// string idempotency_key = 4;
 inline void SellItemRequest::clear_idempotency_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.idempotency_key_.ClearToEmpty();
@@ -14807,7 +14885,7 @@ inline void SellItemRequest::set_allocated_idempotency_key(::std::string* PROTOB
 
 // SellItemResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void SellItemResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -14831,7 +14909,7 @@ inline void SellItemResponse::_internal_set_code(::pandora::common::v1::ErrCode 
   _impl_.code_ = value;
 }
 
-// int64 remaining = 2 [json_name = "remaining"];
+// int64 remaining = 2;
 inline void SellItemResponse::clear_remaining() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remaining_ = ::int64_t{0};
@@ -14855,7 +14933,7 @@ inline void SellItemResponse::_internal_set_remaining(::int64_t value) {
   _impl_.remaining_ = value;
 }
 
-// int64 gold = 3 [json_name = "gold"];
+// int64 gold = 3;
 inline void SellItemResponse::clear_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_ = ::int64_t{0};
@@ -14883,7 +14961,7 @@ inline void SellItemResponse::_internal_set_gold(::int64_t value) {
 
 // DiscardItemRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void DiscardItemRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -14907,7 +14985,7 @@ inline void DiscardItemRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// uint32 item_config_id = 2 [json_name = "itemConfigId"];
+// uint32 item_config_id = 2;
 inline void DiscardItemRequest::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -14931,7 +15009,7 @@ inline void DiscardItemRequest::_internal_set_item_config_id(::uint32_t value) {
   _impl_.item_config_id_ = value;
 }
 
-// int64 count = 3 [json_name = "count"];
+// int64 count = 3;
 inline void DiscardItemRequest::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = ::int64_t{0};
@@ -14955,7 +15033,7 @@ inline void DiscardItemRequest::_internal_set_count(::int64_t value) {
   _impl_.count_ = value;
 }
 
-// string idempotency_key = 4 [json_name = "idempotencyKey"];
+// string idempotency_key = 4;
 inline void DiscardItemRequest::clear_idempotency_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.idempotency_key_.ClearToEmpty();
@@ -15023,7 +15101,7 @@ inline void DiscardItemRequest::set_allocated_idempotency_key(::std::string* PRO
 
 // DiscardItemResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void DiscardItemResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -15047,7 +15125,7 @@ inline void DiscardItemResponse::_internal_set_code(::pandora::common::v1::ErrCo
   _impl_.code_ = value;
 }
 
-// int64 remaining = 2 [json_name = "remaining"];
+// int64 remaining = 2;
 inline void DiscardItemResponse::clear_remaining() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remaining_ = ::int64_t{0};
@@ -15075,7 +15153,7 @@ inline void DiscardItemResponse::_internal_set_remaining(::int64_t value) {
 
 // SettleAuctionMatchRequest
 
-// uint64 match_id = 1 [json_name = "matchId"];
+// uint64 match_id = 1;
 inline void SettleAuctionMatchRequest::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
@@ -15099,7 +15177,7 @@ inline void SettleAuctionMatchRequest::_internal_set_match_id(::uint64_t value) 
   _impl_.match_id_ = value;
 }
 
-// uint64 seller_id = 2 [json_name = "sellerId"];
+// uint64 seller_id = 2;
 inline void SettleAuctionMatchRequest::clear_seller_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.seller_id_ = ::uint64_t{0u};
@@ -15123,7 +15201,7 @@ inline void SettleAuctionMatchRequest::_internal_set_seller_id(::uint64_t value)
   _impl_.seller_id_ = value;
 }
 
-// uint64 buyer_id = 3 [json_name = "buyerId"];
+// uint64 buyer_id = 3;
 inline void SettleAuctionMatchRequest::clear_buyer_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.buyer_id_ = ::uint64_t{0u};
@@ -15147,7 +15225,7 @@ inline void SettleAuctionMatchRequest::_internal_set_buyer_id(::uint64_t value) 
   _impl_.buyer_id_ = value;
 }
 
-// uint32 item_config_id = 4 [json_name = "itemConfigId"];
+// uint32 item_config_id = 4;
 inline void SettleAuctionMatchRequest::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -15171,7 +15249,7 @@ inline void SettleAuctionMatchRequest::_internal_set_item_config_id(::uint32_t v
   _impl_.item_config_id_ = value;
 }
 
-// int64 quantity = 5 [json_name = "quantity"];
+// int64 quantity = 5;
 inline void SettleAuctionMatchRequest::clear_quantity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.quantity_ = ::int64_t{0};
@@ -15195,7 +15273,7 @@ inline void SettleAuctionMatchRequest::_internal_set_quantity(::int64_t value) {
   _impl_.quantity_ = value;
 }
 
-// int64 unit_price = 6 [json_name = "unitPrice"];
+// int64 unit_price = 6;
 inline void SettleAuctionMatchRequest::clear_unit_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.unit_price_ = ::int64_t{0};
@@ -15219,7 +15297,7 @@ inline void SettleAuctionMatchRequest::_internal_set_unit_price(::int64_t value)
   _impl_.unit_price_ = value;
 }
 
-// uint64 sell_order_id = 7 [json_name = "sellOrderId"];
+// uint64 sell_order_id = 7;
 inline void SettleAuctionMatchRequest::clear_sell_order_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sell_order_id_ = ::uint64_t{0u};
@@ -15243,7 +15321,7 @@ inline void SettleAuctionMatchRequest::_internal_set_sell_order_id(::uint64_t va
   _impl_.sell_order_id_ = value;
 }
 
-// uint64 buy_order_id = 8 [json_name = "buyOrderId"];
+// uint64 buy_order_id = 8;
 inline void SettleAuctionMatchRequest::clear_buy_order_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.buy_order_id_ = ::uint64_t{0u};
@@ -15271,7 +15349,7 @@ inline void SettleAuctionMatchRequest::_internal_set_buy_order_id(::uint64_t val
 
 // SettleAuctionMatchResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void SettleAuctionMatchResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -15299,7 +15377,7 @@ inline void SettleAuctionMatchResponse::_internal_set_code(::pandora::common::v1
 
 // SettlePlayerTradeRequest
 
-// uint64 order_id = 1 [json_name = "orderId"];
+// uint64 order_id = 1;
 inline void SettlePlayerTradeRequest::clear_order_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.order_id_ = ::uint64_t{0u};
@@ -15323,7 +15401,7 @@ inline void SettlePlayerTradeRequest::_internal_set_order_id(::uint64_t value) {
   _impl_.order_id_ = value;
 }
 
-// uint64 seller_id = 2 [json_name = "sellerId"];
+// uint64 seller_id = 2;
 inline void SettlePlayerTradeRequest::clear_seller_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.seller_id_ = ::uint64_t{0u};
@@ -15347,7 +15425,7 @@ inline void SettlePlayerTradeRequest::_internal_set_seller_id(::uint64_t value) 
   _impl_.seller_id_ = value;
 }
 
-// uint64 buyer_id = 3 [json_name = "buyerId"];
+// uint64 buyer_id = 3;
 inline void SettlePlayerTradeRequest::clear_buyer_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.buyer_id_ = ::uint64_t{0u};
@@ -15371,7 +15449,7 @@ inline void SettlePlayerTradeRequest::_internal_set_buyer_id(::uint64_t value) {
   _impl_.buyer_id_ = value;
 }
 
-// repeated .pandora.inventory.v1.ItemGrant seller_items = 4 [json_name = "sellerItems"];
+// repeated .pandora.inventory.v1.ItemGrant seller_items = 4;
 inline int SettlePlayerTradeRequest::_internal_seller_items_size() const {
   return _internal_seller_items().size();
 }
@@ -15426,7 +15504,7 @@ SettlePlayerTradeRequest::_internal_mutable_seller_items() {
   return &_impl_.seller_items_;
 }
 
-// repeated .pandora.inventory.v1.ItemGrant buyer_items = 5 [json_name = "buyerItems"];
+// repeated .pandora.inventory.v1.ItemGrant buyer_items = 5;
 inline int SettlePlayerTradeRequest::_internal_buyer_items_size() const {
   return _internal_buyer_items().size();
 }
@@ -15481,7 +15559,7 @@ SettlePlayerTradeRequest::_internal_mutable_buyer_items() {
   return &_impl_.buyer_items_;
 }
 
-// int64 price = 6 [json_name = "price"];
+// int64 price = 6;
 inline void SettlePlayerTradeRequest::clear_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.price_ = ::int64_t{0};
@@ -15509,7 +15587,7 @@ inline void SettlePlayerTradeRequest::_internal_set_price(::int64_t value) {
 
 // SettlePlayerTradeResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void SettlePlayerTradeResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -15537,7 +15615,7 @@ inline void SettlePlayerTradeResponse::_internal_set_code(::pandora::common::v1:
 
 // FreezeForOrderRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void FreezeForOrderRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -15561,7 +15639,7 @@ inline void FreezeForOrderRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// uint64 order_id = 2 [json_name = "orderId"];
+// uint64 order_id = 2;
 inline void FreezeForOrderRequest::clear_order_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.order_id_ = ::uint64_t{0u};
@@ -15585,7 +15663,7 @@ inline void FreezeForOrderRequest::_internal_set_order_id(::uint64_t value) {
   _impl_.order_id_ = value;
 }
 
-// .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
+// .pandora.inventory.v1.EscrowSide side = 3;
 inline void FreezeForOrderRequest::clear_side() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.side_ = 0;
@@ -15609,7 +15687,7 @@ inline void FreezeForOrderRequest::_internal_set_side(::pandora::inventory::v1::
   _impl_.side_ = value;
 }
 
-// uint32 item_config_id = 4 [json_name = "itemConfigId"];
+// uint32 item_config_id = 4;
 inline void FreezeForOrderRequest::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -15633,7 +15711,7 @@ inline void FreezeForOrderRequest::_internal_set_item_config_id(::uint32_t value
   _impl_.item_config_id_ = value;
 }
 
-// int64 quantity = 5 [json_name = "quantity"];
+// int64 quantity = 5;
 inline void FreezeForOrderRequest::clear_quantity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.quantity_ = ::int64_t{0};
@@ -15657,7 +15735,7 @@ inline void FreezeForOrderRequest::_internal_set_quantity(::int64_t value) {
   _impl_.quantity_ = value;
 }
 
-// int64 unit_price = 6 [json_name = "unitPrice"];
+// int64 unit_price = 6;
 inline void FreezeForOrderRequest::clear_unit_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.unit_price_ = ::int64_t{0};
@@ -15685,7 +15763,7 @@ inline void FreezeForOrderRequest::_internal_set_unit_price(::int64_t value) {
 
 // FreezeForOrderResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void FreezeForOrderResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -15713,7 +15791,7 @@ inline void FreezeForOrderResponse::_internal_set_code(::pandora::common::v1::Er
 
 // EnsureAuctionEscrowRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void EnsureAuctionEscrowRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -15737,7 +15815,7 @@ inline void EnsureAuctionEscrowRequest::_internal_set_player_id(::uint64_t value
   _impl_.player_id_ = value;
 }
 
-// uint64 order_id = 2 [json_name = "orderId"];
+// uint64 order_id = 2;
 inline void EnsureAuctionEscrowRequest::clear_order_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.order_id_ = ::uint64_t{0u};
@@ -15761,7 +15839,7 @@ inline void EnsureAuctionEscrowRequest::_internal_set_order_id(::uint64_t value)
   _impl_.order_id_ = value;
 }
 
-// .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
+// .pandora.inventory.v1.EscrowSide side = 3;
 inline void EnsureAuctionEscrowRequest::clear_side() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.side_ = 0;
@@ -15785,7 +15863,7 @@ inline void EnsureAuctionEscrowRequest::_internal_set_side(::pandora::inventory:
   _impl_.side_ = value;
 }
 
-// uint32 item_config_id = 4 [json_name = "itemConfigId"];
+// uint32 item_config_id = 4;
 inline void EnsureAuctionEscrowRequest::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -15809,7 +15887,7 @@ inline void EnsureAuctionEscrowRequest::_internal_set_item_config_id(::uint32_t 
   _impl_.item_config_id_ = value;
 }
 
-// uint64 remaining_quantity = 5 [json_name = "remainingQuantity"];
+// uint64 remaining_quantity = 5;
 inline void EnsureAuctionEscrowRequest::clear_remaining_quantity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remaining_quantity_ = ::uint64_t{0u};
@@ -15833,7 +15911,7 @@ inline void EnsureAuctionEscrowRequest::_internal_set_remaining_quantity(::uint6
   _impl_.remaining_quantity_ = value;
 }
 
-// uint64 unit_price = 6 [json_name = "unitPrice"];
+// uint64 unit_price = 6;
 inline void EnsureAuctionEscrowRequest::clear_unit_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.unit_price_ = ::uint64_t{0u};
@@ -15861,7 +15939,7 @@ inline void EnsureAuctionEscrowRequest::_internal_set_unit_price(::uint64_t valu
 
 // EnsureAuctionEscrowResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void EnsureAuctionEscrowResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -15889,7 +15967,7 @@ inline void EnsureAuctionEscrowResponse::_internal_set_code(::pandora::common::v
 
 // ReleaseEscrowRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void ReleaseEscrowRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -15913,7 +15991,7 @@ inline void ReleaseEscrowRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// uint64 order_id = 2 [json_name = "orderId"];
+// uint64 order_id = 2;
 inline void ReleaseEscrowRequest::clear_order_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.order_id_ = ::uint64_t{0u};
@@ -15941,7 +16019,7 @@ inline void ReleaseEscrowRequest::_internal_set_order_id(::uint64_t value) {
 
 // ReleaseEscrowResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void ReleaseEscrowResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -15969,7 +16047,7 @@ inline void ReleaseEscrowResponse::_internal_set_code(::pandora::common::v1::Err
 
 // GrantInstancesRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void GrantInstancesRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -15993,7 +16071,7 @@ inline void GrantInstancesRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
+// repeated uint32 item_config_ids = 2;
 inline int GrantInstancesRequest::_internal_item_config_ids_size() const {
   return _internal_item_config_ids().size();
 }
@@ -16044,7 +16122,7 @@ GrantInstancesRequest::_internal_mutable_item_config_ids() {
   return &_impl_.item_config_ids_;
 }
 
-// string idempotency_key = 3 [json_name = "idempotencyKey"];
+// string idempotency_key = 3;
 inline void GrantInstancesRequest::clear_idempotency_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.idempotency_key_.ClearToEmpty();
@@ -16112,7 +16190,7 @@ inline void GrantInstancesRequest::set_allocated_idempotency_key(::std::string* 
 
 // GrantInstancesResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void GrantInstancesResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -16136,7 +16214,7 @@ inline void GrantInstancesResponse::_internal_set_code(::pandora::common::v1::Er
   _impl_.code_ = value;
 }
 
-// repeated .pandora.inventory.v1.ItemInstance instances = 2 [json_name = "instances"];
+// repeated .pandora.inventory.v1.ItemInstance instances = 2;
 inline int GrantInstancesResponse::_internal_instances_size() const {
   return _internal_instances().size();
 }
@@ -16195,7 +16273,7 @@ GrantInstancesResponse::_internal_mutable_instances() {
 
 // IdentifyItemRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void IdentifyItemRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -16219,7 +16297,7 @@ inline void IdentifyItemRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// uint64 instance_id = 2 [json_name = "instanceId"];
+// uint64 instance_id = 2;
 inline void IdentifyItemRequest::clear_instance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_id_ = ::uint64_t{0u};
@@ -16247,7 +16325,7 @@ inline void IdentifyItemRequest::_internal_set_instance_id(::uint64_t value) {
 
 // IdentifyItemResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void IdentifyItemResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -16271,7 +16349,7 @@ inline void IdentifyItemResponse::_internal_set_code(::pandora::common::v1::ErrC
   _impl_.code_ = value;
 }
 
-// .pandora.inventory.v1.ItemInstance instance = 2 [json_name = "instance"];
+// .pandora.inventory.v1.ItemInstance instance = 2;
 inline bool IdentifyItemResponse::has_instance() const {
   bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
   PROTOBUF_ASSUME(!value || _impl_.instance_ != nullptr);
@@ -16373,7 +16451,7 @@ inline void IdentifyItemResponse::set_allocated_instance(::pandora::inventory::v
 
 // DiscardInstanceRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void DiscardInstanceRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -16397,7 +16475,7 @@ inline void DiscardInstanceRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// uint64 instance_id = 2 [json_name = "instanceId"];
+// uint64 instance_id = 2;
 inline void DiscardInstanceRequest::clear_instance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_id_ = ::uint64_t{0u};
@@ -16425,7 +16503,7 @@ inline void DiscardInstanceRequest::_internal_set_instance_id(::uint64_t value) 
 
 // DiscardInstanceResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void DiscardInstanceResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -16453,7 +16531,7 @@ inline void DiscardInstanceResponse::_internal_set_code(::pandora::common::v1::E
 
 // MoveInstanceRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void MoveInstanceRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -16477,7 +16555,7 @@ inline void MoveInstanceRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// uint64 instance_id = 2 [json_name = "instanceId"];
+// uint64 instance_id = 2;
 inline void MoveInstanceRequest::clear_instance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_id_ = ::uint64_t{0u};
@@ -16501,7 +16579,7 @@ inline void MoveInstanceRequest::_internal_set_instance_id(::uint64_t value) {
   _impl_.instance_id_ = value;
 }
 
-// int32 to_slot_index = 3 [json_name = "toSlotIndex"];
+// int32 to_slot_index = 3;
 inline void MoveInstanceRequest::clear_to_slot_index() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.to_slot_index_ = 0;
@@ -16529,7 +16607,7 @@ inline void MoveInstanceRequest::_internal_set_to_slot_index(::int32_t value) {
 
 // MoveInstanceResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void MoveInstanceResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -16557,7 +16635,7 @@ inline void MoveInstanceResponse::_internal_set_code(::pandora::common::v1::ErrC
 
 // SellInstanceRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
+// uint64 player_id = 1;
 inline void SellInstanceRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
@@ -16581,7 +16659,7 @@ inline void SellInstanceRequest::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// uint64 instance_id = 2 [json_name = "instanceId"];
+// uint64 instance_id = 2;
 inline void SellInstanceRequest::clear_instance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_id_ = ::uint64_t{0u};
@@ -16605,7 +16683,7 @@ inline void SellInstanceRequest::_internal_set_instance_id(::uint64_t value) {
   _impl_.instance_id_ = value;
 }
 
-// uint32 item_config_id = 3 [json_name = "itemConfigId"];
+// uint32 item_config_id = 3;
 inline void SellInstanceRequest::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -16629,7 +16707,7 @@ inline void SellInstanceRequest::_internal_set_item_config_id(::uint32_t value) 
   _impl_.item_config_id_ = value;
 }
 
-// string idempotency_key = 4 [json_name = "idempotencyKey"];
+// string idempotency_key = 4;
 inline void SellInstanceRequest::clear_idempotency_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.idempotency_key_.ClearToEmpty();
@@ -16697,7 +16775,7 @@ inline void SellInstanceRequest::set_allocated_idempotency_key(::std::string* PR
 
 // SellInstanceResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void SellInstanceResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -16721,7 +16799,7 @@ inline void SellInstanceResponse::_internal_set_code(::pandora::common::v1::ErrC
   _impl_.code_ = value;
 }
 
-// int64 gold = 2 [json_name = "gold"];
+// int64 gold = 2;
 inline void SellInstanceResponse::clear_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_ = ::int64_t{0};
@@ -16749,7 +16827,7 @@ inline void SellInstanceResponse::_internal_set_gold(::int64_t value) {
 
 // EscrowOutInstancesRequest
 
-// uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
+// uint64 source_player_id = 1;
 inline void EscrowOutInstancesRequest::clear_source_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_player_id_ = ::uint64_t{0u};
@@ -16773,7 +16851,7 @@ inline void EscrowOutInstancesRequest::_internal_set_source_player_id(::uint64_t
   _impl_.source_player_id_ = value;
 }
 
-// uint64 to_player_id = 2 [json_name = "toPlayerId"];
+// uint64 to_player_id = 2;
 inline void EscrowOutInstancesRequest::clear_to_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.to_player_id_ = ::uint64_t{0u};
@@ -16797,7 +16875,7 @@ inline void EscrowOutInstancesRequest::_internal_set_to_player_id(::uint64_t val
   _impl_.to_player_id_ = value;
 }
 
-// repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
+// repeated uint64 instance_ids = 3;
 inline int EscrowOutInstancesRequest::_internal_instance_ids_size() const {
   return _internal_instance_ids().size();
 }
@@ -16848,7 +16926,7 @@ EscrowOutInstancesRequest::_internal_mutable_instance_ids() {
   return &_impl_.instance_ids_;
 }
 
-// string escrow_key = 4 [json_name = "escrowKey"];
+// string escrow_key = 4;
 inline void EscrowOutInstancesRequest::clear_escrow_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.escrow_key_.ClearToEmpty();
@@ -16916,7 +16994,7 @@ inline void EscrowOutInstancesRequest::set_allocated_escrow_key(::std::string* P
 
 // EscrowOutInstancesResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void EscrowOutInstancesResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -16940,7 +17018,7 @@ inline void EscrowOutInstancesResponse::_internal_set_code(::pandora::common::v1
   _impl_.code_ = value;
 }
 
-// repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+// repeated .pandora.bag.v1.BagItem items = 2;
 inline int EscrowOutInstancesResponse::_internal_items_size() const {
   return _internal_items().size();
 }
@@ -16994,7 +17072,7 @@ EscrowOutInstancesResponse::_internal_mutable_items() {
 
 // TransferClaimItem
 
-// uint64 instance_id = 1 [json_name = "instanceId"];
+// uint64 instance_id = 1;
 inline void TransferClaimItem::clear_instance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_id_ = ::uint64_t{0u};
@@ -17018,7 +17096,7 @@ inline void TransferClaimItem::_internal_set_instance_id(::uint64_t value) {
   _impl_.instance_id_ = value;
 }
 
-// uint32 item_config_id = 2 [json_name = "itemConfigId"];
+// uint32 item_config_id = 2;
 inline void TransferClaimItem::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
@@ -17046,7 +17124,7 @@ inline void TransferClaimItem::_internal_set_item_config_id(::uint32_t value) {
 
 // ClaimTransferInstancesRequest
 
-// uint64 to_player_id = 1 [json_name = "toPlayerId"];
+// uint64 to_player_id = 1;
 inline void ClaimTransferInstancesRequest::clear_to_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.to_player_id_ = ::uint64_t{0u};
@@ -17070,7 +17148,7 @@ inline void ClaimTransferInstancesRequest::_internal_set_to_player_id(::uint64_t
   _impl_.to_player_id_ = value;
 }
 
-// repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
+// repeated .pandora.inventory.v1.TransferClaimItem items = 2;
 inline int ClaimTransferInstancesRequest::_internal_items_size() const {
   return _internal_items().size();
 }
@@ -17125,7 +17203,7 @@ ClaimTransferInstancesRequest::_internal_mutable_items() {
   return &_impl_.items_;
 }
 
-// string idempotency_key = 3 [json_name = "idempotencyKey"];
+// string idempotency_key = 3;
 inline void ClaimTransferInstancesRequest::clear_idempotency_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.idempotency_key_.ClearToEmpty();
@@ -17193,7 +17271,7 @@ inline void ClaimTransferInstancesRequest::set_allocated_idempotency_key(::std::
 
 // ClaimTransferInstancesResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void ClaimTransferInstancesResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -17221,7 +17299,7 @@ inline void ClaimTransferInstancesResponse::_internal_set_code(::pandora::common
 
 // ReleaseTransferEscrowRequest
 
-// repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
+// repeated uint64 instance_ids = 1;
 inline int ReleaseTransferEscrowRequest::_internal_instance_ids_size() const {
   return _internal_instance_ids().size();
 }
@@ -17276,7 +17354,7 @@ ReleaseTransferEscrowRequest::_internal_mutable_instance_ids() {
 
 // ReleaseTransferEscrowResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void ReleaseTransferEscrowResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
@@ -17304,7 +17382,7 @@ inline void ReleaseTransferEscrowResponse::_internal_set_code(::pandora::common:
 
 // ConsumeTransferEscrowRequest
 
-// uint64 to_player_id = 1 [json_name = "toPlayerId"];
+// uint64 to_player_id = 1;
 inline void ConsumeTransferEscrowRequest::clear_to_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.to_player_id_ = ::uint64_t{0u};
@@ -17328,7 +17406,7 @@ inline void ConsumeTransferEscrowRequest::_internal_set_to_player_id(::uint64_t 
   _impl_.to_player_id_ = value;
 }
 
-// repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
+// repeated uint64 instance_ids = 2;
 inline int ConsumeTransferEscrowRequest::_internal_instance_ids_size() const {
   return _internal_instance_ids().size();
 }
@@ -17383,7 +17461,7 @@ ConsumeTransferEscrowRequest::_internal_mutable_instance_ids() {
 
 // ConsumeTransferEscrowResponse
 
-// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+// .pandora.common.v1.ErrCode code = 1;
 inline void ConsumeTransferEscrowResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;

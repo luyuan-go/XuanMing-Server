@@ -32,6 +32,13 @@ type RewardEntry struct {
 // (快照可能来自早于本上限的历史批次,或道具在热更里由堆叠改成了装备)。
 const MaxRewardEquipmentInstances = 64
 
+// MaxRewardItemEntries 单条奖励的道具条目数上限(§9.24 深度②集合条目上限)。
+//
+// mission_reward_log.reward_pb 是 VARBINARY(2048),单条 MissionRewardItem 约 9 字节,
+// 光靠字节闸要到 ~200 条才拦得住 —— 那等于"按列类型上限设限",§9.24 明令不算数。
+// 32 条按设计期望定(实际任务奖励 1~5 条),超了必是手滑或表列错位。
+const MaxRewardItemEntries = 32
+
 // validateRewardRow 逐行业务校验(生成的 newRewardTable 调用)。
 func validateRewardRow(row *configpb.RewardRow) error {
 	ids, err := parseUint32CSV(row.GetItemIds())
@@ -44,6 +51,10 @@ func validateRewardRow(row *configpb.RewardRow) error {
 	}
 	if len(ids) != len(counts) {
 		return fmt.Errorf("道具ID数组长度 %d 与道具数量数组长度 %d 不等", len(ids), len(counts))
+	}
+	if len(ids) > MaxRewardItemEntries {
+		return fmt.Errorf("道具条目数 %d 超上限 %d(reward_pb 落库列 2048 字节,按设计期望而非列容量设限)",
+			len(ids), MaxRewardItemEntries)
 	}
 	seen := make(map[uint32]struct{}, len(ids))
 	for i, id := range ids {

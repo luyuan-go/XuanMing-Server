@@ -21,6 +21,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	inventoryv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/inventory/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 
 	"github.com/luyuancpp/pandora/services/account/player/internal/conf"
@@ -42,6 +43,12 @@ type PlayerUsecase struct {
 	// 由 main 经 SetExperiencePusher 注入(与 SetCellRouter 同风格)。
 	expPusher ExperiencePusher
 
+	// pushLease 推送出箱发布器的领导权来源;nil = 不选举(单进程 / 单副本 Recreate)。
+	// 只在装配期由 SetPushWriterLease 写。
+	pushLease PushWriterLease
+	// pushLeaseHeld 上一轮领导权状态,只由发布器单 goroutine 读写(跃迁日志去重用)。
+	pushLeaseHeld bool
+
 	// expLevels 提供当前策划等级经验曲线。生产实现包装 configtable.Store 的原子快照；
 	// 玩家等级经验只从 j_玩家等级经验.xlsx 读取，不保留 YAML 双数据源。
 	expLevels experienceLevelSource
@@ -54,9 +61,9 @@ type PlayerUsecase struct {
 	// nil = 专精表未加载 → SetTalents fail-closed 拒绝。
 	talentRules talentRuleSource
 
-	// itemOwnership 查玩家是否持有指定道具(SetEquipment 的 ownEquipment)。
-	// 生产实现是 inventory.CheckItemsOwned 的 gRPC 客户端;nil = 未接线 → fail-closed 拒绝。
-	itemOwnership ItemOwnershipChecker
+	// instanceOwnership 精确校验玩家是否持有指定装备实例(SetEquipment/GetLoadout)。
+	// 生产实现是 inventory.CheckInstancesOwned 的 gRPC 客户端;nil = 未接线 → fail-closed 拒绝。
+	instanceOwnership InstanceOwnershipChecker
 
 	// skillCardRules 提供技能卡表判定(卡是否存在 / 等级上限 / 升级曲线)。
 	// nil = 技能卡表未加载 → 升级与装配 fail-closed 拒绝。
@@ -79,21 +86,34 @@ func (u *PlayerUsecase) SetConfigTables(store *configtable.Store) {
 	u.skillCardRules = configTableSkillCardRules{store: store}
 }
 
-// ItemOwnershipChecker 查询玩家在 inventory 域的持有情况(跨服务,SetEquipment 拥有权校验)。
+// InstanceOwnershipChecker 查询玩家在 inventory 域的精确实例归属(跨服务,
+// SetEquipment 写入与 GetLoadout 战斗快照都复用同一权威校验)。
 //
-// 返回入参集合中确实持有的子集;查询失败必须返回 error 而不是空集,
+// 返回入参集合中 instance_id + item_config_id 都精确匹配的 ID 子集与权威实例快照；
+// 查询失败必须返回 error 而不是空集,
 // 否则调用方无法区分「一件都没有」与「没查成」,fail-closed 就无从谈起。
-type ItemOwnershipChecker interface {
-	CheckItemsOwned(ctx context.Context, playerID uint64, itemConfigIDs []uint32) ([]uint32, error)
+type InstanceOwnershipChecker interface {
+	CheckInstancesOwned(ctx context.Context, playerID uint64, equipment []data.EquipmentSlot) (data.InstanceOwnershipResult, error)
 }
 
-// SetItemOwnershipChecker 注入拥有权查询实现(由 main 接 inventory gRPC 客户端)。
+// SetInstanceOwnershipChecker 注入精确实例归属查询实现(由 main 接 inventory gRPC 客户端)。
 // 传 nil 等于关闭 SetEquipment(fail-closed),不会退化成「不校验就放行」。
-func (u *PlayerUsecase) SetItemOwnershipChecker(c ItemOwnershipChecker) { u.itemOwnership = c }
+func (u *PlayerUsecase) SetInstanceOwnershipChecker(c InstanceOwnershipChecker) {
+	u.instanceOwnership = c
+}
 
 type experienceLevelSource interface {
 	ExperienceCurve() []uint64
 }
+
+const (
+	equipmentAttrAttackID        uint32 = 3
+	equipmentAttrMoveSpeedRateID uint32 = 7
+	equipmentAttrDefenseID       uint32 = 9
+
+	maxEquipmentFlatAttributeValue int64 = 1_000_000
+	maxEquipmentRateBasisPoints    int64 = 10_000
+)
 
 // itemRuleSource 是 SetEquipment 需要的道具表判定(生产实现读 configtable 原子快照)。
 type itemRuleSource interface {
@@ -500,12 +520,13 @@ func (u *PlayerUsecase) GetAttributes(ctx context.Context, playerID uint64) ([]d
 // 战斗内买装 / 换装 / 用道具走 UE GAS,不经 gRPC。
 
 // SetEquipment 全量替换出战装备预设(功能开关关闭 → ErrPlayerFeatureDisabled;
-// 槽位重复 / 非装备 / 部位不匹配 → ErrInvalidArg;未持有 → ErrPermissionDeny)。
+// 槽位/实例重复、非装备、部位不匹配 → ErrInvalidArg;实例未持有 → ErrPermissionDeny)。
 //
 // 权威校验三项(2026-07-25 补齐,原 2026-06-17 审查 TODO):
 //  1. isEquip(item)      —— 道具表 equip_slot > 0 才是装备;
 //  2. slotMatch(item,slot) —— 道具表 equip_slot 必须与提交的槽位号完全一致;
-//  3. ownEquipment(player,item) —— 经 inventory.CheckItemsOwned 确认玩家确实持有。
+//  3. ownEquipmentInstance(player,instance,item) —— 经 inventory.CheckInstancesOwned
+//     精确确认该 instance_id 当前归属玩家且配置 ID 一致。
 //
 // 前两项读 configtable 内存快照(零 RPC),第三项跨服务查 inventory。任一依赖缺失一律
 // fail-closed 拒绝:GetLoadout 会把预设转成 Battle DS 的初始 GameplayEffect,
@@ -518,9 +539,13 @@ func (u *PlayerUsecase) SetEquipment(ctx context.Context, playerID uint64, slots
 		return errcode.New(errcode.ErrPlayerFeatureDisabled, "loadout customize disabled")
 	}
 	seen := make(map[uint32]struct{}, len(slots))
+	seenInstances := make(map[uint64]struct{}, len(slots))
 	for _, s := range slots {
 		if s.ItemConfigID == 0 {
 			return errcode.New(errcode.ErrInvalidArg, "item_config_id required for slot %d", s.Slot)
+		}
+		if s.InstanceID == 0 {
+			return errcode.New(errcode.ErrInvalidArg, "instance_id required for slot %d", s.Slot)
 		}
 		// 槽位号与道具表「装备部位」列同一编号空间,该列约定 0 = 不可穿戴,
 		// 因此预设里的 slot 必须 >= 1:slot 0 永远匹配不到任何装备,只会变成一条恒失败的记录。
@@ -531,11 +556,15 @@ func (u *PlayerUsecase) SetEquipment(ctx context.Context, playerID uint64, slots
 			return errcode.New(errcode.ErrInvalidArg, "duplicate slot %d", s.Slot)
 		}
 		seen[s.Slot] = struct{}{}
+		if _, dup := seenInstances[s.InstanceID]; dup {
+			return errcode.New(errcode.ErrInvalidArg, "duplicate instance_id %d", s.InstanceID)
+		}
+		seenInstances[s.InstanceID] = struct{}{}
 	}
 	if err := u.validateEquipmentAgainstConfig(slots); err != nil {
 		return err
 	}
-	if err := u.validateEquipmentOwnership(ctx, playerID, slots); err != nil {
+	if _, err := u.validateEquipmentOwnership(ctx, playerID, slots); err != nil {
 		return err
 	}
 	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
@@ -569,44 +598,49 @@ func (u *PlayerUsecase) validateEquipmentAgainstConfig(slots []data.EquipmentSlo
 	return nil
 }
 
-// validateEquipmentOwnership 经 inventory 系统 RPC 确认玩家持有全部待装备道具(第 3 项)。
+// validateEquipmentOwnership 经 inventory 系统 RPC 确认玩家持有全部待装备唯一实例(第 3 项)。
 //
 // 查询失败(依赖不可用 / 超时)按 §9.22 fail-closed:返回错误让客户端重试,
 // 绝不把「查不到」当成「持有」。
-func (u *PlayerUsecase) validateEquipmentOwnership(ctx context.Context, playerID uint64, slots []data.EquipmentSlot) error {
+func (u *PlayerUsecase) validateEquipmentOwnership(
+	ctx context.Context, playerID uint64, slots []data.EquipmentSlot,
+) (data.InstanceOwnershipResult, error) {
 	if len(slots) == 0 {
-		return nil
+		return data.InstanceOwnershipResult{}, nil
 	}
-	checker := u.itemOwnership
+	checker := u.instanceOwnership
 	if checker == nil {
-		return errcode.New(errcode.ErrInternal, "item ownership checker unavailable")
+		return data.InstanceOwnershipResult{}, errcode.New(errcode.ErrInternal, "instance ownership checker unavailable")
 	}
 
-	// 同一件装备可能被提交到多个槽位(前面只查了槽位不重复),去重后再查。
-	uniq := make(map[uint32]struct{}, len(slots))
-	ids := make([]uint32, 0, len(slots))
-	for _, s := range slots {
-		if _, dup := uniq[s.ItemConfigID]; dup {
-			continue
-		}
-		uniq[s.ItemConfigID] = struct{}{}
-		ids = append(ids, s.ItemConfigID)
-	}
-
-	owned, err := checker.CheckItemsOwned(ctx, playerID, ids)
+	owned, err := checker.CheckInstancesOwned(ctx, playerID, slots)
 	if err != nil {
-		return err
+		return data.InstanceOwnershipResult{}, err
 	}
-	ownedSet := make(map[uint32]struct{}, len(owned))
-	for _, id := range owned {
+	want := make(map[uint64]uint32, len(slots))
+	for _, slot := range slots {
+		want[slot.InstanceID] = slot.ItemConfigID
+	}
+	ownedSet := make(map[uint64]struct{}, len(owned.OwnedInstanceIDs))
+	for _, id := range owned.OwnedInstanceIDs {
+		if id == 0 || want[id] == 0 {
+			return data.InstanceOwnershipResult{}, errcode.New(errcode.ErrInternal,
+				"inventory returned unexpected owned instance id=%d player=%d", id, playerID)
+		}
+		if _, duplicate := ownedSet[id]; duplicate {
+			return data.InstanceOwnershipResult{}, errcode.New(errcode.ErrInternal,
+				"inventory returned duplicate owned instance id=%d player=%d", id, playerID)
+		}
 		ownedSet[id] = struct{}{}
 	}
-	for _, id := range ids {
-		if _, ok := ownedSet[id]; !ok {
-			return errcode.New(errcode.ErrPermissionDeny, "item %d not owned by player %d", id, playerID)
+	for _, s := range slots {
+		if _, ok := ownedSet[s.InstanceID]; !ok {
+			return data.InstanceOwnershipResult{}, errcode.New(errcode.ErrPermissionDeny,
+				"equipment instance %d (item %d) not owned by player %d",
+				s.InstanceID, s.ItemConfigID, playerID)
 		}
 	}
-	return nil
+	return owned, nil
 }
 
 // GetEquipment 读出战装备预设。
@@ -615,6 +649,121 @@ func (u *PlayerUsecase) GetEquipment(ctx context.Context, playerID uint64) ([]da
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
 	return u.repo.GetEquipment(ctx, playerID)
+}
+
+// validateEquipmentForBattleSnapshot 在 GetLoadout 交付战斗初始效果前重新核验持久化预设。
+//
+// SetEquipment 的 inventory 查询与 player 落库跨两个服务，不可能共享 MySQL 事务；实例可能在
+// 两步之间或预设保存后被其它权威路径转移。开战前再批量查一次 exact pair，确保陈旧预设不会
+// 继续给 Battle DS 产生效果。000006 前只按 item_config_id 保存的旧行无法证明是哪一件实例，
+// 允许 GetEquipment 展示给玩家重选，但这里必须 fail-closed。
+func (u *PlayerUsecase) validateEquipmentForBattleSnapshot(
+	ctx context.Context, playerID uint64, slots []data.EquipmentSlot,
+) (map[uint64]data.OwnedEquipmentInstance, error) {
+	seenSlots := make(map[uint32]struct{}, len(slots))
+	seenInstances := make(map[uint64]struct{}, len(slots))
+	for _, s := range slots {
+		if s.InstanceID == 0 {
+			return nil, errcode.New(errcode.ErrInvalidState,
+				"legacy equipment preset requires exact instance selection player=%d slot=%d item=%d",
+				playerID, s.Slot, s.ItemConfigID)
+		}
+		if _, duplicate := seenSlots[s.Slot]; duplicate {
+			return nil, errcode.New(errcode.ErrInvalidState,
+				"stored equipment has duplicate slot player=%d slot=%d", playerID, s.Slot)
+		}
+		seenSlots[s.Slot] = struct{}{}
+		if _, duplicate := seenInstances[s.InstanceID]; duplicate {
+			return nil, errcode.New(errcode.ErrInvalidState,
+				"stored equipment has duplicate instance player=%d instance=%d", playerID, s.InstanceID)
+		}
+		seenInstances[s.InstanceID] = struct{}{}
+	}
+	if err := u.validateEquipmentAgainstConfig(slots); err != nil {
+		return nil, err
+	}
+	owned, err := u.validateEquipmentOwnership(ctx, playerID, slots)
+	if err != nil {
+		return nil, err
+	}
+	if len(slots) == 0 {
+		return map[uint64]data.OwnedEquipmentInstance{}, nil
+	}
+
+	// 滚动升级期旧 inventory 仍只回 OwnedInstanceIDs。这足以保护 SetEquipment 新写，
+	// 但不足以生成含鉴定词条的战斗快照：GetLoadout 必须在详情缺失时 fail-closed。
+	want := make(map[uint64]uint32, len(slots))
+	for _, slot := range slots {
+		want[slot.InstanceID] = slot.ItemConfigID
+	}
+	details := make(map[uint64]data.OwnedEquipmentInstance, len(owned.OwnedInstances))
+	for _, inst := range owned.OwnedInstances {
+		itemConfigID, requested := want[inst.InstanceID]
+		if inst.InstanceID == 0 || !requested || itemConfigID != inst.ItemConfigID {
+			return nil, errcode.New(errcode.ErrInternal,
+				"inventory returned non-exact instance detail player=%d instance=%d item=%d",
+				playerID, inst.InstanceID, inst.ItemConfigID)
+		}
+		if _, duplicate := details[inst.InstanceID]; duplicate {
+			return nil, errcode.New(errcode.ErrInternal,
+				"inventory returned duplicate instance detail player=%d instance=%d", playerID, inst.InstanceID)
+		}
+		if !inst.Identified && len(inst.Attributes) != 0 {
+			return nil, errcode.New(errcode.ErrInternal,
+				"unidentified instance returned attributes player=%d instance=%d", playerID, inst.InstanceID)
+		}
+		if inst.Identified && len(inst.Attributes) == 0 {
+			return nil, errcode.New(errcode.ErrInternal,
+				"identified instance missing attributes player=%d instance=%d", playerID, inst.InstanceID)
+		}
+		seenAttrs := make(map[uint32]struct{}, len(inst.Attributes))
+		for _, attr := range inst.Attributes {
+			if _, duplicate := seenAttrs[attr.AttrID]; duplicate {
+				return nil, errcode.New(errcode.ErrInternal,
+					"instance detail has duplicate attr player=%d instance=%d attr=%d",
+					playerID, inst.InstanceID, attr.AttrID)
+			}
+			seenAttrs[attr.AttrID] = struct{}{}
+			maxValue, allowed := equipmentAttributeMaxValue(attr.AttrID)
+			if !allowed {
+				return nil, errcode.New(errcode.ErrInternal,
+					"instance detail has unsupported attr player=%d instance=%d attr=%d",
+					playerID, inst.InstanceID, attr.AttrID)
+			}
+			if attr.Value <= 0 || attr.Value > maxValue {
+				return nil, errcode.New(errcode.ErrInternal,
+					"instance detail attr value out of range player=%d instance=%d attr=%d value=%d max=%d",
+					playerID, inst.InstanceID, attr.AttrID, attr.Value, maxValue)
+			}
+		}
+		inst.Attributes = append([]data.EquipmentAttributeSnapshot(nil), inst.Attributes...)
+		details[inst.InstanceID] = inst
+	}
+	for _, slot := range slots {
+		if _, ok := details[slot.InstanceID]; !ok {
+			return nil, errcode.New(errcode.ErrInternal,
+				"inventory instance detail unavailable; rollout incomplete player=%d instance=%d",
+				playerID, slot.InstanceID)
+		}
+	}
+	return details, nil
+}
+
+// equipmentAttributeMaxValue 是 Player -> Battle DS 装备词条信任边界。
+//
+// 词条虽然来自 inventory 内网权威接口，仍可能受脏库、旧副本或解析漂移影响；Player 在组装
+// GetLoadout 前只放行 DS 已实现且数值单位明确的三类属性。Attack/Defense 是平坦整数值，
+// MoveSpeedRate 是基点(10000 = 100%)。任何未知 ID、非正数或超限值都 fail-closed，避免把
+// 不受控的增益注入战斗服。
+func equipmentAttributeMaxValue(attrID uint32) (int64, bool) {
+	switch attrID {
+	case equipmentAttrAttackID, equipmentAttrDefenseID:
+		return maxEquipmentFlatAttributeValue, true
+	case equipmentAttrMoveSpeedRateID:
+		return maxEquipmentRateBasisPoints, true
+	default:
+		return 0, false
+	}
 }
 
 // GrantTalentPoints 幂等授予天赋点(来源:升级 / 活动,系统驱动不受 LoadoutCustomizeEnabled 影响)。
@@ -749,9 +898,21 @@ func (u *PlayerUsecase) GetLoadout(ctx context.Context, playerID uint64) (*playe
 	if err != nil {
 		return nil, err
 	}
+	instanceDetails, err := u.validateEquipmentForBattleSnapshot(ctx, playerID, equip)
+	if err != nil {
+		return nil, err
+	}
 	eq := make([]*playerv1.LoadoutEquipment, 0, len(equip))
 	for _, s := range equip {
-		eq = append(eq, &playerv1.LoadoutEquipment{Slot: s.Slot, ItemConfigId: s.ItemConfigID})
+		detail := instanceDetails[s.InstanceID]
+		attributes := make([]*inventoryv1.ItemAttribute, 0, len(detail.Attributes))
+		for _, attr := range detail.Attributes {
+			attributes = append(attributes, &inventoryv1.ItemAttribute{AttrId: attr.AttrID, Value: attr.Value})
+		}
+		eq = append(eq, &playerv1.LoadoutEquipment{
+			Slot: s.Slot, ItemConfigId: s.ItemConfigID, InstanceId: s.InstanceID,
+			Identified: detail.Identified, Attributes: attributes,
+		})
 	}
 	talents, talentUnspent, err := u.repo.GetTalents(ctx, playerID)
 	if err != nil {

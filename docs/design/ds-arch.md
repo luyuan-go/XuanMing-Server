@@ -137,7 +137,7 @@
    → 客户端持票据连 Battle DS
    → Battle DS 启动后,对每个进场玩家调用 player.GetLoadout(player_id)
        拿到 PlayerLoadout{active_hero_id, attributes[], unspent_attr_points,
-                          equipment[], talents[]}
+                          equipment[{slot,item_config_id,instance_id,identified,attributes[]}], talents[]}
    → Battle DS 用快照初始化该玩家的 GAS(英雄 / 属性基础值 / 装备初始 GameplayEffect / 天赋被动)
    → 之后战斗内一切变化(升技能/再出装/买道具)走 GAS,不回写 player 服务
 ```
@@ -154,6 +154,27 @@
    并打 `trace_id` 告警,绝不阻塞 UE 主 tick 线程。
 6. **装备/天赋只影响初始**:装备槽(`equipment[]`)和天赋(`talents[]`)在开战前转成
    一组初始 `GameplayEffect` / 被动 Ability;战斗内的买装/换装是 GAS 行为,与 player 服务无关。
+7. **装备按唯一实例核权**:`SetEquipment` 新写必须携带 `instance_id>0`,player 以
+   inventory `CheckInstancesOwned(instance_id+item_config_id)` 精确校验归属；`GetLoadout` 交付
+   战斗快照前再批量复核一次，并从同一权威回包取 `identified+attributes[]`
+   进快照，DS 不得在局内再查 inventory。实例已转移/丢失、exact pair 不符、
+   详情缺失或鉴定不变量破坏时全部 fail-closed。000006 前只存
+   `item_config_id` 的旧预设仍可由 `GetEquipment` 以 `instance_id=0` 展示并让玩家重选，
+   但不得继续产生战斗初始效果，避免同配置多件装备时错用鉴定词条。
+   `SetEquipment` 是全量替换：请求未列的槽位视为卸下，`equipment=[]` 删除该玩家全部
+   预设行；数据库不保存“空槽行”，也不用 `instance_id=0/NULL` 表示新空槽。
+
+滚动发布顺序固定为：
+
+1. 先执行 `pandora_player/000006` expand migration（`instance_id` nullable）；
+2. 先将同时回 `owned_instance_ids=2` + `owned_instances=3` 的 inventory 新版升级到全 fleet，
+   确认旧 inventory 副本排空；
+3. 再将新 player 升级到全 fleet。新 player 命中旧 inventory 时 SetEquipment 仍可用字段 2
+   核权，但 GetLoadout 因缺字段 3 必须 fail-closed，所以 inventory 必须先全量；
+4. 最后发布会提交 `instance_id` 并消费鉴定词条的 UE/DS 客户端。
+
+旧 player 二进制会忽略新字段并写出 NULL，因此客户端不得抢跑；服务回滚时优先只回滚
+二进制并保留 nullable 列/新 proto 字段，不要在线删除列/索引。
 
 > 实现位置:`player.GetLoadout` 已在 W5 ① 落地(英雄 + 属性点);装备槽 / 天赋树字段在 W5 ②
 > 扩展到同一 `PlayerLoadout`(见 `go-services.md` §2.2 与 player 服务 proto)。Battle DS 侧的

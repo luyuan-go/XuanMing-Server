@@ -15,8 +15,10 @@ import (
 
 // fakeBagRepo 记录调用的假仓(校验层测试只关心"是否放行到数据层")。
 type fakeBagRepo struct {
-	appendCalls int
-	lastEntries []*bagv1.BagJournalEntry
+	appendCalls     int
+	lastEntries     []*bagv1.BagJournalEntry
+	checkpointCalls int
+	lastCheckpoint  []byte
 
 	// 容量购买状态(§5.3 单测用;镜像 ApplyCapacityPurchase 的档数 CAS 语义)。
 	capExtra     map[uint32]uint32
@@ -34,7 +36,9 @@ func (f *fakeBagRepo) AppendJournal(_ context.Context, _ uint64, _ uint64, entri
 	return entries[len(entries)-1].GetJournalSeq(), nil
 }
 
-func (f *fakeBagRepo) SaveCheckpoint(context.Context, uint64, uint64, []byte, uint64) error {
+func (f *fakeBagRepo) SaveCheckpoint(_ context.Context, _ uint64, _ uint64, snapshot []byte, _ uint64) error {
+	f.checkpointCalls++
+	f.lastCheckpoint = append(f.lastCheckpoint[:0], snapshot...)
 	return nil
 }
 
@@ -176,6 +180,69 @@ func TestBagAppendJournalValidation(t *testing.T) {
 		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{pickupEntry(1, 0, 0, "k", 3)}, DSCallerIdentity{})
 		return err
 	}(), errcode.ErrBagQuotaExceeded, "单 op 物品超限")
+	tooManyJournalAttrs := make([]*bagv1.BagItemAttribute, bagMaxAttrsPerItem+1)
+	for i := range tooManyJournalAttrs {
+		tooManyJournalAttrs[i] = &bagv1.BagItemAttribute{AttrId: uint32(i + 1)}
+	}
+	journalAttrsOverflow := pickupEntry(1, 0, 0, "attrs-overflow", 1)
+	journalAttrsOverflow.GetPickupGrant().Items[0].InstanceId = 101
+	journalAttrsOverflow.GetPickupGrant().Items[0].Identified = true
+	journalAttrsOverflow.GetPickupGrant().Items[0].Attrs = tooManyJournalAttrs
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{journalAttrsOverflow}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrBagQuotaExceeded, "journal 单物品词条超限")
+	duplicateJournalAttr := pickupEntry(1, 0, 0, "attrs-duplicate", 1)
+	duplicateJournalAttr.GetPickupGrant().Items[0].InstanceId = 102
+	duplicateJournalAttr.GetPickupGrant().Items[0].Identified = true
+	duplicateJournalAttr.GetPickupGrant().Items[0].Attrs = []*bagv1.BagItemAttribute{{AttrId: 3, Value: 1}, {AttrId: 3, Value: 1}}
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{duplicateJournalAttr}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrInvalidArg, "journal 重复词条")
+	unsupportedJournalAttr := pickupEntry(1, 0, 0, "attrs-unsupported", 1)
+	unsupportedJournalAttr.GetPickupGrant().Items[0].InstanceId = 105
+	unsupportedJournalAttr.GetPickupGrant().Items[0].Identified = true
+	unsupportedJournalAttr.GetPickupGrant().Items[0].Attrs = []*bagv1.BagItemAttribute{{AttrId: 1, Value: 100}}
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{unsupportedJournalAttr}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrInvalidArg, "journal 非正式 gameplay 词条")
+	overflowMoveSpeed := pickupEntry(1, 0, 0, "attrs-movespeed-overflow", 1)
+	overflowMoveSpeed.GetPickupGrant().Items[0].InstanceId = 106
+	overflowMoveSpeed.GetPickupGrant().Items[0].Identified = true
+	overflowMoveSpeed.GetPickupGrant().Items[0].Attrs = []*bagv1.BagItemAttribute{{AttrId: 7, Value: bagMaxMoveSpeedBasisPoints + 1}}
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{overflowMoveSpeed}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrInvalidArg, "journal 移速 basis-points 越界")
+	attrsWithoutInstance := pickupEntry(1, 0, 0, "attrs-without-instance", 1)
+	attrsWithoutInstance.GetPickupGrant().Items[0].Attrs = []*bagv1.BagItemAttribute{{AttrId: 3, Value: 1}}
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{attrsWithoutInstance}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrInvalidArg, "journal 堆叠物不得携实例词条")
+	invalidInstanceCount := pickupEntry(1, 0, 0, "instance-count", 1)
+	invalidInstanceCount.GetPickupGrant().Items[0].InstanceId = 103
+	invalidInstanceCount.GetPickupGrant().Items[0].Count = 2
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{invalidInstanceCount}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrInvalidArg, "journal 实例数量非一")
+	consumeWithInvalidProduce := &bagv1.BagJournalEntry{
+		JournalSeq: 1, BagType: 1, IdempotencyKey: "consume-produce-attrs",
+		Op: &bagv1.BagJournalEntry_Consume{Consume: &bagv1.ConsumeOp{
+			ConsumeItems:   []*bagv1.BagItem{{ItemConfigId: 10001, Count: 1}},
+			ProduceBagType: 0,
+			ProduceItems: []*bagv1.BagItem{{
+				ItemConfigId: 20001, Count: 1, InstanceId: 104, Identified: true, Attrs: tooManyJournalAttrs,
+			}},
+		}},
+	}
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{consumeWithInvalidProduce}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrBagQuotaExceeded, "consume 产物词条超限")
 	// 同段转移拒。
 	sameType := &bagv1.BagJournalEntry{
 		JournalSeq: 1, BagType: 1, IdempotencyKey: "k",
@@ -209,17 +276,76 @@ func TestBagAppendJournalValidation(t *testing.T) {
 }
 
 func TestBagCheckpointAndSectionsValidation(t *testing.T) {
-	uc, _ := newBagUsecaseForTest()
+	uc, repo := newBagUsecaseForTest()
 	ctx := context.Background()
 
 	// checkpoint 含后端驻留段拒(仓库本体不归 checkpoint)。
 	record := &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 1}}}
 	wantBizCode(t, uc.SaveCheckpoint(ctx, 1, 1, record, nil, 0, DSCallerIdentity{}),
 		errcode.ErrBagSectionNotAllowed, "checkpoint 含仓库段")
-	// 随身组快照放行。
-	carry := &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 0}, {BagType: 2}, {BagType: 3}}}
-	if err := uc.SaveCheckpoint(ctx, 1, 1, carry, nil, 0, DSCallerIdentity{}); err != nil {
-		t.Fatalf("随身组快照应放行: %v", err)
+
+	// checkpoint 不信 capacity，但必须原样保存 slot/堆边界；合法恢复态允许 items>capacity、
+	// slot>=capacity（journal 重放溢出后的临时格“只出不进”）。
+	carry := &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{
+		{
+			BagType: 3, Capacity: 2, Items: []*bagv1.BagItem{
+				{ItemConfigId: 10001, Count: 20, Slot: 0},
+				{ItemConfigId: 20001, Count: 1, Slot: 2, InstanceId: 9001, Identified: true,
+					Attrs: []*bagv1.BagItemAttribute{{AttrId: 3, Value: 25}, {AttrId: 7, Value: 250}}},
+				{ItemConfigId: 10001, Count: 30, Slot: 3},
+			},
+		},
+	}}
+	checkpointBlob := []byte("spatial-checkpoint")
+	if err := uc.SaveCheckpoint(ctx, 1, 1, carry, checkpointBlob, 0, DSCallerIdentity{}); err != nil {
+		t.Fatalf("空间超容恢复态应放行: %v", err)
+	}
+	if repo.checkpointCalls != 1 || string(repo.lastCheckpoint) != string(checkpointBlob) {
+		t.Fatalf("checkpoint 应原样触达数据层: calls=%d blob=%q", repo.checkpointCalls, repo.lastCheckpoint)
+	}
+
+	tooManyAttrs := make([]*bagv1.BagItemAttribute, bagMaxAttrsPerItem+1)
+	for i := range tooManyAttrs {
+		tooManyAttrs[i] = &bagv1.BagItemAttribute{AttrId: uint32(i + 1)}
+	}
+	invalidCases := []struct {
+		name   string
+		record *bagv1.BagStorageRecord
+		blob   []byte
+		code   errcode.Code
+	}{
+		{name: "nil record", record: nil, code: errcode.ErrInvalidArg},
+		{name: "duplicate section", record: &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 0}, {BagType: 0}}}, code: errcode.ErrInvalidArg},
+		{name: "fixed generation", record: &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 2, Generation: 1}}}, code: errcode.ErrInvalidArg},
+		{name: "duplicate slot", record: &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 0, Items: []*bagv1.BagItem{
+			{ItemConfigId: 1, Count: 1, Slot: 4}, {ItemConfigId: 2, Count: 1, Slot: 4},
+		}}}}, code: errcode.ErrInvalidArg},
+		{name: "duplicate instance across carry group", record: &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{
+			{BagType: 0, Items: []*bagv1.BagItem{{ItemConfigId: 1, Count: 1, InstanceId: 77}}},
+			{BagType: 2, Items: []*bagv1.BagItem{{ItemConfigId: 2, Count: 1, InstanceId: 77}}},
+		}}, code: errcode.ErrInvalidArg},
+		{name: "instance count", record: &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 2, Items: []*bagv1.BagItem{
+			{ItemConfigId: 1, Count: 2, InstanceId: 88},
+		}}}}, code: errcode.ErrInvalidArg},
+		{name: "unidentified attrs", record: &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 2, Items: []*bagv1.BagItem{
+			{ItemConfigId: 1, Count: 1, InstanceId: 89, Attrs: []*bagv1.BagItemAttribute{{AttrId: 3}}},
+		}}}}, code: errcode.ErrInvalidArg},
+		{name: "negative flat attr", record: &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 2, Items: []*bagv1.BagItem{
+			{ItemConfigId: 1, Count: 1, InstanceId: 90, Identified: true,
+				Attrs: []*bagv1.BagItemAttribute{{AttrId: 9, Value: -1}}},
+		}}}}, code: errcode.ErrInvalidArg},
+		{name: "too many attrs", record: &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 2, Items: []*bagv1.BagItem{
+			{ItemConfigId: 1, Count: 1, InstanceId: 99, Identified: true, Attrs: tooManyAttrs},
+		}}}}, code: errcode.ErrBagQuotaExceeded},
+		{name: "oversize blob", record: &bagv1.BagStorageRecord{}, blob: make([]byte, BagCheckpointMaxBytes+1), code: errcode.ErrBagQuotaExceeded},
+	}
+	for _, tc := range invalidCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wantBizCode(t, uc.SaveCheckpoint(ctx, 1, 1, tc.record, tc.blob, 0, DSCallerIdentity{}), tc.code, tc.name)
+		})
+	}
+	if repo.checkpointCalls != 1 {
+		t.Fatalf("非法 checkpoint 不得触达数据层: calls=%d", repo.checkpointCalls)
 	}
 
 	// GetSections 只允许后端驻留段。

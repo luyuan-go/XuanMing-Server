@@ -1,7 +1,7 @@
 // Pandora dialogue 服务入口(2026-06-16)。
 //
 // 职责:NPC 对话树运行时;StartDialogue / ChooseOption / EndDialogue 三个 unary RPC。
-//   - 对话树从 yaml 配置加载(MOBA 早期:简单 if-else,不上行为树)。
+//   - 对话树从配置表加载(对话/d_对话.xlsx → configtable/dist/dialogue.json,与 UE 同源)。
 //   - 会话状态(dialogue_id)由服务端持有,当前为单实例内存会话(MemorySessionStore)。
 //
 // 阶段限制:内存会话不跨实例、进程重启即丢。多实例部署需把 SessionStore 换 Redis 版
@@ -12,7 +12,7 @@
 //  2. conf.Defaults 填默认值
 //  3. log.Setup → 全局 zap logger
 //  4. Snowflake Node(dialogue_id 生成,node_id 来自 yaml)
-//  5. 配置对话树 → ConfigTreeProvider;内存会话 → MemorySessionStore
+//  5. 配置表 Store(缺目录 / 坏批次 fail-closed)→ 对话树 provider;内存会话 → MemorySessionStore
 //  6. 装配 DialogueUsecase → DialogueService → gRPC/HTTP server
 //  7. 启动会话过期清理 goroutine
 //  8. kratos.New(...).Run() 阻塞
@@ -21,7 +21,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -32,6 +31,7 @@ import (
 	klog "github.com/go-kratos/kratos/v2/log"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
@@ -87,13 +87,26 @@ func main() {
 	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
 	defer func() { _ = sfCloser.Close() }()
 
-	// 4. 对话树:配置 → ConfigTreeProvider(构造时做基本校验,起始节点缺失直接 fatal)
-	trees, err := buildTrees(cfg.Dialogue.Trees)
-	if err != nil {
-		helper.Errorw("msg", "dialogue_tree_invalid", "err", err)
+	// 4. 对话树:与 UE 同源的 configtable dialogue 表是唯一权威。缺目录、缺表、
+	// checksum 异常、起始节点缺失 / 重复、后继节点悬空一律拒启(不退回 YAML 内联树)。
+	if cfg.ConfigTable.Dir == "" {
+		helper.Errorw("msg", "configtable_dir_required",
+			"hint", "config_table.dir required; dialogue trees read 对话/d_对话.xlsx only")
 		os.Exit(1)
 	}
-	treeProvider := data.NewConfigTreeProvider(trees)
+	ctStore := configtable.NewStore()
+	ctStore.AddValidator(func(t *configtable.Tables) error {
+		return configtable.ValidateDialogueTable(t.Dialogue)
+	})
+	loadResult, err := ctStore.Load(cfg.ConfigTable.Dir, 0)
+	if err != nil {
+		helper.Errorw("msg", "configtable_load_failed", "dir", cfg.ConfigTable.Dir, "err", err)
+		os.Exit(1)
+	}
+	for _, warning := range loadResult.Warnings {
+		helper.Warnw("msg", "configtable_load_warning", "warning", warning)
+	}
+	treeProvider := dialogueTreesFromStore{store: ctStore}
 
 	// 5. 内存会话存储
 	sessions := data.NewMemorySessionStore()
@@ -120,8 +133,11 @@ func main() {
 		"msg", "service_ready",
 		"grpc", cfg.Server.Grpc.Addr,
 		"http", cfg.Server.Http.Addr,
-		"tree_count", len(trees),
 		"session_ttl", cfg.Dialogue.SessionTTL.Std().String(),
+		"configtable_dir", cfg.ConfigTable.Dir,
+		"configtable_version", loadResult.Version,
+		"dialogue_nodes", ctStore.Tables().Dialogue.Count(),
+		"tree_source", "configtable/dialogue",
 	)
 
 	// 8. Kratos App
@@ -134,57 +150,6 @@ func main() {
 		helper.Errorw("msg", "app_run_failed", "err", err)
 		os.Exit(1)
 	}
-}
-
-// buildTrees 把 yaml 配置的对话树转成内部领域类型,并做基本一致性校验。
-func buildTrees(specs []conf.TreeConf) (map[uint32]*data.DialogueTree, error) {
-	trees := make(map[uint32]*data.DialogueTree, len(specs))
-	for i := range specs {
-		spec := &specs[i]
-		if spec.NpcID == 0 {
-			return nil, fmt.Errorf("tree[%d] npc_id required", i)
-		}
-		if _, dup := trees[spec.NpcID]; dup {
-			return nil, fmt.Errorf("duplicate tree for npc_id %d", spec.NpcID)
-		}
-		nodes := make(map[string]*data.DialogueNode, len(spec.Nodes))
-		for j := range spec.Nodes {
-			n := &spec.Nodes[j]
-			if n.NodeID == "" {
-				return nil, fmt.Errorf("npc %d node[%d] node_id required", spec.NpcID, j)
-			}
-			if _, dup := nodes[n.NodeID]; dup {
-				return nil, fmt.Errorf("npc %d duplicate node_id %q", spec.NpcID, n.NodeID)
-			}
-			opts := make([]data.DialogueOption, 0, len(n.Options))
-			for k := range n.Options {
-				o := &n.Options[k]
-				if o.OptionID == "" {
-					return nil, fmt.Errorf("npc %d node %q option[%d] option_id required", spec.NpcID, n.NodeID, k)
-				}
-				opts = append(opts, data.DialogueOption{
-					OptionID: o.OptionID,
-					Text:     o.Text,
-					Visible:  o.Visible == nil || *o.Visible, // 省略 = 可见
-					NextNode: o.NextNode,
-				})
-			}
-			nodes[n.NodeID] = &data.DialogueNode{NodeID: n.NodeID, Text: n.Text, Options: opts}
-		}
-		if spec.StartNode == "" {
-			return nil, fmt.Errorf("npc %d start_node required", spec.NpcID)
-		}
-		if _, ok := nodes[spec.StartNode]; !ok {
-			return nil, fmt.Errorf("npc %d start_node %q not found in nodes", spec.NpcID, spec.StartNode)
-		}
-		trees[spec.NpcID] = &data.DialogueTree{
-			NpcID:     spec.NpcID,
-			Speaker:   spec.Speaker,
-			StartNode: spec.StartNode,
-			Nodes:     nodes,
-		}
-	}
-	return trees, nil
 }
 
 // runSessionSweep 周期清理过期会话,防止被遗弃的会话堆积。

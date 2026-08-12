@@ -44,7 +44,17 @@ $script:PandoraInventoryRenderedDocumentHashes = [ordered]@{
     'NetworkPolicy/allow-redis-ingress' = 'e175a4d2c5496344b91fd8cf4a7c161e79ebcc686c3c49319fe921741e659899'
     'NetworkPolicy/allow-zookeeper-ingress' = '9097fcd8973b3c515e410e721da9e3fd5969a5a43bf3e9e532a075a1c5dab78c'
     'NetworkPolicy/default-deny-ingress' = '90cf769a75a92aae7784d65b68424cf8ab2c142de639a8e5c9f2cdd97c170c2d'
-    'AuthorizationPolicy/pandora-inventory-exact-allow' = '3ecfd444113af7c8bfa8742f3a94c35bdad12def74bc2f3babb739d0766ecf5b'
+    # 2026-08-11 复核并重锁:e27ffc63(任务域批次)给本策略加了 mission 的 principal,
+    # 但**没同步更新本审核锁**,于是 inventory_mesh 契约自那次提交起恒红(干净 HEAD 复验同红)。
+    #
+    # 重锁前逐条核对了新增授权确实是最小权限:
+    #   · 新增内容 = `sa/pandora-mission` → 仅 POST `GrantItems` / `GrantInstances` 两个方法;
+    #   · mission 侧实际调用面核实无第三个 inventory 方法(internal/data/granter.go:57/75),
+    #     经验走 player.AddExperience、满包溢出走 mail.SendPersonalMail,都不经 inventory;
+    #   · 除这一段外策略无其它改动(git log -p 逐行确认)。
+    # 锁的意义是"激活前不得静默扩权",不是"永不变更";变更经审核后必须重锁,
+    # 否则恒红的锁会和 gen_cluster_b1 里那条一样,把后面的检查一起拖死。
+    'AuthorizationPolicy/pandora-inventory-exact-allow' = 'eedf4c209fff60d13df77932b87c71a10107d3d80857b6a059f9bfe0606bf85e'
     'PeerAuthentication/pandora-inventory-mtls' = '3314f81ef92e102c9c1a1b311a4a27af7661bdd8d0e8037deec5ed5b90c77774'
 }
 

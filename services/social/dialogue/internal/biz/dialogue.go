@@ -217,11 +217,15 @@ func buildState(dialogueID uint64, tree *data.DialogueTree, node *data.DialogueN
 			Visible:  true,
 		})
 	}
+	speaker := node.Speaker
+	if speaker == "" {
+		speaker = tree.Speaker // 节点未单独指定说话人 → 用该 NPC 的主名
+	}
 	return &dialoguev1.DialogueState{
 		DialogueId: dialogueID,
 		NpcId:      tree.NpcID,
 		NodeId:     node.NodeID,
-		Speaker:    tree.Speaker,
+		Speaker:    speaker,
 		Text:       node.Text,
 		Options:    opts,
 		Ended:      len(opts) == 0,

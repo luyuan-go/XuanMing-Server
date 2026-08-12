@@ -181,8 +181,8 @@ func (c guardTestCatalog) IsEquipment(uint32) bool                       { retur
 // newGuardUsecase 用真实 repo + 真实引擎装配 usecase(测的是生产路径,不是测试专用分支)。
 func newGuardUsecase(db *sql.DB, catalog biz.Catalog, maxActive int) *biz.MissionUsecase {
 	cfg := conf.MissionConf{MaxActiveMissions: maxActive, MaxFactsPerReport: 64}
-	return biz.NewMissionUsecase(NewMySQLMissionRepo(db), catalog, nil, nil, nil, nil,
-		cfg, klog.NewStdLogger(io.Discard))
+	return biz.NewMissionUsecase(NewMySQLMissionRepo(db), biz.StaticCatalogSource{Catalog: catalog},
+		nil, nil, nil, nil, cfg, klog.NewStdLogger(io.Discard))
 }
 
 func countActive(t *testing.T, db *sql.DB, playerID uint64) int {
@@ -319,6 +319,64 @@ func TestMissionPlayerGuard_ConcurrentAcceptRespectsTypeExclusivity(t *testing.T
 		}
 		if got := countActive(t, db, playerID); got != 1 {
 			t.Fatalf("落库活跃任务 %d 行, want 1(同 (type,sub_type) 双活)", got)
+		}
+	})
+}
+
+// TestDoneReadLimitTruncatesReadPathButNotTransaction 是「完成集读取侧上限」这条设计
+// 判断本身的回归判据(§9.18)。
+//
+// 守的不是"有没有 LIMIT",而是**LIMIT 只能加在只读路径**:
+//   - LoadPlayer(只读,喂 ListMissions)必须截断 —— 否则任务表涨到几千行时,一次
+//     ListMissions 返回全部完成任务,且 push.resync 风暴按在线人数放大;
+//   - MutatePlayer / ApplyFactsTx(FOR UPDATE 事务)**绝不能**截断 —— 那里用完成集判
+//     「已完成不可重复接取」与领奖 CAS,截断会让超出窗口的已完成任务被判成可重新接取,
+//     把一个展示问题升级成**重复发奖**。
+//
+// 把 loadState 里的 doneLimit 改成两条路径共用(即事务路径也截断),本用例必红。
+func TestDoneReadLimitTruncatesReadPathButNotTransaction(t *testing.T) {
+	forEachMissionBackend(t, func(t *testing.T, db *sql.DB) {
+		ctx := context.Background()
+		const playerID uint64 = 7001
+		const totalDone = 6
+		const readLimit = 2 // 远小于 totalDone,截断效果肉眼可辨
+
+		for i := 0; i < totalDone; i++ {
+			if _, err := db.ExecContext(ctx,
+				`INSERT INTO player_mission_done (player_id, mission_config_id, reward_state, completed_at_ms)
+				 VALUES (?, ?, 0, 1)`, playerID, 100+i); err != nil {
+				t.Fatalf("插入完成行 %d: %v", i, err)
+			}
+		}
+
+		repo := NewMySQLMissionRepo(db)
+		repo.doneReadLimitOverride = readLimit
+
+		// ① 只读路径:必须被截断到 readLimit。
+		st, err := repo.LoadPlayer(ctx, playerID)
+		if err != nil {
+			t.Fatalf("LoadPlayer: %v", err)
+		}
+		if len(st.Done) != readLimit {
+			t.Fatalf("只读路径应截断到 %d 行,实为 %d —— 读取侧上限没生效", readLimit, len(st.Done))
+		}
+		// 截断必须按 mission_config_id 稳定序,与 biz.sortedDone 同序(否则每次返回的
+		// 子集不同,客户端看到的完成列表会来回跳)。
+		if _, ok := st.Done[100]; !ok {
+			t.Fatalf("截断应保留最小的 mission_config_id,实际拿到 %v", st.Done)
+		}
+
+		// ② 事务路径:必须拿到**全部** totalDone 行。
+		var seenInTx int
+		if err := repo.MutatePlayer(ctx, playerID, func(s *biz.PlayerState) (*biz.Mutation, error) {
+			seenInTx = len(s.Done)
+			return &biz.Mutation{}, nil
+		}); err != nil {
+			t.Fatalf("MutatePlayer: %v", err)
+		}
+		if seenInTx != totalDone {
+			t.Fatalf("事务路径必须看到全部 %d 行完成任务,实为 %d —— "+
+				"截断会让已完成任务被判成可重新接取,导致重复发奖", totalDone, seenInTx)
 		}
 	})
 }

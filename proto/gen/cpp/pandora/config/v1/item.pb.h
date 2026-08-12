@@ -293,6 +293,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
     kNameFieldNumber = 2,
     kIconFieldNumber = 7,
     kDescriptionFieldNumber = 8,
+    kEquipMeshFieldNumber = 13,
+    kEquipSocketFieldNumber = 14,
     kIdFieldNumber = 1,
     kTypeFieldNumber = 3,
     kQualityFieldNumber = 4,
@@ -301,8 +303,18 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
     kUsableFieldNumber = 9,
     kUseHealHpFieldNumber = 10,
     kEquipSlotFieldNumber = 11,
+    kIdentifyPoolIdFieldNumber = 12,
+    kEquipOffsetXFieldNumber = 15,
+    kEquipOffsetYFieldNumber = 16,
+    kEquipOffsetZFieldNumber = 17,
+    kEquipYawFieldNumber = 18,
+    kEquipPitchFieldNumber = 19,
+    kEquipRollFieldNumber = 20,
+    kEquipScaleXFieldNumber = 21,
+    kEquipScaleYFieldNumber = 22,
+    kEquipScaleZFieldNumber = 23,
   };
-  // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
+  // string name = 2 [(.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
   void clear_name() ;
   [[nodiscard]] const ::std::string& name() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -317,7 +329,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
-  // string icon = 7 [json_name = "icon", (.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
+  // string icon = 7 [(.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
   void clear_icon() ;
   [[nodiscard]] const ::std::string& icon() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -332,7 +344,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   ::std::string* PROTOBUF_NONNULL _internal_mutable_icon();
 
   public:
-  // string description = 8 [json_name = "description", (.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
+  // string description = 8 [(.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
   void clear_description() ;
   [[nodiscard]] const ::std::string& description() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -347,7 +359,37 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   ::std::string* PROTOBUF_NONNULL _internal_mutable_description();
 
   public:
-  // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+  // string equip_mesh = 13 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
+  void clear_equip_mesh() ;
+  [[nodiscard]] const ::std::string& equip_mesh() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_equip_mesh(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_equip_mesh();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_equip_mesh();
+  void set_allocated_equip_mesh(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_equip_mesh() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_equip_mesh(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_equip_mesh();
+
+  public:
+  // string equip_socket = 14 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
+  void clear_equip_socket() ;
+  [[nodiscard]] const ::std::string& equip_socket() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_equip_socket(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_equip_socket();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_equip_socket();
+  void set_allocated_equip_socket(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_equip_socket() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_equip_socket(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_equip_socket();
+
+  public:
+  // uint32 id = 1 [(.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
   void clear_id() ;
   [[nodiscard]] ::uint32_t id() const;
   void set_id(::uint32_t value);
@@ -357,7 +399,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   void _internal_set_id(::uint32_t value);
 
   public:
-  // .pandora.config.v1.ItemType type = 3 [json_name = "type", (.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
+  // .pandora.config.v1.ItemType type = 3 [(.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
   void clear_type() ;
   [[nodiscard]] ::pandora::config::v1::ItemType type() const;
   void set_type(::pandora::config::v1::ItemType value);
@@ -367,7 +409,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   void _internal_set_type(::pandora::config::v1::ItemType value);
 
   public:
-  // uint32 quality = 4 [json_name = "quality", (.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
+  // uint32 quality = 4 [(.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
   void clear_quality() ;
   [[nodiscard]] ::uint32_t quality() const;
   void set_quality(::uint32_t value);
@@ -377,7 +419,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   void _internal_set_quality(::uint32_t value);
 
   public:
-  // uint32 max_stack_size = 5 [json_name = "maxStackSize", (.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
+  // uint32 max_stack_size = 5 [(.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
   void clear_max_stack_size() ;
   [[nodiscard]] ::uint32_t max_stack_size() const;
   void set_max_stack_size(::uint32_t value);
@@ -387,7 +429,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   void _internal_set_max_stack_size(::uint32_t value);
 
   public:
-  // uint32 sell_price = 6 [json_name = "sellPrice", (.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
+  // uint32 sell_price = 6 [(.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
   void clear_sell_price() ;
   [[nodiscard]] ::uint32_t sell_price() const;
   void set_sell_price(::uint32_t value);
@@ -397,7 +439,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   void _internal_set_sell_price(::uint32_t value);
 
   public:
-  // bool usable = 9 [json_name = "usable", (.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
+  // bool usable = 9 [(.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
   void clear_usable() ;
   [[nodiscard]] bool usable() const;
   void set_usable(bool value);
@@ -407,7 +449,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   void _internal_set_usable(bool value);
 
   public:
-  // uint32 use_heal_hp = 10 [json_name = "useHealHp", (.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
+  // uint32 use_heal_hp = 10 [(.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
   void clear_use_heal_hp() ;
   [[nodiscard]] ::uint32_t use_heal_hp() const;
   void set_use_heal_hp(::uint32_t value);
@@ -417,7 +459,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   void _internal_set_use_heal_hp(::uint32_t value);
 
   public:
-  // uint32 equip_slot = 11 [json_name = "equipSlot", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
+  // uint32 equip_slot = 11 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
   void clear_equip_slot() ;
   [[nodiscard]] ::uint32_t equip_slot() const;
   void set_equip_slot(::uint32_t value);
@@ -427,12 +469,112 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
   void _internal_set_equip_slot(::uint32_t value);
 
   public:
+  // uint32 identify_pool_id = 12 [(.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
+  void clear_identify_pool_id() ;
+  [[nodiscard]] ::uint32_t identify_pool_id() const;
+  void set_identify_pool_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_identify_pool_id() const;
+  void _internal_set_identify_pool_id(::uint32_t value);
+
+  public:
+  // float equip_offset_x = 15 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
+  void clear_equip_offset_x() ;
+  [[nodiscard]] float equip_offset_x() const;
+  void set_equip_offset_x(float value);
+
+  private:
+  float _internal_equip_offset_x() const;
+  void _internal_set_equip_offset_x(float value);
+
+  public:
+  // float equip_offset_y = 16 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
+  void clear_equip_offset_y() ;
+  [[nodiscard]] float equip_offset_y() const;
+  void set_equip_offset_y(float value);
+
+  private:
+  float _internal_equip_offset_y() const;
+  void _internal_set_equip_offset_y(float value);
+
+  public:
+  // float equip_offset_z = 17 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
+  void clear_equip_offset_z() ;
+  [[nodiscard]] float equip_offset_z() const;
+  void set_equip_offset_z(float value);
+
+  private:
+  float _internal_equip_offset_z() const;
+  void _internal_set_equip_offset_z(float value);
+
+  public:
+  // float equip_yaw = 18 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
+  void clear_equip_yaw() ;
+  [[nodiscard]] float equip_yaw() const;
+  void set_equip_yaw(float value);
+
+  private:
+  float _internal_equip_yaw() const;
+  void _internal_set_equip_yaw(float value);
+
+  public:
+  // float equip_pitch = 19 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
+  void clear_equip_pitch() ;
+  [[nodiscard]] float equip_pitch() const;
+  void set_equip_pitch(float value);
+
+  private:
+  float _internal_equip_pitch() const;
+  void _internal_set_equip_pitch(float value);
+
+  public:
+  // float equip_roll = 20 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
+  void clear_equip_roll() ;
+  [[nodiscard]] float equip_roll() const;
+  void set_equip_roll(float value);
+
+  private:
+  float _internal_equip_roll() const;
+  void _internal_set_equip_roll(float value);
+
+  public:
+  // float equip_scale_x = 21 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
+  void clear_equip_scale_x() ;
+  [[nodiscard]] float equip_scale_x() const;
+  void set_equip_scale_x(float value);
+
+  private:
+  float _internal_equip_scale_x() const;
+  void _internal_set_equip_scale_x(float value);
+
+  public:
+  // float equip_scale_y = 22 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
+  void clear_equip_scale_y() ;
+  [[nodiscard]] float equip_scale_y() const;
+  void set_equip_scale_y(float value);
+
+  private:
+  float _internal_equip_scale_y() const;
+  void _internal_set_equip_scale_y(float value);
+
+  public:
+  // float equip_scale_z = 23 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
+  void clear_equip_scale_z() ;
+  [[nodiscard]] float equip_scale_z() const;
+  void set_equip_scale_z(float value);
+
+  private:
+  float _internal_equip_scale_z() const;
+  void _internal_set_equip_scale_z(float value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.ItemRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
-                          0, 61,
+      ::google::protobuf::internal::TcParseTable<5, 23,
+                          0, 91,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -463,6 +605,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr icon_;
     ::google::protobuf::internal::ArenaStringPtr description_;
+    ::google::protobuf::internal::ArenaStringPtr equip_mesh_;
+    ::google::protobuf::internal::ArenaStringPtr equip_socket_;
     ::uint32_t id_;
     int type_;
     ::uint32_t quality_;
@@ -471,6 +615,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemRow final : public ::google::pr
     bool usable_;
     ::uint32_t use_heal_hp_;
     ::uint32_t equip_slot_;
+    ::uint32_t identify_pool_id_;
+    float equip_offset_x_;
+    float equip_offset_y_;
+    float equip_offset_z_;
+    float equip_yaw_;
+    float equip_pitch_;
+    float equip_roll_;
+    float equip_scale_x_;
+    float equip_scale_y_;
+    float equip_scale_z_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -628,7 +782,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTableData final : public ::goog
   enum : int {
     kRowsFieldNumber = 1,
   };
-  // repeated .pandora.config.v1.ItemRow rows = 1 [json_name = "rows"];
+  // repeated .pandora.config.v1.ItemRow rows = 1;
   [[nodiscard]] int rows_size()
       const;
   private:
@@ -705,11 +859,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTableData final : public ::goog
 
 // ItemRow
 
-// uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+// uint32 id = 1 [(.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
 inline void ItemRow::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t ItemRow::id() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.id)
@@ -717,7 +871,7 @@ inline ::uint32_t ItemRow::id() const {
 }
 inline void ItemRow::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.id)
 }
 inline ::uint32_t ItemRow::_internal_id() const {
@@ -729,7 +883,7 @@ inline void ItemRow::_internal_set_id(::uint32_t value) {
   _impl_.id_ = value;
 }
 
-// string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
+// string name = 2 [(.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
 inline void ItemRow::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.name_.ClearToEmpty();
@@ -793,11 +947,11 @@ inline void ItemRow::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) 
   // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.ItemRow.name)
 }
 
-// .pandora.config.v1.ItemType type = 3 [json_name = "type", (.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
+// .pandora.config.v1.ItemType type = 3 [(.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
 inline void ItemRow::clear_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.type_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::pandora::config::v1::ItemType ItemRow::type() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.type)
@@ -805,7 +959,7 @@ inline ::pandora::config::v1::ItemType ItemRow::type() const {
 }
 inline void ItemRow::set_type(::pandora::config::v1::ItemType value) {
   _internal_set_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.type)
 }
 inline ::pandora::config::v1::ItemType ItemRow::_internal_type() const {
@@ -817,11 +971,11 @@ inline void ItemRow::_internal_set_type(::pandora::config::v1::ItemType value) {
   _impl_.type_ = value;
 }
 
-// uint32 quality = 4 [json_name = "quality", (.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
+// uint32 quality = 4 [(.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
 inline void ItemRow::clear_quality() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.quality_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t ItemRow::quality() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.quality)
@@ -829,7 +983,7 @@ inline ::uint32_t ItemRow::quality() const {
 }
 inline void ItemRow::set_quality(::uint32_t value) {
   _internal_set_quality(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.quality)
 }
 inline ::uint32_t ItemRow::_internal_quality() const {
@@ -841,11 +995,11 @@ inline void ItemRow::_internal_set_quality(::uint32_t value) {
   _impl_.quality_ = value;
 }
 
-// uint32 max_stack_size = 5 [json_name = "maxStackSize", (.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
+// uint32 max_stack_size = 5 [(.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
 inline void ItemRow::clear_max_stack_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_stack_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t ItemRow::max_stack_size() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.max_stack_size)
@@ -853,7 +1007,7 @@ inline ::uint32_t ItemRow::max_stack_size() const {
 }
 inline void ItemRow::set_max_stack_size(::uint32_t value) {
   _internal_set_max_stack_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.max_stack_size)
 }
 inline ::uint32_t ItemRow::_internal_max_stack_size() const {
@@ -865,11 +1019,11 @@ inline void ItemRow::_internal_set_max_stack_size(::uint32_t value) {
   _impl_.max_stack_size_ = value;
 }
 
-// uint32 sell_price = 6 [json_name = "sellPrice", (.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
+// uint32 sell_price = 6 [(.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
 inline void ItemRow::clear_sell_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sell_price_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t ItemRow::sell_price() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.sell_price)
@@ -877,7 +1031,7 @@ inline ::uint32_t ItemRow::sell_price() const {
 }
 inline void ItemRow::set_sell_price(::uint32_t value) {
   _internal_set_sell_price(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.sell_price)
 }
 inline ::uint32_t ItemRow::_internal_sell_price() const {
@@ -889,7 +1043,7 @@ inline void ItemRow::_internal_set_sell_price(::uint32_t value) {
   _impl_.sell_price_ = value;
 }
 
-// string icon = 7 [json_name = "icon", (.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
+// string icon = 7 [(.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
 inline void ItemRow::clear_icon() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.icon_.ClearToEmpty();
@@ -953,7 +1107,7 @@ inline void ItemRow::set_allocated_icon(::std::string* PROTOBUF_NULLABLE value) 
   // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.ItemRow.icon)
 }
 
-// string description = 8 [json_name = "description", (.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
+// string description = 8 [(.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
 inline void ItemRow::clear_description() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.description_.ClearToEmpty();
@@ -1017,11 +1171,11 @@ inline void ItemRow::set_allocated_description(::std::string* PROTOBUF_NULLABLE 
   // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.ItemRow.description)
 }
 
-// bool usable = 9 [json_name = "usable", (.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
+// bool usable = 9 [(.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
 inline void ItemRow::clear_usable() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.usable_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline bool ItemRow::usable() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.usable)
@@ -1029,7 +1183,7 @@ inline bool ItemRow::usable() const {
 }
 inline void ItemRow::set_usable(bool value) {
   _internal_set_usable(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.usable)
 }
 inline bool ItemRow::_internal_usable() const {
@@ -1041,11 +1195,11 @@ inline void ItemRow::_internal_set_usable(bool value) {
   _impl_.usable_ = value;
 }
 
-// uint32 use_heal_hp = 10 [json_name = "useHealHp", (.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
+// uint32 use_heal_hp = 10 [(.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
 inline void ItemRow::clear_use_heal_hp() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.use_heal_hp_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t ItemRow::use_heal_hp() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.use_heal_hp)
@@ -1053,7 +1207,7 @@ inline ::uint32_t ItemRow::use_heal_hp() const {
 }
 inline void ItemRow::set_use_heal_hp(::uint32_t value) {
   _internal_set_use_heal_hp(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.use_heal_hp)
 }
 inline ::uint32_t ItemRow::_internal_use_heal_hp() const {
@@ -1065,11 +1219,11 @@ inline void ItemRow::_internal_set_use_heal_hp(::uint32_t value) {
   _impl_.use_heal_hp_ = value;
 }
 
-// uint32 equip_slot = 11 [json_name = "equipSlot", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
+// uint32 equip_slot = 11 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
 inline void ItemRow::clear_equip_slot() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equip_slot_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t ItemRow::equip_slot() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_slot)
@@ -1077,7 +1231,7 @@ inline ::uint32_t ItemRow::equip_slot() const {
 }
 inline void ItemRow::set_equip_slot(::uint32_t value) {
   _internal_set_equip_slot(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_slot)
 }
 inline ::uint32_t ItemRow::_internal_equip_slot() const {
@@ -1089,11 +1243,379 @@ inline void ItemRow::_internal_set_equip_slot(::uint32_t value) {
   _impl_.equip_slot_ = value;
 }
 
+// uint32 identify_pool_id = 12 [(.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
+inline void ItemRow::clear_identify_pool_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.identify_pool_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t ItemRow::identify_pool_id() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.identify_pool_id)
+  return _internal_identify_pool_id();
+}
+inline void ItemRow::set_identify_pool_id(::uint32_t value) {
+  _internal_set_identify_pool_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.identify_pool_id)
+}
+inline ::uint32_t ItemRow::_internal_identify_pool_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.identify_pool_id_;
+}
+inline void ItemRow::_internal_set_identify_pool_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.identify_pool_id_ = value;
+}
+
+// string equip_mesh = 13 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
+inline void ItemRow::clear_equip_mesh() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_mesh_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& ItemRow::equip_mesh() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_mesh)
+  return _internal_equip_mesh();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ItemRow::set_equip_mesh(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.equip_mesh_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_mesh)
+}
+inline ::std::string* PROTOBUF_NONNULL ItemRow::mutable_equip_mesh()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_equip_mesh();
+  // @@protoc_insertion_point(field_mutable:pandora.config.v1.ItemRow.equip_mesh)
+  return _s;
+}
+inline const ::std::string& ItemRow::_internal_equip_mesh() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_mesh_.Get();
+}
+inline void ItemRow::_internal_set_equip_mesh(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_mesh_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ItemRow::_internal_mutable_equip_mesh() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.equip_mesh_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ItemRow::release_equip_mesh() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.config.v1.ItemRow.equip_mesh)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.equip_mesh_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.equip_mesh_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ItemRow::set_allocated_equip_mesh(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.equip_mesh_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.equip_mesh_.IsDefault()) {
+    _impl_.equip_mesh_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.ItemRow.equip_mesh)
+}
+
+// string equip_socket = 14 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
+inline void ItemRow::clear_equip_socket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_socket_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& ItemRow::equip_socket() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_socket)
+  return _internal_equip_socket();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ItemRow::set_equip_socket(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.equip_socket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_socket)
+}
+inline ::std::string* PROTOBUF_NONNULL ItemRow::mutable_equip_socket()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_equip_socket();
+  // @@protoc_insertion_point(field_mutable:pandora.config.v1.ItemRow.equip_socket)
+  return _s;
+}
+inline const ::std::string& ItemRow::_internal_equip_socket() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_socket_.Get();
+}
+inline void ItemRow::_internal_set_equip_socket(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_socket_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ItemRow::_internal_mutable_equip_socket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.equip_socket_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ItemRow::release_equip_socket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.config.v1.ItemRow.equip_socket)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.equip_socket_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.equip_socket_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ItemRow::set_allocated_equip_socket(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.equip_socket_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.equip_socket_.IsDefault()) {
+    _impl_.equip_socket_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.ItemRow.equip_socket)
+}
+
+// float equip_offset_x = 15 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
+inline void ItemRow::clear_equip_offset_x() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_offset_x_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline float ItemRow::equip_offset_x() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_offset_x)
+  return _internal_equip_offset_x();
+}
+inline void ItemRow::set_equip_offset_x(float value) {
+  _internal_set_equip_offset_x(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_offset_x)
+}
+inline float ItemRow::_internal_equip_offset_x() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_offset_x_;
+}
+inline void ItemRow::_internal_set_equip_offset_x(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_offset_x_ = value;
+}
+
+// float equip_offset_y = 16 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
+inline void ItemRow::clear_equip_offset_y() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_offset_y_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline float ItemRow::equip_offset_y() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_offset_y)
+  return _internal_equip_offset_y();
+}
+inline void ItemRow::set_equip_offset_y(float value) {
+  _internal_set_equip_offset_y(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_offset_y)
+}
+inline float ItemRow::_internal_equip_offset_y() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_offset_y_;
+}
+inline void ItemRow::_internal_set_equip_offset_y(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_offset_y_ = value;
+}
+
+// float equip_offset_z = 17 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
+inline void ItemRow::clear_equip_offset_z() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_offset_z_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline float ItemRow::equip_offset_z() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_offset_z)
+  return _internal_equip_offset_z();
+}
+inline void ItemRow::set_equip_offset_z(float value) {
+  _internal_set_equip_offset_z(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_offset_z)
+}
+inline float ItemRow::_internal_equip_offset_z() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_offset_z_;
+}
+inline void ItemRow::_internal_set_equip_offset_z(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_offset_z_ = value;
+}
+
+// float equip_yaw = 18 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
+inline void ItemRow::clear_equip_yaw() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_yaw_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline float ItemRow::equip_yaw() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_yaw)
+  return _internal_equip_yaw();
+}
+inline void ItemRow::set_equip_yaw(float value) {
+  _internal_set_equip_yaw(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_yaw)
+}
+inline float ItemRow::_internal_equip_yaw() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_yaw_;
+}
+inline void ItemRow::_internal_set_equip_yaw(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_yaw_ = value;
+}
+
+// float equip_pitch = 19 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
+inline void ItemRow::clear_equip_pitch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_pitch_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline float ItemRow::equip_pitch() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_pitch)
+  return _internal_equip_pitch();
+}
+inline void ItemRow::set_equip_pitch(float value) {
+  _internal_set_equip_pitch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_pitch)
+}
+inline float ItemRow::_internal_equip_pitch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_pitch_;
+}
+inline void ItemRow::_internal_set_equip_pitch(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_pitch_ = value;
+}
+
+// float equip_roll = 20 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
+inline void ItemRow::clear_equip_roll() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_roll_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline float ItemRow::equip_roll() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_roll)
+  return _internal_equip_roll();
+}
+inline void ItemRow::set_equip_roll(float value) {
+  _internal_set_equip_roll(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_roll)
+}
+inline float ItemRow::_internal_equip_roll() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_roll_;
+}
+inline void ItemRow::_internal_set_equip_roll(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_roll_ = value;
+}
+
+// float equip_scale_x = 21 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
+inline void ItemRow::clear_equip_scale_x() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_scale_x_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline float ItemRow::equip_scale_x() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_scale_x)
+  return _internal_equip_scale_x();
+}
+inline void ItemRow::set_equip_scale_x(float value) {
+  _internal_set_equip_scale_x(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_scale_x)
+}
+inline float ItemRow::_internal_equip_scale_x() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_scale_x_;
+}
+inline void ItemRow::_internal_set_equip_scale_x(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_scale_x_ = value;
+}
+
+// float equip_scale_y = 22 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
+inline void ItemRow::clear_equip_scale_y() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_scale_y_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline float ItemRow::equip_scale_y() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_scale_y)
+  return _internal_equip_scale_y();
+}
+inline void ItemRow::set_equip_scale_y(float value) {
+  _internal_set_equip_scale_y(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_scale_y)
+}
+inline float ItemRow::_internal_equip_scale_y() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_scale_y_;
+}
+inline void ItemRow::_internal_set_equip_scale_y(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_scale_y_ = value;
+}
+
+// float equip_scale_z = 23 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
+inline void ItemRow::clear_equip_scale_z() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_scale_z_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline float ItemRow::equip_scale_z() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.ItemRow.equip_scale_z)
+  return _internal_equip_scale_z();
+}
+inline void ItemRow::set_equip_scale_z(float value) {
+  _internal_set_equip_scale_z(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.ItemRow.equip_scale_z)
+}
+inline float ItemRow::_internal_equip_scale_z() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_scale_z_;
+}
+inline void ItemRow::_internal_set_equip_scale_z(float value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_scale_z_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // ItemTableData
 
-// repeated .pandora.config.v1.ItemRow rows = 1 [json_name = "rows"];
+// repeated .pandora.config.v1.ItemRow rows = 1;
 inline int ItemTableData::_internal_rows_size() const {
   return _internal_rows().size();
 }

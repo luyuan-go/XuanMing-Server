@@ -29,7 +29,7 @@ import (
 )
 
 // grantEntriesBestEffort 事务提交后的立即发放尝试(失败只记日志,补扫兜底)。
-func (uc *MissionUsecase) grantEntriesBestEffort(ctx context.Context, playerID uint64, logs []*RewardLogEntry) {
+func (uc *MissionUsecase) grantEntriesBestEffort(ctx context.Context, cat Catalog, playerID uint64, logs []*RewardLogEntry) {
 	for _, entry := range logs {
 		if entry == nil || entry.ID == 0 {
 			continue
@@ -38,7 +38,7 @@ func (uc *MissionUsecase) grantEntriesBestEffort(ctx context.Context, playerID u
 			ID: entry.ID, PlayerID: playerID,
 			MissionConfigID: entry.MissionConfigID, Key: entry.Key, RewardPB: entry.RewardPB,
 		}
-		if err := uc.grantOne(ctx, row); err != nil {
+		if err := uc.grantOne(ctx, cat, row); err != nil {
 			uc.log.Warnw("msg", "mission_reward_grant_deferred",
 				"player_id", playerID, "mission", entry.MissionConfigID, "key", entry.Key, "err", err,
 				"hint", "留 PENDING/FAILED 给补扫,不影响任务状态")
@@ -48,8 +48,8 @@ func (uc *MissionUsecase) grantEntriesBestEffort(ctx context.Context, playerID u
 
 // grantOne 发放一条流水并落终态标记。
 // 成功 → GRANTED;失败 → FAILED(补扫按 status<>GRANTED 继续捞,FAILED 只是审计区分)。
-func (uc *MissionUsecase) grantOne(ctx context.Context, row *RewardLogRow) error {
-	gerr := uc.deliver(ctx, row)
+func (uc *MissionUsecase) grantOne(ctx context.Context, cat Catalog, row *RewardLogRow) error {
+	gerr := uc.deliver(ctx, cat, row)
 	now := uc.nowMs()
 	if merr := uc.repo.MarkReward(ctx, row.ID, gerr == nil, now); merr != nil {
 		// 发放成功但标记失败:行滞留 → 补扫重放 → 下游幂等键吸收,至多一次不被破坏。
@@ -62,7 +62,7 @@ func (uc *MissionUsecase) grantOne(ctx context.Context, row *RewardLogRow) error
 }
 
 // deliver 按 reward_pb 快照逐类发放(不回读配置表:热更不影响在途发放)。
-func (uc *MissionUsecase) deliver(ctx context.Context, row *RewardLogRow) error {
+func (uc *MissionUsecase) deliver(ctx context.Context, cat Catalog, row *RewardLogRow) error {
 	record := &missionv1.MissionRewardStorageRecord{}
 	if err := proto.Unmarshal(row.RewardPB, record); err != nil {
 		// 快照坏行:永远发不出去,ERROR 揭示而不是静默重试到天荒地老。
@@ -80,7 +80,7 @@ func (uc *MissionUsecase) deliver(ctx context.Context, row *RewardLogRow) error 
 		// 换到另一个幂等键上重发一次。缺省 = 冻结位上线前写的旧行,回退读配置表(旧行为)。
 		equipment := it.Equipment != nil && it.GetEquipment()
 		if it.Equipment == nil {
-			equipment = uc.catalog.IsEquipment(it.GetItemConfigId())
+			equipment = cat.IsEquipment(it.GetItemConfigId())
 			uc.log.Warnw("msg", "mission_reward_route_unfrozen",
 				"id", row.ID, "player_id", row.PlayerID, "mission", row.MissionConfigID,
 				"item", it.GetItemConfigId(), "equipment", equipment,
@@ -156,6 +156,9 @@ func (uc *MissionUsecase) RunRewardRetry(ctx context.Context) {
 }
 
 func (uc *MissionUsecase) retryUngrantedOnce(ctx context.Context) {
+	// 每轮取一次批次快照:本轮所有重放共用同一配置批次(只有冻结位缺省的历史行才会
+	// 回读道具表,取一次即可,不必逐行重取)。
+	cat := uc.catalogs.Snapshot()
 	olderThan := uc.nowMs() - uc.cfg.RewardRetryGrace.Std().Milliseconds()
 	rows, err := uc.repo.ListUngrantedRewards(ctx, olderThan, uc.cfg.RewardRetryBatch)
 	if err != nil {
@@ -170,7 +173,7 @@ func (uc *MissionUsecase) retryUngrantedOnce(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if err := uc.grantOne(ctx, row); err != nil {
+		if err := uc.grantOne(ctx, cat, row); err != nil {
 			failed++
 			uc.log.Warnw("msg", "mission_reward_retry_failed",
 				"id", row.ID, "player_id", row.PlayerID, "mission", row.MissionConfigID, "err", err)
@@ -181,18 +184,52 @@ func (uc *MissionUsecase) retryUngrantedOnce(ctx context.Context) {
 	uc.log.Infow("msg", "mission_reward_retry_round", "scanned", len(rows), "granted", granted, "failed", failed)
 }
 
+// PushWriterLease 是推送发布器的领导权来源(*writerlease.Lease 满足)。
+//
+// **边界(扩大用途前必须先读)**:本接口只用来保证「同一时刻只有一个副本在跑发布器」,
+// 目的是**保序**,不是防脑裂,因此出箱的写**不需要**把 fencing token 带进存储事务。
+// 理由与 ds_allocator 的 SweepWriterLease 同构:发布器不携带跨轮次权威意图 —— 每轮
+// 从 MySQL 重读出箱行,动作只是「投 kafka → 删行」,权威态(player_mission_active)
+// 全程不被触碰。一个迟到的旧 leader 做的是与新 leader 逐字相同的重放,不存在"陈旧
+// 意图写进权威"这一类错误;它唯一的危害是**投递顺序交错**,而那正是本选举要消除的。
+//
+// 若将来发布器开始携带跨轮次状态(如按玩家游标),必须同步升级为存储级 fencing,
+// 不能只靠本接口。
+type PushWriterLease interface {
+	// Current 返回 (fencing token, 是否持有领导权)。本接口只消费第二个返回值。
+	Current() (uint64, bool)
+}
+
+// SetPushWriterLease 注入发布器领导权来源;nil = 不选举(本副本无条件发布)。
+// 只允许在启动装配期调用(RunPushPublisher 之前)。
+func (uc *MissionUsecase) SetPushWriterLease(l PushWriterLease) { uc.pushLease = l }
+
+// pushIsLeader 判定本轮是否由本副本发布,并把领导权跃迁打成日志(未注入恒为 true)。
+func (uc *MissionUsecase) pushIsLeader() bool {
+	if uc.pushLease == nil {
+		return true
+	}
+	_, held := uc.pushLease.Current()
+	if held != uc.pushLeaseHeld {
+		uc.pushLeaseHeld = held
+		uc.log.Infow("msg", "mission_push_leadership_changed", "held", held,
+			"hint", "held=false 时本副本热备不发布;出箱由当选副本排空")
+	}
+	return held
+}
+
 // RunPushPublisher 推送出箱发布 worker(FIFO 按 id 序;成功即删行,失败中断本轮保序;
 // pusher 未接线时直接退化为清扫禁用——出箱行会堆积,由 dbcheck outbox 检查揭示)。
 //
-// **已知代价,刻意不在本服务单点改**(2026-08-11 对抗式复核确认后归档):这里是**全局**
-// FIFO,不是每玩家 FIFO。某个 kafka 分区 leader 不可用时,队首行恰好哈希到该分区就会
-// 卡住整轮,期间**其它分区健康的玩家**推送同样延迟,出箱按全服写入速率堆积。分区恢复后
-// 按原序自动排空,无丢失无重复;窗口内客户端仍可靠 ListMissions / push.resync 拿到正确态,
-// 故不是正确性问题。
+// **单写者**:出箱是全局未分区表、按 id 序整表 FIFO,属 §9.21 点名要串行化的
+// 「同一未分区权威的单写者循环」,由 push_writer_lease 选举保证(见 conf.PushWriterLeaseConf
+// 的完整推导)。未选举时靠部署形态保证,main.go 有 RollingUpdate × !enforce 的机械门禁。
 //
-// 不单改的理由:battle_result 的 `player_update_outbox` 与 player 的 `player_push_outbox`
-// 是同一套写法,只把 mission 改成逐行退避会在三条同类链路上留下两套纪律。要收敛就三处
-// 一起改,并按 §15.4 先拿出真实压测 / 故障证据(通用最佳实践不构成改的理由)。
+// **已知代价,刻意不改**(2026-08-11 对抗式复核确认后归档):这里是**全局** FIFO,不是
+// 每玩家 FIFO。某个 kafka 分区 leader 不可用时,队首行恰好哈希到该分区就会卡住整轮,
+// 期间**其它分区健康的玩家**推送同样延迟。分区恢复后按原序自动排空,无丢失无重复;
+// 窗口内客户端仍可靠 ListMissions / push.resync 拿到正确态,故不是正确性问题。
+// 要改成每玩家 FIFO 须按 §15.4 先拿出真实压测 / 故障证据。
 func (uc *MissionUsecase) RunPushPublisher(ctx context.Context) {
 	if uc.pusher == nil {
 		uc.log.Warnw("msg", "mission_push_publisher_disabled",
@@ -206,6 +243,11 @@ func (uc *MissionUsecase) RunPushPublisher(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// 领导权逐轮判定:失主后本副本立刻停止发布(下一拍即生效),
+			// 不需要也不允许把在飞的行"补完"——那正是交错的来源。
+			if !uc.pushIsLeader() {
+				continue
+			}
 			safego.Run(ctx, "mission_push_publish", func() { uc.publishPushBatch(ctx) })
 		}
 	}
@@ -232,8 +274,16 @@ func (uc *MissionUsecase) publishPushBatch(ctx context.Context) {
 				return
 			}
 			if err := uc.repo.DeletePushOutbox(ctx, row.ID); err != nil {
-				// 删行失败 → 下轮重发同一行,push 契约本就 at-least-once,客户端按业务判重。
-				uc.log.Warnw("msg", "mission_push_delete_failed", "id", row.ID, "err", err)
+				// 删行命中 0 行 = 另一副本已抢先投递并删除本行 → 两个发布器正在同一张
+				// 出箱表上打架。progressed 是逐任务全量快照,两边交错投递会让**旧进度
+				// 快照后到并覆盖新的**(客户端 UI 进度条回退,直到下次 ListMissions /
+				// push.resync 才恢复)。这是可用性/显示问题而非数据问题(权威态在
+				// MySQL,全程未被触碰),但必须可见 —— 旧实现丢弃 Result,这件事在日志
+				// 和 metric 里完全不可见。
+				//
+				// 立即中断本轮:继续投只会加剧交错。
+				uc.log.Warnw("msg", "mission_push_publish_raced", "id", row.ID, "err", err,
+					"hint", "多副本同时跑 RunPushPublisher;单写者未生效或正处滚动升级共存窗口")
 				return
 			}
 		}

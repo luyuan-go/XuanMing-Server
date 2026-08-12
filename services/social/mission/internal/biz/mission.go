@@ -41,9 +41,19 @@ const pushPayloadSoftLimit = 1800
 // pushChunkMissions 单条 MissionUpdateEvent 携带的任务条数上限(分片粒度)。
 const pushChunkMissions = 6
 
-// Catalog 是任务域需要的配置表最小视图。
-// cmd/configtable.go 适配 configtable.Store(每次调用取当前批次,与热更同源);
-// 单测用 map 假件。行指针只读,调用方不得修改。
+// CatalogSource 产出「一次领域操作期间恒定」的配置批次快照。
+//
+// 每个公开入口(ListMissions / Accept / Claim / ReportFacts / 补扫一轮)在最外层
+// Snapshot() 一次,把得到的 Catalog 一路传进引擎与发放链。这样一次事务回调里几十次
+// 配置读取全部来自同一批次 —— 热更 reload 的原子切换只影响**下一次**操作,不会在
+// 半途换批次,造成同一条奖励的内容与装备/堆叠冻结位出身不同批次。
+type CatalogSource interface {
+	Snapshot() Catalog
+}
+
+// Catalog 是任务域需要的配置表最小视图(**单一批次**上的只读视图)。
+// cmd/configtable.go 适配 configtable.Store;单测用 map 假件。
+// 行指针只读,调用方不得修改。
 type Catalog interface {
 	MissionByID(id uint32) (*configpb.MissionRow, bool)
 	ConditionByID(id uint32) (*configpb.ConditionRow, bool)
@@ -187,15 +197,20 @@ type Pusher interface {
 
 // MissionUsecase 任务域业务核心。
 type MissionUsecase struct {
-	repo    MissionRepo
-	catalog Catalog
-	items   ItemGranter
-	exp     ExpGranter
-	mail    OverflowMailSender // 可 nil:满包溢出转邮件不可用,发放失败留补扫
-	pusher  Pusher             // 可 nil:推送禁用(kafka 未配),客户端靠 ListMissions
-	cfg     conf.MissionConf
-	log     *klog.Helper
-	nowMs   func() int64
+	repo     MissionRepo
+	catalogs CatalogSource
+	items    ItemGranter
+	exp      ExpGranter
+	mail     OverflowMailSender // 可 nil:满包溢出转邮件不可用,发放失败留补扫
+	pusher   Pusher             // 可 nil:推送禁用(kafka 未配),客户端靠 ListMissions
+	cfg      conf.MissionConf
+	log      *klog.Helper
+	nowMs    func() int64
+
+	// pushLease 推送发布器的领导权来源;nil = 不选举。只在装配期由 SetPushWriterLease 写。
+	pushLease PushWriterLease
+	// pushLeaseHeld 上一轮领导权状态,只由发布器单 goroutine 读写(跃迁日志去重用)。
+	pushLeaseHeld bool
 }
 
 // 关于 cellroute:任务域**刻意不接** region/cell 路由器(§14.1 不留"以后再接"的钩子,
@@ -204,14 +219,20 @@ type MissionUsecase struct {
 // 将来任务域真需要落点观测时,照 chat 的样子一次接到位。
 
 // NewMissionUsecase 构造。
-func NewMissionUsecase(repo MissionRepo, catalog Catalog, items ItemGranter, exp ExpGranter,
+func NewMissionUsecase(repo MissionRepo, catalogs CatalogSource, items ItemGranter, exp ExpGranter,
 	mail OverflowMailSender, pusher Pusher, cfg conf.MissionConf, logger klog.Logger) *MissionUsecase {
 	return &MissionUsecase{
-		repo: repo, catalog: catalog, items: items, exp: exp, mail: mail, pusher: pusher,
+		repo: repo, catalogs: catalogs, items: items, exp: exp, mail: mail, pusher: pusher,
 		cfg: cfg, log: klog.NewHelper(logger),
 		nowMs: func() int64 { return time.Now().UnixMilli() },
 	}
 }
+
+// StaticCatalogSource 把一个固定 Catalog 包成 CatalogSource(单测与不热更的场景)。
+type StaticCatalogSource struct{ Catalog Catalog }
+
+// Snapshot 见 CatalogSource。
+func (s StaticCatalogSource) Snapshot() Catalog { return s.Catalog }
 
 // SetNowFunc 仅测试用:注入确定性时钟。
 func (uc *MissionUsecase) SetNowFunc(f func() int64) { uc.nowMs = f }
@@ -220,13 +241,14 @@ func (uc *MissionUsecase) SetNowFunc(f func() int64) { uc.nowMs = f }
 
 // ListMissions 权威快照(活跃 + 已完成;resync 回源接口)。
 func (uc *MissionUsecase) ListMissions(ctx context.Context, playerID uint64) ([]*missionv1.ActiveMission, []*missionv1.CompletedMission, error) {
+	cat := uc.catalogs.Snapshot()
 	st, err := uc.repo.LoadPlayer(ctx, playerID)
 	if err != nil {
 		return nil, nil, err
 	}
 	active := make([]*missionv1.ActiveMission, 0, len(st.Active))
 	for _, am := range sortedActive(st) {
-		active = append(active, uc.toProtoActive(am))
+		active = append(active, uc.toProtoActive(cat, am))
 	}
 	completed := make([]*missionv1.CompletedMission, 0, len(st.Done))
 	for _, dm := range sortedDone(st) {
@@ -239,9 +261,10 @@ func (uc *MissionUsecase) ListMissions(ctx context.Context, playerID uint64) ([]
 
 // Accept 玩家接取任务。
 func (uc *MissionUsecase) Accept(ctx context.Context, playerID uint64, missionID uint32) (*missionv1.ActiveMission, error) {
+	cat := uc.catalogs.Snapshot()
 	var accepted *ActiveMission
 	err := uc.repo.MutatePlayer(ctx, playerID, func(st *PlayerState) (*Mutation, error) {
-		am, aerr := uc.acceptInto(st, missionID)
+		am, aerr := uc.acceptInto(cat, st, missionID)
 		if aerr != nil {
 			return nil, aerr
 		}
@@ -251,7 +274,7 @@ func (uc *MissionUsecase) Accept(ctx context.Context, playerID uint64, missionID
 	if err != nil {
 		return nil, err
 	}
-	return uc.toProtoActive(accepted), nil
+	return uc.toProtoActive(cat, accepted), nil
 }
 
 // Abandon 玩家放弃任务。
@@ -273,8 +296,13 @@ func (uc *MissionUsecase) Abandon(ctx context.Context, playerID uint64, missionI
 }
 
 // CompleteAll GM 批量完成:全部活跃任务置完成 + 清空活跃列表。
+//
 // 刻意不发奖、不标记可领、不自动接后续链、不触发 COMPLETE_MISSION 再入 ——
 // 与正常完成扇出是两条不可合并的路径(D 版 CompleteAllMissions / todo.md #225)。
+//
+// **但仍产出推送**:不推等于让客户端留着一份与权威不一致的活跃列表,直到下次
+// ListMissions 才对齐。推送不承担正确性,推它不会把两条路径合并,漏推却会制造一个
+// "只有 GM 知道"的状态漂移(proto 注释此前写反了,2026-08-11 已更正为与本实现一致)。
 func (uc *MissionUsecase) CompleteAll(ctx context.Context, playerID uint64) (uint32, error) {
 	var count uint32
 	err := uc.repo.MutatePlayer(ctx, playerID, func(st *PlayerState) (*Mutation, error) {
@@ -312,6 +340,7 @@ func (uc *MissionUsecase) CompleteAll(ctx context.Context, playerID uint64) (uin
 // Claim 领取任务奖励:CLAIMABLE→CLAIMED CAS 与 reward_log(PENDING) 同事务 =
 // 「已领」立即权威生效;内容发放 at-least-once(提交后立即尝试一次,失败留补扫)。
 func (uc *MissionUsecase) Claim(ctx context.Context, playerID uint64, missionID uint32) error {
+	cat := uc.catalogs.Snapshot()
 	var logs []*RewardLogEntry
 	err := uc.repo.MutatePlayer(ctx, playerID, func(st *PlayerState) (*Mutation, error) {
 		dm, ok := st.Done[missionID]
@@ -319,13 +348,13 @@ func (uc *MissionUsecase) Claim(ctx context.Context, playerID uint64, missionID 
 			return nil, errcode.New(errcode.ErrMissionNotClaimable,
 				"claim mission=%d player=%d state=%v", missionID, playerID, dm)
 		}
-		row, ok := uc.catalog.MissionByID(missionID)
+		row, ok := cat.MissionByID(missionID)
 		if !ok {
 			// 完成后任务行被策划删掉:配置错,fail-closed 不发未知内容。
 			return nil, errcode.New(errcode.ErrMissionConfigNotFound,
 				"claim mission=%d config missing", missionID)
 		}
-		entry, rerr := uc.buildRewardLog(playerID, row)
+		entry, rerr := uc.buildRewardLog(cat, playerID, row)
 		if rerr != nil {
 			return nil, rerr
 		}
@@ -341,7 +370,7 @@ func (uc *MissionUsecase) Claim(ctx context.Context, playerID uint64, missionID 
 		return err
 	}
 	// 提交后同步尝试发放一次(请求 ctx 有界;失败不回滚领取,补扫兜底)。
-	uc.grantEntriesBestEffort(ctx, playerID, logs)
+	uc.grantEntriesBestEffort(ctx, cat, playerID, logs)
 	return nil
 }
 
@@ -355,10 +384,11 @@ func (uc *MissionUsecase) ReportFacts(ctx context.Context, playerID uint64, fact
 	if len(facts) > uc.cfg.MaxFactsPerReport {
 		return false, errcode.New(errcode.ErrInvalidArg, "facts %d > max %d", len(facts), uc.cfg.MaxFactsPerReport)
 	}
+	cat := uc.catalogs.Snapshot()
 	var logs []*RewardLogEntry
 	already, err := uc.repo.ApplyFactsTx(ctx, playerID, idemKey, factsFingerprint(playerID, facts),
 		func(st *PlayerState) (*Mutation, error) {
-			mut, ferr := uc.applyFactsEngine(st, facts)
+			mut, ferr := uc.applyFactsEngine(cat, st, facts)
 			if ferr != nil {
 				return nil, ferr
 			}
@@ -373,7 +403,7 @@ func (uc *MissionUsecase) ReportFacts(ctx context.Context, playerID uint64, fact
 		return already, err
 	}
 	// 自动发奖:提交后同步尝试一次,失败留补扫。
-	uc.grantEntriesBestEffort(ctx, playerID, logs)
+	uc.grantEntriesBestEffort(ctx, cat, playerID, logs)
 	return false, nil
 }
 
@@ -381,8 +411,8 @@ func (uc *MissionUsecase) ReportFacts(ctx context.Context, playerID uint64, fact
 
 // acceptInto 接取校验 + 建活跃行(D 版 CheckMissionAcceptance + AcceptMission)。
 // 类型互斥从活跃行现算(D 版 typeFilter 派生态;sub_type=0 不参与互斥)。
-func (uc *MissionUsecase) acceptInto(st *PlayerState, missionID uint32) (*ActiveMission, error) {
-	row, ok := uc.catalog.MissionByID(missionID)
+func (uc *MissionUsecase) acceptInto(cat Catalog, st *PlayerState, missionID uint32) (*ActiveMission, error) {
+	row, ok := cat.MissionByID(missionID)
 	if !ok {
 		return nil, errcode.New(errcode.ErrMissionConfigNotFound, "mission=%d", missionID)
 	}
@@ -398,7 +428,7 @@ func (uc *MissionUsecase) acceptInto(st *PlayerState, missionID uint32) (*Active
 	}
 	if row.GetMissionSubType() > 0 {
 		for _, other := range st.Active {
-			orow, ook := uc.catalog.MissionByID(other.MissionConfigID)
+			orow, ook := cat.MissionByID(other.MissionConfigID)
 			if !ook {
 				continue
 			}
@@ -419,7 +449,7 @@ func (uc *MissionUsecase) acceptInto(st *PlayerState, missionID uint32) (*Active
 }
 
 // applyFactsEngine 进度推进 + 完成扇出(D 版 HandleConditionEvent + OnMissionCompletion)。
-func (uc *MissionUsecase) applyFactsEngine(st *PlayerState, facts []Fact) (*Mutation, error) {
+func (uc *MissionUsecase) applyFactsEngine(cat Catalog, st *PlayerState, facts []Fact) (*Mutation, error) {
 	mut := &Mutation{}
 	now := uc.nowMs()
 	evt := &missionv1.MissionUpdateEvent{TsMs: uint64(now)}
@@ -444,15 +474,15 @@ func (uc *MissionUsecase) applyFactsEngine(st *PlayerState, facts []Fact) (*Muta
 				continue
 			}
 			for _, am := range sortedActive(st) {
-				row, ok := uc.catalog.MissionByID(am.MissionConfigID)
+				row, ok := cat.MissionByID(am.MissionConfigID)
 				if !ok {
 					continue // 配置热更删行:活跃孤行不再推进,不报错(展示层照旧)
 				}
-				if !uc.progressMission(row, am, fact) {
+				if !uc.progressMission(cat, row, am, fact) {
 					continue
 				}
 				changed[am.MissionConfigID] = true
-				if uc.allConditionsFulfilled(row, am) {
+				if uc.allConditionsFulfilled(cat, row, am) {
 					completed = append(completed, am.MissionConfigID)
 				}
 			}
@@ -463,7 +493,7 @@ func (uc *MissionUsecase) applyFactsEngine(st *PlayerState, facts []Fact) (*Muta
 			if _, still := st.Active[mid]; !still {
 				continue // 同批重复完成判定(不同事实各推一次)去重
 			}
-			row, ok := uc.catalog.MissionByID(mid)
+			row, ok := cat.MissionByID(mid)
 			if !ok {
 				continue
 			}
@@ -474,7 +504,7 @@ func (uc *MissionUsecase) applyFactsEngine(st *PlayerState, facts []Fact) (*Muta
 			dm := &DoneMission{MissionConfigID: mid, RewardState: RewardStateNone, CompletedAtMs: now}
 			if row.GetRewardId() > 0 {
 				if row.GetAutoReward() > 0 {
-					entry, rerr := uc.buildRewardLog(st.PlayerID, row)
+					entry, rerr := uc.buildRewardLog(cat, st.PlayerID, row)
 					if rerr != nil {
 						return nil, rerr
 					}
@@ -491,14 +521,14 @@ func (uc *MissionUsecase) applyFactsEngine(st *PlayerState, facts []Fact) (*Muta
 
 			// 自动接后续链(校验不过跳过该条不阻断,D 版 enqueue AcceptMissionEvent 语义)。
 			for _, nid := range configtable.MissionNextIDs(row) {
-				next, aerr := uc.acceptInto(st, nid)
+				next, aerr := uc.acceptInto(cat, st, nid)
 				if aerr != nil {
 					uc.log.Warnw("msg", "mission_chain_accept_skipped",
 						"player_id", st.PlayerID, "from", mid, "next", nid, "err", aerr)
 					continue
 				}
 				mut.UpsertActive = append(mut.UpsertActive, next)
-				evt.AutoAccepted = append(evt.AutoAccepted, uc.toProtoActive(next))
+				evt.AutoAccepted = append(evt.AutoAccepted, uc.toProtoActive(cat, next))
 			}
 
 			// COMPLETE_MISSION 条件再入(下一轮处理;此时链上新任务已激活,D 版 FIFO 等价)。
@@ -517,7 +547,7 @@ func (uc *MissionUsecase) applyFactsEngine(st *PlayerState, facts []Fact) (*Muta
 			continue
 		}
 		mut.UpsertActive = append(mut.UpsertActive, am)
-		evt.Progressed = append(evt.Progressed, uc.toProtoActive(am))
+		evt.Progressed = append(evt.Progressed, uc.toProtoActive(cat, am))
 	}
 
 	if len(evt.Progressed)+len(evt.Completed)+len(evt.AutoAccepted) > 0 {
@@ -551,7 +581,7 @@ func alignProgressSlots(row *configpb.MissionRow, am *ActiveMission) {
 }
 
 // progressMission 单事实对单任务的槽位推进(D 版 UpdateMissionProgress)。
-func (uc *MissionUsecase) progressMission(row *configpb.MissionRow, am *ActiveMission, fact Fact) bool {
+func (uc *MissionUsecase) progressMission(cat Catalog, row *configpb.MissionRow, am *ActiveMission, fact Fact) bool {
 	alignProgressSlots(row, am)
 	condIDs := configtable.MissionConditionIDs(row)
 	slots := len(condIDs)
@@ -560,7 +590,7 @@ func (uc *MissionUsecase) progressMission(row *configpb.MissionRow, am *ActiveMi
 	}
 	progressed := false
 	for i := 0; i < slots; i++ {
-		cond, ok := uc.catalog.ConditionByID(condIDs[i])
+		cond, ok := cat.ConditionByID(condIDs[i])
 		if !ok {
 			continue
 		}
@@ -586,13 +616,13 @@ func (uc *MissionUsecase) progressMission(row *configpb.MissionRow, am *ActiveMi
 //
 // 按**配置的全部条件槽**判定,槽数不足一律 fail-closed 判未达标(原实现取 min 会让
 // 热更新增的条件被整段跳过 → 白送完成,见 alignProgressSlots)。
-func (uc *MissionUsecase) allConditionsFulfilled(row *configpb.MissionRow, am *ActiveMission) bool {
+func (uc *MissionUsecase) allConditionsFulfilled(cat Catalog, row *configpb.MissionRow, am *ActiveMission) bool {
 	condIDs := configtable.MissionConditionIDs(row)
 	for i, cid := range condIDs {
 		if i >= len(am.Progress) {
 			return false // 进度槽比配置短(未对齐):宁可不完成,不误发奖
 		}
-		cond, ok := uc.catalog.ConditionByID(cid)
+		cond, ok := cat.ConditionByID(cid)
 		if !ok {
 			return false // 条件行缺失 fail-closed:宁可不完成,不误发奖
 		}
@@ -604,12 +634,12 @@ func (uc *MissionUsecase) allConditionsFulfilled(row *configpb.MissionRow, am *A
 }
 
 // buildRewardLog 按奖励表拼发放内容快照(reward_id=0 或空内容返回 nil)。
-func (uc *MissionUsecase) buildRewardLog(playerID uint64, row *configpb.MissionRow) (*RewardLogEntry, error) {
+func (uc *MissionUsecase) buildRewardLog(cat Catalog, playerID uint64, row *configpb.MissionRow) (*RewardLogEntry, error) {
 	rewardID := row.GetRewardId()
 	if rewardID == 0 {
 		return nil, nil
 	}
-	rrow, ok := uc.catalog.RewardByID(rewardID)
+	rrow, ok := cat.RewardByID(rewardID)
 	if !ok {
 		// 加载期 fk 校验已挡;热更竞态兜底:fail-closed 拒绝而不是发空奖。
 		return nil, errcode.New(errcode.ErrInternal, "reward=%d config missing (mission=%d)", rewardID, row.GetId())
@@ -620,7 +650,7 @@ func (uc *MissionUsecase) buildRewardLog(playerID uint64, row *configpb.MissionR
 		// GrantItems(`:stack` 键),两个键在 inventory 台账里互不相识。若发放时才回读
 		// 道具表,形态在两次投递之间被热更改掉(或滚动升级期新旧副本加载着不同配置批次),
 		// 同一条奖励会先后用两个不同幂等键各发一次 —— 幂等键防不住,因为不是同一个键。
-		equipment := uc.catalog.IsEquipment(entry.ItemConfigID)
+		equipment := cat.IsEquipment(entry.ItemConfigID)
 		record.Items = append(record.Items, &missionv1.MissionRewardItem{
 			ItemConfigId: entry.ItemConfigID, Count: entry.Count, Equipment: &equipment,
 		})
@@ -639,13 +669,13 @@ func (uc *MissionUsecase) buildRewardLog(playerID uint64, row *configpb.MissionR
 // ── 辅助 ───────────────────────────────────────────────────────────────────
 
 // toProtoActive 活跃任务 → 客户端可见结构(targets 服务端算好下发,客户端不重算)。
-func (uc *MissionUsecase) toProtoActive(am *ActiveMission) *missionv1.ActiveMission {
+func (uc *MissionUsecase) toProtoActive(cat Catalog, am *ActiveMission) *missionv1.ActiveMission {
 	out := &missionv1.ActiveMission{
 		MissionConfigId: am.MissionConfigID,
 		Progress:        append([]uint32(nil), am.Progress...),
 		AcceptedAtMs:    uint64(am.AcceptedAtMs),
 	}
-	if row, ok := uc.catalog.MissionByID(am.MissionConfigID); ok {
+	if row, ok := cat.MissionByID(am.MissionConfigID); ok {
 		// 热更加条件后的旧行 progress 比 condition_ids 短:下发前补零,
 		// 否则 progress 与 targets 长度不等,客户端逐槽渲染会错位/越界。
 		for len(out.Progress) < len(configtable.MissionConditionIDs(row)) {
@@ -655,7 +685,7 @@ func (uc *MissionUsecase) toProtoActive(am *ActiveMission) *missionv1.ActiveMiss
 		out.Targets = make([]uint32, 0, len(condIDs))
 		for i, cid := range condIDs {
 			target := configtable.MissionSlotTarget(row, i)
-			if cond, cok := uc.catalog.ConditionByID(cid); cok {
+			if cond, cok := cat.ConditionByID(cid); cok {
 				target = configtable.ConditionEffectiveTarget(cond, target)
 			}
 			out.Targets = append(out.Targets, target)

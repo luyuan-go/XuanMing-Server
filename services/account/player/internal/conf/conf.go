@@ -2,6 +2,8 @@
 package conf
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
@@ -40,14 +42,14 @@ type PlayerConf struct {
 	//
 	// 2026-07-25:2026-06-17 审查提出的三项校验已补齐,本开关不再是唯一防线——
 	//   - isEquip / slotMatch:读 configtable 道具表(d_道具.xlsx「装备部位」列),零 RPC;
-	//   - ownEquipment:经 inventory.CheckItemsOwned 系统 RPC 确认持有(见 InventoryAddr);
+	//   - ownEquipment:经 inventory.CheckInstancesOwned 系统 RPC 精确确认实例归属(见 InventoryAddr);
 	//   - SetTalents:读 configtable 专精表校验等级上限 / 前置 / 总消耗。
 	// 三条依赖任一缺失(表未加载 / InventoryAddr 未配)一律 fail-closed 拒绝,不会退化成放行。
 	// 因此打开本开关的前提是 **config_table.dir 已就绪 + inventory_addr 已配置**。
 	LoadoutCustomizeEnabled bool `yaml:"loadout_customize_enabled,omitempty" json:"loadout_customize_enabled,omitempty"`
 
 	// InventoryAddr inventory 服务 gRPC 端点(host:port,内网直连无 JWT)。
-	// SetEquipment 的拥有权校验依赖它;留空 = 拥有权校验器不接线,SetEquipment 直接
+	// SetEquipment/GetLoadout 的精确实例归属校验依赖它;留空 = 校验器不接线,写入与战斗快照
 	// fail-closed 返回内部错误(不会静默跳过校验)。LoadoutCustomizeEnabled=true 时必配。
 	InventoryAddr string `yaml:"inventory_addr,omitempty" json:"inventory_addr,omitempty"`
 
@@ -68,6 +70,9 @@ type PlayerConf struct {
 
 	// PushOutboxBatch 每轮发布取多少条推送出箱记录(默认 128)。
 	PushOutboxBatch int `yaml:"push_outbox_batch,omitempty" json:"push_outbox_batch,omitempty"`
+
+	// PushWriterLease 推送出箱发布器的单写者选举(与 mission 同款,推导见该结构注释)。
+	PushWriterLease PushWriterLeaseConf `yaml:"push_writer_lease,omitempty" json:"push_writer_lease,omitempty"`
 
 	// RetentionModeRaw 保留期清理模式(§9.24 全服标准口径):留空 / "report_only" / "report"
 	// = **只统计待清理量并 WARN 告警,一行都不删**(默认);"delete" = 真删。
@@ -140,6 +145,53 @@ func (p *PlayerConf) MaxExpPerGrantOrDefault() uint64 {
 		return p.MaxExpPerGrant
 	}
 	return 1_000_000
+}
+
+// 推送出箱发布器写者租约档位(与 mission.conf 同名常量语义一致)。
+const (
+	// PushWriterLeaseOff 不选举:本副本无条件跑发布器(只在能保证单发布者时合法)。
+	PushWriterLeaseOff = "off"
+	// PushWriterLeaseEnforce 只有当选副本跑发布器,其余副本热备。
+	PushWriterLeaseEnforce = "enforce"
+)
+
+// PushWriterLeaseConf 是 player_push_outbox 发布器的单写者选举配置。
+//
+// 为什么 player 也必须单写者(与 mission 同因):player_push_outbox 是**全局未分区**表,
+// 发布器按 id 升序整表 FIFO 取行(experience_repo.go FetchPushOutbox),属 §9.21
+// 「作用于同一未分区权威的单写者循环」。而 PlayerExperienceEvent 携带的是**绝对值快照**
+// (level / exp_in_level / is_max_level,不是增量),两个副本交错投递会让旧快照后到并
+// 覆盖新的 —— 玩家看到等级/经验条**倒退**。事件里没有 revision;ts_ms 是各副本墙钟,
+// protocol-ordering-rules §5-B 明令不得只靠它判重。
+//
+// 与 battle_result 的 player_update_outbox 的**有据差异**:那条链下游是 player 服务、
+// 靠 mmr_history 唯一键幂等去重,乱序与重复天然无害,且没有客户端可见的覆盖语义,
+// 故**刻意不接选举**(§15.3 不为形式统一付复杂度)。三条同类链路之间是有据的差异,
+// 不是漂移。
+type PushWriterLeaseConf struct {
+	// Mode:"off"(留空即 off)| "enforce"。默认 off 保证 dev 单进程无 etcd 也起得来;
+	// 生产的安全网是 main.go 的机械门禁(RollingUpdate × 非 enforce → fail-closed 退出)。
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
+	// EtcdEndpoints etcd 地址(mode=enforce 必填)。
+	EtcdEndpoints []string `yaml:"etcd_endpoints,omitempty" json:"etcd_endpoints,omitempty"`
+	// LeaseTTLSec etcd session lease TTL(秒);留空用 writerlease 默认值。
+	LeaseTTLSec int `yaml:"lease_ttl_sec,omitempty" json:"lease_ttl_sec,omitempty"`
+	// DialTimeout etcd 连接超时;留空用 writerlease 默认值。
+	DialTimeout config.Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
+}
+
+// ResolveMode 归一化档位,取值不认识**报错而非猜**(拼错一个字母就静默退回无保护并发
+// 发布是不可接受的失败模式,同 dbguard.ParseMode 的纪律)。
+func (c PushWriterLeaseConf) ResolveMode() (string, error) {
+	switch strings.ToLower(strings.TrimSpace(c.Mode)) {
+	case "", PushWriterLeaseOff:
+		return PushWriterLeaseOff, nil
+	case PushWriterLeaseEnforce:
+		return PushWriterLeaseEnforce, nil
+	default:
+		return "", fmt.Errorf("player.push_writer_lease.mode=%q 不认识(只允许 %q / %q,留空=%q)",
+			c.Mode, PushWriterLeaseOff, PushWriterLeaseEnforce, PushWriterLeaseOff)
+	}
 }
 
 // PushOutboxIntervalOrDefault 返回生效的推送出箱轮询间隔(未配置 → 1s)。

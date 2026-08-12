@@ -52,8 +52,17 @@ service MissionService {
   rpc ReportMissionFacts(ReportMissionFactsRequest) returns (ReportMissionFactsResponse);
 
   // GM / 调试:把玩家当前全部活跃任务直接置为已完成并清空活跃列表。
-  // 刻意不发奖、不标记可领、不自动接后续链、不广播完成事件——与正常完成路径
-  // (ReportMissionFacts 内的完成扇出)是两条不可合并的路径(D 版 todo.md #225 教训)。
+  //
+  // 刻意**不发奖、不标记可领、不自动接后续链、不触发 COMPLETE_MISSION 再入**——
+  // 与正常完成路径(ReportMissionFacts 内的完成扇出)是两条不可合并的路径
+  // (D 版 todo.md #225 教训)。
+  //
+  // **但仍然推送**(MissionUpdateEvent.completed):不推等于让客户端保留一份与权威
+  // 不一致的活跃列表,直到玩家下次 ListMissions 才对齐 —— GM 改了状态却看不见,
+  // 正是调试最需要避免的。推送不承担正确性(protocol-ordering-rules 原则 5),
+  // 推它不会把两条路径合并,漏推却会制造一个"只有 GM 知道"的状态漂移。
+  // (2026-08-11 更正:本注释此前写"不广播完成事件",与 biz.CompleteAll 的实现相反;
+  //  经复核实现是对的,注释是错的。)
   rpc CompleteAllMissions(CompleteAllMissionsRequest) returns (CompleteAllMissionsResponse);
 }
 

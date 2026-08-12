@@ -10,6 +10,8 @@ import (
 	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/middleware"
@@ -45,6 +47,20 @@ func (t *gmTestTransport) Endpoint() string                { return "" }
 func (t *gmTestTransport) Operation() string               { return "/pandora.gm.v1.GmService/PollCommands" }
 func (t *gmTestTransport) RequestHeader() transport.Header { return t.request }
 func (t *gmTestTransport) ReplyHeader() transport.Header   { return gmTestHeader{} }
+
+type gmTestServerTransportStream struct {
+	trailer metadata.MD
+}
+
+func (*gmTestServerTransportStream) Method() string              { return "/pandora.gm.v1.GmService/SendCommand" }
+func (*gmTestServerTransportStream) SetHeader(metadata.MD) error { return nil }
+func (*gmTestServerTransportStream) SendHeader(metadata.MD) error {
+	return nil
+}
+func (s *gmTestServerTransportStream) SetTrailer(md metadata.MD) error {
+	s.trailer = metadata.Join(s.trailer, md)
+	return nil
+}
 
 func gmBearerContext(token string) context.Context {
 	h := gmTestHeader{}
@@ -206,6 +222,272 @@ func TestAckCommand(t *testing.T) {
 	}
 	if resp, _ := s.AckCommand(ctx, &gmv1.AckCommandRequest{MatchId: 1, IdempotencyKey: "abc", Ok: true}); resp.GetCode() != commonv1.ErrCode_OK {
 		t.Fatalf("valid ack want OK, got %v", resp.GetCode())
+	}
+}
+
+// TestSendCommand_WaitForExecutionAck 验证 gmctl 请求执行确认时，入队不等于成功：
+// RPC 必须等到同一 idempotency_key 的 DS Ack，并把真实 ok 映射到响应业务码。
+func TestSendCommand_WaitForExecutionAck(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		ackOK       bool
+		wantCode    commonv1.ErrCode
+		wantMessage string
+	}{
+		{name: "executed", ackOK: true, wantCode: commonv1.ErrCode_OK},
+		{name: "execution_failed", ackOK: false, wantCode: commonv1.ErrCode_ERR_INVALID_STATE,
+			wantMessage: "test-execution-result"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, cleanup := newTestService(t)
+			defer cleanup()
+
+			baseCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			waitCtx := metadata.NewIncomingContext(baseCtx,
+				metadata.Pairs("x-pandora-gm-wait-execution-ack", "1"))
+			serverStream := &gmTestServerTransportStream{}
+			waitCtx = grpc.NewContextWithServerTransportStream(waitCtx, serverStream)
+			type sendResult struct {
+				resp *gmv1.SendCommandResponse
+				err  error
+			}
+			resultCh := make(chan sendResult, 1)
+			go func() {
+				resp, err := s.SendCommand(waitCtx, addItemReq(42, 22835336090746880, 10001, 1))
+				resultCh <- sendResult{resp: resp, err: err}
+			}()
+
+			var command *gmv1.GmCommand
+			deadline := time.Now().Add(500 * time.Millisecond)
+			for time.Now().Before(deadline) {
+				poll, err := s.PollCommands(context.Background(), &gmv1.PollCommandsRequest{MatchId: 42})
+				if err != nil {
+					t.Fatalf("PollCommands: %v", err)
+				}
+				if len(poll.GetCommands()) == 1 {
+					command = poll.GetCommands()[0]
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+			if command == nil {
+				t.Fatal("未在时限内取得待执行命令")
+			}
+
+			select {
+			case got := <-resultCh:
+				t.Fatalf("只入队/拉取尚未 Ack 就提前返回: resp=%v err=%v", got.resp, got.err)
+			case <-time.After(10 * time.Millisecond):
+			}
+
+			ack, err := s.AckCommand(context.Background(), &gmv1.AckCommandRequest{
+				MatchId: 42, IdempotencyKey: command.GetIdempotencyKey(), Ok: tc.ackOK,
+				Message: "test-execution-result",
+			})
+			if err != nil || ack.GetCode() != commonv1.ErrCode_OK {
+				t.Fatalf("AckCommand: resp=%v err=%v", ack, err)
+			}
+
+			select {
+			case got := <-resultCh:
+				if got.err != nil {
+					t.Fatalf("SendCommand err: %v", got.err)
+				}
+				if got.resp.GetCode() != tc.wantCode {
+					t.Fatalf("SendCommand code=%v want=%v", got.resp.GetCode(), tc.wantCode)
+				}
+				if got.resp.GetIdempotencyKey() != command.GetIdempotencyKey() {
+					t.Fatalf("idempotency_key=%q want=%q", got.resp.GetIdempotencyKey(), command.GetIdempotencyKey())
+				}
+				if messages := serverStream.trailer.Get("x-pandora-gm-execution-message-bin"); len(messages) != 0 || tc.wantMessage != "" {
+					if len(messages) != 1 || messages[0] != tc.wantMessage {
+						t.Fatalf("execution message=%q want=%q", messages, tc.wantMessage)
+					}
+				}
+			case <-time.After(500 * time.Millisecond):
+				t.Fatal("Ack 后 SendCommand 未在时限内返回")
+			}
+		})
+	}
+}
+
+func TestSendCommand_WaitForExecutionAckCancellationBounded(t *testing.T) {
+	s, cleanup := newTestService(t)
+	defer cleanup()
+
+	baseCtx, deadlineCancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer deadlineCancel()
+	waitCtx, cancel := context.WithCancel(baseCtx)
+	waitCtx = metadata.NewIncomingContext(waitCtx,
+		metadata.Pairs("x-pandora-gm-wait-execution-ack", "1"))
+	resultCh := make(chan *gmv1.SendCommandResponse, 1)
+	go func() {
+		resp, _ := s.SendCommand(waitCtx, addItemReq(42, 1001, 10001, 1))
+		resultCh <- resp
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		poll, err := s.PollCommands(context.Background(), &gmv1.PollCommandsRequest{MatchId: 42})
+		if err != nil {
+			t.Fatalf("PollCommands: %v", err)
+		}
+		if len(poll.GetCommands()) == 1 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	started := time.Now()
+	cancel()
+	select {
+	case resp := <-resultCh:
+		if resp.GetCode() != commonv1.ErrCode_ERR_CANCELED {
+			t.Fatalf("code=%v want ERR_CANCELED", resp.GetCode())
+		}
+		if elapsed := time.Since(started); elapsed > 1500*time.Millisecond {
+			t.Fatalf("取消后释放过慢: %s", elapsed)
+		}
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("取消后 SendCommand 仍占用阻塞等待")
+	}
+}
+
+func TestSendCommand_WaitForExecutionAckAcrossServiceInstances(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run: %v", err)
+	}
+	defer mr.Close()
+	sendRedis := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	ackRedis := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer func() { _ = sendRedis.Close() }()
+	defer func() { _ = ackRedis.Close() }()
+	sender := NewService(sendRedis, log.DefaultLogger)
+	acker := NewService(ackRedis, log.DefaultLogger)
+
+	baseCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	waitCtx := metadata.NewIncomingContext(baseCtx,
+		metadata.Pairs("x-pandora-gm-wait-execution-ack", "1"))
+	resultCh := make(chan *gmv1.SendCommandResponse, 1)
+	go func() {
+		resp, _ := sender.SendCommand(waitCtx, addItemReq(73, 1001, 10001, 1))
+		resultCh <- resp
+	}()
+
+	var command *gmv1.GmCommand
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		poll, pollErr := acker.PollCommands(context.Background(), &gmv1.PollCommandsRequest{MatchId: 73})
+		if pollErr != nil {
+			t.Fatalf("PollCommands: %v", pollErr)
+		}
+		if len(poll.GetCommands()) == 1 {
+			command = poll.GetCommands()[0]
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if command == nil {
+		t.Fatal("另一服务实例未取得指令")
+	}
+	if ack, ackErr := acker.AckCommand(context.Background(), &gmv1.AckCommandRequest{
+		MatchId: 73, IdempotencyKey: command.GetIdempotencyKey(), Ok: true,
+	}); ackErr != nil || ack.GetCode() != commonv1.ErrCode_OK {
+		t.Fatalf("AckCommand: resp=%v err=%v", ack, ackErr)
+	}
+
+	select {
+	case resp := <-resultCh:
+		if resp.GetCode() != commonv1.ErrCode_OK {
+			t.Fatalf("code=%v want OK", resp.GetCode())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("跨服务实例 Ack 未唤醒 SendCommand")
+	}
+}
+
+func TestSendCommand_WaitForExecutionAckTimeout(t *testing.T) {
+	s, cleanup := newTestService(t)
+	defer cleanup()
+
+	baseCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	waitCtx := metadata.NewIncomingContext(baseCtx,
+		metadata.Pairs("x-pandora-gm-wait-execution-ack", "1"))
+	resp, err := s.SendCommand(waitCtx, addItemReq(74, 1001, 10001, 1))
+	if err != nil {
+		t.Fatalf("SendCommand: %v", err)
+	}
+	if resp.GetCode() != commonv1.ErrCode_ERR_TIMEOUT {
+		t.Fatalf("code=%v want ERR_TIMEOUT", resp.GetCode())
+	}
+	if resp.GetIdempotencyKey() == "" {
+		t.Fatal("超时结果必须保留 idempotency_key 供对账")
+	}
+}
+
+func TestAckCommand_FirstExecutionResultWins(t *testing.T) {
+	s, cleanup := newTestService(t)
+	defer cleanup()
+
+	baseCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	waitCtx := metadata.NewIncomingContext(baseCtx,
+		metadata.Pairs("x-pandora-gm-wait-execution-ack", "1"))
+	serverStream := &gmTestServerTransportStream{}
+	waitCtx = grpc.NewContextWithServerTransportStream(waitCtx, serverStream)
+	resultCh := make(chan *gmv1.SendCommandResponse, 1)
+	go func() {
+		resp, _ := s.SendCommand(waitCtx, addItemReq(75, 1001, 10001, 1))
+		resultCh <- resp
+	}()
+
+	var command *gmv1.GmCommand
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		poll, err := s.PollCommands(context.Background(), &gmv1.PollCommandsRequest{MatchId: 75})
+		if err != nil {
+			t.Fatalf("PollCommands: %v", err)
+		}
+		if len(poll.GetCommands()) == 1 {
+			command = poll.GetCommands()[0]
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if command == nil {
+		t.Fatal("未取得指令")
+	}
+
+	first := &gmv1.AckCommandRequest{
+		MatchId: 75, IdempotencyKey: command.GetIdempotencyKey(), Ok: false, Message: "first failure",
+	}
+	if ack, err := s.AckCommand(context.Background(), first); err != nil || ack.GetCode() != commonv1.ErrCode_OK {
+		t.Fatalf("first AckCommand: resp=%v err=%v", ack, err)
+	}
+	if duplicate, err := s.AckCommand(context.Background(), first); err != nil || duplicate.GetCode() != commonv1.ErrCode_OK {
+		t.Fatalf("same-result retry must be idempotent: resp=%v err=%v", duplicate, err)
+	}
+	if conflict, err := s.AckCommand(context.Background(), &gmv1.AckCommandRequest{
+		MatchId: 75, IdempotencyKey: command.GetIdempotencyKey(), Ok: true,
+	}); err != nil || conflict.GetCode() != commonv1.ErrCode_ERR_INVALID_STATE {
+		t.Fatalf("conflicting AckCommand: resp=%v err=%v", conflict, err)
+	}
+
+	select {
+	case resp := <-resultCh:
+		if resp.GetCode() != commonv1.ErrCode_ERR_INVALID_STATE {
+			t.Fatalf("code=%v want ERR_INVALID_STATE", resp.GetCode())
+		}
+		messages := serverStream.trailer.Get("x-pandora-gm-execution-message-bin")
+		if len(messages) != 1 || messages[0] != "first failure" {
+			t.Fatalf("execution message=%q want first failure", messages)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("SendCommand 未返回首次 Ack 结果")
 	}
 }
 

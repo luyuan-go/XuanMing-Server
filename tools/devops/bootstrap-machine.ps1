@@ -8,7 +8,7 @@
 
     1. 前置工具        按角色检查 pwsh7 / svn / git / docker / go / java / kubectl / minikube
     2. 机器级环境变量  PANDORA_ARTIFACT_ROOT / LINUX_MULTIARCH_ROOT / PANDORA_PROTO_SERVER_ROOT
-    3. 源码工作副本    校验后端是不是 ^/trunk/Server 的 SVN 检出；按需检出客户端
+    3. 源码工作副本    校验后端 Git origin；按需检出客户端 SVN
     4. CI 栈           up.ps1（Jenkins + registry + MinIO）
     5. Jenkins 接线    setup-jenkins.ps1 + install-agent-service.ps1
     6. 构建机自检      preflight-buildmachine.ps1
@@ -49,6 +49,9 @@ param(
 
     # SVN 仓库根。换服务器时改这里。
     [string]$SvnBase = 'http://infinity-svn/svn/Pandora-Moba',
+
+    # 后端 Git 权威源。需与 backend-dev 的 BACKEND_GIT_URL 保持一致。
+    [string]$BackendGitUrl = 'https://github.com/luyuan-go/XuanMing-Server.git',
 
     [switch]$CheckoutClient,  # 显式要求检出客户端（很大，默认不做）
     [switch]$Install,         # 允许用 winget 装缺失工具
@@ -240,18 +243,28 @@ if ($roles -contains 'Build') {
 # ─────────────────────────────────────────────────────────────
 Section '3. 源码工作副本'
 # ─────────────────────────────────────────────────────────────
-# 后端：本脚本就在里面，只校验它是不是团队权威源的检出。
-# 用 svn info 的 URL 判定，不看有没有 .svn 目录——SVN 1.7+ 只在工作副本根有一个 .svn。
-$expectServer = "$SvnBase/trunk/Server"
-$svnInfo = if (Get-Command svn -ErrorAction SilentlyContinue) { (svn info $ProjectRoot 2>$null | Out-String) } else { '' }
-if ($svnInfo -match 'URL:\s*(\S+)') {
-    $actual = $Matches[1].TrimEnd('/')
-    if ($actual -eq $expectServer.TrimEnd('/')) { Ok "后端工作副本 = $actual" }
-    else { Warn "后端工作副本指向 $actual，期望 $expectServer —— 版本戳与 CI 构建的可能不是同一份代码" }
-} elseif (Test-Path (Join-Path $ProjectRoot '.git')) {
-    Warn "后端是 git 工作副本，不是 SVN。个人开发没问题，但 CI 构建的是 $expectServer；这台机器要发布制品的话应改用 SVN 检出（版本戳 r<rev> 依赖它）"
+# 后端：本脚本就在里面，校验 origin 是否与 backend-dev 的 Git 权威源一致。
+function Normalize-GitRemote([string]$url) {
+    if (-not $url) { return '' }
+    return (($url.Trim() -replace '\\', '/') -replace '/+$', '' -replace '\.git$', '').ToLowerInvariant()
+}
+$gitTop = if (Get-Command git -ErrorAction SilentlyContinue) {
+    (& git -C $ProjectRoot rev-parse --show-toplevel 2>$null | Out-String).Trim()
+} else { '' }
+if ($gitTop) {
+    $actual = (& git -C $ProjectRoot remote get-url origin 2>$null | Out-String).Trim()
+    if ((Normalize-GitRemote $actual) -eq (Normalize-GitRemote $BackendGitUrl)) {
+        Ok "后端 Git origin = $actual"
+    } else {
+        Warn "后端 Git origin 指向 $actual，期望 $BackendGitUrl —— 本机发布与 backend-dev 可能构建不同代码"
+    }
 } else {
-    Bad "后端既不是 SVN 工作副本也不是 git 仓库：$ProjectRoot"
+    $legacySvn = if (Get-Command svn -ErrorAction SilentlyContinue) { (svn info $ProjectRoot 2>$null | Out-String) } else { '' }
+    if ($legacySvn -match 'URL:\s*(\S+)') {
+        Warn "后端仍是旧 SVN 工作副本 $($Matches[1])；backend-dev 已切到 $BackendGitUrl，版本戳应为 g<sha>"
+    } else {
+        Bad "后端不是 git 仓库：$ProjectRoot"
+    }
 }
 
 # 客户端：默认只报告。89GB 级别的检出不该被"一键"静默触发。

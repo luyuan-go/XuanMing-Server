@@ -54,6 +54,27 @@ type ItemCatalog interface {
 	Lookup(itemConfigID uint32) (def ItemDefinition, ok bool)
 }
 
+// IdentifyAttrDefinition 是配置表鉴定池的一条候选词条。Weight 参与加权不放回抽取；
+// Min/Max 是服务端最终写入实例的闭区间，客户端不得自行 roll。
+type IdentifyAttrDefinition struct {
+	AttrID uint32
+	Weight int64
+	Min    int64
+	Max    int64
+}
+
+// IdentifyDefinition 是某件装备当前热更批次对应的鉴定规则。
+type IdentifyDefinition struct {
+	AttrCount int
+	Pool      []IdentifyAttrDefinition
+}
+
+// IdentifyCatalog 是 ItemCatalog 的可选深接口。生产配置表适配器实现它，使鉴定在每次
+// 请求时读取同一个原子 Store；只实现 ItemCatalog 的旧单测仍走 YAML 兼容规则。
+type IdentifyCatalog interface {
+	IdentifyRule(itemConfigID uint32) (rule IdentifyDefinition, ok bool)
+}
+
 // InventoryUsecase 是 inventory 服务业务逻辑核心。
 type InventoryUsecase struct {
 	repo data.InventoryRepo
@@ -74,7 +95,7 @@ type InventoryUsecase struct {
 	// 默认全局 math/rand;测试经 SetRandSource 注入确定性序列。n<=0 时约定返回 0。
 	randIntn func(n int64) int64
 
-	// catalog 非 nil 时是规则唯一权威；cfg.ItemRules 仅保留给未接配置表的单测/兼容部署。
+	// catalog 是道具规则的唯一权威(生产 = configtable item 表适配器)；未注入即 fail-closed。
 	catalog ItemCatalog
 }
 
@@ -101,15 +122,14 @@ func (u *InventoryUsecase) SetSnowflake(sf snowflakeGen) { u.sf = sf }
 // SetItemCatalog 注入策划道具表。启用后未知 ID、堆叠/实例模型错路由全部 fail-closed。
 func (u *InventoryUsecase) SetItemCatalog(c ItemCatalog) { u.catalog = c }
 
+// itemDefinition 现查道具表当前批次。catalog 未注入时 fail-closed —— 生产路径
+// main.go 已强制注入(缺 config_table.dir 直接拒启),这里不再保留 YAML 兜底规则:
+// 一份可能与 UE 漂移的兜底数值参与扣减 / 入账,比拒掉一次请求危险得多。
 func (u *InventoryUsecase) itemDefinition(itemConfigID uint32) (ItemDefinition, bool) {
-	if u.catalog != nil {
-		return u.catalog.Lookup(itemConfigID)
-	}
-	rule := u.cfg.RuleOf(itemConfigID)
-	if rule == nil {
+	if u.catalog == nil {
 		return ItemDefinition{}, false
 	}
-	return ItemDefinition{LobbyUsable: rule.Usable, SellUnitPrice: rule.SellUnitPrice}, true
+	return u.catalog.Lookup(itemConfigID)
 }
 
 // SetRandSource 注入鉴定 roll 随机源(测试用确定性序列;不调用则用默认 math/rand)。
@@ -260,32 +280,68 @@ func (u *InventoryUsecase) IdentifyItem(ctx context.Context, playerID, instanceI
 // 无规则 / 空池 → 返回 nil；接入配置表的生产路径由 IdentifyItem fail-closed，
 // 防止把装备永久写成 identified=true 但零词条。
 func (u *InventoryUsecase) rollIdentifyAttrs(itemConfigID uint32) []data.ItemAttribute {
-	rule := u.cfg.IdentifyRuleOf(itemConfigID)
-	if rule == nil || len(rule.Pool) == 0 || rule.AttrCount <= 0 {
+	var definition IdentifyDefinition
+	if catalog, ok := u.catalog.(IdentifyCatalog); ok {
+		var found bool
+		definition, found = catalog.IdentifyRule(itemConfigID)
+		if !found {
+			return nil
+		}
+	} else {
+		rule := u.cfg.IdentifyRuleOf(itemConfigID)
+		if rule == nil {
+			return nil
+		}
+		definition.AttrCount = rule.AttrCount
+		definition.Pool = make([]IdentifyAttrDefinition, 0, len(rule.Pool))
+		for _, p := range rule.Pool {
+			// 旧 YAML 没有权重；兼容路径按等权处理。
+			definition.Pool = append(definition.Pool, IdentifyAttrDefinition{
+				AttrID: p.AttrID, Weight: 1, Min: p.Min, Max: p.Max,
+			})
+		}
+	}
+	if definition.AttrCount <= 0 || definition.AttrCount > len(definition.Pool) {
 		return nil
 	}
-	// 洗牌 pool 下标(Fisher-Yates,用注入随机源),取前 min(AttrCount,len(pool)) 条。
-	idx := make([]int, len(rule.Pool))
-	for i := range idx {
-		idx[i] = i
-	}
-	for i := len(idx) - 1; i > 0; i-- {
-		j := int(u.randIntn(int64(i + 1)))
-		idx[i], idx[j] = idx[j], idx[i]
-	}
-	pick := rule.AttrCount
-	if pick > len(idx) {
-		pick = len(idx)
-	}
-	out := make([]data.ItemAttribute, 0, pick)
-	for k := 0; k < pick; k++ {
-		p := rule.Pool[idx[k]]
-		span := p.Max - p.Min + 1 // 闭区间
-		value := p.Min
-		if span > 0 {
-			value = p.Min + u.randIntn(span)
+
+	// 每轮按剩余候选的权重抽一条并移除，严格加权不放回。配置加载门已限制
+	// 候选数/总权重/数值范围；这里仍逐次校验，防自定义 Catalog 绕过门禁。
+	remaining := append([]IdentifyAttrDefinition(nil), definition.Pool...)
+	out := make([]data.ItemAttribute, 0, definition.AttrCount)
+	for len(out) < definition.AttrCount {
+		var totalWeight int64
+		for _, candidate := range remaining {
+			if candidate.AttrID == 0 || candidate.Weight <= 0 ||
+				candidate.Min < 0 || candidate.Max < candidate.Min ||
+				totalWeight > int64(^uint64(0)>>1)-candidate.Weight {
+				return nil
+			}
+			totalWeight += candidate.Weight
 		}
-		out = append(out, data.ItemAttribute{AttrID: p.AttrID, Value: value})
+		if totalWeight <= 0 {
+			return nil
+		}
+
+		draw := u.randIntn(totalWeight)
+		chosen := len(remaining) - 1
+		for i, candidate := range remaining {
+			if draw < candidate.Weight {
+				chosen = i
+				break
+			}
+			draw -= candidate.Weight
+		}
+		candidate := remaining[chosen]
+		span := candidate.Max - candidate.Min + 1
+		if span <= 0 {
+			return nil
+		}
+		out = append(out, data.ItemAttribute{
+			AttrID: candidate.AttrID,
+			Value:  candidate.Min + u.randIntn(span),
+		})
+		remaining = append(remaining[:chosen], remaining[chosen+1:]...)
 	}
 	return out
 }
@@ -316,10 +372,10 @@ func (u *InventoryUsecase) DiscardInstance(ctx context.Context, playerID, instan
 }
 
 // CheckInstancesOwned 精确校验唯一实例归属。instance_id 与 item_config_id 必须同时匹配，
-// 返回请求集合中匹配的 instance_id 子集（去重、升序）。
+// 返回请求集合中匹配的权威实例快照（去重、按 instance_id 升序）。
 const MaxCheckInstancesOwned = 64
 
-func (u *InventoryUsecase) CheckInstancesOwned(ctx context.Context, playerID uint64, queries []data.InstanceOwnershipQuery) ([]uint64, error) {
+func (u *InventoryUsecase) CheckInstancesOwned(ctx context.Context, playerID uint64, queries []data.InstanceOwnershipQuery) ([]data.ItemInstance, error) {
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}

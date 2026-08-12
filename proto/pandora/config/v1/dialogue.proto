@@ -1,0 +1,56 @@
+// Pandora 配置表:NPC 对话表。
+//
+// 源表:Pandora-Client-SVN/Table/对话/d_对话.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/dialogue.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+//
+// 用途:dialogue 服务的对话树唯一权威。一行 = 一个对话节点;选项以「文本 + 后继节点」
+//   成对列承载,最多 3 个(当前产品口径;需要更多就加列,不改接口——CLAUDE.md §17.1)。
+//   本表落地前对话树内联在 dialogue-dev.yaml,属 W2 骨架期的 demo 数据,已随本表删除。
+//
+// ⚠️ 后继节点(option*_next)刻意不打 (excel_fk):生成器明确「(excel_fk) 不支持自引用」
+//   (tools/configtable-gen/internal/tablegen/discover.go)。同表引用完整性由伴生文件
+//   pkg/configtable/dialogue.go 的整表校验器承担,校验强度与 fk 一致(生成期 + 加载期各一道)。
+//
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// DialogueRow 对话表一行 = 一个对话节点(列序 = 字段号序 = 表头 A..K)。
+message DialogueRow {
+  // ID(主键,节点全局唯一 ID;建议按 <npc_id><序号> 编,便于策划肉眼归组)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // NPC ID(该节点归属的 NPC;同一 NPC 的节点共同组成一棵树)
+  uint32 npc_id = 2 [(excel_col) = "NPC ID", (excel_required) = true, (excel_multi_key) = true];
+  // 说话人(展示名;同一 NPC 各节点通常一致,分身/旁白可单独填)
+  string speaker = 3 [(excel_col) = "说话人"];
+  // 对话文本(该节点展示给玩家的正文)
+  string text = 4 [(excel_col) = "对话文本", (excel_required) = true];
+  // 起始节点(每个 NPC 必须恰好有一行为 1;伴生校验器强制)
+  bool is_start = 5 [(excel_col) = "起始节点", (excel_default) = "0"];
+  // 选项 1 文本(空 = 本节点没有第 1 个选项;选项必须从 1 起连续填,不得跳空)
+  string option1_text = 6 [(excel_col) = "选项1文本"];
+  // 选项 1 后继节点 ID(0 = 选完即结束对话;非 0 必须是本表存在的 id)
+  uint32 option1_next = 7 [(excel_col) = "选项1后继", (excel_default) = "0"];
+  // 选项 2 文本
+  string option2_text = 8 [(excel_col) = "选项2文本"];
+  // 选项 2 后继节点 ID
+  uint32 option2_next = 9 [(excel_col) = "选项2后继", (excel_default) = "0"];
+  // 选项 3 文本
+  string option3_text = 10 [(excel_col) = "选项3文本"];
+  // 选项 3 后继节点 ID
+  uint32 option3_next = 11 [(excel_col) = "选项3后继", (excel_default) = "0"];
+}
+
+// DialogueTableData 对话整表容器(dist/dialogue.json 的根对象;excel_file 注解 = 导表登记)。
+message DialogueTableData {
+  option (excel_file) = "对话/d_对话.xlsx";
+  // 版式与道具表一致:第 1 行表头,2~3 行留给列说明,数据自第 4 行起。
+  option (excel_data_start_row) = 4;
+
+  repeated DialogueRow rows = 1;
+}

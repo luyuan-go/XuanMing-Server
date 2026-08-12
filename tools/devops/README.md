@@ -126,7 +126,7 @@ Jenkins 首启装插件需 1–3 分钟，其间登录页 502/未就绪是正常
    ```
 4. 完事。因为 Jenkins 用 **JCasC** 声明式初始化（`jenkins/casc.yaml` + `jenkins/plugins.txt`），两台机器起出来的 Jenkins 配置/插件**完全一致**，不靠手点向导。
 
-> 唯一「每台机器手动一次」的是 **Jenkins 里的 SCM 凭据**（SVN 账号 / git 凭据）—— 这是秘密，不进仓库。见下节。
+> 唯一「每台机器手动一次」的是 **Jenkins 里的客户端 SVN 凭据**—— 这是秘密，不进仓库。后端 GitHub 仓库公开，不需要 Jenkins 凭据。见下节。
 
 ---
 
@@ -168,7 +168,7 @@ mc cp --recursive ..\..\..\artifacts\releases\ pandora/pandora-artifacts/release
 - 客户端仓库：`Tool/Build/Jenkinsfile`(+`.release`)
 - 后端仓库：`Jenkinsfile`(+`.release`)
 
-登录 Jenkins → New Item → **Pipeline** → 「Pipeline script from SCM」→ 填仓库地址 + `Script Path` 指到对应 Jenkinsfile → 建 SVN/git 凭据。
+登录 Jenkins → New Item → **Pipeline** → 「Pipeline script from SCM」→ 填仓库地址 + `Script Path` 指到对应 Jenkinsfile。客户端建 SVN 凭据；公开的后端 GitHub 仓库不需要凭据。
 （想开机自带这几个 job：`jenkins/casc.yaml` 末尾有 job-dsl 模板，补好凭据后取消注释即可。）
 
 ### 4. 构建 agent（关键）

@@ -109,7 +109,7 @@ func TestQueryEmptyTable(t *testing.T) {
 func TestQueryAcrossTables(t *testing.T) {
 	items, err := newItemTable(&configpb.ItemTableData{Rows: []*configpb.ItemRow{
 		{Id: 10001, Name: "药水", Type: configpb.ItemType_ITEM_TYPE_CONSUMABLE, MaxStackSize: 99},
-		{Id: 10002, Name: "长剑", Type: configpb.ItemType_ITEM_TYPE_EQUIPMENT, MaxStackSize: 1, EquipSlot: 1},
+		{Id: 10002, Name: "长剑", Type: configpb.ItemType_ITEM_TYPE_EQUIPMENT, MaxStackSize: 1, EquipSlot: 1, IdentifyPoolId: 1},
 	}})
 	if err != nil {
 		t.Fatal(err)

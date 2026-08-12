@@ -2999,3 +2999,143 @@ battle_result 更危险:它 2026-08-03 起默认 delete,拼错会静默关掉"�
   - **验证**:PowerShell 契约测试 **20/23 PASS**(此前 18/22)。真实引擎回归全部实跑并逐条验过"先红后绿":TiDB 并发接取 12→3 / 互斥 8→1、出箱跨对局 FIFO、pending 扣除闸。touched 模块 build/vet/test 全绿,git 变更的 go 文件 gofmt 干净。mission README 补了"真实数据库用例"节(裸 `go test` 会 Skip 不等于通过,给出可直接跑的 DSN 命令)。
   - **仍红且非本批次所致**(均在干净 HEAD 复现,且都不在本次改动面内):`services_dsticket_secret`(matchmaker `legacySigner`,该文件当前有并发编辑者)、`gen_cluster_b1`(`$PlacementSecretBindings` 是空数组,产物里根本没有 placement 分权 key)、`ds_entrypoint_log_redaction`(DS entrypoint 脚本本批次零改动)。`ds_allocator` 两个 go 文件 gofmt 不干净,同属并发编辑者在途改动,未触碰。
 - 2026-08-11(续):**任务域移植的对抗式复核 + 收口**。四维度复核(半成品接线 / 移植保真度 / 分布式正确性 / 登记面与发布)提出 13 条,每条派独立 agent 证伪后**确认 7 条、推翻 6 条**。三条真会出事:①**发放时回读道具表决定装备/堆叠路由** —— 首投走 `:stack` 键成功后若 MarkReward/经验段/进程崩任一失败使行留非 GRANTED,期间道具被热更改成装备,补扫重放就换成 `:inst` 键,inventory 查无此键 → **同一份奖励发两次**;部分翻转时反而撞 `claimLedger` 请求指纹冲突 fail-closed → **奖励永久发不出去**。修法是把路由**冻结进快照**(`MissionRewardItem.equipment`,`buildRewardLog` 落快照那刻写,`deliver` 只读快照)。②**完成判定取 `min(条件槽数, 进度长度)`** —— 给已上线任务热更加一条条件,存量玩家 progress 比 condition_ids 短,推进与判定两处都只看 min 个槽 → 打满旧条件即判全条件满足 → **白送完成并发奖**,新条件一次没查过。修法 = 推进前 `alignProgressSlots` 补零扩容(只扩不缩,配置回滚可复原)+ 判定改逐 condIDs 且槽不足 fail-closed。**注意这个 min 是从 C++ 原版 `mission.cpp:155` 忠实移植的** —— D 版那个 min 覆盖的是"条件行查不到就不加槽",而 Go 侧 accept 恒等长,唯一造成短槽的路径(配置增列)原版不存在;**忠实移植不改变它在新语境下是 bug 的事实**,这是"照搬即正确"的思维盲区,记录备忘。③compose 漏挂 configtable → docker 模式(策划一键入口默认路径)mission 启动即 fail-closed 退出。另补登记三处:`$ProdDbCredentialDebt`(**实害最大**:运维照该清单逐个接线生产 DSN,漏的恰好是存玩家任务进度与发奖流水的库,产物会带 `pandora_dev_pwd` 进生产且既不断言也不告警)、`.goreleaser.yaml` 少一个 mission 二进制、inventory-mesh enforce 策略未给 `sa/pandora-mission` 授权(mesh 启用后发奖全被 RBAC 拒)。**唯一刻意不修的一条**:push 出箱是全局 FIFO 而非每玩家 FIFO,单分区故障会放大成全服推送延迟——但 battle_result / player 两处同构,只改 mission 会在三条同类链路留两套纪律,已在 `RunPushPublisher` 注释归档已知代价与"要改就三处一起改 + 按 §15.4 举证"的口径。**闭环判据**:为①②补了三条回归测试(`TestDeliverUsesFrozenRouteAcrossCatalogFlip` / `TestDeliverFrozenRouteHoldsForEquipmentToStackFlip` / `TestHotAddedConditionIsNotSkipped`),并**实测把代码改回旧写法后三条全部变红、还原后全绿**(不是"写了个测试恰好过")。另自查删掉 `MissionUsecase` 里只写不读的 `router` 字段(§14.1 禁"以后再接"的钩子;全仓先例是接了就真读或完全不接,无中间态),并修正设计文档三处与代码漂移——其中 §5.1 描述的还是实现期被推翻的方案(复用出箱表 kind),已改成实际的独立表并把推翻理由入档。
+- 2026-08-11:**后端 Jenkins 权威源码人工拍板从旧 SVN 切回 GitHub `main`**。根因是开发提交已推送到 `luyuan-go/XuanMing-Server`，而 `backend-dev` 仍轮询 `^/trunk/Server`，所以只报 `No changes`、不会产生新 Go 构建。持久配置改为公开 GitSCM + `H/5`，后端制品恢复 `g<sha>`；客户端/DS 保持 SVN `r<rev>`，`artifacts-sync` 本轮仍从 SVN 读取流水线定义。迁移与验收见 `docs/design/decision-revisit-backend-ci-source.md`。
+- 2026-08-11(续 3:复核轴 FAIL 的收口 —— 单写者选举、条件比较符、读写侧上限、事故建档)。
+  上一轮把「部分关键修复已落码并通过单测」误写成了接近完成的口径,复核给出 Standards 轴 FAIL +
+  Spec 轴 7 类缺口。本条按缺口逐项收口,**并明确哪些物理上无法在本轮闭环**。
+  - **条件比较符在单调累加计数器上不成立(P0 级配置面 fail-open)**:任务进度是单调不减的累加器
+    且达标槽不再累加,所以比较符的达标集合**必须向上闭合**,只有 GE/GT 满足。而 ①`ConditionClampIfFulfilled`
+    无脑钳到 `target`,GT 下「进度 6 达标 → 钳回 5 → 再判 5>5 为假」→ **进度永久钉死、任务 100% 完不成**;
+    ②LE/LT 在 `progress=0` 即为真 → 该槽永不累加、恒定达标(白送);③EQ 是单点集合,`amount>1` 一步
+    跨过后永远不再相等。加载期 `validateConditionRow` 却明确放行 0..4 全部取值。修法:钳位改落**最小
+    达标值**(GE→target,GT→target+1,溢出保护),并在 `ValidateMissionCrossTables` 拒绝 LE/LT/EQ 用作
+    任务条件(**放任务域而非条件表**:条件件声明为跨系统通用,快照型消费者用 LE/LT 是合法的)。
+    现网 dist 三行全是 GE,**今天没坏**,风险面是"策划下次填一次比较符列"。先红后绿实测:退回旧钳位 →
+    `进度钉死在 [5]`。
+  - **装备件数加载期判单条、发放期判累计,两个口径**:「10 个不同装备各 64 件」= 640 件整批过审 →
+    落进 `reward_pb` 快照 → 任务同事务置 CLAIMED → `deliver` 在累计闸上**永远发不出去**。快照是发放
+    唯一入参不回读配置表,改表也救不回在途行:玩家永久损失该任务全部奖励(含经验,装备失败先 return
+    走不到经验段);补扫每轮重试无上限;`SweepRewardLog` 只清 GRANTED,这些 FAILED 行**永不清理**并
+    淹没"陈年 FAILED = 发放链有 bug"的审计信号。改为整条奖励累计判(带饱和加防回绕),与发放侧同口径。
+    先红后绿实测:退回逐条判 → `装备累计 66 件超上限 64`。
+  - **配置批次可在单次事务内撕裂**:`catalogFromStore` 每个方法各取一次 `Store.Tables()`,而一次
+    `ApplyFactsTx` 回调里 catalog 被调几十次。最坏一条:`buildRewardLog` 用批次 A 的 `RewardByID` 拿
+    奖励内容、用批次 B 的 `IsEquipment` 定装备/堆叠冻结位 —— **冻结位的全部意义就是"路由必须与快照
+    同源"**,撕裂之后它守的东西恰好被绕过。改为 `CatalogSource.Snapshot()`:操作入口取一次 `*Tables`
+    钉住,整个回调复用同一指针(inventory 的 `Lookup` 是单方法自足所以不需要,任务域不是)。顺带补上
+    inventory 早有而 mission 缺的 nil 守卫(原写法启动竞态会 nil panic)。
+  - **推送出箱多副本乱序(mission + player 两处同批改)**:出箱是**全局未分区**表、按 id 序整表 FIFO,
+    属 §9.21「同一未分区权威的单写者循环」。两副本各持一份内存快照交错投递,而 `MissionUpdateEvent.
+    progressed` 与 `PlayerExperienceEvent` 都是**全量/绝对值快照**(后到即覆盖),事件里没有任何
+    revision 可判旧(`ts_ms` 是各副本墙钟,protocol-ordering-rules §5-B 明令不得只靠它)。后果:玩家
+    进度条从 7/10 退回 3/10、等级经验条倒退。**注意 replicas:1 不等于单进程** —— Deployment 是
+    RollingUpdate(§9.16 硬要求),maxSurge 让每次发版都有并存窗口。修法接既有 `writerlease`(零 schema、
+    零额外往返、已在 ds/hub_allocator 生产跑着),**两道闸**:产物侧 `gen_cluster_config.ps1` 机械改写
+    `mode: enforce` + etcd 端点;进程侧读 Deployment 注入的 `PANDORA_DEPLOY_STRATEGY`,
+    RollingUpdate × 非 enforce **fail-closed 退出**。只包发布器 —— 补扫靠下游幂等键、清理靠 DELETE 幂等,
+    按 §9.21「可并行 worker 不得强行全局串行化」不得一起包进来。**battle_result 的 `player_update_outbox`
+    刻意不接**(下游 `mmr_history` uk 幂等、无客户端可见覆盖语义),三条链路之间是**有据的差异不是漂移**。
+  - **完成集读写两侧都没有上限**:§9.18 逐字要求写入侧硬上限**与**读取侧上限**同时**存在,而
+    「完成集被任务表行数有界」此前只是一句描述,没有任何代码拒过批次;`loadState` 的 done 查询一个
+    LIMIT 都没有,且它**同时**服务 `FOR UPDATE` 事务路径(每次 ReportMissionFacts 都全量载入,行锁数与
+    事务时长随之线性增长,是热路径事务放大而非展示问题)。修法:新增 `MaxMissionRows=2000` 加载期拒批次
+    + **只在只读路径**加 `ORDER BY mission_config_id LIMIT 2000`;**事务路径刻意不加**(截断会让已完成
+    任务被判成可重新接取 → 重复发奖,把展示问题升级成发奖 bug),该理由已写进代码注释与 CLAUDE.md §9.18
+    新增的登记行。
+  - **`mission_addr` 全环境未配 → 任务事实链从未通电**:与 `inventory_addr` 那种"未配也不丢"的弱依赖
+    **语义不同**,任务事实是**未配即不产**(未配时一行出箱都不写),已发生的战斗事实**无法事后补齐**。
+    dev + prod 模板补齐,产物侧确认改写为 `mission:20019`。开通前置(migrate 到 pandora_battle 000010、
+    §9.21 Go 先行)与线上第二道闸(`-Prod` 把 `progress_enabled` 机械钉死 false)一并写进注释。
+  - **顺带补上 `run/cluster/etc/mission.yaml` 根本不存在**:生成器自 mission 落地后一次没跑过,而
+    compose 与 k8s 都要挂它 —— 一键起栈会直接卡在缺失的挂载源上。已重跑生成器,22 份产物齐。
+  - **P7 三小项**:①proto reserved —— 查 git 历史确认 mission.proto **从未删过字段编号**,无需 reserved,
+    该条不成立;②RPC 完成语义 —— `CompleteAllMissions` 的 proto 注释写着"不广播完成事件",而
+    `biz.CompleteAll` 确实产出推送。**复核后判定实现是对的、注释是错的**(不推等于让客户端留一份与权威
+    不一致的活跃列表,GM 改了状态却看不见;推送不承担正确性,推它不会把两条路径合并),已改注释并写明
+    更正日期;③登记面 —— `mission_player_guards` 漏登记进 infra.md 表清单(CLAUDE.md §9.24 豁免里有),已补。
+  - **事故建档(Standards 轴)**:按 §16.9 + incidents/index.md §1 第三条(上线前发现、若上线即 P0 → near-miss)
+    建 `INC-20260811-001`。**刻意合并为一份而非五份**:这不是五次独立事故,而是同一个事件(批次上线前被审计),
+    共享同一时间点、同一发现途径、同一影响面(零);为五个从未运行过的缺陷各建一份会把审计发现伪装成五起
+    生产事故,违反 §1「不得伪装成线上事故」。五条根因在 §5 分节独立取证。同型扫描命中
+    `leaderboard_repo.go MarkReward` 同款无条件 UPDATE(**另一服务未动**,已列行动项 A-1)。
+  - **验证**:touched 模块 build/vet/test 全绿;git 变更 go 文件 gofmt 干净;`buf lint` 绿;真 TiDB
+    集成用例实跑通过(本机 4000 容器,`PANDORA_TEST_TIDB_DSN` 显式设置);新增两组清单契约测试
+    (Deployment strategy ↔ annotation ↔ env ↔ 集群产物)全绿;PowerShell 契约 `configtable_mount` /
+    `local_k8s_profile` / `gen_cluster_session_gate` / `online_manifest` 四条 PASS。
+  - **仍红且已证实非本批次所致**:`services_dsticket_secret` / `gen_cluster_b1` /
+    `ds_entrypoint_log_redaction` 三条 —— 本轮用 `git worktree --detach HEAD` **实际复验**,干净 HEAD 上
+    同样 FAIL。
+  - **未闭环(不得当成已完成)**:①`go test -race` —— CI 唯一测试入口 `ci_backend.ps1:50` 根本没有 `-race`,
+    且 Jenkins 跑 Windows(`bat`),本机 `CGO_ENABLED=0` 下直接报错,属**阻断项**;②真实 MySQL 后端未跑
+    (本机只有 TiDB 容器,mysql 子测试 SKIP —— 而 SKIP 在 CI 报告里与 PASS 无法区分,已列 A-4);
+    ③**未部署到任何环境**,现有 `pandora/mission:dev` 镜像早于本轮修复必须重建;④观察窗口为零,且
+    `deploy/grafana` 5 条告警规则里 mission 相关 0 条;⑤**玩家 E2E 物理上不可执行** —— 客户端零 mission
+    接线(无 cpp pb、无 `Module/Mission`、无任何 RPC 调用点,仅 7 张图标贴图),属跨仓 + 需用户编译 UE;
+    ⑥`player.proto` 已加 `instance_id` 但 `player.pb.go` 未重生,**player 模块当前编译失败** —— 属并发
+    编辑者在途改动,按 §5.1 proto 重生是 Codex 的活,未代跑。
+  - **补测本轮新增的五条闸(自查发现零覆盖)**:`MaxMissionRows` / `MaxMissionNextIDs` /
+    `MaxConditionSlotValues` / `MaxRewardItemEntries` / `doneReadLimit` 落码时都只有生产引用、
+    没有任何测试引用 —— 已补齐(含边界值放行用例)。其中 `doneReadLimit` 的判据是**设计判断本身**
+    而非"有没有 LIMIT":只读路径必须截断、事务路径**绝不能**截断(截断会让已完成任务被判成可重新
+    接取 → 重复发奖)。真 TiDB 实测先红后绿:把 LIMIT 改成两条路径共用 →
+    `事务路径必须看到全部 6 行完成任务,实为 2`。
+  - **仍未执行(代码侧唯一自带缺口)**:`push_writer_lease.mode=enforce` 分支 ——
+    `pushIsLeader()` 用 fake 租约验过、清单与产物契约验过,但 `writerlease.Start()` 的**真实选举
+    路径一次都没跑过**(本机 2379/2380 均未监听 etcd)。§14.2 要求"开关打开后的分支必须是完整
+    可用的真实实现",当前是代码完整但未执行,首次上线前必须起 etcd 冒烟一次。
+- 2026-08-11(续 4):**修复 backend-dev #17 的 Windows OEM 编码假失败**。`#17` 已成功检出
+  `e0a10786`,33 个 Go module 的 build/test 全绿,但 `gen_cluster_prod_account_contract_test.ps1`
+  用中文片段区分五类 Account DSN 拒绝原因;Jenkins `cmd` 的 OEM code page 把子 `pwsh` stderr
+  转成 `?`,生成器已经按预期拒绝公开 dev 凭据,测试却因匹配不到中文而误报失败,继而让
+  `ci_backend.ps1` 返回 1、跳过 `Publish Offline Images`。修法是在五条生产 Account DSN FATAL
+  中增加稳定 ASCII 标识(`[ACCOUNT_DSN_*]`),测试继续同时断言非零退出码与精确原因标识,没有
+  降级安全门禁。验证在干净 `e0a10786` 临时副本中只叠加本修复:普通 `pwsh` 与
+  `cmd/chcp 437/pwsh` 针对性测试均 PASS;OEM 437 下完整 `ci_backend.ps1` 33 module + 7 contract
+  tests 全绿(exit 0,162.1s)。当前主工作树另有 dialogue/configtable 在途改动会更早触发独立生成器
+  门禁,未纳入本修复;修复尚未提交/推送,因此 Jenkins 尚未产生下一次成功构建或新 Go 制品。
+- 2026-08-11(续 4:代码侧剩余四处收口 + 一条被遮蔽的生产缺陷)。上一条自查承认"代码方面
+  没有闭环",本条把那四处做完,并在过程中挖出一条**此前被恒红断言遮蔽**的真实生产缺陷。
+  - **enforce 分支从"代码完整但未执行"变成实跑通过**:起本机 etcd 真选举,验三件事 ——
+    `writerlease.Start()` 能连上并选出 leader、第二副本在持有期内拿不到领导权、
+    `*writerlease.Lease` 直接满足 `PushWriterLease` 接口。**跑的过程当场抓到一个 nil-deref**:
+    测试里 `&MissionUsecase{}` 直连构造漏了 log,`pushIsLeader()` 的跃迁日志炸了 —— 这正是
+    fake 租约验不出、只有真跑才暴露的那类接线问题。用例按 DSN 同款纪律门控
+    (`PANDORA_TEST_ETCD_ENDPOINTS` 未设即 Skip),README 补了可直接粘的复现命令
+    (含 Git Bash 会改写容器内路径的坑)。
+  - **A-1 leaderboard `MarkReward`**:同款无条件 UPDATE 已修(失败标记带 `status <> GRANTED`),
+    抽出 `buildMarkRewardSQL` 以便断言(对齐本文件既有 `buildSaveSnapshotSQL` 写法),补两个
+    子用例(失败标记必须带守卫 / 成功标记不得带守卫)。
+  - **A-2 出箱发布器全仓扫描**:8 张出箱表逐张按三条判据(未分区整表 FIFO / 客户端可见全量
+    快照 / 下游无幂等)判定,只有 mission + player 两张 push 出箱同时满足,均已修;其余六张
+    的"不接"逐条写明理由。归档 `docs/reviews/2026-08-11-outbox-single-writer-audit.md`。
+  - **三条契约测试全部转绿,但三条根因完全不同**:
+    ①`ds_entrypoint_log_redaction` = **死契约**:断言写死 `exec "${SERVER_SH}"`,而 c37e8660
+      (2026-07-30)为 stdbuf 行缓冲把启动命令重构成数组 `${FINAL_LAUNCH[@]}`,契约被落下。
+      它要守的性质(强制日志参数必须排在 `${EXTRA_ARGS}` 之后,否则被用户参数覆盖回 Display 级、
+      含 DSTicket 的 URL 重新进 stdout)一直成立。改为**不再匹配启动变量名**(那正是上次写死的
+      地方)只匹配顺序,并做了变异验证:把强制参数挪到 EXTRA_ARGS 之前 → 必红。
+    ②`services_dsticket_secret` = **死契约**:字面量禁用 `legacySigner` 写于 3ba27c3c(07-13),
+      而 2f369c22(08-04)引入的 `ds_local_profile=local-off-v1` 是显式声明、与 v2 私钥互斥、
+      构造时打 WARN 的**认可例外**。要守的从来不是"标识符不许出现"而是"不得静默回退",
+      改为断言三件结构事实(只允许一处赋值 / 只能在显式本机档分支里构造 / 未声明必须走
+      default fail-closed)。同处另一条 `..., nil, v2Signer` 字面量同因同批修正。
+    ③`gen_cluster_b1` = **未实现能力的断言**,与本文件 R11 已清理的三条同类:生成器有参数、
+      有解析、有注入循环,但 `$PlacementSecretBindings` 是空数组,且 **Go 侧零 placement 密钥
+      conf 字段**,注入无处可注。它恒红,并且因为 Assert 抛出,**其后 14 条断言一条都没跑过**。
+      按本文件既有结论(「正确修法是反方向:先落 conf 字段 + 生成器注入,再把断言加回来」)
+      隔离为显式 TODO(A-10),断言逻辑原样保留在 if 内未作任何弱化。
+  - **隔离后立刻暴露一条真实生产缺陷(A-11,已修)**:`login.matchmaker.auth_secret` 没登记进
+    `$MatchResumeAuthSecretBindings`(此前只绑两个 matchmaker)。这把 key 与
+    `matchmaker.match.match_resume_auth_secret` 必须**成对同值**(Go conf 注释与 dev yaml 注释
+    都明写)。漏绑的后果:运维用 `-MatchResumeAuth <生产密钥>` 时 matchmaker 拿生产密钥而
+    **login 留着 dev 密钥** → ①login→matchmaker `ResolvePlayerMatchContext` 全部被拒,而那是
+    2026-07-15 P0 修复的兜底路径(locator presence 未命中 BATTLE 时改查耐久权威,READY 局投影
+    蒸发也能路由回原局),会**静默失效**;②dev 密钥被带进生产。这条正是"恒红断言替真门禁挡枪"
+    的实例。
+  - **`inventory_mesh` 契约重锁**:e27ffc63 给 mesh 策略加了 mission 的 principal 却没更新审核锁,
+    自那次提交起恒红(干净 HEAD 复验同红)。重锁前逐条核对新增授权确是最小权限:只给
+    `sa/pandora-mission` 两个方法 `GrantItems`/`GrantInstances`,而 mission 侧实际调用面核实
+    无第三个 inventory 方法(经验走 player、满包溢出走 mail),策略除该段外无其它改动。
+  - **验证**:PowerShell 契约测试 **20/20 PASS**(此前 20 条里 4 条红);pkg / mission /
+    battle_result / player / leaderboard 五个模块 build+vet+test 全绿;真 TiDB 与真 etcd 用例
+    均实跑通过。

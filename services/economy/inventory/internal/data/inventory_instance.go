@@ -197,7 +197,7 @@ func (r *MySQLInventoryRepo) ListInstances(ctx context.Context, playerID uint64)
 	return out, nil
 }
 
-func (r *MySQLInventoryRepo) CheckInstancesOwned(ctx context.Context, playerID uint64, queries []InstanceOwnershipQuery) ([]uint64, error) {
+func (r *MySQLInventoryRepo) CheckInstancesOwned(ctx context.Context, playerID uint64, queries []InstanceOwnershipQuery) ([]ItemInstance, error) {
 	if len(queries) == 0 {
 		return nil, nil
 	}
@@ -211,21 +211,20 @@ func (r *MySQLInventoryRepo) CheckInstancesOwned(ctx context.Context, playerID u
 		args = append(args, q.InstanceID)
 	}
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT instance_id, item_config_id FROM player_item_instance WHERE player_id = ? AND instance_id IN (`+
+		`SELECT `+instanceCols+` FROM player_item_instance WHERE player_id = ? AND instance_id IN (`+
 			strings.Join(placeholders, ",")+`) ORDER BY instance_id ASC`, args...)
 	if err != nil {
 		return nil, errcode.New(errcode.ErrInternal, "check instance ownership player=%d: %v", playerID, err)
 	}
 	defer func() { _ = rows.Close() }()
-	owned := make([]uint64, 0, len(queries))
+	owned := make([]ItemInstance, 0, len(queries))
 	for rows.Next() {
-		var instanceID uint64
-		var itemConfigID uint32
-		if serr := rows.Scan(&instanceID, &itemConfigID); serr != nil {
+		inst, serr := scanInstance(rows.Scan)
+		if serr != nil {
 			return nil, errcode.New(errcode.ErrInternal, "scan instance ownership player=%d: %v", playerID, serr)
 		}
-		if want[instanceID] == itemConfigID {
-			owned = append(owned, instanceID)
+		if want[inst.InstanceID] == inst.ItemConfigID {
+			owned = append(owned, inst)
 		}
 	}
 	if rerr := rows.Err(); rerr != nil {

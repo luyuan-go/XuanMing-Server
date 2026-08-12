@@ -3,6 +3,7 @@ package conf
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
@@ -61,6 +62,9 @@ type MissionConf struct {
 	// PushPublishBatch 单轮发布行数上限(默认 128;FIFO,失败中断本轮保序)。
 	PushPublishBatch int `yaml:"push_publish_batch,omitempty" json:"push_publish_batch,omitempty"`
 
+	// PushWriterLease 推送发布器的写者继任租约(单写者选举)。
+	PushWriterLease PushWriterLeaseConf `yaml:"push_writer_lease,omitempty" json:"push_writer_lease,omitempty"`
+
 	// ── 保留期清理(CLAUDE.md §9 不变量 24)──
 
 	// RewardLogRetentionDays mission_reward_log 已发放(GRANTED)行保留天数(默认 90)。
@@ -81,6 +85,67 @@ type MissionConf struct {
 	SweepBatch int `yaml:"sweep_batch,omitempty" json:"sweep_batch,omitempty"`
 	// RetentionModeRaw 保留期清理模式:留空 / "report_only" = 默认只报告不删;"delete" = 真删。
 	RetentionModeRaw string `yaml:"retention_mode,omitempty" json:"retention_mode,omitempty"`
+}
+
+// 推送发布器写者租约档位。
+const (
+	// PushWriterLeaseOff 不选举:本副本无条件跑发布器。
+	// 只在**能保证单发布者**时合法(单进程 dev / 单副本 Recreate)。
+	PushWriterLeaseOff = "off"
+	// PushWriterLeaseEnforce 只有当选副本跑发布器,其余副本热备。
+	PushWriterLeaseEnforce = "enforce"
+)
+
+// PushWriterLeaseConf 是推送出箱发布器的单写者选举配置。
+//
+// 为什么发布器必须单写者(而补扫 / 清理不需要):
+//
+//	mission_push_outbox 是**全局未分区**的一张表,发布器按 id 序整表 FIFO 取行 ——
+//	正是 §9.21 点名要串行化的「作用于同一未分区权威的单写者循环」。两个副本同时跑时,
+//	各自持有一份内存快照,投递顺序会交错:副本 B 手上的旧行可能在副本 A 投完新行之后
+//	才发出去。而 MissionUpdateEvent.progressed 是**逐任务全量快照**(不是增量),后到即
+//	覆盖 —— 玩家 UI 上进度条会从 7/10 退回 3/10,直到下次 ListMissions / push.resync
+//	才恢复。事件里没有任何 revision 可供客户端判旧(ts_ms 是 event 级、跨副本各自墙钟,
+//	protocol-ordering-rules §5-B 明令不得只靠它判重)。
+//
+//	对照:RunRewardRetry 与 RunRetentionSweep **刻意不选举** —— 前者的正确性由下游三个
+//	幂等键保证(重复重放被吸收),后者的 DELETE 天然幂等。§9.21 明确「可并行 worker
+//	不得为金丝雀强行全局串行化」,把它们一起包进选举是错的。
+//
+// 为什么不用出箱 claim 列:那需要建表迁移 + 每批多一次 UPDATE 往返 + 一套租约过期回收
+// 语义(还得处理"claim 后进程被 SIGKILL,行卡到租约到期"),而 writerlease 是零 schema、
+// 零额外往返、且已在 ds_allocator / hub_allocator 生产跑着的同形状件(§15.2 最少复杂度)。
+// 也不能改成"先 DELETE 拿 RowsAffected==1 再投递":那把 at-least-once 降成 at-most-once
+// (投递失败行已删,永不重放),用丢推送换保序,是更差的交易。
+type PushWriterLeaseConf struct {
+	// Mode:"off"(留空即 off)| "enforce"。
+	//
+	// 默认 off 而不是 enforce:mission 的 dev / 一键启动是单进程,没有 etcd 也必须起得来
+	// (§14.2 默认值必须保证现有行为不变)。**生产的安全网不是这个默认值,而是 main.go
+	// 里的机械门禁**:受管 k8s 内检测到 Deployment 是 RollingUpdate 而 mode != enforce
+	// 时 fail-closed 退出 —— 与 ds_allocator / hub_allocator 同款,不留"滚动重叠期两个
+	// 发布器并发"的无保护组合。
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
+	// EtcdEndpoints etcd 地址(mode=enforce 必填)。
+	EtcdEndpoints []string `yaml:"etcd_endpoints,omitempty" json:"etcd_endpoints,omitempty"`
+	// LeaseTTLSec etcd session lease TTL(秒);留空用 writerlease 默认值。
+	LeaseTTLSec int `yaml:"lease_ttl_sec,omitempty" json:"lease_ttl_sec,omitempty"`
+	// DialTimeout etcd 连接超时;留空用 writerlease 默认值。
+	DialTimeout config.Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
+}
+
+// ResolveMode 归一化档位,取值不认识**报错而非猜** —— 拼错一个字母就静默退回无保护
+// 并发发布是不可接受的失败模式(同 dbguard.ParseMode 的纪律)。
+func (c PushWriterLeaseConf) ResolveMode() (string, error) {
+	switch strings.ToLower(strings.TrimSpace(c.Mode)) {
+	case "", PushWriterLeaseOff:
+		return PushWriterLeaseOff, nil
+	case PushWriterLeaseEnforce:
+		return PushWriterLeaseEnforce, nil
+	default:
+		return "", fmt.Errorf("mission.push_writer_lease.mode=%q 不认识(只允许 %q / %q,留空=%q)",
+			c.Mode, PushWriterLeaseOff, PushWriterLeaseEnforce, PushWriterLeaseOff)
+	}
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。

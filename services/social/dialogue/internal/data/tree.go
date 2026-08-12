@@ -19,7 +19,11 @@ type DialogueOption struct {
 
 // DialogueNode 是对话树的一个节点。Options 为空 = 终止节点。
 type DialogueNode struct {
-	NodeID  string
+	NodeID string
+	// Speaker 本节点说话人;空 = 沿用 DialogueTree.Speaker。
+	// 源表逐行有「说话人」列(分身 / 旁白可与 NPC 主名不同),这里如实承载,
+	// 不在组树时压成一个值。
+	Speaker string
 	Text    string
 	Options []DialogueOption
 }

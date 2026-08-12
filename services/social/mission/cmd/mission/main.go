@@ -19,9 +19,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -30,6 +32,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/dbguard"
+	"github.com/luyuancpp/pandora/pkg/dsauthfence/writerlease"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
@@ -191,7 +194,7 @@ func main() {
 	repo := data.NewMySQLMissionRepo(db)
 	// cellroute 刻意不接:见 biz/mission.go 里 MissionUsecase 结构体后的说明
 	// (全仓先例是「接了就真读」或「用不上就完全不接」,mail / guild / leaderboard 同)。
-	uc := biz.NewMissionUsecase(repo, catalogFromStore{store: ctStore}, items, exp, mail, pusher, cfg.Mission, logger)
+	uc := biz.NewMissionUsecase(repo, storeCatalogSource{store: ctStore}, items, exp, mail, pusher, cfg.Mission, logger)
 	svc := service.NewMissionService(uc)
 
 	// 会话现行性门(INC-20260722-004:顶号后旧 JWT 不得继续操作;对齐 friend)。
@@ -200,6 +203,76 @@ func main() {
 
 	grpcSrv := server.NewGRPCServer(&cfg, svc, sessGate)
 	httpSrv := server.NewHTTPServer(&cfg)
+
+	// 6.1 推送发布器的写者继任租约(单写者选举;推导见 conf.PushWriterLeaseConf 注释)。
+	//
+	// 只包 RunPushPublisher:RunRewardRetry 靠下游三个幂等键、RunRetentionSweep 靠
+	// DELETE 幂等,两者多副本并跑本就安全,按 §9.21「可并行 worker 不得为金丝雀强行
+	// 全局串行化」不得一起包进来。
+	pushLeaseMode, plErr := cfg.Mission.PushWriterLease.ResolveMode()
+	if plErr != nil {
+		helper.Errorw("msg", "mission_push_writer_lease_mode_invalid", "err", plErr)
+		os.Exit(1)
+	}
+	// 机械门禁(与 ds_allocator / hub_allocator 同款):mode != enforce 时"单发布者"只由
+	// 部署形态保证。进程看不到 spec.strategy,故由 Deployment 把策略作为 annotation 注入
+	// env,再由 push_writer_lease_manifest_test.go 钉住 annotation 与真实 strategy 一致。
+	//   · 受管 k8s 内 + RollingUpdate + 非 enforce → fail-closed 退出(不留无保护并发发布);
+	//   · 受管 k8s 内 + env 缺失 → fail-closed 退出(清单回归必须炸,不能靠人看日志);
+	//   · 非 k8s(本机裸跑 / dev)+ env 缺失 → 只告警(阻断会把开发环境一起打死)。
+	deployStrategy := strings.TrimSpace(os.Getenv("PANDORA_DEPLOY_STRATEGY"))
+	inManagedK8s := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_HOST")) != ""
+	switch {
+	case deployStrategy != "":
+		if strings.EqualFold(deployStrategy, "RollingUpdate") && pushLeaseMode != conf.PushWriterLeaseEnforce {
+			helper.Errorw("msg", "mission_push_writer_lease_rollingupdate_without_enforce",
+				"strategy", deployStrategy, "mode", pushLeaseMode,
+				"hint", "RollingUpdate × push_writer_lease.mode!=enforce = 滚动重叠期两个发布器并发,"+
+					"同玩家旧进度快照会后到并覆盖新的(progressed 是全量快照,无 revision 可判旧);"+
+					"要么把 mission.push_writer_lease.mode 改 enforce,要么把 Deployment 改回单副本 Recreate")
+			os.Exit(1)
+		}
+		helper.Infow("msg", "mission_push_writer_lease_strategy_checked",
+			"strategy", deployStrategy, "mode", pushLeaseMode)
+	case inManagedK8s:
+		helper.Errorw("msg", "mission_push_writer_lease_strategy_annotation_missing", "mode", pushLeaseMode,
+			"hint", "受管 k8s 内必须注入 PANDORA_DEPLOY_STRATEGY(取自 Deployment 的 "+
+				"pandora.dev/deploy-strategy annotation);缺失则无法机械校验 RollingUpdate×非 enforce 组合,"+
+				"fail-closed 退出。见 deploy/k8s/services/services.yaml")
+		os.Exit(1)
+	default:
+		helper.Warnw("msg", "mission_push_writer_lease_strategy_unknown", "mode", pushLeaseMode,
+			"hint", "非 k8s 环境(本机裸跑/dev):跳过部署策略机械校验")
+	}
+	if pushLeaseMode == conf.PushWriterLeaseEnforce {
+		if len(cfg.Mission.PushWriterLease.EtcdEndpoints) == 0 {
+			helper.Errorw("msg", "mission_push_writer_lease_endpoints_missing",
+				"hint", "push_writer_lease.mode=enforce 必须配 etcd_endpoints,否则选举无从谈起")
+			os.Exit(1)
+		}
+		hostname, _ := os.Hostname()
+		pushLease, wlErr := writerlease.Start(context.Background(), writerlease.Config{
+			Endpoints:   cfg.Mission.PushWriterLease.EtcdEndpoints,
+			Election:    "mission/push_publisher",
+			Identity:    fmt.Sprintf("%s/%d", hostname, os.Getpid()),
+			LeaseTTLSec: cfg.Mission.PushWriterLease.LeaseTTLSec,
+			DialTimeout: cfg.Mission.PushWriterLease.DialTimeout.Std(),
+			// 无 OnElected:接任不需要推进任何 fence 水位(发布器不携带跨轮次权威意图,
+			// 见 biz.PushWriterLease 的边界说明)。
+		})
+		if wlErr != nil {
+			helper.Errorw("msg", "mission_push_writer_lease_start_failed", "err", wlErr)
+			os.Exit(1)
+		}
+		defer func() { _ = pushLease.Close() }()
+		uc.SetPushWriterLease(pushLease)
+		helper.Infow("msg", "mission_push_writer_lease_started",
+			"election", "mission/push_publisher", "mode", pushLeaseMode,
+			"hint", "enforce:只有当选副本跑推送发布器,热备副本照常服务 RPC 与补扫/清理")
+	} else {
+		helper.Warnw("msg", "mission_push_writer_lease_disabled",
+			"hint", "mode=off:单发布者只由部署形态保证,只允许单进程 / 单副本 Recreate")
+	}
 
 	// 7. workers(随进程退出而停;各自 safego 兜 panic,不新建第二套 timer 状态机)
 	workerCtx, workerCancel := context.WithCancel(context.Background())

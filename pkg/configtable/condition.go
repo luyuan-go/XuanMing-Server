@@ -2,6 +2,7 @@ package configtable
 
 import (
 	"fmt"
+	"math"
 
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 )
@@ -42,6 +43,12 @@ const (
 	conditionCompareMax uint32 = 4
 )
 
+// MaxConditionSlotValues 单个槽位过滤集合的取值条数上限(§9.24 深度②集合条目上限)。
+// ConditionMatchesEventSlots 是线性扫描:单次上报最多 max_facts_per_report 条事实 ×
+// 每玩家最多 max_active_missions 个活跃任务 × 8 个槽 × 本上限次比较,填大了纯烧 CPU。
+// 32 远超正常设计(实际 1~5 个 ID),只挡手滑。
+const MaxConditionSlotValues = 32
+
 // validateConditionRow 逐行业务校验(生成的 newConditionTable 调用)。
 func validateConditionRow(row *configpb.ConditionRow) error {
 	cat := row.GetConditionCategory()
@@ -56,6 +63,10 @@ func validateConditionRow(row *configpb.ConditionRow) error {
 		vals, err := parseUint32CSV(slot)
 		if err != nil {
 			return fmt.Errorf("槽位%d 数组格式非法: %w", i+1, err)
+		}
+		if len(vals) > MaxConditionSlotValues {
+			return fmt.Errorf("槽位%d 取值条数 %d 超上限 %d(槽位匹配是线性扫描,填大了纯烧 CPU)",
+				i+1, len(vals), MaxConditionSlotValues)
 		}
 		for _, v := range vals {
 			if v == 0 {
@@ -105,12 +116,57 @@ func ConditionIsFulfilled(row *configpb.ConditionRow, progress, targetOverride u
 	}
 }
 
-// ConditionClampIfFulfilled 达标后把进度 clamp 到目标值,未达标原样返回
+// ConditionMinFulfillingProgress 返回「刚好达标」的最小进度值,以及**该比较符能否用在
+// 单调累加计数器上**(第二个返回值)。
+//
+// 任务进度是单调不减的累加器(saturatingAdd + 达标槽不再累加),所以一个比较符要能用,
+// 它的达标集合必须**向上闭合**:一旦为真,更大的进度也必须为真。逐个检查:
+//
+//	GE  progress >= target   向上闭合 ✓   最小达标值 = target
+//	GT  progress >  target   向上闭合 ✓   最小达标值 = target+1
+//	LE  progress <= target   ✗ 在 progress=0 就为真,且越推进越假
+//	LT  progress <  target   ✗ 同上
+//	EQ  progress == target   ✗ 单点集合,amount>1 会一步跨过去后永不再等
+//
+// 只有 GE/GT 返回 ok=true。LE/LT/EQ 用作任务条件的后果分别是「白送完成」与「永远
+// 完不成」,由 ValidateMissionCrossTables 在加载期整批拒绝(mission.go)。
+func ConditionMinFulfillingProgress(comparisonOp, target uint32) (uint32, bool) {
+	switch comparisonOp {
+	case ConditionCompareGE:
+		return target, true
+	case ConditionCompareGT:
+		if target == math.MaxUint32 {
+			// GT MaxUint32 无解:没有任何 uint32 大于它,配置错而非可 clamp 的形态。
+			return math.MaxUint32, false
+		}
+		return target + 1, true
+	default:
+		return 0, false
+	}
+}
+
+// ConditionClampIfFulfilled 达标后把进度 clamp 到**最小达标值**,未达标原样返回
 // (D 版 condition_util::ClampIfFulfilled:进度条不超冲,存储不膨胀)。
+//
+// 必须 clamp 到最小达标值而不是 target 本身 —— 否则 GT 会被 clamp 打回未达标:
+// target=5 的 GT 条件,进度 6 达标 → clamp 到 5 → 再判定 `5 > 5` 为假 → 任务判定
+// 回到未完成,而进度已被写死在 5;下一条事实推到 6 又被 clamp 回 5,**永久活锁,
+// 任务再也完不成**。clamp 的不变量是「clamp 不得改变达标与否」,GT 的最小达标值
+// 是 target+1。
+//
+// 非单调可用的比较符(LE/LT/EQ)不 clamp:它们达标时 progress > target 本就不可能
+// 成立(旧实现同样不会 clamp),行为不变;这类比较符用作任务条件已在加载期被拒。
 func ConditionClampIfFulfilled(row *configpb.ConditionRow, progress, targetOverride uint32) uint32 {
+	if !ConditionIsFulfilled(row, progress, targetOverride) {
+		return progress
+	}
 	target := ConditionEffectiveTarget(row, targetOverride)
-	if ConditionIsFulfilled(row, progress, targetOverride) && progress > target {
-		return target
+	floor, ok := ConditionMinFulfillingProgress(row.GetComparisonOp(), target)
+	if !ok {
+		return progress
+	}
+	if progress > floor {
+		return floor
 	}
 	return progress
 }
