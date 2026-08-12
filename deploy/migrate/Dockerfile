@@ -7,7 +7,8 @@ ARG BASE_REGISTRY=docker.io
 FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION}-${GO_IMAGE_VARIANT} AS builder
 
 ARG GO_VERSION
-ARG GOPROXY=https://goproxy.cn,direct
+# 分隔符必须是 `|`:逗号只在 404/410 回退,网络层错误直接失败(详见 deploy/services/Dockerfile)。
+ARG GOPROXY=https://goproxy.cn|https://proxy.golang.org|direct
 ENV CGO_ENABLED=0 GOOS=linux GOWORK=off GOFLAGS=-mod=readonly GOPROXY=${GOPROXY}
 
 WORKDIR /src

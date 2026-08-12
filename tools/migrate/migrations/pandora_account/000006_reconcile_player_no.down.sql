@@ -1,0 +1,4 @@
+-- 000006 只把 v4/v5 与 mysql-init 可能产生的多种 schema 收敛到唯一的 v5 目标形态。
+-- up 可能已经把双列的兼容值合入 player_no、把双计数器水位取 GREATEST 后删除 legacy；
+-- 这些信息一旦合并就无法判定原始来源，也无法安全重建逐字等价的双对象状态。
+-- 因此 down 有意为 no-op。需要回退应用时保留 canonical player_no schema 即可。

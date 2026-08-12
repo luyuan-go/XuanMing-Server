@@ -4417,11 +4417,11 @@ constexpr BattleStorageRecord::ParseTableT_ BattleStorageRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      21, 248,  // max_field_number, fast_idx_mask
+      22, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4292870144,  // skipmap
+      4290772992,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      21,  // num_field_entries
+      22,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -4516,7 +4516,10 @@ constexpr BattleStorageRecord::ParseTableT_ BattleStorageRecord::InternalGenerat
       {::_pbi::TcParser::FastV8S2,
        {424, 20, 0,
         PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.ever_had_players_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .pandora.config.v1.LevelRatingMode rating_mode = 22 [json_name = "ratingMode"];
+      {::_pbi::TcParser::FastV32S2,
+       {432, 21, 0,
+        PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.rating_mode_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -4571,6 +4574,8 @@ constexpr BattleStorageRecord::ParseTableT_ BattleStorageRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.player_combat_factions_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool ever_had_players = 21 [json_name = "everHadPlayers"];
       {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.ever_had_players_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // .pandora.config.v1.LevelRatingMode rating_mode = 22 [json_name = "ratingMode"];
+      {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.rating_mode_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -4647,7 +4652,8 @@ inline constexpr BattleStorageRecord::Impl_::Impl_(
         last_verified_gen_{::uint64_t{0u}},
         instance_epoch_{0u},
         last_verified_writer_epoch_{0u},
-        ever_had_players_{false} {}
+        ever_had_players_{false},
+        rating_mode_{static_cast< ::pandora::config::v1::LevelRatingMode >(0)} {}
 
 template <typename>
 constexpr BattleStorageRecord::BattleStorageRecord(::_pbi::ConstantInitialized,
@@ -5170,11 +5176,11 @@ constexpr AllocateBattleRequest::ParseTableT_ AllocateBattleRequest::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(AllocateBattleRequest, _impl_._has_bits_),
       0, // no _extensions_
-      10, 24,  // max_field_number, fast_idx_mask
+      11, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966768,  // skipmap
+      4294965744,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -5212,7 +5218,9 @@ constexpr AllocateBattleRequest::ParseTableT_ AllocateBattleRequest::InternalGen
       // string game_mode = 4 [json_name = "gameMode"];
       {PROTOBUF_FIELD_OFFSET(AllocateBattleRequest, _impl_.game_mode_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // repeated .pandora.ds.v1.BattlePlayerCombatFaction player_combat_factions = 10 [json_name = "playerCombatFactions"];
-      {PROTOBUF_FIELD_OFFSET(AllocateBattleRequest, _impl_.player_combat_factions_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(AllocateBattleRequest, _impl_.player_combat_factions_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .pandora.config.v1.LevelRatingMode rating_mode = 11 [json_name = "ratingMode"];
+      {PROTOBUF_FIELD_OFFSET(AllocateBattleRequest, _impl_.rating_mode_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -5245,6 +5253,7 @@ inline constexpr AllocateBattleRequest::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         match_id_{::uint64_t{0u}},
         map_id_{0u},
+        rating_mode_{static_cast< ::pandora::config::v1::LevelRatingMode >(0)},
         player_combat_factions_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::pandora::ds::v1::AllocateBattleRequest,
             PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::AllocateBattleRequest, _impl_.player_combat_factions_)>()
@@ -5381,16 +5390,18 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::AllocateBattleRequest, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::AllocateBattleRequest, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::AllocateBattleRequest, _impl_.player_ids_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::AllocateBattleRequest, _impl_.map_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::AllocateBattleRequest, _impl_.game_mode_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::AllocateBattleRequest, _impl_.player_combat_factions_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::AllocateBattleRequest, _impl_.rating_mode_),
         2,
         0,
         3,
         1,
+        5,
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::AllocateBattleResponse, _impl_._has_bits_),
@@ -5595,7 +5606,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_._has_bits_),
-        24, // hasbit index offset
+        25, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.ds_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.ds_addr_),
@@ -5617,6 +5628,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.pod_uid_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.player_combat_factions_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.ever_had_players_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.rating_mode_),
         11,
         2,
         3,
@@ -5638,6 +5650,7 @@ const ::uint32_t
         10,
         1,
         20,
+        21,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleDSCredential, _impl_._has_bits_),
         11, // hasbit index offset
@@ -5820,29 +5833,29 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::pandora::ds::v1::ResolveBattleTargetRequest)},
         {7, sizeof(::pandora::ds::v1::ResolveBattleTargetResponse)},
         {26, sizeof(::pandora::ds::v1::AllocateBattleRequest)},
-        {39, sizeof(::pandora::ds::v1::AllocateBattleResponse)},
-        {58, sizeof(::pandora::ds::v1::ReleaseBattleRequest)},
-        {87, sizeof(::pandora::ds::v1::ReleaseBattleResponse)},
-        {92, sizeof(::pandora::ds::v1::AbortPreactiveBattleRequest)},
-        {109, sizeof(::pandora::ds::v1::AbortPreactiveBattleResponse)},
-        {114, sizeof(::pandora::ds::v1::EnsurePlayerDepartureRequest)},
-        {137, sizeof(::pandora::ds::v1::EnsurePlayerDepartureResponse)},
-        {146, sizeof(::pandora::ds::v1::BattleEvictionOrder)},
-        {167, sizeof(::pandora::ds::v1::HeartbeatRequest)},
-        {194, sizeof(::pandora::ds::v1::HeartbeatResponse)},
-        {213, sizeof(::pandora::ds::v1::BattleInfo)},
-        {228, sizeof(::pandora::ds::v1::ListBattlesRequest)},
-        {233, sizeof(::pandora::ds::v1::ListBattlesResponse)},
-        {240, sizeof(::pandora::ds::v1::BattleStorageRecord)},
-        {285, sizeof(::pandora::ds::v1::BattleDSCredential)},
-        {304, sizeof(::pandora::ds::v1::BattleDSAuthStorageRecord)},
-        {335, sizeof(::pandora::ds::v1::BattlePlayerDepartureStorageRecord)},
-        {372, sizeof(::pandora::ds::v1::BattlePlayerDepartureJournalStorageRecord)},
-        {379, sizeof(::pandora::ds::v1::BattleInstanceTeardownStorageRecord)},
-        {396, sizeof(::pandora::ds::v1::BattleAllocationAbortStorageRecord)},
-        {417, sizeof(::pandora::ds::v1::BattleAllocationLifecyclePublishedStorageRecord)},
-        {436, sizeof(::pandora::ds::v1::DSLifecycleEvent)},
-        {453, sizeof(::pandora::ds::v1::BattlePlayerCombatFaction)},
+        {41, sizeof(::pandora::ds::v1::AllocateBattleResponse)},
+        {60, sizeof(::pandora::ds::v1::ReleaseBattleRequest)},
+        {89, sizeof(::pandora::ds::v1::ReleaseBattleResponse)},
+        {94, sizeof(::pandora::ds::v1::AbortPreactiveBattleRequest)},
+        {111, sizeof(::pandora::ds::v1::AbortPreactiveBattleResponse)},
+        {116, sizeof(::pandora::ds::v1::EnsurePlayerDepartureRequest)},
+        {139, sizeof(::pandora::ds::v1::EnsurePlayerDepartureResponse)},
+        {148, sizeof(::pandora::ds::v1::BattleEvictionOrder)},
+        {169, sizeof(::pandora::ds::v1::HeartbeatRequest)},
+        {196, sizeof(::pandora::ds::v1::HeartbeatResponse)},
+        {215, sizeof(::pandora::ds::v1::BattleInfo)},
+        {230, sizeof(::pandora::ds::v1::ListBattlesRequest)},
+        {235, sizeof(::pandora::ds::v1::ListBattlesResponse)},
+        {242, sizeof(::pandora::ds::v1::BattleStorageRecord)},
+        {289, sizeof(::pandora::ds::v1::BattleDSCredential)},
+        {308, sizeof(::pandora::ds::v1::BattleDSAuthStorageRecord)},
+        {339, sizeof(::pandora::ds::v1::BattlePlayerDepartureStorageRecord)},
+        {376, sizeof(::pandora::ds::v1::BattlePlayerDepartureJournalStorageRecord)},
+        {383, sizeof(::pandora::ds::v1::BattleInstanceTeardownStorageRecord)},
+        {400, sizeof(::pandora::ds::v1::BattleAllocationAbortStorageRecord)},
+        {421, sizeof(::pandora::ds::v1::BattleAllocationLifecyclePublishedStorageRecord)},
+        {440, sizeof(::pandora::ds::v1::DSLifecycleEvent)},
+        {457, sizeof(::pandora::ds::v1::BattlePlayerCombatFaction)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -5876,259 +5889,264 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\035pandora/ds/v1/allocator.proto\022\rpandora"
-    ".ds.v1\032\037pandora/common/v1/errcode.proto\""
-    "T\n\032ResolveBattleTargetRequest\022\031\n\010match_i"
-    "d\030\001 \001(\004R\007matchId\022\033\n\tplayer_id\030\002 \001(\004R\010pla"
-    "yerId\"\306\002\n\033ResolveBattleTargetResponse\022.\n"
-    "\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR"
-    "\004code\022\027\n\007ds_addr\030\002 \001(\tR\006dsAddr\022\036\n\013ds_pod"
-    "_name\030\003 \001(\tR\tdsPodName\022&\n\017allocated_at_m"
-    "s\030\004 \001(\003R\rallocatedAtMs\022%\n\016gameserver_uid"
-    "\030\005 \001(\tR\rgameserverUid\022%\n\016instance_epoch\030"
-    "\006 \001(\rR\rinstanceEpoch\022#\n\rallocation_id\030\007 "
-    "\001(\tR\014allocationId\022#\n\rrelease_track\030\010 \001(\t"
-    "R\014releaseTrack\"\353\001\n\025AllocateBattleRequest"
-    "\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\035\n\nplayer_id"
-    "s\030\002 \003(\004R\tplayerIds\022\025\n\006map_id\030\003 \001(\rR\005mapI"
-    "d\022\033\n\tgame_mode\030\004 \001(\tR\010gameMode\022^\n\026player"
-    "_combat_factions\030\n \003(\0132(.pandora.ds.v1.B"
-    "attlePlayerCombatFactionR\024playerCombatFa"
-    "ctionsJ\004\010\005\020\n\"\301\002\n\026AllocateBattleResponse\022"
-    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
-    "eR\004code\022\027\n\007ds_addr\030\002 \001(\tR\006dsAddr\022\036\n\013ds_p"
-    "od_name\030\003 \001(\tR\tdsPodName\022&\n\017allocated_at"
-    "_ms\030\004 \001(\003R\rallocatedAtMs\022%\n\016gameserver_u"
-    "id\030\005 \001(\tR\rgameserverUid\022%\n\016instance_epoc"
-    "h\030\006 \001(\rR\rinstanceEpoch\022#\n\rallocation_id\030"
-    "\007 \001(\tR\014allocationId\022#\n\rrelease_track\030\010 \001"
-    "(\tR\014releaseTrack\"\317\003\n\024ReleaseBattleReques"
-    "t\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\026\n\006reason\030\002"
-    " \001(\tR\006reason\022#\n\rallocation_id\030\003 \001(\tR\014all"
-    "ocationId\022\036\n\013ds_pod_name\030\004 \001(\tR\tdsPodNam"
-    "e\022%\n\016gameserver_uid\030\005 \001(\tR\rgameserverUid"
-    "\022%\n\016instance_epoch\030\006 \001(\rR\rinstanceEpoch\022"
-    "\031\n\010auth_gen\030\007 \001(\004R\007authGen\022\031\n\010auth_jti\030\010"
-    " \001(\tR\007authJti\022\036\n\013auth_exp_ms\030\t \001(\003R\tauth"
-    "ExpMs\022\031\n\010auth_kid\030\n \001(\tR\007authKid\022*\n\021auth"
-    "_token_sha256\030\013 \001(\tR\017authTokenSha256\022*\n\021"
-    "auth_writer_epoch\030\014 \001(\rR\017authWriterEpoch"
-    "\022(\n\020authorized_at_ms\030\r \001(\003R\016authorizedAt"
-    "Ms\"G\n\025ReleaseBattleResponse\022.\n\004code\030\001 \001("
-    "\0162\032.pandora.common.v1.ErrCodeR\004code\"\250\002\n\033"
-    "AbortPreactiveBattleRequest\022\031\n\010match_id\030"
-    "\001 \001(\004R\007matchId\0226\n\027allocation_operation_i"
-    "d\030\002 \001(\tR\025allocationOperationId\022\036\n\013ds_pod"
-    "_name\030\003 \001(\tR\tdsPodName\022%\n\016gameserver_uid"
-    "\030\004 \001(\tR\rgameserverUid\022%\n\016instance_epoch\030"
-    "\005 \001(\rR\rinstanceEpoch\022#\n\rallocation_id\030\006 "
-    "\001(\tR\014allocationId\022#\n\rrelease_track\030\007 \001(\t"
-    "R\014releaseTrack\"N\n\034AbortPreactiveBattleRe"
-    "sponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1"
-    ".ErrCodeR\004code\"\243\003\n\034EnsurePlayerDeparture"
-    "Request\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\033\n\tpl"
-    "ayer_id\030\002 \001(\004R\010playerId\022!\n\014operation_id\030"
-    "\003 \001(\tR\013operationId\022\036\n\013ds_pod_name\030\004 \001(\tR"
-    "\tdsPodName\022%\n\016gameserver_uid\030\005 \001(\tR\rgame"
-    "serverUid\022%\n\016instance_epoch\030\006 \001(\rR\rinsta"
-    "nceEpoch\022#\n\rallocation_id\030\007 \001(\tR\014allocat"
-    "ionId\022+\n\021placement_version\030\010 \001(\004R\020placem"
-    "entVersion\0228\n\030source_placement_version\030\t"
-    " \001(\004R\026sourcePlacementVersion\022.\n\023source_o"
-    "peration_id\030\n \001(\tR\021sourceOperationId\"\257\001\n"
-    "\035EnsurePlayerDepartureResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022\032"
-    "\n\010departed\030\002 \001(\010R\010departed\022B\n\006status\030\003 \001"
-    "(\0162*.pandora.ds.v1.BattlePlayerDeparture"
-    "StatusR\006status\"\323\002\n\023BattleEvictionOrder\022!"
-    "\n\014departure_id\030\001 \001(\tR\013departureId\022\031\n\010mat"
-    "ch_id\030\002 \001(\004R\007matchId\022\033\n\tplayer_id\030\003 \001(\004R"
-    "\010playerId\022\036\n\013ds_pod_name\030\004 \001(\tR\tdsPodNam"
-    "e\022%\n\016gameserver_uid\030\005 \001(\tR\rgameserverUid"
-    "\022%\n\016instance_epoch\030\006 \001(\rR\rinstanceEpoch\022"
-    "#\n\rallocation_id\030\007 \001(\tR\014allocationId\022+\n\021"
-    "placement_version\030\010 \001(\004R\020placementVersio"
-    "n\022!\n\014operation_id\030\t \001(\tR\013operationId\"\363\003\n"
-    "\020HeartbeatRequest\022\036\n\013ds_pod_name\030\001 \001(\tR\t"
-    "dsPodName\022\031\n\010match_id\030\002 \001(\004R\007matchId\022!\n\014"
-    "player_count\030\003 \001(\005R\013playerCount\022\027\n\007cpu_p"
-    "ct\030\004 \001(\002R\006cpuPct\022\025\n\006mem_mb\030\005 \001(\002R\005memMb\022"
-    "\024\n\005state\030\006 \001(\tR\005state\022\023\n\005ts_ms\030\007 \001(\003R\004ts"
-    "Ms\022*\n\021active_player_ids\030\n \003(\004R\017activePla"
-    "yerIds\022C\n\036active_player_snapshot_present"
-    "\030\013 \001(\010R\033activePlayerSnapshotPresent\022<\n\032a"
-    "cknowledged_departure_ids\030\014 \003(\tR\030acknowl"
-    "edgedDepartureIds\022G\n player_census_capab"
-    "ility_version\030\r \001(\rR\035playerCensusCapabil"
-    "ityVersion\022(\n\020player_census_id\030\016 \001(\tR\016pl"
-    "ayerCensusIdJ\004\010\010\020\n\"\254\003\n\021HeartbeatResponse"
-    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
-    "deR\004code\022\030\n\007command\030\002 \001(\tR\007command\022,\n\022ac"
-    "cepted_token_gen\030\n \001(\004R\020acceptedTokenGen"
-    "\022,\n\022accepted_token_jti\030\013 \001(\tR\020acceptedTo"
-    "kenJti\0222\n\025accepted_instance_uid\030\014 \001(\tR\023a"
-    "cceptedInstanceUid\0226\n\027accepted_instance_"
-    "epoch\030\r \001(\rR\025acceptedInstanceEpoch\0222\n\025ac"
-    "cepted_writer_epoch\030\016 \001(\rR\023acceptedWrite"
-    "rEpoch\022K\n\017eviction_orders\030\017 \003(\0132\".pandor"
-    "a.ds.v1.BattleEvictionOrderR\016evictionOrd"
-    "ersJ\004\010\003\020\n\"\301\001\n\nBattleInfo\022\031\n\010match_id\030\001 \001"
-    "(\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodN"
-    "ame\022\027\n\007ds_addr\030\003 \001(\tR\006dsAddr\022\024\n\005state\030\004 "
-    "\001(\tR\005state\022!\n\014player_count\030\005 \001(\005R\013player"
-    "Count\022&\n\017allocated_at_ms\030\006 \001(\003R\rallocate"
-    "dAtMs\"7\n\022ListBattlesRequest\022!\n\014state_fil"
-    "ter\030\001 \001(\tR\013stateFilter\"z\n\023ListBattlesRes"
-    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCodeR\004code\0223\n\007battles\030\002 \003(\0132\031.pandora"
-    ".ds.v1.BattleInfoR\007battles\"\277\006\n\023BattleSto"
+    ".ds.v1\032\037pandora/common/v1/errcode.proto\032"
+    "\035pandora/config/v1/level.proto\"T\n\032Resolv"
+    "eBattleTargetRequest\022\031\n\010match_id\030\001 \001(\004R\007"
+    "matchId\022\033\n\tplayer_id\030\002 \001(\004R\010playerId\"\306\002\n"
+    "\033ResolveBattleTargetResponse\022.\n\004code\030\001 \001"
+    "(\0162\032.pandora.common.v1.ErrCodeR\004code\022\027\n\007"
+    "ds_addr\030\002 \001(\tR\006dsAddr\022\036\n\013ds_pod_name\030\003 \001"
+    "(\tR\tdsPodName\022&\n\017allocated_at_ms\030\004 \001(\003R\r"
+    "allocatedAtMs\022%\n\016gameserver_uid\030\005 \001(\tR\rg"
+    "ameserverUid\022%\n\016instance_epoch\030\006 \001(\rR\rin"
+    "stanceEpoch\022#\n\rallocation_id\030\007 \001(\tR\014allo"
+    "cationId\022#\n\rrelease_track\030\010 \001(\tR\014release"
+    "Track\"\260\002\n\025AllocateBattleRequest\022\031\n\010match"
+    "_id\030\001 \001(\004R\007matchId\022\035\n\nplayer_ids\030\002 \003(\004R\t"
+    "playerIds\022\025\n\006map_id\030\003 \001(\rR\005mapId\022\033\n\tgame"
+    "_mode\030\004 \001(\tR\010gameMode\022^\n\026player_combat_f"
+    "actions\030\n \003(\0132(.pandora.ds.v1.BattlePlay"
+    "erCombatFactionR\024playerCombatFactions\022C\n"
+    "\013rating_mode\030\013 \001(\0162\".pandora.config.v1.L"
+    "evelRatingModeR\nratingModeJ\004\010\005\020\n\"\301\002\n\026All"
+    "ocateBattleResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\022\027\n\007ds_addr\030\002"
+    " \001(\tR\006dsAddr\022\036\n\013ds_pod_name\030\003 \001(\tR\tdsPod"
+    "Name\022&\n\017allocated_at_ms\030\004 \001(\003R\rallocated"
+    "AtMs\022%\n\016gameserver_uid\030\005 \001(\tR\rgameserver"
+    "Uid\022%\n\016instance_epoch\030\006 \001(\rR\rinstanceEpo"
+    "ch\022#\n\rallocation_id\030\007 \001(\tR\014allocationId\022"
+    "#\n\rrelease_track\030\010 \001(\tR\014releaseTrack\"\317\003\n"
+    "\024ReleaseBattleRequest\022\031\n\010match_id\030\001 \001(\004R"
+    "\007matchId\022\026\n\006reason\030\002 \001(\tR\006reason\022#\n\rallo"
+    "cation_id\030\003 \001(\tR\014allocationId\022\036\n\013ds_pod_"
+    "name\030\004 \001(\tR\tdsPodName\022%\n\016gameserver_uid\030"
+    "\005 \001(\tR\rgameserverUid\022%\n\016instance_epoch\030\006"
+    " \001(\rR\rinstanceEpoch\022\031\n\010auth_gen\030\007 \001(\004R\007a"
+    "uthGen\022\031\n\010auth_jti\030\010 \001(\tR\007authJti\022\036\n\013aut"
+    "h_exp_ms\030\t \001(\003R\tauthExpMs\022\031\n\010auth_kid\030\n "
+    "\001(\tR\007authKid\022*\n\021auth_token_sha256\030\013 \001(\tR"
+    "\017authTokenSha256\022*\n\021auth_writer_epoch\030\014 "
+    "\001(\rR\017authWriterEpoch\022(\n\020authorized_at_ms"
+    "\030\r \001(\003R\016authorizedAtMs\"G\n\025ReleaseBattleR"
+    "esponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v"
+    "1.ErrCodeR\004code\"\250\002\n\033AbortPreactiveBattle"
+    "Request\022\031\n\010match_id\030\001 \001(\004R\007matchId\0226\n\027al"
+    "location_operation_id\030\002 \001(\tR\025allocationO"
+    "perationId\022\036\n\013ds_pod_name\030\003 \001(\tR\tdsPodNa"
+    "me\022%\n\016gameserver_uid\030\004 \001(\tR\rgameserverUi"
+    "d\022%\n\016instance_epoch\030\005 \001(\rR\rinstanceEpoch"
+    "\022#\n\rallocation_id\030\006 \001(\tR\014allocationId\022#\n"
+    "\rrelease_track\030\007 \001(\tR\014releaseTrack\"N\n\034Ab"
+    "ortPreactiveBattleResponse\022.\n\004code\030\001 \001(\016"
+    "2\032.pandora.common.v1.ErrCodeR\004code\"\243\003\n\034E"
+    "nsurePlayerDepartureRequest\022\031\n\010match_id\030"
+    "\001 \001(\004R\007matchId\022\033\n\tplayer_id\030\002 \001(\004R\010playe"
+    "rId\022!\n\014operation_id\030\003 \001(\tR\013operationId\022\036"
+    "\n\013ds_pod_name\030\004 \001(\tR\tdsPodName\022%\n\016gamese"
+    "rver_uid\030\005 \001(\tR\rgameserverUid\022%\n\016instanc"
+    "e_epoch\030\006 \001(\rR\rinstanceEpoch\022#\n\rallocati"
+    "on_id\030\007 \001(\tR\014allocationId\022+\n\021placement_v"
+    "ersion\030\010 \001(\004R\020placementVersion\0228\n\030source"
+    "_placement_version\030\t \001(\004R\026sourcePlacemen"
+    "tVersion\022.\n\023source_operation_id\030\n \001(\tR\021s"
+    "ourceOperationId\"\257\001\n\035EnsurePlayerDepartu"
+    "reResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
+    "n.v1.ErrCodeR\004code\022\032\n\010departed\030\002 \001(\010R\010de"
+    "parted\022B\n\006status\030\003 \001(\0162*.pandora.ds.v1.B"
+    "attlePlayerDepartureStatusR\006status\"\323\002\n\023B"
+    "attleEvictionOrder\022!\n\014departure_id\030\001 \001(\t"
+    "R\013departureId\022\031\n\010match_id\030\002 \001(\004R\007matchId"
+    "\022\033\n\tplayer_id\030\003 \001(\004R\010playerId\022\036\n\013ds_pod_"
+    "name\030\004 \001(\tR\tdsPodName\022%\n\016gameserver_uid\030"
+    "\005 \001(\tR\rgameserverUid\022%\n\016instance_epoch\030\006"
+    " \001(\rR\rinstanceEpoch\022#\n\rallocation_id\030\007 \001"
+    "(\tR\014allocationId\022+\n\021placement_version\030\010 "
+    "\001(\004R\020placementVersion\022!\n\014operation_id\030\t "
+    "\001(\tR\013operationId\"\363\003\n\020HeartbeatRequest\022\036\n"
+    "\013ds_pod_name\030\001 \001(\tR\tdsPodName\022\031\n\010match_i"
+    "d\030\002 \001(\004R\007matchId\022!\n\014player_count\030\003 \001(\005R\013"
+    "playerCount\022\027\n\007cpu_pct\030\004 \001(\002R\006cpuPct\022\025\n\006"
+    "mem_mb\030\005 \001(\002R\005memMb\022\024\n\005state\030\006 \001(\tR\005stat"
+    "e\022\023\n\005ts_ms\030\007 \001(\003R\004tsMs\022*\n\021active_player_"
+    "ids\030\n \003(\004R\017activePlayerIds\022C\n\036active_pla"
+    "yer_snapshot_present\030\013 \001(\010R\033activePlayer"
+    "SnapshotPresent\022<\n\032acknowledged_departur"
+    "e_ids\030\014 \003(\tR\030acknowledgedDepartureIds\022G\n"
+    " player_census_capability_version\030\r \001(\rR"
+    "\035playerCensusCapabilityVersion\022(\n\020player"
+    "_census_id\030\016 \001(\tR\016playerCensusIdJ\004\010\010\020\n\"\254"
+    "\003\n\021HeartbeatResponse\022.\n\004code\030\001 \001(\0162\032.pan"
+    "dora.common.v1.ErrCodeR\004code\022\030\n\007command\030"
+    "\002 \001(\tR\007command\022,\n\022accepted_token_gen\030\n \001"
+    "(\004R\020acceptedTokenGen\022,\n\022accepted_token_j"
+    "ti\030\013 \001(\tR\020acceptedTokenJti\0222\n\025accepted_i"
+    "nstance_uid\030\014 \001(\tR\023acceptedInstanceUid\0226"
+    "\n\027accepted_instance_epoch\030\r \001(\rR\025accepte"
+    "dInstanceEpoch\0222\n\025accepted_writer_epoch\030"
+    "\016 \001(\rR\023acceptedWriterEpoch\022K\n\017eviction_o"
+    "rders\030\017 \003(\0132\".pandora.ds.v1.BattleEvicti"
+    "onOrderR\016evictionOrdersJ\004\010\003\020\n\"\301\001\n\nBattle"
+    "Info\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_po"
+    "d_name\030\002 \001(\tR\tdsPodName\022\027\n\007ds_addr\030\003 \001(\t"
+    "R\006dsAddr\022\024\n\005state\030\004 \001(\tR\005state\022!\n\014player"
+    "_count\030\005 \001(\005R\013playerCount\022&\n\017allocated_a"
+    "t_ms\030\006 \001(\003R\rallocatedAtMs\"7\n\022ListBattles"
+    "Request\022!\n\014state_filter\030\001 \001(\tR\013stateFilt"
+    "er\"z\n\023ListBattlesResponse\022.\n\004code\030\001 \001(\0162"
+    "\032.pandora.common.v1.ErrCodeR\004code\0223\n\007bat"
+    "tles\030\002 \003(\0132\031.pandora.ds.v1.BattleInfoR\007b"
+    "attles\"\204\007\n\023BattleStorageRecord\022\031\n\010match_"
+    "id\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\t"
+    "dsPodName\022\027\n\007ds_addr\030\003 \001(\tR\006dsAddr\022\024\n\005st"
+    "ate\030\004 \001(\tR\005state\022\035\n\nplayer_ids\030\005 \003(\004R\tpl"
+    "ayerIds\022\025\n\006map_id\030\006 \001(\rR\005mapId\022\033\n\tgame_m"
+    "ode\030\007 \001(\tR\010gameMode\022&\n\017allocated_at_ms\030\010"
+    " \001(\003R\rallocatedAtMs\022*\n\021last_heartbeat_ms"
+    "\030\t \001(\003R\017lastHeartbeatMs\022!\n\014player_count\030"
+    "\n \001(\005R\013playerCount\022$\n\016empty_since_ms\030\013 \001"
+    "(\003R\014emptySinceMs\022%\n\016gameserver_uid\030\014 \001(\t"
+    "R\rgameserverUid\022%\n\016instance_epoch\030\r \001(\rR"
+    "\rinstanceEpoch\022*\n\021last_verified_gen\030\016 \001("
+    "\004R\017lastVerifiedGen\022*\n\021last_verified_jti\030"
+    "\017 \001(\tR\017lastVerifiedJti\022;\n\032last_verified_"
+    "writer_epoch\030\020 \001(\rR\027lastVerifiedWriterEp"
+    "och\022#\n\rallocation_id\030\021 \001(\tR\014allocationId"
+    "\022#\n\rrelease_track\030\022 \001(\tR\014releaseTrack\022\027\n"
+    "\007pod_uid\030\023 \001(\tR\006podUid\022^\n\026player_combat_"
+    "factions\030\024 \003(\0132(.pandora.ds.v1.BattlePla"
+    "yerCombatFactionR\024playerCombatFactions\022("
+    "\n\020ever_had_players\030\025 \001(\010R\016everHadPlayers"
+    "\022C\n\013rating_mode\030\026 \001(\0162\".pandora.config.v"
+    "1.LevelRatingModeR\nratingMode\"\361\001\n\022Battle"
+    "DSCredential\022\020\n\003gen\030\001 \001(\004R\003gen\022\020\n\003jti\030\002 "
+    "\001(\tR\003jti\022\025\n\006exp_ms\030\003 \001(\004R\005expMs\022\020\n\003kid\030\004"
+    " \001(\tR\003kid\022!\n\014instance_uid\030\005 \001(\tR\013instanc"
+    "eUid\022%\n\016instance_epoch\030\006 \001(\rR\rinstanceEp"
+    "och\022!\n\014token_sha256\030\007 \001(\tR\013tokenSha256\022!"
+    "\n\014writer_epoch\030\010 \001(\rR\013writerEpoch\"\373\004\n\031Ba"
+    "ttleDSAuthStorageRecord\022\031\n\010match_id\030\001 \001("
+    "\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodNa"
+    "me\022!\n\014instance_uid\030\003 \001(\tR\013instanceUid\022%\n"
+    "\016instance_epoch\030\004 \001(\rR\rinstanceEpoch\0224\n\005"
+    "phase\030\005 \001(\0162\036.pandora.ds.v1.BattleAuthPh"
+    "aseR\005phase\0229\n\006active\030\006 \001(\0132!.pandora.ds."
+    "v1.BattleDSCredentialR\006active\022;\n\007pending"
+    "\030\007 \001(\0132!.pandora.ds.v1.BattleDSCredentia"
+    "lR\007pending\022$\n\016high_water_gen\030\010 \001(\004R\014high"
+    "WaterGen\022,\n\022pending_started_ms\030\t \001(\003R\020pe"
+    "ndingStartedMs\022!\n\014delivered_rv\030\n \001(\tR\013de"
+    "liveredRv\022\"\n\rupdated_at_ms\030\013 \001(\003R\013update"
+    "dAtMs\0222\n\025required_writer_epoch\030\014 \001(\rR\023re"
+    "quiredWriterEpoch\022#\n\rallocation_id\030\r \001(\t"
+    "R\014allocationId\0227\n\030last_active_heartbeat_"
+    "ms\030\016 \001(\003R\025lastActiveHeartbeatMs\"\344\005\n\"Batt"
+    "lePlayerDepartureStorageRecord\022!\n\014depart"
+    "ure_id\030\001 \001(\tR\013departureId\022\031\n\010match_id\030\002 "
+    "\001(\004R\007matchId\022\033\n\tplayer_id\030\003 \001(\004R\010playerI"
+    "d\022!\n\014operation_id\030\004 \001(\tR\013operationId\022\036\n\013"
+    "ds_pod_name\030\005 \001(\tR\tdsPodName\022%\n\016gameserv"
+    "er_uid\030\006 \001(\tR\rgameserverUid\022%\n\016instance_"
+    "epoch\030\007 \001(\rR\rinstanceEpoch\022#\n\rallocation"
+    "_id\030\010 \001(\tR\014allocationId\022B\n\006status\030\t \001(\0162"
+    "*.pandora.ds.v1.BattlePlayerDepartureSta"
+    "tusR\006status\022&\n\017requested_at_ms\030\n \001(\003R\rre"
+    "questedAtMs\022 \n\014issued_at_ms\030\013 \001(\003R\nissue"
+    "dAtMs\022$\n\016departed_at_ms\030\014 \001(\003R\014departedA"
+    "tMs\022+\n\021placement_version\030\r \001(\004R\020placemen"
+    "tVersion\0228\n\030source_placement_version\030\016 \001"
+    "(\004R\026sourcePlacementVersion\022.\n\023source_ope"
+    "ration_id\030\017 \001(\tR\021sourceOperationId\022,\n\022ac"
+    "knowledged_at_ms\030\020 \001(\003R\020acknowledgedAtMs"
+    "\0224\n\026acknowledged_census_id\030\021 \001(\tR\024acknow"
+    "ledgedCensusId\"\231\001\n)BattlePlayerDeparture"
+    "JournalStorageRecord\022\031\n\010match_id\030\001 \001(\004R\007"
+    "matchId\022Q\n\ndepartures\030\002 \003(\01321.pandora.ds"
+    ".v1.BattlePlayerDepartureStorageRecordR\n"
+    "departures\"\223\002\n#BattleInstanceTeardownSto"
     "rageRecord\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n"
-    "\013ds_pod_name\030\002 \001(\tR\tdsPodName\022\027\n\007ds_addr"
-    "\030\003 \001(\tR\006dsAddr\022\024\n\005state\030\004 \001(\tR\005state\022\035\n\n"
-    "player_ids\030\005 \003(\004R\tplayerIds\022\025\n\006map_id\030\006 "
-    "\001(\rR\005mapId\022\033\n\tgame_mode\030\007 \001(\tR\010gameMode\022"
-    "&\n\017allocated_at_ms\030\010 \001(\003R\rallocatedAtMs\022"
-    "*\n\021last_heartbeat_ms\030\t \001(\003R\017lastHeartbea"
-    "tMs\022!\n\014player_count\030\n \001(\005R\013playerCount\022$"
-    "\n\016empty_since_ms\030\013 \001(\003R\014emptySinceMs\022%\n\016"
-    "gameserver_uid\030\014 \001(\tR\rgameserverUid\022%\n\016i"
-    "nstance_epoch\030\r \001(\rR\rinstanceEpoch\022*\n\021la"
-    "st_verified_gen\030\016 \001(\004R\017lastVerifiedGen\022*"
-    "\n\021last_verified_jti\030\017 \001(\tR\017lastVerifiedJ"
-    "ti\022;\n\032last_verified_writer_epoch\030\020 \001(\rR\027"
-    "lastVerifiedWriterEpoch\022#\n\rallocation_id"
-    "\030\021 \001(\tR\014allocationId\022#\n\rrelease_track\030\022 "
-    "\001(\tR\014releaseTrack\022\027\n\007pod_uid\030\023 \001(\tR\006podU"
-    "id\022^\n\026player_combat_factions\030\024 \003(\0132(.pan"
-    "dora.ds.v1.BattlePlayerCombatFactionR\024pl"
-    "ayerCombatFactions\022(\n\020ever_had_players\030\025"
-    " \001(\010R\016everHadPlayers\"\361\001\n\022BattleDSCredent"
-    "ial\022\020\n\003gen\030\001 \001(\004R\003gen\022\020\n\003jti\030\002 \001(\tR\003jti\022"
-    "\025\n\006exp_ms\030\003 \001(\004R\005expMs\022\020\n\003kid\030\004 \001(\tR\003kid"
-    "\022!\n\014instance_uid\030\005 \001(\tR\013instanceUid\022%\n\016i"
-    "nstance_epoch\030\006 \001(\rR\rinstanceEpoch\022!\n\014to"
-    "ken_sha256\030\007 \001(\tR\013tokenSha256\022!\n\014writer_"
-    "epoch\030\010 \001(\rR\013writerEpoch\"\373\004\n\031BattleDSAut"
-    "hStorageRecord\022\031\n\010match_id\030\001 \001(\004R\007matchI"
-    "d\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\022!\n\014ins"
-    "tance_uid\030\003 \001(\tR\013instanceUid\022%\n\016instance"
-    "_epoch\030\004 \001(\rR\rinstanceEpoch\0224\n\005phase\030\005 \001"
-    "(\0162\036.pandora.ds.v1.BattleAuthPhaseR\005phas"
-    "e\0229\n\006active\030\006 \001(\0132!.pandora.ds.v1.Battle"
-    "DSCredentialR\006active\022;\n\007pending\030\007 \001(\0132!."
-    "pandora.ds.v1.BattleDSCredentialR\007pendin"
-    "g\022$\n\016high_water_gen\030\010 \001(\004R\014highWaterGen\022"
-    ",\n\022pending_started_ms\030\t \001(\003R\020pendingStar"
-    "tedMs\022!\n\014delivered_rv\030\n \001(\tR\013deliveredRv"
-    "\022\"\n\rupdated_at_ms\030\013 \001(\003R\013updatedAtMs\0222\n\025"
-    "required_writer_epoch\030\014 \001(\rR\023requiredWri"
-    "terEpoch\022#\n\rallocation_id\030\r \001(\tR\014allocat"
-    "ionId\0227\n\030last_active_heartbeat_ms\030\016 \001(\003R"
-    "\025lastActiveHeartbeatMs\"\344\005\n\"BattlePlayerD"
-    "epartureStorageRecord\022!\n\014departure_id\030\001 "
-    "\001(\tR\013departureId\022\031\n\010match_id\030\002 \001(\004R\007matc"
-    "hId\022\033\n\tplayer_id\030\003 \001(\004R\010playerId\022!\n\014oper"
-    "ation_id\030\004 \001(\tR\013operationId\022\036\n\013ds_pod_na"
-    "me\030\005 \001(\tR\tdsPodName\022%\n\016gameserver_uid\030\006 "
-    "\001(\tR\rgameserverUid\022%\n\016instance_epoch\030\007 \001"
-    "(\rR\rinstanceEpoch\022#\n\rallocation_id\030\010 \001(\t"
-    "R\014allocationId\022B\n\006status\030\t \001(\0162*.pandora"
-    ".ds.v1.BattlePlayerDepartureStatusR\006stat"
-    "us\022&\n\017requested_at_ms\030\n \001(\003R\rrequestedAt"
-    "Ms\022 \n\014issued_at_ms\030\013 \001(\003R\nissuedAtMs\022$\n\016"
-    "departed_at_ms\030\014 \001(\003R\014departedAtMs\022+\n\021pl"
-    "acement_version\030\r \001(\004R\020placementVersion\022"
-    "8\n\030source_placement_version\030\016 \001(\004R\026sourc"
-    "ePlacementVersion\022.\n\023source_operation_id"
-    "\030\017 \001(\tR\021sourceOperationId\022,\n\022acknowledge"
-    "d_at_ms\030\020 \001(\003R\020acknowledgedAtMs\0224\n\026ackno"
-    "wledged_census_id\030\021 \001(\tR\024acknowledgedCen"
-    "susId\"\231\001\n)BattlePlayerDepartureJournalSt"
-    "orageRecord\022\031\n\010match_id\030\001 \001(\004R\007matchId\022Q"
-    "\n\ndepartures\030\002 \003(\01321.pandora.ds.v1.Battl"
-    "ePlayerDepartureStorageRecordR\ndeparture"
-    "s\"\223\002\n#BattleInstanceTeardownStorageRecor"
-    "d\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_n"
-    "ame\030\002 \001(\tR\tdsPodName\022%\n\016gameserver_uid\030\003"
-    " \001(\tR\rgameserverUid\022%\n\016instance_epoch\030\004 "
-    "\001(\rR\rinstanceEpoch\022#\n\rallocation_id\030\005 \001("
-    "\tR\014allocationId\022%\n\017torn_down_at_ms\030\006 \001(\003"
-    "R\014tornDownAtMs\022\027\n\007pod_uid\030\007 \001(\tR\006podUid\""
-    "\375\002\n\"BattleAllocationAbortStorageRecord\022\031"
-    "\n\010match_id\030\001 \001(\004R\007matchId\0226\n\027allocation_"
-    "operation_id\030\002 \001(\tR\025allocationOperationI"
-    "d\022\036\n\013ds_pod_name\030\003 \001(\tR\tdsPodName\022%\n\016gam"
-    "eserver_uid\030\004 \001(\tR\rgameserverUid\022%\n\016inst"
-    "ance_epoch\030\005 \001(\rR\rinstanceEpoch\022#\n\ralloc"
-    "ation_id\030\006 \001(\tR\014allocationId\022#\n\rrelease_"
-    "track\030\007 \001(\tR\014releaseTrack\022&\n\017requested_a"
-    "t_ms\030\010 \001(\003R\rrequestedAtMs\022$\n\016released_at"
-    "_ms\030\t \001(\003R\014releasedAtMs\"\343\002\n/BattleAlloca"
-    "tionLifecyclePublishedStorageRecord\022\031\n\010m"
-    "atch_id\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_name\030\002 "
-    "\001(\tR\tdsPodName\022%\n\016gameserver_uid\030\003 \001(\tR\r"
-    "gameserverUid\022%\n\016instance_epoch\030\004 \001(\rR\ri"
-    "nstanceEpoch\022#\n\rallocation_id\030\005 \001(\tR\014all"
-    "ocationId\022#\n\rrelease_track\030\006 \001(\tR\014releas"
-    "eTrack\0225\n\005phase\030\007 \001(\0162\037.pandora.ds.v1.DS"
-    "LifecyclePhaseR\005phase\022&\n\017published_at_ms"
-    "\030\010 \001(\003R\rpublishedAtMs\"\354\001\n\020DSLifecycleEve"
-    "nt\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_"
-    "name\030\002 \001(\tR\tdsPodName\0225\n\005phase\030\003 \001(\0162\037.p"
-    "andora.ds.v1.DSLifecyclePhaseR\005phase\022\035\n\n"
-    "player_ids\030\004 \003(\004R\tplayerIds\022\025\n\006map_id\030\005 "
-    "\001(\rR\005mapId\022\033\n\tgame_mode\030\006 \001(\tR\010gameMode\022"
-    "\023\n\005ts_ms\030\007 \001(\003R\004tsMs\"d\n\031BattlePlayerComb"
-    "atFaction\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022*"
-    "\n\021combat_faction_id\030\002 \001(\rR\017combatFaction"
-    "Id*\333\001\n\033BattlePlayerDepartureStatus\022.\n*BA"
-    "TTLE_PLAYER_DEPARTURE_STATUS_UNSPECIFIED"
-    "\020\000\022*\n&BATTLE_PLAYER_DEPARTURE_STATUS_PEN"
-    "DING\020\001\022+\n\'BATTLE_PLAYER_DEPARTURE_STATUS"
-    "_DEPARTED\020\002\0223\n/BATTLE_PLAYER_DEPARTURE_S"
-    "TATUS_SOURCE_TORN_DOWN\020\003*\331\001\n\017BattleAuthP"
-    "hase\022!\n\035BATTLE_AUTH_PHASE_UNSPECIFIED\020\000\022"
-    "\037\n\033BATTLE_AUTH_PHASE_BOOTSTRAP\020\001\022\034\n\030BATT"
-    "LE_AUTH_PHASE_ACTIVE\020\002\022\036\n\032BATTLE_AUTH_PH"
-    "ASE_ROTATING\020\003\022!\n\035BATTLE_AUTH_PHASE_QUAR"
-    "ANTINED\020\004\022!\n\035BATTLE_AUTH_PHASE_TERMINATI"
-    "NG\020\005*\233\001\n\020DSLifecyclePhase\022\"\n\036DS_LIFECYCL"
-    "E_PHASE_UNSPECIFIED\020\000\022 \n\034DS_LIFECYCLE_PH"
-    "ASE_ALLOCATED\020\001\022\037\n\033DS_LIFECYCLE_PHASE_RE"
-    "LEASED\020\002\022 \n\034DS_LIFECYCLE_PHASE_ABANDONED"
-    "\020\0032\310\005\n\022DSAllocatorService\022]\n\016AllocateBat"
-    "tle\022$.pandora.ds.v1.AllocateBattleReques"
-    "t\032%.pandora.ds.v1.AllocateBattleResponse"
-    "\022l\n\023ResolveBattleTarget\022).pandora.ds.v1."
-    "ResolveBattleTargetRequest\032*.pandora.ds."
-    "v1.ResolveBattleTargetResponse\022Z\n\rReleas"
-    "eBattle\022#.pandora.ds.v1.ReleaseBattleReq"
-    "uest\032$.pandora.ds.v1.ReleaseBattleRespon"
-    "se\022o\n\024AbortPreactiveBattle\022*.pandora.ds."
-    "v1.AbortPreactiveBattleRequest\032+.pandora"
-    ".ds.v1.AbortPreactiveBattleResponse\022r\n\025E"
-    "nsurePlayerDeparture\022+.pandora.ds.v1.Ens"
-    "urePlayerDepartureRequest\032,.pandora.ds.v"
-    "1.EnsurePlayerDepartureResponse\022N\n\tHeart"
-    "beat\022\037.pandora.ds.v1.HeartbeatRequest\032 ."
-    "pandora.ds.v1.HeartbeatResponse\022T\n\013ListB"
-    "attles\022!.pandora.ds.v1.ListBattlesReques"
-    "t\032\".pandora.ds.v1.ListBattlesResponseb\006p"
-    "roto3"
+    "\013ds_pod_name\030\002 \001(\tR\tdsPodName\022%\n\016gameser"
+    "ver_uid\030\003 \001(\tR\rgameserverUid\022%\n\016instance"
+    "_epoch\030\004 \001(\rR\rinstanceEpoch\022#\n\rallocatio"
+    "n_id\030\005 \001(\tR\014allocationId\022%\n\017torn_down_at"
+    "_ms\030\006 \001(\003R\014tornDownAtMs\022\027\n\007pod_uid\030\007 \001(\t"
+    "R\006podUid\"\375\002\n\"BattleAllocationAbortStorag"
+    "eRecord\022\031\n\010match_id\030\001 \001(\004R\007matchId\0226\n\027al"
+    "location_operation_id\030\002 \001(\tR\025allocationO"
+    "perationId\022\036\n\013ds_pod_name\030\003 \001(\tR\tdsPodNa"
+    "me\022%\n\016gameserver_uid\030\004 \001(\tR\rgameserverUi"
+    "d\022%\n\016instance_epoch\030\005 \001(\rR\rinstanceEpoch"
+    "\022#\n\rallocation_id\030\006 \001(\tR\014allocationId\022#\n"
+    "\rrelease_track\030\007 \001(\tR\014releaseTrack\022&\n\017re"
+    "quested_at_ms\030\010 \001(\003R\rrequestedAtMs\022$\n\016re"
+    "leased_at_ms\030\t \001(\003R\014releasedAtMs\"\343\002\n/Bat"
+    "tleAllocationLifecyclePublishedStorageRe"
+    "cord\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_po"
+    "d_name\030\002 \001(\tR\tdsPodName\022%\n\016gameserver_ui"
+    "d\030\003 \001(\tR\rgameserverUid\022%\n\016instance_epoch"
+    "\030\004 \001(\rR\rinstanceEpoch\022#\n\rallocation_id\030\005"
+    " \001(\tR\014allocationId\022#\n\rrelease_track\030\006 \001("
+    "\tR\014releaseTrack\0225\n\005phase\030\007 \001(\0162\037.pandora"
+    ".ds.v1.DSLifecyclePhaseR\005phase\022&\n\017publis"
+    "hed_at_ms\030\010 \001(\003R\rpublishedAtMs\"\354\001\n\020DSLif"
+    "ecycleEvent\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036"
+    "\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\0225\n\005phase\030"
+    "\003 \001(\0162\037.pandora.ds.v1.DSLifecyclePhaseR\005"
+    "phase\022\035\n\nplayer_ids\030\004 \003(\004R\tplayerIds\022\025\n\006"
+    "map_id\030\005 \001(\rR\005mapId\022\033\n\tgame_mode\030\006 \001(\tR\010"
+    "gameMode\022\023\n\005ts_ms\030\007 \001(\003R\004tsMs\"d\n\031BattleP"
+    "layerCombatFaction\022\033\n\tplayer_id\030\001 \001(\004R\010p"
+    "layerId\022*\n\021combat_faction_id\030\002 \001(\rR\017comb"
+    "atFactionId*\333\001\n\033BattlePlayerDepartureSta"
+    "tus\022.\n*BATTLE_PLAYER_DEPARTURE_STATUS_UN"
+    "SPECIFIED\020\000\022*\n&BATTLE_PLAYER_DEPARTURE_S"
+    "TATUS_PENDING\020\001\022+\n\'BATTLE_PLAYER_DEPARTU"
+    "RE_STATUS_DEPARTED\020\002\0223\n/BATTLE_PLAYER_DE"
+    "PARTURE_STATUS_SOURCE_TORN_DOWN\020\003*\331\001\n\017Ba"
+    "ttleAuthPhase\022!\n\035BATTLE_AUTH_PHASE_UNSPE"
+    "CIFIED\020\000\022\037\n\033BATTLE_AUTH_PHASE_BOOTSTRAP\020"
+    "\001\022\034\n\030BATTLE_AUTH_PHASE_ACTIVE\020\002\022\036\n\032BATTL"
+    "E_AUTH_PHASE_ROTATING\020\003\022!\n\035BATTLE_AUTH_P"
+    "HASE_QUARANTINED\020\004\022!\n\035BATTLE_AUTH_PHASE_"
+    "TERMINATING\020\005*\233\001\n\020DSLifecyclePhase\022\"\n\036DS"
+    "_LIFECYCLE_PHASE_UNSPECIFIED\020\000\022 \n\034DS_LIF"
+    "ECYCLE_PHASE_ALLOCATED\020\001\022\037\n\033DS_LIFECYCLE"
+    "_PHASE_RELEASED\020\002\022 \n\034DS_LIFECYCLE_PHASE_"
+    "ABANDONED\020\0032\310\005\n\022DSAllocatorService\022]\n\016Al"
+    "locateBattle\022$.pandora.ds.v1.AllocateBat"
+    "tleRequest\032%.pandora.ds.v1.AllocateBattl"
+    "eResponse\022l\n\023ResolveBattleTarget\022).pando"
+    "ra.ds.v1.ResolveBattleTargetRequest\032*.pa"
+    "ndora.ds.v1.ResolveBattleTargetResponse\022"
+    "Z\n\rReleaseBattle\022#.pandora.ds.v1.Release"
+    "BattleRequest\032$.pandora.ds.v1.ReleaseBat"
+    "tleResponse\022o\n\024AbortPreactiveBattle\022*.pa"
+    "ndora.ds.v1.AbortPreactiveBattleRequest\032"
+    "+.pandora.ds.v1.AbortPreactiveBattleResp"
+    "onse\022r\n\025EnsurePlayerDeparture\022+.pandora."
+    "ds.v1.EnsurePlayerDepartureRequest\032,.pan"
+    "dora.ds.v1.EnsurePlayerDepartureResponse"
+    "\022N\n\tHeartbeat\022\037.pandora.ds.v1.HeartbeatR"
+    "equest\032 .pandora.ds.v1.HeartbeatResponse"
+    "\022T\n\013ListBattles\022!.pandora.ds.v1.ListBatt"
+    "lesRequest\032\".pandora.ds.v1.ListBattlesRe"
+    "sponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_deps[1] = {
+    descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_deps[2] = {
         &::descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto,
+        &::descriptor_table_pandora_2fconfig_2fv1_2flevel_2eproto,
 };
 static ::absl::once_flag descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto = {
     false,
     false,
-    9525,
+    9694,
     descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto,
     "pandora/ds/v1/allocator.proto",
     &descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_once,
     descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_deps,
-    1,
+    2,
     26,
     schemas,
     file_message_globals,
@@ -6878,9 +6896,9 @@ AllocateBattleRequest::AllocateBattleRequest(
                offsetof(Impl_, match_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, match_id_),
-           offsetof(Impl_, map_id_) -
+           offsetof(Impl_, rating_mode_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::map_id_));
+               sizeof(Impl_::rating_mode_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.ds.v1.AllocateBattleRequest)
 }
@@ -6906,9 +6924,9 @@ inline void AllocateBattleRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, match_id_),
            0,
-           offsetof(Impl_, map_id_) -
+           offsetof(Impl_, rating_mode_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::map_id_));
+               sizeof(Impl_::rating_mode_));
 }
 AllocateBattleRequest::~AllocateBattleRequest() {
   // @@protoc_insertion_point(destructor:pandora.ds.v1.AllocateBattleRequest)
@@ -6967,11 +6985,11 @@ PROTOBUF_NOINLINE void AllocateBattleRequest::Clear() {
       _impl_.game_mode_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
     ::memset(&_impl_.match_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.map_id_) -
-        reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.map_id_));
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+        reinterpret_cast<char*>(&_impl_.rating_mode_) -
+        reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.rating_mode_));
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       _impl_.player_combat_factions_.Clear();
     }
   }
@@ -7038,7 +7056,7 @@ PROTOBUF_NOINLINE void AllocateBattleRequest::Clear() {
   }
 
   // repeated .pandora.ds.v1.BattlePlayerCombatFaction player_combat_factions = 10 [json_name = "playerCombatFactions"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_player_combat_factions_size());
          i < n; i++) {
@@ -7047,6 +7065,15 @@ PROTOBUF_NOINLINE void AllocateBattleRequest::Clear() {
           ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
               10, repfield, repfield.GetCachedSize(),
               target, stream);
+    }
+  }
+
+  // .pandora.config.v1.LevelRatingMode rating_mode = 11 [json_name = "ratingMode"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_rating_mode() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          11, this_._internal_rating_mode(), target);
     }
   }
 
@@ -7075,7 +7102,7 @@ PROTOBUF_NOINLINE void AllocateBattleRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // repeated uint64 player_ids = 2 [json_name = "playerIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -7104,8 +7131,15 @@ PROTOBUF_NOINLINE void AllocateBattleRequest::Clear() {
             this_._internal_map_id());
       }
     }
-    // repeated .pandora.ds.v1.BattlePlayerCombatFaction player_combat_factions = 10 [json_name = "playerCombatFactions"];
+    // .pandora.config.v1.LevelRatingMode rating_mode = 11 [json_name = "ratingMode"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_rating_mode() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_rating_mode());
+      }
+    }
+    // repeated .pandora.ds.v1.BattlePlayerCombatFaction player_combat_factions = 10 [json_name = "playerCombatFactions"];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       total_size += 1UL * this_._internal_player_combat_factions_size();
       for (const auto& msg : this_._internal_player_combat_factions()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
@@ -7130,7 +7164,7 @@ void AllocateBattleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
     }
@@ -7154,6 +7188,11 @@ void AllocateBattleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_rating_mode() != 0) {
+        _this->_impl_.rating_mode_ = from._impl_.rating_mode_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       _this->_internal_mutable_player_combat_factions()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_player_combat_factions());
@@ -7181,8 +7220,8 @@ void AllocateBattleRequest::InternalSwap(AllocateBattleRequest* PROTOBUF_RESTRIC
   _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_, &other->_impl_.game_mode_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AllocateBattleRequest, _impl_.map_id_)
-      + sizeof(AllocateBattleRequest::_impl_.map_id_)
+      PROTOBUF_FIELD_OFFSET(AllocateBattleRequest, _impl_.rating_mode_)
+      + sizeof(AllocateBattleRequest::_impl_.rating_mode_)
       - PROTOBUF_FIELD_OFFSET(AllocateBattleRequest, _impl_.match_id_)>(
           reinterpret_cast<char*>(&_impl_.match_id_),
           reinterpret_cast<char*>(&other->_impl_.match_id_));
@@ -12068,9 +12107,9 @@ BattleStorageRecord::BattleStorageRecord(
                offsetof(Impl_, match_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, match_id_),
-           offsetof(Impl_, ever_had_players_) -
+           offsetof(Impl_, rating_mode_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::ever_had_players_));
+               sizeof(Impl_::rating_mode_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.ds.v1.BattleStorageRecord)
 }
@@ -12104,9 +12143,9 @@ inline void BattleStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, match_id_),
            0,
-           offsetof(Impl_, ever_had_players_) -
+           offsetof(Impl_, rating_mode_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::ever_had_players_));
+               sizeof(Impl_::rating_mode_));
 }
 BattleStorageRecord::~BattleStorageRecord() {
   // @@protoc_insertion_point(destructor:pandora.ds.v1.BattleStorageRecord)
@@ -12207,10 +12246,10 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.last_heartbeat_ms_) -
         reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.last_heartbeat_ms_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     ::memset(&_impl_.empty_since_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.ever_had_players_) -
-        reinterpret_cast<char*>(&_impl_.empty_since_ms_)) + sizeof(_impl_.ever_had_players_));
+        reinterpret_cast<char*>(&_impl_.rating_mode_) -
+        reinterpret_cast<char*>(&_impl_.empty_since_ms_)) + sizeof(_impl_.rating_mode_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -12439,6 +12478,15 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
     }
   }
 
+  // .pandora.config.v1.LevelRatingMode rating_mode = 22 [json_name = "ratingMode"];
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_rating_mode() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          22, this_._internal_rating_mode(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -12580,7 +12628,7 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     // int64 empty_since_ms = 11 [json_name = "emptySinceMs"];
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_empty_since_ms() != 0) {
@@ -12613,6 +12661,13 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (this_._internal_ever_had_players() != 0) {
         total_size += 3;
+      }
+    }
+    // .pandora.config.v1.LevelRatingMode rating_mode = 22 [json_name = "ratingMode"];
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_rating_mode() != 0) {
+        total_size += 2 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_rating_mode());
       }
     }
   }
@@ -12752,7 +12807,7 @@ void BattleStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_empty_since_ms() != 0) {
         _this->_impl_.empty_since_ms_ = from._impl_.empty_since_ms_;
@@ -12776,6 +12831,11 @@ void BattleStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_ever_had_players() != 0) {
         _this->_impl_.ever_had_players_ = from._impl_.ever_had_players_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_rating_mode() != 0) {
+        _this->_impl_.rating_mode_ = from._impl_.rating_mode_;
       }
     }
   }
@@ -12810,8 +12870,8 @@ void BattleStorageRecord::InternalSwap(BattleStorageRecord* PROTOBUF_RESTRICT PR
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.release_track_, &other->_impl_.release_track_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.pod_uid_, &other->_impl_.pod_uid_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.ever_had_players_)
-      + sizeof(BattleStorageRecord::_impl_.ever_had_players_)
+      PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.rating_mode_)
+      + sizeof(BattleStorageRecord::_impl_.rating_mode_)
       - PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.match_id_)>(
           reinterpret_cast<char*>(&_impl_.match_id_),
           reinterpret_cast<char*>(&other->_impl_.match_id_));

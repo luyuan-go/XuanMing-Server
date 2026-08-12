@@ -32,6 +32,7 @@
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "pandora/common/v1/errcode.pb.h"
+#include "pandora/config/v1/level.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -6944,6 +6945,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     kInstanceEpochFieldNumber = 13,
     kLastVerifiedWriterEpochFieldNumber = 16,
     kEverHadPlayersFieldNumber = 21,
+    kRatingModeFieldNumber = 22,
   };
   // repeated uint64 player_ids = 5 [json_name = "playerIds"];
   [[nodiscard]] int player_ids_size()
@@ -7221,11 +7223,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
   void _internal_set_ever_had_players(bool value);
 
   public:
+  // .pandora.config.v1.LevelRatingMode rating_mode = 22 [json_name = "ratingMode"];
+  void clear_rating_mode() ;
+  [[nodiscard]] ::pandora::config::v1::LevelRatingMode rating_mode() const;
+  void set_rating_mode(::pandora::config::v1::LevelRatingMode value);
+
+  private:
+  ::pandora::config::v1::LevelRatingMode _internal_rating_mode() const;
+  void _internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 21,
+      ::google::protobuf::internal::TcParseTable<5, 22,
                           1, 154,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7276,6 +7288,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     ::uint32_t instance_epoch_;
     ::uint32_t last_verified_writer_epoch_;
     bool ever_had_players_;
+    int rating_mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8048,6 +8061,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : publi
     kGameModeFieldNumber = 4,
     kMatchIdFieldNumber = 1,
     kMapIdFieldNumber = 3,
+    kRatingModeFieldNumber = 11,
     kPlayerCombatFactionsFieldNumber = 10,
   };
   // repeated uint64 player_ids = 2 [json_name = "playerIds"];
@@ -8105,6 +8119,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : publi
   void _internal_set_map_id(::uint32_t value);
 
   public:
+  // .pandora.config.v1.LevelRatingMode rating_mode = 11 [json_name = "ratingMode"];
+  void clear_rating_mode() ;
+  [[nodiscard]] ::pandora::config::v1::LevelRatingMode rating_mode() const;
+  void set_rating_mode(::pandora::config::v1::LevelRatingMode value);
+
+  private:
+  ::pandora::config::v1::LevelRatingMode _internal_rating_mode() const;
+  void _internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value);
+
+  public:
   // repeated .pandora.ds.v1.BattlePlayerCombatFaction player_combat_factions = 10 [json_name = "playerCombatFactions"];
   [[nodiscard]] int player_combat_factions_size()
       const;
@@ -8130,7 +8154,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : publi
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 5,
+      ::google::protobuf::internal::TcParseTable<2, 6,
                           1, 53,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -8164,6 +8188,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : publi
     ::google::protobuf::internal::ArenaStringPtr game_mode_;
     ::uint64_t match_id_;
     ::uint32_t map_id_;
+    int rating_mode_;
     ::google::protobuf::RepeatedPtrField< ::pandora::ds::v1::BattlePlayerCombatFaction > player_combat_factions_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -8808,7 +8833,7 @@ inline int AllocateBattleRequest::player_combat_factions_size() const {
 inline void AllocateBattleRequest::clear_player_combat_factions() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_combat_factions_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline const ::pandora::ds::v1::BattlePlayerCombatFaction& AllocateBattleRequest::player_combat_factions(int index) const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -8826,7 +8851,7 @@ inline ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL AllocateBa
   ::pandora::ds::v1::BattlePlayerCombatFaction* _add =
       _internal_mutable_player_combat_factions()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_add:pandora.ds.v1.AllocateBattleRequest.player_combat_factions)
   return _add;
 }
@@ -8837,7 +8862,7 @@ inline const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlaye
 }
 inline ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL
 AllocateBattleRequest::mutable_player_combat_factions() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_mutable_list:pandora.ds.v1.AllocateBattleRequest.player_combat_factions)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_player_combat_factions();
@@ -8851,6 +8876,30 @@ inline ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerComba
 AllocateBattleRequest::_internal_mutable_player_combat_factions() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.player_combat_factions_;
+}
+
+// .pandora.config.v1.LevelRatingMode rating_mode = 11 [json_name = "ratingMode"];
+inline void AllocateBattleRequest::clear_rating_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::pandora::config::v1::LevelRatingMode AllocateBattleRequest::rating_mode() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.AllocateBattleRequest.rating_mode)
+  return _internal_rating_mode();
+}
+inline void AllocateBattleRequest::set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
+  _internal_set_rating_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.AllocateBattleRequest.rating_mode)
+}
+inline ::pandora::config::v1::LevelRatingMode AllocateBattleRequest::_internal_rating_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::config::v1::LevelRatingMode>(_impl_.rating_mode_);
+}
+inline void AllocateBattleRequest::_internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_mode_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -13390,6 +13439,30 @@ inline bool BattleStorageRecord::_internal_ever_had_players() const {
 inline void BattleStorageRecord::_internal_set_ever_had_players(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ever_had_players_ = value;
+}
+
+// .pandora.config.v1.LevelRatingMode rating_mode = 22 [json_name = "ratingMode"];
+inline void BattleStorageRecord::clear_rating_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::pandora::config::v1::LevelRatingMode BattleStorageRecord::rating_mode() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.rating_mode)
+  return _internal_rating_mode();
+}
+inline void BattleStorageRecord::set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
+  _internal_set_rating_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.rating_mode)
+}
+inline ::pandora::config::v1::LevelRatingMode BattleStorageRecord::_internal_rating_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::config::v1::LevelRatingMode>(_impl_.rating_mode_);
+}
+inline void BattleStorageRecord::_internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_mode_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -233,11 +233,11 @@ constexpr MissionRewardItem::ParseTableT_ MissionRewardItem::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -247,14 +247,19 @@ constexpr MissionRewardItem::ParseTableT_ MissionRewardItem::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::mission::v1::MissionRewardItem>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 count = 2 [json_name = "count"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MissionRewardItem, _impl_.count_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.count_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 item_config_id = 1 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MissionRewardItem, _impl_.item_config_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.item_config_id_)}},
+      // uint32 count = 2 [json_name = "count"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MissionRewardItem, _impl_.count_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.count_)}},
+      // optional bool equipment = 3 [json_name = "equipment"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(MissionRewardItem, _impl_.equipment_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.equipment_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -262,6 +267,8 @@ constexpr MissionRewardItem::ParseTableT_ MissionRewardItem::InternalGeneratePar
       {PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.item_config_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 count = 2 [json_name = "count"];
       {PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.count_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // optional bool equipment = 3 [json_name = "equipment"];
+      {PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.equipment_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -275,7 +282,8 @@ inline constexpr MissionRewardItem::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         item_config_id_{0u},
-        count_{0u} {}
+        count_{0u},
+        equipment_{false} {}
 
 template <typename>
 constexpr MissionRewardItem::MissionRewardItem(::_pbi::ConstantInitialized,
@@ -3097,11 +3105,13 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::mission::v1::MissionRewardItem, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::mission::v1::MissionRewardItem, _impl_.item_config_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::mission::v1::MissionRewardItem, _impl_.count_),
+        PROTOBUF_FIELD_OFFSET(::pandora::mission::v1::MissionRewardItem, _impl_.equipment_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::mission::v1::MissionRewardStorageRecord, _impl_._has_bits_),
         5, // hasbit index offset
@@ -3131,7 +3141,7 @@ static const ::_pbi::MigrationSchema
         {99, sizeof(::pandora::mission::v1::MissionUpdateEvent)},
         {110, sizeof(::pandora::mission::v1::MissionProgressStorageRecord)},
         {115, sizeof(::pandora::mission::v1::MissionRewardItem)},
-        {122, sizeof(::pandora::mission::v1::MissionRewardStorageRecord)},
+        {124, sizeof(::pandora::mission::v1::MissionRewardStorageRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3208,44 +3218,45 @@ const char descriptor_table_protodef_pandora_2fmission_2fv1_2fmission_2eproto[] 
     "pted\030\003 \003(\0132!.pandora.mission.v1.ActiveMi"
     "ssionR\014autoAccepted\022\023\n\005ts_ms\030\004 \001(\004R\004tsMs"
     "\":\n\034MissionProgressStorageRecord\022\032\n\010prog"
-    "ress\030\001 \003(\rR\010progress\"O\n\021MissionRewardIte"
-    "m\022$\n\016item_config_id\030\001 \001(\rR\014itemConfigId\022"
-    "\024\n\005count\030\002 \001(\rR\005count\"k\n\032MissionRewardSt"
-    "orageRecord\022;\n\005items\030\001 \003(\0132%.pandora.mis"
-    "sion.v1.MissionRewardItemR\005items\022\020\n\003exp\030"
-    "\002 \001(\004R\003exp*\316\003\n\030MissionConditionCategory\022"
-    "*\n&MISSION_CONDITION_CATEGORY_UNSPECIFIE"
-    "D\020\000\022+\n\'MISSION_CONDITION_CATEGORY_KILL_M"
-    "ONSTER\020\001\022\'\n#MISSION_CONDITION_CATEGORY_T"
-    "ALK_NPC\020\002\0221\n-MISSION_CONDITION_CATEGORY_"
-    "COMPLETE_CONDITION\020\003\022\'\n#MISSION_CONDITIO"
-    "N_CATEGORY_USE_ITEM\020\004\022\'\n#MISSION_CONDITI"
-    "ON_CATEGORY_INTERACT\020\005\022\'\n#MISSION_CONDIT"
-    "ION_CATEGORY_LEVEL_UP\020\006\022%\n!MISSION_CONDI"
-    "TION_CATEGORY_CUSTOM\020\007\022/\n+MISSION_CONDIT"
-    "ION_CATEGORY_COMPLETE_MISSION\020\010\022*\n&MISSI"
-    "ON_CONDITION_CATEGORY_PICKUP_ITEM\020\t*y\n\022M"
-    "issionRewardState\022\035\n\031MISSION_REWARD_STAT"
-    "E_NONE\020\000\022\"\n\036MISSION_REWARD_STATE_CLAIMAB"
-    "LE\020\001\022 \n\034MISSION_REWARD_STATE_CLAIMED\020\0022\244"
-    "\005\n\016MissionService\022a\n\014ListMissions\022\'.pand"
-    "ora.mission.v1.ListMissionsRequest\032(.pan"
-    "dora.mission.v1.ListMissionsResponse\022d\n\r"
-    "AcceptMission\022(.pandora.mission.v1.Accep"
-    "tMissionRequest\032).pandora.mission.v1.Acc"
-    "eptMissionResponse\022g\n\016AbandonMission\022).p"
-    "andora.mission.v1.AbandonMissionRequest\032"
-    "*.pandora.mission.v1.AbandonMissionRespo"
-    "nse\022s\n\022ClaimMissionReward\022-.pandora.miss"
-    "ion.v1.ClaimMissionRewardRequest\032..pando"
-    "ra.mission.v1.ClaimMissionRewardResponse"
-    "\022s\n\022ReportMissionFacts\022-.pandora.mission"
-    ".v1.ReportMissionFactsRequest\032..pandora."
-    "mission.v1.ReportMissionFactsResponse\022v\n"
-    "\023CompleteAllMissions\022..pandora.mission.v"
-    "1.CompleteAllMissionsRequest\032/.pandora.m"
-    "ission.v1.CompleteAllMissionsResponseb\006p"
-    "roto3"
+    "ress\030\001 \003(\rR\010progress\"\200\001\n\021MissionRewardIt"
+    "em\022$\n\016item_config_id\030\001 \001(\rR\014itemConfigId"
+    "\022\024\n\005count\030\002 \001(\rR\005count\022!\n\tequipment\030\003 \001("
+    "\010H\000R\tequipment\210\001\001B\014\n\n_equipment\"k\n\032Missi"
+    "onRewardStorageRecord\022;\n\005items\030\001 \003(\0132%.p"
+    "andora.mission.v1.MissionRewardItemR\005ite"
+    "ms\022\020\n\003exp\030\002 \001(\004R\003exp*\316\003\n\030MissionConditio"
+    "nCategory\022*\n&MISSION_CONDITION_CATEGORY_"
+    "UNSPECIFIED\020\000\022+\n\'MISSION_CONDITION_CATEG"
+    "ORY_KILL_MONSTER\020\001\022\'\n#MISSION_CONDITION_"
+    "CATEGORY_TALK_NPC\020\002\0221\n-MISSION_CONDITION"
+    "_CATEGORY_COMPLETE_CONDITION\020\003\022\'\n#MISSIO"
+    "N_CONDITION_CATEGORY_USE_ITEM\020\004\022\'\n#MISSI"
+    "ON_CONDITION_CATEGORY_INTERACT\020\005\022\'\n#MISS"
+    "ION_CONDITION_CATEGORY_LEVEL_UP\020\006\022%\n!MIS"
+    "SION_CONDITION_CATEGORY_CUSTOM\020\007\022/\n+MISS"
+    "ION_CONDITION_CATEGORY_COMPLETE_MISSION\020"
+    "\010\022*\n&MISSION_CONDITION_CATEGORY_PICKUP_I"
+    "TEM\020\t*y\n\022MissionRewardState\022\035\n\031MISSION_R"
+    "EWARD_STATE_NONE\020\000\022\"\n\036MISSION_REWARD_STA"
+    "TE_CLAIMABLE\020\001\022 \n\034MISSION_REWARD_STATE_C"
+    "LAIMED\020\0022\244\005\n\016MissionService\022a\n\014ListMissi"
+    "ons\022\'.pandora.mission.v1.ListMissionsReq"
+    "uest\032(.pandora.mission.v1.ListMissionsRe"
+    "sponse\022d\n\rAcceptMission\022(.pandora.missio"
+    "n.v1.AcceptMissionRequest\032).pandora.miss"
+    "ion.v1.AcceptMissionResponse\022g\n\016AbandonM"
+    "ission\022).pandora.mission.v1.AbandonMissi"
+    "onRequest\032*.pandora.mission.v1.AbandonMi"
+    "ssionResponse\022s\n\022ClaimMissionReward\022-.pa"
+    "ndora.mission.v1.ClaimMissionRewardReque"
+    "st\032..pandora.mission.v1.ClaimMissionRewa"
+    "rdResponse\022s\n\022ReportMissionFacts\022-.pando"
+    "ra.mission.v1.ReportMissionFactsRequest\032"
+    "..pandora.mission.v1.ReportMissionFactsR"
+    "esponse\022v\n\023CompleteAllMissions\022..pandora"
+    ".mission.v1.CompleteAllMissionsRequest\032/"
+    ".pandora.mission.v1.CompleteAllMissionsR"
+    "esponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fmission_2fv1_2fmission_2eproto_deps[1] = {
@@ -3255,7 +3266,7 @@ static ::absl::once_flag descriptor_table_pandora_2fmission_2fv1_2fmission_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fmission_2fv1_2fmission_2eproto = {
     false,
     false,
-    3525,
+    3575,
     descriptor_table_protodef_pandora_2fmission_2fv1_2fmission_2eproto,
     "pandora/mission/v1/mission.proto",
     &descriptor_table_pandora_2fmission_2fv1_2fmission_2eproto_once,
@@ -7210,9 +7221,9 @@ inline void MissionRewardItem::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena)
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, item_config_id_),
            0,
-           offsetof(Impl_, count_) -
+           offsetof(Impl_, equipment_) -
                offsetof(Impl_, item_config_id_) +
-               sizeof(Impl_::count_));
+               sizeof(Impl_::equipment_));
 }
 MissionRewardItem::~MissionRewardItem() {
   // @@protoc_insertion_point(destructor:pandora.mission.v1.MissionRewardItem)
@@ -7262,10 +7273,10 @@ PROTOBUF_NOINLINE void MissionRewardItem::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     ::memset(&_impl_.item_config_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.count_) -
-        reinterpret_cast<char*>(&_impl_.item_config_id_)) + sizeof(_impl_.count_));
+        reinterpret_cast<char*>(&_impl_.equipment_) -
+        reinterpret_cast<char*>(&_impl_.item_config_id_)) + sizeof(_impl_.equipment_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -7308,6 +7319,13 @@ PROTOBUF_NOINLINE void MissionRewardItem::Clear() {
     }
   }
 
+  // optional bool equipment = 3 [json_name = "equipment"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(
+        3, this_._internal_equipment(), target);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7333,6 +7351,7 @@ PROTOBUF_NOINLINE void MissionRewardItem::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
+  total_size += static_cast<bool>(0x00000004U & cached_has_bits) * 2;
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint32 item_config_id = 1 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
@@ -7366,7 +7385,7 @@ void MissionRewardItem::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_item_config_id() != 0) {
         _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
@@ -7376,6 +7395,9 @@ void MissionRewardItem::MergeImpl(::google::protobuf::MessageLite& to_msg,
       if (from._internal_count() != 0) {
         _this->_impl_.count_ = from._impl_.count_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _this->_impl_.equipment_ = from._impl_.equipment_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -7396,8 +7418,8 @@ void MissionRewardItem::InternalSwap(MissionRewardItem* PROTOBUF_RESTRICT PROTOB
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.count_)
-      + sizeof(MissionRewardItem::_impl_.count_)
+      PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.equipment_)
+      + sizeof(MissionRewardItem::_impl_.equipment_)
       - PROTOBUF_FIELD_OFFSET(MissionRewardItem, _impl_.item_config_id_)>(
           reinterpret_cast<char*>(&_impl_.item_config_id_),
           reinterpret_cast<char*>(&other->_impl_.item_config_id_));

@@ -7004,11 +7004,16 @@ function Build-Images-InContainer {
     $goproxy = $env:PANDORA_GOPROXY
     if (-not $goproxy) {
         if ($env:GOPROXY -and $env:GOPROXY -notmatch 'proxy\.golang\.org') { $goproxy = $env:GOPROXY }
-        else { $goproxy = 'https://goproxy.cn,direct' }
+        # 分隔符是 `|` 不是 `,`:逗号只在代理返回 404/410 时才退到下一个源,网络层错误
+        # (unexpected EOF / 超时 / 连接重置)直接失败,后面的 direct 根本轮不到。
+        # 竖线才是「任何错误都回退」。同处注释见 deploy/services/Dockerfile。
+        else { $goproxy = 'https://goproxy.cn|https://proxy.golang.org|direct' }
     }
     Write-Info "  基础镜像仓库:$baseRegistry(可用 PANDORA_BASE_REGISTRY 覆盖;官方用 docker.io)"
     Write-Info "  Go 模块代理:$goproxy(可用 PANDORA_GOPROXY 覆盖)"
 
+    # 本轮已构建成功的镜像 id。离线兜底的 docker load 按 tag 覆盖同名镜像,必须留着 id 指回来。
+    $builtImageIds = @{}
     $offlineFallbackDone = $false
     foreach ($svc in $List) {
         Write-Info "  docker build pandora/$($svc.Name):dev ..."
@@ -7022,20 +7027,51 @@ function Build-Images-InContainer {
             --build-arg "GOPROXY=$goproxy" `
             --label "org.opencontainers.image.revision=$($v.Commit)" `
             -t "pandora/$($svc.Name):dev" $ProjectRoot
-        if ($LASTEXITCODE -ne 0) {
-            # 构建失败兜底:有离线包就自动导入(拉不到基础镜像/goproxy 挂时),导入后该镜像存在则继续。
-            # 导入只做一次(offlineFallbackDone),但之后每个失败服务都复查一次 inspect,避免第 2 个服务误报失败。
-            if (-not $StrictRelease -and -not $Rebuild -and (Test-Path $OfflineTar)) {
-                if (-not $offlineFallbackDone) {
-                    Write-Warn "  构建 $($svc.Name) 失败(多半拉不到基础镜像)。检测到离线镜像包,自动导入兜底..."
-                    docker load -i $OfflineTar
-                    $offlineFallbackDone = $true
-                }
-                docker image inspect "pandora/$($svc.Name):dev" *> $null
-                if ($LASTEXITCODE -eq 0) { Write-Ok "  使用离线镜像:pandora/$($svc.Name):dev"; continue }
-            }
-            throw "镜像构建失败:$($svc.Name)"
+        if ($LASTEXITCODE -eq 0) {
+            $builtId = ((& docker image inspect --format '{{.Id}}' "pandora/$($svc.Name):dev" 2>$null) | Out-String).Trim()
+            if ($builtId) { $builtImageIds[$svc.Name] = $builtId }
+            continue
         }
+
+        # 构建失败兜底:有离线包就自动导入,导入后该镜像存在则继续。
+        # 导入只做一次(offlineFallbackDone),但之后每个失败服务都复查一次 inspect,避免第 2 个服务误报失败。
+        if (-not $StrictRelease -and -not $Rebuild -and (Test-Path $OfflineTar)) {
+            if (-not $offlineFallbackDone) {
+                Write-Warn "  构建 $($svc.Name) 失败。检测到离线镜像包,自动导入兜底(离线包是历史构建产物,commit 通常旧于当前工作树)..."
+                docker load -i $OfflineTar
+                $offlineFallbackDone = $true
+                # docker load 按 tag 覆盖:本轮**已经构建成功**的服务会被离线包里的同名 :dev 顶掉。
+                # 2026-08-12 事故就是这样把 5 个刚构建好的镜像静默换回旧 commit(日志里只提示了
+                # 实际用到离线包的那几个,被覆盖的那批一声不吭)。逐个指回本轮产物并逐条报告。
+                foreach ($name in @($builtImageIds.Keys)) {
+                    $nowId = ((& docker image inspect --format '{{.Id}}' "pandora/${name}:dev" 2>$null) | Out-String).Trim()
+                    if ($nowId -and $nowId -cne $builtImageIds[$name]) {
+                        docker tag $builtImageIds[$name] "pandora/${name}:dev" *> $null
+                        if ($LASTEXITCODE -ne 0) {
+                            throw "离线包覆盖了本轮已构建的 pandora/${name}:dev,且无法指回本轮产物(image=$($builtImageIds[$name]))。"
+                        }
+                        Write-Warn "  离线包覆盖了本轮已构建的 pandora/${name}:dev,已指回本轮产物。"
+                    }
+                }
+            }
+            docker image inspect "pandora/$($svc.Name):dev" *> $null
+            if ($LASTEXITCODE -eq 0) {
+                $rev = ((& docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "pandora/$($svc.Name):dev" 2>$null) | Out-String).Trim()
+                if ($rev -eq '<no value>') { $rev = '' }
+                if ($rev -and $rev -cne $v.Commit) {
+                    # 旧二进制 + 新生成的配置 = 错位,而且症状离原因很远:2026-08-12 inventory
+                    # 用离线包的 e253821 起来,配置已按新版删掉 default_identify_rule,进程启动
+                    # 10ms 就退出,现象只表现为 rollout status 180s 超时「新 Pod 未就绪」。
+                    Write-Warn "  使用离线镜像:pandora/$($svc.Name):dev(commit=$rev,本次配置生成源=$($v.Commit),两者不一致)"
+                    Write-Warn "    旧二进制会配上新版生成的配置:可能要求已被删掉的配置键而启动即 CrashLoop,或读不到新增配表而静默降级。"
+                    Write-Warn "    要跑当前工作树的代码,请先修好该服务的构建再重跑(常见原因是 go 模块代理抖动,可用 PANDORA_GOPROXY 换源)。"
+                } else {
+                    Write-Ok "  使用离线镜像:pandora/$($svc.Name):dev"
+                }
+                continue
+            }
+        }
+        throw "镜像构建失败:$($svc.Name)"
     }
 }
 
@@ -7114,10 +7150,11 @@ function Build-Images-Host {
         throw '本地 runtime assets 提取结果不完整。'
     }
     # 宿主 go build 拉模块用的代理(默认 goproxy.cn;尊重已自定义的非公有 GOPROXY)。
+    # 分隔符必须是 `|`:逗号只在 404/410 回退,网络层错误直接失败(详见 deploy/services/Dockerfile)。
     $goproxy = $env:PANDORA_GOPROXY
     if (-not $goproxy) {
         if ($env:GOPROXY -and $env:GOPROXY -notmatch 'proxy\.golang\.org') { $goproxy = $env:GOPROXY }
-        else { $goproxy = 'https://goproxy.cn,direct' }
+        else { $goproxy = 'https://goproxy.cn|https://proxy.golang.org|direct' }
     }
     Write-Info "  CA/时区资产镜像:$runtimeAssetsImage(本地固定 tag，服务循环内不访问 registry)"
     Write-Info "  Go 模块代理:$goproxy(宿主交叉编译用)"

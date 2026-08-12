@@ -4,9 +4,10 @@
 -- (01-create-databases.sql 先建库 + grant,本文件接着建表)。
 --
 -- 表清单(对齐 docs/design/infra.md §2.1 pandora_player):
---   players       玩家档案(player_id PK,昵称 / 等级 / 段位 mmr / 战绩计数 / 出战英雄 / 属性点)
+--   players       玩家档案(player_id PK,昵称 / 等级 / 战绩计数 / 出战英雄 / 属性点;段位见 player_mmr)
+--   player_mmr    分池段位分(PK player_id+rating_pool,段位唯一权威)
 --   player_heroes 英雄解锁记录(uk player_id+hero_id)
---   mmr_history   MMR 变化历史 + 幂等键(uk player_id+idempotency_key,不变量 §2)
+--   mmr_history   MMR 变化历史 + 幂等键(uk player_id+idempotency_key,含 rating_pool,不变量 §2)
 --   player_attributes 属性加点已分配点(uk player_id+attr_key)
 --   attr_point_grants 属性点授予幂等表(uk player_id+idempotency_key)
 --   player_equipment  出战装备预设(uk player_id+slot)
@@ -15,7 +16,7 @@
 --
 -- 约定:
 --   - player_id 由 login 服务用 snowflake 生成(BIGINT UNSIGNED),player 服务不生成
---   - mmr 缺省 1500(与 battle_result base_mmr 对齐),floor 0 由应用层保证
+--   - 段位分按 rating_pool 分区存 player_mmr,缺省 1500(与 battle_result base_mmr 对齐),floor 0 由应用层保证
 --   - UpdateMMR 幂等:idempotency_key 一般是 match_id;mmr_history uk 命中即视为已处理
 --   - 默认昵称 = 配置前缀 + player_id,保证 uk_nickname 不冲突
 
@@ -26,7 +27,6 @@ CREATE TABLE IF NOT EXISTS `players` (
     `nickname`      VARCHAR(64)      NOT NULL COMMENT '玩家昵称,uk_nickname 唯一',
     `level`         INT              NOT NULL DEFAULT 1,
     `exp`           BIGINT UNSIGNED  NOT NULL DEFAULT 0 COMMENT '级内经验(实时成长;满级恒 0)',
-    `mmr`           INT              NOT NULL DEFAULT 1500 COMMENT '段位分,floor 0',
     `avatar`        VARCHAR(255)     NOT NULL DEFAULT '',
     `total_battles` INT              NOT NULL DEFAULT 0,
     `total_wins`    INT              NOT NULL DEFAULT 0,
@@ -36,8 +36,7 @@ CREATE TABLE IF NOT EXISTS `players` (
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `last_seen_at`  DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`),
-    UNIQUE KEY `uk_nickname` (`nickname`),
-    KEY `idx_mmr` (`mmr`)
+    UNIQUE KEY `uk_nickname` (`nickname`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 玩家档案表';
 
@@ -53,10 +52,34 @@ CREATE TABLE IF NOT EXISTS `player_heroes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 玩家英雄解锁记录';
 
+
+-- player_mmr 是段位分的**唯一权威**(2026-08-11 段位分区)。
+--
+-- 为什么不是 players 表的一列:产品口径「3v3 与 5v5 不共用同一份段位」要求一个玩家
+-- 持有多份分,单列表达不了。分区键 rating_pool 由关卡表「段位池」列决定(matchmaker
+-- 成局定格 → canonical BattleStorageRecord → battle_result 结算按本值入账),服务端
+-- 不解析其内容,只当分区键用——同值即同一份段位。
+--
+-- 行的生命周期:**首次在该池结算时才创建**(ApplyMMRChange 的 upsert)。没打过的池
+-- 没有行,与"打到基线分"是两回事,查询侧靠 found=false 区分,不预插占位行。
+-- 增长有界(§9.24 登记豁免):每玩家每池至多 1 行,池数由关卡表行数有界。
+CREATE TABLE IF NOT EXISTS `player_mmr` (
+    `player_id`   BIGINT UNSIGNED  NOT NULL,
+    `rating_pool` VARCHAR(32)      NOT NULL COMMENT '段位池(分区键);空值在应用层归一为 default',
+    `mmr`         INT              NOT NULL DEFAULT 1500 COMMENT '该池段位分,floor 0 由应用层保证',
+    `updated_at`  DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`player_id`, `rating_pool`),
+    KEY `idx_pool_mmr` (`rating_pool`, `mmr`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家分池段位分(段位唯一权威;PK=player_id+rating_pool)';
+-- idx_pool_mmr 服务"某池 TopN / 排名"查询(leaderboard 竞技分榜按池取数),
+-- 前缀是 rating_pool 保证单池扫描不跨池。
+
 CREATE TABLE IF NOT EXISTS `mmr_history` (
     `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
     `player_id`       BIGINT UNSIGNED  NOT NULL,
     `idempotency_key` VARCHAR(64)      NOT NULL COMMENT '幂等键,一般是 match_id',
+    `rating_pool`     VARCHAR(32)      NOT NULL DEFAULT 'default' COMMENT '段位池(分区键,关卡表「段位池」列;空值归一为 default)',
     `delta`           INT              NOT NULL COMMENT '本次 MMR 变化(可负)',
     `reason`          VARCHAR(32)      NOT NULL DEFAULT '' COMMENT 'win | lose | draw | abandon | rollback',
     `old_mmr`         INT              NOT NULL,

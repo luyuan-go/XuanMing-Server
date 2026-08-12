@@ -18,13 +18,17 @@ VALUES (?, ?, 1, ?, '', 0, 0)`
 	return nil
 }
 
+// GetProfile 只读 players 表(账号级档案)。**段位分不在这里** —— 它按 rating_pool
+// 分区存 player_mmr,由 biz 层另调 ListRatings 组装进 PlayerProfile.ratings。
+// 刻意不在本查询里 JOIN:段位是一对多,JOIN 会让单行扫描变成需要去重的多行结果,
+// 而档案本身(昵称/等级/战绩)与打了几个池无关。
 func (r *MySQLPlayerRepo) GetProfile(ctx context.Context, playerID uint64) (*playerv1.PlayerProfile, bool, error) {
-	const q = `SELECT nickname, level, mmr, avatar,
+	const q = `SELECT nickname, level, avatar,
 UNIX_TIMESTAMP(created_at)*1000, UNIX_TIMESTAMP(last_seen_at)*1000, total_battles, total_wins, exp
 FROM players WHERE player_id = ? LIMIT 1`
 	p := &playerv1.PlayerProfile{PlayerId: playerID}
 	err := r.db.QueryRowContext(ctx, q, playerID).Scan(
-		&p.Nickname, &p.Level, &p.Mmr, &p.Avatar,
+		&p.Nickname, &p.Level, &p.Avatar,
 		&p.CreatedAtMs, &p.LastSeenMs, &p.TotalBattles, &p.TotalWins, &p.ExpInLevel)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil

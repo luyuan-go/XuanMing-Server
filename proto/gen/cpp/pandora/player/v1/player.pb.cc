@@ -193,20 +193,20 @@ constexpr UpgradeSkillCardRequest::ParseTableT_ UpgradeSkillCardRequest::Interna
       ::_pbi::TcParser::GetTable<::pandora::player::v1::UpgradeSkillCardRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 card_id = 2;
+      // uint32 card_id = 2 [json_name = "cardId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UpgradeSkillCardRequest, _impl_.card_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(UpgradeSkillCardRequest, _impl_.card_id_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UpgradeSkillCardRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(UpgradeSkillCardRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(UpgradeSkillCardRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 card_id = 2;
+      // uint32 card_id = 2 [json_name = "cardId"];
       {PROTOBUF_FIELD_OFFSET(UpgradeSkillCardRequest, _impl_.card_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -341,14 +341,14 @@ constexpr UpdateNicknameResponse::ParseTableT_ UpdateNicknameResponse::InternalG
       ::_pbi::TcParser::GetTable<::pandora::player::v1::UpdateNicknameResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UpdateNicknameResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(UpdateNicknameResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(UpdateNicknameResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -482,20 +482,20 @@ constexpr UpdateNicknameRequest::ParseTableT_ UpdateNicknameRequest::InternalGen
       ::_pbi::TcParser::GetTable<::pandora::player::v1::UpdateNicknameRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string nickname = 2;
+      // string nickname = 2 [json_name = "nickname"];
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(UpdateNicknameRequest, _impl_.nickname_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UpdateNicknameRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(UpdateNicknameRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(UpdateNicknameRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // string nickname = 2;
+      // string nickname = 2 [json_name = "nickname"];
       {PROTOBUF_FIELD_OFFSET(UpdateNicknameRequest, _impl_.nickname_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -635,20 +635,20 @@ constexpr UpdateMMRResponse::ParseTableT_ UpdateMMRResponse::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::player::v1::UpdateMMRResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 new_mmr = 2;
+      // int32 new_mmr = 2 [json_name = "newMmr"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UpdateMMRResponse, _impl_.new_mmr_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(UpdateMMRResponse, _impl_.new_mmr_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UpdateMMRResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(UpdateMMRResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(UpdateMMRResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int32 new_mmr = 2;
+      // int32 new_mmr = 2 [json_name = "newMmr"];
       {PROTOBUF_FIELD_OFFSET(UpdateMMRResponse, _impl_.new_mmr_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -783,32 +783,32 @@ constexpr UpdateMMRRequest::ParseTableT_ UpdateMMRRequest::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::pandora::player::v1::UpdateMMRRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 1, 0,
         PROTOBUF_FIELD_OFFSET(UpdateMMRRequest, _impl_.idempotency_key_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UpdateMMRRequest, _impl_.player_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(UpdateMMRRequest, _impl_.player_id_)}},
-      // int32 delta = 2;
+      // int32 delta = 2 [json_name = "delta"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UpdateMMRRequest, _impl_.delta_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(UpdateMMRRequest, _impl_.delta_)}},
-      // string reason = 3;
+      // string reason = 3 [json_name = "reason"];
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(UpdateMMRRequest, _impl_.reason_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(UpdateMMRRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // int32 delta = 2;
+      // int32 delta = 2 [json_name = "delta"];
       {PROTOBUF_FIELD_OFFSET(UpdateMMRRequest, _impl_.delta_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // string reason = 3;
+      // string reason = 3 [json_name = "reason"];
       {PROTOBUF_FIELD_OFFSET(UpdateMMRRequest, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(UpdateMMRRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -953,14 +953,14 @@ constexpr UnlockHeroResponse::ParseTableT_ UnlockHeroResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::player::v1::UnlockHeroResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UnlockHeroResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(UnlockHeroResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(UnlockHeroResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -1095,26 +1095,26 @@ constexpr UnlockHeroRequest::ParseTableT_ UnlockHeroRequest::InternalGeneratePar
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnlockHeroRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(UnlockHeroRequest, _impl_.player_id_)}},
-      // uint32 hero_id = 2;
+      // uint32 hero_id = 2 [json_name = "heroId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UnlockHeroRequest, _impl_.hero_id_), 2>(),
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(UnlockHeroRequest, _impl_.hero_id_)}},
-      // string source = 3;
+      // string source = 3 [json_name = "source"];
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(UnlockHeroRequest, _impl_.source_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(UnlockHeroRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 hero_id = 2;
+      // uint32 hero_id = 2 [json_name = "heroId"];
       {PROTOBUF_FIELD_OFFSET(UnlockHeroRequest, _impl_.hero_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // string source = 3;
+      // string source = 3 [json_name = "source"];
       {PROTOBUF_FIELD_OFFSET(UnlockHeroRequest, _impl_.source_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -1255,20 +1255,20 @@ constexpr TalentNode::ParseTableT_ TalentNode::InternalGenerateParseTable_(const
       ::_pbi::TcParser::GetTable<::pandora::player::v1::TalentNode>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 level = 2;
+      // int32 level = 2 [json_name = "level"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TalentNode, _impl_.level_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(TalentNode, _impl_.level_)}},
-      // uint32 talent_id = 1;
+      // uint32 talent_id = 1 [json_name = "talentId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TalentNode, _impl_.talent_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(TalentNode, _impl_.talent_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 talent_id = 1;
+      // uint32 talent_id = 1 [json_name = "talentId"];
       {PROTOBUF_FIELD_OFFSET(TalentNode, _impl_.talent_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int32 level = 2;
+      // int32 level = 2 [json_name = "level"];
       {PROTOBUF_FIELD_OFFSET(TalentNode, _impl_.level_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -1403,20 +1403,20 @@ constexpr SkillSlot::ParseTableT_ SkillSlot::InternalGenerateParseTable_(const :
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SkillSlot>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 card_id = 2;
+      // uint32 card_id = 2 [json_name = "cardId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillSlot, _impl_.card_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(SkillSlot, _impl_.card_id_)}},
-      // uint32 slot = 1;
+      // uint32 slot = 1 [json_name = "slot"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillSlot, _impl_.slot_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SkillSlot, _impl_.slot_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 slot = 1;
+      // uint32 slot = 1 [json_name = "slot"];
       {PROTOBUF_FIELD_OFFSET(SkillSlot, _impl_.slot_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 card_id = 2;
+      // uint32 card_id = 2 [json_name = "cardId"];
       {PROTOBUF_FIELD_OFFSET(SkillSlot, _impl_.card_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -1551,20 +1551,20 @@ constexpr SkillCardGrant::ParseTableT_ SkillCardGrant::InternalGenerateParseTabl
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SkillCardGrant>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 shards = 2;
+      // uint32 shards = 2 [json_name = "shards"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCardGrant, _impl_.shards_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(SkillCardGrant, _impl_.shards_)}},
-      // uint32 card_id = 1;
+      // uint32 card_id = 1 [json_name = "cardId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCardGrant, _impl_.card_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SkillCardGrant, _impl_.card_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 card_id = 1;
+      // uint32 card_id = 1 [json_name = "cardId"];
       {PROTOBUF_FIELD_OFFSET(SkillCardGrant, _impl_.card_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 shards = 2;
+      // uint32 shards = 2 [json_name = "shards"];
       {PROTOBUF_FIELD_OFFSET(SkillCardGrant, _impl_.shards_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -1700,26 +1700,26 @@ constexpr SkillCard::ParseTableT_ SkillCard::InternalGenerateParseTable_(const :
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint32 card_id = 1;
+      // uint32 card_id = 1 [json_name = "cardId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCard, _impl_.card_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SkillCard, _impl_.card_id_)}},
-      // uint32 level = 2;
+      // uint32 level = 2 [json_name = "level"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCard, _impl_.level_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(SkillCard, _impl_.level_)}},
-      // uint32 shards = 3;
+      // uint32 shards = 3 [json_name = "shards"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCard, _impl_.shards_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(SkillCard, _impl_.shards_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 card_id = 1;
+      // uint32 card_id = 1 [json_name = "cardId"];
       {PROTOBUF_FIELD_OFFSET(SkillCard, _impl_.card_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 level = 2;
+      // uint32 level = 2 [json_name = "level"];
       {PROTOBUF_FIELD_OFFSET(SkillCard, _impl_.level_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 shards = 3;
+      // uint32 shards = 3 [json_name = "shards"];
       {PROTOBUF_FIELD_OFFSET(SkillCard, _impl_.shards_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -1855,20 +1855,20 @@ constexpr SetTalentsResponse::ParseTableT_ SetTalentsResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SetTalentsResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetTalentsResponse, _impl_.unspent_points_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(SetTalentsResponse, _impl_.unspent_points_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetTalentsResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SetTalentsResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(SetTalentsResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {PROTOBUF_FIELD_OFFSET(SetTalentsResponse, _impl_.unspent_points_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -2003,14 +2003,14 @@ constexpr SetEquipmentResponse::ParseTableT_ SetEquipmentResponse::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SetEquipmentResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetEquipmentResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SetEquipmentResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(SetEquipmentResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -2144,14 +2144,14 @@ constexpr SelectHeroResponse::ParseTableT_ SelectHeroResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SelectHeroResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SelectHeroResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SelectHeroResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(SelectHeroResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -2285,20 +2285,20 @@ constexpr SelectHeroRequest::ParseTableT_ SelectHeroRequest::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SelectHeroRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 hero_id = 2;
+      // uint32 hero_id = 2 [json_name = "heroId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SelectHeroRequest, _impl_.hero_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(SelectHeroRequest, _impl_.hero_id_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SelectHeroRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SelectHeroRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(SelectHeroRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 hero_id = 2;
+      // uint32 hero_id = 2 [json_name = "heroId"];
       {PROTOBUF_FIELD_OFFSET(SelectHeroRequest, _impl_.hero_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -2426,20 +2426,20 @@ constexpr RewardClaimStorageRecord_PermanentEntry_DoNotUse::ParseTableT_ RewardC
       ::_pbi::TcParser::GetTable<::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // bytes value = 2;
+      // bytes value = 2 [json_name = "value"];
       {::_pbi::TcParser::FastBS1,
        {18, 1, 0,
         PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.value_)}},
-      // string key = 1;
+      // string key = 1 [json_name = "key"];
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.key_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // string key = 1;
+      // string key = 1 [json_name = "key"];
       {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // bytes value = 2;
+      // bytes value = 2 [json_name = "value"];
       {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -2562,20 +2562,20 @@ constexpr RewardClaimStorageRecord_ActivityEntry_DoNotUse::ParseTableT_ RewardCl
       ::_pbi::TcParser::GetTable<::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // bytes value = 2;
+      // bytes value = 2 [json_name = "value"];
       {::_pbi::TcParser::FastBS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.value_)}},
-      // uint64 key = 1;
+      // uint64 key = 1 [json_name = "key"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.key_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.key_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 key = 1;
+      // uint64 key = 1 [json_name = "key"];
       {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // bytes value = 2;
+      // bytes value = 2 [json_name = "value"];
       {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -2702,20 +2702,20 @@ constexpr ResetTalentsResponse::ParseTableT_ ResetTalentsResponse::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::player::v1::ResetTalentsResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResetTalentsResponse, _impl_.unspent_points_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(ResetTalentsResponse, _impl_.unspent_points_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResetTalentsResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ResetTalentsResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(ResetTalentsResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {PROTOBUF_FIELD_OFFSET(ResetTalentsResponse, _impl_.unspent_points_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -2850,14 +2850,14 @@ constexpr ResetTalentsRequest::ParseTableT_ ResetTalentsRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::player::v1::ResetTalentsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResetTalentsRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ResetTalentsRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(ResetTalentsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -2991,20 +2991,20 @@ constexpr ResetAttributesResponse::ParseTableT_ ResetAttributesResponse::Interna
       ::_pbi::TcParser::GetTable<::pandora::player::v1::ResetAttributesResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResetAttributesResponse, _impl_.unspent_points_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(ResetAttributesResponse, _impl_.unspent_points_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResetAttributesResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ResetAttributesResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(ResetAttributesResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {PROTOBUF_FIELD_OFFSET(ResetAttributesResponse, _impl_.unspent_points_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -3139,14 +3139,14 @@ constexpr ResetAttributesRequest::ParseTableT_ ResetAttributesRequest::InternalG
       ::_pbi::TcParser::GetTable<::pandora::player::v1::ResetAttributesRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResetAttributesRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ResetAttributesRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(ResetAttributesRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -3281,23 +3281,23 @@ constexpr PlayerUpdateEvent::ParseTableT_ PlayerUpdateEvent::InternalGeneratePar
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUpdateEvent, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.player_id_)}},
-      // uint64 match_id = 2;
+      // uint64 match_id = 2 [json_name = "matchId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUpdateEvent, _impl_.match_id_), 2>(),
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.match_id_)}},
-      // int32 mmr_delta = 3;
+      // int32 mmr_delta = 3 [json_name = "mmrDelta"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerUpdateEvent, _impl_.mmr_delta_), 4>(),
        {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.mmr_delta_)}},
-      // string reason = 4;
+      // string reason = 4 [json_name = "reason"];
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.reason_)}},
-      // int64 ts_ms = 5;
+      // int64 ts_ms = 5 [json_name = "tsMs"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUpdateEvent, _impl_.ts_ms_), 3>(),
        {40, 3, 0,
         PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.ts_ms_)}},
@@ -3306,15 +3306,15 @@ constexpr PlayerUpdateEvent::ParseTableT_ PlayerUpdateEvent::InternalGeneratePar
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 match_id = 2;
+      // uint64 match_id = 2 [json_name = "matchId"];
       {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.match_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // int32 mmr_delta = 3;
+      // int32 mmr_delta = 3 [json_name = "mmrDelta"];
       {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.mmr_delta_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // string reason = 4;
+      // string reason = 4 [json_name = "reason"];
       {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // int64 ts_ms = 5;
+      // int64 ts_ms = 5 [json_name = "tsMs"];
       {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.ts_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -3458,41 +3458,41 @@ constexpr PlayerProfile::ParseTableT_ PlayerProfile::InternalGenerateParseTable_
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfile, _impl_.player_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.player_id_)}},
-      // string nickname = 2;
+      // string nickname = 2 [json_name = "nickname"];
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.nickname_)}},
-      // int32 level = 3;
+      // int32 level = 3 [json_name = "level"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfile, _impl_.level_), 3>(),
        {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.level_)}},
-      // int32 mmr = 4;
+      // int32 mmr = 4 [json_name = "mmr"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfile, _impl_.mmr_), 4>(),
        {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.mmr_)}},
-      // string avatar = 5;
+      // string avatar = 5 [json_name = "avatar"];
       {::_pbi::TcParser::FastUS1,
        {42, 1, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.avatar_)}},
-      // int64 created_at_ms = 6;
+      // int64 created_at_ms = 6 [json_name = "createdAtMs"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfile, _impl_.created_at_ms_), 5>(),
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.created_at_ms_)}},
-      // int64 last_seen_ms = 7;
+      // int64 last_seen_ms = 7 [json_name = "lastSeenMs"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfile, _impl_.last_seen_ms_), 6>(),
        {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.last_seen_ms_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
-      // int32 total_battles = 10;
+      // int32 total_battles = 10 [json_name = "totalBattles"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfile, _impl_.total_battles_), 7>(),
        {80, 7, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.total_battles_)}},
-      // int32 total_wins = 11;
+      // int32 total_wins = 11 [json_name = "totalWins"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfile, _impl_.total_wins_), 8>(),
        {88, 8, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.total_wins_)}},
@@ -3505,27 +3505,27 @@ constexpr PlayerProfile::ParseTableT_ PlayerProfile::InternalGenerateParseTable_
       65532, 9,
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // string nickname = 2;
+      // string nickname = 2 [json_name = "nickname"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.nickname_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // int32 level = 3;
+      // int32 level = 3 [json_name = "level"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.level_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // int32 mmr = 4;
+      // int32 mmr = 4 [json_name = "mmr"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.mmr_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // string avatar = 5;
+      // string avatar = 5 [json_name = "avatar"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.avatar_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // int64 created_at_ms = 6;
+      // int64 created_at_ms = 6 [json_name = "createdAtMs"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // int64 last_seen_ms = 7;
+      // int64 last_seen_ms = 7 [json_name = "lastSeenMs"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.last_seen_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // int32 total_battles = 10;
+      // int32 total_battles = 10 [json_name = "totalBattles"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.total_battles_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // int32 total_wins = 11;
+      // int32 total_wins = 11 [json_name = "totalWins"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.total_wins_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // uint64 exp_in_level = 50;
+      // uint64 exp_in_level = 50 [json_name = "expInLevel"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.exp_in_level_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // bool is_max_level = 51;
+      // bool is_max_level = 51 [json_name = "isMaxLevel"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.is_max_level_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
@@ -3678,27 +3678,27 @@ constexpr PlayerExperienceEvent::ParseTableT_ PlayerExperienceEvent::InternalGen
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerExperienceEvent, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.player_id_)}},
-      // int32 level = 2;
+      // int32 level = 2 [json_name = "level"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerExperienceEvent, _impl_.level_), 2>(),
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.level_)}},
-      // uint64 exp_in_level = 3;
+      // uint64 exp_in_level = 3 [json_name = "expInLevel"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerExperienceEvent, _impl_.exp_in_level_), 1>(),
        {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.exp_in_level_)}},
-      // bool is_max_level = 4;
+      // bool is_max_level = 4 [json_name = "isMaxLevel"];
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerExperienceEvent, _impl_.is_max_level_), 3>(),
        {32, 3, 0,
         PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.is_max_level_)}},
-      // uint32 levels_gained = 5;
+      // uint32 levels_gained = 5 [json_name = "levelsGained"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerExperienceEvent, _impl_.levels_gained_), 5>(),
        {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.levels_gained_)}},
-      // int64 ts_ms = 6;
+      // int64 ts_ms = 6 [json_name = "tsMs"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerExperienceEvent, _impl_.ts_ms_), 4>(),
        {48, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.ts_ms_)}},
@@ -3706,17 +3706,17 @@ constexpr PlayerExperienceEvent::ParseTableT_ PlayerExperienceEvent::InternalGen
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // int32 level = 2;
+      // int32 level = 2 [json_name = "level"];
       {PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.level_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // uint64 exp_in_level = 3;
+      // uint64 exp_in_level = 3 [json_name = "expInLevel"];
       {PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.exp_in_level_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // bool is_max_level = 4;
+      // bool is_max_level = 4 [json_name = "isMaxLevel"];
       {PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.is_max_level_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
-      // uint32 levels_gained = 5;
+      // uint32 levels_gained = 5 [json_name = "levelsGained"];
       {PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.levels_gained_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 ts_ms = 6;
+      // int64 ts_ms = 6 [json_name = "tsMs"];
       {PROTOBUF_FIELD_OFFSET(PlayerExperienceEvent, _impl_.ts_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -3856,26 +3856,26 @@ constexpr LoadoutSkillCard::ParseTableT_ LoadoutSkillCard::InternalGenerateParse
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint32 slot = 1;
+      // uint32 slot = 1 [json_name = "slot"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoadoutSkillCard, _impl_.slot_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(LoadoutSkillCard, _impl_.slot_)}},
-      // uint32 card_id = 2;
+      // uint32 card_id = 2 [json_name = "cardId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoadoutSkillCard, _impl_.card_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(LoadoutSkillCard, _impl_.card_id_)}},
-      // uint32 level = 3;
+      // uint32 level = 3 [json_name = "level"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoadoutSkillCard, _impl_.level_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(LoadoutSkillCard, _impl_.level_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 slot = 1;
+      // uint32 slot = 1 [json_name = "slot"];
       {PROTOBUF_FIELD_OFFSET(LoadoutSkillCard, _impl_.slot_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 card_id = 2;
+      // uint32 card_id = 2 [json_name = "cardId"];
       {PROTOBUF_FIELD_OFFSET(LoadoutSkillCard, _impl_.card_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 level = 3;
+      // uint32 level = 3 [json_name = "level"];
       {PROTOBUF_FIELD_OFFSET(LoadoutSkillCard, _impl_.level_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -4011,20 +4011,20 @@ constexpr ListHeroesResponse::ParseTableT_ ListHeroesResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::player::v1::ListHeroesResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated uint32 hero_ids = 2;
+      // repeated uint32 hero_ids = 2 [json_name = "heroIds"];
       {::_pbi::TcParser::FastV32P1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(ListHeroesResponse, _impl_.hero_ids_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ListHeroesResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ListHeroesResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(ListHeroesResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated uint32 hero_ids = 2;
+      // repeated uint32 hero_ids = 2 [json_name = "heroIds"];
       {PROTOBUF_FIELD_OFFSET(ListHeroesResponse, _impl_.hero_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
     }},
     // no aux_entries
@@ -4164,14 +4164,14 @@ constexpr ListHeroesRequest::ParseTableT_ ListHeroesRequest::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::player::v1::ListHeroesRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ListHeroesRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ListHeroesRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(ListHeroesRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -4305,20 +4305,20 @@ constexpr GrantTalentPointsResponse::ParseTableT_ GrantTalentPointsResponse::Int
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GrantTalentPointsResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GrantTalentPointsResponse, _impl_.unspent_points_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantTalentPointsResponse, _impl_.unspent_points_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GrantTalentPointsResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantTalentPointsResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GrantTalentPointsResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {PROTOBUF_FIELD_OFFSET(GrantTalentPointsResponse, _impl_.unspent_points_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -4454,26 +4454,26 @@ constexpr GrantTalentPointsRequest::ParseTableT_ GrantTalentPointsRequest::Inter
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GrantTalentPointsRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantTalentPointsRequest, _impl_.player_id_)}},
-      // int32 points = 2;
+      // int32 points = 2 [json_name = "points"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GrantTalentPointsRequest, _impl_.points_), 2>(),
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(GrantTalentPointsRequest, _impl_.points_)}},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantTalentPointsRequest, _impl_.idempotency_key_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GrantTalentPointsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // int32 points = 2;
+      // int32 points = 2 [json_name = "points"];
       {PROTOBUF_FIELD_OFFSET(GrantTalentPointsRequest, _impl_.points_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(GrantTalentPointsRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -4614,20 +4614,20 @@ constexpr GrantAttributePointsResponse::ParseTableT_ GrantAttributePointsRespons
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GrantAttributePointsResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GrantAttributePointsResponse, _impl_.unspent_points_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantAttributePointsResponse, _impl_.unspent_points_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GrantAttributePointsResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantAttributePointsResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GrantAttributePointsResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {PROTOBUF_FIELD_OFFSET(GrantAttributePointsResponse, _impl_.unspent_points_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -4763,26 +4763,26 @@ constexpr GrantAttributePointsRequest::ParseTableT_ GrantAttributePointsRequest:
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GrantAttributePointsRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantAttributePointsRequest, _impl_.player_id_)}},
-      // int32 points = 2;
+      // int32 points = 2 [json_name = "points"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GrantAttributePointsRequest, _impl_.points_), 2>(),
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(GrantAttributePointsRequest, _impl_.points_)}},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantAttributePointsRequest, _impl_.idempotency_key_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GrantAttributePointsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // int32 points = 2;
+      // int32 points = 2 [json_name = "points"];
       {PROTOBUF_FIELD_OFFSET(GrantAttributePointsRequest, _impl_.points_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(GrantAttributePointsRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -4923,14 +4923,14 @@ constexpr GetTalentsRequest::ParseTableT_ GetTalentsRequest::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetTalentsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetTalentsRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetTalentsRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetTalentsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -5064,14 +5064,14 @@ constexpr GetSkillCardsRequest::ParseTableT_ GetSkillCardsRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetSkillCardsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetSkillCardsRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetSkillCardsRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetSkillCardsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -5205,20 +5205,20 @@ constexpr GetRewardClaimsResponse::ParseTableT_ GetRewardClaimsResponse::Interna
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetRewardClaimsResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated uint32 claimed_reward_ids = 2;
+      // repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
       {::_pbi::TcParser::FastV32P1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_.claimed_reward_ids_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetRewardClaimsResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated uint32 claimed_reward_ids = 2;
+      // repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
       {PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_.claimed_reward_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
     }},
     // no aux_entries
@@ -5358,32 +5358,32 @@ constexpr GetRewardClaimsRequest::ParseTableT_ GetRewardClaimsRequest::InternalG
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetRewardClaimsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 activity_instance_id = 4;
+      // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetRewardClaimsRequest, _impl_.activity_instance_id_), 2>(),
        {32, 2, 0,
         PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.activity_instance_id_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetRewardClaimsRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.player_id_)}},
-      // .pandora.player.v1.RewardSourceType source_type = 2;
+      // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetRewardClaimsRequest, _impl_.source_type_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.source_type_)}},
-      // string source = 3;
+      // string source = 3 [json_name = "source"];
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.source_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // .pandora.player.v1.RewardSourceType source_type = 2;
+      // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
       {PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.source_type_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // string source = 3;
+      // string source = 3 [json_name = "source"];
       {PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.source_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // uint64 activity_instance_id = 4;
+      // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
       {PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.activity_instance_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -5525,14 +5525,14 @@ constexpr GetProfileRequest::ParseTableT_ GetProfileRequest::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetProfileRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetProfileRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetProfileRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetProfileRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -5666,20 +5666,20 @@ constexpr GetMMRResponse::ParseTableT_ GetMMRResponse::InternalGenerateParseTabl
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetMMRResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 mmr = 2;
+      // int32 mmr = 2 [json_name = "mmr"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetMMRResponse, _impl_.mmr_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetMMRResponse, _impl_.mmr_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetMMRResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetMMRResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetMMRResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int32 mmr = 2;
+      // int32 mmr = 2 [json_name = "mmr"];
       {PROTOBUF_FIELD_OFFSET(GetMMRResponse, _impl_.mmr_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -5814,14 +5814,14 @@ constexpr GetMMRRequest::ParseTableT_ GetMMRRequest::InternalGenerateParseTable_
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetMMRRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetMMRRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetMMRRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetMMRRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -5955,14 +5955,14 @@ constexpr GetLoadoutRequest::ParseTableT_ GetLoadoutRequest::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetLoadoutRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetLoadoutRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetLoadoutRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetLoadoutRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -6096,14 +6096,14 @@ constexpr GetEquipmentRequest::ParseTableT_ GetEquipmentRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetEquipmentRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetEquipmentRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetEquipmentRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetEquipmentRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -6237,14 +6237,14 @@ constexpr GetAttributesRequest::ParseTableT_ GetAttributesRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetAttributesRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetAttributesRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetAttributesRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetAttributesRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -6378,20 +6378,20 @@ constexpr GetActiveHeroResponse::ParseTableT_ GetActiveHeroResponse::InternalGen
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetActiveHeroResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 hero_id = 2;
+      // uint32 hero_id = 2 [json_name = "heroId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetActiveHeroResponse, _impl_.hero_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetActiveHeroResponse, _impl_.hero_id_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetActiveHeroResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetActiveHeroResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetActiveHeroResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // uint32 hero_id = 2;
+      // uint32 hero_id = 2 [json_name = "heroId"];
       {PROTOBUF_FIELD_OFFSET(GetActiveHeroResponse, _impl_.hero_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -6526,14 +6526,14 @@ constexpr GetActiveHeroRequest::ParseTableT_ GetActiveHeroRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetActiveHeroRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetActiveHeroRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetActiveHeroRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetActiveHeroRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -6667,14 +6667,14 @@ constexpr ClaimRewardResponse::ParseTableT_ ClaimRewardResponse::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::player::v1::ClaimRewardResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(ClaimRewardResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -6809,23 +6809,23 @@ constexpr ClaimRewardRequest::ParseTableT_ ClaimRewardRequest::InternalGenerateP
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.player_id_)}},
-      // .pandora.player.v1.RewardSourceType source_type = 2;
+      // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardRequest, _impl_.source_type_), 2>(),
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.source_type_)}},
-      // string source = 3;
+      // string source = 3 [json_name = "source"];
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.source_)}},
-      // uint64 activity_instance_id = 4;
+      // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardRequest, _impl_.activity_instance_id_), 4>(),
        {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.activity_instance_id_)}},
-      // uint32 reward_id = 5;
+      // uint32 reward_id = 5 [json_name = "rewardId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardRequest, _impl_.reward_id_), 3>(),
        {40, 3, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.reward_id_)}},
@@ -6834,15 +6834,15 @@ constexpr ClaimRewardRequest::ParseTableT_ ClaimRewardRequest::InternalGenerateP
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // .pandora.player.v1.RewardSourceType source_type = 2;
+      // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
       {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.source_type_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // string source = 3;
+      // string source = 3 [json_name = "source"];
       {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.source_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // uint64 activity_instance_id = 4;
+      // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
       {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.activity_instance_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 reward_id = 5;
+      // uint32 reward_id = 5 [json_name = "rewardId"];
       {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.reward_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -6985,20 +6985,20 @@ constexpr AttributeAllocation::ParseTableT_ AttributeAllocation::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::player::v1::AttributeAllocation>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 points = 2;
+      // int32 points = 2 [json_name = "points"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributeAllocation, _impl_.points_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(AttributeAllocation, _impl_.points_)}},
-      // string attr_key = 1;
+      // string attr_key = 1 [json_name = "attrKey"];
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(AttributeAllocation, _impl_.attr_key_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // string attr_key = 1;
+      // string attr_key = 1 [json_name = "attrKey"];
       {PROTOBUF_FIELD_OFFSET(AttributeAllocation, _impl_.attr_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // int32 points = 2;
+      // int32 points = 2 [json_name = "points"];
       {PROTOBUF_FIELD_OFFSET(AttributeAllocation, _impl_.points_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -7138,20 +7138,20 @@ constexpr AllocateAttributePointsResponse::ParseTableT_ AllocateAttributePointsR
       ::_pbi::TcParser::GetTable<::pandora::player::v1::AllocateAttributePointsResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AllocateAttributePointsResponse, _impl_.unspent_points_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(AllocateAttributePointsResponse, _impl_.unspent_points_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AllocateAttributePointsResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(AllocateAttributePointsResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(AllocateAttributePointsResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int32 unspent_points = 2;
+      // int32 unspent_points = 2 [json_name = "unspentPoints"];
       {PROTOBUF_FIELD_OFFSET(AllocateAttributePointsResponse, _impl_.unspent_points_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -7287,27 +7287,27 @@ constexpr AddExperienceResponse::ParseTableT_ AddExperienceResponse::InternalGen
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AddExperienceResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.code_)}},
-      // int32 level = 2;
+      // int32 level = 2 [json_name = "level"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AddExperienceResponse, _impl_.level_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.level_)}},
-      // uint64 exp_in_level = 3;
+      // uint64 exp_in_level = 3 [json_name = "expInLevel"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AddExperienceResponse, _impl_.exp_in_level_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.exp_in_level_)}},
-      // bool is_max_level = 4;
+      // bool is_max_level = 4 [json_name = "isMaxLevel"];
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AddExperienceResponse, _impl_.is_max_level_), 4>(),
        {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.is_max_level_)}},
-      // uint32 levels_gained = 5;
+      // uint32 levels_gained = 5 [json_name = "levelsGained"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AddExperienceResponse, _impl_.levels_gained_), 3>(),
        {40, 3, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.levels_gained_)}},
-      // bool already = 6;
+      // bool already = 6 [json_name = "already"];
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AddExperienceResponse, _impl_.already_), 5>(),
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.already_)}},
@@ -7315,17 +7315,17 @@ constexpr AddExperienceResponse::ParseTableT_ AddExperienceResponse::InternalGen
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int32 level = 2;
+      // int32 level = 2 [json_name = "level"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.level_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // uint64 exp_in_level = 3;
+      // uint64 exp_in_level = 3 [json_name = "expInLevel"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.exp_in_level_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // bool is_max_level = 4;
+      // bool is_max_level = 4 [json_name = "isMaxLevel"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.is_max_level_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
-      // uint32 levels_gained = 5;
+      // uint32 levels_gained = 5 [json_name = "levelsGained"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.levels_gained_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // bool already = 6;
+      // bool already = 6 [json_name = "already"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceResponse, _impl_.already_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
@@ -7464,32 +7464,32 @@ constexpr AddExperienceRequest::ParseTableT_ AddExperienceRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::player::v1::AddExperienceRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 1, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceRequest, _impl_.idempotency_key_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AddExperienceRequest, _impl_.player_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceRequest, _impl_.player_id_)}},
-      // uint64 exp_delta = 2;
+      // uint64 exp_delta = 2 [json_name = "expDelta"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AddExperienceRequest, _impl_.exp_delta_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceRequest, _impl_.exp_delta_)}},
-      // string reason = 3;
+      // string reason = 3 [json_name = "reason"];
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(AddExperienceRequest, _impl_.reason_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 exp_delta = 2;
+      // uint64 exp_delta = 2 [json_name = "expDelta"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceRequest, _impl_.exp_delta_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // string reason = 3;
+      // string reason = 3 [json_name = "reason"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceRequest, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(AddExperienceRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -7635,26 +7635,26 @@ constexpr UpgradeSkillCardResponse::ParseTableT_ UpgradeSkillCardResponse::Inter
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UpgradeSkillCardResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(UpgradeSkillCardResponse, _impl_.code_)}},
-      // .pandora.player.v1.SkillCard card = 2;
+      // .pandora.player.v1.SkillCard card = 2 [json_name = "card"];
       {::_pbi::TcParser::FastMtS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(UpgradeSkillCardResponse, _impl_.card_)}},
-      // uint32 shard_cost = 3;
+      // uint32 shard_cost = 3 [json_name = "shardCost"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UpgradeSkillCardResponse, _impl_.shard_cost_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(UpgradeSkillCardResponse, _impl_.shard_cost_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(UpgradeSkillCardResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // .pandora.player.v1.SkillCard card = 2;
+      // .pandora.player.v1.SkillCard card = 2 [json_name = "card"];
       {PROTOBUF_FIELD_OFFSET(UpgradeSkillCardResponse, _impl_.card_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-      // uint32 shard_cost = 3;
+      // uint32 shard_cost = 3 [json_name = "shardCost"];
       {PROTOBUF_FIELD_OFFSET(UpgradeSkillCardResponse, _impl_.shard_cost_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
@@ -7796,20 +7796,20 @@ constexpr SetTalentsRequest::ParseTableT_ SetTalentsRequest::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SetTalentsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.player.v1.TalentNode talents = 2;
+      // repeated .pandora.player.v1.TalentNode talents = 2 [json_name = "talents"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(SetTalentsRequest, _impl_.talents_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetTalentsRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(SetTalentsRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(SetTalentsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .pandora.player.v1.TalentNode talents = 2;
+      // repeated .pandora.player.v1.TalentNode talents = 2 [json_name = "talents"];
       {PROTOBUF_FIELD_OFFSET(SetTalentsRequest, _impl_.talents_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -7954,20 +7954,20 @@ constexpr SetSkillSlotsResponse::ParseTableT_ SetSkillSlotsResponse::InternalGen
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SetSkillSlotsResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.player.v1.SkillSlot slots = 2;
+      // repeated .pandora.player.v1.SkillSlot slots = 2 [json_name = "slots"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(SetSkillSlotsResponse, _impl_.slots_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetSkillSlotsResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(SetSkillSlotsResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(SetSkillSlotsResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated .pandora.player.v1.SkillSlot slots = 2;
+      // repeated .pandora.player.v1.SkillSlot slots = 2 [json_name = "slots"];
       {PROTOBUF_FIELD_OFFSET(SetSkillSlotsResponse, _impl_.slots_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -8112,20 +8112,20 @@ constexpr SetSkillSlotsRequest::ParseTableT_ SetSkillSlotsRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SetSkillSlotsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.player.v1.SkillSlot slots = 2;
+      // repeated .pandora.player.v1.SkillSlot slots = 2 [json_name = "slots"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(SetSkillSlotsRequest, _impl_.slots_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetSkillSlotsRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(SetSkillSlotsRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(SetSkillSlotsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .pandora.player.v1.SkillSlot slots = 2;
+      // repeated .pandora.player.v1.SkillSlot slots = 2 [json_name = "slots"];
       {PROTOBUF_FIELD_OFFSET(SetSkillSlotsRequest, _impl_.slots_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -8274,9 +8274,9 @@ constexpr RewardClaimStorageRecord::ParseTableT_ RewardClaimStorageRecord::Inter
     }}, {{
       65535, 65535
     }}, {{
-      // map<string, bytes> permanent = 1;
+      // map<string, bytes> permanent = 1 [json_name = "permanent"];
       {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord, _impl_.permanent_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
-      // map<uint64, bytes> activity = 2;
+      // map<uint64, bytes> activity = 2 [json_name = "activity"];
       {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord, _impl_.activity_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
     }},
     {{
@@ -8428,23 +8428,23 @@ constexpr LoadoutEquipment::ParseTableT_ LoadoutEquipment::InternalGenerateParse
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint32 slot = 1;
+      // uint32 slot = 1 [json_name = "slot"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoadoutEquipment, _impl_.slot_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.slot_)}},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoadoutEquipment, _impl_.item_config_id_), 2>(),
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.item_config_id_)}},
-      // uint64 instance_id = 3;
+      // uint64 instance_id = 3 [json_name = "instanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LoadoutEquipment, _impl_.instance_id_), 3>(),
        {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.instance_id_)}},
-      // bool identified = 4;
+      // bool identified = 4 [json_name = "identified"];
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LoadoutEquipment, _impl_.identified_), 4>(),
        {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.identified_)}},
-      // repeated .pandora.inventory.v1.ItemAttribute attributes = 5;
+      // repeated .pandora.inventory.v1.ItemAttribute attributes = 5 [json_name = "attributes"];
       {::_pbi::TcParser::FastMtR1,
        {42, 0, 0,
         PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.attributes_)}},
@@ -8453,15 +8453,15 @@ constexpr LoadoutEquipment::ParseTableT_ LoadoutEquipment::InternalGenerateParse
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 slot = 1;
+      // uint32 slot = 1 [json_name = "slot"];
       {PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.slot_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.item_config_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint64 instance_id = 3;
+      // uint64 instance_id = 3 [json_name = "instanceId"];
       {PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.instance_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // bool identified = 4;
+      // bool identified = 4 [json_name = "identified"];
       {PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.identified_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
-      // repeated .pandora.inventory.v1.ItemAttribute attributes = 5;
+      // repeated .pandora.inventory.v1.ItemAttribute attributes = 5 [json_name = "attributes"];
       {PROTOBUF_FIELD_OFFSET(LoadoutEquipment, _impl_.attributes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -8610,26 +8610,26 @@ constexpr GrantSkillCardsResponse::ParseTableT_ GrantSkillCardsResponse::Interna
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GrantSkillCardsResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantSkillCardsResponse, _impl_.code_)}},
-      // repeated .pandora.player.v1.SkillCard cards = 2;
+      // repeated .pandora.player.v1.SkillCard cards = 2 [json_name = "cards"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantSkillCardsResponse, _impl_.cards_)}},
-      // bool already = 3;
+      // bool already = 3 [json_name = "already"];
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GrantSkillCardsResponse, _impl_.already_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(GrantSkillCardsResponse, _impl_.already_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GrantSkillCardsResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated .pandora.player.v1.SkillCard cards = 2;
+      // repeated .pandora.player.v1.SkillCard cards = 2 [json_name = "cards"];
       {PROTOBUF_FIELD_OFFSET(GrantSkillCardsResponse, _impl_.cards_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // bool already = 3;
+      // bool already = 3 [json_name = "already"];
       {PROTOBUF_FIELD_OFFSET(GrantSkillCardsResponse, _impl_.already_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
@@ -8776,26 +8776,26 @@ constexpr GrantSkillCardsRequest::ParseTableT_ GrantSkillCardsRequest::InternalG
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GrantSkillCardsRequest, _impl_.player_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(GrantSkillCardsRequest, _impl_.player_id_)}},
-      // repeated .pandora.player.v1.SkillCardGrant grants = 2;
+      // repeated .pandora.player.v1.SkillCardGrant grants = 2 [json_name = "grants"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantSkillCardsRequest, _impl_.grants_)}},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantSkillCardsRequest, _impl_.idempotency_key_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GrantSkillCardsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .pandora.player.v1.SkillCardGrant grants = 2;
+      // repeated .pandora.player.v1.SkillCardGrant grants = 2 [json_name = "grants"];
       {PROTOBUF_FIELD_OFFSET(GrantSkillCardsRequest, _impl_.grants_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(GrantSkillCardsRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
@@ -8947,26 +8947,26 @@ constexpr GetTalentsResponse::ParseTableT_ GetTalentsResponse::InternalGenerateP
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetTalentsResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetTalentsResponse, _impl_.code_)}},
-      // repeated .pandora.player.v1.TalentNode talents = 2;
+      // repeated .pandora.player.v1.TalentNode talents = 2 [json_name = "talents"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetTalentsResponse, _impl_.talents_)}},
-      // int32 unspent_points = 3;
+      // int32 unspent_points = 3 [json_name = "unspentPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetTalentsResponse, _impl_.unspent_points_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(GetTalentsResponse, _impl_.unspent_points_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetTalentsResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated .pandora.player.v1.TalentNode talents = 2;
+      // repeated .pandora.player.v1.TalentNode talents = 2 [json_name = "talents"];
       {PROTOBUF_FIELD_OFFSET(GetTalentsResponse, _impl_.talents_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // int32 unspent_points = 3;
+      // int32 unspent_points = 3 [json_name = "unspentPoints"];
       {PROTOBUF_FIELD_OFFSET(GetTalentsResponse, _impl_.unspent_points_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     {{
@@ -9113,26 +9113,26 @@ constexpr GetSkillCardsResponse::ParseTableT_ GetSkillCardsResponse::InternalGen
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetSkillCardsResponse, _impl_.code_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(GetSkillCardsResponse, _impl_.code_)}},
-      // repeated .pandora.player.v1.SkillCard cards = 2;
+      // repeated .pandora.player.v1.SkillCard cards = 2 [json_name = "cards"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetSkillCardsResponse, _impl_.cards_)}},
-      // repeated .pandora.player.v1.SkillSlot slots = 3;
+      // repeated .pandora.player.v1.SkillSlot slots = 3 [json_name = "slots"];
       {::_pbi::TcParser::FastMtR1,
        {26, 1, 1,
         PROTOBUF_FIELD_OFFSET(GetSkillCardsResponse, _impl_.slots_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetSkillCardsResponse, _impl_.code_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated .pandora.player.v1.SkillCard cards = 2;
+      // repeated .pandora.player.v1.SkillCard cards = 2 [json_name = "cards"];
       {PROTOBUF_FIELD_OFFSET(GetSkillCardsResponse, _impl_.cards_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // repeated .pandora.player.v1.SkillSlot slots = 3;
+      // repeated .pandora.player.v1.SkillSlot slots = 3 [json_name = "slots"];
       {PROTOBUF_FIELD_OFFSET(GetSkillCardsResponse, _impl_.slots_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -9287,20 +9287,20 @@ constexpr GetProfileResponse::ParseTableT_ GetProfileResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetProfileResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.player.v1.PlayerProfile profile = 2;
+      // .pandora.player.v1.PlayerProfile profile = 2 [json_name = "profile"];
       {::_pbi::TcParser::FastMtS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetProfileResponse, _impl_.profile_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetProfileResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetProfileResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetProfileResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // .pandora.player.v1.PlayerProfile profile = 2;
+      // .pandora.player.v1.PlayerProfile profile = 2 [json_name = "profile"];
       {PROTOBUF_FIELD_OFFSET(GetProfileResponse, _impl_.profile_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -9442,26 +9442,26 @@ constexpr GetAttributesResponse::ParseTableT_ GetAttributesResponse::InternalGen
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetAttributesResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetAttributesResponse, _impl_.code_)}},
-      // repeated .pandora.player.v1.AttributeAllocation attributes = 2;
+      // repeated .pandora.player.v1.AttributeAllocation attributes = 2 [json_name = "attributes"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetAttributesResponse, _impl_.attributes_)}},
-      // int32 unspent_points = 3;
+      // int32 unspent_points = 3 [json_name = "unspentPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetAttributesResponse, _impl_.unspent_points_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(GetAttributesResponse, _impl_.unspent_points_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetAttributesResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated .pandora.player.v1.AttributeAllocation attributes = 2;
+      // repeated .pandora.player.v1.AttributeAllocation attributes = 2 [json_name = "attributes"];
       {PROTOBUF_FIELD_OFFSET(GetAttributesResponse, _impl_.attributes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // int32 unspent_points = 3;
+      // int32 unspent_points = 3 [json_name = "unspentPoints"];
       {PROTOBUF_FIELD_OFFSET(GetAttributesResponse, _impl_.unspent_points_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     {{
@@ -9607,20 +9607,20 @@ constexpr AllocateAttributePointsRequest::ParseTableT_ AllocateAttributePointsRe
       ::_pbi::TcParser::GetTable<::pandora::player::v1::AllocateAttributePointsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.player.v1.AttributeAllocation allocations = 2;
+      // repeated .pandora.player.v1.AttributeAllocation allocations = 2 [json_name = "allocations"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(AllocateAttributePointsRequest, _impl_.allocations_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AllocateAttributePointsRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(AllocateAttributePointsRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(AllocateAttributePointsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .pandora.player.v1.AttributeAllocation allocations = 2;
+      // repeated .pandora.player.v1.AttributeAllocation allocations = 2 [json_name = "allocations"];
       {PROTOBUF_FIELD_OFFSET(AllocateAttributePointsRequest, _impl_.allocations_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -9765,20 +9765,20 @@ constexpr SetEquipmentRequest::ParseTableT_ SetEquipmentRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::player::v1::SetEquipmentRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.player.v1.LoadoutEquipment equipment = 2;
+      // repeated .pandora.player.v1.LoadoutEquipment equipment = 2 [json_name = "equipment"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(SetEquipmentRequest, _impl_.equipment_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetEquipmentRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(SetEquipmentRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(SetEquipmentRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .pandora.player.v1.LoadoutEquipment equipment = 2;
+      // repeated .pandora.player.v1.LoadoutEquipment equipment = 2 [json_name = "equipment"];
       {PROTOBUF_FIELD_OFFSET(SetEquipmentRequest, _impl_.equipment_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -9923,56 +9923,56 @@ constexpr PlayerLoadout::ParseTableT_ PlayerLoadout::InternalGenerateParseTable_
       ::_pbi::TcParser::GetTable<::pandora::player::v1::PlayerLoadout>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.player.v1.LoadoutSkillCard skill_cards = 8;
+      // repeated .pandora.player.v1.LoadoutSkillCard skill_cards = 8 [json_name = "skillCards"];
       {::_pbi::TcParser::FastMtR1,
        {66, 3, 3,
         PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.skill_cards_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerLoadout, _impl_.player_id_), 4>(),
        {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.player_id_)}},
-      // uint32 active_hero_id = 2;
+      // uint32 active_hero_id = 2 [json_name = "activeHeroId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerLoadout, _impl_.active_hero_id_), 5>(),
        {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.active_hero_id_)}},
-      // repeated .pandora.player.v1.AttributeAllocation attributes = 3;
+      // repeated .pandora.player.v1.AttributeAllocation attributes = 3 [json_name = "attributes"];
       {::_pbi::TcParser::FastMtR1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.attributes_)}},
-      // int32 unspent_attr_points = 4;
+      // int32 unspent_attr_points = 4 [json_name = "unspentAttrPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerLoadout, _impl_.unspent_attr_points_), 6>(),
        {32, 6, 0,
         PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.unspent_attr_points_)}},
-      // repeated .pandora.player.v1.LoadoutEquipment equipment = 5;
+      // repeated .pandora.player.v1.LoadoutEquipment equipment = 5 [json_name = "equipment"];
       {::_pbi::TcParser::FastMtR1,
        {42, 1, 1,
         PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.equipment_)}},
-      // repeated .pandora.player.v1.TalentNode talents = 6;
+      // repeated .pandora.player.v1.TalentNode talents = 6 [json_name = "talents"];
       {::_pbi::TcParser::FastMtR1,
        {50, 2, 2,
         PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.talents_)}},
-      // int32 unspent_talent_points = 7;
+      // int32 unspent_talent_points = 7 [json_name = "unspentTalentPoints"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerLoadout, _impl_.unspent_talent_points_), 7>(),
        {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.unspent_talent_points_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 active_hero_id = 2;
+      // uint32 active_hero_id = 2 [json_name = "activeHeroId"];
       {PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.active_hero_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // repeated .pandora.player.v1.AttributeAllocation attributes = 3;
+      // repeated .pandora.player.v1.AttributeAllocation attributes = 3 [json_name = "attributes"];
       {PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.attributes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // int32 unspent_attr_points = 4;
+      // int32 unspent_attr_points = 4 [json_name = "unspentAttrPoints"];
       {PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.unspent_attr_points_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // repeated .pandora.player.v1.LoadoutEquipment equipment = 5;
+      // repeated .pandora.player.v1.LoadoutEquipment equipment = 5 [json_name = "equipment"];
       {PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.equipment_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // repeated .pandora.player.v1.TalentNode talents = 6;
+      // repeated .pandora.player.v1.TalentNode talents = 6 [json_name = "talents"];
       {PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.talents_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // int32 unspent_talent_points = 7;
+      // int32 unspent_talent_points = 7 [json_name = "unspentTalentPoints"];
       {PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.unspent_talent_points_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // repeated .pandora.player.v1.LoadoutSkillCard skill_cards = 8;
+      // repeated .pandora.player.v1.LoadoutSkillCard skill_cards = 8 [json_name = "skillCards"];
       {PROTOBUF_FIELD_OFFSET(PlayerLoadout, _impl_.skill_cards_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -10150,20 +10150,20 @@ constexpr GetEquipmentResponse::ParseTableT_ GetEquipmentResponse::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetEquipmentResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.player.v1.LoadoutEquipment equipment = 2;
+      // repeated .pandora.player.v1.LoadoutEquipment equipment = 2 [json_name = "equipment"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetEquipmentResponse, _impl_.equipment_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetEquipmentResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetEquipmentResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetEquipmentResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated .pandora.player.v1.LoadoutEquipment equipment = 2;
+      // repeated .pandora.player.v1.LoadoutEquipment equipment = 2 [json_name = "equipment"];
       {PROTOBUF_FIELD_OFFSET(GetEquipmentResponse, _impl_.equipment_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -10308,20 +10308,20 @@ constexpr GetLoadoutResponse::ParseTableT_ GetLoadoutResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::player::v1::GetLoadoutResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.player.v1.PlayerLoadout loadout = 2;
+      // .pandora.player.v1.PlayerLoadout loadout = 2 [json_name = "loadout"];
       {::_pbi::TcParser::FastMtS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetLoadoutResponse, _impl_.loadout_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetLoadoutResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetLoadoutResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetLoadoutResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // .pandora.player.v1.PlayerLoadout loadout = 2;
+      // .pandora.player.v1.PlayerLoadout loadout = 2 [json_name = "loadout"];
       {PROTOBUF_FIELD_OFFSET(GetLoadoutResponse, _impl_.loadout_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -11119,232 +11119,271 @@ const char descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto[] AB
     "\n\036pandora/player/v1/player.proto\022\021pandor"
     "a.player.v1\032\037pandora/common/v1/errcode.p"
     "roto\032$pandora/inventory/v1/inventory.pro"
-    "to\"\360\001\n\rPlayerProfile\022\021\n\tplayer_id\030\001 \001(\004\022"
-    "\020\n\010nickname\030\002 \001(\t\022\r\n\005level\030\003 \001(\005\022\013\n\003mmr\030"
-    "\004 \001(\005\022\016\n\006avatar\030\005 \001(\t\022\025\n\rcreated_at_ms\030\006"
-    " \001(\003\022\024\n\014last_seen_ms\030\007 \001(\003\022\025\n\rtotal_batt"
-    "les\030\n \001(\005\022\022\n\ntotal_wins\030\013 \001(\005\022\024\n\014exp_in_"
-    "level\0302 \001(\004\022\024\n\014is_max_level\0303 \001(\010J\004\010\010\020\nJ"
-    "\004\010\014\0202\"&\n\021GetProfileRequest\022\021\n\tplayer_id\030"
-    "\001 \001(\004\"q\n\022GetProfileResponse\022(\n\004code\030\001 \001("
-    "\0162\032.pandora.common.v1.ErrCode\0221\n\007profile"
-    "\030\002 \001(\0132 .pandora.player.v1.PlayerProfile"
-    "\"<\n\025UpdateNicknameRequest\022\021\n\tplayer_id\030\001"
-    " \001(\004\022\020\n\010nickname\030\002 \001(\t\"B\n\026UpdateNickname"
-    "Response\022(\n\004code\030\001 \001(\0162\032.pandora.common."
-    "v1.ErrCode\"&\n\021ListHeroesRequest\022\021\n\tplaye"
-    "r_id\030\001 \001(\004\"P\n\022ListHeroesResponse\022(\n\004code"
-    "\030\001 \001(\0162\032.pandora.common.v1.ErrCode\022\020\n\010he"
-    "ro_ids\030\002 \003(\r\"G\n\021UnlockHeroRequest\022\021\n\tpla"
-    "yer_id\030\001 \001(\004\022\017\n\007hero_id\030\002 \001(\r\022\016\n\006source\030"
-    "\003 \001(\t\">\n\022UnlockHeroResponse\022(\n\004code\030\001 \001("
-    "\0162\032.pandora.common.v1.ErrCode\"\"\n\rGetMMRR"
-    "equest\022\021\n\tplayer_id\030\001 \001(\004\"G\n\016GetMMRRespo"
-    "nse\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
-    "rCode\022\013\n\003mmr\030\002 \001(\005\"]\n\020UpdateMMRRequest\022\021"
-    "\n\tplayer_id\030\001 \001(\004\022\r\n\005delta\030\002 \001(\005\022\016\n\006reas"
-    "on\030\003 \001(\t\022\027\n\017idempotency_key\030\004 \001(\t\"N\n\021Upd"
-    "ateMMRResponse\022(\n\004code\030\001 \001(\0162\032.pandora.c"
-    "ommon.v1.ErrCode\022\017\n\007new_mmr\030\002 \001(\005\"j\n\021Pla"
-    "yerUpdateEvent\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010mat"
-    "ch_id\030\002 \001(\004\022\021\n\tmmr_delta\030\003 \001(\005\022\016\n\006reason"
-    "\030\004 \001(\t\022\r\n\005ts_ms\030\005 \001(\003\"\213\001\n\025PlayerExperien"
-    "ceEvent\022\021\n\tplayer_id\030\001 \001(\004\022\r\n\005level\030\002 \001("
-    "\005\022\024\n\014exp_in_level\030\003 \001(\004\022\024\n\014is_max_level\030"
-    "\004 \001(\010\022\025\n\rlevels_gained\030\005 \001(\r\022\r\n\005ts_ms\030\006 "
-    "\001(\003\"7\n\023AttributeAllocation\022\020\n\010attr_key\030\001"
-    " \001(\t\022\016\n\006points\030\002 \001(\005\"7\n\021SelectHeroReques"
-    "t\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007hero_id\030\002 \001(\r\">\n"
-    "\022SelectHeroResponse\022(\n\004code\030\001 \001(\0162\032.pand"
-    "ora.common.v1.ErrCode\")\n\024GetActiveHeroRe"
-    "quest\022\021\n\tplayer_id\030\001 \001(\004\"R\n\025GetActiveHer"
-    "oResponse\022(\n\004code\030\001 \001(\0162\032.pandora.common"
-    ".v1.ErrCode\022\017\n\007hero_id\030\002 \001(\r\"Y\n\033GrantAtt"
-    "ributePointsRequest\022\021\n\tplayer_id\030\001 \001(\004\022\016"
-    "\n\006points\030\002 \001(\005\022\027\n\017idempotency_key\030\003 \001(\t\""
-    "`\n\034GrantAttributePointsResponse\022(\n\004code\030"
-    "\001 \001(\0162\032.pandora.common.v1.ErrCode\022\026\n\016uns"
-    "pent_points\030\002 \001(\005\"p\n\036AllocateAttributePo"
-    "intsRequest\022\021\n\tplayer_id\030\001 \001(\004\022;\n\013alloca"
-    "tions\030\002 \003(\0132&.pandora.player.v1.Attribut"
-    "eAllocation\"c\n\037AllocateAttributePointsRe"
-    "sponse\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1"
-    ".ErrCode\022\026\n\016unspent_points\030\002 \001(\005\"+\n\026Rese"
-    "tAttributesRequest\022\021\n\tplayer_id\030\001 \001(\004\"[\n"
-    "\027ResetAttributesResponse\022(\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCode\022\026\n\016unspent_po"
-    "ints\030\002 \001(\005\")\n\024GetAttributesRequest\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\"\225\001\n\025GetAttributesResponse\022"
-    "(\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
-    "e\022:\n\nattributes\030\002 \003(\0132&.pandora.player.v"
-    "1.AttributeAllocation\022\026\n\016unspent_points\030"
-    "\003 \001(\005\"\232\001\n\020LoadoutEquipment\022\014\n\004slot\030\001 \001(\r"
-    "\022\026\n\016item_config_id\030\002 \001(\r\022\023\n\013instance_id\030"
-    "\003 \001(\004\022\022\n\nidentified\030\004 \001(\010\0227\n\nattributes\030"
-    "\005 \003(\0132#.pandora.inventory.v1.ItemAttribu"
-    "te\".\n\nTalentNode\022\021\n\ttalent_id\030\001 \001(\r\022\r\n\005l"
-    "evel\030\002 \001(\005\"`\n\023SetEquipmentRequest\022\021\n\tpla"
-    "yer_id\030\001 \001(\004\0226\n\tequipment\030\002 \003(\0132#.pandor"
-    "a.player.v1.LoadoutEquipment\"@\n\024SetEquip"
-    "mentResponse\022(\n\004code\030\001 \001(\0162\032.pandora.com"
-    "mon.v1.ErrCode\"(\n\023GetEquipmentRequest\022\021\n"
-    "\tplayer_id\030\001 \001(\004\"x\n\024GetEquipmentResponse"
-    "\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
-    "de\0226\n\tequipment\030\002 \003(\0132#.pandora.player.v"
-    "1.LoadoutEquipment\"V\n\030GrantTalentPointsR"
-    "equest\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006points\030\002 \001("
-    "\005\022\027\n\017idempotency_key\030\003 \001(\t\"]\n\031GrantTalen"
-    "tPointsResponse\022(\n\004code\030\001 \001(\0162\032.pandora."
-    "common.v1.ErrCode\022\026\n\016unspent_points\030\002 \001("
-    "\005\"V\n\021SetTalentsRequest\022\021\n\tplayer_id\030\001 \001("
-    "\004\022.\n\007talents\030\002 \003(\0132\035.pandora.player.v1.T"
-    "alentNode\"V\n\022SetTalentsResponse\022(\n\004code\030"
-    "\001 \001(\0162\032.pandora.common.v1.ErrCode\022\026\n\016uns"
-    "pent_points\030\002 \001(\005\"(\n\023ResetTalentsRequest"
-    "\022\021\n\tplayer_id\030\001 \001(\004\"X\n\024ResetTalentsRespo"
-    "nse\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
-    "rCode\022\026\n\016unspent_points\030\002 \001(\005\"&\n\021GetTale"
-    "ntsRequest\022\021\n\tplayer_id\030\001 \001(\004\"\206\001\n\022GetTal"
-    "entsResponse\022(\n\004code\030\001 \001(\0162\032.pandora.com"
-    "mon.v1.ErrCode\022.\n\007talents\030\002 \003(\0132\035.pandor"
-    "a.player.v1.TalentNode\022\026\n\016unspent_points"
-    "\030\003 \001(\005\";\n\tSkillCard\022\017\n\007card_id\030\001 \001(\r\022\r\n\005"
-    "level\030\002 \001(\r\022\016\n\006shards\030\003 \001(\r\"*\n\tSkillSlot"
-    "\022\014\n\004slot\030\001 \001(\r\022\017\n\007card_id\030\002 \001(\r\"w\n\026Grant"
-    "SkillCardsRequest\022\021\n\tplayer_id\030\001 \001(\004\0221\n\006"
-    "grants\030\002 \003(\0132!.pandora.player.v1.SkillCa"
-    "rdGrant\022\027\n\017idempotency_key\030\003 \001(\t\"1\n\016Skil"
-    "lCardGrant\022\017\n\007card_id\030\001 \001(\r\022\016\n\006shards\030\002 "
-    "\001(\r\"\201\001\n\027GrantSkillCardsResponse\022(\n\004code\030"
-    "\001 \001(\0162\032.pandora.common.v1.ErrCode\022+\n\005car"
-    "ds\030\002 \003(\0132\034.pandora.player.v1.SkillCard\022\017"
-    "\n\007already\030\003 \001(\010\"=\n\027UpgradeSkillCardReque"
-    "st\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007card_id\030\002 \001(\r\"\204"
-    "\001\n\030UpgradeSkillCardResponse\022(\n\004code\030\001 \001("
-    "\0162\032.pandora.common.v1.ErrCode\022*\n\004card\030\002 "
-    "\001(\0132\034.pandora.player.v1.SkillCard\022\022\n\nsha"
-    "rd_cost\030\003 \001(\r\"V\n\024SetSkillSlotsRequest\022\021\n"
-    "\tplayer_id\030\001 \001(\004\022+\n\005slots\030\002 \003(\0132\034.pandor"
-    "a.player.v1.SkillSlot\"n\n\025SetSkillSlotsRe"
-    "sponse\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1"
-    ".ErrCode\022+\n\005slots\030\002 \003(\0132\034.pandora.player"
-    ".v1.SkillSlot\")\n\024GetSkillCardsRequest\022\021\n"
-    "\tplayer_id\030\001 \001(\004\"\233\001\n\025GetSkillCardsRespon"
-    "se\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
-    "Code\022+\n\005cards\030\002 \003(\0132\034.pandora.player.v1."
-    "SkillCard\022+\n\005slots\030\003 \003(\0132\034.pandora.playe"
-    "r.v1.SkillSlot\"\324\002\n\rPlayerLoadout\022\021\n\tplay"
-    "er_id\030\001 \001(\004\022\026\n\016active_hero_id\030\002 \001(\r\022:\n\na"
-    "ttributes\030\003 \003(\0132&.pandora.player.v1.Attr"
-    "ibuteAllocation\022\033\n\023unspent_attr_points\030\004"
-    " \001(\005\0226\n\tequipment\030\005 \003(\0132#.pandora.player"
-    ".v1.LoadoutEquipment\022.\n\007talents\030\006 \003(\0132\035."
-    "pandora.player.v1.TalentNode\022\035\n\025unspent_"
-    "talent_points\030\007 \001(\005\0228\n\013skill_cards\030\010 \003(\013"
-    "2#.pandora.player.v1.LoadoutSkillCard\"@\n"
-    "\020LoadoutSkillCard\022\014\n\004slot\030\001 \001(\r\022\017\n\007card_"
-    "id\030\002 \001(\r\022\r\n\005level\030\003 \001(\r\"&\n\021GetLoadoutReq"
-    "uest\022\021\n\tplayer_id\030\001 \001(\004\"q\n\022GetLoadoutRes"
-    "ponse\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCode\0221\n\007loadout\030\002 \001(\0132 .pandora.playe"
-    "r.v1.PlayerLoadout\"\231\002\n\030RewardClaimStorag"
-    "eRecord\022M\n\tpermanent\030\001 \003(\0132:.pandora.pla"
-    "yer.v1.RewardClaimStorageRecord.Permanen"
-    "tEntry\022K\n\010activity\030\002 \003(\01329.pandora.playe"
-    "r.v1.RewardClaimStorageRecord.ActivityEn"
-    "try\0320\n\016PermanentEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005va"
-    "lue\030\002 \001(\014:\0028\001\032/\n\rActivityEntry\022\013\n\003key\030\001 "
-    "\001(\004\022\r\n\005value\030\002 \001(\014:\0028\001\"\242\001\n\022ClaimRewardRe"
-    "quest\022\021\n\tplayer_id\030\001 \001(\004\0228\n\013source_type\030"
-    "\002 \001(\0162#.pandora.player.v1.RewardSourceTy"
-    "pe\022\016\n\006source\030\003 \001(\t\022\034\n\024activity_instance_"
-    "id\030\004 \001(\004\022\021\n\treward_id\030\005 \001(\r\"\?\n\023ClaimRewa"
-    "rdResponse\022(\n\004code\030\001 \001(\0162\032.pandora.commo"
-    "n.v1.ErrCode\"\223\001\n\026GetRewardClaimsRequest\022"
-    "\021\n\tplayer_id\030\001 \001(\004\0228\n\013source_type\030\002 \001(\0162"
-    "#.pandora.player.v1.RewardSourceType\022\016\n\006"
-    "source\030\003 \001(\t\022\034\n\024activity_instance_id\030\004 \001"
-    "(\004\"_\n\027GetRewardClaimsResponse\022(\n\004code\030\001 "
-    "\001(\0162\032.pandora.common.v1.ErrCode\022\032\n\022claim"
-    "ed_reward_ids\030\002 \003(\r\"e\n\024AddExperienceRequ"
-    "est\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\texp_delta\030\002 \001("
-    "\004\022\016\n\006reason\030\003 \001(\t\022\027\n\017idempotency_key\030\004 \001"
-    "(\t\"\244\001\n\025AddExperienceResponse\022(\n\004code\030\001 \001"
-    "(\0162\032.pandora.common.v1.ErrCode\022\r\n\005level\030"
-    "\002 \001(\005\022\024\n\014exp_in_level\030\003 \001(\004\022\024\n\014is_max_le"
-    "vel\030\004 \001(\010\022\025\n\rlevels_gained\030\005 \001(\r\022\017\n\007alre"
-    "ady\030\006 \001(\010*f\n\023PlayerPushEventType\022(\n$PLAY"
-    "ER_PUSH_EVENT_TYPE_LEGACY_UPDATE\020\000\022%\n!PL"
-    "AYER_PUSH_EVENT_TYPE_EXPERIENCE\020\001*y\n\020Rew"
-    "ardSourceType\022\"\n\036REWARD_SOURCE_TYPE_UNSP"
-    "ECIFIED\020\000\022 \n\034REWARD_SOURCE_TYPE_PERMANEN"
-    "T\020\001\022\037\n\033REWARD_SOURCE_TYPE_ACTIVITY\020\0022\246\024\n"
-    "\rPlayerService\022Y\n\nGetProfile\022$.pandora.p"
-    "layer.v1.GetProfileRequest\032%.pandora.pla"
-    "yer.v1.GetProfileResponse\022e\n\016UpdateNickn"
-    "ame\022(.pandora.player.v1.UpdateNicknameRe"
-    "quest\032).pandora.player.v1.UpdateNickname"
-    "Response\022Y\n\nListHeroes\022$.pandora.player."
-    "v1.ListHeroesRequest\032%.pandora.player.v1"
-    ".ListHeroesResponse\022Y\n\nUnlockHero\022$.pand"
-    "ora.player.v1.UnlockHeroRequest\032%.pandor"
-    "a.player.v1.UnlockHeroResponse\022M\n\006GetMMR"
-    "\022 .pandora.player.v1.GetMMRRequest\032!.pan"
-    "dora.player.v1.GetMMRResponse\022V\n\tUpdateM"
-    "MR\022#.pandora.player.v1.UpdateMMRRequest\032"
-    "$.pandora.player.v1.UpdateMMRResponse\022Y\n"
-    "\nSelectHero\022$.pandora.player.v1.SelectHe"
-    "roRequest\032%.pandora.player.v1.SelectHero"
-    "Response\022b\n\rGetActiveHero\022\'.pandora.play"
-    "er.v1.GetActiveHeroRequest\032(.pandora.pla"
-    "yer.v1.GetActiveHeroResponse\022w\n\024GrantAtt"
-    "ributePoints\022..pandora.player.v1.GrantAt"
-    "tributePointsRequest\032/.pandora.player.v1"
-    ".GrantAttributePointsResponse\022\200\001\n\027Alloca"
-    "teAttributePoints\0221.pandora.player.v1.Al"
-    "locateAttributePointsRequest\0322.pandora.p"
-    "layer.v1.AllocateAttributePointsResponse"
-    "\022h\n\017ResetAttributes\022).pandora.player.v1."
-    "ResetAttributesRequest\032*.pandora.player."
-    "v1.ResetAttributesResponse\022b\n\rGetAttribu"
-    "tes\022\'.pandora.player.v1.GetAttributesReq"
-    "uest\032(.pandora.player.v1.GetAttributesRe"
-    "sponse\022_\n\014SetEquipment\022&.pandora.player."
-    "v1.SetEquipmentRequest\032\'.pandora.player."
-    "v1.SetEquipmentResponse\022_\n\014GetEquipment\022"
-    "&.pandora.player.v1.GetEquipmentRequest\032"
-    "\'.pandora.player.v1.GetEquipmentResponse"
-    "\022n\n\021GrantTalentPoints\022+.pandora.player.v"
-    "1.GrantTalentPointsRequest\032,.pandora.pla"
-    "yer.v1.GrantTalentPointsResponse\022Y\n\nSetT"
-    "alents\022$.pandora.player.v1.SetTalentsReq"
-    "uest\032%.pandora.player.v1.SetTalentsRespo"
-    "nse\022_\n\014ResetTalents\022&.pandora.player.v1."
-    "ResetTalentsRequest\032\'.pandora.player.v1."
-    "ResetTalentsResponse\022Y\n\nGetTalents\022$.pan"
-    "dora.player.v1.GetTalentsRequest\032%.pando"
-    "ra.player.v1.GetTalentsResponse\022h\n\017Grant"
-    "SkillCards\022).pandora.player.v1.GrantSkil"
-    "lCardsRequest\032*.pandora.player.v1.GrantS"
-    "killCardsResponse\022k\n\020UpgradeSkillCard\022*."
-    "pandora.player.v1.UpgradeSkillCardReques"
-    "t\032+.pandora.player.v1.UpgradeSkillCardRe"
-    "sponse\022b\n\rSetSkillSlots\022\'.pandora.player"
-    ".v1.SetSkillSlotsRequest\032(.pandora.playe"
-    "r.v1.SetSkillSlotsResponse\022b\n\rGetSkillCa"
-    "rds\022\'.pandora.player.v1.GetSkillCardsReq"
-    "uest\032(.pandora.player.v1.GetSkillCardsRe"
-    "sponse\022Y\n\nGetLoadout\022$.pandora.player.v1"
-    ".GetLoadoutRequest\032%.pandora.player.v1.G"
-    "etLoadoutResponse\022\\\n\013ClaimReward\022%.pando"
-    "ra.player.v1.ClaimRewardRequest\032&.pandor"
-    "a.player.v1.ClaimRewardResponse\022h\n\017GetRe"
-    "wardClaims\022).pandora.player.v1.GetReward"
-    "ClaimsRequest\032*.pandora.player.v1.GetRew"
-    "ardClaimsResponse\022b\n\rAddExperience\022\'.pan"
-    "dora.player.v1.AddExperienceRequest\032(.pa"
-    "ndora.player.v1.AddExperienceResponseb\006p"
-    "roto3"
+    "to\"\342\002\n\rPlayerProfile\022\033\n\tplayer_id\030\001 \001(\004R"
+    "\010playerId\022\032\n\010nickname\030\002 \001(\tR\010nickname\022\024\n"
+    "\005level\030\003 \001(\005R\005level\022\020\n\003mmr\030\004 \001(\005R\003mmr\022\026\n"
+    "\006avatar\030\005 \001(\tR\006avatar\022\"\n\rcreated_at_ms\030\006"
+    " \001(\003R\013createdAtMs\022 \n\014last_seen_ms\030\007 \001(\003R"
+    "\nlastSeenMs\022#\n\rtotal_battles\030\n \001(\005R\014tota"
+    "lBattles\022\035\n\ntotal_wins\030\013 \001(\005R\ttotalWins\022"
+    " \n\014exp_in_level\0302 \001(\004R\nexpInLevel\022 \n\014is_"
+    "max_level\0303 \001(\010R\nisMaxLevelJ\004\010\010\020\nJ\004\010\014\0202\""
+    "0\n\021GetProfileRequest\022\033\n\tplayer_id\030\001 \001(\004R"
+    "\010playerId\"\200\001\n\022GetProfileResponse\022.\n\004code"
+    "\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code"
+    "\022:\n\007profile\030\002 \001(\0132 .pandora.player.v1.Pl"
+    "ayerProfileR\007profile\"P\n\025UpdateNicknameRe"
+    "quest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\032\n\010ni"
+    "ckname\030\002 \001(\tR\010nickname\"H\n\026UpdateNickname"
+    "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
+    "v1.ErrCodeR\004code\"0\n\021ListHeroesRequest\022\033\n"
+    "\tplayer_id\030\001 \001(\004R\010playerId\"_\n\022ListHeroes"
+    "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
+    "v1.ErrCodeR\004code\022\031\n\010hero_ids\030\002 \003(\rR\007hero"
+    "Ids\"a\n\021UnlockHeroRequest\022\033\n\tplayer_id\030\001 "
+    "\001(\004R\010playerId\022\027\n\007hero_id\030\002 \001(\rR\006heroId\022\026"
+    "\n\006source\030\003 \001(\tR\006source\"D\n\022UnlockHeroResp"
+    "onse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.E"
+    "rrCodeR\004code\",\n\rGetMMRRequest\022\033\n\tplayer_"
+    "id\030\001 \001(\004R\010playerId\"R\n\016GetMMRResponse\022.\n\004"
+    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
+    "code\022\020\n\003mmr\030\002 \001(\005R\003mmr\"\206\001\n\020UpdateMMRRequ"
+    "est\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\024\n\005delt"
+    "a\030\002 \001(\005R\005delta\022\026\n\006reason\030\003 \001(\tR\006reason\022\'"
+    "\n\017idempotency_key\030\004 \001(\tR\016idempotencyKey\""
+    "\\\n\021UpdateMMRResponse\022.\n\004code\030\001 \001(\0162\032.pan"
+    "dora.common.v1.ErrCodeR\004code\022\027\n\007new_mmr\030"
+    "\002 \001(\005R\006newMmr\"\225\001\n\021PlayerUpdateEvent\022\033\n\tp"
+    "layer_id\030\001 \001(\004R\010playerId\022\031\n\010match_id\030\002 \001"
+    "(\004R\007matchId\022\033\n\tmmr_delta\030\003 \001(\005R\010mmrDelta"
+    "\022\026\n\006reason\030\004 \001(\tR\006reason\022\023\n\005ts_ms\030\005 \001(\003R"
+    "\004tsMs\"\310\001\n\025PlayerExperienceEvent\022\033\n\tplaye"
+    "r_id\030\001 \001(\004R\010playerId\022\024\n\005level\030\002 \001(\005R\005lev"
+    "el\022 \n\014exp_in_level\030\003 \001(\004R\nexpInLevel\022 \n\014"
+    "is_max_level\030\004 \001(\010R\nisMaxLevel\022#\n\rlevels"
+    "_gained\030\005 \001(\rR\014levelsGained\022\023\n\005ts_ms\030\006 \001"
+    "(\003R\004tsMs\"H\n\023AttributeAllocation\022\031\n\010attr_"
+    "key\030\001 \001(\tR\007attrKey\022\026\n\006points\030\002 \001(\005R\006poin"
+    "ts\"I\n\021SelectHeroRequest\022\033\n\tplayer_id\030\001 \001"
+    "(\004R\010playerId\022\027\n\007hero_id\030\002 \001(\rR\006heroId\"D\n"
+    "\022SelectHeroResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\"3\n\024GetActive"
+    "HeroRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId"
+    "\"`\n\025GetActiveHeroResponse\022.\n\004code\030\001 \001(\0162"
+    "\032.pandora.common.v1.ErrCodeR\004code\022\027\n\007her"
+    "o_id\030\002 \001(\rR\006heroId\"{\n\033GrantAttributePoin"
+    "tsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\026"
+    "\n\006points\030\002 \001(\005R\006points\022\'\n\017idempotency_ke"
+    "y\030\003 \001(\tR\016idempotencyKey\"u\n\034GrantAttribut"
+    "ePointsResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\022%\n\016unspent_point"
+    "s\030\002 \001(\005R\runspentPoints\"\207\001\n\036AllocateAttri"
+    "butePointsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pl"
+    "ayerId\022H\n\013allocations\030\002 \003(\0132&.pandora.pl"
+    "ayer.v1.AttributeAllocationR\013allocations"
+    "\"x\n\037AllocateAttributePointsResponse\022.\n\004c"
+    "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004c"
+    "ode\022%\n\016unspent_points\030\002 \001(\005R\runspentPoin"
+    "ts\"5\n\026ResetAttributesRequest\022\033\n\tplayer_i"
+    "d\030\001 \001(\004R\010playerId\"p\n\027ResetAttributesResp"
+    "onse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.E"
+    "rrCodeR\004code\022%\n\016unspent_points\030\002 \001(\005R\run"
+    "spentPoints\"3\n\024GetAttributesRequest\022\033\n\tp"
+    "layer_id\030\001 \001(\004R\010playerId\"\266\001\n\025GetAttribut"
+    "esResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
+    "n.v1.ErrCodeR\004code\022F\n\nattributes\030\002 \003(\0132&"
+    ".pandora.player.v1.AttributeAllocationR\n"
+    "attributes\022%\n\016unspent_points\030\003 \001(\005R\runsp"
+    "entPoints\"\322\001\n\020LoadoutEquipment\022\022\n\004slot\030\001"
+    " \001(\rR\004slot\022$\n\016item_config_id\030\002 \001(\rR\014item"
+    "ConfigId\022\037\n\013instance_id\030\003 \001(\004R\ninstanceI"
+    "d\022\036\n\nidentified\030\004 \001(\010R\nidentified\022C\n\natt"
+    "ributes\030\005 \003(\0132#.pandora.inventory.v1.Ite"
+    "mAttributeR\nattributes\"\?\n\nTalentNode\022\033\n\t"
+    "talent_id\030\001 \001(\rR\010talentId\022\024\n\005level\030\002 \001(\005"
+    "R\005level\"u\n\023SetEquipmentRequest\022\033\n\tplayer"
+    "_id\030\001 \001(\004R\010playerId\022A\n\tequipment\030\002 \003(\0132#"
+    ".pandora.player.v1.LoadoutEquipmentR\tequ"
+    "ipment\"F\n\024SetEquipmentResponse\022.\n\004code\030\001"
+    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\"2"
+    "\n\023GetEquipmentRequest\022\033\n\tplayer_id\030\001 \001(\004"
+    "R\010playerId\"\211\001\n\024GetEquipmentResponse\022.\n\004c"
+    "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004c"
+    "ode\022A\n\tequipment\030\002 \003(\0132#.pandora.player."
+    "v1.LoadoutEquipmentR\tequipment\"x\n\030GrantT"
+    "alentPointsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010p"
+    "layerId\022\026\n\006points\030\002 \001(\005R\006points\022\'\n\017idemp"
+    "otency_key\030\003 \001(\tR\016idempotencyKey\"r\n\031Gran"
+    "tTalentPointsResponse\022.\n\004code\030\001 \001(\0162\032.pa"
+    "ndora.common.v1.ErrCodeR\004code\022%\n\016unspent"
+    "_points\030\002 \001(\005R\runspentPoints\"i\n\021SetTalen"
+    "tsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\0227"
+    "\n\007talents\030\002 \003(\0132\035.pandora.player.v1.Tale"
+    "ntNodeR\007talents\"k\n\022SetTalentsResponse\022.\n"
+    "\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR"
+    "\004code\022%\n\016unspent_points\030\002 \001(\005R\runspentPo"
+    "ints\"2\n\023ResetTalentsRequest\022\033\n\tplayer_id"
+    "\030\001 \001(\004R\010playerId\"m\n\024ResetTalentsResponse"
+    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
+    "deR\004code\022%\n\016unspent_points\030\002 \001(\005R\runspen"
+    "tPoints\"0\n\021GetTalentsRequest\022\033\n\tplayer_i"
+    "d\030\001 \001(\004R\010playerId\"\244\001\n\022GetTalentsResponse"
+    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
+    "deR\004code\0227\n\007talents\030\002 \003(\0132\035.pandora.play"
+    "er.v1.TalentNodeR\007talents\022%\n\016unspent_poi"
+    "nts\030\003 \001(\005R\runspentPoints\"R\n\tSkillCard\022\027\n"
+    "\007card_id\030\001 \001(\rR\006cardId\022\024\n\005level\030\002 \001(\rR\005l"
+    "evel\022\026\n\006shards\030\003 \001(\rR\006shards\"8\n\tSkillSlo"
+    "t\022\022\n\004slot\030\001 \001(\rR\004slot\022\027\n\007card_id\030\002 \001(\rR\006"
+    "cardId\"\231\001\n\026GrantSkillCardsRequest\022\033\n\tpla"
+    "yer_id\030\001 \001(\004R\010playerId\0229\n\006grants\030\002 \003(\0132!"
+    ".pandora.player.v1.SkillCardGrantR\006grant"
+    "s\022\'\n\017idempotency_key\030\003 \001(\tR\016idempotencyK"
+    "ey\"A\n\016SkillCardGrant\022\027\n\007card_id\030\001 \001(\rR\006c"
+    "ardId\022\026\n\006shards\030\002 \001(\rR\006shards\"\227\001\n\027GrantS"
+    "killCardsResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
+    "a.common.v1.ErrCodeR\004code\0222\n\005cards\030\002 \003(\013"
+    "2\034.pandora.player.v1.SkillCardR\005cards\022\030\n"
+    "\007already\030\003 \001(\010R\007already\"O\n\027UpgradeSkillC"
+    "ardRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022"
+    "\027\n\007card_id\030\002 \001(\rR\006cardId\"\233\001\n\030UpgradeSkil"
+    "lCardResponse\022.\n\004code\030\001 \001(\0162\032.pandora.co"
+    "mmon.v1.ErrCodeR\004code\0220\n\004card\030\002 \001(\0132\034.pa"
+    "ndora.player.v1.SkillCardR\004card\022\035\n\nshard"
+    "_cost\030\003 \001(\rR\tshardCost\"g\n\024SetSkillSlotsR"
+    "equest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\0222\n\005s"
+    "lots\030\002 \003(\0132\034.pandora.player.v1.SkillSlot"
+    "R\005slots\"{\n\025SetSkillSlotsResponse\022.\n\004code"
+    "\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code"
+    "\0222\n\005slots\030\002 \003(\0132\034.pandora.player.v1.Skil"
+    "lSlotR\005slots\"3\n\024GetSkillCardsRequest\022\033\n\t"
+    "player_id\030\001 \001(\004R\010playerId\"\257\001\n\025GetSkillCa"
+    "rdsResponse\022.\n\004code\030\001 \001(\0162\032.pandora.comm"
+    "on.v1.ErrCodeR\004code\0222\n\005cards\030\002 \003(\0132\034.pan"
+    "dora.player.v1.SkillCardR\005cards\0222\n\005slots"
+    "\030\003 \003(\0132\034.pandora.player.v1.SkillSlotR\005sl"
+    "ots\"\300\003\n\rPlayerLoadout\022\033\n\tplayer_id\030\001 \001(\004"
+    "R\010playerId\022$\n\016active_hero_id\030\002 \001(\rR\014acti"
+    "veHeroId\022F\n\nattributes\030\003 \003(\0132&.pandora.p"
+    "layer.v1.AttributeAllocationR\nattributes"
+    "\022.\n\023unspent_attr_points\030\004 \001(\005R\021unspentAt"
+    "trPoints\022A\n\tequipment\030\005 \003(\0132#.pandora.pl"
+    "ayer.v1.LoadoutEquipmentR\tequipment\0227\n\007t"
+    "alents\030\006 \003(\0132\035.pandora.player.v1.TalentN"
+    "odeR\007talents\0222\n\025unspent_talent_points\030\007 "
+    "\001(\005R\023unspentTalentPoints\022D\n\013skill_cards\030"
+    "\010 \003(\0132#.pandora.player.v1.LoadoutSkillCa"
+    "rdR\nskillCards\"U\n\020LoadoutSkillCard\022\022\n\004sl"
+    "ot\030\001 \001(\rR\004slot\022\027\n\007card_id\030\002 \001(\rR\006cardId\022"
+    "\024\n\005level\030\003 \001(\rR\005level\"0\n\021GetLoadoutReque"
+    "st\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"\200\001\n\022GetL"
+    "oadoutResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
+    "ommon.v1.ErrCodeR\004code\022:\n\007loadout\030\002 \001(\0132"
+    " .pandora.player.v1.PlayerLoadoutR\007loado"
+    "ut\"\306\002\n\030RewardClaimStorageRecord\022X\n\tperma"
+    "nent\030\001 \003(\0132:.pandora.player.v1.RewardCla"
+    "imStorageRecord.PermanentEntryR\tpermanen"
+    "t\022U\n\010activity\030\002 \003(\01329.pandora.player.v1."
+    "RewardClaimStorageRecord.ActivityEntryR\010"
+    "activity\032<\n\016PermanentEntry\022\020\n\003key\030\001 \001(\tR"
+    "\003key\022\024\n\005value\030\002 \001(\014R\005value:\0028\001\032;\n\rActivi"
+    "tyEntry\022\020\n\003key\030\001 \001(\004R\003key\022\024\n\005value\030\002 \001(\014"
+    "R\005value:\0028\001\"\336\001\n\022ClaimRewardRequest\022\033\n\tpl"
+    "ayer_id\030\001 \001(\004R\010playerId\022D\n\013source_type\030\002"
+    " \001(\0162#.pandora.player.v1.RewardSourceTyp"
+    "eR\nsourceType\022\026\n\006source\030\003 \001(\tR\006source\0220\n"
+    "\024activity_instance_id\030\004 \001(\004R\022activityIns"
+    "tanceId\022\033\n\treward_id\030\005 \001(\rR\010rewardId\"E\n\023"
+    "ClaimRewardResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\"\305\001\n\026GetRewar"
+    "dClaimsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
+    "rId\022D\n\013source_type\030\002 \001(\0162#.pandora.playe"
+    "r.v1.RewardSourceTypeR\nsourceType\022\026\n\006sou"
+    "rce\030\003 \001(\tR\006source\0220\n\024activity_instance_i"
+    "d\030\004 \001(\004R\022activityInstanceId\"w\n\027GetReward"
+    "ClaimsResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
+    "ommon.v1.ErrCodeR\004code\022,\n\022claimed_reward"
+    "_ids\030\002 \003(\rR\020claimedRewardIds\"\221\001\n\024AddExpe"
+    "rienceRequest\022\033\n\tplayer_id\030\001 \001(\004R\010player"
+    "Id\022\033\n\texp_delta\030\002 \001(\004R\010expDelta\022\026\n\006reaso"
+    "n\030\003 \001(\tR\006reason\022\'\n\017idempotency_key\030\004 \001(\t"
+    "R\016idempotencyKey\"\340\001\n\025AddExperienceRespon"
+    "se\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
+    "CodeR\004code\022\024\n\005level\030\002 \001(\005R\005level\022 \n\014exp_"
+    "in_level\030\003 \001(\004R\nexpInLevel\022 \n\014is_max_lev"
+    "el\030\004 \001(\010R\nisMaxLevel\022#\n\rlevels_gained\030\005 "
+    "\001(\rR\014levelsGained\022\030\n\007already\030\006 \001(\010R\007alre"
+    "ady*f\n\023PlayerPushEventType\022(\n$PLAYER_PUS"
+    "H_EVENT_TYPE_LEGACY_UPDATE\020\000\022%\n!PLAYER_P"
+    "USH_EVENT_TYPE_EXPERIENCE\020\001*y\n\020RewardSou"
+    "rceType\022\"\n\036REWARD_SOURCE_TYPE_UNSPECIFIE"
+    "D\020\000\022 \n\034REWARD_SOURCE_TYPE_PERMANENT\020\001\022\037\n"
+    "\033REWARD_SOURCE_TYPE_ACTIVITY\020\0022\246\024\n\rPlaye"
+    "rService\022Y\n\nGetProfile\022$.pandora.player."
+    "v1.GetProfileRequest\032%.pandora.player.v1"
+    ".GetProfileResponse\022e\n\016UpdateNickname\022(."
+    "pandora.player.v1.UpdateNicknameRequest\032"
+    ").pandora.player.v1.UpdateNicknameRespon"
+    "se\022Y\n\nListHeroes\022$.pandora.player.v1.Lis"
+    "tHeroesRequest\032%.pandora.player.v1.ListH"
+    "eroesResponse\022Y\n\nUnlockHero\022$.pandora.pl"
+    "ayer.v1.UnlockHeroRequest\032%.pandora.play"
+    "er.v1.UnlockHeroResponse\022M\n\006GetMMR\022 .pan"
+    "dora.player.v1.GetMMRRequest\032!.pandora.p"
+    "layer.v1.GetMMRResponse\022V\n\tUpdateMMR\022#.p"
+    "andora.player.v1.UpdateMMRRequest\032$.pand"
+    "ora.player.v1.UpdateMMRResponse\022Y\n\nSelec"
+    "tHero\022$.pandora.player.v1.SelectHeroRequ"
+    "est\032%.pandora.player.v1.SelectHeroRespon"
+    "se\022b\n\rGetActiveHero\022\'.pandora.player.v1."
+    "GetActiveHeroRequest\032(.pandora.player.v1"
+    ".GetActiveHeroResponse\022w\n\024GrantAttribute"
+    "Points\022..pandora.player.v1.GrantAttribut"
+    "ePointsRequest\032/.pandora.player.v1.Grant"
+    "AttributePointsResponse\022\200\001\n\027AllocateAttr"
+    "ibutePoints\0221.pandora.player.v1.Allocate"
+    "AttributePointsRequest\0322.pandora.player."
+    "v1.AllocateAttributePointsResponse\022h\n\017Re"
+    "setAttributes\022).pandora.player.v1.ResetA"
+    "ttributesRequest\032*.pandora.player.v1.Res"
+    "etAttributesResponse\022b\n\rGetAttributes\022\'."
+    "pandora.player.v1.GetAttributesRequest\032("
+    ".pandora.player.v1.GetAttributesResponse"
+    "\022_\n\014SetEquipment\022&.pandora.player.v1.Set"
+    "EquipmentRequest\032\'.pandora.player.v1.Set"
+    "EquipmentResponse\022_\n\014GetEquipment\022&.pand"
+    "ora.player.v1.GetEquipmentRequest\032\'.pand"
+    "ora.player.v1.GetEquipmentResponse\022n\n\021Gr"
+    "antTalentPoints\022+.pandora.player.v1.Gran"
+    "tTalentPointsRequest\032,.pandora.player.v1"
+    ".GrantTalentPointsResponse\022Y\n\nSetTalents"
+    "\022$.pandora.player.v1.SetTalentsRequest\032%"
+    ".pandora.player.v1.SetTalentsResponse\022_\n"
+    "\014ResetTalents\022&.pandora.player.v1.ResetT"
+    "alentsRequest\032\'.pandora.player.v1.ResetT"
+    "alentsResponse\022Y\n\nGetTalents\022$.pandora.p"
+    "layer.v1.GetTalentsRequest\032%.pandora.pla"
+    "yer.v1.GetTalentsResponse\022h\n\017GrantSkillC"
+    "ards\022).pandora.player.v1.GrantSkillCards"
+    "Request\032*.pandora.player.v1.GrantSkillCa"
+    "rdsResponse\022k\n\020UpgradeSkillCard\022*.pandor"
+    "a.player.v1.UpgradeSkillCardRequest\032+.pa"
+    "ndora.player.v1.UpgradeSkillCardResponse"
+    "\022b\n\rSetSkillSlots\022\'.pandora.player.v1.Se"
+    "tSkillSlotsRequest\032(.pandora.player.v1.S"
+    "etSkillSlotsResponse\022b\n\rGetSkillCards\022\'."
+    "pandora.player.v1.GetSkillCardsRequest\032("
+    ".pandora.player.v1.GetSkillCardsResponse"
+    "\022Y\n\nGetLoadout\022$.pandora.player.v1.GetLo"
+    "adoutRequest\032%.pandora.player.v1.GetLoad"
+    "outResponse\022\\\n\013ClaimReward\022%.pandora.pla"
+    "yer.v1.ClaimRewardRequest\032&.pandora.play"
+    "er.v1.ClaimRewardResponse\022h\n\017GetRewardCl"
+    "aims\022).pandora.player.v1.GetRewardClaims"
+    "Request\032*.pandora.player.v1.GetRewardCla"
+    "imsResponse\022b\n\rAddExperience\022\'.pandora.p"
+    "layer.v1.AddExperienceRequest\032(.pandora."
+    "player.v1.AddExperienceResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_deps[2] = {
@@ -11355,7 +11394,7 @@ static ::absl::once_flag descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto = {
     false,
     false,
-    9125,
+    10719,
     descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto,
     "pandora/player/v1/player.proto",
     &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_once,
@@ -11536,7 +11575,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -11545,7 +11584,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // string nickname = 2;
+  // string nickname = 2 [json_name = "nickname"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_nickname().empty()) {
       const ::std::string& _s = this_._internal_nickname();
@@ -11555,7 +11594,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // int32 level = 3;
+  // int32 level = 3 [json_name = "level"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_level() != 0) {
       target =
@@ -11564,7 +11603,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // int32 mmr = 4;
+  // int32 mmr = 4 [json_name = "mmr"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_mmr() != 0) {
       target =
@@ -11573,7 +11612,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // string avatar = 5;
+  // string avatar = 5 [json_name = "avatar"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_avatar().empty()) {
       const ::std::string& _s = this_._internal_avatar();
@@ -11583,7 +11622,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // int64 created_at_ms = 6;
+  // int64 created_at_ms = 6 [json_name = "createdAtMs"];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_created_at_ms() != 0) {
       target =
@@ -11592,7 +11631,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // int64 last_seen_ms = 7;
+  // int64 last_seen_ms = 7 [json_name = "lastSeenMs"];
   if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_last_seen_ms() != 0) {
       target =
@@ -11601,7 +11640,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // int32 total_battles = 10;
+  // int32 total_battles = 10 [json_name = "totalBattles"];
   if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_total_battles() != 0) {
       target =
@@ -11610,7 +11649,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // int32 total_wins = 11;
+  // int32 total_wins = 11 [json_name = "totalWins"];
   if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_total_wins() != 0) {
       target =
@@ -11619,7 +11658,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // uint64 exp_in_level = 50;
+  // uint64 exp_in_level = 50 [json_name = "expInLevel"];
   if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_exp_in_level() != 0) {
       target = stream->EnsureSpace(target);
@@ -11628,7 +11667,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // bool is_max_level = 51;
+  // bool is_max_level = 51 [json_name = "isMaxLevel"];
   if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_is_max_level() != 0) {
       target = stream->EnsureSpace(target);
@@ -11663,56 +11702,56 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    // string nickname = 2;
+    // string nickname = 2 [json_name = "nickname"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_nickname().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_nickname());
       }
     }
-    // string avatar = 5;
+    // string avatar = 5 [json_name = "avatar"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_avatar().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_avatar());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int32 level = 3;
+    // int32 level = 3 [json_name = "level"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_level());
       }
     }
-    // int32 mmr = 4;
+    // int32 mmr = 4 [json_name = "mmr"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_mmr() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_mmr());
       }
     }
-    // int64 created_at_ms = 6;
+    // int64 created_at_ms = 6 [json_name = "createdAtMs"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_created_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_created_at_ms());
       }
     }
-    // int64 last_seen_ms = 7;
+    // int64 last_seen_ms = 7 [json_name = "lastSeenMs"];
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_last_seen_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_last_seen_ms());
       }
     }
-    // int32 total_battles = 10;
+    // int32 total_battles = 10 [json_name = "totalBattles"];
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_total_battles() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -11721,21 +11760,21 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
-    // int32 total_wins = 11;
+    // int32 total_wins = 11 [json_name = "totalWins"];
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_total_wins() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_total_wins());
       }
     }
-    // uint64 exp_in_level = 50;
+    // uint64 exp_in_level = 50 [json_name = "expInLevel"];
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_exp_in_level() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_exp_in_level());
       }
     }
-    // bool is_max_level = 51;
+    // bool is_max_level = 51 [json_name = "isMaxLevel"];
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_is_max_level() != 0) {
         total_size += 3;
@@ -11960,7 +11999,7 @@ PROTOBUF_NOINLINE void GetProfileRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -11993,7 +12032,7 @@ PROTOBUF_NOINLINE void GetProfileRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -12178,7 +12217,7 @@ PROTOBUF_NOINLINE void GetProfileResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -12187,7 +12226,7 @@ PROTOBUF_NOINLINE void GetProfileResponse::Clear() {
     }
   }
 
-  // .pandora.player.v1.PlayerProfile profile = 2;
+  // .pandora.player.v1.PlayerProfile profile = 2 [json_name = "profile"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.profile_, this_._impl_.profile_->GetCachedSize(), target,
@@ -12220,12 +12259,12 @@ PROTOBUF_NOINLINE void GetProfileResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.player.v1.PlayerProfile profile = 2;
+    // .pandora.player.v1.PlayerProfile profile = 2 [json_name = "profile"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.profile_);
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -12417,7 +12456,7 @@ PROTOBUF_NOINLINE void UpdateNicknameRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -12426,7 +12465,7 @@ PROTOBUF_NOINLINE void UpdateNicknameRequest::Clear() {
     }
   }
 
-  // string nickname = 2;
+  // string nickname = 2 [json_name = "nickname"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_nickname().empty()) {
       const ::std::string& _s = this_._internal_nickname();
@@ -12462,14 +12501,14 @@ PROTOBUF_NOINLINE void UpdateNicknameRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // string nickname = 2;
+    // string nickname = 2 [json_name = "nickname"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_nickname().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_nickname());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -12638,7 +12677,7 @@ PROTOBUF_NOINLINE void UpdateNicknameResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -12671,7 +12710,7 @@ PROTOBUF_NOINLINE void UpdateNicknameResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -12827,7 +12866,7 @@ PROTOBUF_NOINLINE void ListHeroesRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -12860,7 +12899,7 @@ PROTOBUF_NOINLINE void ListHeroesRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -13048,7 +13087,7 @@ PROTOBUF_NOINLINE void ListHeroesResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -13057,7 +13096,7 @@ PROTOBUF_NOINLINE void ListHeroesResponse::Clear() {
     }
   }
 
-  // repeated uint32 hero_ids = 2;
+  // repeated uint32 hero_ids = 2 [json_name = "heroIds"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._hero_ids_cached_byte_size_.Get();
@@ -13094,14 +13133,14 @@ PROTOBUF_NOINLINE void ListHeroesResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated uint32 hero_ids = 2;
+    // repeated uint32 hero_ids = 2 [json_name = "heroIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
               this_._internal_hero_ids(), 1,
               this_._impl_._hero_ids_cached_byte_size_);
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -13298,7 +13337,7 @@ PROTOBUF_NOINLINE void UnlockHeroRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -13307,7 +13346,7 @@ PROTOBUF_NOINLINE void UnlockHeroRequest::Clear() {
     }
   }
 
-  // uint32 hero_id = 2;
+  // uint32 hero_id = 2 [json_name = "heroId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_hero_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -13316,7 +13355,7 @@ PROTOBUF_NOINLINE void UnlockHeroRequest::Clear() {
     }
   }
 
-  // string source = 3;
+  // string source = 3 [json_name = "source"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_source().empty()) {
       const ::std::string& _s = this_._internal_source();
@@ -13352,21 +13391,21 @@ PROTOBUF_NOINLINE void UnlockHeroRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // string source = 3;
+    // string source = 3 [json_name = "source"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_source().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_source());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint32 hero_id = 2;
+    // uint32 hero_id = 2 [json_name = "heroId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_hero_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -13545,7 +13584,7 @@ PROTOBUF_NOINLINE void UnlockHeroResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -13578,7 +13617,7 @@ PROTOBUF_NOINLINE void UnlockHeroResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -13734,7 +13773,7 @@ PROTOBUF_NOINLINE void GetMMRRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -13767,7 +13806,7 @@ PROTOBUF_NOINLINE void GetMMRRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -13933,7 +13972,7 @@ PROTOBUF_NOINLINE void GetMMRResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -13942,7 +13981,7 @@ PROTOBUF_NOINLINE void GetMMRResponse::Clear() {
     }
   }
 
-  // int32 mmr = 2;
+  // int32 mmr = 2 [json_name = "mmr"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_mmr() != 0) {
       target =
@@ -13977,14 +14016,14 @@ PROTOBUF_NOINLINE void GetMMRResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 mmr = 2;
+    // int32 mmr = 2 [json_name = "mmr"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_mmr() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -14195,7 +14234,7 @@ PROTOBUF_NOINLINE void UpdateMMRRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -14204,7 +14243,7 @@ PROTOBUF_NOINLINE void UpdateMMRRequest::Clear() {
     }
   }
 
-  // int32 delta = 2;
+  // int32 delta = 2 [json_name = "delta"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_delta() != 0) {
       target =
@@ -14213,7 +14252,7 @@ PROTOBUF_NOINLINE void UpdateMMRRequest::Clear() {
     }
   }
 
-  // string reason = 3;
+  // string reason = 3 [json_name = "reason"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_reason().empty()) {
       const ::std::string& _s = this_._internal_reason();
@@ -14223,7 +14262,7 @@ PROTOBUF_NOINLINE void UpdateMMRRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 4;
+  // string idempotency_key = 4 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -14259,28 +14298,28 @@ PROTOBUF_NOINLINE void UpdateMMRRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // string reason = 3;
+    // string reason = 3 [json_name = "reason"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_reason().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_reason());
       }
     }
-    // string idempotency_key = 4;
+    // string idempotency_key = 4 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int32 delta = 2;
+    // int32 delta = 2 [json_name = "delta"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_delta() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -14479,7 +14518,7 @@ PROTOBUF_NOINLINE void UpdateMMRResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -14488,7 +14527,7 @@ PROTOBUF_NOINLINE void UpdateMMRResponse::Clear() {
     }
   }
 
-  // int32 new_mmr = 2;
+  // int32 new_mmr = 2 [json_name = "newMmr"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_new_mmr() != 0) {
       target =
@@ -14523,14 +14562,14 @@ PROTOBUF_NOINLINE void UpdateMMRResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 new_mmr = 2;
+    // int32 new_mmr = 2 [json_name = "newMmr"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_new_mmr() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -14733,7 +14772,7 @@ PROTOBUF_NOINLINE void PlayerUpdateEvent::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -14742,7 +14781,7 @@ PROTOBUF_NOINLINE void PlayerUpdateEvent::Clear() {
     }
   }
 
-  // uint64 match_id = 2;
+  // uint64 match_id = 2 [json_name = "matchId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_match_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -14751,7 +14790,7 @@ PROTOBUF_NOINLINE void PlayerUpdateEvent::Clear() {
     }
   }
 
-  // int32 mmr_delta = 3;
+  // int32 mmr_delta = 3 [json_name = "mmrDelta"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_mmr_delta() != 0) {
       target =
@@ -14760,7 +14799,7 @@ PROTOBUF_NOINLINE void PlayerUpdateEvent::Clear() {
     }
   }
 
-  // string reason = 4;
+  // string reason = 4 [json_name = "reason"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_reason().empty()) {
       const ::std::string& _s = this_._internal_reason();
@@ -14770,7 +14809,7 @@ PROTOBUF_NOINLINE void PlayerUpdateEvent::Clear() {
     }
   }
 
-  // int64 ts_ms = 5;
+  // int64 ts_ms = 5 [json_name = "tsMs"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_ts_ms() != 0) {
       target =
@@ -14805,35 +14844,35 @@ PROTOBUF_NOINLINE void PlayerUpdateEvent::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    // string reason = 4;
+    // string reason = 4 [json_name = "reason"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_reason().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_reason());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 match_id = 2;
+    // uint64 match_id = 2 [json_name = "matchId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_match_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_match_id());
       }
     }
-    // int64 ts_ms = 5;
+    // int64 ts_ms = 5 [json_name = "tsMs"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_ts_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_ts_ms());
       }
     }
-    // int32 mmr_delta = 3;
+    // int32 mmr_delta = 3 [json_name = "mmrDelta"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_mmr_delta() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -15032,7 +15071,7 @@ PROTOBUF_NOINLINE void PlayerExperienceEvent::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -15041,7 +15080,7 @@ PROTOBUF_NOINLINE void PlayerExperienceEvent::Clear() {
     }
   }
 
-  // int32 level = 2;
+  // int32 level = 2 [json_name = "level"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_level() != 0) {
       target =
@@ -15050,7 +15089,7 @@ PROTOBUF_NOINLINE void PlayerExperienceEvent::Clear() {
     }
   }
 
-  // uint64 exp_in_level = 3;
+  // uint64 exp_in_level = 3 [json_name = "expInLevel"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_exp_in_level() != 0) {
       target = stream->EnsureSpace(target);
@@ -15059,7 +15098,7 @@ PROTOBUF_NOINLINE void PlayerExperienceEvent::Clear() {
     }
   }
 
-  // bool is_max_level = 4;
+  // bool is_max_level = 4 [json_name = "isMaxLevel"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_is_max_level() != 0) {
       target = stream->EnsureSpace(target);
@@ -15068,7 +15107,7 @@ PROTOBUF_NOINLINE void PlayerExperienceEvent::Clear() {
     }
   }
 
-  // uint32 levels_gained = 5;
+  // uint32 levels_gained = 5 [json_name = "levelsGained"];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_levels_gained() != 0) {
       target = stream->EnsureSpace(target);
@@ -15077,7 +15116,7 @@ PROTOBUF_NOINLINE void PlayerExperienceEvent::Clear() {
     }
   }
 
-  // int64 ts_ms = 6;
+  // int64 ts_ms = 6 [json_name = "tsMs"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_ts_ms() != 0) {
       target =
@@ -15112,41 +15151,41 @@ PROTOBUF_NOINLINE void PlayerExperienceEvent::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 exp_in_level = 3;
+    // uint64 exp_in_level = 3 [json_name = "expInLevel"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_exp_in_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_exp_in_level());
       }
     }
-    // int32 level = 2;
+    // int32 level = 2 [json_name = "level"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_level());
       }
     }
-    // bool is_max_level = 4;
+    // bool is_max_level = 4 [json_name = "isMaxLevel"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_is_max_level() != 0) {
         total_size += 2;
       }
     }
-    // int64 ts_ms = 6;
+    // int64 ts_ms = 6 [json_name = "tsMs"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_ts_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_ts_ms());
       }
     }
-    // uint32 levels_gained = 5;
+    // uint32 levels_gained = 5 [json_name = "levelsGained"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_levels_gained() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -15354,7 +15393,7 @@ PROTOBUF_NOINLINE void AttributeAllocation::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // string attr_key = 1;
+  // string attr_key = 1 [json_name = "attrKey"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_attr_key().empty()) {
       const ::std::string& _s = this_._internal_attr_key();
@@ -15364,7 +15403,7 @@ PROTOBUF_NOINLINE void AttributeAllocation::Clear() {
     }
   }
 
-  // int32 points = 2;
+  // int32 points = 2 [json_name = "points"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_points() != 0) {
       target =
@@ -15399,14 +15438,14 @@ PROTOBUF_NOINLINE void AttributeAllocation::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // string attr_key = 1;
+    // string attr_key = 1 [json_name = "attrKey"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_attr_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_attr_key());
       }
     }
-    // int32 points = 2;
+    // int32 points = 2 [json_name = "points"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -15585,7 +15624,7 @@ PROTOBUF_NOINLINE void SelectHeroRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -15594,7 +15633,7 @@ PROTOBUF_NOINLINE void SelectHeroRequest::Clear() {
     }
   }
 
-  // uint32 hero_id = 2;
+  // uint32 hero_id = 2 [json_name = "heroId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_hero_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -15629,14 +15668,14 @@ PROTOBUF_NOINLINE void SelectHeroRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint32 hero_id = 2;
+    // uint32 hero_id = 2 [json_name = "heroId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_hero_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -15803,7 +15842,7 @@ PROTOBUF_NOINLINE void SelectHeroResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -15836,7 +15875,7 @@ PROTOBUF_NOINLINE void SelectHeroResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -15992,7 +16031,7 @@ PROTOBUF_NOINLINE void GetActiveHeroRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16025,7 +16064,7 @@ PROTOBUF_NOINLINE void GetActiveHeroRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -16191,7 +16230,7 @@ PROTOBUF_NOINLINE void GetActiveHeroResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -16200,7 +16239,7 @@ PROTOBUF_NOINLINE void GetActiveHeroResponse::Clear() {
     }
   }
 
-  // uint32 hero_id = 2;
+  // uint32 hero_id = 2 [json_name = "heroId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_hero_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16235,14 +16274,14 @@ PROTOBUF_NOINLINE void GetActiveHeroResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // uint32 hero_id = 2;
+    // uint32 hero_id = 2 [json_name = "heroId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_hero_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -16445,7 +16484,7 @@ PROTOBUF_NOINLINE void GrantAttributePointsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16454,7 +16493,7 @@ PROTOBUF_NOINLINE void GrantAttributePointsRequest::Clear() {
     }
   }
 
-  // int32 points = 2;
+  // int32 points = 2 [json_name = "points"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_points() != 0) {
       target =
@@ -16463,7 +16502,7 @@ PROTOBUF_NOINLINE void GrantAttributePointsRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 3;
+  // string idempotency_key = 3 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -16499,21 +16538,21 @@ PROTOBUF_NOINLINE void GrantAttributePointsRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // string idempotency_key = 3;
+    // string idempotency_key = 3 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int32 points = 2;
+    // int32 points = 2 [json_name = "points"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -16702,7 +16741,7 @@ PROTOBUF_NOINLINE void GrantAttributePointsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -16711,7 +16750,7 @@ PROTOBUF_NOINLINE void GrantAttributePointsResponse::Clear() {
     }
   }
 
-  // int32 unspent_points = 2;
+  // int32 unspent_points = 2 [json_name = "unspentPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_unspent_points() != 0) {
       target =
@@ -16746,14 +16785,14 @@ PROTOBUF_NOINLINE void GrantAttributePointsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 unspent_points = 2;
+    // int32 unspent_points = 2 [json_name = "unspentPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_unspent_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -16950,7 +16989,7 @@ PROTOBUF_NOINLINE void AllocateAttributePointsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16959,7 +16998,7 @@ PROTOBUF_NOINLINE void AllocateAttributePointsRequest::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.AttributeAllocation allocations = 2;
+  // repeated .pandora.player.v1.AttributeAllocation allocations = 2 [json_name = "allocations"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_allocations_size());
@@ -16998,14 +17037,14 @@ PROTOBUF_NOINLINE void AllocateAttributePointsRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .pandora.player.v1.AttributeAllocation allocations = 2;
+    // repeated .pandora.player.v1.AttributeAllocation allocations = 2 [json_name = "allocations"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_allocations_size();
       for (const auto& msg : this_._internal_allocations()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -17179,7 +17218,7 @@ PROTOBUF_NOINLINE void AllocateAttributePointsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -17188,7 +17227,7 @@ PROTOBUF_NOINLINE void AllocateAttributePointsResponse::Clear() {
     }
   }
 
-  // int32 unspent_points = 2;
+  // int32 unspent_points = 2 [json_name = "unspentPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_unspent_points() != 0) {
       target =
@@ -17223,14 +17262,14 @@ PROTOBUF_NOINLINE void AllocateAttributePointsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 unspent_points = 2;
+    // int32 unspent_points = 2 [json_name = "unspentPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_unspent_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -17397,7 +17436,7 @@ PROTOBUF_NOINLINE void ResetAttributesRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -17430,7 +17469,7 @@ PROTOBUF_NOINLINE void ResetAttributesRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -17596,7 +17635,7 @@ PROTOBUF_NOINLINE void ResetAttributesResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -17605,7 +17644,7 @@ PROTOBUF_NOINLINE void ResetAttributesResponse::Clear() {
     }
   }
 
-  // int32 unspent_points = 2;
+  // int32 unspent_points = 2 [json_name = "unspentPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_unspent_points() != 0) {
       target =
@@ -17640,14 +17679,14 @@ PROTOBUF_NOINLINE void ResetAttributesResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 unspent_points = 2;
+    // int32 unspent_points = 2 [json_name = "unspentPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_unspent_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -17814,7 +17853,7 @@ PROTOBUF_NOINLINE void GetAttributesRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -17847,7 +17886,7 @@ PROTOBUF_NOINLINE void GetAttributesRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -18048,7 +18087,7 @@ PROTOBUF_NOINLINE void GetAttributesResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -18057,7 +18096,7 @@ PROTOBUF_NOINLINE void GetAttributesResponse::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.AttributeAllocation attributes = 2;
+  // repeated .pandora.player.v1.AttributeAllocation attributes = 2 [json_name = "attributes"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_attributes_size());
@@ -18070,7 +18109,7 @@ PROTOBUF_NOINLINE void GetAttributesResponse::Clear() {
     }
   }
 
-  // int32 unspent_points = 3;
+  // int32 unspent_points = 3 [json_name = "unspentPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_unspent_points() != 0) {
       target =
@@ -18105,21 +18144,21 @@ PROTOBUF_NOINLINE void GetAttributesResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // repeated .pandora.player.v1.AttributeAllocation attributes = 2;
+    // repeated .pandora.player.v1.AttributeAllocation attributes = 2 [json_name = "attributes"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_attributes_size();
       for (const auto& msg : this_._internal_attributes()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 unspent_points = 3;
+    // int32 unspent_points = 3 [json_name = "unspentPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_unspent_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -18343,7 +18382,7 @@ PROTOBUF_NOINLINE void LoadoutEquipment::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 slot = 1;
+  // uint32 slot = 1 [json_name = "slot"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_slot() != 0) {
       target = stream->EnsureSpace(target);
@@ -18352,7 +18391,7 @@ PROTOBUF_NOINLINE void LoadoutEquipment::Clear() {
     }
   }
 
-  // uint32 item_config_id = 2;
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -18361,7 +18400,7 @@ PROTOBUF_NOINLINE void LoadoutEquipment::Clear() {
     }
   }
 
-  // uint64 instance_id = 3;
+  // uint64 instance_id = 3 [json_name = "instanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -18370,7 +18409,7 @@ PROTOBUF_NOINLINE void LoadoutEquipment::Clear() {
     }
   }
 
-  // bool identified = 4;
+  // bool identified = 4 [json_name = "identified"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_identified() != 0) {
       target = stream->EnsureSpace(target);
@@ -18379,7 +18418,7 @@ PROTOBUF_NOINLINE void LoadoutEquipment::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.ItemAttribute attributes = 5;
+  // repeated .pandora.inventory.v1.ItemAttribute attributes = 5 [json_name = "attributes"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_attributes_size());
@@ -18418,35 +18457,35 @@ PROTOBUF_NOINLINE void LoadoutEquipment::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    // repeated .pandora.inventory.v1.ItemAttribute attributes = 5;
+    // repeated .pandora.inventory.v1.ItemAttribute attributes = 5 [json_name = "attributes"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_attributes_size();
       for (const auto& msg : this_._internal_attributes()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint32 slot = 1;
+    // uint32 slot = 1 [json_name = "slot"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_slot() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_slot());
       }
     }
-    // uint32 item_config_id = 2;
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_item_config_id());
       }
     }
-    // uint64 instance_id = 3;
+    // uint64 instance_id = 3 [json_name = "instanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_instance_id());
       }
     }
-    // bool identified = 4;
+    // bool identified = 4 [json_name = "identified"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_identified() != 0) {
         total_size += 2;
@@ -18639,7 +18678,7 @@ PROTOBUF_NOINLINE void TalentNode::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 talent_id = 1;
+  // uint32 talent_id = 1 [json_name = "talentId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_talent_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -18648,7 +18687,7 @@ PROTOBUF_NOINLINE void TalentNode::Clear() {
     }
   }
 
-  // int32 level = 2;
+  // int32 level = 2 [json_name = "level"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_level() != 0) {
       target =
@@ -18683,14 +18722,14 @@ PROTOBUF_NOINLINE void TalentNode::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint32 talent_id = 1;
+    // uint32 talent_id = 1 [json_name = "talentId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_talent_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_talent_id());
       }
     }
-    // int32 level = 2;
+    // int32 level = 2 [json_name = "level"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -18887,7 +18926,7 @@ PROTOBUF_NOINLINE void SetEquipmentRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -18896,7 +18935,7 @@ PROTOBUF_NOINLINE void SetEquipmentRequest::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.LoadoutEquipment equipment = 2;
+  // repeated .pandora.player.v1.LoadoutEquipment equipment = 2 [json_name = "equipment"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_equipment_size());
@@ -18935,14 +18974,14 @@ PROTOBUF_NOINLINE void SetEquipmentRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .pandora.player.v1.LoadoutEquipment equipment = 2;
+    // repeated .pandora.player.v1.LoadoutEquipment equipment = 2 [json_name = "equipment"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_equipment_size();
       for (const auto& msg : this_._internal_equipment()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -19106,7 +19145,7 @@ PROTOBUF_NOINLINE void SetEquipmentResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -19139,7 +19178,7 @@ PROTOBUF_NOINLINE void SetEquipmentResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -19295,7 +19334,7 @@ PROTOBUF_NOINLINE void GetEquipmentRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -19328,7 +19367,7 @@ PROTOBUF_NOINLINE void GetEquipmentRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -19514,7 +19553,7 @@ PROTOBUF_NOINLINE void GetEquipmentResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -19523,7 +19562,7 @@ PROTOBUF_NOINLINE void GetEquipmentResponse::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.LoadoutEquipment equipment = 2;
+  // repeated .pandora.player.v1.LoadoutEquipment equipment = 2 [json_name = "equipment"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_equipment_size());
@@ -19562,14 +19601,14 @@ PROTOBUF_NOINLINE void GetEquipmentResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .pandora.player.v1.LoadoutEquipment equipment = 2;
+    // repeated .pandora.player.v1.LoadoutEquipment equipment = 2 [json_name = "equipment"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_equipment_size();
       for (const auto& msg : this_._internal_equipment()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -19769,7 +19808,7 @@ PROTOBUF_NOINLINE void GrantTalentPointsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -19778,7 +19817,7 @@ PROTOBUF_NOINLINE void GrantTalentPointsRequest::Clear() {
     }
   }
 
-  // int32 points = 2;
+  // int32 points = 2 [json_name = "points"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_points() != 0) {
       target =
@@ -19787,7 +19826,7 @@ PROTOBUF_NOINLINE void GrantTalentPointsRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 3;
+  // string idempotency_key = 3 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -19823,21 +19862,21 @@ PROTOBUF_NOINLINE void GrantTalentPointsRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // string idempotency_key = 3;
+    // string idempotency_key = 3 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int32 points = 2;
+    // int32 points = 2 [json_name = "points"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -20026,7 +20065,7 @@ PROTOBUF_NOINLINE void GrantTalentPointsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -20035,7 +20074,7 @@ PROTOBUF_NOINLINE void GrantTalentPointsResponse::Clear() {
     }
   }
 
-  // int32 unspent_points = 2;
+  // int32 unspent_points = 2 [json_name = "unspentPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_unspent_points() != 0) {
       target =
@@ -20070,14 +20109,14 @@ PROTOBUF_NOINLINE void GrantTalentPointsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 unspent_points = 2;
+    // int32 unspent_points = 2 [json_name = "unspentPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_unspent_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -20274,7 +20313,7 @@ PROTOBUF_NOINLINE void SetTalentsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -20283,7 +20322,7 @@ PROTOBUF_NOINLINE void SetTalentsRequest::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.TalentNode talents = 2;
+  // repeated .pandora.player.v1.TalentNode talents = 2 [json_name = "talents"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_talents_size());
@@ -20322,14 +20361,14 @@ PROTOBUF_NOINLINE void SetTalentsRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .pandora.player.v1.TalentNode talents = 2;
+    // repeated .pandora.player.v1.TalentNode talents = 2 [json_name = "talents"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_talents_size();
       for (const auto& msg : this_._internal_talents()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -20503,7 +20542,7 @@ PROTOBUF_NOINLINE void SetTalentsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -20512,7 +20551,7 @@ PROTOBUF_NOINLINE void SetTalentsResponse::Clear() {
     }
   }
 
-  // int32 unspent_points = 2;
+  // int32 unspent_points = 2 [json_name = "unspentPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_unspent_points() != 0) {
       target =
@@ -20547,14 +20586,14 @@ PROTOBUF_NOINLINE void SetTalentsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 unspent_points = 2;
+    // int32 unspent_points = 2 [json_name = "unspentPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_unspent_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -20721,7 +20760,7 @@ PROTOBUF_NOINLINE void ResetTalentsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -20754,7 +20793,7 @@ PROTOBUF_NOINLINE void ResetTalentsRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -20920,7 +20959,7 @@ PROTOBUF_NOINLINE void ResetTalentsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -20929,7 +20968,7 @@ PROTOBUF_NOINLINE void ResetTalentsResponse::Clear() {
     }
   }
 
-  // int32 unspent_points = 2;
+  // int32 unspent_points = 2 [json_name = "unspentPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_unspent_points() != 0) {
       target =
@@ -20964,14 +21003,14 @@ PROTOBUF_NOINLINE void ResetTalentsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 unspent_points = 2;
+    // int32 unspent_points = 2 [json_name = "unspentPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_unspent_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -21138,7 +21177,7 @@ PROTOBUF_NOINLINE void GetTalentsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -21171,7 +21210,7 @@ PROTOBUF_NOINLINE void GetTalentsRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -21372,7 +21411,7 @@ PROTOBUF_NOINLINE void GetTalentsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -21381,7 +21420,7 @@ PROTOBUF_NOINLINE void GetTalentsResponse::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.TalentNode talents = 2;
+  // repeated .pandora.player.v1.TalentNode talents = 2 [json_name = "talents"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_talents_size());
@@ -21394,7 +21433,7 @@ PROTOBUF_NOINLINE void GetTalentsResponse::Clear() {
     }
   }
 
-  // int32 unspent_points = 3;
+  // int32 unspent_points = 3 [json_name = "unspentPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_unspent_points() != 0) {
       target =
@@ -21429,21 +21468,21 @@ PROTOBUF_NOINLINE void GetTalentsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // repeated .pandora.player.v1.TalentNode talents = 2;
+    // repeated .pandora.player.v1.TalentNode talents = 2 [json_name = "talents"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_talents_size();
       for (const auto& msg : this_._internal_talents()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 unspent_points = 3;
+    // int32 unspent_points = 3 [json_name = "unspentPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_unspent_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -21627,7 +21666,7 @@ PROTOBUF_NOINLINE void SkillCard::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 card_id = 1;
+  // uint32 card_id = 1 [json_name = "cardId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_card_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -21636,7 +21675,7 @@ PROTOBUF_NOINLINE void SkillCard::Clear() {
     }
   }
 
-  // uint32 level = 2;
+  // uint32 level = 2 [json_name = "level"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_level() != 0) {
       target = stream->EnsureSpace(target);
@@ -21645,7 +21684,7 @@ PROTOBUF_NOINLINE void SkillCard::Clear() {
     }
   }
 
-  // uint32 shards = 3;
+  // uint32 shards = 3 [json_name = "shards"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_shards() != 0) {
       target = stream->EnsureSpace(target);
@@ -21680,21 +21719,21 @@ PROTOBUF_NOINLINE void SkillCard::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // uint32 card_id = 1;
+    // uint32 card_id = 1 [json_name = "cardId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_card_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_card_id());
       }
     }
-    // uint32 level = 2;
+    // uint32 level = 2 [json_name = "level"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_level());
       }
     }
-    // uint32 shards = 3;
+    // uint32 shards = 3 [json_name = "shards"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_shards() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -21876,7 +21915,7 @@ PROTOBUF_NOINLINE void SkillSlot::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 slot = 1;
+  // uint32 slot = 1 [json_name = "slot"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_slot() != 0) {
       target = stream->EnsureSpace(target);
@@ -21885,7 +21924,7 @@ PROTOBUF_NOINLINE void SkillSlot::Clear() {
     }
   }
 
-  // uint32 card_id = 2;
+  // uint32 card_id = 2 [json_name = "cardId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_card_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -21920,14 +21959,14 @@ PROTOBUF_NOINLINE void SkillSlot::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint32 slot = 1;
+    // uint32 slot = 1 [json_name = "slot"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_slot() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_slot());
       }
     }
-    // uint32 card_id = 2;
+    // uint32 card_id = 2 [json_name = "cardId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_card_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -22132,7 +22171,7 @@ PROTOBUF_NOINLINE void GrantSkillCardsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -22141,7 +22180,7 @@ PROTOBUF_NOINLINE void GrantSkillCardsRequest::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.SkillCardGrant grants = 2;
+  // repeated .pandora.player.v1.SkillCardGrant grants = 2 [json_name = "grants"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_grants_size());
@@ -22154,7 +22193,7 @@ PROTOBUF_NOINLINE void GrantSkillCardsRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 3;
+  // string idempotency_key = 3 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -22190,21 +22229,21 @@ PROTOBUF_NOINLINE void GrantSkillCardsRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // repeated .pandora.player.v1.SkillCardGrant grants = 2;
+    // repeated .pandora.player.v1.SkillCardGrant grants = 2 [json_name = "grants"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_grants_size();
       for (const auto& msg : this_._internal_grants()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // string idempotency_key = 3;
+    // string idempotency_key = 3 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -22390,7 +22429,7 @@ PROTOBUF_NOINLINE void SkillCardGrant::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 card_id = 1;
+  // uint32 card_id = 1 [json_name = "cardId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_card_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -22399,7 +22438,7 @@ PROTOBUF_NOINLINE void SkillCardGrant::Clear() {
     }
   }
 
-  // uint32 shards = 2;
+  // uint32 shards = 2 [json_name = "shards"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_shards() != 0) {
       target = stream->EnsureSpace(target);
@@ -22434,14 +22473,14 @@ PROTOBUF_NOINLINE void SkillCardGrant::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint32 card_id = 1;
+    // uint32 card_id = 1 [json_name = "cardId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_card_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_card_id());
       }
     }
-    // uint32 shards = 2;
+    // uint32 shards = 2 [json_name = "shards"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_shards() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -22653,7 +22692,7 @@ PROTOBUF_NOINLINE void GrantSkillCardsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -22662,7 +22701,7 @@ PROTOBUF_NOINLINE void GrantSkillCardsResponse::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.SkillCard cards = 2;
+  // repeated .pandora.player.v1.SkillCard cards = 2 [json_name = "cards"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_cards_size());
@@ -22675,7 +22714,7 @@ PROTOBUF_NOINLINE void GrantSkillCardsResponse::Clear() {
     }
   }
 
-  // bool already = 3;
+  // bool already = 3 [json_name = "already"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_already() != 0) {
       target = stream->EnsureSpace(target);
@@ -22710,21 +22749,21 @@ PROTOBUF_NOINLINE void GrantSkillCardsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // repeated .pandora.player.v1.SkillCard cards = 2;
+    // repeated .pandora.player.v1.SkillCard cards = 2 [json_name = "cards"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_cards_size();
       for (const auto& msg : this_._internal_cards()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // bool already = 3;
+    // bool already = 3 [json_name = "already"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_already() != 0) {
         total_size += 2;
@@ -22907,7 +22946,7 @@ PROTOBUF_NOINLINE void UpgradeSkillCardRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -22916,7 +22955,7 @@ PROTOBUF_NOINLINE void UpgradeSkillCardRequest::Clear() {
     }
   }
 
-  // uint32 card_id = 2;
+  // uint32 card_id = 2 [json_name = "cardId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_card_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -22951,14 +22990,14 @@ PROTOBUF_NOINLINE void UpgradeSkillCardRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint32 card_id = 2;
+    // uint32 card_id = 2 [json_name = "cardId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_card_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -23164,7 +23203,7 @@ PROTOBUF_NOINLINE void UpgradeSkillCardResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -23173,14 +23212,14 @@ PROTOBUF_NOINLINE void UpgradeSkillCardResponse::Clear() {
     }
   }
 
-  // .pandora.player.v1.SkillCard card = 2;
+  // .pandora.player.v1.SkillCard card = 2 [json_name = "card"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.card_, this_._impl_.card_->GetCachedSize(), target,
         stream);
   }
 
-  // uint32 shard_cost = 3;
+  // uint32 shard_cost = 3 [json_name = "shardCost"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_shard_cost() != 0) {
       target = stream->EnsureSpace(target);
@@ -23215,19 +23254,19 @@ PROTOBUF_NOINLINE void UpgradeSkillCardResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // .pandora.player.v1.SkillCard card = 2;
+    // .pandora.player.v1.SkillCard card = 2 [json_name = "card"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.card_);
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // uint32 shard_cost = 3;
+    // uint32 shard_cost = 3 [json_name = "shardCost"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_shard_cost() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -23433,7 +23472,7 @@ PROTOBUF_NOINLINE void SetSkillSlotsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -23442,7 +23481,7 @@ PROTOBUF_NOINLINE void SetSkillSlotsRequest::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.SkillSlot slots = 2;
+  // repeated .pandora.player.v1.SkillSlot slots = 2 [json_name = "slots"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_slots_size());
@@ -23481,14 +23520,14 @@ PROTOBUF_NOINLINE void SetSkillSlotsRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .pandora.player.v1.SkillSlot slots = 2;
+    // repeated .pandora.player.v1.SkillSlot slots = 2 [json_name = "slots"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_slots_size();
       for (const auto& msg : this_._internal_slots()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -23682,7 +23721,7 @@ PROTOBUF_NOINLINE void SetSkillSlotsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -23691,7 +23730,7 @@ PROTOBUF_NOINLINE void SetSkillSlotsResponse::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.SkillSlot slots = 2;
+  // repeated .pandora.player.v1.SkillSlot slots = 2 [json_name = "slots"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_slots_size());
@@ -23730,14 +23769,14 @@ PROTOBUF_NOINLINE void SetSkillSlotsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .pandora.player.v1.SkillSlot slots = 2;
+    // repeated .pandora.player.v1.SkillSlot slots = 2 [json_name = "slots"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_slots_size();
       for (const auto& msg : this_._internal_slots()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -23901,7 +23940,7 @@ PROTOBUF_NOINLINE void GetSkillCardsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -23934,7 +23973,7 @@ PROTOBUF_NOINLINE void GetSkillCardsRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -24137,7 +24176,7 @@ PROTOBUF_NOINLINE void GetSkillCardsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -24146,7 +24185,7 @@ PROTOBUF_NOINLINE void GetSkillCardsResponse::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.SkillCard cards = 2;
+  // repeated .pandora.player.v1.SkillCard cards = 2 [json_name = "cards"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_cards_size());
@@ -24159,7 +24198,7 @@ PROTOBUF_NOINLINE void GetSkillCardsResponse::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.SkillSlot slots = 3;
+  // repeated .pandora.player.v1.SkillSlot slots = 3 [json_name = "slots"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_slots_size());
@@ -24198,21 +24237,21 @@ PROTOBUF_NOINLINE void GetSkillCardsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // repeated .pandora.player.v1.SkillCard cards = 2;
+    // repeated .pandora.player.v1.SkillCard cards = 2 [json_name = "cards"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_cards_size();
       for (const auto& msg : this_._internal_cards()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // repeated .pandora.player.v1.SkillSlot slots = 3;
+    // repeated .pandora.player.v1.SkillSlot slots = 3 [json_name = "slots"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1UL * this_._internal_slots_size();
       for (const auto& msg : this_._internal_slots()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -24474,7 +24513,7 @@ PROTOBUF_NOINLINE void PlayerLoadout::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -24483,7 +24522,7 @@ PROTOBUF_NOINLINE void PlayerLoadout::Clear() {
     }
   }
 
-  // uint32 active_hero_id = 2;
+  // uint32 active_hero_id = 2 [json_name = "activeHeroId"];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_active_hero_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -24492,7 +24531,7 @@ PROTOBUF_NOINLINE void PlayerLoadout::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.AttributeAllocation attributes = 3;
+  // repeated .pandora.player.v1.AttributeAllocation attributes = 3 [json_name = "attributes"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_attributes_size());
@@ -24505,7 +24544,7 @@ PROTOBUF_NOINLINE void PlayerLoadout::Clear() {
     }
   }
 
-  // int32 unspent_attr_points = 4;
+  // int32 unspent_attr_points = 4 [json_name = "unspentAttrPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_unspent_attr_points() != 0) {
       target =
@@ -24514,7 +24553,7 @@ PROTOBUF_NOINLINE void PlayerLoadout::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.LoadoutEquipment equipment = 5;
+  // repeated .pandora.player.v1.LoadoutEquipment equipment = 5 [json_name = "equipment"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_equipment_size());
@@ -24527,7 +24566,7 @@ PROTOBUF_NOINLINE void PlayerLoadout::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.TalentNode talents = 6;
+  // repeated .pandora.player.v1.TalentNode talents = 6 [json_name = "talents"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_talents_size());
@@ -24540,7 +24579,7 @@ PROTOBUF_NOINLINE void PlayerLoadout::Clear() {
     }
   }
 
-  // int32 unspent_talent_points = 7;
+  // int32 unspent_talent_points = 7 [json_name = "unspentTalentPoints"];
   if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_unspent_talent_points() != 0) {
       target =
@@ -24549,7 +24588,7 @@ PROTOBUF_NOINLINE void PlayerLoadout::Clear() {
     }
   }
 
-  // repeated .pandora.player.v1.LoadoutSkillCard skill_cards = 8;
+  // repeated .pandora.player.v1.LoadoutSkillCard skill_cards = 8 [json_name = "skillCards"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_skill_cards_size());
@@ -24588,56 +24627,56 @@ PROTOBUF_NOINLINE void PlayerLoadout::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    // repeated .pandora.player.v1.AttributeAllocation attributes = 3;
+    // repeated .pandora.player.v1.AttributeAllocation attributes = 3 [json_name = "attributes"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_attributes_size();
       for (const auto& msg : this_._internal_attributes()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // repeated .pandora.player.v1.LoadoutEquipment equipment = 5;
+    // repeated .pandora.player.v1.LoadoutEquipment equipment = 5 [json_name = "equipment"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1UL * this_._internal_equipment_size();
       for (const auto& msg : this_._internal_equipment()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // repeated .pandora.player.v1.TalentNode talents = 6;
+    // repeated .pandora.player.v1.TalentNode talents = 6 [json_name = "talents"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1UL * this_._internal_talents_size();
       for (const auto& msg : this_._internal_talents()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // repeated .pandora.player.v1.LoadoutSkillCard skill_cards = 8;
+    // repeated .pandora.player.v1.LoadoutSkillCard skill_cards = 8 [json_name = "skillCards"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       total_size += 1UL * this_._internal_skill_cards_size();
       for (const auto& msg : this_._internal_skill_cards()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint32 active_hero_id = 2;
+    // uint32 active_hero_id = 2 [json_name = "activeHeroId"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_active_hero_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_active_hero_id());
       }
     }
-    // int32 unspent_attr_points = 4;
+    // int32 unspent_attr_points = 4 [json_name = "unspentAttrPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_unspent_attr_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_unspent_attr_points());
       }
     }
-    // int32 unspent_talent_points = 7;
+    // int32 unspent_talent_points = 7 [json_name = "unspentTalentPoints"];
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_unspent_talent_points() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -24849,7 +24888,7 @@ PROTOBUF_NOINLINE void LoadoutSkillCard::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 slot = 1;
+  // uint32 slot = 1 [json_name = "slot"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_slot() != 0) {
       target = stream->EnsureSpace(target);
@@ -24858,7 +24897,7 @@ PROTOBUF_NOINLINE void LoadoutSkillCard::Clear() {
     }
   }
 
-  // uint32 card_id = 2;
+  // uint32 card_id = 2 [json_name = "cardId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_card_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -24867,7 +24906,7 @@ PROTOBUF_NOINLINE void LoadoutSkillCard::Clear() {
     }
   }
 
-  // uint32 level = 3;
+  // uint32 level = 3 [json_name = "level"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_level() != 0) {
       target = stream->EnsureSpace(target);
@@ -24902,21 +24941,21 @@ PROTOBUF_NOINLINE void LoadoutSkillCard::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // uint32 slot = 1;
+    // uint32 slot = 1 [json_name = "slot"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_slot() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_slot());
       }
     }
-    // uint32 card_id = 2;
+    // uint32 card_id = 2 [json_name = "cardId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_card_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_card_id());
       }
     }
-    // uint32 level = 3;
+    // uint32 level = 3 [json_name = "level"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -25088,7 +25127,7 @@ PROTOBUF_NOINLINE void GetLoadoutRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -25121,7 +25160,7 @@ PROTOBUF_NOINLINE void GetLoadoutRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -25306,7 +25345,7 @@ PROTOBUF_NOINLINE void GetLoadoutResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -25315,7 +25354,7 @@ PROTOBUF_NOINLINE void GetLoadoutResponse::Clear() {
     }
   }
 
-  // .pandora.player.v1.PlayerLoadout loadout = 2;
+  // .pandora.player.v1.PlayerLoadout loadout = 2 [json_name = "loadout"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.loadout_, this_._impl_.loadout_->GetCachedSize(), target,
@@ -25348,12 +25387,12 @@ PROTOBUF_NOINLINE void GetLoadoutResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.player.v1.PlayerLoadout loadout = 2;
+    // .pandora.player.v1.PlayerLoadout loadout = 2 [json_name = "loadout"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.loadout_);
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -25644,7 +25683,7 @@ PROTOBUF_NOINLINE void RewardClaimStorageRecord::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // map<string, bytes> permanent = 1;
+  // map<string, bytes> permanent = 1 [json_name = "permanent"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_permanent().empty()) {
       using MapType = ::google::protobuf::Map<::std::string, ::std::string>;
@@ -25673,7 +25712,7 @@ PROTOBUF_NOINLINE void RewardClaimStorageRecord::Clear() {
     }
   }
 
-  // map<uint64, bytes> activity = 2;
+  // map<uint64, bytes> activity = 2 [json_name = "activity"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_activity().empty()) {
       using MapType = ::google::protobuf::Map<::uint64_t, ::std::string>;
@@ -25722,7 +25761,7 @@ PROTOBUF_NOINLINE void RewardClaimStorageRecord::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // map<string, bytes> permanent = 1;
+    // map<string, bytes> permanent = 1 [json_name = "permanent"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_permanent_size());
@@ -25732,7 +25771,7 @@ PROTOBUF_NOINLINE void RewardClaimStorageRecord::Clear() {
                                        _pbi::WireFormatLite::TYPE_BYTES>::ByteSizeLong(entry.first, entry.second);
       }
     }
-    // map<uint64, bytes> activity = 2;
+    // map<uint64, bytes> activity = 2 [json_name = "activity"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_activity_size());
@@ -25930,7 +25969,7 @@ PROTOBUF_NOINLINE void ClaimRewardRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -25939,7 +25978,7 @@ PROTOBUF_NOINLINE void ClaimRewardRequest::Clear() {
     }
   }
 
-  // .pandora.player.v1.RewardSourceType source_type = 2;
+  // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_source_type() != 0) {
       target = stream->EnsureSpace(target);
@@ -25948,7 +25987,7 @@ PROTOBUF_NOINLINE void ClaimRewardRequest::Clear() {
     }
   }
 
-  // string source = 3;
+  // string source = 3 [json_name = "source"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_source().empty()) {
       const ::std::string& _s = this_._internal_source();
@@ -25958,7 +25997,7 @@ PROTOBUF_NOINLINE void ClaimRewardRequest::Clear() {
     }
   }
 
-  // uint64 activity_instance_id = 4;
+  // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_activity_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -25967,7 +26006,7 @@ PROTOBUF_NOINLINE void ClaimRewardRequest::Clear() {
     }
   }
 
-  // uint32 reward_id = 5;
+  // uint32 reward_id = 5 [json_name = "rewardId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_reward_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -26002,35 +26041,35 @@ PROTOBUF_NOINLINE void ClaimRewardRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    // string source = 3;
+    // string source = 3 [json_name = "source"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_source().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_source());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // .pandora.player.v1.RewardSourceType source_type = 2;
+    // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_source_type() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_source_type());
       }
     }
-    // uint32 reward_id = 5;
+    // uint32 reward_id = 5 [json_name = "rewardId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_reward_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_reward_id());
       }
     }
-    // uint64 activity_instance_id = 4;
+    // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_activity_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -26219,7 +26258,7 @@ PROTOBUF_NOINLINE void ClaimRewardResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -26252,7 +26291,7 @@ PROTOBUF_NOINLINE void ClaimRewardResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -26444,7 +26483,7 @@ PROTOBUF_NOINLINE void GetRewardClaimsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -26453,7 +26492,7 @@ PROTOBUF_NOINLINE void GetRewardClaimsRequest::Clear() {
     }
   }
 
-  // .pandora.player.v1.RewardSourceType source_type = 2;
+  // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_source_type() != 0) {
       target = stream->EnsureSpace(target);
@@ -26462,7 +26501,7 @@ PROTOBUF_NOINLINE void GetRewardClaimsRequest::Clear() {
     }
   }
 
-  // string source = 3;
+  // string source = 3 [json_name = "source"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_source().empty()) {
       const ::std::string& _s = this_._internal_source();
@@ -26472,7 +26511,7 @@ PROTOBUF_NOINLINE void GetRewardClaimsRequest::Clear() {
     }
   }
 
-  // uint64 activity_instance_id = 4;
+  // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_activity_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -26507,28 +26546,28 @@ PROTOBUF_NOINLINE void GetRewardClaimsRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // string source = 3;
+    // string source = 3 [json_name = "source"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_source().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_source());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 activity_instance_id = 4;
+    // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_activity_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_activity_instance_id());
       }
     }
-    // .pandora.player.v1.RewardSourceType source_type = 2;
+    // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_source_type() != 0) {
         total_size += 1 +
@@ -26744,7 +26783,7 @@ PROTOBUF_NOINLINE void GetRewardClaimsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -26753,7 +26792,7 @@ PROTOBUF_NOINLINE void GetRewardClaimsResponse::Clear() {
     }
   }
 
-  // repeated uint32 claimed_reward_ids = 2;
+  // repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._claimed_reward_ids_cached_byte_size_.Get();
@@ -26790,14 +26829,14 @@ PROTOBUF_NOINLINE void GetRewardClaimsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated uint32 claimed_reward_ids = 2;
+    // repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
               this_._internal_claimed_reward_ids(), 1,
               this_._impl_._claimed_reward_ids_cached_byte_size_);
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -27002,7 +27041,7 @@ PROTOBUF_NOINLINE void AddExperienceRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -27011,7 +27050,7 @@ PROTOBUF_NOINLINE void AddExperienceRequest::Clear() {
     }
   }
 
-  // uint64 exp_delta = 2;
+  // uint64 exp_delta = 2 [json_name = "expDelta"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_exp_delta() != 0) {
       target = stream->EnsureSpace(target);
@@ -27020,7 +27059,7 @@ PROTOBUF_NOINLINE void AddExperienceRequest::Clear() {
     }
   }
 
-  // string reason = 3;
+  // string reason = 3 [json_name = "reason"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_reason().empty()) {
       const ::std::string& _s = this_._internal_reason();
@@ -27030,7 +27069,7 @@ PROTOBUF_NOINLINE void AddExperienceRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 4;
+  // string idempotency_key = 4 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -27066,28 +27105,28 @@ PROTOBUF_NOINLINE void AddExperienceRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // string reason = 3;
+    // string reason = 3 [json_name = "reason"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_reason().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_reason());
       }
     }
-    // string idempotency_key = 4;
+    // string idempotency_key = 4 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 exp_delta = 2;
+    // uint64 exp_delta = 2 [json_name = "expDelta"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_exp_delta() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -27286,7 +27325,7 @@ PROTOBUF_NOINLINE void AddExperienceResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -27295,7 +27334,7 @@ PROTOBUF_NOINLINE void AddExperienceResponse::Clear() {
     }
   }
 
-  // int32 level = 2;
+  // int32 level = 2 [json_name = "level"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_level() != 0) {
       target =
@@ -27304,7 +27343,7 @@ PROTOBUF_NOINLINE void AddExperienceResponse::Clear() {
     }
   }
 
-  // uint64 exp_in_level = 3;
+  // uint64 exp_in_level = 3 [json_name = "expInLevel"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_exp_in_level() != 0) {
       target = stream->EnsureSpace(target);
@@ -27313,7 +27352,7 @@ PROTOBUF_NOINLINE void AddExperienceResponse::Clear() {
     }
   }
 
-  // bool is_max_level = 4;
+  // bool is_max_level = 4 [json_name = "isMaxLevel"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_is_max_level() != 0) {
       target = stream->EnsureSpace(target);
@@ -27322,7 +27361,7 @@ PROTOBUF_NOINLINE void AddExperienceResponse::Clear() {
     }
   }
 
-  // uint32 levels_gained = 5;
+  // uint32 levels_gained = 5 [json_name = "levelsGained"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_levels_gained() != 0) {
       target = stream->EnsureSpace(target);
@@ -27331,7 +27370,7 @@ PROTOBUF_NOINLINE void AddExperienceResponse::Clear() {
     }
   }
 
-  // bool already = 6;
+  // bool already = 6 [json_name = "already"];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_already() != 0) {
       target = stream->EnsureSpace(target);
@@ -27366,41 +27405,41 @@ PROTOBUF_NOINLINE void AddExperienceResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // int32 level = 2;
+    // int32 level = 2 [json_name = "level"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_level());
       }
     }
-    // uint64 exp_in_level = 3;
+    // uint64 exp_in_level = 3 [json_name = "expInLevel"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_exp_in_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_exp_in_level());
       }
     }
-    // uint32 levels_gained = 5;
+    // uint32 levels_gained = 5 [json_name = "levelsGained"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_levels_gained() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_levels_gained());
       }
     }
-    // bool is_max_level = 4;
+    // bool is_max_level = 4 [json_name = "isMaxLevel"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_is_max_level() != 0) {
         total_size += 2;
       }
     }
-    // bool already = 6;
+    // bool already = 6 [json_name = "already"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_already() != 0) {
         total_size += 2;

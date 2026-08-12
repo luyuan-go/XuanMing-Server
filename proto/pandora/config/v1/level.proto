@@ -65,6 +65,15 @@ enum LevelRatingMode {
   // 不计分:本图结算一律 mmr_delta=0,且完全不读 MMR(PVE 副本 / 娱乐图 / 训练场)。
   LEVEL_RATING_MODE_NONE        = 1;
   // 按 Elo 计分:battle_result 用既有 Elo 换算写 mmr_delta(排位对抗图)。
+  //
+  // ⚠️ **本档目前只指向唯一一份全局段位,不区分玩法**(2026-08-11 查证):
+  // `players.mmr` 是单列全局值,`MMRReader.GetMMR(ctx, player_id)` /
+  // `PlayerService.UpdateMMR(player_id, delta, reason, idem_key)` / `mmr_history` /
+  // `PlayerUpdateEvent.mmr_delta` 全链路**没有任何玩法维度**。
+  // 因此「3v3 与 5v5 各算各的段位」这类需求**当前实现不支持**:填了本档的图无论人数
+  // 多少都在改同一份分。要做到分开算,缺的是**段位分区键 + 分区存储**(方案与拍板点见
+  // PROGRESS.md 2026-08-11「段位分区缺口」条),不是再加一个枚举值。
+  // 在那之前,不要以为填了本列就已经按玩法分开计分了。
   LEVEL_RATING_MODE_ELO         = 2;
 }
 
@@ -160,6 +169,24 @@ message LevelRow {
   //   而改段位不可逆,是最坏的失败方向。计分与否从此是表里一条独立事实:
   //   新增玩法只填这一列,不改代码(§17.1 差异进表)。
   LevelRatingMode rating_mode = 16 [(excel_col) = "计分模式"];
+  // 段位池(rating_pool):本图算**哪一份**段位分。`rating_mode=ELO` 时必填,其余情况必须留空。
+  //
+  // 与 game_mode 正交,这是本列存在的全部理由(2026-08-11 用户拍板「3v3 与 5v5 不共用同一份
+  //   段位」):game_mode 回答「这张图去哪个**撮合池**」,本列回答「打完算进哪一份**段位**」。
+  //   两者维度不同——撮合隔离早已由 matchmaker 按 map_id 分组解决(`partitionTicketsByMap`,
+  //   3v3 图与 1v1 图本就不会串局),所以**不需要**为「段位分开」新建一整套 matchmaker 部署 /
+  //   audience / Redis 命名空间(§15.2 最少复杂度)。让一个字符串同时扛「撮合池」和「段位池」
+  //   正是上一轮 fail-open 的成因,不再重犯。
+  //
+  // 取值是自由标识符(如 "5v5_ranked" / "3v3_ranked"),**语义只有"同值即同一份段位"**:
+  //   服务端不解析其内容、不从中推断人数或玩法,只当分区键用(`player_mmr` 主键的一半)。
+  //   两张图想共用一份段位就填同一个值;想各算各的就填不同值。新增一份段位 = 填一个新值,
+  //   玩家在该值下从基线分起步,**不污染任何既有段位**(这与"用池名排除法推布尔"有本质区别:
+  //   前者是分区,漏配的后果是新开一份分;后者是推导,漏配的后果是静默改错既有分)。
+  //
+  // 校验(加载期,pkg/configtable/level.go):ELO 必须填、非 ELO 必须留空,两向都拒——
+  //   「要计分却没说算哪份」会让结算无处落账;「不计分却填了池」是配置误解,早报早改。
+  string rating_pool = 17 [(excel_col) = "段位池", (excel_default) = ""];
 }
 
 // LevelTableData 关卡表整表容器(dist/level.json 的根对象;excel_file 注解 = 导表登记)。

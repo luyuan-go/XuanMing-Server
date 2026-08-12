@@ -43,6 +43,7 @@ const (
 	GuildService_GetMyGuild_FullMethodName       = "/pandora.guild.v1.GuildService/GetMyGuild"
 	GuildService_ListMembers_FullMethodName      = "/pandora.guild.v1.GuildService/ListMembers"
 	GuildService_ListJoinRequests_FullMethodName = "/pandora.guild.v1.GuildService/ListJoinRequests"
+	GuildService_GetPlayerGuild_FullMethodName   = "/pandora.guild.v1.GuildService/GetPlayerGuild"
 )
 
 // GuildServiceClient is the client API for GuildService service.
@@ -62,6 +63,14 @@ type GuildServiceClient interface {
 	GetMyGuild(ctx context.Context, in *GetMyGuildRequest, opts ...grpc.CallOption) (*GetMyGuildResponse, error)
 	ListMembers(ctx context.Context, in *ListMembersRequest, opts ...grpc.CallOption) (*ListMembersResponse, error)
 	ListJoinRequests(ctx context.Context, in *ListJoinRequestsRequest, opts ...grpc.CallOption) (*ListJoinRequestsResponse, error)
+	// ── 内部:按 player_id 反查公会编号(DS 出生编制专用,不对客户端开放)────────────
+	//
+	// 与 team.v1 GetPlayerTeam 同源需求:DS 要把公会归属写到实体上,客户端才不必靠本机名册
+	// 反推会友(名册按游标分页,没翻到的页会把会友判成路人)。
+	//
+	// 不复用 GetMyGuild:它的 player_id 已被删除并 reserved,身份一律取自 JWT。
+	// 只回编号不回快照:DS 只判定「同会与否」。
+	GetPlayerGuild(ctx context.Context, in *GetPlayerGuildRequest, opts ...grpc.CallOption) (*GetPlayerGuildResponse, error)
 }
 
 type guildServiceClient struct {
@@ -202,6 +211,16 @@ func (c *guildServiceClient) ListJoinRequests(ctx context.Context, in *ListJoinR
 	return out, nil
 }
 
+func (c *guildServiceClient) GetPlayerGuild(ctx context.Context, in *GetPlayerGuildRequest, opts ...grpc.CallOption) (*GetPlayerGuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlayerGuildResponse)
+	err := c.cc.Invoke(ctx, GuildService_GetPlayerGuild_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GuildServiceServer is the server API for GuildService service.
 // All implementations should embed UnimplementedGuildServiceServer
 // for forward compatibility.
@@ -219,6 +238,14 @@ type GuildServiceServer interface {
 	GetMyGuild(context.Context, *GetMyGuildRequest) (*GetMyGuildResponse, error)
 	ListMembers(context.Context, *ListMembersRequest) (*ListMembersResponse, error)
 	ListJoinRequests(context.Context, *ListJoinRequestsRequest) (*ListJoinRequestsResponse, error)
+	// ── 内部:按 player_id 反查公会编号(DS 出生编制专用,不对客户端开放)────────────
+	//
+	// 与 team.v1 GetPlayerTeam 同源需求:DS 要把公会归属写到实体上,客户端才不必靠本机名册
+	// 反推会友(名册按游标分页,没翻到的页会把会友判成路人)。
+	//
+	// 不复用 GetMyGuild:它的 player_id 已被删除并 reserved,身份一律取自 JWT。
+	// 只回编号不回快照:DS 只判定「同会与否」。
+	GetPlayerGuild(context.Context, *GetPlayerGuildRequest) (*GetPlayerGuildResponse, error)
 }
 
 // UnimplementedGuildServiceServer should be embedded to have
@@ -266,6 +293,9 @@ func (UnimplementedGuildServiceServer) ListMembers(context.Context, *ListMembers
 }
 func (UnimplementedGuildServiceServer) ListJoinRequests(context.Context, *ListJoinRequestsRequest) (*ListJoinRequestsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListJoinRequests not implemented")
+}
+func (UnimplementedGuildServiceServer) GetPlayerGuild(context.Context, *GetPlayerGuildRequest) (*GetPlayerGuildResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPlayerGuild not implemented")
 }
 func (UnimplementedGuildServiceServer) testEmbeddedByValue() {}
 
@@ -521,6 +551,24 @@ func _GuildService_ListJoinRequests_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GuildService_GetPlayerGuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayerGuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).GetPlayerGuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_GetPlayerGuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).GetPlayerGuild(ctx, req.(*GetPlayerGuildRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GuildService_ServiceDesc is the grpc.ServiceDesc for GuildService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -579,6 +627,10 @@ var GuildService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListJoinRequests",
 			Handler:    _GuildService_ListJoinRequests_Handler,
+		},
+		{
+			MethodName: "GetPlayerGuild",
+			Handler:    _GuildService_GetPlayerGuild_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

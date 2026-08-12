@@ -29,6 +29,15 @@ service GuildService {
   rpc GetMyGuild(GetMyGuildRequest) returns (GetMyGuildResponse);
   rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
   rpc ListJoinRequests(ListJoinRequestsRequest) returns (ListJoinRequestsResponse);
+
+  // ── 内部:按 player_id 反查公会编号(DS 出生编制专用,不对客户端开放)────────────
+  //
+  // 与 team.v1 GetPlayerTeam 同源需求:DS 要把公会归属写到实体上,客户端才不必靠本机名册
+  // 反推会友(名册按游标分页,没翻到的页会把会友判成路人)。
+  //
+  // 不复用 GetMyGuild:它的 player_id 已被删除并 reserved,身份一律取自 JWT。
+  // 只回编号不回快照:DS 只判定「同会与否」。
+  rpc GetPlayerGuild(GetPlayerGuildRequest) returns (GetPlayerGuildResponse);
 }
 
 // 公会职位(enum 底层 int32,不属 ID 规则,CLAUDE.md §5.7)。
@@ -242,4 +251,19 @@ message GuildEvent {
   uint64         to_player_id = 3;  // 接收方(也是 kafka key)
   uint64         actor_id     = 4;  // 触发者(申请人 / 操作会长等)
   string         guild_name   = 5;
+}
+
+// GetPlayerGuild:内部东西向只读。Envoy 按 /pandora.guild.v1.GuildService/ 整前缀放行,
+// 本方法在客户端面同样可达,因此 service 层必须显式拒绝带玩家 JWT 的调用(callerID>0),
+// 否则等于开放「查任意玩家属于哪个公会」。
+message GetPlayerGuildRequest {
+  uint64 player_id = 1;
+}
+
+message GetPlayerGuildResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // false 表示该玩家当前不属于任何公会;不是错误,code 仍为 OK。
+  bool has_guild = 2;
+  // has_guild=false 时为 0。
+  uint64 guild_id = 3;
 }

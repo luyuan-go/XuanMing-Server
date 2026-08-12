@@ -58,8 +58,10 @@ $ErrorActionPreference = 'Stop'
 # 会导致 go build 拉模块超时(dial tcp 142.251.188.141:443 ... connectex: 超时)。
 # 这里在脚本进程内兜底切到 goproxy.cn(不改机器全局 go env,便于一键脚本分发到多台策划机)。
 # 已显式自定义 GOPROXY(且不是默认公有代理)的机器保持不动,尊重企业内网配置。
+# 分隔符必须是 `|`:逗号只在代理返回 404/410 时才退到下一个源,网络层错误(unexpected EOF /
+# 超时 / 连接重置)直接失败,后面的 direct 根本轮不到(详见 deploy/services/Dockerfile)。
 if (-not $env:GOPROXY -or $env:GOPROXY -match 'proxy\.golang\.org') {
-    $env:GOPROXY = 'https://goproxy.cn,direct'
+    $env:GOPROXY = 'https://goproxy.cn|https://proxy.golang.org|direct'
 }
 if (-not $env:GOSUMDB -or $env:GOSUMDB -match 'sum\.golang\.org') {
     $env:GOSUMDB = 'sum.golang.google.cn'

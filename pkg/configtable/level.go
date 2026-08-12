@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/luyuancpp/pandora/pkg/rating"
+
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
 )
 
@@ -53,6 +55,23 @@ func validateLevelRow(row *configpb.LevelRow) error {
 	// side_count==0 是"未配置沿用服务端默认 2 方",按 2 方对待,合法。
 	if row.GetRatingMode() == configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO && row.GetSideCount() == 1 {
 		return fmt.Errorf("计分模式(rating_mode)=ELO 但对局方数(side_count)=1(单方合作副本没有对手结构,无法算 Elo);要么改 1=不计分,要么把方数填成实际对抗方数")
+	}
+	// 段位池与计分模式必须配套,两向都拒(2026-08-11「3v3 与 5v5 不共用同一份段位」):
+	//   - ELO 却没填池 → 结算时无处落账,只能兜底进 default 池,表现为"这张图的分和别的
+	//     图混在一起算",而且**没有任何报错**——正是本次要消灭的那类静默错配;
+	//   - 不计分却填了池 → 配置误解(填的人以为它生效了),早报早改。
+	// 池名本身不设白名单(策划自由填,同值即同一份段位),只校验长度:超长会在非严格
+	// sql_mode 下被静默截断成另一份段位(§9.24),必须挡在配置边界。
+	pool := strings.TrimSpace(row.GetRatingPool())
+	if row.GetRatingMode() == configpb.LevelRatingMode_LEVEL_RATING_MODE_ELO {
+		if pool == "" {
+			return fmt.Errorf("计分模式(rating_mode)=ELO 但段位池(rating_pool)为空;必须指明本图算进哪一份段位(如 5v5_ranked / 3v3_ranked)")
+		}
+		if len(pool) > rating.MaxPoolLen {
+			return fmt.Errorf("段位池(rating_pool=%q)长度 %d 超过上限 %d(超长会被数据库静默截断成另一份段位)", pool, len(pool), rating.MaxPoolLen)
+		}
+	} else if pool != "" {
+		return fmt.Errorf("段位池(rating_pool=%q)已填,但计分模式(rating_mode)不是 2=按Elo算段位(本图根本不计分,填池无意义);要么把计分模式改成 2,要么清空本列", pool)
 	}
 	return nil
 }

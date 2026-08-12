@@ -369,6 +369,21 @@ func callerID(ctx context.Context) uint64 {
 	return id
 }
 
+// systemOnly 内部东西向接口鉴权:带玩家 JWT 的调用一律拒。
+//
+// Envoy 是按 /pandora.team.v1.TeamService/ **整前缀**路由到本服务的,没有按方法的白名单,
+// 因此"内部方法"在客户端面同样可达。少了这道门,GetPlayerTeam 就是一个"查任意玩家在哪支队"
+// 的 IDOR 口子。拒绝必须留痕:这类分支以 response Code + nil error 返回,统一 access log
+// 会记成 rpc_ok,不打日志则线上对越权尝试零可见性(与 player 服务 logAuthzDeny 同口径)。
+func systemOnly(ctx context.Context) commonv1.ErrCode {
+	if id := callerID(ctx); id != 0 {
+		plog.With(ctx).Warnw("msg", "team_authz_denied",
+			"reason", "system_rpc_by_client", "caller_id", id)
+		return commonv1.ErrCode_ERR_PERMISSION_DENY
+	}
+	return commonv1.ErrCode_OK
+}
+
 // toProtoCode 把 pkg/errcode 1:1 映射成 proto enum(数值相同)。
 func toProtoCode(err error) commonv1.ErrCode {
 	return commonv1.ErrCode(errcode.As(err))
@@ -389,5 +404,34 @@ func (s *TeamService) BeginTeamMatch(ctx context.Context, req *teamv1.BeginTeamM
 		Code:             commonv1.ErrCode_OK,
 		Team:             s.uc.TeamToProto(team),
 		LeaseExpiresAtMs: expiresAtMs,
+	}, nil
+}
+
+// GetPlayerTeam 按 player_id 反查队伍编号(内部东西向,DS 出生编制专用)。
+//
+// DS 在玩家进场时把队伍编号写到实体上并复制给全场客户端,「谁和谁是一伙的」才有权威来源;
+// 否则大厅里所有玩家共用玩家阵营,队友与路人无从区分。
+// 只回编号不回名单:DS 只判定「同队与否」,发整份 Team 快照是无谓的扩面(§9.14)。
+func (s *TeamService) GetPlayerTeam(ctx context.Context, req *teamv1.GetPlayerTeamRequest) (*teamv1.GetPlayerTeamResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &teamv1.GetPlayerTeamResponse{Code: code}, nil
+	}
+	playerID := req.GetPlayerId()
+	if playerID == 0 {
+		return &teamv1.GetPlayerTeamResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+
+	teamID, hasTeam, err := s.uc.GetPlayerTeamID(ctx, playerID)
+	if err != nil {
+		return &teamv1.GetPlayerTeamResponse{Code: toProtoCode(err)}, nil
+	}
+	if !hasTeam {
+		// 没队伍是正常态,不是错误:DS 据此把实体的队伍编号留在「未知」。
+		return &teamv1.GetPlayerTeamResponse{Code: commonv1.ErrCode_OK, HasTeam: false}, nil
+	}
+	return &teamv1.GetPlayerTeamResponse{
+		Code:    commonv1.ErrCode_OK,
+		HasTeam: true,
+		TeamId:  teamID,
 	}, nil
 }

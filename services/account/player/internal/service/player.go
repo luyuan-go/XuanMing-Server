@@ -22,6 +22,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/rating"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 
@@ -154,17 +155,20 @@ func (s *PlayerService) UnlockHero(ctx context.Context, req *playerv1.UnlockHero
 	return &playerv1.UnlockHeroResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// GetMMR 读玩家当前 MMR(供 battle_result 当 reader;客户端只能读自己)。
+// GetMMR 读玩家在某段位池下的分(供 battle_result 当 reader;客户端只能读自己)。
+// rating_pool 空 = 默认池。
 func (s *PlayerService) GetMMR(ctx context.Context, req *playerv1.GetMMRRequest) (*playerv1.GetMMRResponse, error) {
 	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
 	if code != commonv1.ErrCode_OK {
 		return &playerv1.GetMMRResponse{Code: code}, nil
 	}
-	mmr, err := s.uc.GetMMR(ctx, playerID)
+	mmr, found, err := s.uc.GetMMR(ctx, playerID, req.GetRatingPool())
 	if err != nil {
 		return &playerv1.GetMMRResponse{Code: toProtoCode(err)}, nil
 	}
-	return &playerv1.GetMMRResponse{Code: commonv1.ErrCode_OK, Mmr: int32(mmr)}, nil
+	// 回显归一后的池 + found:调用方靠 found 区分"没打过"与"分刚好是基线"。
+	return &playerv1.GetMMRResponse{Code: commonv1.ErrCode_OK, Mmr: int32(mmr),
+		RatingPool: rating.Normalize(req.GetRatingPool()), Found: found}, nil
 }
 
 // UpdateMMR 幂等改 MMR(系统接口;同步兜底,正常链路走 kafka 消费 player.update)。
@@ -178,7 +182,8 @@ func (s *PlayerService) UpdateMMR(ctx context.Context, req *playerv1.UpdateMMRRe
 	if req.GetIdempotencyKey() == "" {
 		return &playerv1.UpdateMMRResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	newMMR, _, err := s.uc.UpdateMMR(ctx, req.GetPlayerId(), req.GetDelta(), req.GetReason(), req.GetIdempotencyKey())
+	newMMR, _, err := s.uc.UpdateMMR(ctx, req.GetPlayerId(), req.GetDelta(), req.GetReason(),
+		req.GetIdempotencyKey(), req.GetRatingPool())
 	if err != nil {
 		return &playerv1.UpdateMMRResponse{Code: toProtoCode(err)}, nil
 	}

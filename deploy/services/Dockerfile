@@ -22,14 +22,6 @@ ARG BASE_REGISTRY=docker.io
 FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION}-${GO_IMAGE_VARIANT} AS builder
 
 ARG GO_VERSION
-ARG SERVICE_DIR
-ARG CMD_NAME
-
-# 版本烙印:由 start.ps1 / compose 传入 git 版本信息,编译期 -ldflags -X 注入二进制。
-# 不传时用占位默认值(本地随手 build 也能跑),线上发布务必传真实 git tag/commit。
-ARG VERSION=dev
-ARG GIT_COMMIT=unknown
-ARG BUILD_TIME=unknown
 
 WORKDIR /src
 
@@ -40,11 +32,34 @@ COPY . .
 # 不使用 Dockerfile 外部 frontend / RUN --mount,避免内网机器启动时额外拉
 # docker/dockerfile:* 导致一键构建卡在 Docker Hub。
 # GOPROXY:容器内拉 go 模块;国内机器默认走 goproxy.cn,可由 start.ps1 / 环境变量覆盖。
-ARG GOPROXY=https://goproxy.cn,direct
+# **分隔符必须是 `|` 而不是 `,`**:逗号只在代理返回 404/410 时才退到下一个源,网络层错误
+# (unexpected EOF / 超时 / 连接重置)直接失败,`,direct` 那个 direct 根本轮不到;竖线才是
+# 「任何错误都回退」。2026-08-12 事故链:goproxy.cn 抖动 → 不回退 → 22 个服务里必有构建
+# 失败 → start.ps1 导入离线镜像包兜底 → 旧 commit 二进制配上新生成的配置 →
+# inventory 缺 default_identify_rule 启动即 CrashLoop → rollout 180s 超时。
+ARG GOPROXY=https://goproxy.cn|https://proxy.golang.org|direct
 ENV CGO_ENABLED=0 GOOS=linux GOFLAGS=-trimpath GOPROXY=${GOPROXY}
 RUN actual="$(go env GOVERSION)" \
     && test "$actual" = "go${GO_VERSION}" \
        || (echo "ERROR: required go${GO_VERSION}, actual=${actual}" && exit 1)
+
+# 模块下载独立成层:22 个服务共用同一份 workspace,依赖图完全相同。
+# 本层的 cache key 只取决于 workspace 源码,与服务名 / 版本烙印无关 —— 一次 start.ps1
+# 里只有第一个服务真的下载,其余 21 个直接命中本层缓存。
+# 必须放在 per-service ARG **之前**:BUILD_TIME 每次运行都是新值,若与 go build 同层,
+# 22 个服务每次都要各自重拉整张依赖图(2026-08-12 事故日志里 125 条代理报错即由此而来)。
+RUN go mod download
+
+# per-service 构建参数到这里才声明,避免参与上面各层的 cache key。
+ARG SERVICE_DIR
+ARG CMD_NAME
+
+# 版本烙印:由 start.ps1 / compose 传入 git 版本信息,编译期 -ldflags -X 注入二进制。
+# 不传时用占位默认值(本地随手 build 也能跑),线上发布务必传真实 git tag/commit。
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
 RUN test -n "$SERVICE_DIR" || (echo "ERROR: build-arg SERVICE_DIR 必填" && exit 1) \
     && test -n "$CMD_NAME" || (echo "ERROR: build-arg CMD_NAME 必填" && exit 1) \
     && cd "/src/${SERVICE_DIR}" \

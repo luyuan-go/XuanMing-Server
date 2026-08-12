@@ -53,4 +53,7 @@ func TestLoginResponseCarriesPlayerNo(t *testing.T) {
 	if res.GetPlayerNo() != want {
 		t.Fatalf("LoginResponse.player_no = %d, want %d", res.GetPlayerNo(), want)
 	}
+	if res.GetRegisterNo() != want {
+		t.Fatalf("LoginResponse.register_no compatibility field = %d, want %d", res.GetRegisterNo(), want)
+	}
 }

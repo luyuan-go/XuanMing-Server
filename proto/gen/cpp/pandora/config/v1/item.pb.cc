@@ -66,95 +66,95 @@ constexpr ItemRow::ParseTableT_ ItemRow::InternalGenerateParseTable_(const ::_pb
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint32 id = 1 [(.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+      // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemRow, _impl_.id_), 5>(),
        {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.id_)}},
-      // string name = 2 [(.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
+      // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.name_)}},
-      // .pandora.config.v1.ItemType type = 3 [(.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
+      // .pandora.config.v1.ItemType type = 3 [json_name = "type", (.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemRow, _impl_.type_), 6>(),
        {24, 6, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.type_)}},
-      // uint32 quality = 4 [(.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 quality = 4 [json_name = "quality", (.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemRow, _impl_.quality_), 7>(),
        {32, 7, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.quality_)}},
-      // uint32 max_stack_size = 5 [(.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
+      // uint32 max_stack_size = 5 [json_name = "maxStackSize", (.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemRow, _impl_.max_stack_size_), 8>(),
        {40, 8, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.max_stack_size_)}},
-      // uint32 sell_price = 6 [(.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 sell_price = 6 [json_name = "sellPrice", (.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemRow, _impl_.sell_price_), 9>(),
        {48, 9, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.sell_price_)}},
-      // string icon = 7 [(.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
+      // string icon = 7 [json_name = "icon", (.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
       {::_pbi::TcParser::FastUS1,
        {58, 1, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.icon_)}},
-      // string description = 8 [(.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
+      // string description = 8 [json_name = "description", (.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
       {::_pbi::TcParser::FastUS1,
        {66, 2, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.description_)}},
-      // bool usable = 9 [(.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
+      // bool usable = 9 [json_name = "usable", (.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ItemRow, _impl_.usable_), 10>(),
        {72, 10, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.usable_)}},
-      // uint32 use_heal_hp = 10 [(.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 use_heal_hp = 10 [json_name = "useHealHp", (.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemRow, _impl_.use_heal_hp_), 11>(),
        {80, 11, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.use_heal_hp_)}},
-      // uint32 equip_slot = 11 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 equip_slot = 11 [json_name = "equipSlot", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemRow, _impl_.equip_slot_), 12>(),
        {88, 12, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_slot_)}},
-      // uint32 identify_pool_id = 12 [(.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 identify_pool_id = 12 [json_name = "identifyPoolId", (.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemRow, _impl_.identify_pool_id_), 13>(),
        {96, 13, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.identify_pool_id_)}},
-      // string equip_mesh = 13 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
+      // string equip_mesh = 13 [json_name = "equipMesh", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
       {::_pbi::TcParser::FastUS1,
        {106, 3, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_mesh_)}},
-      // string equip_socket = 14 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
+      // string equip_socket = 14 [json_name = "equipSocket", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
       {::_pbi::TcParser::FastUS1,
        {114, 4, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_socket_)}},
-      // float equip_offset_x = 15 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_offset_x = 15 [json_name = "equipOffsetX", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::FastF32S1,
        {125, 14, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_offset_x_)}},
-      // float equip_offset_y = 16 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_offset_y = 16 [json_name = "equipOffsetY", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::FastF32S2,
        {389, 15, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_offset_y_)}},
-      // float equip_offset_z = 17 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_offset_z = 17 [json_name = "equipOffsetZ", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::FastF32S2,
        {397, 16, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_offset_z_)}},
-      // float equip_yaw = 18 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_yaw = 18 [json_name = "equipYaw", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::FastF32S2,
        {405, 17, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_yaw_)}},
-      // float equip_pitch = 19 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_pitch = 19 [json_name = "equipPitch", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::FastF32S2,
        {413, 18, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_pitch_)}},
-      // float equip_roll = 20 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_roll = 20 [json_name = "equipRoll", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
       {::_pbi::TcParser::FastF32S2,
        {421, 19, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_roll_)}},
-      // float equip_scale_x = 21 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
+      // float equip_scale_x = 21 [json_name = "equipScaleX", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
       {::_pbi::TcParser::FastF32S2,
        {429, 20, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_scale_x_)}},
-      // float equip_scale_y = 22 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
+      // float equip_scale_y = 22 [json_name = "equipScaleY", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
       {::_pbi::TcParser::FastF32S2,
        {437, 21, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_scale_y_)}},
-      // float equip_scale_z = 23 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
+      // float equip_scale_z = 23 [json_name = "equipScaleZ", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
       {::_pbi::TcParser::FastF32S2,
        {445, 22, 0,
         PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_scale_z_)}},
@@ -169,51 +169,51 @@ constexpr ItemRow::ParseTableT_ ItemRow::InternalGenerateParseTable_(const ::_pb
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 id = 1 [(.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+      // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // string name = 2 [(.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
+      // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // .pandora.config.v1.ItemType type = 3 [(.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
+      // .pandora.config.v1.ItemType type = 3 [json_name = "type", (.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.type_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // uint32 quality = 4 [(.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 quality = 4 [json_name = "quality", (.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.quality_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 max_stack_size = 5 [(.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
+      // uint32 max_stack_size = 5 [json_name = "maxStackSize", (.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.max_stack_size_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 sell_price = 6 [(.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 sell_price = 6 [json_name = "sellPrice", (.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.sell_price_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // string icon = 7 [(.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
+      // string icon = 7 [json_name = "icon", (.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.icon_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // string description = 8 [(.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
+      // string description = 8 [json_name = "description", (.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.description_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // bool usable = 9 [(.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
+      // bool usable = 9 [json_name = "usable", (.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.usable_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
-      // uint32 use_heal_hp = 10 [(.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 use_heal_hp = 10 [json_name = "useHealHp", (.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.use_heal_hp_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 equip_slot = 11 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 equip_slot = 11 [json_name = "equipSlot", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_slot_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 identify_pool_id = 12 [(.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
+      // uint32 identify_pool_id = 12 [json_name = "identifyPoolId", (.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.identify_pool_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // string equip_mesh = 13 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
+      // string equip_mesh = 13 [json_name = "equipMesh", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_mesh_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // string equip_socket = 14 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
+      // string equip_socket = 14 [json_name = "equipSocket", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_socket_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // float equip_offset_x = 15 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_offset_x = 15 [json_name = "equipOffsetX", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_offset_x_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
-      // float equip_offset_y = 16 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_offset_y = 16 [json_name = "equipOffsetY", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_offset_y_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
-      // float equip_offset_z = 17 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_offset_z = 17 [json_name = "equipOffsetZ", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_offset_z_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
-      // float equip_yaw = 18 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_yaw = 18 [json_name = "equipYaw", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_yaw_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
-      // float equip_pitch = 19 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_pitch = 19 [json_name = "equipPitch", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_pitch_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
-      // float equip_roll = 20 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
+      // float equip_roll = 20 [json_name = "equipRoll", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_roll_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
-      // float equip_scale_x = 21 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
+      // float equip_scale_x = 21 [json_name = "equipScaleX", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_scale_x_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
-      // float equip_scale_y = 22 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
+      // float equip_scale_y = 22 [json_name = "equipScaleY", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_scale_y_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
-      // float equip_scale_z = 23 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
+      // float equip_scale_z = 23 [json_name = "equipScaleZ", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
       {PROTOBUF_FIELD_OFFSET(ItemRow, _impl_.equip_scale_z_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
     }},
     // no aux_entries
@@ -386,14 +386,14 @@ constexpr ItemTableData::ParseTableT_ ItemTableData::InternalGenerateParseTable_
       ::_pbi::TcParser::GetTable<::pandora::config::v1::ItemTableData>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.config.v1.ItemRow rows = 1;
+      // repeated .pandora.config.v1.ItemRow rows = 1 [json_name = "rows"];
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(ItemTableData, _impl_.rows_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // repeated .pandora.config.v1.ItemRow rows = 1;
+      // repeated .pandora.config.v1.ItemRow rows = 1 [json_name = "rows"];
       {PROTOBUF_FIELD_OFFSET(ItemTableData, _impl_.rows_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -591,38 +591,44 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fitem_2eproto[] ABSL
     protodesc_cold) = {
     "\n\034pandora/config/v1/item.proto\022\021pandora."
     "config.v1\032\035pandora/config/v1/excel.proto"
-    "\"\340\007\n\007ItemRow\022\026\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001\022\034\n\004"
-    "name\030\002 \001(\tB\016\362\222\031\006\345\220\215\347\247\260\370\222\031\001\0229\n\004type\030\003 \001(\016"
-    "2\033.pandora.config.v1.ItemTypeB\016\362\222\031\006\347\261\273\345\236"
-    "\213\370\222\031\001\022 \n\007quality\030\004 \001(\rB\017\362\222\031\006\345\223\201\350\264\250\202\223\031\0010\022"
-    ",\n\016max_stack_size\030\005 \001(\rB\024\362\222\031\014\345\240\206\345\217\240\344\270\212\351\231"
-    "\220\370\222\031\001\022#\n\nsell_price\030\006 \001(\rB\017\362\222\031\006\345\224\256\344\273\267\202\223\031"
-    "\0010\022\035\n\004icon\030\007 \001(\tB\017\362\222\031\006\345\233\276\346\240\207\212\223\031\001/\022%\n\013des"
-    "cription\030\010 \001(\tB\020\362\222\031\014\346\217\217\350\277\260\346\226\207\346\234\254\022\"\n\006usab"
-    "le\030\t \001(\010B\022\362\222\031\t\345\217\257\344\275\277\347\224\250\202\223\031\0010\022-\n\013use_heal"
-    "_hp\030\n \001(\rB\030\362\222\031\017\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217\202\223\031\0010\022)\n\ne"
-    "quip_slot\030\013 \001(\rB\025\362\222\031\014\350\243\205\345\244\207\351\203\250\344\275\215\202\223\031\0010\022."
-    "\n\020identify_pool_id\030\014 \001(\rB\024\362\222\031\013\351\211\264\345\256\232\346\261\240I"
-    "D\202\223\031\0010\022)\n\nequip_mesh\030\r \001(\tB\025\362\222\031\014\350\243\205\345\244\207\346\250"
-    "\241\345\236\213\212\223\031\001/\022&\n\014equip_socket\030\016 \001(\tB\020\362\222\031\014\350\243\205"
-    "\345\244\207\346\214\202\347\202\271\022.\n\016equip_offset_x\030\017 \001(\002B\026\362\222\031\r\350"
-    "\243\205\345\244\207\345\201\217\347\247\273X\202\223\031\0010\022.\n\016equip_offset_y\030\020 \001("
-    "\002B\026\362\222\031\r\350\243\205\345\244\207\345\201\217\347\247\273Y\202\223\031\0010\022.\n\016equip_offse"
-    "t_z\030\021 \001(\002B\026\362\222\031\r\350\243\205\345\244\207\345\201\217\347\247\273Z\202\223\031\0010\022+\n\tequ"
-    "ip_yaw\030\022 \001(\002B\030\362\222\031\017\350\243\205\345\244\207\346\227\213\350\275\254Yaw\202\223\031\0010\022/"
-    "\n\013equip_pitch\030\023 \001(\002B\032\362\222\031\021\350\243\205\345\244\207\346\227\213\350\275\254Pit"
-    "ch\202\223\031\0010\022-\n\nequip_roll\030\024 \001(\002B\031\362\222\031\020\350\243\205\345\244\207\346"
-    "\227\213\350\275\254Roll\202\223\031\0010\022-\n\requip_scale_x\030\025 \001(\002B\026\362"
-    "\222\031\r\350\243\205\345\244\207\347\274\251\346\224\276X\202\223\031\0011\022-\n\requip_scale_y\030\026"
-    " \001(\002B\026\362\222\031\r\350\243\205\345\244\207\347\274\251\346\224\276Y\202\223\031\0011\022-\n\requip_sc"
-    "ale_z\030\027 \001(\002B\026\362\222\031\r\350\243\205\345\244\207\347\274\251\346\224\276Z\202\223\031\0011\"W\n\rI"
-    "temTableData\022(\n\004rows\030\001 \003(\0132\032.pandora.con"
-    "fig.v1.ItemRow:\034\352\222\031\024\351\201\223\345\205\267/d_\351\201\223\345\205\267.xlsx"
-    "\260\223\031\004*\235\001\n\010ItemType\022\031\n\025ITEM_TYPE_UNSPECIFI"
-    "ED\020\000\022\030\n\024ITEM_TYPE_CONSUMABLE\020\001\022\026\n\022ITEM_T"
-    "YPE_MATERIAL\020\002\022\027\n\023ITEM_TYPE_EQUIPMENT\020\003\022"
-    "\023\n\017ITEM_TYPE_QUEST\020\004\022\026\n\022ITEM_TYPE_CURREN"
-    "CY\020\005b\006proto3"
+    "\"\335\t\n\007ItemRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002id"
+    "\022\"\n\004name\030\002 \001(\tB\016\362\222\031\006\345\220\215\347\247\260\370\222\031\001R\004name\022\?\n\004"
+    "type\030\003 \001(\0162\033.pandora.config.v1.ItemTypeB"
+    "\016\362\222\031\006\347\261\273\345\236\213\370\222\031\001R\004type\022)\n\007quality\030\004 \001(\rB\017"
+    "\362\222\031\006\345\223\201\350\264\250\202\223\031\0010R\007quality\022:\n\016max_stack_si"
+    "ze\030\005 \001(\rB\024\362\222\031\014\345\240\206\345\217\240\344\270\212\351\231\220\370\222\031\001R\014maxStack"
+    "Size\022.\n\nsell_price\030\006 \001(\rB\017\362\222\031\006\345\224\256\344\273\267\202\223\031\001"
+    "0R\tsellPrice\022#\n\004icon\030\007 \001(\tB\017\362\222\031\006\345\233\276\346\240\207\212\223"
+    "\031\001/R\004icon\0222\n\013description\030\010 \001(\tB\020\362\222\031\014\346\217\217\350"
+    "\277\260\346\226\207\346\234\254R\013description\022*\n\006usable\030\t \001(\010B\022\362"
+    "\222\031\t\345\217\257\344\275\277\347\224\250\202\223\031\0010R\006usable\0228\n\013use_heal_hp"
+    "\030\n \001(\rB\030\362\222\031\017\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217\202\223\031\0010R\tuseHea"
+    "lHp\0224\n\nequip_slot\030\013 \001(\rB\025\362\222\031\014\350\243\205\345\244\207\351\203\250\344\275"
+    "\215\202\223\031\0010R\tequipSlot\022>\n\020identify_pool_id\030\014 "
+    "\001(\rB\024\362\222\031\013\351\211\264\345\256\232\346\261\240ID\202\223\031\0010R\016identifyPoolI"
+    "d\0224\n\nequip_mesh\030\r \001(\tB\025\362\222\031\014\350\243\205\345\244\207\346\250\241\345\236\213\212"
+    "\223\031\001/R\tequipMesh\0223\n\014equip_socket\030\016 \001(\tB\020\362"
+    "\222\031\014\350\243\205\345\244\207\346\214\202\347\202\271R\013equipSocket\022<\n\016equip_of"
+    "fset_x\030\017 \001(\002B\026\362\222\031\r\350\243\205\345\244\207\345\201\217\347\247\273X\202\223\031\0010R\014eq"
+    "uipOffsetX\022<\n\016equip_offset_y\030\020 \001(\002B\026\362\222\031\r"
+    "\350\243\205\345\244\207\345\201\217\347\247\273Y\202\223\031\0010R\014equipOffsetY\022<\n\016equi"
+    "p_offset_z\030\021 \001(\002B\026\362\222\031\r\350\243\205\345\244\207\345\201\217\347\247\273Z\202\223\031\0010"
+    "R\014equipOffsetZ\0225\n\tequip_yaw\030\022 \001(\002B\030\362\222\031\017\350"
+    "\243\205\345\244\207\346\227\213\350\275\254Yaw\202\223\031\0010R\010equipYaw\022;\n\013equip_p"
+    "itch\030\023 \001(\002B\032\362\222\031\021\350\243\205\345\244\207\346\227\213\350\275\254Pitch\202\223\031\0010R\n"
+    "equipPitch\0228\n\nequip_roll\030\024 \001(\002B\031\362\222\031\020\350\243\205\345"
+    "\244\207\346\227\213\350\275\254Roll\202\223\031\0010R\tequipRoll\022:\n\requip_sc"
+    "ale_x\030\025 \001(\002B\026\362\222\031\r\350\243\205\345\244\207\347\274\251\346\224\276X\202\223\031\0011R\013equ"
+    "ipScaleX\022:\n\requip_scale_y\030\026 \001(\002B\026\362\222\031\r\350\243\205"
+    "\345\244\207\347\274\251\346\224\276Y\202\223\031\0011R\013equipScaleY\022:\n\requip_sc"
+    "ale_z\030\027 \001(\002B\026\362\222\031\r\350\243\205\345\244\207\347\274\251\346\224\276Z\202\223\031\0011R\013equ"
+    "ipScaleZ\"]\n\rItemTableData\022.\n\004rows\030\001 \003(\0132"
+    "\032.pandora.config.v1.ItemRowR\004rows:\034\352\222\031\024\351"
+    "\201\223\345\205\267/d_\351\201\223\345\205\267.xlsx\260\223\031\004*\235\001\n\010ItemType\022\031\n\025"
+    "ITEM_TYPE_UNSPECIFIED\020\000\022\030\n\024ITEM_TYPE_CON"
+    "SUMABLE\020\001\022\026\n\022ITEM_TYPE_MATERIAL\020\002\022\027\n\023ITE"
+    "M_TYPE_EQUIPMENT\020\003\022\023\n\017ITEM_TYPE_QUEST\020\004\022"
+    "\026\n\022ITEM_TYPE_CURRENCY\020\005b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fconfig_2fv1_2fitem_2eproto_deps[1] = {
@@ -632,7 +638,7 @@ static ::absl::once_flag descriptor_table_pandora_2fconfig_2fv1_2fitem_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fconfig_2fv1_2fitem_2eproto = {
     false,
     false,
-    1332,
+    1591,
     descriptor_table_protodef_pandora_2fconfig_2fv1_2fitem_2eproto,
     "pandora/config/v1/item.proto",
     &descriptor_table_pandora_2fconfig_2fv1_2fitem_2eproto_once,
@@ -829,7 +835,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 id = 1 [(.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+  // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -838,7 +844,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // string name = 2 [(.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
+  // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_name().empty()) {
       const ::std::string& _s = this_._internal_name();
@@ -848,7 +854,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // .pandora.config.v1.ItemType type = 3 [(.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
+  // .pandora.config.v1.ItemType type = 3 [json_name = "type", (.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
   if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_type() != 0) {
       target = stream->EnsureSpace(target);
@@ -857,7 +863,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // uint32 quality = 4 [(.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
+  // uint32 quality = 4 [json_name = "quality", (.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_quality() != 0) {
       target = stream->EnsureSpace(target);
@@ -866,7 +872,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // uint32 max_stack_size = 5 [(.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
+  // uint32 max_stack_size = 5 [json_name = "maxStackSize", (.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
   if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_max_stack_size() != 0) {
       target = stream->EnsureSpace(target);
@@ -875,7 +881,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // uint32 sell_price = 6 [(.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
+  // uint32 sell_price = 6 [json_name = "sellPrice", (.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_sell_price() != 0) {
       target = stream->EnsureSpace(target);
@@ -884,7 +890,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // string icon = 7 [(.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
+  // string icon = 7 [json_name = "icon", (.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_icon().empty()) {
       const ::std::string& _s = this_._internal_icon();
@@ -894,7 +900,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // string description = 8 [(.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
+  // string description = 8 [json_name = "description", (.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (!this_._internal_description().empty()) {
       const ::std::string& _s = this_._internal_description();
@@ -904,7 +910,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // bool usable = 9 [(.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
+  // bool usable = 9 [json_name = "usable", (.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_usable() != 0) {
       target = stream->EnsureSpace(target);
@@ -913,7 +919,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // uint32 use_heal_hp = 10 [(.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
+  // uint32 use_heal_hp = 10 [json_name = "useHealHp", (.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_use_heal_hp() != 0) {
       target = stream->EnsureSpace(target);
@@ -922,7 +928,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // uint32 equip_slot = 11 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
+  // uint32 equip_slot = 11 [json_name = "equipSlot", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_equip_slot() != 0) {
       target = stream->EnsureSpace(target);
@@ -931,7 +937,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // uint32 identify_pool_id = 12 [(.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
+  // uint32 identify_pool_id = 12 [json_name = "identifyPoolId", (.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_identify_pool_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -940,7 +946,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // string equip_mesh = 13 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
+  // string equip_mesh = 13 [json_name = "equipMesh", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (!this_._internal_equip_mesh().empty()) {
       const ::std::string& _s = this_._internal_equip_mesh();
@@ -950,7 +956,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // string equip_socket = 14 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
+  // string equip_socket = 14 [json_name = "equipSocket", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (!this_._internal_equip_socket().empty()) {
       const ::std::string& _s = this_._internal_equip_socket();
@@ -960,7 +966,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // float equip_offset_x = 15 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
+  // float equip_offset_x = 15 [json_name = "equipOffsetX", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_equip_offset_x()) != 0) {
       target = stream->EnsureSpace(target);
@@ -969,7 +975,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // float equip_offset_y = 16 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
+  // float equip_offset_y = 16 [json_name = "equipOffsetY", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_equip_offset_y()) != 0) {
       target = stream->EnsureSpace(target);
@@ -978,7 +984,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // float equip_offset_z = 17 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
+  // float equip_offset_z = 17 [json_name = "equipOffsetZ", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_equip_offset_z()) != 0) {
       target = stream->EnsureSpace(target);
@@ -987,7 +993,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // float equip_yaw = 18 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
+  // float equip_yaw = 18 [json_name = "equipYaw", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_equip_yaw()) != 0) {
       target = stream->EnsureSpace(target);
@@ -996,7 +1002,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // float equip_pitch = 19 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
+  // float equip_pitch = 19 [json_name = "equipPitch", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_equip_pitch()) != 0) {
       target = stream->EnsureSpace(target);
@@ -1005,7 +1011,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // float equip_roll = 20 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
+  // float equip_roll = 20 [json_name = "equipRoll", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
   if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_equip_roll()) != 0) {
       target = stream->EnsureSpace(target);
@@ -1014,7 +1020,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // float equip_scale_x = 21 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
+  // float equip_scale_x = 21 [json_name = "equipScaleX", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
   if (CheckHasBit(cached_has_bits, 0x00100000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_equip_scale_x()) != 0) {
       target = stream->EnsureSpace(target);
@@ -1023,7 +1029,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // float equip_scale_y = 22 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
+  // float equip_scale_y = 22 [json_name = "equipScaleY", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
   if (CheckHasBit(cached_has_bits, 0x00200000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_equip_scale_y()) != 0) {
       target = stream->EnsureSpace(target);
@@ -1032,7 +1038,7 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
 
-  // float equip_scale_z = 23 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
+  // float equip_scale_z = 23 [json_name = "equipScaleZ", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
   if (CheckHasBit(cached_has_bits, 0x00400000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_equip_scale_z()) != 0) {
       target = stream->EnsureSpace(target);
@@ -1067,56 +1073,56 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    // string name = 2 [(.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
+    // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_name().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_name());
       }
     }
-    // string icon = 7 [(.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
+    // string icon = 7 [json_name = "icon", (.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_icon().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_icon());
       }
     }
-    // string description = 8 [(.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
+    // string description = 8 [json_name = "description", (.pandora.config.v1.excel_col) = "\346\217\217\350\277\260\346\226\207\346\234\254"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!this_._internal_description().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_description());
       }
     }
-    // string equip_mesh = 13 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
+    // string equip_mesh = 13 [json_name = "equipMesh", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\250\241\345\236\213", (.pandora.config.v1.excel_prefix) = "/"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!this_._internal_equip_mesh().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_equip_mesh());
       }
     }
-    // string equip_socket = 14 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
+    // string equip_socket = 14 [json_name = "equipSocket", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\214\202\347\202\271"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (!this_._internal_equip_socket().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_equip_socket());
       }
     }
-    // uint32 id = 1 [(.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+    // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
-    // .pandora.config.v1.ItemType type = 3 [(.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
+    // .pandora.config.v1.ItemType type = 3 [json_name = "type", (.pandora.config.v1.excel_col) = "\347\261\273\345\236\213", (.pandora.config.v1.excel_required) = true];
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_type() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_type());
       }
     }
-    // uint32 quality = 4 [(.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
+    // uint32 quality = 4 [json_name = "quality", (.pandora.config.v1.excel_col) = "\345\223\201\350\264\250", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_quality() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -1125,54 +1131,54 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    // uint32 max_stack_size = 5 [(.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
+    // uint32 max_stack_size = 5 [json_name = "maxStackSize", (.pandora.config.v1.excel_col) = "\345\240\206\345\217\240\344\270\212\351\231\220", (.pandora.config.v1.excel_required) = true];
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_max_stack_size() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_stack_size());
       }
     }
-    // uint32 sell_price = 6 [(.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
+    // uint32 sell_price = 6 [json_name = "sellPrice", (.pandora.config.v1.excel_col) = "\345\224\256\344\273\267", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_sell_price() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_sell_price());
       }
     }
-    // bool usable = 9 [(.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
+    // bool usable = 9 [json_name = "usable", (.pandora.config.v1.excel_col) = "\345\217\257\344\275\277\347\224\250", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_usable() != 0) {
         total_size += 2;
       }
     }
-    // uint32 use_heal_hp = 10 [(.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
+    // uint32 use_heal_hp = 10 [json_name = "useHealHp", (.pandora.config.v1.excel_col) = "\344\275\277\347\224\250\345\233\236\350\241\200\351\207\217", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_use_heal_hp() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_use_heal_hp());
       }
     }
-    // uint32 equip_slot = 11 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
+    // uint32 equip_slot = 11 [json_name = "equipSlot", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\351\203\250\344\275\215", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_equip_slot() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_equip_slot());
       }
     }
-    // uint32 identify_pool_id = 12 [(.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
+    // uint32 identify_pool_id = 12 [json_name = "identifyPoolId", (.pandora.config.v1.excel_col) = "\351\211\264\345\256\232\346\261\240ID", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_identify_pool_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_identify_pool_id());
       }
     }
-    // float equip_offset_x = 15 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
+    // float equip_offset_x = 15 [json_name = "equipOffsetX", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273X", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_equip_offset_x()) != 0) {
         total_size += 5;
       }
     }
-    // float equip_offset_y = 16 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
+    // float equip_offset_y = 16 [json_name = "equipOffsetY", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Y", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_equip_offset_y()) != 0) {
         total_size += 6;
@@ -1180,43 +1186,43 @@ PROTOBUF_NOINLINE void ItemRow::Clear() {
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
-    // float equip_offset_z = 17 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
+    // float equip_offset_z = 17 [json_name = "equipOffsetZ", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\345\201\217\347\247\273Z", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_equip_offset_z()) != 0) {
         total_size += 6;
       }
     }
-    // float equip_yaw = 18 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
+    // float equip_yaw = 18 [json_name = "equipYaw", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Yaw", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_equip_yaw()) != 0) {
         total_size += 6;
       }
     }
-    // float equip_pitch = 19 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
+    // float equip_pitch = 19 [json_name = "equipPitch", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Pitch", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_equip_pitch()) != 0) {
         total_size += 6;
       }
     }
-    // float equip_roll = 20 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
+    // float equip_roll = 20 [json_name = "equipRoll", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\346\227\213\350\275\254Roll", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_equip_roll()) != 0) {
         total_size += 6;
       }
     }
-    // float equip_scale_x = 21 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
+    // float equip_scale_x = 21 [json_name = "equipScaleX", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276X", (.pandora.config.v1.excel_default) = "1"];
     if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_equip_scale_x()) != 0) {
         total_size += 6;
       }
     }
-    // float equip_scale_y = 22 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
+    // float equip_scale_y = 22 [json_name = "equipScaleY", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Y", (.pandora.config.v1.excel_default) = "1"];
     if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_equip_scale_y()) != 0) {
         total_size += 6;
       }
     }
-    // float equip_scale_z = 23 [(.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
+    // float equip_scale_z = 23 [json_name = "equipScaleZ", (.pandora.config.v1.excel_col) = "\350\243\205\345\244\207\347\274\251\346\224\276Z", (.pandora.config.v1.excel_default) = "1"];
     if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_equip_scale_z()) != 0) {
         total_size += 6;
@@ -1545,7 +1551,7 @@ PROTOBUF_NOINLINE void ItemTableData::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // repeated .pandora.config.v1.ItemRow rows = 1;
+  // repeated .pandora.config.v1.ItemRow rows = 1 [json_name = "rows"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_rows_size());
@@ -1583,7 +1589,7 @@ PROTOBUF_NOINLINE void ItemTableData::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
    {
-    // repeated .pandora.config.v1.ItemRow rows = 1;
+    // repeated .pandora.config.v1.ItemRow rows = 1 [json_name = "rows"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_rows_size();

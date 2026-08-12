@@ -42,8 +42,8 @@ type AccountRepo interface {
 	// GetPlayerNo 读**当前角色**的角色编号(展示专用,player-no-and-login-surge.md §3;
 	// 编号绑定角色实体而非账号,见 §3.6.1——今 player_id 即角色身份)。
 	// 0 = 补号任务尚未分配(客户端显示「生成中」)。错误策略按入口分流:
-	// Login 主路径必须 fail-soft(失败置 0 只记日志,绝不因展示字段拒登录——存量库未跑
-	// 000004 迁移时靠该口径兜住);GetPlayerNo 补拉 RPC 必须把查询错误翻译成非 OK,
+	// Login 主路径必须 fail-soft(失败置 0 只记日志,绝不因展示字段拒登录——存量库尚未
+	// 收敛到 pandora_account 000006 时靠该口径兜住);GetPlayerNo 补拉 RPC 必须把查询错误翻译成非 OK,
 	// 不得伪装为 0。刻意不合并进 FindByAccount:列缺失不能把登录整链打挂。
 	GetPlayerNo(ctx context.Context, playerID uint64) (uint64, error)
 }

@@ -64,6 +64,8 @@ enum LevelEntryMode : int;
 extern const uint32_t LevelEntryMode_internal_data_[];
 enum LevelExpShareMode : int;
 extern const uint32_t LevelExpShareMode_internal_data_[];
+enum LevelRatingMode : int;
+extern const uint32_t LevelRatingMode_internal_data_[];
 class LevelRow;
 struct LevelRowGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -94,6 +96,9 @@ internal::EnumTraitsT<::pandora::config::v1::LevelEntryMode_internal_data_>
 template <>
 internal::EnumTraitsT<::pandora::config::v1::LevelExpShareMode_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::config::v1::LevelExpShareMode>;
+template <>
+internal::EnumTraitsT<::pandora::config::v1::LevelRatingMode_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::config::v1::LevelRatingMode>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -182,6 +187,47 @@ template <>
 [[nodiscard]] inline bool LevelExpShareMode_Parse(
     ::absl::string_view name, LevelExpShareMode* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<LevelExpShareMode>(LevelExpShareMode_descriptor(), name,
+                                           value);
+}
+enum LevelRatingMode : int {
+  LEVEL_RATING_MODE_UNSPECIFIED = 0,
+  LEVEL_RATING_MODE_NONE = 1,
+  LEVEL_RATING_MODE_ELO = 2,
+  LevelRatingMode_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  LevelRatingMode_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t LevelRatingMode_internal_data_[];
+inline constexpr LevelRatingMode LevelRatingMode_MIN =
+    static_cast<LevelRatingMode>(0);
+inline constexpr LevelRatingMode LevelRatingMode_MAX =
+    static_cast<LevelRatingMode>(2);
+[[nodiscard]] inline bool LevelRatingMode_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int LevelRatingMode_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+LevelRatingMode_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(LevelRatingMode) {
+  return LevelRatingMode_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& LevelRatingMode_Name(T value) {
+  static_assert(::std::is_same<T, LevelRatingMode>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to LevelRatingMode_Name().");
+  return LevelRatingMode_Name(static_cast<LevelRatingMode>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& LevelRatingMode_Name(LevelRatingMode value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<LevelRatingMode_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool LevelRatingMode_Parse(
+    ::absl::string_view name, LevelRatingMode* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<LevelRatingMode>(LevelRatingMode_descriptor(), name,
                                            value);
 }
 enum LevelCategory : int {
@@ -398,6 +444,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     kExpShareModeFieldNumber = 13,
     kBattleDurationSecondsFieldNumber = 14,
     kMinTeamSizeFieldNumber = 15,
+    kRatingModeFieldNumber = 16,
   };
   // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
   void clear_name() ;
@@ -569,12 +616,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
   void _internal_set_min_team_size(::uint32_t value);
 
   public:
+  // .pandora.config.v1.LevelRatingMode rating_mode = 16 [json_name = "ratingMode", (.pandora.config.v1.excel_col) = "\350\256\241\345\210\206\346\250\241\345\274\217"];
+  void clear_rating_mode() ;
+  [[nodiscard]] ::pandora::config::v1::LevelRatingMode rating_mode() const;
+  void set_rating_mode(::pandora::config::v1::LevelRatingMode value);
+
+  private:
+  ::pandora::config::v1::LevelRatingMode _internal_rating_mode() const;
+  void _internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.LevelRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 81,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          0, 89,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -617,6 +674,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     int exp_share_mode_;
     ::uint32_t battle_duration_seconds_;
     ::uint32_t min_team_size_;
+    int rating_mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1371,6 +1429,30 @@ inline void LevelRow::_internal_set_min_team_size(::uint32_t value) {
   _impl_.min_team_size_ = value;
 }
 
+// .pandora.config.v1.LevelRatingMode rating_mode = 16 [json_name = "ratingMode", (.pandora.config.v1.excel_col) = "\350\256\241\345\210\206\346\250\241\345\274\217"];
+inline void LevelRow::clear_rating_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::pandora::config::v1::LevelRatingMode LevelRow::rating_mode() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.rating_mode)
+  return _internal_rating_mode();
+}
+inline void LevelRow::set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
+  _internal_set_rating_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.rating_mode)
+}
+inline ::pandora::config::v1::LevelRatingMode LevelRow::_internal_rating_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::config::v1::LevelRatingMode>(_impl_.rating_mode_);
+}
+inline void LevelRow::_internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_mode_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // LevelTableData
@@ -1454,6 +1536,12 @@ struct is_proto_enum<::pandora::config::v1::LevelExpShareMode> : std::true_type 
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::config::v1::LevelExpShareMode>() {
   return ::pandora::config::v1::LevelExpShareMode_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::config::v1::LevelRatingMode> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::config::v1::LevelRatingMode>() {
+  return ::pandora::config::v1::LevelRatingMode_descriptor();
 }
 template <>
 struct is_proto_enum<::pandora::config::v1::LevelCategory> : std::true_type {};

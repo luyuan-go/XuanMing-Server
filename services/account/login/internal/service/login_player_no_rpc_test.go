@@ -132,3 +132,21 @@ func TestGetPlayerNo_PropagatesRepoFailure(t *testing.T) {
 		t.Fatal("查询失败却返回 OK:故障被伪装成「仍在补号」,客户端会一直等下去")
 	}
 }
+
+// 旧客户端在滚动升级窗口内仍调用 GetRegisterNo；兼容入口必须返回同一编号与业务码。
+func TestGetRegisterNo_LegacyCompatibility(t *testing.T) {
+	const want = uint64(100001)
+	svc := newPlayerNoRPCService(t, &playerNoRPCRepo{playerNo: want})
+	ctx := context.WithValue(context.Background(), plog.CtxKeyPlayerID, uint64(42))
+
+	res, rpcErr := svc.GetRegisterNo(ctx, &loginv1.GetRegisterNoRequest{})
+	if rpcErr != nil {
+		t.Fatalf("GetRegisterNo transport error: %v", rpcErr)
+	}
+	if res.GetCode() != commonv1.ErrCode_OK {
+		t.Fatalf("legacy code = %v, want OK", res.GetCode())
+	}
+	if res.GetRegisterNo() != want {
+		t.Fatalf("legacy register_no = %d, want %d", res.GetRegisterNo(), want)
+	}
+}

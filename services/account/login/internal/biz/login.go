@@ -465,12 +465,12 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 原对局 match_id(Battle→Hub 回流 fence),签进 hub 票据 source_match_id claim。
 	// 会话已是当前一代:此后的每一步暂时失败都必须带着它返回 WAIT,而不是丢弃(§9.23)。
 	// 角色编号(展示专用):fail-soft——查失败只打日志置 0(客户端显示「生成中」),
-	// 绝不因展示字段拒登录;存量库未跑 pandora_account 000004 迁移时同样落此分支。
+	// 绝不因展示字段拒登录;存量库尚未收敛到 pandora_account 000006 时同样落此分支。
 	playerNoCtx, playerNoCancel := context.WithTimeout(ctx, playerNoReadTimeout)
-	playerNo, rnErr := u.repo.GetPlayerNo(playerNoCtx, playerID)
+	playerNo, playerNoErr := u.repo.GetPlayerNo(playerNoCtx, playerID)
 	playerNoCancel()
-	if rnErr != nil {
-		h.Warnw("msg", "player_no_read_failed", "err", rnErr, "player_id", playerID)
+	if playerNoErr != nil {
+		h.Warnw("msg", "player_no_read_failed", "err", playerNoErr, "player_id", playerID)
 		playerNo = 0
 	}
 

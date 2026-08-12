@@ -68,11 +68,24 @@ service PlayerService {
 
 // ===== 玩家档案 =====
 
+// PlayerRating 是玩家在**某一个段位池**下的一份段位分(2026-08-11 段位分区)。
+//
+// rating_pool 的取值来自关卡表「段位池」列(如 "5v5_ranked" / "3v3_ranked"),
+// 语义只有"同值即同一份段位"——服务端不解析其内容,只当分区键用。
+// 存储权威是 `player_mmr(player_id, rating_pool)`;本 message 是客户端可见结构
+// (§5.11:不外露 updated_at 等存储侧字段)。
+message PlayerRating {
+  string rating_pool = 1;
+  int32  mmr         = 2;
+}
+
 message PlayerProfile {
   uint64 player_id     = 1;
   string nickname      = 2;
   int32  level         = 3;
-  int32  mmr           = 4;
+  // 4 曾是单值 `int32 mmr`(全局一份段位分)。2026-08-11 段位按 rating_pool 分区后
+  // 一个玩家有多份分,单值字段无法表达且没有正确的填法,故退役——见下方 ratings。
+  reserved 4;
   string avatar        = 5;
   int64  created_at_ms = 6;
   int64  last_seen_ms  = 7;
@@ -90,6 +103,14 @@ message PlayerProfile {
   // 用 50/51 新编号,不收窄 12-49 预留段(buf breaking RESERVED 门禁保持绿,审计 P1)。
   uint64 exp_in_level = 50;
   bool   is_max_level = 51;
+
+  // ── 段位(按 rating_pool 分区,2026-08-11)──
+  // 一个玩家在每个段位池下各有一份分,由关卡表 rating_pool 列决定某张图算进哪一份
+  // (「3v3 与 5v5 不共用同一份段位」是产品口径)。只返回该玩家**已有记录**的池:
+  // 没打过的池不在列表里(不返回"基线 1500"占位——那会把"没打过"伪装成"已定级")。
+  // 顺序按 rating_pool 字典序,保证同一份档案多次查询结果稳定(客户端可直接渲染)。
+  // 用 52 新编号,不收窄 12-49 预留段(同 exp_in_level/is_max_level 的做法)。
+  repeated PlayerRating ratings = 52;
 }
 
 message GetProfileRequest {
@@ -135,11 +156,19 @@ message UnlockHeroResponse {
 
 message GetMMRRequest {
   uint64 player_id = 1;
+  // 段位池:查哪一份段位分。空 = 默认池(见 biz.DefaultRatingPool),
+  // 兼容旧调用方与本字段上线前的行为(§9.21)。
+  string rating_pool = 2;
 }
 
 message GetMMRResponse {
   pandora.common.v1.ErrCode code = 1;
   int32 mmr = 2;
+  // 回显本次实际查询的池(空入参被解析成默认池后的结果),便于调用方对账。
+  string rating_pool = 3;
+  // found=false 表示该玩家在该池**没有任何记录**(没打过),mmr 为基线分。
+  // 与"打到基线分"不同:前者不该展示成已定级,由调用方决定怎么呈现。
+  bool found = 4;
 }
 
 // UpdateMMR 必须幂等(idempotency_key 通常是 match_id)。
@@ -149,6 +178,10 @@ message UpdateMMRRequest {
   int32  delta           = 2;
   string reason          = 3;  // "win" | "lose" | "abandon" | "rollback"
   string idempotency_key = 4;  // 一般是 match_id
+  // 段位池:改哪一份段位分。空 = 默认池(§9.21 兼容旧调用方)。
+  // 幂等键仍是 (player_id, idempotency_key) —— 一个 match 只属于一个池,
+  // 不把 rating_pool 混进幂等键(否则同一场比赛换个池名就能重复入账)。
+  string rating_pool = 5;
 }
 
 message UpdateMMRResponse {
@@ -169,6 +202,9 @@ message PlayerUpdateEvent {
   int32  mmr_delta = 3;
   string reason    = 4;  // "win" | "lose" | "draw" | "abandon"
   int64  ts_ms     = 5;
+  // 本局段位池,由 battle_result 从 canonical BattleStorageRecord 定格值带出。
+  // 空 = 默认池(旧记录 / 滚动升级期),消费侧按 DefaultRatingPool 兜底。
+  string rating_pool = 6;
 }
 
 // PlayerPushEventType 是 player 域推送事件类型判别键
@@ -528,6 +564,10 @@ message AddExperienceRequest {
   uint64 exp_delta       = 2;  // 须 > 0(服务端另有单次上限,超限拒)
   string reason          = 3;  // "monster_kill" | "quest" | "gm"(审计)
   string idempotency_key = 4;
+  // 段位池:改哪一份段位分。空 = 默认池(§9.21 兼容旧调用方)。
+  // 幂等键仍是 (player_id, idempotency_key) —— 一个 match 只属于一个池,
+  // 不把 rating_pool 混进幂等键(否则同一场比赛换个池名就能重复入账)。
+  string rating_pool = 5;
 }
 
 message AddExperienceResponse {

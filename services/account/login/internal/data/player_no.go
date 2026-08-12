@@ -63,7 +63,7 @@ const (
 
 // EnsurePlayerNoCounter 启动期探针 + 计数器幂等初始化。
 //
-// 探针:SELECT player_no 验证 000004 迁移已跑;未迁移的存量库在此一次性失败,
+// 探针:SELECT player_no 验证库已收敛到 000006 的目标列;未迁移的存量库在此一次性失败,
 // 调用方停用补号任务(展示功能 fail-soft,不拦 login 启动——对比 sql_mode 断言那类
 // 才有资格 fail-fast,§9.24)。
 // 初始化:INSERT IGNORE 单行 id=1;计数器已存在时不改 next_no,即起始号(拍板项 A③)
@@ -75,7 +75,7 @@ func EnsurePlayerNoCounter(ctx context.Context, db *sql.DB, startNo uint64) erro
 	var probe sql.NullInt64
 	err := db.QueryRowContext(ctx, "SELECT player_no FROM accounts LIMIT 1").Scan(&probe)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return errcode.New(errcode.ErrInternal, "player_no 列探针失败(pandora_account 000004 迁移未跑?): %v", err)
+		return errcode.New(errcode.ErrInternal, "player_no 列探针失败(pandora_account 000006 迁移链未收敛?): %v", err)
 	}
 	if _, err := db.ExecContext(ctx,
 		"INSERT IGNORE INTO player_no_counter (id, next_no) VALUES (1, ?)", startNo); err != nil {

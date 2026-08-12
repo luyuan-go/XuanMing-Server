@@ -317,7 +317,7 @@ review 判据改为:**`player_no` 出现在 `pandora_account` 以外的任何表
 
 | # | 事项 | 落点 | 状态 |
 |---|---|---|---|
-| 1 | DDL:加列 + uk + 计数器表 | deploy/mysql-init/02、deploy/tidb-init/03(TiDB 版 `uk_player_no` 尾部热点在补号 QPS 量级下无碍,不需打散)、tools/migrate pandora_account `000004_player_no`(条件幂等,含 down);角色归属注释对存量库由新增 `000005_player_no_comment` 同步,不改写已发布迁移 | ✅ |
+| 1 | DDL:加列 + uk + 计数器表 | deploy/mysql-init/02、deploy/tidb-init/03(TiDB 版 `uk_player_no` 尾部热点在补号 QPS 量级下无碍,不需打散);迁移链保留 immutable `000004_register_no` 与 `000005_rename_player_no`,新增 `000006_reconcile_player_no` 收敛 old-only / target-only / 双对象库并统一注释 | ✅ |
 | 2 | 回填 | **无独立步骤**:补号任务首轮自然追平(§3.3 要点);`next_no` 起始由 login 启动期初始化 | ✅(简化) |
 | 3 | 补号任务 | login `internal/data/player_no.go`(事务)+ `cmd/login/main.go`(5s ticker,drain 上限 20 批,启动探针 fail-soft)+ conf `player_no_start` | ✅ |
 | 4 | 真 MySQL / 真 TiDB 双后端测试 | `internal/data/player_no_mysql_test.go`:全序/跨批连续、水位滞后、双 sweeper 并发无重号无空洞(= TiDB start_ts 快照缺陷回归,见 §3.3 隔离级别要点)、起始号幂等、缺迁移探针失败(PANDORA_TEST_MYSQL_DSN / PANDORA_TEST_TIDB_DSN 双门控,friend/guild 同款) | ✅ |
@@ -458,13 +458,25 @@ proto(`LoginResponse.player_no`、`GetPlayerNoRequest/Response`、rpc `GetPlayer
 HTTP `/v1/player-no/get`)、envoy jwt_authn rules path、日志 msg(`player_no_assigned` 等)、
 文件名(`data/player_no.go`、本文档)。中文措辞统一为「角色编号」。
 
-**迁移 `000005_rename_player_no`**(已在临时库验证 up / 重复跑幂等 / down 回滚三项):
-- 四步条件执行:RENAME COLUMN → RENAME INDEX → RENAME TABLE → MODIFY COMMENT;
-- **000004 保持原样**(README 明定迁移一旦执行即 immutable),故两条路径最终一致:
-  用 `deploy/*-init` 建的新库直接就是 `player_no`(本版四步全跳过);用迁移建的库由本版改名;
+**迁移 `000005_rename_player_no` + `000006_reconcile_player_no`**:
+- `000004` / `000005` 都保持原样(README 明定迁移一旦执行即 immutable);`000005` 负责普通
+  old-only 库的 RENAME COLUMN / INDEX / TABLE 与列注释同步;
+- 不能再声称「fresh init 下 000005 四步全跳过」:本机 `dev_migrate.ps1` 会先重放
+  mysql-init(target),再在无 `schema_migrations` 的库上执行 000004/000005。000004 会补出 legacy
+  三件套,000005 因 target 已存在而跳过 rename,从而留下双列/双索引/双计数器;
+- `000006` 是唯一收敛门:old-only 原地改名,target-only 幂等保留,双对象先 fail-closed 检查
+  同行值冲突和跨角色重号,再把不冲突 legacy 值补入 target;双计数器同 id 取
+  `GREATEST(next_no)` 后删 legacy,最后统一列/计数器列/计数器表三处 COMMENT;
+- 任何写入/改名之前先校验两套编号列必须是 `BIGINT UNSIGNED NULL`、计数器 `next_no`
+  必须是 `BIGINT UNSIGNED NOT NULL`、新旧唯一索引必须各自是预期列上的单列唯一索引;
+  形态漂移直接 guard 失败,不允许 COMMENT 的 `MODIFY COLUMN` 静默顺手改类型;
+- `000006.down.sql` 有意 no-op:合并后无法安全判断并重建原始双对象状态;
+- 真 MySQL 8.4 / TiDB 8.5.1 临时库矩阵均验证 old-only、target-only、双对象空 legacy、
+  双对象兼容值补入、冲突 fail-closed,成功路径重复执行仍幂等;
 - 用 `RENAME COLUMN` 而非 `CHANGE old new <type>`:后者需完整重复列定义,漏写
   `UNSIGNED`/`NULL` 会**静默**改变列语义;RENAME 不碰类型,是本场景唯一无脑安全的写法;
-- 只改元数据,不重建表、不触碰行数据(dev 库实测:改名后编号 1/2/3 与计数器值原样)。
+- old-only 路径只改元数据;双对象路径只补 target 空值并合并计数器水位,冲突时在任何写入/删除
+  之前以 `__pandora_player_no_reconcile_data_conflict__` 语义化 guard 报错停止。
 
 ⚠️ **down.sql 里的 `@old_comment` 必须与 000004 的 COMMENT 逐字一致**(含旧词「注册编号」
 与旧文档名),它是回滚的匹配目标而非本次改名的产物——批量改词时若把它一起换掉,条件判断

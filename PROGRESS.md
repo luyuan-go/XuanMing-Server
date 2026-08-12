@@ -3233,3 +3233,11 @@ immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致
 补号任务每 5s 一条 `register_no_sweep_failed` Warn,**pod 1/1 Running 登录不受影响**
 (fail-soft 承诺实测成立)。**待 Codex**:①构建部署新 login 镜像后 Warn 自动消失、编号恢复;
 ②cpp pb 同步(rpc 与字段均改名,标 [proto]);③UE 侧字段名与 UI 文案随之更新。
+- 2026-08-11(**段位分区缺口**:用户拍板「3v3 与 5v5 不共用同一份段位」,查证结论=当前实现不支持,**未做,待拍板**)。上一条落地 `rating_mode` 后追问「3v3 与 5v5 是否共用段位分」,用户答**不共用**。这个答案否掉了上一条留的「改名成 `pvp` 单池」选项,同时暴露出一个比命名严重得多的缺口。
+  - **查证:全链路零玩法维度**。`players.mmr` 是**单列全局值**(`04-player-tables.sql`:`mmr INT NOT NULL DEFAULT 1500`,附 `idx_mmr`);`MMRReader.GetMMR(ctx, player_id)`、`PlayerUsecase.UpdateMMR(ctx, player_id, delta, reason, idem_key)`、`mmr_history`(uk 是 `player_id+idempotency_key`,idem_key=match_id)、`PlayerUpdateEvent.mmr_delta`、matchmaker 票据 `avg_mmr`(`resolveMembers` 取的就是这一份)——**没有任何一处带玩法/池维度**。所以"各自段位"不是配置问题,是**存储模型缺一个分区维度**;`rating_mode` 只回答了"算不算",没回答"算哪份"(NONE 那半边完全成立,已修掉的 fail-open 不受影响;ELO 那半边目前恒指向同一份全局分)。已把这条**写进 `LevelRatingMode.LEVEL_RATING_MODE_ELO` 的 proto 注释**,防止下一个人以为填了列就已经分玩法计分(§14 不留假象)。
+  - **岔口(必须先拍这个,两条路自洽但不可混)**:
+    - **(a) 各自成池**:新建 `3v3_ranked` matchmaker 部署,id 9 改挂过去,段位分区键**复用 canonical game_mode**(已定格在 `BattleStorageRecord`,零新增列)。代价=每种人数一套部署 + audience + Redis 命名空间 + envoy 路由,加个 4v4 就再来一套;好处=`game_mode` 名字里的数字终于不撒谎。
+    - **(b) 撮合池与段位池正交(推荐)**:撮合维持一个池不动(**撮合隔离已由 `partitionTicketsByMap` 按 map_id 分组解决**,3v3 图与 1v1 图本来就不会串局),另加关卡表列 `rating_pool` 表达"算哪份段位"(`rating_mode=NONE` 时留空)。代价=一列 + 分区存储;好处=不新建任何部署,且把本次教训推广了——**一个字符串不扛两个语义**。走 (b) 后 `game_mode` 就真的只剩"哪个撮合池"一个语义,那时改名成 `pvp` 反而重新成立。
+  - **无论走哪条都要做的存储改造**:`players.mmr` 单列 → 分区存储(如 `player_mmr(player_id, rating_pool, mmr)`),`GetMMR` / `UpdateMMR` / `mmr_history` / `PlayerUpdateEvent` 全链路补分区键,leaderboard 竞技分榜按 `board_type` 分榜(**榜那边已有复合 BoardKey 维度,数据源改了即可**),客户端段位 UI 要能显示多份。
+  - **拍板点(涉及玩家已有数据,不替用户定)**:①存量单值 `mmr` 怎么分裂(复制成两份 / 只留给 5v5 而 3v3 从基线起 / 全部重置);②新分区初始分=1500 基线还是继承;③要不要顺带做赛季——**若要,分区键现在就该是 `(rating_pool, season)`,事后再加比现在加贵得多**;④(a)/(b) 二选一。
+  - **本次未写任何段位存储代码**:每一步都依赖上述拍板,且动的是玩家已有段位数据,做错要回滚不可逆(§9.24「不因数据大自动删」同源的谨慎)。已落地的 `rating_mode` 保持不变且仍然正确。

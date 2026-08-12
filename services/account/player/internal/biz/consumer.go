@@ -54,7 +54,9 @@ func (u *PlayerUsecase) PlayerUpdateHandler() kafkax.Handler {
 			return nil
 		}
 		key := strconv.FormatUint(evt.GetMatchId(), 10)
-		_, _, err := u.UpdateMMR(ctx, evt.GetPlayerId(), evt.GetMmrDelta(), evt.GetReason(), key)
+		// 段位池随事件带来(battle_result 从 canonical BattleStorageRecord 定格值填);
+		// 空 = 旧 battle_result 或旧对局,由 UpdateMMR 归一到默认池(§9.21)。
+		_, _, err := u.UpdateMMR(ctx, evt.GetPlayerId(), evt.GetMmrDelta(), evt.GetReason(), key, evt.GetRatingPool())
 		return err
 	}
 }

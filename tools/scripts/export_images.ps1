@@ -288,8 +288,9 @@ if ($Build) {
     }
 
     # 基础镜像仓库 + go 模块代理(host / incontainer 都用):本地已有镜像不会真的联网。
+    # GOPROXY 分隔符必须是 `|`:逗号只在 404/410 回退,网络层错误直接失败(详见 deploy/services/Dockerfile)。
     if (-not $env:PANDORA_BASE_REGISTRY) { $env:PANDORA_BASE_REGISTRY = 'docker.io' }
-    if (-not $env:PANDORA_GOPROXY)       { $env:PANDORA_GOPROXY       = 'https://goproxy.cn,direct' }
+    if (-not $env:PANDORA_GOPROXY)       { $env:PANDORA_GOPROXY       = 'https://goproxy.cn|https://proxy.golang.org|direct' }
 
     $buildOnlyServices = @($BusinessImages | ForEach-Object { ($_ -replace '^pandora/', '') -replace ':dev$', '' })
     # ⚠️ 必须带 -Rebuild:不带时 start.ps1 的离线短路(PANDORA_OFFLINE=1 / 本机无构建能力)会

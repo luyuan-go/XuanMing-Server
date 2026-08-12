@@ -71,6 +71,11 @@ message AllocateBattleRequest {
   // (§17.1 差异进表)。allocator 只原样存进 BattleStorageRecord,不解释、不下发 DS。
   // 未设置(0=UNSPECIFIED)= 旧 matchmaker 或旧批次表,battle_result 按旧口径兜底(§9.21)。
   pandora.config.v1.LevelRatingMode rating_mode = 11;
+  // 本局段位池,与 rating_mode 同源同路径:matchmaker 成局时按 map_id 读关卡表
+  // rating_pool 列定格后传入。allocator 同样只原样存进 BattleStorageRecord。
+  // rating_mode=ELO 时非空(结算按本值分区入账段位);其余情况为空。
+  // 空值 + ELO 只可能出现在滚动升级期的旧 matchmaker,battle_result 按旧口径兜底。
+  string rating_pool = 12;
 }
 
 message AllocateBattleResponse {
@@ -293,6 +298,11 @@ message BattleStorageRecord {
   // 0=UNSPECIFIED:旧 matchmaker 或本字段上线前的旧记录,battle_result 保守回落旧口径
   // (canonical game_mode=="pve_coop" 不计分,其余算 Elo),不得据此跳过或强开计分(§9.21)。
   pandora.config.v1.LevelRatingMode rating_mode = 22;
+  // 本局段位池(canonical):分配时从 AllocateBattleRequest 定格,此后只读。
+  // 与 rating_mode 成对——rating_mode 回答「算不算」,本字段回答「算进哪一份」。
+  // battle_result 结算时按本值调用 player.UpdateMMR(rating_pool=...) 分区入账;
+  // 空值 + ELO(旧记录)回落到默认池,见 battle_result 的 settlementRatingPool。
+  string rating_pool = 23;
 }
 
 // ===== Model B Battle DS 回调授权状态机 =====

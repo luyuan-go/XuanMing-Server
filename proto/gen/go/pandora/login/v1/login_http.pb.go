@@ -20,6 +20,7 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationLoginServiceGetPlayerNo = "/pandora.login.v1.LoginService/GetPlayerNo"
+const OperationLoginServiceGetRegisterNo = "/pandora.login.v1.LoginService/GetRegisterNo"
 const OperationLoginServiceGetResumeContext = "/pandora.login.v1.LoginService/GetResumeContext"
 const OperationLoginServiceIssueDSTicket = "/pandora.login.v1.LoginService/IssueDSTicket"
 const OperationLoginServiceLogin = "/pandora.login.v1.LoginService/Login"
@@ -39,6 +40,13 @@ type LoginServiceHTTPServer interface {
 	// player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
 	// 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
 	GetPlayerNo(context.Context, *GetPlayerNoRequest) (*GetPlayerNoResponse, error)
+	// GetRegisterNo GetRegisterNo 是 player_no 改名期间的只读兼容入口。
+	//
+	// 已发布客户端仍会调用旧 gRPC method / HTTP path，不能在滚动升级时原地移除；
+	// 等最后一个旧客户端版本排空后，才可按 expand -> migrate -> contract 收缩本入口。
+	// 新代码一律调用 GetPlayerNo，不得新增对本入口的依赖。
+	// Deprecated: Do not use.
+	GetRegisterNo(context.Context, *GetRegisterNoRequest) (*GetRegisterNoResponse, error)
 	// GetResumeContext GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
 	// 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
 	GetResumeContext(context.Context, *GetResumeContextRequest) (*GetResumeContextResponse, error)
@@ -68,6 +76,7 @@ func RegisterLoginServiceHTTPServer(s *http.Server, srv LoginServiceHTTPServer) 
 	r.POST("/v1/logout", _LoginService_Logout0_HTTP_Handler(srv))
 	r.POST("/v1/ds/ticket/issue", _LoginService_IssueDSTicket0_HTTP_Handler(srv))
 	r.POST("/v1/player-no/get", _LoginService_GetPlayerNo0_HTTP_Handler(srv))
+	r.POST("/v1/register-no/get", _LoginService_GetRegisterNo0_HTTP_Handler(srv))
 	r.POST("/v1/role/select", _LoginService_SelectRole0_HTTP_Handler(srv))
 	r.POST("/v1/ds/ticket/verify", _LoginService_VerifyDSTicket0_HTTP_Handler(srv))
 	r.POST("/v1/resume/context", _LoginService_GetResumeContext0_HTTP_Handler(srv))
@@ -161,6 +170,28 @@ func _LoginService_GetPlayerNo0_HTTP_Handler(srv LoginServiceHTTPServer) func(ct
 	}
 }
 
+func _LoginService_GetRegisterNo0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetRegisterNoRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationLoginServiceGetRegisterNo)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetRegisterNo(ctx, req.(*GetRegisterNoRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetRegisterNoResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _LoginService_SelectRole0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in SelectRoleRequest
@@ -239,6 +270,13 @@ type LoginServiceHTTPClient interface {
 	// player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
 	// 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
 	GetPlayerNo(ctx context.Context, req *GetPlayerNoRequest, opts ...http.CallOption) (rsp *GetPlayerNoResponse, err error)
+	// GetRegisterNo GetRegisterNo 是 player_no 改名期间的只读兼容入口。
+	//
+	// 已发布客户端仍会调用旧 gRPC method / HTTP path，不能在滚动升级时原地移除；
+	// 等最后一个旧客户端版本排空后，才可按 expand -> migrate -> contract 收缩本入口。
+	// 新代码一律调用 GetPlayerNo，不得新增对本入口的依赖。
+	// Deprecated: Do not use.
+	GetRegisterNo(ctx context.Context, req *GetRegisterNoRequest, opts ...http.CallOption) (rsp *GetRegisterNoResponse, err error)
 	// GetResumeContext GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
 	// 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
 	GetResumeContext(ctx context.Context, req *GetResumeContextRequest, opts ...http.CallOption) (rsp *GetResumeContextResponse, err error)
@@ -285,6 +323,25 @@ func (c *LoginServiceHTTPClientImpl) GetPlayerNo(ctx context.Context, in *GetPla
 	pattern := "/v1/player-no/get"
 	path := binding.EncodeURL(pattern, in, false)
 	opts = append(opts, http.Operation(OperationLoginServiceGetPlayerNo))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetRegisterNo GetRegisterNo 是 player_no 改名期间的只读兼容入口。
+//
+// 已发布客户端仍会调用旧 gRPC method / HTTP path，不能在滚动升级时原地移除；
+// 等最后一个旧客户端版本排空后，才可按 expand -> migrate -> contract 收缩本入口。
+// 新代码一律调用 GetPlayerNo，不得新增对本入口的依赖。
+// Deprecated: Do not use.
+func (c *LoginServiceHTTPClientImpl) GetRegisterNo(ctx context.Context, in *GetRegisterNoRequest, opts ...http.CallOption) (*GetRegisterNoResponse, error) {
+	var out GetRegisterNoResponse
+	pattern := "/v1/register-no/get"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationLoginServiceGetRegisterNo))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {

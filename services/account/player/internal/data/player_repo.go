@@ -25,11 +25,25 @@ import (
 type MMRChange struct {
 	PlayerID       uint64
 	IdempotencyKey string // 一般是 match_id 字符串
-	Delta          int32
-	Reason         string
-	Floor          int  // MMR 下限(clamp 用)
-	IncBattle      bool // 是否计一场对局(total_battles+1)
-	IncWin         bool // 是否计一胜(total_wins+1)
+	// RatingPool 是本次入账的段位池(分区键)。调用方必须传**已归一化**的值
+	// (rating.Normalize):空串会写出一行 rating_pool='' 的孤儿分区,与 default
+	// 池的分永远对不上,且没有任何报错。
+	RatingPool string
+	// Baseline 是该池**首战**时的起算分(通常 = cfg.BaseMMR)。它只在该玩家该池
+	// 尚无行时生效;已有行时以库里的值为准,绝不用本字段覆盖(否则每次结算都会
+	// 把老玩家的分拽回基线)。
+	Baseline  int
+	Delta     int32
+	Reason    string
+	Floor     int  // MMR 下限(clamp 用)
+	IncBattle bool // 是否计一场对局(total_battles+1)
+	IncWin    bool // 是否计一胜(total_wins+1)
+}
+
+// PlayerRating 是某玩家在某段位池下的一份分(ListRatings 的行视图)。
+type PlayerRating struct {
+	RatingPool string
+	MMR        int
 }
 
 // AttrAllocation 是一次加点请求里对某属性增加的点数(只增,Points>0)。
@@ -120,7 +134,9 @@ type PlayerRepo interface {
 	// UnlockHero 解锁英雄。已拥有 → (true, nil) 幂等命中。
 	UnlockHero(ctx context.Context, playerID uint64, heroID uint32, source string) (already bool, err error)
 	// GetMMR 读玩家当前 MMR。not found → (0, false, nil)。
-	GetMMR(ctx context.Context, playerID uint64) (mmr int, found bool, err error)
+	GetMMR(ctx context.Context, playerID uint64, ratingPool string) (mmr int, found bool, err error)
+	// ListRatings 列出该玩家已有记录的全部池段位分(按 rating_pool 字典序;没打过的池不在列表里)。
+	ListRatings(ctx context.Context, playerID uint64) ([]PlayerRating, error)
 	// ApplyMMRChange 幂等改 MMR + 战绩计数。命中幂等键 → (已记录 new_mmr, true, nil)。
 	ApplyMMRChange(ctx context.Context, change MMRChange) (newMMR int, already bool, err error)
 

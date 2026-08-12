@@ -29,6 +29,8 @@ const (
 
 var (
 	createTablePattern = regexp.MustCompile("(?i)CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`([a-z0-9_]+)`")
+	dropTablePattern   = regexp.MustCompile("(?i)DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?`([a-z0-9_]+)`")
+	renameTablePattern = regexp.MustCompile("(?i)RENAME\\s+TABLE\\s+`([a-z0-9_]+)`\\s+TO\\s+`([a-z0-9_]+)`")
 	useDatabasePattern = regexp.MustCompile("(?i)^\\s*USE\\s+`?([a-z0-9_]+)`?\\s*;")
 )
 
@@ -48,8 +50,9 @@ func TestFreshInitTablesAreRegistered(t *testing.T) {
 	assertRegistered(t, tables, "deploy/mysql-init")
 }
 
-// TestMigrationTablesAreRegistered:迁移里 CREATE 出来的每张表也必须登记。
-// 存量库走的是这条路径,和 fresh-init 覆盖的集合不完全相同(例如只在迁移里出现的表)。
+// TestMigrationTablesAreRegistered:按 up 迁移顺序执行 CREATE / RENAME / DROP 后最终存在的
+// 每张表都必须登记。不能把 immutable 历史迁移里曾创建、后来明确改名/删除的 legacy 表
+// 当成最终表；也不能只扫 CREATE 而漏掉 RENAME 后的新名字。
 func TestMigrationTablesAreRegistered(t *testing.T) {
 	tables := collectMigrationTables(t)
 	if len(tables) < 40 {
@@ -207,21 +210,62 @@ func collectMigrationTables(t *testing.T) []qualifiedTable {
 		if derr != nil {
 			t.Fatalf("读取 %s: %v", set.Name(), derr)
 		}
+		active := make(map[string]qualifiedTable)
 		for _, file := range files {
 			if !strings.HasSuffix(file.Name(), ".up.sql") {
 				continue
 			}
 			path := filepath.Join(migrationsDir, set.Name(), file.Name())
-			for _, line := range strings.Split(readSQL(t, path), "\n") {
-				for _, table := range tableNames(line) {
-					out = append(out, qualifiedTable{
-						db: dbName, table: table, source: set.Name() + "/" + file.Name(),
-					})
+			source := set.Name() + "/" + file.Name()
+			for _, event := range migrationTableEvents(readSQL(t, path)) {
+				switch event.kind {
+				case "create":
+					active[event.to] = qualifiedTable{db: dbName, table: event.to, source: source}
+				case "rename":
+					delete(active, event.from)
+					active[event.to] = qualifiedTable{db: dbName, table: event.to, source: source}
+				case "drop":
+					delete(active, event.from)
 				}
 			}
 		}
+		var names []string
+		for table := range active {
+			names = append(names, table)
+		}
+		sort.Strings(names)
+		for _, table := range names {
+			out = append(out, active[table])
+		}
 	}
 	return out
+}
+
+type migrationTableEvent struct {
+	at       int
+	kind     string
+	from, to string
+}
+
+// migrationTableEvents 同时识别裸 DDL 与 PREPARE 字符串里的 DDL。这里只建模表名生命周期，
+// 不判断条件表达式；迁移的目标形态必须在成功执行后唯一，因此 rename/drop 都代表旧名退出。
+func migrationTableEvents(content string) []migrationTableEvent {
+	var events []migrationTableEvent
+	for _, match := range createTablePattern.FindAllStringSubmatchIndex(content, -1) {
+		events = append(events, migrationTableEvent{at: match[0], kind: "create", to: strings.ToLower(content[match[2]:match[3]])})
+	}
+	for _, match := range renameTablePattern.FindAllStringSubmatchIndex(content, -1) {
+		events = append(events, migrationTableEvent{
+			at: match[0], kind: "rename",
+			from: strings.ToLower(content[match[2]:match[3]]),
+			to:   strings.ToLower(content[match[4]:match[5]]),
+		})
+	}
+	for _, match := range dropTablePattern.FindAllStringSubmatchIndex(content, -1) {
+		events = append(events, migrationTableEvent{at: match[0], kind: "drop", from: strings.ToLower(content[match[2]:match[3]])})
+	}
+	sort.SliceStable(events, func(i, j int) bool { return events[i].at < events[j].at })
+	return events
 }
 
 // tableNames 取一行里 CREATE TABLE 的表名。逐行处理是为了让 `USE` 的作用域好判定;

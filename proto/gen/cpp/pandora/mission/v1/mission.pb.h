@@ -692,6 +692,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MissionRewardItem final : public ::
   enum : int {
     kItemConfigIdFieldNumber = 1,
     kCountFieldNumber = 2,
+    kEquipmentFieldNumber = 3,
   };
   // uint32 item_config_id = 1 [json_name = "itemConfigId"];
   void clear_item_config_id() ;
@@ -713,11 +714,23 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MissionRewardItem final : public ::
   void _internal_set_count(::uint32_t value);
 
   public:
+  // optional bool equipment = 3 [json_name = "equipment"];
+  [[nodiscard]] bool has_equipment()
+      const;
+  void clear_equipment() ;
+  [[nodiscard]] bool equipment() const;
+  void set_equipment(bool value);
+
+  private:
+  bool _internal_equipment() const;
+  void _internal_set_equipment(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.mission.v1.MissionRewardItem)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -748,6 +761,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MissionRewardItem final : public ::
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t item_config_id_;
     ::uint32_t count_;
+    bool equipment_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5774,6 +5788,34 @@ inline ::uint32_t MissionRewardItem::_internal_count() const {
 inline void MissionRewardItem::_internal_set_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = value;
+}
+
+// optional bool equipment = 3 [json_name = "equipment"];
+inline bool MissionRewardItem::has_equipment() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  return value;
+}
+inline void MissionRewardItem::clear_equipment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool MissionRewardItem::equipment() const {
+  // @@protoc_insertion_point(field_get:pandora.mission.v1.MissionRewardItem.equipment)
+  return _internal_equipment();
+}
+inline void MissionRewardItem::set_equipment(bool value) {
+  _internal_set_equipment(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.mission.v1.MissionRewardItem.equipment)
+}
+inline bool MissionRewardItem::_internal_equipment() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipment_;
+}
+inline void MissionRewardItem::_internal_set_equipment(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -167,6 +167,12 @@ static_resources:
                   path: "/pandora.login.v1.LoginService/GetPlayerNo"
                 requires:
                   provider_name: "pandora_session"
+              # 已发布客户端的滚动升级兼容入口；与 GetPlayerNo 使用相同鉴权纪律。
+              # 删除前必须先证明旧客户端版本已排空。
+              - match:
+                  path: "/pandora.login.v1.LoginService/GetRegisterNo"
+                requires:
+                  provider_name: "pandora_session"
               # push.Subscribe 必须带 SessionToken(玩家长连接订阅,W3 ④ kafka 路由依赖 player_id)
               - match:
                   prefix: "/pandora.push.v1.PushService/"

@@ -704,6 +704,33 @@ func (u *TeamUsecase) GetTeam(ctx context.Context, teamID uint64) (*teamv1.TeamS
 	return team, nil
 }
 
+// GetPlayerTeamID 只反查玩家当前队伍编号(内部只读,DS 出生编制专用)。
+//
+// 刻意不复用 GetMyTeam:那条路径带三个「玩家本人正在看队伍」的副作用 —— 续 TTL、清脏索引、
+// 离线成员观察。DS 每有一名玩家进场就会调一次,把它当成玩家心跳会让已被抛弃的队伍被反复
+// 续命,正是 GetMyTeam 注释里点名要防的「旁人反复读把队伍永久续命」。
+//
+// 仍要读一次队伍记录:索引可能指向已解散/已过期的队伍,把陈旧 team_id 发给 DS 会让两个
+// 早已不同队的人在场上被判成队友。这里只判定不清理,自愈仍留给 GetMyTeam。
+func (u *TeamUsecase) GetPlayerTeamID(ctx context.Context, playerID uint64) (uint64, bool, error) {
+	teamID, found, err := u.repo.GetPlayerTeamID(ctx, playerID)
+	if err != nil {
+		return 0, false, err
+	}
+	if !found {
+		return 0, false, nil
+	}
+
+	team, found, err := u.repo.Get(ctx, teamID)
+	if err != nil {
+		return 0, false, err
+	}
+	if !found || team.State == stateDisbanded {
+		return 0, false, nil
+	}
+	return teamID, true, nil
+}
+
 // GetMyTeam 查询玩家当前所在队伍(只读,登录后进大厅时调用)。
 // 返回 (record, hasTeam, err):没队伍是正常态,hasTeam=false 且 err=nil。
 // 索引命中但队伍记录已过期/已解散时,顺手清掉脏索引(否则玩家会被

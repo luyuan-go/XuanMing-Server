@@ -246,7 +246,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentAffixRow final : public ::
     kMaxValueFieldNumber = 7,
     kWeightFieldNumber = 5,
   };
-  // uint32 id = 1 [(.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+  // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
   void clear_id() ;
   [[nodiscard]] ::uint32_t id() const;
   void set_id(::uint32_t value);
@@ -256,7 +256,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentAffixRow final : public ::
   void _internal_set_id(::uint32_t value);
 
   public:
-  // uint32 pool_id = 2 [(.pandora.config.v1.excel_col) = "\350\257\215\346\235\241\346\261\240ID", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_multi_key) = true];
+  // uint32 pool_id = 2 [json_name = "poolId", (.pandora.config.v1.excel_col) = "\350\257\215\346\235\241\346\261\240ID", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_multi_key) = true];
   void clear_pool_id() ;
   [[nodiscard]] ::uint32_t pool_id() const;
   void set_pool_id(::uint32_t value);
@@ -266,7 +266,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentAffixRow final : public ::
   void _internal_set_pool_id(::uint32_t value);
 
   public:
-  // uint32 attr_count = 3 [(.pandora.config.v1.excel_col) = "\346\212\275\345\217\226\346\225\260\351\207\217", (.pandora.config.v1.excel_required) = true];
+  // uint32 attr_count = 3 [json_name = "attrCount", (.pandora.config.v1.excel_col) = "\346\212\275\345\217\226\346\225\260\351\207\217", (.pandora.config.v1.excel_required) = true];
   void clear_attr_count() ;
   [[nodiscard]] ::uint32_t attr_count() const;
   void set_attr_count(::uint32_t value);
@@ -276,7 +276,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentAffixRow final : public ::
   void _internal_set_attr_count(::uint32_t value);
 
   public:
-  // uint32 attr_id = 4 [(.pandora.config.v1.excel_col) = "\345\261\236\346\200\247ID", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_fk) = "role_attr_map"];
+  // uint32 attr_id = 4 [json_name = "attrId", (.pandora.config.v1.excel_col) = "\345\261\236\346\200\247ID", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_fk) = "role_attr_map"];
   void clear_attr_id() ;
   [[nodiscard]] ::uint32_t attr_id() const;
   void set_attr_id(::uint32_t value);
@@ -286,7 +286,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentAffixRow final : public ::
   void _internal_set_attr_id(::uint32_t value);
 
   public:
-  // int64 min_value = 6 [(.pandora.config.v1.excel_col) = "\346\234\200\345\260\217\345\200\274", (.pandora.config.v1.excel_required) = true];
+  // int64 min_value = 6 [json_name = "minValue", (.pandora.config.v1.excel_col) = "\346\234\200\345\260\217\345\200\274", (.pandora.config.v1.excel_required) = true];
   void clear_min_value() ;
   [[nodiscard]] ::int64_t min_value() const;
   void set_min_value(::int64_t value);
@@ -296,7 +296,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentAffixRow final : public ::
   void _internal_set_min_value(::int64_t value);
 
   public:
-  // int64 max_value = 7 [(.pandora.config.v1.excel_col) = "\346\234\200\345\244\247\345\200\274", (.pandora.config.v1.excel_required) = true];
+  // int64 max_value = 7 [json_name = "maxValue", (.pandora.config.v1.excel_col) = "\346\234\200\345\244\247\345\200\274", (.pandora.config.v1.excel_required) = true];
   void clear_max_value() ;
   [[nodiscard]] ::int64_t max_value() const;
   void set_max_value(::int64_t value);
@@ -306,7 +306,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentAffixRow final : public ::
   void _internal_set_max_value(::int64_t value);
 
   public:
-  // uint32 weight = 5 [(.pandora.config.v1.excel_col) = "\346\235\203\351\207\215", (.pandora.config.v1.excel_required) = true];
+  // uint32 weight = 5 [json_name = "weight", (.pandora.config.v1.excel_col) = "\346\235\203\351\207\215", (.pandora.config.v1.excel_required) = true];
   void clear_weight() ;
   [[nodiscard]] ::uint32_t weight() const;
   void set_weight(::uint32_t value);
@@ -513,7 +513,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentAffixTableData final : pub
   enum : int {
     kRowsFieldNumber = 1,
   };
-  // repeated .pandora.config.v1.EquipmentAffixRow rows = 1;
+  // repeated .pandora.config.v1.EquipmentAffixRow rows = 1 [json_name = "rows"];
   [[nodiscard]] int rows_size()
       const;
   private:
@@ -590,7 +590,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentAffixTableData final : pub
 
 // EquipmentAffixRow
 
-// uint32 id = 1 [(.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+// uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
 inline void EquipmentAffixRow::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
@@ -614,7 +614,7 @@ inline void EquipmentAffixRow::_internal_set_id(::uint32_t value) {
   _impl_.id_ = value;
 }
 
-// uint32 pool_id = 2 [(.pandora.config.v1.excel_col) = "\350\257\215\346\235\241\346\261\240ID", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_multi_key) = true];
+// uint32 pool_id = 2 [json_name = "poolId", (.pandora.config.v1.excel_col) = "\350\257\215\346\235\241\346\261\240ID", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_multi_key) = true];
 inline void EquipmentAffixRow::clear_pool_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pool_id_ = 0u;
@@ -638,7 +638,7 @@ inline void EquipmentAffixRow::_internal_set_pool_id(::uint32_t value) {
   _impl_.pool_id_ = value;
 }
 
-// uint32 attr_count = 3 [(.pandora.config.v1.excel_col) = "\346\212\275\345\217\226\346\225\260\351\207\217", (.pandora.config.v1.excel_required) = true];
+// uint32 attr_count = 3 [json_name = "attrCount", (.pandora.config.v1.excel_col) = "\346\212\275\345\217\226\346\225\260\351\207\217", (.pandora.config.v1.excel_required) = true];
 inline void EquipmentAffixRow::clear_attr_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.attr_count_ = 0u;
@@ -662,7 +662,7 @@ inline void EquipmentAffixRow::_internal_set_attr_count(::uint32_t value) {
   _impl_.attr_count_ = value;
 }
 
-// uint32 attr_id = 4 [(.pandora.config.v1.excel_col) = "\345\261\236\346\200\247ID", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_fk) = "role_attr_map"];
+// uint32 attr_id = 4 [json_name = "attrId", (.pandora.config.v1.excel_col) = "\345\261\236\346\200\247ID", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_fk) = "role_attr_map"];
 inline void EquipmentAffixRow::clear_attr_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.attr_id_ = 0u;
@@ -686,7 +686,7 @@ inline void EquipmentAffixRow::_internal_set_attr_id(::uint32_t value) {
   _impl_.attr_id_ = value;
 }
 
-// uint32 weight = 5 [(.pandora.config.v1.excel_col) = "\346\235\203\351\207\215", (.pandora.config.v1.excel_required) = true];
+// uint32 weight = 5 [json_name = "weight", (.pandora.config.v1.excel_col) = "\346\235\203\351\207\215", (.pandora.config.v1.excel_required) = true];
 inline void EquipmentAffixRow::clear_weight() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.weight_ = 0u;
@@ -710,7 +710,7 @@ inline void EquipmentAffixRow::_internal_set_weight(::uint32_t value) {
   _impl_.weight_ = value;
 }
 
-// int64 min_value = 6 [(.pandora.config.v1.excel_col) = "\346\234\200\345\260\217\345\200\274", (.pandora.config.v1.excel_required) = true];
+// int64 min_value = 6 [json_name = "minValue", (.pandora.config.v1.excel_col) = "\346\234\200\345\260\217\345\200\274", (.pandora.config.v1.excel_required) = true];
 inline void EquipmentAffixRow::clear_min_value() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.min_value_ = ::int64_t{0};
@@ -734,7 +734,7 @@ inline void EquipmentAffixRow::_internal_set_min_value(::int64_t value) {
   _impl_.min_value_ = value;
 }
 
-// int64 max_value = 7 [(.pandora.config.v1.excel_col) = "\346\234\200\345\244\247\345\200\274", (.pandora.config.v1.excel_required) = true];
+// int64 max_value = 7 [json_name = "maxValue", (.pandora.config.v1.excel_col) = "\346\234\200\345\244\247\345\200\274", (.pandora.config.v1.excel_required) = true];
 inline void EquipmentAffixRow::clear_max_value() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_value_ = ::int64_t{0};
@@ -762,7 +762,7 @@ inline void EquipmentAffixRow::_internal_set_max_value(::int64_t value) {
 
 // EquipmentAffixTableData
 
-// repeated .pandora.config.v1.EquipmentAffixRow rows = 1;
+// repeated .pandora.config.v1.EquipmentAffixRow rows = 1 [json_name = "rows"];
 inline int EquipmentAffixTableData::_internal_rows_size() const {
   return _internal_rows().size();
 }

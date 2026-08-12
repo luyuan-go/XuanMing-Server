@@ -97,7 +97,9 @@ func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*l
 		SelectedRoleId: res.SelectedRoleID,
 		ResumeContext:  resumeContextToProto(res.Resume),
 		// 角色编号(展示专用,player-no-and-login-surge.md §3):0=补号中,客户端显示「生成中」。
-		PlayerNo: res.PlayerNo,
+		// #13 兼容旧客户端/JSON，#14 给新客户端；旧调用方排空前必须双写同值。
+		RegisterNo: res.PlayerNo,
+		PlayerNo:   res.PlayerNo,
 	}, nil
 }
 
@@ -150,6 +152,16 @@ func (s *LoginService) GetPlayerNo(ctx context.Context, _ *loginv1.GetPlayerNoRe
 		return &loginv1.GetPlayerNoResponse{Code: toProtoCode(err)}, nil
 	}
 	return &loginv1.GetPlayerNoResponse{Code: commonv1.ErrCode_OK, PlayerNo: no}, nil
+}
+
+// GetRegisterNo 是已发布客户端的兼容入口；新调用方必须使用 GetPlayerNo。
+// 删除前须先证明旧客户端已排空，不能在滚动升级窗口内原地收缩 RPC。
+func (s *LoginService) GetRegisterNo(ctx context.Context, _ *loginv1.GetRegisterNoRequest) (*loginv1.GetRegisterNoResponse, error) {
+	res, err := s.GetPlayerNo(ctx, &loginv1.GetPlayerNoRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return &loginv1.GetRegisterNoResponse{Code: res.GetCode(), RegisterNo: res.GetPlayerNo()}, nil
 }
 
 // SelectRole 立即完成型(选角权威化 2026-07-08,见 login.proto SelectRole 注释)。

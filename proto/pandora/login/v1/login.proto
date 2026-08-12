@@ -61,6 +61,19 @@ service LoginService {
     };
   }
 
+  // GetRegisterNo 是 player_no 改名期间的只读兼容入口。
+  //
+  // 已发布客户端仍会调用旧 gRPC method / HTTP path，不能在滚动升级时原地移除；
+  // 等最后一个旧客户端版本排空后，才可按 expand -> migrate -> contract 收缩本入口。
+  // 新代码一律调用 GetPlayerNo，不得新增对本入口的依赖。
+  rpc GetRegisterNo(GetRegisterNoRequest) returns (GetRegisterNoResponse) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post: "/v1/register-no/get"
+      body: "*"
+    };
+  }
+
   // SelectRole 立即完成型,选角(2026-07-08)。
   // 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
   //   → 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
@@ -151,7 +164,12 @@ message LoginResponse {
   //
   // 纯展示字段,客户端不得当身份 ID 用(身份永远是 player_id);服务端也禁止任何服务
   // 拿它当键 / 外键 / 路由键 / 幂等键(设计文档 §3.3 红线)。
-  uint64 player_no = 13;
+  //
+  // register_no #13 是已发布 JSON / 生成 API 的滚动升级兼容字段；新服务在迁移期
+  // 与 player_no #14 双写。新客户端优先读 #14，缺失时回退 #13；旧客户端继续读 #13。
+  // 最后一个旧客户端和外部 JSON 调用方排空后，才可 reserved #13。
+  uint64 register_no = 13 [deprecated = true];
+  uint64 player_no = 14;
 }
 
 enum ResumeRoute {
@@ -362,6 +380,19 @@ message GetPlayerNoResponse {
   // 一账号建 N 个角色就有 N 个编号;角色过户(卖角色)时编号随角色走、值不变,
   // 它是角色的资历凭证(编号小=老角色)。故 UI 上应呈现为「该角色的编号」,不是「你的账号编号」。
   uint64 player_no = 2;
+}
+
+// GetRegisterNoRequest / Response 只用于已发布调用方的滚动升级兼容。
+// 新代码不得引用；删除前必须先证明最后一个旧客户端版本已排空。
+message GetRegisterNoRequest {
+  option deprecated = true;
+}
+
+message GetRegisterNoResponse {
+  option deprecated = true;
+
+  pandora.common.v1.ErrCode code = 1;
+  uint64 register_no = 2 [deprecated = true];
 }
 
 message SelectRoleRequest {

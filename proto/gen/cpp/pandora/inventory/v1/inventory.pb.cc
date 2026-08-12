@@ -169,20 +169,20 @@ constexpr UseItemResponse::ParseTableT_ UseItemResponse::InternalGenerateParseTa
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::UseItemResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UseItemResponse, _impl_.remaining_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(UseItemResponse, _impl_.remaining_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UseItemResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(UseItemResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(UseItemResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {PROTOBUF_FIELD_OFFSET(UseItemResponse, _impl_.remaining_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -317,32 +317,32 @@ constexpr UseItemRequest::ParseTableT_ UseItemRequest::InternalGenerateParseTabl
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::UseItemRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(UseItemRequest, _impl_.idempotency_key_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UseItemRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(UseItemRequest, _impl_.player_id_)}},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UseItemRequest, _impl_.item_config_id_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(UseItemRequest, _impl_.item_config_id_)}},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UseItemRequest, _impl_.count_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(UseItemRequest, _impl_.count_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(UseItemRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(UseItemRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {PROTOBUF_FIELD_OFFSET(UseItemRequest, _impl_.count_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(UseItemRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -484,20 +484,20 @@ constexpr TransferClaimItem::ParseTableT_ TransferClaimItem::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::TransferClaimItem>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TransferClaimItem, _impl_.item_config_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.item_config_id_)}},
-      // uint64 instance_id = 1;
+      // uint64 instance_id = 1 [json_name = "instanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TransferClaimItem, _impl_.instance_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.instance_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 instance_id = 1;
+      // uint64 instance_id = 1 [json_name = "instanceId"];
       {PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.instance_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.item_config_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -632,14 +632,14 @@ constexpr SettlePlayerTradeResponse::ParseTableT_ SettlePlayerTradeResponse::Int
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::SettlePlayerTradeResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SettlePlayerTradeResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SettlePlayerTradeResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(SettlePlayerTradeResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -773,14 +773,14 @@ constexpr SettleAuctionMatchResponse::ParseTableT_ SettleAuctionMatchResponse::I
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::SettleAuctionMatchResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SettleAuctionMatchResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SettleAuctionMatchResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(SettleAuctionMatchResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -914,56 +914,56 @@ constexpr SettleAuctionMatchRequest::ParseTableT_ SettleAuctionMatchRequest::Int
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::SettleAuctionMatchRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 buy_order_id = 8;
+      // uint64 buy_order_id = 8 [json_name = "buyOrderId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettleAuctionMatchRequest, _impl_.buy_order_id_), 6>(),
        {64, 6, 0,
         PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.buy_order_id_)}},
-      // uint64 match_id = 1;
+      // uint64 match_id = 1 [json_name = "matchId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettleAuctionMatchRequest, _impl_.match_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.match_id_)}},
-      // uint64 seller_id = 2;
+      // uint64 seller_id = 2 [json_name = "sellerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettleAuctionMatchRequest, _impl_.seller_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.seller_id_)}},
-      // uint64 buyer_id = 3;
+      // uint64 buyer_id = 3 [json_name = "buyerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettleAuctionMatchRequest, _impl_.buyer_id_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.buyer_id_)}},
-      // uint32 item_config_id = 4;
+      // uint32 item_config_id = 4 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SettleAuctionMatchRequest, _impl_.item_config_id_), 7>(),
        {32, 7, 0,
         PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.item_config_id_)}},
-      // int64 quantity = 5;
+      // int64 quantity = 5 [json_name = "quantity"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettleAuctionMatchRequest, _impl_.quantity_), 3>(),
        {40, 3, 0,
         PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.quantity_)}},
-      // int64 unit_price = 6;
+      // int64 unit_price = 6 [json_name = "unitPrice"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettleAuctionMatchRequest, _impl_.unit_price_), 4>(),
        {48, 4, 0,
         PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.unit_price_)}},
-      // uint64 sell_order_id = 7;
+      // uint64 sell_order_id = 7 [json_name = "sellOrderId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettleAuctionMatchRequest, _impl_.sell_order_id_), 5>(),
        {56, 5, 0,
         PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.sell_order_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 match_id = 1;
+      // uint64 match_id = 1 [json_name = "matchId"];
       {PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.match_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 seller_id = 2;
+      // uint64 seller_id = 2 [json_name = "sellerId"];
       {PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.seller_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 buyer_id = 3;
+      // uint64 buyer_id = 3 [json_name = "buyerId"];
       {PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.buyer_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 4;
+      // uint32 item_config_id = 4 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 quantity = 5;
+      // int64 quantity = 5 [json_name = "quantity"];
       {PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.quantity_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // int64 unit_price = 6;
+      // int64 unit_price = 6 [json_name = "unitPrice"];
       {PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.unit_price_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // uint64 sell_order_id = 7;
+      // uint64 sell_order_id = 7 [json_name = "sellOrderId"];
       {PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.sell_order_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 buy_order_id = 8;
+      // uint64 buy_order_id = 8 [json_name = "buyOrderId"];
       {PROTOBUF_FIELD_OFFSET(SettleAuctionMatchRequest, _impl_.buy_order_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -1105,26 +1105,26 @@ constexpr SellItemResponse::ParseTableT_ SellItemResponse::InternalGenerateParse
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SellItemResponse, _impl_.code_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(SellItemResponse, _impl_.code_)}},
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellItemResponse, _impl_.remaining_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(SellItemResponse, _impl_.remaining_)}},
-      // int64 gold = 3;
+      // int64 gold = 3 [json_name = "gold"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellItemResponse, _impl_.gold_), 1>(),
        {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(SellItemResponse, _impl_.gold_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(SellItemResponse, _impl_.code_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {PROTOBUF_FIELD_OFFSET(SellItemResponse, _impl_.remaining_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // int64 gold = 3;
+      // int64 gold = 3 [json_name = "gold"];
       {PROTOBUF_FIELD_OFFSET(SellItemResponse, _impl_.gold_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -1260,32 +1260,32 @@ constexpr SellItemRequest::ParseTableT_ SellItemRequest::InternalGenerateParseTa
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::SellItemRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(SellItemRequest, _impl_.idempotency_key_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellItemRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(SellItemRequest, _impl_.player_id_)}},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SellItemRequest, _impl_.item_config_id_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(SellItemRequest, _impl_.item_config_id_)}},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellItemRequest, _impl_.count_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(SellItemRequest, _impl_.count_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(SellItemRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(SellItemRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {PROTOBUF_FIELD_OFFSET(SellItemRequest, _impl_.count_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(SellItemRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -1427,20 +1427,20 @@ constexpr SellInstanceResponse::ParseTableT_ SellInstanceResponse::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::SellInstanceResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 gold = 2;
+      // int64 gold = 2 [json_name = "gold"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellInstanceResponse, _impl_.gold_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(SellInstanceResponse, _impl_.gold_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SellInstanceResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(SellInstanceResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(SellInstanceResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int64 gold = 2;
+      // int64 gold = 2 [json_name = "gold"];
       {PROTOBUF_FIELD_OFFSET(SellInstanceResponse, _impl_.gold_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -1575,32 +1575,32 @@ constexpr SellInstanceRequest::ParseTableT_ SellInstanceRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::SellInstanceRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(SellInstanceRequest, _impl_.idempotency_key_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellInstanceRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(SellInstanceRequest, _impl_.player_id_)}},
-      // uint64 instance_id = 2;
+      // uint64 instance_id = 2 [json_name = "instanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellInstanceRequest, _impl_.instance_id_), 2>(),
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(SellInstanceRequest, _impl_.instance_id_)}},
-      // uint32 item_config_id = 3;
+      // uint32 item_config_id = 3 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SellInstanceRequest, _impl_.item_config_id_), 3>(),
        {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(SellInstanceRequest, _impl_.item_config_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(SellInstanceRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 instance_id = 2;
+      // uint64 instance_id = 2 [json_name = "instanceId"];
       {PROTOBUF_FIELD_OFFSET(SellInstanceRequest, _impl_.instance_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 3;
+      // uint32 item_config_id = 3 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(SellInstanceRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(SellInstanceRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -1742,14 +1742,14 @@ constexpr ReleaseTransferEscrowResponse::ParseTableT_ ReleaseTransferEscrowRespo
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ReleaseTransferEscrowResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReleaseTransferEscrowResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -1883,14 +1883,14 @@ constexpr ReleaseTransferEscrowRequest::ParseTableT_ ReleaseTransferEscrowReques
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ReleaseTransferEscrowRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated uint64 instance_ids = 1;
+      // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
       {::_pbi::TcParser::FastV64P1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowRequest, _impl_.instance_ids_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // repeated uint64 instance_ids = 1;
+      // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
       {PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowRequest, _impl_.instance_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
     }},
     // no aux_entries
@@ -2029,14 +2029,14 @@ constexpr ReleaseEscrowResponse::ParseTableT_ ReleaseEscrowResponse::InternalGen
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ReleaseEscrowResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReleaseEscrowResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ReleaseEscrowResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(ReleaseEscrowResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -2170,20 +2170,20 @@ constexpr ReleaseEscrowRequest::ParseTableT_ ReleaseEscrowRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ReleaseEscrowRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 order_id = 2;
+      // uint64 order_id = 2 [json_name = "orderId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReleaseEscrowRequest, _impl_.order_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(ReleaseEscrowRequest, _impl_.order_id_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReleaseEscrowRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ReleaseEscrowRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(ReleaseEscrowRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 order_id = 2;
+      // uint64 order_id = 2 [json_name = "orderId"];
       {PROTOBUF_FIELD_OFFSET(ReleaseEscrowRequest, _impl_.order_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -2318,14 +2318,14 @@ constexpr MoveInstanceResponse::ParseTableT_ MoveInstanceResponse::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::MoveInstanceResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MoveInstanceResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(MoveInstanceResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(MoveInstanceResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -2460,26 +2460,26 @@ constexpr MoveInstanceRequest::ParseTableT_ MoveInstanceRequest::InternalGenerat
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MoveInstanceRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(MoveInstanceRequest, _impl_.player_id_)}},
-      // uint64 instance_id = 2;
+      // uint64 instance_id = 2 [json_name = "instanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MoveInstanceRequest, _impl_.instance_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(MoveInstanceRequest, _impl_.instance_id_)}},
-      // int32 to_slot_index = 3;
+      // int32 to_slot_index = 3 [json_name = "toSlotIndex"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MoveInstanceRequest, _impl_.to_slot_index_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(MoveInstanceRequest, _impl_.to_slot_index_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(MoveInstanceRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 instance_id = 2;
+      // uint64 instance_id = 2 [json_name = "instanceId"];
       {PROTOBUF_FIELD_OFFSET(MoveInstanceRequest, _impl_.instance_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // int32 to_slot_index = 3;
+      // int32 to_slot_index = 3 [json_name = "toSlotIndex"];
       {PROTOBUF_FIELD_OFFSET(MoveInstanceRequest, _impl_.to_slot_index_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     }},
     // no aux_entries
@@ -2615,20 +2615,20 @@ constexpr ItemStack::ParseTableT_ ItemStack::InternalGenerateParseTable_(const :
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ItemStack>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 count = 2;
+      // int64 count = 2 [json_name = "count"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ItemStack, _impl_.count_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(ItemStack, _impl_.count_)}},
-      // uint32 item_config_id = 1;
+      // uint32 item_config_id = 1 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemStack, _impl_.item_config_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ItemStack, _impl_.item_config_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 item_config_id = 1;
+      // uint32 item_config_id = 1 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(ItemStack, _impl_.item_config_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 count = 2;
+      // int64 count = 2 [json_name = "count"];
       {PROTOBUF_FIELD_OFFSET(ItemStack, _impl_.count_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -2763,20 +2763,20 @@ constexpr ItemGrant::ParseTableT_ ItemGrant::InternalGenerateParseTable_(const :
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ItemGrant>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 count = 2;
+      // int64 count = 2 [json_name = "count"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ItemGrant, _impl_.count_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(ItemGrant, _impl_.count_)}},
-      // uint32 item_config_id = 1;
+      // uint32 item_config_id = 1 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemGrant, _impl_.item_config_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ItemGrant, _impl_.item_config_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 item_config_id = 1;
+      // uint32 item_config_id = 1 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(ItemGrant, _impl_.item_config_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 count = 2;
+      // int64 count = 2 [json_name = "count"];
       {PROTOBUF_FIELD_OFFSET(ItemGrant, _impl_.count_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -2911,20 +2911,20 @@ constexpr ItemAttribute::ParseTableT_ ItemAttribute::InternalGenerateParseTable_
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ItemAttribute>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 value = 2;
+      // int64 value = 2 [json_name = "value"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ItemAttribute, _impl_.value_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(ItemAttribute, _impl_.value_)}},
-      // uint32 attr_id = 1;
+      // uint32 attr_id = 1 [json_name = "attrId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemAttribute, _impl_.attr_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ItemAttribute, _impl_.attr_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 attr_id = 1;
+      // uint32 attr_id = 1 [json_name = "attrId"];
       {PROTOBUF_FIELD_OFFSET(ItemAttribute, _impl_.attr_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 value = 2;
+      // int64 value = 2 [json_name = "value"];
       {PROTOBUF_FIELD_OFFSET(ItemAttribute, _impl_.value_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -3059,20 +3059,20 @@ constexpr InstanceOwnershipQuery::ParseTableT_ InstanceOwnershipQuery::InternalG
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::InstanceOwnershipQuery>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(InstanceOwnershipQuery, _impl_.item_config_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(InstanceOwnershipQuery, _impl_.item_config_id_)}},
-      // uint64 instance_id = 1;
+      // uint64 instance_id = 1 [json_name = "instanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InstanceOwnershipQuery, _impl_.instance_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(InstanceOwnershipQuery, _impl_.instance_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 instance_id = 1;
+      // uint64 instance_id = 1 [json_name = "instanceId"];
       {PROTOBUF_FIELD_OFFSET(InstanceOwnershipQuery, _impl_.instance_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(InstanceOwnershipQuery, _impl_.item_config_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
@@ -3207,20 +3207,20 @@ constexpr IdentifyItemRequest::ParseTableT_ IdentifyItemRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::IdentifyItemRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 instance_id = 2;
+      // uint64 instance_id = 2 [json_name = "instanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(IdentifyItemRequest, _impl_.instance_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(IdentifyItemRequest, _impl_.instance_id_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(IdentifyItemRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(IdentifyItemRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(IdentifyItemRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 instance_id = 2;
+      // uint64 instance_id = 2 [json_name = "instanceId"];
       {PROTOBUF_FIELD_OFFSET(IdentifyItemRequest, _impl_.instance_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -3355,20 +3355,20 @@ constexpr GrantItemsResponse::ParseTableT_ GrantItemsResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::GrantItemsResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 gold = 2;
+      // int64 gold = 2 [json_name = "gold"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GrantItemsResponse, _impl_.gold_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantItemsResponse, _impl_.gold_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GrantItemsResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantItemsResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GrantItemsResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int64 gold = 2;
+      // int64 gold = 2 [json_name = "gold"];
       {PROTOBUF_FIELD_OFFSET(GrantItemsResponse, _impl_.gold_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -3504,26 +3504,26 @@ constexpr GrantInstancesRequest::ParseTableT_ GrantInstancesRequest::InternalGen
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GrantInstancesRequest, _impl_.player_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(GrantInstancesRequest, _impl_.player_id_)}},
-      // repeated uint32 item_config_ids = 2;
+      // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
       {::_pbi::TcParser::FastV32P1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantInstancesRequest, _impl_.item_config_ids_)}},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantInstancesRequest, _impl_.idempotency_key_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GrantInstancesRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated uint32 item_config_ids = 2;
+      // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
       {PROTOBUF_FIELD_OFFSET(GrantInstancesRequest, _impl_.item_config_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(GrantInstancesRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -3669,14 +3669,14 @@ constexpr GetInventoryRequest::ParseTableT_ GetInventoryRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::GetInventoryRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetInventoryRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetInventoryRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GetInventoryRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -3810,14 +3810,14 @@ constexpr FreezeForOrderResponse::ParseTableT_ FreezeForOrderResponse::InternalG
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::FreezeForOrderResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(FreezeForOrderResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(FreezeForOrderResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(FreezeForOrderResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -3952,27 +3952,27 @@ constexpr FreezeForOrderRequest::ParseTableT_ FreezeForOrderRequest::InternalGen
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FreezeForOrderRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.player_id_)}},
-      // uint64 order_id = 2;
+      // uint64 order_id = 2 [json_name = "orderId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FreezeForOrderRequest, _impl_.order_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.order_id_)}},
-      // .pandora.inventory.v1.EscrowSide side = 3;
+      // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(FreezeForOrderRequest, _impl_.side_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.side_)}},
-      // uint32 item_config_id = 4;
+      // uint32 item_config_id = 4 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(FreezeForOrderRequest, _impl_.item_config_id_), 3>(),
        {32, 3, 0,
         PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.item_config_id_)}},
-      // int64 quantity = 5;
+      // int64 quantity = 5 [json_name = "quantity"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FreezeForOrderRequest, _impl_.quantity_), 4>(),
        {40, 4, 0,
         PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.quantity_)}},
-      // int64 unit_price = 6;
+      // int64 unit_price = 6 [json_name = "unitPrice"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FreezeForOrderRequest, _impl_.unit_price_), 5>(),
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.unit_price_)}},
@@ -3980,17 +3980,17 @@ constexpr FreezeForOrderRequest::ParseTableT_ FreezeForOrderRequest::InternalGen
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 order_id = 2;
+      // uint64 order_id = 2 [json_name = "orderId"];
       {PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.order_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // .pandora.inventory.v1.EscrowSide side = 3;
+      // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
       {PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.side_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // uint32 item_config_id = 4;
+      // uint32 item_config_id = 4 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 quantity = 5;
+      // int64 quantity = 5 [json_name = "quantity"];
       {PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.quantity_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // int64 unit_price = 6;
+      // int64 unit_price = 6 [json_name = "unitPrice"];
       {PROTOBUF_FIELD_OFFSET(FreezeForOrderRequest, _impl_.unit_price_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -4129,32 +4129,32 @@ constexpr EscrowOutInstancesRequest::ParseTableT_ EscrowOutInstancesRequest::Int
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::EscrowOutInstancesRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string escrow_key = 4;
+      // string escrow_key = 4 [json_name = "escrowKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 1, 0,
         PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.escrow_key_)}},
-      // uint64 source_player_id = 1;
+      // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EscrowOutInstancesRequest, _impl_.source_player_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.source_player_id_)}},
-      // uint64 to_player_id = 2;
+      // uint64 to_player_id = 2 [json_name = "toPlayerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EscrowOutInstancesRequest, _impl_.to_player_id_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.to_player_id_)}},
-      // repeated uint64 instance_ids = 3;
+      // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
       {::_pbi::TcParser::FastV64P1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.instance_ids_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 source_player_id = 1;
+      // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
       {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.source_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 to_player_id = 2;
+      // uint64 to_player_id = 2 [json_name = "toPlayerId"];
       {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated uint64 instance_ids = 3;
+      // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
       {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.instance_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
-      // string escrow_key = 4;
+      // string escrow_key = 4 [json_name = "escrowKey"];
       {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.escrow_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -4301,14 +4301,14 @@ constexpr EnsureAuctionEscrowResponse::ParseTableT_ EnsureAuctionEscrowResponse:
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::EnsureAuctionEscrowResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnsureAuctionEscrowResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -4443,27 +4443,27 @@ constexpr EnsureAuctionEscrowRequest::ParseTableT_ EnsureAuctionEscrowRequest::I
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnsureAuctionEscrowRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.player_id_)}},
-      // uint64 order_id = 2;
+      // uint64 order_id = 2 [json_name = "orderId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnsureAuctionEscrowRequest, _impl_.order_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.order_id_)}},
-      // .pandora.inventory.v1.EscrowSide side = 3;
+      // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnsureAuctionEscrowRequest, _impl_.side_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.side_)}},
-      // uint32 item_config_id = 4;
+      // uint32 item_config_id = 4 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnsureAuctionEscrowRequest, _impl_.item_config_id_), 3>(),
        {32, 3, 0,
         PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.item_config_id_)}},
-      // uint64 remaining_quantity = 5;
+      // uint64 remaining_quantity = 5 [json_name = "remainingQuantity"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnsureAuctionEscrowRequest, _impl_.remaining_quantity_), 4>(),
        {40, 4, 0,
         PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.remaining_quantity_)}},
-      // uint64 unit_price = 6;
+      // uint64 unit_price = 6 [json_name = "unitPrice"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnsureAuctionEscrowRequest, _impl_.unit_price_), 5>(),
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.unit_price_)}},
@@ -4471,17 +4471,17 @@ constexpr EnsureAuctionEscrowRequest::ParseTableT_ EnsureAuctionEscrowRequest::I
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 order_id = 2;
+      // uint64 order_id = 2 [json_name = "orderId"];
       {PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.order_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // .pandora.inventory.v1.EscrowSide side = 3;
+      // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
       {PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.side_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // uint32 item_config_id = 4;
+      // uint32 item_config_id = 4 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint64 remaining_quantity = 5;
+      // uint64 remaining_quantity = 5 [json_name = "remainingQuantity"];
       {PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.remaining_quantity_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 unit_price = 6;
+      // uint64 unit_price = 6 [json_name = "unitPrice"];
       {PROTOBUF_FIELD_OFFSET(EnsureAuctionEscrowRequest, _impl_.unit_price_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -4620,20 +4620,20 @@ constexpr DiscardItemResponse::ParseTableT_ DiscardItemResponse::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::DiscardItemResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DiscardItemResponse, _impl_.remaining_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(DiscardItemResponse, _impl_.remaining_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DiscardItemResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(DiscardItemResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(DiscardItemResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {PROTOBUF_FIELD_OFFSET(DiscardItemResponse, _impl_.remaining_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -4768,32 +4768,32 @@ constexpr DiscardItemRequest::ParseTableT_ DiscardItemRequest::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::DiscardItemRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(DiscardItemRequest, _impl_.idempotency_key_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DiscardItemRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(DiscardItemRequest, _impl_.player_id_)}},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DiscardItemRequest, _impl_.item_config_id_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(DiscardItemRequest, _impl_.item_config_id_)}},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DiscardItemRequest, _impl_.count_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(DiscardItemRequest, _impl_.count_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(DiscardItemRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(DiscardItemRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {PROTOBUF_FIELD_OFFSET(DiscardItemRequest, _impl_.count_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(DiscardItemRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -4935,14 +4935,14 @@ constexpr DiscardInstanceResponse::ParseTableT_ DiscardInstanceResponse::Interna
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::DiscardInstanceResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DiscardInstanceResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(DiscardInstanceResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(DiscardInstanceResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -5076,20 +5076,20 @@ constexpr DiscardInstanceRequest::ParseTableT_ DiscardInstanceRequest::InternalG
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::DiscardInstanceRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 instance_id = 2;
+      // uint64 instance_id = 2 [json_name = "instanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DiscardInstanceRequest, _impl_.instance_id_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(DiscardInstanceRequest, _impl_.instance_id_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DiscardInstanceRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(DiscardInstanceRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(DiscardInstanceRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 instance_id = 2;
+      // uint64 instance_id = 2 [json_name = "instanceId"];
       {PROTOBUF_FIELD_OFFSET(DiscardInstanceRequest, _impl_.instance_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
@@ -5224,20 +5224,20 @@ constexpr DiscardBattleItemResponse::ParseTableT_ DiscardBattleItemResponse::Int
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::DiscardBattleItemResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DiscardBattleItemResponse, _impl_.remaining_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(DiscardBattleItemResponse, _impl_.remaining_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DiscardBattleItemResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(DiscardBattleItemResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(DiscardBattleItemResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {PROTOBUF_FIELD_OFFSET(DiscardBattleItemResponse, _impl_.remaining_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -5372,32 +5372,32 @@ constexpr DiscardBattleItemRequest::ParseTableT_ DiscardBattleItemRequest::Inter
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::DiscardBattleItemRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(DiscardBattleItemRequest, _impl_.idempotency_key_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DiscardBattleItemRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(DiscardBattleItemRequest, _impl_.player_id_)}},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DiscardBattleItemRequest, _impl_.item_config_id_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(DiscardBattleItemRequest, _impl_.item_config_id_)}},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DiscardBattleItemRequest, _impl_.count_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(DiscardBattleItemRequest, _impl_.count_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(DiscardBattleItemRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(DiscardBattleItemRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {PROTOBUF_FIELD_OFFSET(DiscardBattleItemRequest, _impl_.count_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(DiscardBattleItemRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -5539,14 +5539,14 @@ constexpr ConsumeTransferEscrowResponse::ParseTableT_ ConsumeTransferEscrowRespo
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ConsumeTransferEscrowResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ConsumeTransferEscrowResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -5680,20 +5680,20 @@ constexpr ConsumeTransferEscrowRequest::ParseTableT_ ConsumeTransferEscrowReques
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ConsumeTransferEscrowRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated uint64 instance_ids = 2;
+      // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
       {::_pbi::TcParser::FastV64P1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_.instance_ids_)}},
-      // uint64 to_player_id = 1;
+      // uint64 to_player_id = 1 [json_name = "toPlayerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConsumeTransferEscrowRequest, _impl_.to_player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_.to_player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 to_player_id = 1;
+      // uint64 to_player_id = 1 [json_name = "toPlayerId"];
       {PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated uint64 instance_ids = 2;
+      // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
       {PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_.instance_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
     }},
     // no aux_entries
@@ -5833,20 +5833,20 @@ constexpr ConsumeBattleItemResponse::ParseTableT_ ConsumeBattleItemResponse::Int
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ConsumeBattleItemResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConsumeBattleItemResponse, _impl_.remaining_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(ConsumeBattleItemResponse, _impl_.remaining_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ConsumeBattleItemResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ConsumeBattleItemResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(ConsumeBattleItemResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // int64 remaining = 2;
+      // int64 remaining = 2 [json_name = "remaining"];
       {PROTOBUF_FIELD_OFFSET(ConsumeBattleItemResponse, _impl_.remaining_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
@@ -5981,32 +5981,32 @@ constexpr ConsumeBattleItemRequest::ParseTableT_ ConsumeBattleItemRequest::Inter
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ConsumeBattleItemRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(ConsumeBattleItemRequest, _impl_.idempotency_key_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConsumeBattleItemRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ConsumeBattleItemRequest, _impl_.player_id_)}},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ConsumeBattleItemRequest, _impl_.item_config_id_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(ConsumeBattleItemRequest, _impl_.item_config_id_)}},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConsumeBattleItemRequest, _impl_.count_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(ConsumeBattleItemRequest, _impl_.count_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(ConsumeBattleItemRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(ConsumeBattleItemRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // int64 count = 3;
+      // int64 count = 3 [json_name = "count"];
       {PROTOBUF_FIELD_OFFSET(ConsumeBattleItemRequest, _impl_.count_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(ConsumeBattleItemRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
@@ -6148,14 +6148,14 @@ constexpr ClaimTransferInstancesResponse::ParseTableT_ ClaimTransferInstancesRes
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ClaimTransferInstancesResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimTransferInstancesResponse, _impl_.code_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     // no aux_entries
@@ -6289,20 +6289,20 @@ constexpr CheckItemsOwnedResponse::ParseTableT_ CheckItemsOwnedResponse::Interna
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::CheckItemsOwnedResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated uint32 owned_item_config_ids = 2;
+      // repeated uint32 owned_item_config_ids = 2 [json_name = "ownedItemConfigIds"];
       {::_pbi::TcParser::FastV32P1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(CheckItemsOwnedResponse, _impl_.owned_item_config_ids_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CheckItemsOwnedResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(CheckItemsOwnedResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(CheckItemsOwnedResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated uint32 owned_item_config_ids = 2;
+      // repeated uint32 owned_item_config_ids = 2 [json_name = "ownedItemConfigIds"];
       {PROTOBUF_FIELD_OFFSET(CheckItemsOwnedResponse, _impl_.owned_item_config_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
     }},
     // no aux_entries
@@ -6442,20 +6442,20 @@ constexpr CheckItemsOwnedRequest::ParseTableT_ CheckItemsOwnedRequest::InternalG
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::CheckItemsOwnedRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated uint32 item_config_ids = 2;
+      // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
       {::_pbi::TcParser::FastV32P1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(CheckItemsOwnedRequest, _impl_.item_config_ids_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CheckItemsOwnedRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(CheckItemsOwnedRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(CheckItemsOwnedRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated uint32 item_config_ids = 2;
+      // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
       {PROTOBUF_FIELD_OFFSET(CheckItemsOwnedRequest, _impl_.item_config_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
     }},
     // no aux_entries
@@ -6596,27 +6596,27 @@ constexpr SettlePlayerTradeRequest::ParseTableT_ SettlePlayerTradeRequest::Inter
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 order_id = 1;
+      // uint64 order_id = 1 [json_name = "orderId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettlePlayerTradeRequest, _impl_.order_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.order_id_)}},
-      // uint64 seller_id = 2;
+      // uint64 seller_id = 2 [json_name = "sellerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettlePlayerTradeRequest, _impl_.seller_id_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.seller_id_)}},
-      // uint64 buyer_id = 3;
+      // uint64 buyer_id = 3 [json_name = "buyerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettlePlayerTradeRequest, _impl_.buyer_id_), 4>(),
        {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.buyer_id_)}},
-      // repeated .pandora.inventory.v1.ItemGrant seller_items = 4;
+      // repeated .pandora.inventory.v1.ItemGrant seller_items = 4 [json_name = "sellerItems"];
       {::_pbi::TcParser::FastMtR1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.seller_items_)}},
-      // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5;
+      // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5 [json_name = "buyerItems"];
       {::_pbi::TcParser::FastMtR1,
        {42, 1, 1,
         PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.buyer_items_)}},
-      // int64 price = 6;
+      // int64 price = 6 [json_name = "price"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SettlePlayerTradeRequest, _impl_.price_), 5>(),
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.price_)}},
@@ -6624,17 +6624,17 @@ constexpr SettlePlayerTradeRequest::ParseTableT_ SettlePlayerTradeRequest::Inter
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 order_id = 1;
+      // uint64 order_id = 1 [json_name = "orderId"];
       {PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.order_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 seller_id = 2;
+      // uint64 seller_id = 2 [json_name = "sellerId"];
       {PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.seller_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 buyer_id = 3;
+      // uint64 buyer_id = 3 [json_name = "buyerId"];
       {PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.buyer_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .pandora.inventory.v1.ItemGrant seller_items = 4;
+      // repeated .pandora.inventory.v1.ItemGrant seller_items = 4 [json_name = "sellerItems"];
       {PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.seller_items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5;
+      // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5 [json_name = "buyerItems"];
       {PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.buyer_items_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // int64 price = 6;
+      // int64 price = 6 [json_name = "price"];
       {PROTOBUF_FIELD_OFFSET(SettlePlayerTradeRequest, _impl_.price_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     {{
@@ -6792,14 +6792,14 @@ constexpr ItemInstanceAttributesStorageRecord::ParseTableT_ ItemInstanceAttribut
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ItemInstanceAttributesStorageRecord>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.inventory.v1.ItemAttribute attributes = 1;
+      // repeated .pandora.inventory.v1.ItemAttribute attributes = 1 [json_name = "attributes"];
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(ItemInstanceAttributesStorageRecord, _impl_.attributes_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // repeated .pandora.inventory.v1.ItemAttribute attributes = 1;
+      // repeated .pandora.inventory.v1.ItemAttribute attributes = 1 [json_name = "attributes"];
       {PROTOBUF_FIELD_OFFSET(ItemInstanceAttributesStorageRecord, _impl_.attributes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -6944,27 +6944,27 @@ constexpr ItemInstance::ParseTableT_ ItemInstance::InternalGenerateParseTable_(c
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 instance_id = 1;
+      // uint64 instance_id = 1 [json_name = "instanceId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ItemInstance, _impl_.instance_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.instance_id_)}},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemInstance, _impl_.item_config_id_), 2>(),
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.item_config_id_)}},
-      // bool identified = 3;
+      // bool identified = 3 [json_name = "identified"];
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ItemInstance, _impl_.identified_), 3>(),
        {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.identified_)}},
-      // repeated .pandora.inventory.v1.ItemAttribute attributes = 4;
+      // repeated .pandora.inventory.v1.ItemAttribute attributes = 4 [json_name = "attributes"];
       {::_pbi::TcParser::FastMtR1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.attributes_)}},
-      // int32 slot_index = 5;
+      // int32 slot_index = 5 [json_name = "slotIndex"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemInstance, _impl_.slot_index_), 5>(),
        {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.slot_index_)}},
-      // bool bound = 6;
+      // bool bound = 6 [json_name = "bound"];
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ItemInstance, _impl_.bound_), 4>(),
        {48, 4, 0,
         PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.bound_)}},
@@ -6972,17 +6972,17 @@ constexpr ItemInstance::ParseTableT_ ItemInstance::InternalGenerateParseTable_(c
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 instance_id = 1;
+      // uint64 instance_id = 1 [json_name = "instanceId"];
       {PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.instance_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 item_config_id = 2;
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
       {PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.item_config_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // bool identified = 3;
+      // bool identified = 3 [json_name = "identified"];
       {PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.identified_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
-      // repeated .pandora.inventory.v1.ItemAttribute attributes = 4;
+      // repeated .pandora.inventory.v1.ItemAttribute attributes = 4 [json_name = "attributes"];
       {PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.attributes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // int32 slot_index = 5;
+      // int32 slot_index = 5 [json_name = "slotIndex"];
       {PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.slot_index_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // bool bound = 6;
+      // bool bound = 6 [json_name = "bound"];
       {PROTOBUF_FIELD_OFFSET(ItemInstance, _impl_.bound_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
@@ -7131,32 +7131,32 @@ constexpr GrantItemsRequest::ParseTableT_ GrantItemsRequest::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::GrantItemsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {34, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantItemsRequest, _impl_.idempotency_key_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GrantItemsRequest, _impl_.player_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(GrantItemsRequest, _impl_.player_id_)}},
-      // repeated .pandora.inventory.v1.ItemGrant items = 2;
+      // repeated .pandora.inventory.v1.ItemGrant items = 2 [json_name = "items"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantItemsRequest, _impl_.items_)}},
-      // int64 gold = 3;
+      // int64 gold = 3 [json_name = "gold"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GrantItemsRequest, _impl_.gold_), 3>(),
        {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(GrantItemsRequest, _impl_.gold_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(GrantItemsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .pandora.inventory.v1.ItemGrant items = 2;
+      // repeated .pandora.inventory.v1.ItemGrant items = 2 [json_name = "items"];
       {PROTOBUF_FIELD_OFFSET(GrantItemsRequest, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // int64 gold = 3;
+      // int64 gold = 3 [json_name = "gold"];
       {PROTOBUF_FIELD_OFFSET(GrantItemsRequest, _impl_.gold_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // string idempotency_key = 4;
+      // string idempotency_key = 4 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(GrantItemsRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
@@ -7309,26 +7309,26 @@ constexpr ClaimTransferInstancesRequest::ParseTableT_ ClaimTransferInstancesRequ
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 to_player_id = 1;
+      // uint64 to_player_id = 1 [json_name = "toPlayerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimTransferInstancesRequest, _impl_.to_player_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.to_player_id_)}},
-      // repeated .pandora.inventory.v1.TransferClaimItem items = 2;
+      // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.items_)}},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {::_pbi::TcParser::FastUS1,
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.idempotency_key_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 to_player_id = 1;
+      // uint64 to_player_id = 1 [json_name = "toPlayerId"];
       {PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .pandora.inventory.v1.TransferClaimItem items = 2;
+      // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
       {PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // string idempotency_key = 3;
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
       {PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
@@ -7479,20 +7479,20 @@ constexpr CheckInstancesOwnedRequest::ParseTableT_ CheckInstancesOwnedRequest::I
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::CheckInstancesOwnedRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2;
+      // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2 [json_name = "instances"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedRequest, _impl_.instances_)}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CheckInstancesOwnedRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2;
+      // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2 [json_name = "instances"];
       {PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedRequest, _impl_.instances_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -7638,23 +7638,23 @@ constexpr Inventory::ParseTableT_ Inventory::InternalGenerateParseTable_(const :
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(Inventory, _impl_.player_id_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(Inventory, _impl_.player_id_)}},
-      // int64 gold = 2;
+      // int64 gold = 2 [json_name = "gold"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(Inventory, _impl_.gold_), 3>(),
        {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(Inventory, _impl_.gold_)}},
-      // repeated .pandora.inventory.v1.ItemStack items = 3;
+      // repeated .pandora.inventory.v1.ItemStack items = 3 [json_name = "items"];
       {::_pbi::TcParser::FastMtR1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(Inventory, _impl_.items_)}},
-      // int32 capacity = 4;
+      // int32 capacity = 4 [json_name = "capacity"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Inventory, _impl_.capacity_), 4>(),
        {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(Inventory, _impl_.capacity_)}},
-      // repeated .pandora.inventory.v1.ItemInstance instances = 5;
+      // repeated .pandora.inventory.v1.ItemInstance instances = 5 [json_name = "instances"];
       {::_pbi::TcParser::FastMtR1,
        {42, 1, 1,
         PROTOBUF_FIELD_OFFSET(Inventory, _impl_.instances_)}},
@@ -7663,15 +7663,15 @@ constexpr Inventory::ParseTableT_ Inventory::InternalGenerateParseTable_(const :
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
+      // uint64 player_id = 1 [json_name = "playerId"];
       {PROTOBUF_FIELD_OFFSET(Inventory, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // int64 gold = 2;
+      // int64 gold = 2 [json_name = "gold"];
       {PROTOBUF_FIELD_OFFSET(Inventory, _impl_.gold_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // repeated .pandora.inventory.v1.ItemStack items = 3;
+      // repeated .pandora.inventory.v1.ItemStack items = 3 [json_name = "items"];
       {PROTOBUF_FIELD_OFFSET(Inventory, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // int32 capacity = 4;
+      // int32 capacity = 4 [json_name = "capacity"];
       {PROTOBUF_FIELD_OFFSET(Inventory, _impl_.capacity_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // repeated .pandora.inventory.v1.ItemInstance instances = 5;
+      // repeated .pandora.inventory.v1.ItemInstance instances = 5 [json_name = "instances"];
       {PROTOBUF_FIELD_OFFSET(Inventory, _impl_.instances_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -7828,20 +7828,20 @@ constexpr IdentifyItemResponse::ParseTableT_ IdentifyItemResponse::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::IdentifyItemResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.inventory.v1.ItemInstance instance = 2;
+      // .pandora.inventory.v1.ItemInstance instance = 2 [json_name = "instance"];
       {::_pbi::TcParser::FastMtS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(IdentifyItemResponse, _impl_.instance_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(IdentifyItemResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(IdentifyItemResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(IdentifyItemResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // .pandora.inventory.v1.ItemInstance instance = 2;
+      // .pandora.inventory.v1.ItemInstance instance = 2 [json_name = "instance"];
       {PROTOBUF_FIELD_OFFSET(IdentifyItemResponse, _impl_.instance_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -7982,20 +7982,20 @@ constexpr GrantInstancesResponse::ParseTableT_ GrantInstancesResponse::InternalG
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::GrantInstancesResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.inventory.v1.ItemInstance instances = 2;
+      // repeated .pandora.inventory.v1.ItemInstance instances = 2 [json_name = "instances"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GrantInstancesResponse, _impl_.instances_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GrantInstancesResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GrantInstancesResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GrantInstancesResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated .pandora.inventory.v1.ItemInstance instances = 2;
+      // repeated .pandora.inventory.v1.ItemInstance instances = 2 [json_name = "instances"];
       {PROTOBUF_FIELD_OFFSET(GrantInstancesResponse, _impl_.instances_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -8140,20 +8140,20 @@ constexpr EscrowOutInstancesResponse::ParseTableT_ EscrowOutInstancesResponse::I
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::EscrowOutInstancesResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.bag.v1.BagItem items = 2;
+      // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
       {::_pbi::TcParser::FastMtR1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_.items_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EscrowOutInstancesResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated .pandora.bag.v1.BagItem items = 2;
+      // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
       {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -8299,26 +8299,26 @@ constexpr CheckInstancesOwnedResponse::ParseTableT_ CheckInstancesOwnedResponse:
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CheckInstancesOwnedResponse, _impl_.code_), 2>(),
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedResponse, _impl_.code_)}},
-      // repeated uint64 owned_instance_ids = 2;
+      // repeated uint64 owned_instance_ids = 2 [json_name = "ownedInstanceIds"];
       {::_pbi::TcParser::FastV64P1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedResponse, _impl_.owned_instance_ids_)}},
-      // repeated .pandora.inventory.v1.ItemInstance owned_instances = 3;
+      // repeated .pandora.inventory.v1.ItemInstance owned_instances = 3 [json_name = "ownedInstances"];
       {::_pbi::TcParser::FastMtR1,
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedResponse, _impl_.owned_instances_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedResponse, _impl_.code_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // repeated uint64 owned_instance_ids = 2;
+      // repeated uint64 owned_instance_ids = 2 [json_name = "ownedInstanceIds"];
       {PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedResponse, _impl_.owned_instance_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
-      // repeated .pandora.inventory.v1.ItemInstance owned_instances = 3;
+      // repeated .pandora.inventory.v1.ItemInstance owned_instances = 3 [json_name = "ownedInstances"];
       {PROTOBUF_FIELD_OFFSET(CheckInstancesOwnedResponse, _impl_.owned_instances_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -8469,20 +8469,20 @@ constexpr GetInventoryResponse::ParseTableT_ GetInventoryResponse::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::inventory::v1::GetInventoryResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.inventory.v1.Inventory inventory = 2;
+      // .pandora.inventory.v1.Inventory inventory = 2 [json_name = "inventory"];
       {::_pbi::TcParser::FastMtS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetInventoryResponse, _impl_.inventory_)}},
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetInventoryResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetInventoryResponse, _impl_.code_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // .pandora.common.v1.ErrCode code = 1;
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetInventoryResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // .pandora.inventory.v1.Inventory inventory = 2;
+      // .pandora.inventory.v1.Inventory inventory = 2 [json_name = "inventory"];
       {PROTOBUF_FIELD_OFFSET(GetInventoryResponse, _impl_.inventory_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
@@ -9172,208 +9172,244 @@ const char descriptor_table_protodef_pandora_2finventory_2fv1_2finventory_2eprot
     "\n$pandora/inventory/v1/inventory.proto\022\024"
     "pandora.inventory.v1\032\037pandora/common/v1/"
     "errcode.proto\032\030pandora/bag/v1/bag.proto\""
-    "2\n\tItemStack\022\026\n\016item_config_id\030\001 \001(\r\022\r\n\005"
-    "count\030\002 \001(\003\"2\n\tItemGrant\022\026\n\016item_config_"
-    "id\030\001 \001(\r\022\r\n\005count\030\002 \001(\003\"\245\001\n\tInventory\022\021\n"
-    "\tplayer_id\030\001 \001(\004\022\014\n\004gold\030\002 \001(\003\022.\n\005items\030"
-    "\003 \003(\0132\037.pandora.inventory.v1.ItemStack\022\020"
-    "\n\010capacity\030\004 \001(\005\0225\n\tinstances\030\005 \003(\0132\".pa"
-    "ndora.inventory.v1.ItemInstance\"/\n\rItemA"
-    "ttribute\022\017\n\007attr_id\030\001 \001(\r\022\r\n\005value\030\002 \001(\003"
-    "\"^\n#ItemInstanceAttributesStorageRecord\022"
-    "7\n\nattributes\030\001 \003(\0132#.pandora.inventory."
-    "v1.ItemAttribute\"\253\001\n\014ItemInstance\022\023\n\013ins"
-    "tance_id\030\001 \001(\004\022\026\n\016item_config_id\030\002 \001(\r\022\022"
-    "\n\nidentified\030\003 \001(\010\0227\n\nattributes\030\004 \003(\0132#"
-    ".pandora.inventory.v1.ItemAttribute\022\022\n\ns"
-    "lot_index\030\005 \001(\005\022\r\n\005bound\030\006 \001(\010\"(\n\023GetInv"
-    "entoryRequest\022\021\n\tplayer_id\030\001 \001(\004\"t\n\024GetI"
-    "nventoryResponse\022(\n\004code\030\001 \001(\0162\032.pandora"
-    ".common.v1.ErrCode\0222\n\tinventory\030\002 \001(\0132\037."
-    "pandora.inventory.v1.Inventory\"}\n\021GrantI"
-    "temsRequest\022\021\n\tplayer_id\030\001 \001(\004\022.\n\005items\030"
-    "\002 \003(\0132\037.pandora.inventory.v1.ItemGrant\022\014"
-    "\n\004gold\030\003 \001(\003\022\027\n\017idempotency_key\030\004 \001(\t\"L\n"
-    "\022GrantItemsResponse\022(\n\004code\030\001 \001(\0162\032.pand"
-    "ora.common.v1.ErrCode\022\014\n\004gold\030\002 \001(\003\"D\n\026C"
-    "heckItemsOwnedRequest\022\021\n\tplayer_id\030\001 \001(\004"
-    "\022\027\n\017item_config_ids\030\002 \003(\r\"b\n\027CheckItemsO"
-    "wnedResponse\022(\n\004code\030\001 \001(\0162\032.pandora.com"
-    "mon.v1.ErrCode\022\035\n\025owned_item_config_ids\030"
-    "\002 \003(\r\"E\n\026InstanceOwnershipQuery\022\023\n\013insta"
-    "nce_id\030\001 \001(\004\022\026\n\016item_config_id\030\002 \001(\r\"p\n\032"
-    "CheckInstancesOwnedRequest\022\021\n\tplayer_id\030"
-    "\001 \001(\004\022\?\n\tinstances\030\002 \003(\0132,.pandora.inven"
-    "tory.v1.InstanceOwnershipQuery\"\240\001\n\033Check"
-    "InstancesOwnedResponse\022(\n\004code\030\001 \001(\0162\032.p"
-    "andora.common.v1.ErrCode\022\032\n\022owned_instan"
-    "ce_ids\030\002 \003(\004\022;\n\017owned_instances\030\003 \003(\0132\"."
-    "pandora.inventory.v1.ItemInstance\"c\n\016Use"
-    "ItemRequest\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016item_c"
-    "onfig_id\030\002 \001(\r\022\r\n\005count\030\003 \001(\003\022\027\n\017idempot"
-    "ency_key\030\004 \001(\t\"N\n\017UseItemResponse\022(\n\004cod"
-    "e\030\001 \001(\0162\032.pandora.common.v1.ErrCode\022\021\n\tr"
-    "emaining\030\002 \001(\003\"m\n\030ConsumeBattleItemReque"
-    "st\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016item_config_id\030"
-    "\002 \001(\r\022\r\n\005count\030\003 \001(\003\022\027\n\017idempotency_key\030"
-    "\004 \001(\t\"X\n\031ConsumeBattleItemResponse\022(\n\004co"
-    "de\030\001 \001(\0162\032.pandora.common.v1.ErrCode\022\021\n\t"
-    "remaining\030\002 \001(\003\"m\n\030DiscardBattleItemRequ"
-    "est\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016item_config_id"
-    "\030\002 \001(\r\022\r\n\005count\030\003 \001(\003\022\027\n\017idempotency_key"
-    "\030\004 \001(\t\"X\n\031DiscardBattleItemResponse\022(\n\004c"
-    "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCode\022\021\n"
-    "\tremaining\030\002 \001(\003\"d\n\017SellItemRequest\022\021\n\tp"
-    "layer_id\030\001 \001(\004\022\026\n\016item_config_id\030\002 \001(\r\022\r"
-    "\n\005count\030\003 \001(\003\022\027\n\017idempotency_key\030\004 \001(\t\"]"
-    "\n\020SellItemResponse\022(\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCode\022\021\n\tremaining\030\002 \001(\003\022"
-    "\014\n\004gold\030\003 \001(\003\"g\n\022DiscardItemRequest\022\021\n\tp"
-    "layer_id\030\001 \001(\004\022\026\n\016item_config_id\030\002 \001(\r\022\r"
-    "\n\005count\030\003 \001(\003\022\027\n\017idempotency_key\030\004 \001(\t\"R"
-    "\n\023DiscardItemResponse\022(\n\004code\030\001 \001(\0162\032.pa"
-    "ndora.common.v1.ErrCode\022\021\n\tremaining\030\002 \001"
-    "(\003\"\275\001\n\031SettleAuctionMatchRequest\022\020\n\010matc"
-    "h_id\030\001 \001(\004\022\021\n\tseller_id\030\002 \001(\004\022\020\n\010buyer_i"
-    "d\030\003 \001(\004\022\026\n\016item_config_id\030\004 \001(\r\022\020\n\010quant"
-    "ity\030\005 \001(\003\022\022\n\nunit_price\030\006 \001(\003\022\025\n\rsell_or"
-    "der_id\030\007 \001(\004\022\024\n\014buy_order_id\030\010 \001(\004\"F\n\032Se"
-    "ttleAuctionMatchResponse\022(\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCode\"\315\001\n\030SettlePla"
-    "yerTradeRequest\022\020\n\010order_id\030\001 \001(\004\022\021\n\tsel"
-    "ler_id\030\002 \001(\004\022\020\n\010buyer_id\030\003 \001(\004\0225\n\014seller"
-    "_items\030\004 \003(\0132\037.pandora.inventory.v1.Item"
-    "Grant\0224\n\013buyer_items\030\005 \003(\0132\037.pandora.inv"
-    "entory.v1.ItemGrant\022\r\n\005price\030\006 \001(\003\"E\n\031Se"
-    "ttlePlayerTradeResponse\022(\n\004code\030\001 \001(\0162\032."
-    "pandora.common.v1.ErrCode\"\252\001\n\025FreezeForO"
-    "rderRequest\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010order_"
-    "id\030\002 \001(\004\022.\n\004side\030\003 \001(\0162 .pandora.invento"
-    "ry.v1.EscrowSide\022\026\n\016item_config_id\030\004 \001(\r"
-    "\022\020\n\010quantity\030\005 \001(\003\022\022\n\nunit_price\030\006 \001(\003\"B"
-    "\n\026FreezeForOrderResponse\022(\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCode\"\271\001\n\032EnsureAuc"
-    "tionEscrowRequest\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010"
-    "order_id\030\002 \001(\004\022.\n\004side\030\003 \001(\0162 .pandora.i"
-    "nventory.v1.EscrowSide\022\026\n\016item_config_id"
-    "\030\004 \001(\r\022\032\n\022remaining_quantity\030\005 \001(\004\022\022\n\nun"
-    "it_price\030\006 \001(\004\"G\n\033EnsureAuctionEscrowRes"
-    "ponse\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCode\";\n\024ReleaseEscrowRequest\022\021\n\tplaye"
-    "r_id\030\001 \001(\004\022\020\n\010order_id\030\002 \001(\004\"A\n\025ReleaseE"
-    "scrowResponse\022(\n\004code\030\001 \001(\0162\032.pandora.co"
-    "mmon.v1.ErrCode\"\\\n\025GrantInstancesRequest"
-    "\022\021\n\tplayer_id\030\001 \001(\004\022\027\n\017item_config_ids\030\002"
-    " \003(\r\022\027\n\017idempotency_key\030\003 \001(\t\"y\n\026GrantIn"
-    "stancesResponse\022(\n\004code\030\001 \001(\0162\032.pandora."
-    "common.v1.ErrCode\0225\n\tinstances\030\002 \003(\0132\".p"
-    "andora.inventory.v1.ItemInstance\"=\n\023Iden"
-    "tifyItemRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013in"
-    "stance_id\030\002 \001(\004\"v\n\024IdentifyItemResponse\022"
-    "(\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
-    "e\0224\n\010instance\030\002 \001(\0132\".pandora.inventory."
-    "v1.ItemInstance\"@\n\026DiscardInstanceReques"
-    "t\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013instance_id\030\002 \001("
-    "\004\"C\n\027DiscardInstanceResponse\022(\n\004code\030\001 \001"
-    "(\0162\032.pandora.common.v1.ErrCode\"T\n\023MoveIn"
-    "stanceRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013inst"
-    "ance_id\030\002 \001(\004\022\025\n\rto_slot_index\030\003 \001(\005\"@\n\024"
-    "MoveInstanceResponse\022(\n\004code\030\001 \001(\0162\032.pan"
-    "dora.common.v1.ErrCode\"n\n\023SellInstanceRe"
-    "quest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013instance_id\030"
-    "\002 \001(\004\022\026\n\016item_config_id\030\003 \001(\r\022\027\n\017idempot"
-    "ency_key\030\004 \001(\t\"N\n\024SellInstanceResponse\022("
-    "\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCode"
-    "\022\014\n\004gold\030\002 \001(\003\"u\n\031EscrowOutInstancesRequ"
-    "est\022\030\n\020source_player_id\030\001 \001(\004\022\024\n\014to_play"
-    "er_id\030\002 \001(\004\022\024\n\014instance_ids\030\003 \003(\004\022\022\n\nesc"
-    "row_key\030\004 \001(\t\"n\n\032EscrowOutInstancesRespo"
-    "nse\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
-    "rCode\022&\n\005items\030\002 \003(\0132\027.pandora.bag.v1.Ba"
-    "gItem\"@\n\021TransferClaimItem\022\023\n\013instance_i"
-    "d\030\001 \001(\004\022\026\n\016item_config_id\030\002 \001(\r\"\206\001\n\035Clai"
-    "mTransferInstancesRequest\022\024\n\014to_player_i"
-    "d\030\001 \001(\004\0226\n\005items\030\002 \003(\0132\'.pandora.invento"
-    "ry.v1.TransferClaimItem\022\027\n\017idempotency_k"
-    "ey\030\003 \001(\t\"J\n\036ClaimTransferInstancesRespon"
-    "se\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
-    "Code\"4\n\034ReleaseTransferEscrowRequest\022\024\n\014"
-    "instance_ids\030\001 \003(\004\"I\n\035ReleaseTransferEsc"
-    "rowResponse\022(\n\004code\030\001 \001(\0162\032.pandora.comm"
-    "on.v1.ErrCode\"J\n\034ConsumeTransferEscrowRe"
-    "quest\022\024\n\014to_player_id\030\001 \001(\004\022\024\n\014instance_"
-    "ids\030\002 \003(\004\"I\n\035ConsumeTransferEscrowRespon"
-    "se\022(\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
-    "Code*T\n\nEscrowSide\022\033\n\027ESCROW_SIDE_UNSPEC"
-    "IFIED\020\000\022\024\n\020ESCROW_SIDE_SELL\020\001\022\023\n\017ESCROW_"
-    "SIDE_BUY\020\002*E\n\014CurrencyKind\022\035\n\031CURRENCY_K"
-    "IND_UNSPECIFIED\020\000\022\026\n\022CURRENCY_KIND_GOLD\020"
-    "\0012\242\024\n\020InventoryService\022e\n\014GetInventory\022)"
-    ".pandora.inventory.v1.GetInventoryReques"
-    "t\032*.pandora.inventory.v1.GetInventoryRes"
-    "ponse\022_\n\nGrantItems\022\'.pandora.inventory."
-    "v1.GrantItemsRequest\032(.pandora.inventory"
-    ".v1.GrantItemsResponse\022V\n\007UseItem\022$.pand"
-    "ora.inventory.v1.UseItemRequest\032%.pandor"
-    "a.inventory.v1.UseItemResponse\022t\n\021Consum"
-    "eBattleItem\022..pandora.inventory.v1.Consu"
-    "meBattleItemRequest\032/.pandora.inventory."
-    "v1.ConsumeBattleItemResponse\022t\n\021DiscardB"
-    "attleItem\022..pandora.inventory.v1.Discard"
-    "BattleItemRequest\032/.pandora.inventory.v1"
-    ".DiscardBattleItemResponse\022Y\n\010SellItem\022%"
-    ".pandora.inventory.v1.SellItemRequest\032&."
-    "pandora.inventory.v1.SellItemResponse\022b\n"
-    "\013DiscardItem\022(.pandora.inventory.v1.Disc"
-    "ardItemRequest\032).pandora.inventory.v1.Di"
-    "scardItemResponse\022k\n\016GrantInstances\022+.pa"
-    "ndora.inventory.v1.GrantInstancesRequest"
-    "\032,.pandora.inventory.v1.GrantInstancesRe"
-    "sponse\022e\n\014IdentifyItem\022).pandora.invento"
-    "ry.v1.IdentifyItemRequest\032*.pandora.inve"
-    "ntory.v1.IdentifyItemResponse\022n\n\017Discard"
-    "Instance\022,.pandora.inventory.v1.DiscardI"
-    "nstanceRequest\032-.pandora.inventory.v1.Di"
-    "scardInstanceResponse\022e\n\014MoveInstance\022)."
-    "pandora.inventory.v1.MoveInstanceRequest"
-    "\032*.pandora.inventory.v1.MoveInstanceResp"
-    "onse\022e\n\014SellInstance\022).pandora.inventory"
-    ".v1.SellInstanceRequest\032*.pandora.invent"
-    "ory.v1.SellInstanceResponse\022k\n\016FreezeFor"
-    "Order\022+.pandora.inventory.v1.FreezeForOr"
-    "derRequest\032,.pandora.inventory.v1.Freeze"
-    "ForOrderResponse\022z\n\023EnsureAuctionEscrow\022"
-    "0.pandora.inventory.v1.EnsureAuctionEscr"
-    "owRequest\0321.pandora.inventory.v1.EnsureA"
-    "uctionEscrowResponse\022w\n\022SettleAuctionMat"
-    "ch\022/.pandora.inventory.v1.SettleAuctionM"
-    "atchRequest\0320.pandora.inventory.v1.Settl"
-    "eAuctionMatchResponse\022t\n\021SettlePlayerTra"
-    "de\022..pandora.inventory.v1.SettlePlayerTr"
-    "adeRequest\032/.pandora.inventory.v1.Settle"
-    "PlayerTradeResponse\022h\n\rReleaseEscrow\022*.p"
-    "andora.inventory.v1.ReleaseEscrowRequest"
-    "\032+.pandora.inventory.v1.ReleaseEscrowRes"
-    "ponse\022w\n\022EscrowOutInstances\022/.pandora.in"
-    "ventory.v1.EscrowOutInstancesRequest\0320.p"
-    "andora.inventory.v1.EscrowOutInstancesRe"
-    "sponse\022\203\001\n\026ClaimTransferInstances\0223.pand"
-    "ora.inventory.v1.ClaimTransferInstancesR"
-    "equest\0324.pandora.inventory.v1.ClaimTrans"
-    "ferInstancesResponse\022\200\001\n\025ReleaseTransfer"
-    "Escrow\0222.pandora.inventory.v1.ReleaseTra"
-    "nsferEscrowRequest\0323.pandora.inventory.v"
-    "1.ReleaseTransferEscrowResponse\022\200\001\n\025Cons"
-    "umeTransferEscrow\0222.pandora.inventory.v1"
-    ".ConsumeTransferEscrowRequest\0323.pandora."
-    "inventory.v1.ConsumeTransferEscrowRespon"
-    "se\022n\n\017CheckItemsOwned\022,.pandora.inventor"
-    "y.v1.CheckItemsOwnedRequest\032-.pandora.in"
-    "ventory.v1.CheckItemsOwnedResponse\022z\n\023Ch"
-    "eckInstancesOwned\0220.pandora.inventory.v1"
-    ".CheckInstancesOwnedRequest\0321.pandora.in"
-    "ventory.v1.CheckInstancesOwnedResponseb\006"
-    "proto3"
+    "G\n\tItemStack\022$\n\016item_config_id\030\001 \001(\rR\014it"
+    "emConfigId\022\024\n\005count\030\002 \001(\003R\005count\"G\n\tItem"
+    "Grant\022$\n\016item_config_id\030\001 \001(\rR\014itemConfi"
+    "gId\022\024\n\005count\030\002 \001(\003R\005count\"\321\001\n\tInventory\022"
+    "\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\022\n\004gold\030\002 \001"
+    "(\003R\004gold\0225\n\005items\030\003 \003(\0132\037.pandora.invent"
+    "ory.v1.ItemStackR\005items\022\032\n\010capacity\030\004 \001("
+    "\005R\010capacity\022@\n\tinstances\030\005 \003(\0132\".pandora"
+    ".inventory.v1.ItemInstanceR\tinstances\">\n"
+    "\rItemAttribute\022\027\n\007attr_id\030\001 \001(\rR\006attrId\022"
+    "\024\n\005value\030\002 \001(\003R\005value\"j\n#ItemInstanceAtt"
+    "ributesStorageRecord\022C\n\nattributes\030\001 \003(\013"
+    "2#.pandora.inventory.v1.ItemAttributeR\na"
+    "ttributes\"\357\001\n\014ItemInstance\022\037\n\013instance_i"
+    "d\030\001 \001(\004R\ninstanceId\022$\n\016item_config_id\030\002 "
+    "\001(\rR\014itemConfigId\022\036\n\nidentified\030\003 \001(\010R\ni"
+    "dentified\022C\n\nattributes\030\004 \003(\0132#.pandora."
+    "inventory.v1.ItemAttributeR\nattributes\022\035"
+    "\n\nslot_index\030\005 \001(\005R\tslotIndex\022\024\n\005bound\030\006"
+    " \001(\010R\005bound\"2\n\023GetInventoryRequest\022\033\n\tpl"
+    "ayer_id\030\001 \001(\004R\010playerId\"\205\001\n\024GetInventory"
+    "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
+    "v1.ErrCodeR\004code\022=\n\tinventory\030\002 \001(\0132\037.pa"
+    "ndora.inventory.v1.InventoryR\tinventory\""
+    "\244\001\n\021GrantItemsRequest\022\033\n\tplayer_id\030\001 \001(\004"
+    "R\010playerId\0225\n\005items\030\002 \003(\0132\037.pandora.inve"
+    "ntory.v1.ItemGrantR\005items\022\022\n\004gold\030\003 \001(\003R"
+    "\004gold\022\'\n\017idempotency_key\030\004 \001(\tR\016idempote"
+    "ncyKey\"X\n\022GrantItemsResponse\022.\n\004code\030\001 \001"
+    "(\0162\032.pandora.common.v1.ErrCodeR\004code\022\022\n\004"
+    "gold\030\002 \001(\003R\004gold\"]\n\026CheckItemsOwnedReque"
+    "st\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022&\n\017item_"
+    "config_ids\030\002 \003(\rR\ritemConfigIds\"|\n\027Check"
+    "ItemsOwnedResponse\022.\n\004code\030\001 \001(\0162\032.pando"
+    "ra.common.v1.ErrCodeR\004code\0221\n\025owned_item"
+    "_config_ids\030\002 \003(\rR\022ownedItemConfigIds\"_\n"
+    "\026InstanceOwnershipQuery\022\037\n\013instance_id\030\001"
+    " \001(\004R\ninstanceId\022$\n\016item_config_id\030\002 \001(\r"
+    "R\014itemConfigId\"\205\001\n\032CheckInstancesOwnedRe"
+    "quest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022J\n\tin"
+    "stances\030\002 \003(\0132,.pandora.inventory.v1.Ins"
+    "tanceOwnershipQueryR\tinstances\"\310\001\n\033Check"
+    "InstancesOwnedResponse\022.\n\004code\030\001 \001(\0162\032.p"
+    "andora.common.v1.ErrCodeR\004code\022,\n\022owned_"
+    "instance_ids\030\002 \003(\004R\020ownedInstanceIds\022K\n\017"
+    "owned_instances\030\003 \003(\0132\".pandora.inventor"
+    "y.v1.ItemInstanceR\016ownedInstances\"\222\001\n\016Us"
+    "eItemRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerI"
+    "d\022$\n\016item_config_id\030\002 \001(\rR\014itemConfigId\022"
+    "\024\n\005count\030\003 \001(\003R\005count\022\'\n\017idempotency_key"
+    "\030\004 \001(\tR\016idempotencyKey\"_\n\017UseItemRespons"
+    "e\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrC"
+    "odeR\004code\022\034\n\tremaining\030\002 \001(\003R\tremaining\""
+    "\234\001\n\030ConsumeBattleItemRequest\022\033\n\tplayer_i"
+    "d\030\001 \001(\004R\010playerId\022$\n\016item_config_id\030\002 \001("
+    "\rR\014itemConfigId\022\024\n\005count\030\003 \001(\003R\005count\022\'\n"
+    "\017idempotency_key\030\004 \001(\tR\016idempotencyKey\"i"
+    "\n\031ConsumeBattleItemResponse\022.\n\004code\030\001 \001("
+    "\0162\032.pandora.common.v1.ErrCodeR\004code\022\034\n\tr"
+    "emaining\030\002 \001(\003R\tremaining\"\234\001\n\030DiscardBat"
+    "tleItemRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
+    "rId\022$\n\016item_config_id\030\002 \001(\rR\014itemConfigI"
+    "d\022\024\n\005count\030\003 \001(\003R\005count\022\'\n\017idempotency_k"
+    "ey\030\004 \001(\tR\016idempotencyKey\"i\n\031DiscardBattl"
+    "eItemResponse\022.\n\004code\030\001 \001(\0162\032.pandora.co"
+    "mmon.v1.ErrCodeR\004code\022\034\n\tremaining\030\002 \001(\003"
+    "R\tremaining\"\223\001\n\017SellItemRequest\022\033\n\tplaye"
+    "r_id\030\001 \001(\004R\010playerId\022$\n\016item_config_id\030\002"
+    " \001(\rR\014itemConfigId\022\024\n\005count\030\003 \001(\003R\005count"
+    "\022\'\n\017idempotency_key\030\004 \001(\tR\016idempotencyKe"
+    "y\"t\n\020SellItemResponse\022.\n\004code\030\001 \001(\0162\032.pa"
+    "ndora.common.v1.ErrCodeR\004code\022\034\n\tremaini"
+    "ng\030\002 \001(\003R\tremaining\022\022\n\004gold\030\003 \001(\003R\004gold\""
+    "\226\001\n\022DiscardItemRequest\022\033\n\tplayer_id\030\001 \001("
+    "\004R\010playerId\022$\n\016item_config_id\030\002 \001(\rR\014ite"
+    "mConfigId\022\024\n\005count\030\003 \001(\003R\005count\022\'\n\017idemp"
+    "otency_key\030\004 \001(\tR\016idempotencyKey\"c\n\023Disc"
+    "ardItemResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\022\034\n\tremaining\030\002 \001"
+    "(\003R\tremaining\"\225\002\n\031SettleAuctionMatchRequ"
+    "est\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\033\n\tseller"
+    "_id\030\002 \001(\004R\010sellerId\022\031\n\010buyer_id\030\003 \001(\004R\007b"
+    "uyerId\022$\n\016item_config_id\030\004 \001(\rR\014itemConf"
+    "igId\022\032\n\010quantity\030\005 \001(\003R\010quantity\022\035\n\nunit"
+    "_price\030\006 \001(\003R\tunitPrice\022\"\n\rsell_order_id"
+    "\030\007 \001(\004R\013sellOrderId\022 \n\014buy_order_id\030\010 \001("
+    "\004R\nbuyOrderId\"L\n\032SettleAuctionMatchRespo"
+    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
+    "rCodeR\004code\"\211\002\n\030SettlePlayerTradeRequest"
+    "\022\031\n\010order_id\030\001 \001(\004R\007orderId\022\033\n\tseller_id"
+    "\030\002 \001(\004R\010sellerId\022\031\n\010buyer_id\030\003 \001(\004R\007buye"
+    "rId\022B\n\014seller_items\030\004 \003(\0132\037.pandora.inve"
+    "ntory.v1.ItemGrantR\013sellerItems\022@\n\013buyer"
+    "_items\030\005 \003(\0132\037.pandora.inventory.v1.Item"
+    "GrantR\nbuyerItems\022\024\n\005price\030\006 \001(\003R\005price\""
+    "K\n\031SettlePlayerTradeResponse\022.\n\004code\030\001 \001"
+    "(\0162\032.pandora.common.v1.ErrCodeR\004code\"\346\001\n"
+    "\025FreezeForOrderRequest\022\033\n\tplayer_id\030\001 \001("
+    "\004R\010playerId\022\031\n\010order_id\030\002 \001(\004R\007orderId\0224"
+    "\n\004side\030\003 \001(\0162 .pandora.inventory.v1.Escr"
+    "owSideR\004side\022$\n\016item_config_id\030\004 \001(\rR\014it"
+    "emConfigId\022\032\n\010quantity\030\005 \001(\003R\010quantity\022\035"
+    "\n\nunit_price\030\006 \001(\003R\tunitPrice\"H\n\026FreezeF"
+    "orOrderResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\"\376\001\n\032EnsureAuctio"
+    "nEscrowRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
+    "rId\022\031\n\010order_id\030\002 \001(\004R\007orderId\0224\n\004side\030\003"
+    " \001(\0162 .pandora.inventory.v1.EscrowSideR\004"
+    "side\022$\n\016item_config_id\030\004 \001(\rR\014itemConfig"
+    "Id\022-\n\022remaining_quantity\030\005 \001(\004R\021remainin"
+    "gQuantity\022\035\n\nunit_price\030\006 \001(\004R\tunitPrice"
+    "\"M\n\033EnsureAuctionEscrowResponse\022.\n\004code\030"
+    "\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code\""
+    "N\n\024ReleaseEscrowRequest\022\033\n\tplayer_id\030\001 \001"
+    "(\004R\010playerId\022\031\n\010order_id\030\002 \001(\004R\007orderId\""
+    "G\n\025ReleaseEscrowResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\"\205\001\n\025Gra"
+    "ntInstancesRequest\022\033\n\tplayer_id\030\001 \001(\004R\010p"
+    "layerId\022&\n\017item_config_ids\030\002 \003(\rR\ritemCo"
+    "nfigIds\022\'\n\017idempotency_key\030\003 \001(\tR\016idempo"
+    "tencyKey\"\212\001\n\026GrantInstancesResponse\022.\n\004c"
+    "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004c"
+    "ode\022@\n\tinstances\030\002 \003(\0132\".pandora.invento"
+    "ry.v1.ItemInstanceR\tinstances\"S\n\023Identif"
+    "yItemRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerI"
+    "d\022\037\n\013instance_id\030\002 \001(\004R\ninstanceId\"\206\001\n\024I"
+    "dentifyItemResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\022>\n\010instance\030"
+    "\002 \001(\0132\".pandora.inventory.v1.ItemInstanc"
+    "eR\010instance\"V\n\026DiscardInstanceRequest\022\033\n"
+    "\tplayer_id\030\001 \001(\004R\010playerId\022\037\n\013instance_i"
+    "d\030\002 \001(\004R\ninstanceId\"I\n\027DiscardInstanceRe"
+    "sponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1"
+    ".ErrCodeR\004code\"w\n\023MoveInstanceRequest\022\033\n"
+    "\tplayer_id\030\001 \001(\004R\010playerId\022\037\n\013instance_i"
+    "d\030\002 \001(\004R\ninstanceId\022\"\n\rto_slot_index\030\003 \001"
+    "(\005R\013toSlotIndex\"F\n\024MoveInstanceResponse\022"
+    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
+    "eR\004code\"\242\001\n\023SellInstanceRequest\022\033\n\tplaye"
+    "r_id\030\001 \001(\004R\010playerId\022\037\n\013instance_id\030\002 \001("
+    "\004R\ninstanceId\022$\n\016item_config_id\030\003 \001(\rR\014i"
+    "temConfigId\022\'\n\017idempotency_key\030\004 \001(\tR\016id"
+    "empotencyKey\"Z\n\024SellInstanceResponse\022.\n\004"
+    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
+    "code\022\022\n\004gold\030\002 \001(\003R\004gold\"\251\001\n\031EscrowOutIn"
+    "stancesRequest\022(\n\020source_player_id\030\001 \001(\004"
+    "R\016sourcePlayerId\022 \n\014to_player_id\030\002 \001(\004R\n"
+    "toPlayerId\022!\n\014instance_ids\030\003 \003(\004R\013instan"
+    "ceIds\022\035\n\nescrow_key\030\004 \001(\tR\tescrowKey\"{\n\032"
+    "EscrowOutInstancesResponse\022.\n\004code\030\001 \001(\016"
+    "2\032.pandora.common.v1.ErrCodeR\004code\022-\n\005it"
+    "ems\030\002 \003(\0132\027.pandora.bag.v1.BagItemR\005item"
+    "s\"Z\n\021TransferClaimItem\022\037\n\013instance_id\030\001 "
+    "\001(\004R\ninstanceId\022$\n\016item_config_id\030\002 \001(\rR"
+    "\014itemConfigId\"\251\001\n\035ClaimTransferInstances"
+    "Request\022 \n\014to_player_id\030\001 \001(\004R\ntoPlayerI"
+    "d\022=\n\005items\030\002 \003(\0132\'.pandora.inventory.v1."
+    "TransferClaimItemR\005items\022\'\n\017idempotency_"
+    "key\030\003 \001(\tR\016idempotencyKey\"P\n\036ClaimTransf"
+    "erInstancesResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\"A\n\034ReleaseTr"
+    "ansferEscrowRequest\022!\n\014instance_ids\030\001 \003("
+    "\004R\013instanceIds\"O\n\035ReleaseTransferEscrowR"
+    "esponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v"
+    "1.ErrCodeR\004code\"c\n\034ConsumeTransferEscrow"
+    "Request\022 \n\014to_player_id\030\001 \001(\004R\ntoPlayerI"
+    "d\022!\n\014instance_ids\030\002 \003(\004R\013instanceIds\"O\n\035"
+    "ConsumeTransferEscrowResponse\022.\n\004code\030\001 "
+    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code*T\n"
+    "\nEscrowSide\022\033\n\027ESCROW_SIDE_UNSPECIFIED\020\000"
+    "\022\024\n\020ESCROW_SIDE_SELL\020\001\022\023\n\017ESCROW_SIDE_BU"
+    "Y\020\002*E\n\014CurrencyKind\022\035\n\031CURRENCY_KIND_UNS"
+    "PECIFIED\020\000\022\026\n\022CURRENCY_KIND_GOLD\020\0012\242\024\n\020I"
+    "nventoryService\022e\n\014GetInventory\022).pandor"
+    "a.inventory.v1.GetInventoryRequest\032*.pan"
+    "dora.inventory.v1.GetInventoryResponse\022_"
+    "\n\nGrantItems\022\'.pandora.inventory.v1.Gran"
+    "tItemsRequest\032(.pandora.inventory.v1.Gra"
+    "ntItemsResponse\022V\n\007UseItem\022$.pandora.inv"
+    "entory.v1.UseItemRequest\032%.pandora.inven"
+    "tory.v1.UseItemResponse\022t\n\021ConsumeBattle"
+    "Item\022..pandora.inventory.v1.ConsumeBattl"
+    "eItemRequest\032/.pandora.inventory.v1.Cons"
+    "umeBattleItemResponse\022t\n\021DiscardBattleIt"
+    "em\022..pandora.inventory.v1.DiscardBattleI"
+    "temRequest\032/.pandora.inventory.v1.Discar"
+    "dBattleItemResponse\022Y\n\010SellItem\022%.pandor"
+    "a.inventory.v1.SellItemRequest\032&.pandora"
+    ".inventory.v1.SellItemResponse\022b\n\013Discar"
+    "dItem\022(.pandora.inventory.v1.DiscardItem"
+    "Request\032).pandora.inventory.v1.DiscardIt"
+    "emResponse\022k\n\016GrantInstances\022+.pandora.i"
+    "nventory.v1.GrantInstancesRequest\032,.pand"
+    "ora.inventory.v1.GrantInstancesResponse\022"
+    "e\n\014IdentifyItem\022).pandora.inventory.v1.I"
+    "dentifyItemRequest\032*.pandora.inventory.v"
+    "1.IdentifyItemResponse\022n\n\017DiscardInstanc"
+    "e\022,.pandora.inventory.v1.DiscardInstance"
+    "Request\032-.pandora.inventory.v1.DiscardIn"
+    "stanceResponse\022e\n\014MoveInstance\022).pandora"
+    ".inventory.v1.MoveInstanceRequest\032*.pand"
+    "ora.inventory.v1.MoveInstanceResponse\022e\n"
+    "\014SellInstance\022).pandora.inventory.v1.Sel"
+    "lInstanceRequest\032*.pandora.inventory.v1."
+    "SellInstanceResponse\022k\n\016FreezeForOrder\022+"
+    ".pandora.inventory.v1.FreezeForOrderRequ"
+    "est\032,.pandora.inventory.v1.FreezeForOrde"
+    "rResponse\022z\n\023EnsureAuctionEscrow\0220.pando"
+    "ra.inventory.v1.EnsureAuctionEscrowReque"
+    "st\0321.pandora.inventory.v1.EnsureAuctionE"
+    "scrowResponse\022w\n\022SettleAuctionMatch\022/.pa"
+    "ndora.inventory.v1.SettleAuctionMatchReq"
+    "uest\0320.pandora.inventory.v1.SettleAuctio"
+    "nMatchResponse\022t\n\021SettlePlayerTrade\022..pa"
+    "ndora.inventory.v1.SettlePlayerTradeRequ"
+    "est\032/.pandora.inventory.v1.SettlePlayerT"
+    "radeResponse\022h\n\rReleaseEscrow\022*.pandora."
+    "inventory.v1.ReleaseEscrowRequest\032+.pand"
+    "ora.inventory.v1.ReleaseEscrowResponse\022w"
+    "\n\022EscrowOutInstances\022/.pandora.inventory"
+    ".v1.EscrowOutInstancesRequest\0320.pandora."
+    "inventory.v1.EscrowOutInstancesResponse\022"
+    "\203\001\n\026ClaimTransferInstances\0223.pandora.inv"
+    "entory.v1.ClaimTransferInstancesRequest\032"
+    "4.pandora.inventory.v1.ClaimTransferInst"
+    "ancesResponse\022\200\001\n\025ReleaseTransferEscrow\022"
+    "2.pandora.inventory.v1.ReleaseTransferEs"
+    "crowRequest\0323.pandora.inventory.v1.Relea"
+    "seTransferEscrowResponse\022\200\001\n\025ConsumeTran"
+    "sferEscrow\0222.pandora.inventory.v1.Consum"
+    "eTransferEscrowRequest\0323.pandora.invento"
+    "ry.v1.ConsumeTransferEscrowResponse\022n\n\017C"
+    "heckItemsOwned\022,.pandora.inventory.v1.Ch"
+    "eckItemsOwnedRequest\032-.pandora.inventory"
+    ".v1.CheckItemsOwnedResponse\022z\n\023CheckInst"
+    "ancesOwned\0220.pandora.inventory.v1.CheckI"
+    "nstancesOwnedRequest\0321.pandora.inventory"
+    ".v1.CheckInstancesOwnedResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto_deps[2] = {
@@ -9384,7 +9420,7 @@ static ::absl::once_flag descriptor_table_pandora_2finventory_2fv1_2finventory_2
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto = {
     false,
     false,
-    8166,
+    9639,
     descriptor_table_protodef_pandora_2finventory_2fv1_2finventory_2eproto,
     "pandora/inventory/v1/inventory.proto",
     &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto_once,
@@ -9526,7 +9562,7 @@ PROTOBUF_NOINLINE void ItemStack::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 item_config_id = 1;
+  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -9535,7 +9571,7 @@ PROTOBUF_NOINLINE void ItemStack::Clear() {
     }
   }
 
-  // int64 count = 2;
+  // int64 count = 2 [json_name = "count"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_count() != 0) {
       target =
@@ -9570,14 +9606,14 @@ PROTOBUF_NOINLINE void ItemStack::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // int64 count = 2;
+    // int64 count = 2 [json_name = "count"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_count());
       }
     }
-    // uint32 item_config_id = 1;
+    // uint32 item_config_id = 1 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -9754,7 +9790,7 @@ PROTOBUF_NOINLINE void ItemGrant::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 item_config_id = 1;
+  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -9763,7 +9799,7 @@ PROTOBUF_NOINLINE void ItemGrant::Clear() {
     }
   }
 
-  // int64 count = 2;
+  // int64 count = 2 [json_name = "count"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_count() != 0) {
       target =
@@ -9798,14 +9834,14 @@ PROTOBUF_NOINLINE void ItemGrant::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // int64 count = 2;
+    // int64 count = 2 [json_name = "count"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_count());
       }
     }
-    // uint32 item_config_id = 1;
+    // uint32 item_config_id = 1 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -10034,7 +10070,7 @@ PROTOBUF_NOINLINE void Inventory::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -10043,7 +10079,7 @@ PROTOBUF_NOINLINE void Inventory::Clear() {
     }
   }
 
-  // int64 gold = 2;
+  // int64 gold = 2 [json_name = "gold"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_gold() != 0) {
       target =
@@ -10052,7 +10088,7 @@ PROTOBUF_NOINLINE void Inventory::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.ItemStack items = 3;
+  // repeated .pandora.inventory.v1.ItemStack items = 3 [json_name = "items"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_items_size());
@@ -10065,7 +10101,7 @@ PROTOBUF_NOINLINE void Inventory::Clear() {
     }
   }
 
-  // int32 capacity = 4;
+  // int32 capacity = 4 [json_name = "capacity"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_capacity() != 0) {
       target =
@@ -10074,7 +10110,7 @@ PROTOBUF_NOINLINE void Inventory::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.ItemInstance instances = 5;
+  // repeated .pandora.inventory.v1.ItemInstance instances = 5 [json_name = "instances"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_instances_size());
@@ -10113,35 +10149,35 @@ PROTOBUF_NOINLINE void Inventory::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    // repeated .pandora.inventory.v1.ItemStack items = 3;
+    // repeated .pandora.inventory.v1.ItemStack items = 3 [json_name = "items"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_items_size();
       for (const auto& msg : this_._internal_items()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // repeated .pandora.inventory.v1.ItemInstance instances = 5;
+    // repeated .pandora.inventory.v1.ItemInstance instances = 5 [json_name = "instances"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1UL * this_._internal_instances_size();
       for (const auto& msg : this_._internal_instances()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int64 gold = 2;
+    // int64 gold = 2 [json_name = "gold"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_gold());
       }
     }
-    // int32 capacity = 4;
+    // int32 capacity = 4 [json_name = "capacity"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_capacity() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -10336,7 +10372,7 @@ PROTOBUF_NOINLINE void ItemAttribute::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 attr_id = 1;
+  // uint32 attr_id = 1 [json_name = "attrId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_attr_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -10345,7 +10381,7 @@ PROTOBUF_NOINLINE void ItemAttribute::Clear() {
     }
   }
 
-  // int64 value = 2;
+  // int64 value = 2 [json_name = "value"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_value() != 0) {
       target =
@@ -10380,14 +10416,14 @@ PROTOBUF_NOINLINE void ItemAttribute::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // int64 value = 2;
+    // int64 value = 2 [json_name = "value"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_value() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_value());
       }
     }
-    // uint32 attr_id = 1;
+    // uint32 attr_id = 1 [json_name = "attrId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_attr_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -10581,7 +10617,7 @@ PROTOBUF_NOINLINE void ItemInstanceAttributesStorageRecord::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // repeated .pandora.inventory.v1.ItemAttribute attributes = 1;
+  // repeated .pandora.inventory.v1.ItemAttribute attributes = 1 [json_name = "attributes"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_attributes_size());
@@ -10619,7 +10655,7 @@ PROTOBUF_NOINLINE void ItemInstanceAttributesStorageRecord::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
    {
-    // repeated .pandora.inventory.v1.ItemAttribute attributes = 1;
+    // repeated .pandora.inventory.v1.ItemAttribute attributes = 1 [json_name = "attributes"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_attributes_size();
@@ -10821,7 +10857,7 @@ PROTOBUF_NOINLINE void ItemInstance::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 instance_id = 1;
+  // uint64 instance_id = 1 [json_name = "instanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -10830,7 +10866,7 @@ PROTOBUF_NOINLINE void ItemInstance::Clear() {
     }
   }
 
-  // uint32 item_config_id = 2;
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -10839,7 +10875,7 @@ PROTOBUF_NOINLINE void ItemInstance::Clear() {
     }
   }
 
-  // bool identified = 3;
+  // bool identified = 3 [json_name = "identified"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_identified() != 0) {
       target = stream->EnsureSpace(target);
@@ -10848,7 +10884,7 @@ PROTOBUF_NOINLINE void ItemInstance::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.ItemAttribute attributes = 4;
+  // repeated .pandora.inventory.v1.ItemAttribute attributes = 4 [json_name = "attributes"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_attributes_size());
@@ -10861,7 +10897,7 @@ PROTOBUF_NOINLINE void ItemInstance::Clear() {
     }
   }
 
-  // int32 slot_index = 5;
+  // int32 slot_index = 5 [json_name = "slotIndex"];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_slot_index() != 0) {
       target =
@@ -10870,7 +10906,7 @@ PROTOBUF_NOINLINE void ItemInstance::Clear() {
     }
   }
 
-  // bool bound = 6;
+  // bool bound = 6 [json_name = "bound"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_bound() != 0) {
       target = stream->EnsureSpace(target);
@@ -10905,40 +10941,40 @@ PROTOBUF_NOINLINE void ItemInstance::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
-    // repeated .pandora.inventory.v1.ItemAttribute attributes = 4;
+    // repeated .pandora.inventory.v1.ItemAttribute attributes = 4 [json_name = "attributes"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_attributes_size();
       for (const auto& msg : this_._internal_attributes()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 instance_id = 1;
+    // uint64 instance_id = 1 [json_name = "instanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_instance_id());
       }
     }
-    // uint32 item_config_id = 2;
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_item_config_id());
       }
     }
-    // bool identified = 3;
+    // bool identified = 3 [json_name = "identified"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_identified() != 0) {
         total_size += 2;
       }
     }
-    // bool bound = 6;
+    // bool bound = 6 [json_name = "bound"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_bound() != 0) {
         total_size += 2;
       }
     }
-    // int32 slot_index = 5;
+    // int32 slot_index = 5 [json_name = "slotIndex"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_slot_index() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -11127,7 +11163,7 @@ PROTOBUF_NOINLINE void GetInventoryRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -11160,7 +11196,7 @@ PROTOBUF_NOINLINE void GetInventoryRequest::Clear() {
   (void)cached_has_bits;
 
    {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -11345,7 +11381,7 @@ PROTOBUF_NOINLINE void GetInventoryResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -11354,7 +11390,7 @@ PROTOBUF_NOINLINE void GetInventoryResponse::Clear() {
     }
   }
 
-  // .pandora.inventory.v1.Inventory inventory = 2;
+  // .pandora.inventory.v1.Inventory inventory = 2 [json_name = "inventory"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.inventory_, this_._impl_.inventory_->GetCachedSize(), target,
@@ -11387,12 +11423,12 @@ PROTOBUF_NOINLINE void GetInventoryResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.inventory.v1.Inventory inventory = 2;
+    // .pandora.inventory.v1.Inventory inventory = 2 [json_name = "inventory"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.inventory_);
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -11616,7 +11652,7 @@ PROTOBUF_NOINLINE void GrantItemsRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -11625,7 +11661,7 @@ PROTOBUF_NOINLINE void GrantItemsRequest::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.ItemGrant items = 2;
+  // repeated .pandora.inventory.v1.ItemGrant items = 2 [json_name = "items"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_items_size());
@@ -11638,7 +11674,7 @@ PROTOBUF_NOINLINE void GrantItemsRequest::Clear() {
     }
   }
 
-  // int64 gold = 3;
+  // int64 gold = 3 [json_name = "gold"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_gold() != 0) {
       target =
@@ -11647,7 +11683,7 @@ PROTOBUF_NOINLINE void GrantItemsRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 4;
+  // string idempotency_key = 4 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -11683,28 +11719,28 @@ PROTOBUF_NOINLINE void GrantItemsRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // repeated .pandora.inventory.v1.ItemGrant items = 2;
+    // repeated .pandora.inventory.v1.ItemGrant items = 2 [json_name = "items"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_items_size();
       for (const auto& msg : this_._internal_items()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // string idempotency_key = 4;
+    // string idempotency_key = 4 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int64 gold = 3;
+    // int64 gold = 3 [json_name = "gold"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
@@ -11900,7 +11936,7 @@ PROTOBUF_NOINLINE void GrantItemsResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -11909,7 +11945,7 @@ PROTOBUF_NOINLINE void GrantItemsResponse::Clear() {
     }
   }
 
-  // int64 gold = 2;
+  // int64 gold = 2 [json_name = "gold"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_gold() != 0) {
       target =
@@ -11944,14 +11980,14 @@ PROTOBUF_NOINLINE void GrantItemsResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // int64 gold = 2;
+    // int64 gold = 2 [json_name = "gold"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_gold());
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -12150,7 +12186,7 @@ PROTOBUF_NOINLINE void CheckItemsOwnedRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -12159,7 +12195,7 @@ PROTOBUF_NOINLINE void CheckItemsOwnedRequest::Clear() {
     }
   }
 
-  // repeated uint32 item_config_ids = 2;
+  // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._item_config_ids_cached_byte_size_.Get();
@@ -12196,14 +12232,14 @@ PROTOBUF_NOINLINE void CheckItemsOwnedRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated uint32 item_config_ids = 2;
+    // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
               this_._internal_item_config_ids(), 1,
               this_._impl_._item_config_ids_cached_byte_size_);
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -12396,7 +12432,7 @@ PROTOBUF_NOINLINE void CheckItemsOwnedResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -12405,7 +12441,7 @@ PROTOBUF_NOINLINE void CheckItemsOwnedResponse::Clear() {
     }
   }
 
-  // repeated uint32 owned_item_config_ids = 2;
+  // repeated uint32 owned_item_config_ids = 2 [json_name = "ownedItemConfigIds"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._owned_item_config_ids_cached_byte_size_.Get();
@@ -12442,14 +12478,14 @@ PROTOBUF_NOINLINE void CheckItemsOwnedResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated uint32 owned_item_config_ids = 2;
+    // repeated uint32 owned_item_config_ids = 2 [json_name = "ownedItemConfigIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
               this_._internal_owned_item_config_ids(), 1,
               this_._impl_._owned_item_config_ids_cached_byte_size_);
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -12620,7 +12656,7 @@ PROTOBUF_NOINLINE void InstanceOwnershipQuery::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 instance_id = 1;
+  // uint64 instance_id = 1 [json_name = "instanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -12629,7 +12665,7 @@ PROTOBUF_NOINLINE void InstanceOwnershipQuery::Clear() {
     }
   }
 
-  // uint32 item_config_id = 2;
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -12664,14 +12700,14 @@ PROTOBUF_NOINLINE void InstanceOwnershipQuery::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 instance_id = 1;
+    // uint64 instance_id = 1 [json_name = "instanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_instance_id());
       }
     }
-    // uint32 item_config_id = 2;
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -12868,7 +12904,7 @@ PROTOBUF_NOINLINE void CheckInstancesOwnedRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -12877,7 +12913,7 @@ PROTOBUF_NOINLINE void CheckInstancesOwnedRequest::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2;
+  // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2 [json_name = "instances"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_instances_size());
@@ -12916,14 +12952,14 @@ PROTOBUF_NOINLINE void CheckInstancesOwnedRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2;
+    // repeated .pandora.inventory.v1.InstanceOwnershipQuery instances = 2 [json_name = "instances"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_instances_size();
       for (const auto& msg : this_._internal_instances()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -13136,7 +13172,7 @@ PROTOBUF_NOINLINE void CheckInstancesOwnedResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -13145,7 +13181,7 @@ PROTOBUF_NOINLINE void CheckInstancesOwnedResponse::Clear() {
     }
   }
 
-  // repeated uint64 owned_instance_ids = 2;
+  // repeated uint64 owned_instance_ids = 2 [json_name = "ownedInstanceIds"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._owned_instance_ids_cached_byte_size_.Get();
@@ -13156,7 +13192,7 @@ PROTOBUF_NOINLINE void CheckInstancesOwnedResponse::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.ItemInstance owned_instances = 3;
+  // repeated .pandora.inventory.v1.ItemInstance owned_instances = 3 [json_name = "ownedInstances"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_owned_instances_size());
@@ -13195,21 +13231,21 @@ PROTOBUF_NOINLINE void CheckInstancesOwnedResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // repeated uint64 owned_instance_ids = 2;
+    // repeated uint64 owned_instance_ids = 2 [json_name = "ownedInstanceIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
               this_._internal_owned_instance_ids(), 1,
               this_._impl_._owned_instance_ids_cached_byte_size_);
     }
-    // repeated .pandora.inventory.v1.ItemInstance owned_instances = 3;
+    // repeated .pandora.inventory.v1.ItemInstance owned_instances = 3 [json_name = "ownedInstances"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1UL * this_._internal_owned_instances_size();
       for (const auto& msg : this_._internal_owned_instances()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -13413,7 +13449,7 @@ PROTOBUF_NOINLINE void UseItemRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -13422,7 +13458,7 @@ PROTOBUF_NOINLINE void UseItemRequest::Clear() {
     }
   }
 
-  // uint32 item_config_id = 2;
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -13431,7 +13467,7 @@ PROTOBUF_NOINLINE void UseItemRequest::Clear() {
     }
   }
 
-  // int64 count = 3;
+  // int64 count = 3 [json_name = "count"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_count() != 0) {
       target =
@@ -13440,7 +13476,7 @@ PROTOBUF_NOINLINE void UseItemRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 4;
+  // string idempotency_key = 4 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -13476,28 +13512,28 @@ PROTOBUF_NOINLINE void UseItemRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // string idempotency_key = 4;
+    // string idempotency_key = 4 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int64 count = 3;
+    // int64 count = 3 [json_name = "count"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_count());
       }
     }
-    // uint32 item_config_id = 2;
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -13691,7 +13727,7 @@ PROTOBUF_NOINLINE void UseItemResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -13700,7 +13736,7 @@ PROTOBUF_NOINLINE void UseItemResponse::Clear() {
     }
   }
 
-  // int64 remaining = 2;
+  // int64 remaining = 2 [json_name = "remaining"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_remaining() != 0) {
       target =
@@ -13735,14 +13771,14 @@ PROTOBUF_NOINLINE void UseItemResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // int64 remaining = 2;
+    // int64 remaining = 2 [json_name = "remaining"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_remaining() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_remaining());
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -13945,7 +13981,7 @@ PROTOBUF_NOINLINE void ConsumeBattleItemRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -13954,7 +13990,7 @@ PROTOBUF_NOINLINE void ConsumeBattleItemRequest::Clear() {
     }
   }
 
-  // uint32 item_config_id = 2;
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -13963,7 +13999,7 @@ PROTOBUF_NOINLINE void ConsumeBattleItemRequest::Clear() {
     }
   }
 
-  // int64 count = 3;
+  // int64 count = 3 [json_name = "count"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_count() != 0) {
       target =
@@ -13972,7 +14008,7 @@ PROTOBUF_NOINLINE void ConsumeBattleItemRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 4;
+  // string idempotency_key = 4 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -14008,28 +14044,28 @@ PROTOBUF_NOINLINE void ConsumeBattleItemRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // string idempotency_key = 4;
+    // string idempotency_key = 4 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int64 count = 3;
+    // int64 count = 3 [json_name = "count"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_count());
       }
     }
-    // uint32 item_config_id = 2;
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -14223,7 +14259,7 @@ PROTOBUF_NOINLINE void ConsumeBattleItemResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -14232,7 +14268,7 @@ PROTOBUF_NOINLINE void ConsumeBattleItemResponse::Clear() {
     }
   }
 
-  // int64 remaining = 2;
+  // int64 remaining = 2 [json_name = "remaining"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_remaining() != 0) {
       target =
@@ -14267,14 +14303,14 @@ PROTOBUF_NOINLINE void ConsumeBattleItemResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // int64 remaining = 2;
+    // int64 remaining = 2 [json_name = "remaining"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_remaining() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_remaining());
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -14477,7 +14513,7 @@ PROTOBUF_NOINLINE void DiscardBattleItemRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -14486,7 +14522,7 @@ PROTOBUF_NOINLINE void DiscardBattleItemRequest::Clear() {
     }
   }
 
-  // uint32 item_config_id = 2;
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -14495,7 +14531,7 @@ PROTOBUF_NOINLINE void DiscardBattleItemRequest::Clear() {
     }
   }
 
-  // int64 count = 3;
+  // int64 count = 3 [json_name = "count"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_count() != 0) {
       target =
@@ -14504,7 +14540,7 @@ PROTOBUF_NOINLINE void DiscardBattleItemRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 4;
+  // string idempotency_key = 4 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -14540,28 +14576,28 @@ PROTOBUF_NOINLINE void DiscardBattleItemRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // string idempotency_key = 4;
+    // string idempotency_key = 4 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int64 count = 3;
+    // int64 count = 3 [json_name = "count"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_count());
       }
     }
-    // uint32 item_config_id = 2;
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -14755,7 +14791,7 @@ PROTOBUF_NOINLINE void DiscardBattleItemResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -14764,7 +14800,7 @@ PROTOBUF_NOINLINE void DiscardBattleItemResponse::Clear() {
     }
   }
 
-  // int64 remaining = 2;
+  // int64 remaining = 2 [json_name = "remaining"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_remaining() != 0) {
       target =
@@ -14799,14 +14835,14 @@ PROTOBUF_NOINLINE void DiscardBattleItemResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // int64 remaining = 2;
+    // int64 remaining = 2 [json_name = "remaining"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_remaining() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_remaining());
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -15009,7 +15045,7 @@ PROTOBUF_NOINLINE void SellItemRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -15018,7 +15054,7 @@ PROTOBUF_NOINLINE void SellItemRequest::Clear() {
     }
   }
 
-  // uint32 item_config_id = 2;
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -15027,7 +15063,7 @@ PROTOBUF_NOINLINE void SellItemRequest::Clear() {
     }
   }
 
-  // int64 count = 3;
+  // int64 count = 3 [json_name = "count"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_count() != 0) {
       target =
@@ -15036,7 +15072,7 @@ PROTOBUF_NOINLINE void SellItemRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 4;
+  // string idempotency_key = 4 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -15072,28 +15108,28 @@ PROTOBUF_NOINLINE void SellItemRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // string idempotency_key = 4;
+    // string idempotency_key = 4 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int64 count = 3;
+    // int64 count = 3 [json_name = "count"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_count());
       }
     }
-    // uint32 item_config_id = 2;
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -15287,7 +15323,7 @@ PROTOBUF_NOINLINE void SellItemResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -15296,7 +15332,7 @@ PROTOBUF_NOINLINE void SellItemResponse::Clear() {
     }
   }
 
-  // int64 remaining = 2;
+  // int64 remaining = 2 [json_name = "remaining"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_remaining() != 0) {
       target =
@@ -15305,7 +15341,7 @@ PROTOBUF_NOINLINE void SellItemResponse::Clear() {
     }
   }
 
-  // int64 gold = 3;
+  // int64 gold = 3 [json_name = "gold"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_gold() != 0) {
       target =
@@ -15340,21 +15376,21 @@ PROTOBUF_NOINLINE void SellItemResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // int64 remaining = 2;
+    // int64 remaining = 2 [json_name = "remaining"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_remaining() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_remaining());
       }
     }
-    // int64 gold = 3;
+    // int64 gold = 3 [json_name = "gold"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_gold());
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -15562,7 +15598,7 @@ PROTOBUF_NOINLINE void DiscardItemRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -15571,7 +15607,7 @@ PROTOBUF_NOINLINE void DiscardItemRequest::Clear() {
     }
   }
 
-  // uint32 item_config_id = 2;
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -15580,7 +15616,7 @@ PROTOBUF_NOINLINE void DiscardItemRequest::Clear() {
     }
   }
 
-  // int64 count = 3;
+  // int64 count = 3 [json_name = "count"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_count() != 0) {
       target =
@@ -15589,7 +15625,7 @@ PROTOBUF_NOINLINE void DiscardItemRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 4;
+  // string idempotency_key = 4 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -15625,28 +15661,28 @@ PROTOBUF_NOINLINE void DiscardItemRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // string idempotency_key = 4;
+    // string idempotency_key = 4 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // int64 count = 3;
+    // int64 count = 3 [json_name = "count"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_count());
       }
     }
-    // uint32 item_config_id = 2;
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -15840,7 +15876,7 @@ PROTOBUF_NOINLINE void DiscardItemResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -15849,7 +15885,7 @@ PROTOBUF_NOINLINE void DiscardItemResponse::Clear() {
     }
   }
 
-  // int64 remaining = 2;
+  // int64 remaining = 2 [json_name = "remaining"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_remaining() != 0) {
       target =
@@ -15884,14 +15920,14 @@ PROTOBUF_NOINLINE void DiscardItemResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // int64 remaining = 2;
+    // int64 remaining = 2 [json_name = "remaining"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_remaining() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_remaining());
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -16068,7 +16104,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 match_id = 1;
+  // uint64 match_id = 1 [json_name = "matchId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_match_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16077,7 +16113,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchRequest::Clear() {
     }
   }
 
-  // uint64 seller_id = 2;
+  // uint64 seller_id = 2 [json_name = "sellerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_seller_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16086,7 +16122,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchRequest::Clear() {
     }
   }
 
-  // uint64 buyer_id = 3;
+  // uint64 buyer_id = 3 [json_name = "buyerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_buyer_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16095,7 +16131,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchRequest::Clear() {
     }
   }
 
-  // uint32 item_config_id = 4;
+  // uint32 item_config_id = 4 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16104,7 +16140,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchRequest::Clear() {
     }
   }
 
-  // int64 quantity = 5;
+  // int64 quantity = 5 [json_name = "quantity"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_quantity() != 0) {
       target =
@@ -16113,7 +16149,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchRequest::Clear() {
     }
   }
 
-  // int64 unit_price = 6;
+  // int64 unit_price = 6 [json_name = "unitPrice"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_unit_price() != 0) {
       target =
@@ -16122,7 +16158,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchRequest::Clear() {
     }
   }
 
-  // uint64 sell_order_id = 7;
+  // uint64 sell_order_id = 7 [json_name = "sellOrderId"];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_sell_order_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16131,7 +16167,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchRequest::Clear() {
     }
   }
 
-  // uint64 buy_order_id = 8;
+  // uint64 buy_order_id = 8 [json_name = "buyOrderId"];
   if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_buy_order_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16166,56 +16202,56 @@ PROTOBUF_NOINLINE void SettleAuctionMatchRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    // uint64 match_id = 1;
+    // uint64 match_id = 1 [json_name = "matchId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_match_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_match_id());
       }
     }
-    // uint64 seller_id = 2;
+    // uint64 seller_id = 2 [json_name = "sellerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_seller_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_seller_id());
       }
     }
-    // uint64 buyer_id = 3;
+    // uint64 buyer_id = 3 [json_name = "buyerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_buyer_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_buyer_id());
       }
     }
-    // int64 quantity = 5;
+    // int64 quantity = 5 [json_name = "quantity"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_quantity() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_quantity());
       }
     }
-    // int64 unit_price = 6;
+    // int64 unit_price = 6 [json_name = "unitPrice"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_unit_price() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_unit_price());
       }
     }
-    // uint64 sell_order_id = 7;
+    // uint64 sell_order_id = 7 [json_name = "sellOrderId"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_sell_order_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_sell_order_id());
       }
     }
-    // uint64 buy_order_id = 8;
+    // uint64 buy_order_id = 8 [json_name = "buyOrderId"];
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_buy_order_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_buy_order_id());
       }
     }
-    // uint32 item_config_id = 4;
+    // uint32 item_config_id = 4 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -16412,7 +16448,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -16445,7 +16481,7 @@ PROTOBUF_NOINLINE void SettleAuctionMatchResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -16663,7 +16699,7 @@ PROTOBUF_NOINLINE void SettlePlayerTradeRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 order_id = 1;
+  // uint64 order_id = 1 [json_name = "orderId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_order_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16672,7 +16708,7 @@ PROTOBUF_NOINLINE void SettlePlayerTradeRequest::Clear() {
     }
   }
 
-  // uint64 seller_id = 2;
+  // uint64 seller_id = 2 [json_name = "sellerId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_seller_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16681,7 +16717,7 @@ PROTOBUF_NOINLINE void SettlePlayerTradeRequest::Clear() {
     }
   }
 
-  // uint64 buyer_id = 3;
+  // uint64 buyer_id = 3 [json_name = "buyerId"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_buyer_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -16690,7 +16726,7 @@ PROTOBUF_NOINLINE void SettlePlayerTradeRequest::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.ItemGrant seller_items = 4;
+  // repeated .pandora.inventory.v1.ItemGrant seller_items = 4 [json_name = "sellerItems"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_seller_items_size());
@@ -16703,7 +16739,7 @@ PROTOBUF_NOINLINE void SettlePlayerTradeRequest::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5;
+  // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5 [json_name = "buyerItems"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_buyer_items_size());
@@ -16716,7 +16752,7 @@ PROTOBUF_NOINLINE void SettlePlayerTradeRequest::Clear() {
     }
   }
 
-  // int64 price = 6;
+  // int64 price = 6 [json_name = "price"];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_price() != 0) {
       target =
@@ -16751,42 +16787,42 @@ PROTOBUF_NOINLINE void SettlePlayerTradeRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
-    // repeated .pandora.inventory.v1.ItemGrant seller_items = 4;
+    // repeated .pandora.inventory.v1.ItemGrant seller_items = 4 [json_name = "sellerItems"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_seller_items_size();
       for (const auto& msg : this_._internal_seller_items()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5;
+    // repeated .pandora.inventory.v1.ItemGrant buyer_items = 5 [json_name = "buyerItems"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1UL * this_._internal_buyer_items_size();
       for (const auto& msg : this_._internal_buyer_items()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 order_id = 1;
+    // uint64 order_id = 1 [json_name = "orderId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_order_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_order_id());
       }
     }
-    // uint64 seller_id = 2;
+    // uint64 seller_id = 2 [json_name = "sellerId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_seller_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_seller_id());
       }
     }
-    // uint64 buyer_id = 3;
+    // uint64 buyer_id = 3 [json_name = "buyerId"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_buyer_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_buyer_id());
       }
     }
-    // int64 price = 6;
+    // int64 price = 6 [json_name = "price"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_price() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
@@ -16976,7 +17012,7 @@ PROTOBUF_NOINLINE void SettlePlayerTradeResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -17009,7 +17045,7 @@ PROTOBUF_NOINLINE void SettlePlayerTradeResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -17175,7 +17211,7 @@ PROTOBUF_NOINLINE void FreezeForOrderRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -17184,7 +17220,7 @@ PROTOBUF_NOINLINE void FreezeForOrderRequest::Clear() {
     }
   }
 
-  // uint64 order_id = 2;
+  // uint64 order_id = 2 [json_name = "orderId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_order_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -17193,7 +17229,7 @@ PROTOBUF_NOINLINE void FreezeForOrderRequest::Clear() {
     }
   }
 
-  // .pandora.inventory.v1.EscrowSide side = 3;
+  // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_side() != 0) {
       target = stream->EnsureSpace(target);
@@ -17202,7 +17238,7 @@ PROTOBUF_NOINLINE void FreezeForOrderRequest::Clear() {
     }
   }
 
-  // uint32 item_config_id = 4;
+  // uint32 item_config_id = 4 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -17211,7 +17247,7 @@ PROTOBUF_NOINLINE void FreezeForOrderRequest::Clear() {
     }
   }
 
-  // int64 quantity = 5;
+  // int64 quantity = 5 [json_name = "quantity"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_quantity() != 0) {
       target =
@@ -17220,7 +17256,7 @@ PROTOBUF_NOINLINE void FreezeForOrderRequest::Clear() {
     }
   }
 
-  // int64 unit_price = 6;
+  // int64 unit_price = 6 [json_name = "unitPrice"];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_unit_price() != 0) {
       target =
@@ -17255,42 +17291,42 @@ PROTOBUF_NOINLINE void FreezeForOrderRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 order_id = 2;
+    // uint64 order_id = 2 [json_name = "orderId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_order_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_order_id());
       }
     }
-    // .pandora.inventory.v1.EscrowSide side = 3;
+    // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_side() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_side());
       }
     }
-    // uint32 item_config_id = 4;
+    // uint32 item_config_id = 4 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_item_config_id());
       }
     }
-    // int64 quantity = 5;
+    // int64 quantity = 5 [json_name = "quantity"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_quantity() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_quantity());
       }
     }
-    // int64 unit_price = 6;
+    // int64 unit_price = 6 [json_name = "unitPrice"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_unit_price() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
@@ -17477,7 +17513,7 @@ PROTOBUF_NOINLINE void FreezeForOrderResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -17510,7 +17546,7 @@ PROTOBUF_NOINLINE void FreezeForOrderResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -17676,7 +17712,7 @@ PROTOBUF_NOINLINE void EnsureAuctionEscrowRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -17685,7 +17721,7 @@ PROTOBUF_NOINLINE void EnsureAuctionEscrowRequest::Clear() {
     }
   }
 
-  // uint64 order_id = 2;
+  // uint64 order_id = 2 [json_name = "orderId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_order_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -17694,7 +17730,7 @@ PROTOBUF_NOINLINE void EnsureAuctionEscrowRequest::Clear() {
     }
   }
 
-  // .pandora.inventory.v1.EscrowSide side = 3;
+  // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_side() != 0) {
       target = stream->EnsureSpace(target);
@@ -17703,7 +17739,7 @@ PROTOBUF_NOINLINE void EnsureAuctionEscrowRequest::Clear() {
     }
   }
 
-  // uint32 item_config_id = 4;
+  // uint32 item_config_id = 4 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -17712,7 +17748,7 @@ PROTOBUF_NOINLINE void EnsureAuctionEscrowRequest::Clear() {
     }
   }
 
-  // uint64 remaining_quantity = 5;
+  // uint64 remaining_quantity = 5 [json_name = "remainingQuantity"];
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_remaining_quantity() != 0) {
       target = stream->EnsureSpace(target);
@@ -17721,7 +17757,7 @@ PROTOBUF_NOINLINE void EnsureAuctionEscrowRequest::Clear() {
     }
   }
 
-  // uint64 unit_price = 6;
+  // uint64 unit_price = 6 [json_name = "unitPrice"];
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_unit_price() != 0) {
       target = stream->EnsureSpace(target);
@@ -17756,42 +17792,42 @@ PROTOBUF_NOINLINE void EnsureAuctionEscrowRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 order_id = 2;
+    // uint64 order_id = 2 [json_name = "orderId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_order_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_order_id());
       }
     }
-    // .pandora.inventory.v1.EscrowSide side = 3;
+    // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_side() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_side());
       }
     }
-    // uint32 item_config_id = 4;
+    // uint32 item_config_id = 4 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_item_config_id());
       }
     }
-    // uint64 remaining_quantity = 5;
+    // uint64 remaining_quantity = 5 [json_name = "remainingQuantity"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_remaining_quantity() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_remaining_quantity());
       }
     }
-    // uint64 unit_price = 6;
+    // uint64 unit_price = 6 [json_name = "unitPrice"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_unit_price() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -17978,7 +18014,7 @@ PROTOBUF_NOINLINE void EnsureAuctionEscrowResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -18011,7 +18047,7 @@ PROTOBUF_NOINLINE void EnsureAuctionEscrowResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -18177,7 +18213,7 @@ PROTOBUF_NOINLINE void ReleaseEscrowRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -18186,7 +18222,7 @@ PROTOBUF_NOINLINE void ReleaseEscrowRequest::Clear() {
     }
   }
 
-  // uint64 order_id = 2;
+  // uint64 order_id = 2 [json_name = "orderId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_order_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -18221,14 +18257,14 @@ PROTOBUF_NOINLINE void ReleaseEscrowRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 order_id = 2;
+    // uint64 order_id = 2 [json_name = "orderId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_order_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -18395,7 +18431,7 @@ PROTOBUF_NOINLINE void ReleaseEscrowResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -18428,7 +18464,7 @@ PROTOBUF_NOINLINE void ReleaseEscrowResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -18624,7 +18660,7 @@ PROTOBUF_NOINLINE void GrantInstancesRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -18633,7 +18669,7 @@ PROTOBUF_NOINLINE void GrantInstancesRequest::Clear() {
     }
   }
 
-  // repeated uint32 item_config_ids = 2;
+  // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._item_config_ids_cached_byte_size_.Get();
@@ -18644,7 +18680,7 @@ PROTOBUF_NOINLINE void GrantInstancesRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 3;
+  // string idempotency_key = 3 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -18680,21 +18716,21 @@ PROTOBUF_NOINLINE void GrantInstancesRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // repeated uint32 item_config_ids = 2;
+    // repeated uint32 item_config_ids = 2 [json_name = "itemConfigIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
               this_._internal_item_config_ids(), 1,
               this_._impl_._item_config_ids_cached_byte_size_);
     }
-    // string idempotency_key = 3;
+    // string idempotency_key = 3 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -18897,7 +18933,7 @@ PROTOBUF_NOINLINE void GrantInstancesResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -18906,7 +18942,7 @@ PROTOBUF_NOINLINE void GrantInstancesResponse::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.ItemInstance instances = 2;
+  // repeated .pandora.inventory.v1.ItemInstance instances = 2 [json_name = "instances"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_instances_size());
@@ -18945,14 +18981,14 @@ PROTOBUF_NOINLINE void GrantInstancesResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .pandora.inventory.v1.ItemInstance instances = 2;
+    // repeated .pandora.inventory.v1.ItemInstance instances = 2 [json_name = "instances"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_instances_size();
       for (const auto& msg : this_._internal_instances()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -19126,7 +19162,7 @@ PROTOBUF_NOINLINE void IdentifyItemRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -19135,7 +19171,7 @@ PROTOBUF_NOINLINE void IdentifyItemRequest::Clear() {
     }
   }
 
-  // uint64 instance_id = 2;
+  // uint64 instance_id = 2 [json_name = "instanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -19170,14 +19206,14 @@ PROTOBUF_NOINLINE void IdentifyItemRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 instance_id = 2;
+    // uint64 instance_id = 2 [json_name = "instanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -19373,7 +19409,7 @@ PROTOBUF_NOINLINE void IdentifyItemResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -19382,7 +19418,7 @@ PROTOBUF_NOINLINE void IdentifyItemResponse::Clear() {
     }
   }
 
-  // .pandora.inventory.v1.ItemInstance instance = 2;
+  // .pandora.inventory.v1.ItemInstance instance = 2 [json_name = "instance"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.instance_, this_._impl_.instance_->GetCachedSize(), target,
@@ -19415,12 +19451,12 @@ PROTOBUF_NOINLINE void IdentifyItemResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .pandora.inventory.v1.ItemInstance instance = 2;
+    // .pandora.inventory.v1.ItemInstance instance = 2 [json_name = "instance"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.instance_);
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -19601,7 +19637,7 @@ PROTOBUF_NOINLINE void DiscardInstanceRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -19610,7 +19646,7 @@ PROTOBUF_NOINLINE void DiscardInstanceRequest::Clear() {
     }
   }
 
-  // uint64 instance_id = 2;
+  // uint64 instance_id = 2 [json_name = "instanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -19645,14 +19681,14 @@ PROTOBUF_NOINLINE void DiscardInstanceRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 instance_id = 2;
+    // uint64 instance_id = 2 [json_name = "instanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -19819,7 +19855,7 @@ PROTOBUF_NOINLINE void DiscardInstanceResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -19852,7 +19888,7 @@ PROTOBUF_NOINLINE void DiscardInstanceResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -20018,7 +20054,7 @@ PROTOBUF_NOINLINE void MoveInstanceRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -20027,7 +20063,7 @@ PROTOBUF_NOINLINE void MoveInstanceRequest::Clear() {
     }
   }
 
-  // uint64 instance_id = 2;
+  // uint64 instance_id = 2 [json_name = "instanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -20036,7 +20072,7 @@ PROTOBUF_NOINLINE void MoveInstanceRequest::Clear() {
     }
   }
 
-  // int32 to_slot_index = 3;
+  // int32 to_slot_index = 3 [json_name = "toSlotIndex"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_to_slot_index() != 0) {
       target =
@@ -20071,21 +20107,21 @@ PROTOBUF_NOINLINE void MoveInstanceRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 instance_id = 2;
+    // uint64 instance_id = 2 [json_name = "instanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_instance_id());
       }
     }
-    // int32 to_slot_index = 3;
+    // int32 to_slot_index = 3 [json_name = "toSlotIndex"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_to_slot_index() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
@@ -20257,7 +20293,7 @@ PROTOBUF_NOINLINE void MoveInstanceResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -20290,7 +20326,7 @@ PROTOBUF_NOINLINE void MoveInstanceResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -20482,7 +20518,7 @@ PROTOBUF_NOINLINE void SellInstanceRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
+  // uint64 player_id = 1 [json_name = "playerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -20491,7 +20527,7 @@ PROTOBUF_NOINLINE void SellInstanceRequest::Clear() {
     }
   }
 
-  // uint64 instance_id = 2;
+  // uint64 instance_id = 2 [json_name = "instanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -20500,7 +20536,7 @@ PROTOBUF_NOINLINE void SellInstanceRequest::Clear() {
     }
   }
 
-  // uint32 item_config_id = 3;
+  // uint32 item_config_id = 3 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -20509,7 +20545,7 @@ PROTOBUF_NOINLINE void SellInstanceRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 4;
+  // string idempotency_key = 4 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -20545,28 +20581,28 @@ PROTOBUF_NOINLINE void SellInstanceRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // string idempotency_key = 4;
+    // string idempotency_key = 4 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 player_id = 1;
+    // uint64 player_id = 1 [json_name = "playerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-    // uint64 instance_id = 2;
+    // uint64 instance_id = 2 [json_name = "instanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_instance_id());
       }
     }
-    // uint32 item_config_id = 3;
+    // uint32 item_config_id = 3 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -20760,7 +20796,7 @@ PROTOBUF_NOINLINE void SellInstanceResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -20769,7 +20805,7 @@ PROTOBUF_NOINLINE void SellInstanceResponse::Clear() {
     }
   }
 
-  // int64 gold = 2;
+  // int64 gold = 2 [json_name = "gold"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_gold() != 0) {
       target =
@@ -20804,14 +20840,14 @@ PROTOBUF_NOINLINE void SellInstanceResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // int64 gold = 2;
+    // int64 gold = 2 [json_name = "gold"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_gold());
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -21033,7 +21069,7 @@ PROTOBUF_NOINLINE void EscrowOutInstancesRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 source_player_id = 1;
+  // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_source_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -21042,7 +21078,7 @@ PROTOBUF_NOINLINE void EscrowOutInstancesRequest::Clear() {
     }
   }
 
-  // uint64 to_player_id = 2;
+  // uint64 to_player_id = 2 [json_name = "toPlayerId"];
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_to_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -21051,7 +21087,7 @@ PROTOBUF_NOINLINE void EscrowOutInstancesRequest::Clear() {
     }
   }
 
-  // repeated uint64 instance_ids = 3;
+  // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._instance_ids_cached_byte_size_.Get();
@@ -21062,7 +21098,7 @@ PROTOBUF_NOINLINE void EscrowOutInstancesRequest::Clear() {
     }
   }
 
-  // string escrow_key = 4;
+  // string escrow_key = 4 [json_name = "escrowKey"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_escrow_key().empty()) {
       const ::std::string& _s = this_._internal_escrow_key();
@@ -21098,28 +21134,28 @@ PROTOBUF_NOINLINE void EscrowOutInstancesRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // repeated uint64 instance_ids = 3;
+    // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
               this_._internal_instance_ids(), 1,
               this_._impl_._instance_ids_cached_byte_size_);
     }
-    // string escrow_key = 4;
+    // string escrow_key = 4 [json_name = "escrowKey"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_escrow_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_escrow_key());
       }
     }
-    // uint64 source_player_id = 1;
+    // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_source_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_source_player_id());
       }
     }
-    // uint64 to_player_id = 2;
+    // uint64 to_player_id = 2 [json_name = "toPlayerId"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_to_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -21337,7 +21373,7 @@ PROTOBUF_NOINLINE void EscrowOutInstancesResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -21346,7 +21382,7 @@ PROTOBUF_NOINLINE void EscrowOutInstancesResponse::Clear() {
     }
   }
 
-  // repeated .pandora.bag.v1.BagItem items = 2;
+  // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_items_size());
@@ -21385,14 +21421,14 @@ PROTOBUF_NOINLINE void EscrowOutInstancesResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .pandora.bag.v1.BagItem items = 2;
+    // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_items_size();
       for (const auto& msg : this_._internal_items()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
@@ -21566,7 +21602,7 @@ PROTOBUF_NOINLINE void TransferClaimItem::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 instance_id = 1;
+  // uint64 instance_id = 1 [json_name = "instanceId"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_instance_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -21575,7 +21611,7 @@ PROTOBUF_NOINLINE void TransferClaimItem::Clear() {
     }
   }
 
-  // uint32 item_config_id = 2;
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -21610,14 +21646,14 @@ PROTOBUF_NOINLINE void TransferClaimItem::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 instance_id = 1;
+    // uint64 instance_id = 1 [json_name = "instanceId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_instance_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_instance_id());
       }
     }
-    // uint32 item_config_id = 2;
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
@@ -21822,7 +21858,7 @@ PROTOBUF_NOINLINE void ClaimTransferInstancesRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 to_player_id = 1;
+  // uint64 to_player_id = 1 [json_name = "toPlayerId"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_to_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -21831,7 +21867,7 @@ PROTOBUF_NOINLINE void ClaimTransferInstancesRequest::Clear() {
     }
   }
 
-  // repeated .pandora.inventory.v1.TransferClaimItem items = 2;
+  // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_items_size());
@@ -21844,7 +21880,7 @@ PROTOBUF_NOINLINE void ClaimTransferInstancesRequest::Clear() {
     }
   }
 
-  // string idempotency_key = 3;
+  // string idempotency_key = 3 [json_name = "idempotencyKey"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_idempotency_key().empty()) {
       const ::std::string& _s = this_._internal_idempotency_key();
@@ -21880,21 +21916,21 @@ PROTOBUF_NOINLINE void ClaimTransferInstancesRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // repeated .pandora.inventory.v1.TransferClaimItem items = 2;
+    // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_items_size();
       for (const auto& msg : this_._internal_items()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // string idempotency_key = 3;
+    // string idempotency_key = 3 [json_name = "idempotencyKey"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_idempotency_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_idempotency_key());
       }
     }
-    // uint64 to_player_id = 1;
+    // uint64 to_player_id = 1 [json_name = "toPlayerId"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_to_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -22070,7 +22106,7 @@ PROTOBUF_NOINLINE void ClaimTransferInstancesResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -22103,7 +22139,7 @@ PROTOBUF_NOINLINE void ClaimTransferInstancesResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -22288,7 +22324,7 @@ PROTOBUF_NOINLINE void ReleaseTransferEscrowRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // repeated uint64 instance_ids = 1;
+  // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._instance_ids_cached_byte_size_.Get();
@@ -22324,7 +22360,7 @@ PROTOBUF_NOINLINE void ReleaseTransferEscrowRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
    {
-    // repeated uint64 instance_ids = 1;
+    // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -22478,7 +22514,7 @@ PROTOBUF_NOINLINE void ReleaseTransferEscrowResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -22511,7 +22547,7 @@ PROTOBUF_NOINLINE void ReleaseTransferEscrowResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {
@@ -22699,7 +22735,7 @@ PROTOBUF_NOINLINE void ConsumeTransferEscrowRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 to_player_id = 1;
+  // uint64 to_player_id = 1 [json_name = "toPlayerId"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_to_player_id() != 0) {
       target = stream->EnsureSpace(target);
@@ -22708,7 +22744,7 @@ PROTOBUF_NOINLINE void ConsumeTransferEscrowRequest::Clear() {
     }
   }
 
-  // repeated uint64 instance_ids = 2;
+  // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._instance_ids_cached_byte_size_.Get();
@@ -22745,14 +22781,14 @@ PROTOBUF_NOINLINE void ConsumeTransferEscrowRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated uint64 instance_ids = 2;
+    // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
               this_._internal_instance_ids(), 1,
               this_._impl_._instance_ids_cached_byte_size_);
     }
-    // uint64 to_player_id = 1;
+    // uint64 to_player_id = 1 [json_name = "toPlayerId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_to_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -22913,7 +22949,7 @@ PROTOBUF_NOINLINE void ConsumeTransferEscrowResponse::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // .pandora.common.v1.ErrCode code = 1;
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
@@ -22946,7 +22982,7 @@ PROTOBUF_NOINLINE void ConsumeTransferEscrowResponse::Clear() {
   (void)cached_has_bits;
 
    {
-    // .pandora.common.v1.ErrCode code = 1;
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_code() != 0) {

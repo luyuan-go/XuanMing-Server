@@ -156,11 +156,11 @@ func main() {
 	// 注册/登录关键路径零参与;事务先锁 player_no_counter 单行即全局互斥,多副本
 	// 各自跑安全,无需 leader election。mock 模式(非 MySQL 库)不跑。
 	if sdb, ok := db.(*sql.DB); ok && sdb != nil {
-		regSweepCtx, regSweepCancel := context.WithCancel(context.Background())
-		defer regSweepCancel()
-		// 启动探针 + 计数器幂等初始化。失败(典型:存量库 000004 迁移未跑)只停用补号:
+		playerNoSweepCtx, playerNoSweepCancel := context.WithCancel(context.Background())
+		defer playerNoSweepCancel()
+		// 启动探针 + 计数器幂等初始化。失败(典型:存量库尚未收敛到 000006)只停用补号:
 		// 编号是展示功能,fail-soft 不拦 login 启动;ERROR 让缺迁移在部署当天可见。
-		if err := data.EnsurePlayerNoCounter(regSweepCtx, sdb, cfg.Login.PlayerNoStart); err != nil {
+		if err := data.EnsurePlayerNoCounter(playerNoSweepCtx, sdb, cfg.Login.PlayerNoStart); err != nil {
 			helper.Errorw("msg", "player_no_sweeper_disabled", "err", err)
 		} else {
 			go func(sdb *sql.DB) {
@@ -169,15 +169,15 @@ func main() {
 				defer ticker.Stop()
 				for {
 					select {
-					case <-regSweepCtx.Done():
+					case <-playerNoSweepCtx.Done():
 						return
 					case <-ticker.C:
 						// panic 兜底(同 device sweep 点位):单轮 panic 只丢本轮,下轮继续。
-						safego.Run(regSweepCtx, "login_player_no_sweep", func() {
+						safego.Run(playerNoSweepCtx, "login_player_no_sweep", func() {
 							// 单轮 drain 上限 20 批(1 万行):存量追平期不长期霸占,下轮继续
 							// (§16.10:复用同一 ticker,不新建第二套状态机)。
 							for i := 0; i < 20; i++ {
-								n, err := data.SweepPlayerNo(regSweepCtx, sdb, data.PlayerNoBatchSize)
+								n, err := data.SweepPlayerNo(playerNoSweepCtx, sdb, data.PlayerNoBatchSize)
 								if err != nil {
 									helper.Warnw("msg", "player_no_sweep_failed", "err", err)
 									return

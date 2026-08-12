@@ -44,7 +44,7 @@ const playerNoTestDBPrefix = "pandora_account_regno_it_"
 var playerNoTestDBPattern = regexp.MustCompile(`^pandora_account_regno_it_[0-9]+_[0-9a-f]{16}$`)
 
 // playerNoTestDDL 与 deploy/mysql-init/02-account-tables.sql / deploy/tidb-init/
-// 03-account-tidb.sql / migrations 000004 的 accounts + player_no_counter 定义一致
+// 03-account-tidb.sql / migrations 000006 的 canonical accounts + player_no_counter 定义一致
 // (测试只需要参与补号的列;ENGINE 子句 TiDB 接受并忽略)。
 var playerNoTestDDL = []string{
 	"CREATE TABLE `accounts` (" +
@@ -358,7 +358,7 @@ func TestPlayerNo_MySQLAndTiDB_EnsureCounterIdempotentStart(t *testing.T) {
 func TestPlayerNo_MySQLAndTiDB_EnsureFailsWithoutMigration(t *testing.T) {
 	forEachPlayerNoBackend(t, func(t *testing.T, db *sql.DB) {
 		ctx := context.Background()
-		// 模拟 000004 未跑:删掉列与计数器表。
+		// 模拟 000006 迁移链未收敛:删掉目标列与计数器表。
 		if _, err := db.ExecContext(ctx, "ALTER TABLE accounts DROP INDEX uk_player_no"); err != nil {
 			t.Fatalf("drop index: %v", err)
 		}

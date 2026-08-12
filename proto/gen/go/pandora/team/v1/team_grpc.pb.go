@@ -44,6 +44,7 @@ const (
 	TeamService_ListTeamApplications_FullMethodName  = "/pandora.team.v1.TeamService/ListTeamApplications"
 	TeamService_HandleTeamApplication_FullMethodName = "/pandora.team.v1.TeamService/HandleTeamApplication"
 	TeamService_BeginTeamMatch_FullMethodName        = "/pandora.team.v1.TeamService/BeginTeamMatch"
+	TeamService_GetPlayerTeam_FullMethodName         = "/pandora.team.v1.TeamService/GetPlayerTeam"
 )
 
 // TeamServiceClient is the client API for TeamService service.
@@ -88,6 +89,18 @@ type TeamServiceClient interface {
 	//
 	// 因此这把锁不是权威状态,只是一个有界互斥窗口,不得被解释成「队伍在对局中」。
 	BeginTeamMatch(ctx context.Context, in *BeginTeamMatchRequest, opts ...grpc.CallOption) (*BeginTeamMatchResponse, error)
+	// ── 内部:按 player_id 反查队伍编号(DS 出生编制专用,不对客户端开放)────────────
+	//
+	// DS 在玩家进场时需要把「谁和谁是一伙的」写到实体上,否则大厅里所有玩家共用玩家阵营,
+	// 队友与路人无从区分。它手上只有 player_id。
+	//
+	// 为什么不复用现有两个读接口:
+	//   - GetMyTeam 的 player_id 已被删除并 reserved,身份一律取自 JWT。「客户端不应自报」
+	//     是刻意的 IDOR 防线,不能为了 DS 的需要把它开回去;
+	//   - GetTeam 按 team_id 查,而 DS 不知道 team_id。
+	//
+	// 只回编号不回名单:DS 只需要判定「同队与否」,把整份 Team 快照发给它是无谓的扩面。
+	GetPlayerTeam(ctx context.Context, in *GetPlayerTeamRequest, opts ...grpc.CallOption) (*GetPlayerTeamResponse, error)
 }
 
 type teamServiceClient struct {
@@ -248,6 +261,16 @@ func (c *teamServiceClient) BeginTeamMatch(ctx context.Context, in *BeginTeamMat
 	return out, nil
 }
 
+func (c *teamServiceClient) GetPlayerTeam(ctx context.Context, in *GetPlayerTeamRequest, opts ...grpc.CallOption) (*GetPlayerTeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlayerTeamResponse)
+	err := c.cc.Invoke(ctx, TeamService_GetPlayerTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TeamServiceServer is the server API for TeamService service.
 // All implementations should embed UnimplementedTeamServiceServer
 // for forward compatibility.
@@ -290,6 +313,18 @@ type TeamServiceServer interface {
 	//
 	// 因此这把锁不是权威状态,只是一个有界互斥窗口,不得被解释成「队伍在对局中」。
 	BeginTeamMatch(context.Context, *BeginTeamMatchRequest) (*BeginTeamMatchResponse, error)
+	// ── 内部:按 player_id 反查队伍编号(DS 出生编制专用,不对客户端开放)────────────
+	//
+	// DS 在玩家进场时需要把「谁和谁是一伙的」写到实体上,否则大厅里所有玩家共用玩家阵营,
+	// 队友与路人无从区分。它手上只有 player_id。
+	//
+	// 为什么不复用现有两个读接口:
+	//   - GetMyTeam 的 player_id 已被删除并 reserved,身份一律取自 JWT。「客户端不应自报」
+	//     是刻意的 IDOR 防线,不能为了 DS 的需要把它开回去;
+	//   - GetTeam 按 team_id 查,而 DS 不知道 team_id。
+	//
+	// 只回编号不回名单:DS 只需要判定「同队与否」,把整份 Team 快照发给它是无谓的扩面。
+	GetPlayerTeam(context.Context, *GetPlayerTeamRequest) (*GetPlayerTeamResponse, error)
 }
 
 // UnimplementedTeamServiceServer should be embedded to have
@@ -343,6 +378,9 @@ func (UnimplementedTeamServiceServer) HandleTeamApplication(context.Context, *Ha
 }
 func (UnimplementedTeamServiceServer) BeginTeamMatch(context.Context, *BeginTeamMatchRequest) (*BeginTeamMatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BeginTeamMatch not implemented")
+}
+func (UnimplementedTeamServiceServer) GetPlayerTeam(context.Context, *GetPlayerTeamRequest) (*GetPlayerTeamResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPlayerTeam not implemented")
 }
 func (UnimplementedTeamServiceServer) testEmbeddedByValue() {}
 
@@ -634,6 +672,24 @@ func _TeamService_BeginTeamMatch_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TeamService_GetPlayerTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayerTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).GetPlayerTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_GetPlayerTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).GetPlayerTeam(ctx, req.(*GetPlayerTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TeamService_ServiceDesc is the grpc.ServiceDesc for TeamService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -700,6 +756,10 @@ var TeamService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BeginTeamMatch",
 			Handler:    _TeamService_BeginTeamMatch_Handler,
+		},
+		{
+			MethodName: "GetPlayerTeam",
+			Handler:    _TeamService_GetPlayerTeam_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

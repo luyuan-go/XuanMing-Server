@@ -36,6 +36,7 @@ const (
 	LoginService_Logout_FullMethodName           = "/pandora.login.v1.LoginService/Logout"
 	LoginService_IssueDSTicket_FullMethodName    = "/pandora.login.v1.LoginService/IssueDSTicket"
 	LoginService_GetPlayerNo_FullMethodName      = "/pandora.login.v1.LoginService/GetPlayerNo"
+	LoginService_GetRegisterNo_FullMethodName    = "/pandora.login.v1.LoginService/GetRegisterNo"
 	LoginService_SelectRole_FullMethodName       = "/pandora.login.v1.LoginService/SelectRole"
 	LoginService_VerifyDSTicket_FullMethodName   = "/pandora.login.v1.LoginService/VerifyDSTicket"
 	LoginService_GetResumeContext_FullMethodName = "/pandora.login.v1.LoginService/GetResumeContext"
@@ -63,6 +64,13 @@ type LoginServiceClient interface {
 	// player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
 	// 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
 	GetPlayerNo(ctx context.Context, in *GetPlayerNoRequest, opts ...grpc.CallOption) (*GetPlayerNoResponse, error)
+	// Deprecated: Do not use.
+	// GetRegisterNo 是 player_no 改名期间的只读兼容入口。
+	//
+	// 已发布客户端仍会调用旧 gRPC method / HTTP path，不能在滚动升级时原地移除；
+	// 等最后一个旧客户端版本排空后，才可按 expand -> migrate -> contract 收缩本入口。
+	// 新代码一律调用 GetPlayerNo，不得新增对本入口的依赖。
+	GetRegisterNo(ctx context.Context, in *GetRegisterNoRequest, opts ...grpc.CallOption) (*GetRegisterNoResponse, error)
 	// SelectRole 立即完成型,选角(2026-07-08)。
 	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
 	//
@@ -129,6 +137,17 @@ func (c *loginServiceClient) GetPlayerNo(ctx context.Context, in *GetPlayerNoReq
 	return out, nil
 }
 
+// Deprecated: Do not use.
+func (c *loginServiceClient) GetRegisterNo(ctx context.Context, in *GetRegisterNoRequest, opts ...grpc.CallOption) (*GetRegisterNoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRegisterNoResponse)
+	err := c.cc.Invoke(ctx, LoginService_GetRegisterNo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *loginServiceClient) SelectRole(ctx context.Context, in *SelectRoleRequest, opts ...grpc.CallOption) (*SelectRoleResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SelectRoleResponse)
@@ -181,6 +200,13 @@ type LoginServiceServer interface {
 	// player_id ——只能查自己,不能拿别人的编号(§9.6 不信客户端自报身份)。
 	// 幂等只读,无副作用;编号一经分配即不再变化,客户端拿到非 0 后应停止轮询。
 	GetPlayerNo(context.Context, *GetPlayerNoRequest) (*GetPlayerNoResponse, error)
+	// Deprecated: Do not use.
+	// GetRegisterNo 是 player_no 改名期间的只读兼容入口。
+	//
+	// 已发布客户端仍会调用旧 gRPC method / HTTP path，不能在滚动升级时原地移除；
+	// 等最后一个旧客户端版本排空后，才可按 expand -> migrate -> contract 收缩本入口。
+	// 新代码一律调用 GetPlayerNo，不得新增对本入口的依赖。
+	GetRegisterNo(context.Context, *GetRegisterNoRequest) (*GetRegisterNoResponse, error)
 	// SelectRole 立即完成型,选角(2026-07-08)。
 	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
 	//
@@ -217,6 +243,9 @@ func (UnimplementedLoginServiceServer) IssueDSTicket(context.Context, *IssueDSTi
 }
 func (UnimplementedLoginServiceServer) GetPlayerNo(context.Context, *GetPlayerNoRequest) (*GetPlayerNoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPlayerNo not implemented")
+}
+func (UnimplementedLoginServiceServer) GetRegisterNo(context.Context, *GetRegisterNoRequest) (*GetRegisterNoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRegisterNo not implemented")
 }
 func (UnimplementedLoginServiceServer) SelectRole(context.Context, *SelectRoleRequest) (*SelectRoleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SelectRole not implemented")
@@ -319,6 +348,24 @@ func _LoginService_GetPlayerNo_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LoginService_GetRegisterNo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRegisterNoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LoginServiceServer).GetRegisterNo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LoginService_GetRegisterNo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LoginServiceServer).GetRegisterNo(ctx, req.(*GetRegisterNoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LoginService_SelectRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SelectRoleRequest)
 	if err := dec(in); err != nil {
@@ -395,6 +442,10 @@ var LoginService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPlayerNo",
 			Handler:    _LoginService_GetPlayerNo_Handler,
+		},
+		{
+			MethodName: "GetRegisterNo",
+			Handler:    _LoginService_GetRegisterNo_Handler,
 		},
 		{
 			MethodName: "SelectRole",

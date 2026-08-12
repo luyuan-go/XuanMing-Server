@@ -192,6 +192,35 @@ func (s *GuildService) GetMyGuild(ctx context.Context, _ *guildv1.GetMyGuildRequ
 	return &guildv1.GetMyGuildResponse{Code: commonv1.ErrCode_OK, Guild: g}, nil
 }
 
+// GetPlayerGuild 按 player_id 反查公会编号(内部东西向,DS 出生编制专用)。
+//
+// 有了它,客户端就不必靠本机名册反推会友 —— 名册按游标分页,没翻到的那一页会把会友判成路人。
+// 复用 GetMyGuild 的读路径(含 member→guild 反查缓存与权威回源),不另起一条缓存语义;
+// 但只把编号放进响应,整份 Guild 快照不外发(§9.14 最小视图)。
+func (s *GuildService) GetPlayerGuild(ctx context.Context, req *guildv1.GetPlayerGuildRequest) (*guildv1.GetPlayerGuildResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &guildv1.GetPlayerGuildResponse{Code: code}, nil
+	}
+	playerID := req.GetPlayerId()
+	if playerID == 0 {
+		return &guildv1.GetPlayerGuildResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+
+	g, err := s.uc.GetMyGuild(ctx, playerID)
+	if err != nil {
+		return &guildv1.GetPlayerGuildResponse{Code: toProtoCode(err)}, nil
+	}
+	if g == nil || g.GetGuildId() == 0 {
+		// 不在任何公会是正常态,不是错误。
+		return &guildv1.GetPlayerGuildResponse{Code: commonv1.ErrCode_OK, HasGuild: false}, nil
+	}
+	return &guildv1.GetPlayerGuildResponse{
+		Code:     commonv1.ErrCode_OK,
+		HasGuild: true,
+		GuildId:  g.GetGuildId(),
+	}, nil
+}
+
 // ListMembers 列公会成员(只读)。
 func (s *GuildService) ListMembers(ctx context.Context, req *guildv1.ListMembersRequest) (*guildv1.ListMembersResponse, error) {
 	if req.GetGuildId() == 0 {
@@ -223,6 +252,21 @@ func (s *GuildService) ListJoinRequests(ctx context.Context, req *guildv1.ListJo
 func callerID(ctx context.Context) uint64 {
 	id, _ := ctx.Value(plog.CtxKeyPlayerID).(uint64)
 	return id
+}
+
+// systemOnly 内部东西向接口鉴权:带玩家 JWT 的调用一律拒。
+//
+// Envoy 按 /pandora.guild.v1.GuildService/ **整前缀**路由到本服务,没有按方法的白名单,
+// 因此"内部方法"在客户端面同样可达。少了这道门,GetPlayerGuild 就成了「查任意玩家属于
+// 哪个公会」的 IDOR 口子。拒绝分支以 response Code + nil error 返回,统一 access log 会
+// 记成 rpc_ok,不打日志则越权尝试零可见性(与 player 服务 logAuthzDeny 同口径)。
+func systemOnly(ctx context.Context) commonv1.ErrCode {
+	if id := callerID(ctx); id != 0 {
+		plog.With(ctx).Warnw("msg", "guild_authz_denied",
+			"reason", "system_rpc_by_client", "caller_id", id)
+		return commonv1.ErrCode_ERR_PERMISSION_DENY
+	}
+	return commonv1.ErrCode_OK
 }
 
 // toProtoCode 把 pkg/errcode 1:1 映射成 proto enum(数值相同)。

@@ -21,6 +21,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/rating"
 	inventoryv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/inventory/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 
@@ -333,24 +334,37 @@ func (u *PlayerUsecase) UnlockHero(ctx context.Context, playerID uint64, heroID 
 
 // ── MMR ──────────────────────────────────────────────────────────────────────
 
-// GetMMR 读玩家当前 MMR(未建档 → 返回 BaseMMR,不创建行;供 battle_result 当 reader)。
-func (u *PlayerUsecase) GetMMR(ctx context.Context, playerID uint64) (int, error) {
+// GetMMR 读玩家在某段位池下的分(该池无记录 → 返回 (BaseMMR, false),不创建行)。
+//
+// 第二个返回值是 found:false = 该池没打过。调用方必须能区分"没定级"与"分刚好等于
+// 基线",否则未定级玩家会被当成已定级展示(battle_result 算 Elo 时两者等价,都用基线
+// 当期望胜率输入;但客户端展示不同)。
+func (u *PlayerUsecase) GetMMR(ctx context.Context, playerID uint64, ratingPool string) (int, bool, error) {
 	if playerID == 0 {
-		return 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
+		return 0, false, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
-	mmr, found, err := u.repo.GetMMR(ctx, playerID)
+	pool := rating.Normalize(ratingPool)
+	mmr, found, err := u.repo.GetMMR(ctx, playerID, pool)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	if !found {
-		return u.cfg.BaseMMR, nil
+		return u.cfg.BaseMMR, false, nil
 	}
-	return mmr, nil
+	return mmr, true, nil
+}
+
+// ListRatings 列出该玩家已有记录的全部池段位分(供 GetProfile 组装客户端可见结构)。
+func (u *PlayerUsecase) ListRatings(ctx context.Context, playerID uint64) ([]data.PlayerRating, error) {
+	if playerID == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	return u.repo.ListRatings(ctx, playerID)
 }
 
 // UpdateMMR 幂等改 MMR + 战绩计数(idempotency_key 一般是 match_id,不变量 §2)。
 // 返回 (新 MMR, 是否幂等命中, error)。
-func (u *PlayerUsecase) UpdateMMR(ctx context.Context, playerID uint64, delta int32, reason, idempotencyKey string) (int, bool, error) {
+func (u *PlayerUsecase) UpdateMMR(ctx context.Context, playerID uint64, delta int32, reason, idempotencyKey, ratingPool string) (int, bool, error) {
 	if playerID == 0 {
 		return 0, false, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
@@ -363,9 +377,13 @@ func (u *PlayerUsecase) UpdateMMR(ctx context.Context, playerID uint64, delta in
 	}
 
 	incBattle, incWin := battleFlags(reason)
+	// 段位池归一化在**写入侧**做一次,与读侧 GetMMR 同一函数,杜绝写 default / 读 "" 的分裂。
+	pool := rating.Normalize(ratingPool)
 	newMMR, already, err := u.repo.ApplyMMRChange(ctx, data.MMRChange{
 		PlayerID:       playerID,
 		IdempotencyKey: idempotencyKey,
+		RatingPool:     pool,
+		Baseline:       u.cfg.BaseMMR,
 		Delta:          delta,
 		Reason:         reason,
 		Floor:          u.cfg.MMRFloor,
@@ -377,12 +395,12 @@ func (u *PlayerUsecase) UpdateMMR(ctx context.Context, playerID uint64, delta in
 	}
 	if already {
 		plog.With(ctx).Debugw("msg", "update_mmr_idempotent_hit",
-			"player_id", playerID, "idempotency_key", idempotencyKey, "new_mmr", newMMR)
+			"player_id", playerID, "idempotency_key", idempotencyKey, "new_mmr", newMMR, "rating_pool", pool)
 		return newMMR, true, nil
 	}
 	plog.With(ctx).Debugw("msg", "update_mmr_applied",
-		"player_id", playerID, "delta", delta, "reason", reason, "new_mmr", newMMR)
-	// 分片:档案(含段位 mmr)是 owner 数据,锁定玩家 owner cell(ProfileShardKey=player_id,
+		"player_id", playerID, "delta", delta, "reason", reason, "new_mmr", newMMR, "rating_pool", pool)
+	// 分片:档案与分池段位分都是 owner 数据,锁定玩家 owner cell(ProfileShardKey=player_id,
 	// §4.2 line 142)。router 为 nil(单 Cell)→ 不打,行为与历史一致。
 	u.logProfilePlacement(ctx, playerID, "update_mmr")
 	return newMMR, false, nil

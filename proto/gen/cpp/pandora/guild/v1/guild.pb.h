@@ -161,6 +161,22 @@ extern const ::google::protobuf::internal::ClassDataFull GetMyGuildResponse_clas
 #else
 extern const GetMyGuildResponseGlobalsTypeInternal GetMyGuildResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPlayerGuildRequest;
+struct GetPlayerGuildRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPlayerGuildRequestGlobalsTypeInternal GetPlayerGuildRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPlayerGuildRequest_class_data_;
+#else
+extern const GetPlayerGuildRequestGlobalsTypeInternal GetPlayerGuildRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPlayerGuildResponse;
+struct GetPlayerGuildResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPlayerGuildResponseGlobalsTypeInternal GetPlayerGuildResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPlayerGuildResponse_class_data_;
+#else
+extern const GetPlayerGuildResponseGlobalsTypeInternal GetPlayerGuildResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class Guild;
 struct GuildGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -3868,6 +3884,432 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Guild final : public ::google::prot
     ::int32_t member_count_;
     ::int32_t max_members_;
     ::int64_t created_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fguild_2fv1_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerGuildResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.guild.v1.GetPlayerGuildResponse) */ {
+ public:
+  inline GetPlayerGuildResponse() : GetPlayerGuildResponse(nullptr) {}
+  ~GetPlayerGuildResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPlayerGuildResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPlayerGuildResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPlayerGuildResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPlayerGuildResponse(const GetPlayerGuildResponse& from) : GetPlayerGuildResponse(nullptr, from) {}
+  inline GetPlayerGuildResponse(GetPlayerGuildResponse&& from) noexcept : GetPlayerGuildResponse(nullptr, ::std::move(from)) {}
+  inline GetPlayerGuildResponse& operator=(const GetPlayerGuildResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPlayerGuildResponse& operator=(GetPlayerGuildResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPlayerGuildResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerGuildResponse>(&GetPlayerGuildResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 31;
+  friend void swap(GetPlayerGuildResponse& a, GetPlayerGuildResponse& b) { a.Swap(&b); }
+  inline void Swap(GetPlayerGuildResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPlayerGuildResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPlayerGuildResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetPlayerGuildResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetPlayerGuildResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetPlayerGuildResponse& from) { GetPlayerGuildResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetPlayerGuildResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.guild.v1.GetPlayerGuildResponse"; }
+
+  explicit GetPlayerGuildResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPlayerGuildResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlayerGuildResponse& from);
+  GetPlayerGuildResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPlayerGuildResponse&& from) noexcept
+      : GetPlayerGuildResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+    kHasGuildFieldNumber = 2,
+    kGuildIdFieldNumber = 3,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // bool has_guild = 2 [json_name = "hasGuild"];
+  void clear_has_guild() ;
+  [[nodiscard]] bool has_guild() const;
+  void set_has_guild(bool value);
+
+  private:
+  bool _internal_has_guild() const;
+  void _internal_set_has_guild(bool value);
+
+  public:
+  // uint64 guild_id = 3 [json_name = "guildId"];
+  void clear_guild_id() ;
+  [[nodiscard]] ::uint64_t guild_id() const;
+  void set_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_guild_id() const;
+  void _internal_set_guild_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.guild.v1.GetPlayerGuildResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetPlayerGuildResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    bool has_guild_;
+    ::uint64_t guild_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fguild_2fv1_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerGuildRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.guild.v1.GetPlayerGuildRequest) */ {
+ public:
+  inline GetPlayerGuildRequest() : GetPlayerGuildRequest(nullptr) {}
+  ~GetPlayerGuildRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPlayerGuildRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPlayerGuildRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPlayerGuildRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPlayerGuildRequest(const GetPlayerGuildRequest& from) : GetPlayerGuildRequest(nullptr, from) {}
+  inline GetPlayerGuildRequest(GetPlayerGuildRequest&& from) noexcept : GetPlayerGuildRequest(nullptr, ::std::move(from)) {}
+  inline GetPlayerGuildRequest& operator=(const GetPlayerGuildRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPlayerGuildRequest& operator=(GetPlayerGuildRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPlayerGuildRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerGuildRequest>(&GetPlayerGuildRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 30;
+  friend void swap(GetPlayerGuildRequest& a, GetPlayerGuildRequest& b) { a.Swap(&b); }
+  inline void Swap(GetPlayerGuildRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPlayerGuildRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPlayerGuildRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetPlayerGuildRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetPlayerGuildRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetPlayerGuildRequest& from) { GetPlayerGuildRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetPlayerGuildRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.guild.v1.GetPlayerGuildRequest"; }
+
+  explicit GetPlayerGuildRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPlayerGuildRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlayerGuildRequest& from);
+  GetPlayerGuildRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPlayerGuildRequest&& from) noexcept
+      : GetPlayerGuildRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+  };
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.guild.v1.GetPlayerGuildRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetPlayerGuildRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8557,6 +8999,110 @@ inline void GuildEvent::set_allocated_guild_name(::std::string* PROTOBUF_NULLABL
     _impl_.guild_name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.guild.v1.GuildEvent.guild_name)
+}
+
+// -------------------------------------------------------------------
+
+// GetPlayerGuildRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void GetPlayerGuildRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GetPlayerGuildRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.guild.v1.GetPlayerGuildRequest.player_id)
+  return _internal_player_id();
+}
+inline void GetPlayerGuildRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.guild.v1.GetPlayerGuildRequest.player_id)
+}
+inline ::uint64_t GetPlayerGuildRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void GetPlayerGuildRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetPlayerGuildResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void GetPlayerGuildResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode GetPlayerGuildResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.guild.v1.GetPlayerGuildResponse.code)
+  return _internal_code();
+}
+inline void GetPlayerGuildResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.guild.v1.GetPlayerGuildResponse.code)
+}
+inline ::pandora::common::v1::ErrCode GetPlayerGuildResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void GetPlayerGuildResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// bool has_guild = 2 [json_name = "hasGuild"];
+inline void GetPlayerGuildResponse::clear_has_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_guild_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool GetPlayerGuildResponse::has_guild() const {
+  // @@protoc_insertion_point(field_get:pandora.guild.v1.GetPlayerGuildResponse.has_guild)
+  return _internal_has_guild();
+}
+inline void GetPlayerGuildResponse::set_has_guild(bool value) {
+  _internal_set_has_guild(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.guild.v1.GetPlayerGuildResponse.has_guild)
+}
+inline bool GetPlayerGuildResponse::_internal_has_guild() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.has_guild_;
+}
+inline void GetPlayerGuildResponse::_internal_set_has_guild(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_guild_ = value;
+}
+
+// uint64 guild_id = 3 [json_name = "guildId"];
+inline void GetPlayerGuildResponse::clear_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t GetPlayerGuildResponse::guild_id() const {
+  // @@protoc_insertion_point(field_get:pandora.guild.v1.GetPlayerGuildResponse.guild_id)
+  return _internal_guild_id();
+}
+inline void GetPlayerGuildResponse::set_guild_id(::uint64_t value) {
+  _internal_set_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.guild.v1.GetPlayerGuildResponse.guild_id)
+}
+inline ::uint64_t GetPlayerGuildResponse::_internal_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guild_id_;
+}
+inline void GetPlayerGuildResponse::_internal_set_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = value;
 }
 
 #ifdef __GNUC__

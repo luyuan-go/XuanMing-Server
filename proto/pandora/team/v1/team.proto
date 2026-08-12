@@ -52,6 +52,19 @@ service TeamService {
   //     此后整场对局的占用判定仍由 matchmaker 的 player→ticket claim(ResolvePlayerMatchContext)负责。
   // 因此这把锁不是权威状态,只是一个有界互斥窗口,不得被解释成「队伍在对局中」。
   rpc BeginTeamMatch(BeginTeamMatchRequest) returns (BeginTeamMatchResponse);
+
+  // ── 内部:按 player_id 反查队伍编号(DS 出生编制专用,不对客户端开放)────────────
+  //
+  // DS 在玩家进场时需要把「谁和谁是一伙的」写到实体上,否则大厅里所有玩家共用玩家阵营,
+  // 队友与路人无从区分。它手上只有 player_id。
+  //
+  // 为什么不复用现有两个读接口:
+  //   - GetMyTeam 的 player_id 已被删除并 reserved,身份一律取自 JWT。「客户端不应自报」
+  //     是刻意的 IDOR 防线,不能为了 DS 的需要把它开回去;
+  //   - GetTeam 按 team_id 查,而 DS 不知道 team_id。
+  //
+  // 只回编号不回名单:DS 只需要判定「同队与否」,把整份 Team 快照发给它是无谓的扩面。
+  rpc GetPlayerTeam(GetPlayerTeamRequest) returns (GetPlayerTeamResponse);
 }
 
 enum TeamState {
@@ -513,4 +526,19 @@ message BeginTeamMatchResponse {
   Team team = 2;
   // lease_expires_at_ms:租约截止,供 matchmaker 判断自己是否已超时(超时须重新 Begin)。
   int64 lease_expires_at_ms = 3;
+}
+
+// GetPlayerTeam:内部东西向只读。Envoy 是按 /pandora.team.v1.TeamService/ 整前缀放行的,
+// 因此本方法在客户端面同样可达 —— service 层必须显式拒绝任何带玩家 JWT 的调用(callerID>0),
+// 否则它就成了一个「查任意玩家在哪支队」的 IDOR 口子。
+message GetPlayerTeamRequest {
+  uint64 player_id = 1;
+}
+
+message GetPlayerTeamResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // false 表示该玩家当前不属于任何队伍;这不是错误,code 仍为 OK。
+  bool has_team = 2;
+  // has_team=false 时为 0。
+  uint64 team_id = 3;
 }

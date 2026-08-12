@@ -78,6 +78,22 @@ extern const ::google::protobuf::internal::ClassDataFull DSTicket_class_data_;
 #else
 extern const DSTicketGlobalsTypeInternal DSTicket_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPlayerNoRequest;
+struct GetPlayerNoRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPlayerNoRequestGlobalsTypeInternal GetPlayerNoRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPlayerNoRequest_class_data_;
+#else
+extern const GetPlayerNoRequestGlobalsTypeInternal GetPlayerNoRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPlayerNoResponse;
+struct GetPlayerNoResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPlayerNoResponseGlobalsTypeInternal GetPlayerNoResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPlayerNoResponse_class_data_;
+#else
+extern const GetPlayerNoResponseGlobalsTypeInternal GetPlayerNoResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetRegisterNoRequest;
 struct GetRegisterNoRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -744,7 +760,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectRoleResponse final : public :
   [[nodiscard]] static const SelectRoleResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectRoleResponse>(&SelectRoleResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(SelectRoleResponse& a, SelectRoleResponse& b) { a.Swap(&b); }
   inline void Swap(SelectRoleResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -979,7 +995,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectRoleRequest final : public ::
   [[nodiscard]] static const SelectRoleRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectRoleRequest>(&SelectRoleRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(SelectRoleRequest& a, SelectRoleRequest& b) { a.Swap(&b); }
   inline void Swap(SelectRoleRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2994,7 +3010,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRegisterNoResponse final : publi
   [[nodiscard]] static const GetRegisterNoResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRegisterNoResponse>(&GetRegisterNoResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(GetRegisterNoResponse& a, GetRegisterNoResponse& b) { a.Swap(&b); }
   inline void Swap(GetRegisterNoResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3089,10 +3105,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRegisterNoResponse final : publi
     kRegisterNoFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
-  // uint64 register_no = 2 [json_name = "registerNo"];
-  void clear_register_no() ;
-  [[nodiscard]] ::uint64_t register_no() const;
-  void set_register_no(::uint64_t value);
+  // uint64 register_no = 2 [json_name = "registerNo", deprecated = true];
+  [[deprecated]]  void clear_register_no() ;
+  [[nodiscard]] [[deprecated]] ::uint64_t register_no() const;
+  [[deprecated]] void set_register_no(::uint64_t value);
 
   private:
   ::uint64_t _internal_register_no() const;
@@ -3206,7 +3222,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRegisterNoRequest final : public
   [[nodiscard]] static const GetRegisterNoRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRegisterNoRequest>(&GetRegisterNoRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(GetRegisterNoRequest& a, GetRegisterNoRequest& b) { a.Swap(&b); }
   inline void Swap(GetRegisterNoRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3265,6 +3281,357 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRegisterNoRequest final : public
 
   // accessors -------------------------------------------------------
   // @@protoc_insertion_point(class_scope:pandora.login.v1.GetRegisterNoRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerNoResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.GetPlayerNoResponse) */ {
+ public:
+  inline GetPlayerNoResponse() : GetPlayerNoResponse(nullptr) {}
+  ~GetPlayerNoResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPlayerNoResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPlayerNoResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPlayerNoResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPlayerNoResponse(const GetPlayerNoResponse& from) : GetPlayerNoResponse(nullptr, from) {}
+  inline GetPlayerNoResponse(GetPlayerNoResponse&& from) noexcept : GetPlayerNoResponse(nullptr, ::std::move(from)) {}
+  inline GetPlayerNoResponse& operator=(const GetPlayerNoResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPlayerNoResponse& operator=(GetPlayerNoResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPlayerNoResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerNoResponse>(&GetPlayerNoResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(GetPlayerNoResponse& a, GetPlayerNoResponse& b) { a.Swap(&b); }
+  inline void Swap(GetPlayerNoResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPlayerNoResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPlayerNoResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetPlayerNoResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetPlayerNoResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetPlayerNoResponse& from) { GetPlayerNoResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetPlayerNoResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.GetPlayerNoResponse"; }
+
+  explicit GetPlayerNoResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPlayerNoResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlayerNoResponse& from);
+  GetPlayerNoResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPlayerNoResponse&& from) noexcept
+      : GetPlayerNoResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerNoFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // uint64 player_no = 2 [json_name = "playerNo"];
+  void clear_player_no() ;
+  [[nodiscard]] ::uint64_t player_no() const;
+  void set_player_no(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_no() const;
+  void _internal_set_player_no(::uint64_t value);
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.GetPlayerNoResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetPlayerNoResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_no_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerNoRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.GetPlayerNoRequest) */ {
+ public:
+  inline GetPlayerNoRequest() : GetPlayerNoRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPlayerNoRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPlayerNoRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPlayerNoRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPlayerNoRequest(const GetPlayerNoRequest& from) : GetPlayerNoRequest(nullptr, from) {}
+  inline GetPlayerNoRequest(GetPlayerNoRequest&& from) noexcept : GetPlayerNoRequest(nullptr, ::std::move(from)) {}
+  inline GetPlayerNoRequest& operator=(const GetPlayerNoRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPlayerNoRequest& operator=(GetPlayerNoRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPlayerNoRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerNoRequest>(&GetPlayerNoRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(GetPlayerNoRequest& a, GetPlayerNoRequest& b) { a.Swap(&b); }
+  inline void Swap(GetPlayerNoRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPlayerNoRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPlayerNoRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<GetPlayerNoRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const GetPlayerNoRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const GetPlayerNoRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.GetPlayerNoRequest"; }
+
+  explicit GetPlayerNoRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPlayerNoRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlayerNoRequest& from);
+  GetPlayerNoRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPlayerNoRequest&& from) noexcept
+      : GetPlayerNoRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.GetPlayerNoRequest)
  private:
   class _Internal;
   using ParseTableT_ =
@@ -4179,6 +4546,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     kSelectedRoleIdFieldNumber = 11,
     kMatchIdFieldNumber = 10,
     kRegisterNoFieldNumber = 13,
+    kPlayerNoFieldNumber = 14,
   };
   // string session_token = 3 [json_name = "sessionToken"];
   void clear_session_token() ;
@@ -4331,21 +4699,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
   void _internal_set_match_id(::uint64_t value);
 
   public:
-  // uint64 register_no = 13 [json_name = "registerNo"];
-  void clear_register_no() ;
-  [[nodiscard]] ::uint64_t register_no() const;
-  void set_register_no(::uint64_t value);
+  // uint64 register_no = 13 [json_name = "registerNo", deprecated = true];
+  [[deprecated]]  void clear_register_no() ;
+  [[nodiscard]] [[deprecated]] ::uint64_t register_no() const;
+  [[deprecated]] void set_register_no(::uint64_t value);
 
   private:
   ::uint64_t _internal_register_no() const;
   void _internal_set_register_no(::uint64_t value);
 
   public:
+  // uint64 player_no = 14 [json_name = "playerNo"];
+  void clear_player_no() ;
+  [[nodiscard]] ::uint64_t player_no() const;
+  void set_player_no(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_no() const;
+  void _internal_set_player_no(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.LoginResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           1, 108,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4387,6 +4765,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     ::uint32_t selected_role_id_;
     ::uint64_t match_id_;
     ::uint64_t register_no_;
+    ::uint64_t player_no_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5578,7 +5957,7 @@ inline void LoginResponse::set_allocated_resume_context(::pandora::login::v1::Re
   // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.LoginResponse.resume_context)
 }
 
-// uint64 register_no = 13 [json_name = "registerNo"];
+// uint64 register_no = 13 [json_name = "registerNo", deprecated = true];
 inline void LoginResponse::clear_register_no() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.register_no_ = ::uint64_t{0u};
@@ -5600,6 +5979,30 @@ inline ::uint64_t LoginResponse::_internal_register_no() const {
 inline void LoginResponse::_internal_set_register_no(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.register_no_ = value;
+}
+
+// uint64 player_no = 14 [json_name = "playerNo"];
+inline void LoginResponse::clear_player_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_no_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t LoginResponse::player_no() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.player_no)
+  return _internal_player_no();
+}
+inline void LoginResponse::set_player_no(::uint64_t value) {
+  _internal_set_player_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.player_no)
+}
+inline ::uint64_t LoginResponse::_internal_player_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_no_;
+}
+inline void LoginResponse::_internal_set_player_no(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_no_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -8160,6 +8563,62 @@ inline void VerifyDSTicketResponse::set_allocated_claims(::pandora::login::v1::D
 
 // -------------------------------------------------------------------
 
+// GetPlayerNoRequest
+
+// -------------------------------------------------------------------
+
+// GetPlayerNoResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void GetPlayerNoResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode GetPlayerNoResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.GetPlayerNoResponse.code)
+  return _internal_code();
+}
+inline void GetPlayerNoResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.GetPlayerNoResponse.code)
+}
+inline ::pandora::common::v1::ErrCode GetPlayerNoResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void GetPlayerNoResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// uint64 player_no = 2 [json_name = "playerNo"];
+inline void GetPlayerNoResponse::clear_player_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_no_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GetPlayerNoResponse::player_no() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.GetPlayerNoResponse.player_no)
+  return _internal_player_no();
+}
+inline void GetPlayerNoResponse::set_player_no(::uint64_t value) {
+  _internal_set_player_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.GetPlayerNoResponse.player_no)
+}
+inline ::uint64_t GetPlayerNoResponse::_internal_player_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_no_;
+}
+inline void GetPlayerNoResponse::_internal_set_player_no(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_no_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // GetRegisterNoRequest
 
 // -------------------------------------------------------------------
@@ -8190,7 +8649,7 @@ inline void GetRegisterNoResponse::_internal_set_code(::pandora::common::v1::Err
   _impl_.code_ = value;
 }
 
-// uint64 register_no = 2 [json_name = "registerNo"];
+// uint64 register_no = 2 [json_name = "registerNo", deprecated = true];
 inline void GetRegisterNoResponse::clear_register_no() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.register_no_ = ::uint64_t{0u};
