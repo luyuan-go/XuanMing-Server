@@ -29,6 +29,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/dsmetadata"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
@@ -276,35 +277,49 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 
 // localBattleRoster 是一局待拉起 DS 的权威准入元数据(mode=local 版的 Agones annotation)。
 type localBattleRoster struct {
-	playerIDs    []uint64
-	allocationID string
-	releaseTrack string
+	playerIDs             []uint64
+	combatFactionByPlayer map[uint64]uint32
+	allocationID          string
+	releaseTrack          string
 }
 
 // SetPendingBattleRoster 在拉起 DS **之前**登记本局的权威准入元数据。
 //
 // 为什么必须有:UE 的 APandoraBattleGameMode::ApplyAgonesAdmissionMetadata 只从 Agones
-// GameServer annotation 装载 ExpectedPlayers;mode=local 没有 Agones,花名册恒空,
-// APandoraPveGameMode::EvaluateSoloDungeonLeaveRequest 因 roster_count==0 返回
-// AuthorityNotReady —— 玩家在副本里能正常战斗,但点「退出副本/失败结算」永远被拒
-// (2026-08-04 实测,DS 日志:result=4 canonical_pve=1 roster_count=0)。
+// GameServer annotation 装载 ExpectedPlayers 与权威阵营;mode=local 没有 Agones,两者恒空:
+//   - 花名册空 → APandoraPveGameMode::EvaluateSoloDungeonLeaveRequest 因 roster_count==0
+//     返回 AuthorityNotReady,玩家能正常战斗但点「退出副本/失败结算」永远被拒
+//     (2026-08-04 实测,DS 日志:result=4 canonical_pve=1 roster_count=0);
+//   - 阵营空 → APandoraBattleGameMode::ResolveCampForSpawn 返回 RejectSpawn 且**禁止回退**
+//     默认 Pawn,玩家进图后根本没有角色,表现为"进副本就卡死"
+//     (2026-08-13 实测,DS 日志:拒绝出生 present=0 valid=0 mapping_count=0)。
+//
 // 本地没有 annotation 通道,故改用 env 投递同一份事实(与 PANDORA_DS_TOKEN 同机制)。
 //
 // 必须在 Allocate 之前调用:DS 进程在 Allocate 内 exec,env 那一刻就已定型。
 // 幂等:同 matchID 重复登记以最后一次为准;Allocate 消费后即删除,避免台账无界增长。
+// 入参一律深拷贝:调用方(biz)的 slice / map 在本次 RPC 返回前仍可能被复用或修改。
 func (l *LocalGameServerAllocator) SetPendingBattleRoster(matchID uint64, playerIDs []uint64,
-	allocationID, releaseTrack string) {
+	combatFactionByPlayer map[uint64]uint32, allocationID, releaseTrack string) {
 	if matchID == 0 {
 		return
 	}
 	ids := append([]uint64(nil), playerIDs...)
+	var factions map[uint64]uint32
+	if len(combatFactionByPlayer) > 0 {
+		factions = make(map[uint64]uint32, len(combatFactionByPlayer))
+		for playerID, factionID := range combatFactionByPlayer {
+			factions[playerID] = factionID
+		}
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.pendingRosters == nil {
 		l.pendingRosters = make(map[uint64]localBattleRoster)
 	}
 	l.pendingRosters[matchID] = localBattleRoster{
-		playerIDs: ids, allocationID: allocationID, releaseTrack: releaseTrack,
+		playerIDs: ids, combatFactionByPlayer: factions,
+		allocationID: allocationID, releaseTrack: releaseTrack,
 	}
 }
 
@@ -370,6 +385,7 @@ func (l *LocalGameServerAllocator) LocalInstanceIdentity(podName string) (string
 //   - 精确驱逐单被整份丢弃,PendingBattleDepartureAcks 永不消费,每跳重发;
 //   - NotifyAuthorizedActiveHeartbeat 不触发,本地准入租约永不打开
 //     (local-off-v1 战斗票走 HS256 档不撞这道门,验票档会直接拒收玩家)。
+//
 // 2026-08-05 实测 DS 日志每 5s 一条 "heartbeat response credential ACK missing"。
 //
 // 为什么这不是"伪造回显":ACK 的值直接取自本进程签发、并经 env 下发给该 DS 的**同一份**
@@ -564,9 +580,11 @@ func (l *LocalGameServerAllocator) buildEnv(podName string, matchID uint64, mapI
 	if token != "" {
 		env = append(env, "PANDORA_DS_TOKEN="+token)
 	}
-	// 权威准入元数据(mode=local 版的 battle admission annotation 三件套)。
+	// 权威准入元数据(mode=local 版的 battle admission annotation 四件套)。
 	// UE 侧要求 roster / allocation-id / release-track **同时**齐备才认(缺一即整份判非法),
-	// 故这里也三者同投同不投,绝不投半份。roster 编码见 canonicalRosterText。
+	// 而 combat-factions 缺失会让 ResolveCampForSpawn 直接 RejectSpawn(玩家进图没角色),
+	// 故这里四者同投同不投,绝不投半份。roster 编码见 canonicalRosterText,
+	// 阵营编码复用与 annotation 路径同一个权威规范化器 dsmetadata.CanonicalCombatFactions。
 	// ⚠️ 这里**不能**再取 l.mu:唯一生产调用链是 Allocate → startProc → defaultStart → buildEnv,
 	// 而 Allocate 全程持有 l.mu(defer Unlock),Go 互斥锁不可重入,再取即自锁死
 	// —— 表现为 DS 进程永远不被拉起、AllocateBattle 无限挂起、对局最终按空 pod 判弃
@@ -577,18 +595,32 @@ func (l *LocalGameServerAllocator) buildEnv(podName string, matchID uint64, mapI
 		delete(l.pendingRosters, matchID) // 消费即删,台账不随对局数无界增长
 	}
 	if hasRoster {
-		if text := canonicalRosterText(roster.playerIDs); text != "" &&
-			roster.allocationID != "" && roster.releaseTrack != "" {
+		rosterText := canonicalRosterText(roster.playerIDs)
+		// CanonicalCombatFactions 同时校验"精确覆盖 roster、升序去重、非零 player_id、
+		// faction_id 可安全映射为 UE Camp",并按 roster 顺序输出 `pid=faction,...`。
+		// 不自己再拼一遍:UE 的 ParseCanonicalCombatFactions 是逐项对齐 roster 的强校验,
+		// 两边规则一旦漂移,投出去也会被整份判非法(把"没投"伪装成"格式错",更难查)。
+		_, factionsText, factionErr := dsmetadata.CanonicalCombatFactions(
+			roster.playerIDs, roster.combatFactionByPlayer)
+		if rosterText != "" && roster.allocationID != "" && roster.releaseTrack != "" && factionErr == nil {
 			env = append(env,
-				"PANDORA_BATTLE_ROSTER="+text,
+				"PANDORA_BATTLE_ROSTER="+rosterText,
 				"PANDORA_ALLOCATION_ID="+roster.allocationID,
 				"PANDORA_RELEASE_TRACK="+roster.releaseTrack,
+				"PANDORA_BATTLE_COMBAT_FACTIONS="+factionsText,
 			)
 		} else {
+			factionErrText := ""
+			if factionErr != nil {
+				factionErrText = factionErr.Error()
+			}
 			plog.With(context.Background()).Warnw("msg", "local_battle_roster_not_canonical",
 				"match_id", matchID, "players", len(roster.playerIDs),
+				"factions", len(roster.combatFactionByPlayer),
 				"allocation_id", roster.allocationID, "release_track", roster.releaseTrack,
-				"hint", "三件套不全或 roster 非 canonical,不投递;UE 侧将保持空名单、主动退出会被判 AuthorityNotReady")
+				"faction_err", factionErrText,
+				"hint", "四件套不全或 roster/阵营非 canonical,不投递;UE 侧将保持空名单与空阵营,"+
+					"主动退出会被判 AuthorityNotReady、玩家出生会被 RejectSpawn(进图无角色)")
 		}
 	}
 	// extra_env 追加,但严禁覆盖内置身份/令牌变量(审核 P1:extra_env 覆盖 PANDORA_DS_TOKEN

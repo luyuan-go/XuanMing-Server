@@ -518,11 +518,13 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		}
 	} else {
 		// legacy 本地面:DS 进程在 Allocate 内 exec、env 那一刻定型,所以权威准入元数据
-		// (roster/allocation-id/release-track)必须**先**登记。生产走 Agones annotation,
-		// 这里是它在 mode=local 的等价投递通道(见 localBattleRosterSink 注释)。
+		// (roster/allocation-id/release-track/combat-factions)必须**先**登记。生产走 Agones
+		// annotation,这里是它在 mode=local 的等价投递通道(见 localBattleRosterSink 注释)。
+		// combatFactionByPlayer 已在上方经 dsmetadata.CanonicalCombatFactions 校验并重建为
+		// 独立 map(非空时),此处原样交给 sink,由它再深拷贝一份存进台账。
 		// 双重隔离:!u.modelB + 类型断言(Agones/Mock 不实现),生产恒不进。
 		if sink, ok := u.alloc.(localBattleRosterSink); ok {
-			sink.SetPendingBattleRoster(matchID, playerIDs, allocationID, desiredReleaseTrack)
+			sink.SetPendingBattleRoster(matchID, playerIDs, combatFactionByPlayer, allocationID, desiredReleaseTrack)
 		}
 		podName, addr, actualReleaseTrack, err = u.alloc.Allocate(ctx, matchID, mapID, gameMode, desiredReleaseTrack)
 	}

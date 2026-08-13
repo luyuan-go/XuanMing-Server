@@ -45,13 +45,20 @@ type localBattleCredentialSource interface {
 
 // localBattleRosterSink 由 mode=local 的分配器实现,接收本局的权威准入元数据。
 //
-// 生产走 Agones GameServer annotation 下发 roster/allocation-id/release-track;local 没有
-// annotation 通道,改用 DS 进程 env 投递同一份事实。不投递的后果不是"少个字段",而是
-// UE 的 ExpectedPlayers 恒空 → 玩家能进副本能打怪,但点「退出副本」永远被判 AuthorityNotReady。
+// 生产走 Agones GameServer annotation 下发 roster/allocation-id/release-track/combat-factions;
+// local 没有 annotation 通道,改用 DS 进程 env 投递同一份事实。漏投的后果不是"少个字段":
+//   - 缺 roster:UE 的 ExpectedPlayers 恒空 → 玩家能进副本能打怪,但点「退出副本」永远被判
+//     AuthorityNotReady(2026-08-04 实伤);
+//   - 缺 combat-factions:UE 的 ResolveCampForSpawn 解不出权威阵营 → RejectSpawn 且禁止回退
+//     默认 Pawn → 玩家进了图但**根本没有角色**,表现为进副本即卡死(2026-08-13 实伤,
+//     DS 日志 `拒绝出生：权威 combat faction 无法解析 present=0 valid=0 mapping_count=0`)。
+//
+// 因此四件套是一份不可拆的事实,必须整份进出;缺项的后果见 data.buildEnv 的同投同不投纪律。
 //
 // 只有 data.LocalGameServerAllocator 实现它;Agones/Mock 都不实现,故本路径在生产是机械死代码。
 type localBattleRosterSink interface {
-	SetPendingBattleRoster(matchID uint64, playerIDs []uint64, allocationID, releaseTrack string)
+	SetPendingBattleRoster(matchID uint64, playerIDs []uint64,
+		combatFactionByPlayer map[uint64]uint32, allocationID, releaseTrack string)
 }
 
 // AuthoritativeGameServerAllocator 是 Agones Model B 的额外能力：分配时先取得实例 UID/RV，
