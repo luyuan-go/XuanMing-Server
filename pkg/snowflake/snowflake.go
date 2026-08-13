@@ -1,7 +1,7 @@
 // Package snowflake 提供 64 位全局唯一 ID 生成器。
 //
 // Layout: [time:32][node:17][step:15]
-// Epoch:  2026-06-11 14:59:25 UTC (1781161165)
+// Epoch:  2026-06-11 06:59:25 UTC (1781161165)
 //
 // 实现为无锁 CAS:把 (lastTime, step) 打包进单个 atomic 状态字
 // (布局与 ID 本身一致),Generate 的临界区只有一条 CompareAndSwap。
