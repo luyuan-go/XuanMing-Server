@@ -60,6 +60,8 @@ function New-TestHmacConfigs {
         'ds-allocator' = "ds_auth:`n  secret: `"$DsSecret`"$dsAdditionalLine"
         'battle-result' = "ds_auth:`n  secret: `"$DsSecret`"$dsAdditionalLine"
         'player-locator' = "ds_auth:`n  secret: `"$DsSecret`"$dsAdditionalLine"
+        # player 2026-08-13 入列(verify-only:GetLoadout 经 :8444 暴露,须验 DS 回调令牌)。
+        player = "ds_auth:`n  secret: `"$DsSecret`"$dsAdditionalLine"
     }
 }
 

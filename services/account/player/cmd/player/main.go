@@ -35,6 +35,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/dsauthfence/writerlease"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
@@ -236,6 +237,20 @@ func main() {
 		defer func() { _ = closeCell() }()
 	}
 	svc := service.NewPlayerService(uc)
+
+	// DS 回调令牌守卫:GetLoadout 挂在 Envoy DS 面(:8444),经它进来的调用须带 DS 服务令牌。
+	// 开发环境先用 permissive 观察,生产配置使用 enforce;仅显式 off / 未配置时 dsGuard 为 nil。
+	// 配错 mode / 缺 secret 则启动即失败,不静默退回不校验。
+	dsGuard, derr := middleware.NewDSCallbackGuardFromConf(cfg.DSAuth)
+	if derr != nil {
+		helper.Errorw("msg", "ds_auth_guard_init_failed", "err", derr)
+		os.Exit(1)
+	}
+	svc.SetDSCallbackGuard(dsGuard)
+	if dsGuard != nil {
+		helper.Infow("msg", "ds_callback_guard_ready", "mode", dsGuard.Mode().String())
+	}
+
 	ctAdmin := configtable.NewAdminService(ctStore, cfg.ConfigTable.Dir)
 
 	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):客户端面请求 jti 必须是 login

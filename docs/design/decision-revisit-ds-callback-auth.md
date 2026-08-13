@@ -1347,3 +1347,93 @@ SCAN 窗口中 master/slot 原子迁移后又恢复的 ABA。ConfigMap/一次 to
 fresh/retry Activate 在任何 create/patch/scale 前阻断，CAS 前二次阻断；Go CLI/core CAS 和普通 online
 build/push/apply 也独立 fail-closed。该缺口属于外部控制面能力尚未接线的发布硬阻断，不是可标为
 `BLOCKED-ENV` 后跳过的测试；真实 provider 接入并完成 Redis/K8s/Agones 故障注入前不得启用 epoch=2。
+
+## 8. 2026-08-13:player 入列(GetLoadout 上 DS 面)与灰度启用策略
+
+### 8.1 为什么 player 必须入列
+
+`player.GetLoadout` 这天被挂到 Envoy DS 面(`:8444`)的精确路由上,供 Hub/Battle DS 在
+`PlayerState` 初始化时拉专精与预设装备。该监听器**没有 `jwt_authn`**,经它进来的请求
+`callerID` 恒为 0;而 `resolvePlayerID` 的既有语义是「`callerID==0` ⇒ 后端内部可信 ⇒ 信请求体
+`player_id`」。两者相乘的结果是:**任何能连到 `:8444`、或绕过 Envoy 直连业务端口 20002 的进程,
+都能读任意玩家的出战快照**(装备实例 ID、词条、天赋)。`systemOnly` 在这里帮不上忙 ——
+它挡的是「带玩家 JWT 的客户端」,而这里的问题恰恰是「什么都不带」。
+
+补法即本文件 §2 的既有机制:handler 顶部过 `DSCallbackGuard`,`scope` 取
+`{RequireToken: true}`,不绑 `Type` / `Pod` / `MatchID`。
+
+- `RequireToken`:全仓 grep 确认 `GetLoadout` **没有**任何内部 Go 调用方,因此「无标记无令牌的
+  东西向调用」不存在合法形态,直连业务端口也一并拒 —— 这正是堵住 20002 旁路的那一半。
+- 不绑类型:Hub 与 Battle DS 都在进场时查这一次,与哪台 DS、哪一局无关。这与 UE 侧既有契约一致 ——
+  `IsPlayerLoadoutMethod` 早已归在 `hub|battle` 双类型 + `Active` 凭据分支里,**DS 本来就带着
+  Bearer 令牌发这条请求**,服务端只是此前没验。切 enforce 不需要 UE 侧任何改动。
+- 只在 `callerID==0` 时过门:客户端自助查自己的出战快照走 `:8443`,其 `authorization` 头里是
+  **玩家 JWT**,拿去 `VerifyDSCallback` 必然验签失败。无条件过门会把整个客户端出战面板拒成
+  `ERR_UNAUTHORIZED`,这条有专门的回归用例钉住。
+
+### 8.2 三处同增同减
+
+player 是 **verify-only**(只验签,不签发;签发方仍只有 `ds_allocator` / `hub_allocator`),
+但持有校验材料同样扩大了 DS 回调密钥的分发面,因此按既有纪律登记:
+
+| 位置 | 内容 |
+|---|---|
+| `services/account/player/etc/player-dev.yaml` | 新增 `ds_auth` 节点(生成器双向断言:节点存在 ⟺ 在清单里) |
+| `services/account/player/etc/player-prod.yaml.example` | 同上,生产底稿 `mode: "enforce"` |
+| `tools/scripts/gen_cluster_config.ps1` | `$DsSecretServiceNames` += `'player'` |
+| `tools/scripts/lib/online_manifest_contract.ps1` | `$PandoraDsCallbackHmacServices` += `'player'` |
+
+四处漏改任意一处,`gen_cluster_config.ps1` 会以
+`[FATAL] player 的 ds_auth 节点与权威服务清单不一致` 拒绝生成,或发布契约以
+`DS callback HMAC 连续性检查缺 player 配置` 拒绝发布。`ds_auth_conf_test.go` 把这条一致性
+提前到 `go test`,不必等到真实配置生成才炸。
+
+### 8.3 档位与启用顺序
+
+| 环境 | 档位 | 来源 | 理由 |
+|---|---|---|---|
+| local / dev | `permissive` | `player-dev.yaml` 直接写死 | 跑与 enforce **完全相同**的验签 + 范围校验路径,失败只打 warn 仍放行 —— 不改变任何现有行为(§14.2,本地联调与一键启动不会被这次加固弄坏),同时把「令牌到底有没有到、验不验得过」变成可查证据 |
+| prod / agones | `enforce` | `gen_cluster_config.ps1 -DsAuthMode enforce` 机械注入 | 已实测:B1 档生成的 `player.yaml` 得到 `mode: enforce` + `authority_mode: redis` + 完整 fence,与其余四个 DS 密钥服务逐字同款 |
+
+**dev 刻意不写 `off`。** 写 off 就退回「执行点在位但恒放行」的纸面门 —— 那正是 2026-08-13
+评审打回的状态:代码可编译、测试全绿、漏洞照旧。permissive 是能同时满足「不破坏现有行为」与
+「持续产出真实证据」的唯一档位。
+
+**切 enforce 的判据**:dev 跑一局双人 PVE,player 日志里**没有**任何
+`ds_callback_auth` 相关 warn(令牌缺失 / 验签失败 / 范围不匹配),即证明 DS 侧令牌链路完整。
+判据不成立就先查 UE 的 `EPandoraDSCredentialUse::Active` 凭据是否完整,**不要**先降档位。
+
+**回滚**:把生成参数 `-DsAuthMode` 退回 `permissive` 即可,不需要改代码、不需要重出 DS 包;
+player 只验不签,退档不影响任何其它服务的令牌签发。
+
+`authority_mode: redis` 与 `fence` 会被生成器一并注入 player.yaml,但 player **不读**它们
+(只有 `hub_allocator` 读;player 侧只调 `NewDSCallbackGuardFromConf`,仅消费 `mode` / `secret` /
+`additional_secrets`)。属惰性字段,不构成启动依赖。
+
+### 8.4 剩余风险(本次未覆盖)
+
+`team.GetPlayerTeam` 与 `guild.GetPlayerGuild` 同样挂在 DS 面、同样已接 `DSCallbackGuard`,
+但这两个服务**至今不在上述两份权威清单里** —— 它们的 `ds_auth.mode` 恒为 off、守卫恒 nil,
+那两道门目前仍是纸面门。泄露面小于 loadout(只有队伍 / 公会编号),但性质与本条完全相同。
+要闭合需按 §8.2 同样的四处登记把 team / guild 也纳入,属独立决策,本次未做。
+
+### 8.5 ⚠️ 首次 online 发布会被连续性门挡下(必须先走换钥流程)
+
+`Assert-PandoraOnlineHmacContinuity` 会对**线上现存配置**和候选配置各算一次 DS callback keyset
+基线,而基线是按 `$PandoraDsCallbackHmacServices` **逐个服务**算的。player 刚进这份清单,
+但线上正在跑的 `player.yaml` 是本次改动之前生成的、**没有 `ds_auth` 节点** ——
+于是算 live 基线时就会在 player 上抛错(`player.ds_auth 是空节点` / `缺 player 配置`),
+发布在 push/apply 之前被拒。
+
+这不是 bug,是这套门禁的既定语义:**DS callback 密钥的分发面变化必须走独立换钥流程,
+不能混在普通 online 发布里**。往一个域里新增持钥服务与轮换密钥同属该类事件。
+
+因此上线顺序是:
+
+1. 先按换钥流程把 player 纳入 DS callback 域(让线上 `player.yaml` 先带上 `ds_auth` 节点,
+   secret 与现网 DS callback 主钥同值 —— 这一步不改任何密钥值,只是把同一把钥匙多发一份);
+2. 确认线上 player.yaml 已有 `ds_auth` 后,后续普通 online 发布的连续性门即自然通过;
+3. 再按 §8.3 的判据从 permissive 推到 enforce。
+
+把 1 和 3 合成一次发布会同时触发「分发面变化」与「档位变化」,出问题时无法二分定位,
+不要这么做。

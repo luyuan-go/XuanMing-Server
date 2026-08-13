@@ -78,3 +78,17 @@ player:
 # 权威端点漏配拒启,权威不可达 fail-closed。与 gen_cluster_config.ps1 -Prod 产物一致。
 session_gate:
   require: true
+
+# DS 回调令牌校验(verify-only)。player 只持校验材料,不持任何签发私钥,也不持玩家签票密钥;
+# 普通 stable/canary 发布不轮换本 secret(轮换走 additional_secrets 三段式,见 pkg/config DSAuthConf)。
+#
+# 生产直接 enforce:GetLoadout 经 Envoy DS 面(:8444)暴露且该监听器无 jwt_authn,
+# 不 enforce 等于把任意玩家的出战快照(装备实例 ID / 词条 / 天赋)开放给能连到该端口的任何进程。
+# 切 enforce 的前置条件与灰度顺序见 docs/design/decision-revisit-ds-callback-auth.md。
+#
+# secret 必须与 ds_allocator / hub_allocator 的 ds_auth.secret 同值,且与玩家面 jwt keyset 无交集。
+ds_auth:
+  mode: "enforce"
+  issuer: "pandora-ds-control"
+  audience: "pandora-ds"
+  secret: "__DS_CALLBACK_HS256_SECRET_AT_LEAST_32_BYTES__"

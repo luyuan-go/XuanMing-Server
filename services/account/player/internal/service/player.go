@@ -96,12 +96,19 @@ func systemOnly(ctx context.Context) commonv1.ErrCode {
 type PlayerService struct {
 	playerv1.UnimplementedPlayerServiceServer
 	uc *biz.PlayerUsecase
+
+	// dsGuard DS 回调令牌守卫;nil = 未启用(mode=off),Check 直接放行。
+	// 只有 GetLoadout 用它:见该方法注释,它是本服务里唯一挂在 Envoy DS 面上的 RPC。
+	dsGuard *pmw.DSCallbackGuard
 }
 
 // NewPlayerService 构造。
 func NewPlayerService(uc *biz.PlayerUsecase) *PlayerService {
 	return &PlayerService{uc: uc}
 }
+
+// SetDSCallbackGuard 注入 DS 回调令牌守卫(main 接线;nil 等价 mode=off)。
+func (s *PlayerService) SetDSCallbackGuard(g *pmw.DSCallbackGuard) { s.dsGuard = g }
 
 // GetProfile 读玩家档案(懒创建)。客户端只能读自己;内部直连信任请求体。
 func (s *PlayerService) GetProfile(ctx context.Context, req *playerv1.GetProfileRequest) (*playerv1.GetProfileResponse, error) {
@@ -415,8 +422,34 @@ func (s *PlayerService) GetTalents(ctx context.Context, req *playerv1.GetTalents
 }
 
 // GetLoadout 组装开战前快照(出战英雄 + 属性点 + 装备预设 + 天赋)。
-// 双模:内部(matchmaker/DS 开局快照注入,callerID==0)信请求体;客户端只能读自己。
+// 双模:内部(DS 开局快照注入,callerID==0)信请求体;客户端只能读自己。
+//
+// **本方法是 player 服务里唯一挂在 Envoy DS 面(:8444)上的 RPC**(2026-08-13 补路由,
+// 供 Hub/Battle DS 在 PlayerState 初始化时拉专精与预设装备)。那个监听器没有 jwt_authn,
+// 经它进来的调用 callerID 恒为 0 —— 于是 resolvePlayerID 的「callerID==0 即后端内部可信,
+// 信请求体 player_id」在本方法上不再成立:任何能连到 :8444、或绕过 Envoy 直连业务端口
+// 20002 的进程,都能拿到任意玩家的出战快照(装备实例 ID / 词条 / 天赋)。
+// 故 callerID==0 这一支必须自证是 DS,不能只靠「没带玩家 JWT」。
+//
+// 只在 callerID==0 时过门:带玩家 JWT 的客户端(自助查自己的出战快照,走 :8443)其
+// authorization 头里是**玩家** JWT,拿去 VerifyDSCallback 必然验签失败 —— 无条件过门
+// 会把正常客户端一起拒掉。这条分支纪律有回归测试钉死。
+//
+// scope 与 team.GetPlayerTeam / guild.GetPlayerGuild 逐条同构:
+//   - RequireToken:全仓无内部 Go 调用方(已 grep 确认),故直连无令牌也拒,
+//     堵住「绕过 Envoy 直连业务端口、无标记无令牌却被当内部东西向信任」的旁路;
+//   - 不绑 Type / Pod / MatchID:Hub 与 Battle DS 都在进场时查这一次,与哪台 DS、哪一局无关。
+//
+// 档位(2026-08-13 起 player 已在 DS 回调密钥权威清单内,本门是真门不是纸面门):
+// dev=permissive(验签与范围校验全跑,失败只 warn 放行,便于在切 enforce 前拿到真实证据),
+// prod=enforce(无有效令牌一律拒)。UE 侧对应契约:GetLoadout 属
+// IsPlayerLoadoutMethod 的 hub|battle 双类型 Active 方法,DS 本来就带 Bearer 令牌发这条请求。
 func (s *PlayerService) GetLoadout(ctx context.Context, req *playerv1.GetLoadoutRequest) (*playerv1.GetLoadoutResponse, error) {
+	if pmw.PlayerIDFromContext(ctx) == 0 {
+		if err := s.dsGuard.Check(ctx, pmw.DSScope{RequireToken: true}); err != nil {
+			return &playerv1.GetLoadoutResponse{Code: toProtoCode(err)}, nil
+		}
+	}
 	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
 	if code != commonv1.ErrCode_OK {
 		return &playerv1.GetLoadoutResponse{Code: code}, nil

@@ -585,7 +585,11 @@ function ConvertTo-YamlDoubleQuoted([string]$s) {
 # 当前 dev 模板中两类密钥节点的权威服务集合。新增/移动节点必须显式更新本清单；发现未登记节点
 # 直接失败，避免正则或目录扫描把玩家密钥误写进 DS 域。
 $PlayerSecretServiceNames = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
-$DsSecretServiceNames = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator')
+# player 2026-08-13 入列:GetLoadout 挂上了 Envoy DS 面(:8444),而该监听器没有 jwt_authn,
+# 经它进来的 callerID 恒为 0 —— 服务端必须能验 DS 回调令牌,才拦得住「任意能连 :8444 或
+# 直连 20002 的进程查任意玩家出战快照」。player 只做 verify(不签发),与 team/guild 不同:
+# 那两个至今没入列,故它们的门仍是纸面门。
+$DsSecretServiceNames = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator', 'player')
 # DSTicket v2(方案 B)签发方清单(与决策文档 §7.2 私钥暴露面一致):恰好等于玩家面 jwt 清单。
 $DsTicketServiceNames = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
 $PlacementSecretBindings = @()

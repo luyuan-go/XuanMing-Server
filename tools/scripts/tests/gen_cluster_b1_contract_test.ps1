@@ -72,7 +72,7 @@ function Invoke-B1Generator {
 function Get-B1HmacConfigs([string]$TargetDir) {
     $configs = [ordered]@{}
     foreach ($service in @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator',
-            'ds-allocator', 'battle-result', 'player-locator')) {
+            'ds-allocator', 'battle-result', 'player-locator', 'player')) {
         $configs[$service] = Get-Content -LiteralPath (Join-Path $TargetDir "$service.yaml") -Raw
     }
     return $configs
@@ -177,7 +177,7 @@ try {
         }
     }
 
-    foreach ($service in @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator')) {
+    foreach ($service in @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator', 'player')) {
         $yaml = Get-Content -LiteralPath (Join-Path $OutDir "$service.yaml") -Raw
         Assert-True ([regex]::IsMatch($yaml, '(?m)^\s*mode:\s*"?enforce"?\s*$')) "$service ds_auth.mode 不是 enforce"
         Assert-True ([regex]::IsMatch($yaml, '(?m)^\s*authority_mode:\s*"?redis"?\s*$')) "$service authority_mode 不是 redis"
@@ -337,7 +337,7 @@ try {
         $yaml = Get-Content -LiteralPath (Join-Path $OutDirAbortAuth "$service.yaml") -Raw
         Assert-True ($yaml.Contains($explicitAbortAuth)) "$service 缺 allocation abort key"
     }
-    foreach ($service in @('login', 'hub-allocator', 'battle-result', 'player-locator')) {
+    foreach ($service in @('login', 'hub-allocator', 'battle-result', 'player-locator', 'player')) {
         $yaml = Get-Content -LiteralPath (Join-Path $OutDirAbortAuth "$service.yaml") -Raw
         Assert-True (-not $yaml.Contains($explicitAbortAuth)) "$service 不得持有 allocation abort key"
     }

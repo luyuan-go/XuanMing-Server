@@ -16,6 +16,20 @@ type Config struct {
 	config.Base `yaml:",inline" mapstructure:",squash"`
 
 	Player PlayerConf `yaml:"player" json:"player"`
+
+	// DSAuth DS 回调服务令牌校验(verify-only)。GetLoadout 自 2026-08-13 起挂上了 Envoy
+	// DS 面(:8444)精确路由,而该监听器没有 jwt_authn —— callerID 恒为 0,原先「callerID==0
+	// 即后端内部可信」的双模读语义在该方法上不再成立(任何能连 :8444 或直连 20002 的进程
+	// 都能查任意玩家出战快照)。本配置提供「调用方确实是 DS」的那半证明。
+	// player 2026-08-13 已入权威清单(gen_cluster_config.ps1 的 DsSecretServiceNames 与
+	// online_manifest_contract.ps1 的 PandoraDsCallbackHmacServices),因此 etc/ 模板里
+	// **必须**带 ds_auth 节点 —— 生成器对每个服务做双向断言(节点存在 ⟺ 在权威清单里),
+	// 少了就是 `[FATAL] player 的 ds_auth 节点与权威服务清单不一致`,且只在真实配置生成时才炸。
+	// 三者(dev 模板 / 两处清单)必须同增同减,ds_auth_conf_test.go 把这条钉在 go test 里。
+	//
+	// player 只**验签**不签发:签发方是 ds_allocator / hub_allocator,secret 三方同值。
+	// 档位:dev=permissive(验签路径全跑、失败只 warn,不改变现有行为),prod=enforce。
+	DSAuth config.DSAuthConf `yaml:"ds_auth,omitempty" json:"ds_auth,omitempty"`
 }
 
 // PlayerConf 是 player 服务私有配置。
@@ -116,6 +130,7 @@ type PlayerConf struct {
 
 // Defaults 填默认值。
 func (c *Config) Defaults() {
+	c.DSAuth.Defaults()
 	if c.Player.BaseMMR <= 0 {
 		c.Player.BaseMMR = 1500
 	}

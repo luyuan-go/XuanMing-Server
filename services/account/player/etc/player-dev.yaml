@@ -110,3 +110,25 @@ player:
 # -Prod 产物由 gen_cluster_config.ps1 机械置 true(漏配端点拒启)。
 session_gate:
   require: false
+
+# DS 回调令牌校验(verify-only;player 只验不签,签发方是 ds_allocator / hub_allocator)。
+#
+# 为什么 player 需要它:GetLoadout 自 2026-08-13 起挂在 Envoy DS 面(:8444)上,供 Hub/Battle DS
+# 在 PlayerState 初始化时拉专精与预设装备。该监听器**没有 jwt_authn**,经它进来的 callerID 恒为 0,
+# 于是 resolvePlayerID 的「callerID==0 即后端内部可信、信请求体 player_id」在该方法上失效 ——
+# 没有这道门,任何能连 :8444、或绕过 Envoy 直连 20002 的进程都能拿任意玩家的出战快照。
+#
+# secret 必须与 ds_allocator / hub_allocator 的 ds_auth.secret 同值(它们签,这里验);
+# 与玩家面 jwt.secret 严格分域,两个 keyset 不得相交(online_manifest_contract 会硬拒相交发布)。
+#
+# 灰度档位(dev 取 permissive,理由见 docs/design/decision-revisit-ds-callback-auth.md 的启用策略):
+#   off        → 完全不校验
+#   permissive → 完整验签 + 范围校验,失败只打 warn 仍放行(观察期:确认 DS 真的带上了令牌)
+#   enforce    → 无有效令牌一律拒
+# dev 用 permissive 而不是 off:它跑的是与 enforce 完全相同的验签路径,失败会在 player 日志里
+# 留下可查的 warn,但**不改变任何现有行为**(§14.2),因此本地联调与一键启动不会被这次加固弄坏,
+# 同时又能在切 enforce 之前就拿到「令牌到底有没有到、验不验得过」的真实证据。
+ds_auth:
+  mode: "permissive"
+  authority_mode: "legacy"
+  secret: "pandora-dev-jwt-secret-change-me-32!"

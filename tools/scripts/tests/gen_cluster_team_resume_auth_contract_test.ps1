@@ -50,7 +50,7 @@ function Assert-Throws([scriptblock]$Action, [string]$Message) {
 function Get-TeamAuthConfigs([string]$TargetDir) {
     $configs = [ordered]@{}
     foreach ($service in @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator',
-            'ds-allocator', 'battle-result', 'player-locator', 'team')) {
+            'ds-allocator', 'battle-result', 'player-locator', 'team', 'player')) {
         $configs[$service] = Get-Content -LiteralPath (Join-Path $TargetDir "$service.yaml") -Raw
     }
     return $configs
