@@ -455,6 +455,31 @@ func (u *GuildUsecase) GetMyGuild(ctx context.Context, playerID uint64) (*guildv
 	return toGuildView(g), nil
 }
 
+// GetPlayerGuildID 反查玩家当前公会编号(内部只读,DS 出生编制专用)。
+//
+// 刻意不复用 GetMyGuild:那条是给玩家自己看公会面板的 cache-aside 读,member→guild 反查
+// 缓存命中即返回、不回源权威。同一次陈旧读在两条路径上的代价差一个量级 ——
+// 玩家面板读到旧值只是晚一拍,下次拉取自愈;而 DS 只在进场时查这一次,陈旧值一旦写到实体上
+// 就会复制给全场并**整场不再纠正**(会友被显示成路人,或反过来)。写路径删缓存失败时仅告警、
+// 靠 TTL 兜底,所以"删缓存基本都成功"不足以让 DS 这一侧也吃缓存。
+//
+// 与 team 侧 GetPlayerTeamID 同构:只回编号不回快照(§9.14 最小视图)。权威读到的结果顺手
+// 回填缓存,玩家面板那条路径照常受益。
+func (u *GuildUsecase) GetPlayerGuildID(ctx context.Context, playerID uint64) (uint64, bool, error) {
+	g, ok, err := u.repo.GetMyGuild(ctx, playerID)
+	if err != nil {
+		return 0, false, err
+	}
+	if !ok {
+		// 权威:不在任何公会 → 清掉可能残留的陈旧 member 反查缓存(与 GetMyGuild 同口径)。
+		u.invalidateMember(ctx, playerID)
+		return 0, false, nil
+	}
+	u.fillGuildCache(ctx, g)
+	u.fillMemberCache(ctx, playerID, g.GuildID)
+	return g.GuildID, true, nil
+}
+
 // 分页上限(决策:docs/design/decision-revisit-list-pagination.md)。
 const (
 	defaultPageLimit = 50

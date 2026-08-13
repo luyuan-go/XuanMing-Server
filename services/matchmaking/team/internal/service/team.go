@@ -16,6 +16,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	teamv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/team/v1"
 
@@ -34,7 +35,19 @@ type TeamService struct {
 	// team_id 与 invite_id 必须各自留在自己的 key 空间里,禁止混进同一个 map / 唯一键比较。
 	teamSF   snowflakeGen
 	inviteSF snowflakeGen
+
+	// dsGuard DS 回调令牌守卫;nil = 未启用(mode=off),行为与接线前一致。
+	//
+	// systemOnly 只能证明「本次调用不带玩家 JWT」,证明不了「调用方真的是 DS」——:8444
+	// 没有 jwt_authn,任何能连到网关或直连本服务端口的东西都满足 callerID==0。GetPlayerTeam
+	// 是「查任意 player_id 在哪支队」的接口,只靠 systemOnly 等于把它对整个集群内网敞开。
+	// 与 login / battle_result / ds_allocator / hub_allocator / inventory / player_locator
+	// 同一套守卫,同一份 ds_auth 配置。
+	dsGuard *middleware.DSCallbackGuard
 }
+
+// SetDSCallbackGuard 由 main.go 在构造后注入;不调用即 mode=off。
+func (s *TeamService) SetDSCallbackGuard(g *middleware.DSCallbackGuard) { s.dsGuard = g }
 
 // snowflakeGen 是 snowflake.Node 的最小接口,避免 service 直接依赖 snowflake 包。
 type snowflakeGen interface {
@@ -415,6 +428,15 @@ func (s *TeamService) BeginTeamMatch(ctx context.Context, req *teamv1.BeginTeamM
 func (s *TeamService) GetPlayerTeam(ctx context.Context, req *teamv1.GetPlayerTeamRequest) (*teamv1.GetPlayerTeamResponse, error) {
 	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
 		return &teamv1.GetPlayerTeamResponse{Code: code}, nil
+	}
+	// 令牌门。RequireToken:本方法只可能来自 DS —— 全仓没有任何内部 Go 服务调它
+	// (mail 的同名 repo 方法查的是自己的 MySQL,与本 RPC 无关),故直连无令牌也一律拒,
+	// 堵住「被攻破的业务 Pod 绕过 Envoy 直连 20010、无标记无令牌被当东西向内部信任」。
+	// 不绑 Type:大厅与对局都可能查(公会两种玩法都要,队伍虽只有大厅查,但绑死 hub 会让
+	// 将来任何新玩法的合法查询变成鉴权失败,而这里的范围收益是零 —— 令牌本身已证明是 DS)。
+	// 不绑 Pod / MatchID:反查与哪台 DS、哪一局无关,填了只会把合法调用拒掉。
+	if err := s.dsGuard.Check(ctx, middleware.DSScope{RequireToken: true}); err != nil {
+		return &teamv1.GetPlayerTeamResponse{Code: toProtoCode(err)}, nil
 	}
 	playerID := req.GetPlayerId()
 	if playerID == 0 {

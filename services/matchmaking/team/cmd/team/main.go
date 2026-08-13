@@ -31,6 +31,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/offlinewatch"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
@@ -244,6 +245,18 @@ func main() {
 		defer func() { _ = closeCell() }()
 	}
 	svc := service.NewTeamService(uc, teamSF, inviteSF)
+
+	// DS 回调令牌守卫:GetPlayerTeam 经 :8444 进来的调用须带 DS 服务令牌。
+	// mode=off(默认)→ dsGuard 为 nil,Check 直接放行,与接线前完全一致。
+	dsGuard, derr := middleware.NewDSCallbackGuardFromConf(cfg.DSAuth)
+	if derr != nil {
+		helper.Errorw("msg", "ds_auth_guard_init_failed", "err", derr)
+		os.Exit(1)
+	}
+	svc.SetDSCallbackGuard(dsGuard)
+	if dsGuard != nil {
+		helper.Infow("msg", "ds_callback_guard_ready", "mode", dsGuard.Mode().String())
+	}
 
 	// 7. gRPC + HTTP
 	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):客户端面请求 jti 必须是 login

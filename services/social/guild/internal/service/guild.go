@@ -15,6 +15,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	guildv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/guild/v1"
 
@@ -38,7 +39,15 @@ type GuildService struct {
 	// 必须各自留在自己的表 / 唯一键里,禁止混进同一容器比较。
 	guildSF   snowflakeGen
 	requestSF snowflakeGen
+
+	// dsGuard DS 回调令牌守卫;nil = 未启用(mode=off),行为与接线前一致。
+	// 理由与 team 侧 GetPlayerTeam 同构:systemOnly 只证明「不带玩家 JWT」,
+	// 证明不了「调用方是 DS」。
+	dsGuard *middleware.DSCallbackGuard
 }
+
+// SetDSCallbackGuard 由 main.go 在构造后注入;不调用即 mode=off。
+func (s *GuildService) SetDSCallbackGuard(g *middleware.DSCallbackGuard) { s.dsGuard = g }
 
 // NewGuildService 构造。
 //
@@ -195,29 +204,35 @@ func (s *GuildService) GetMyGuild(ctx context.Context, _ *guildv1.GetMyGuildRequ
 // GetPlayerGuild 按 player_id 反查公会编号(内部东西向,DS 出生编制专用)。
 //
 // 有了它,客户端就不必靠本机名册反推会友 —— 名册按游标分页,没翻到的那一页会把会友判成路人。
-// 复用 GetMyGuild 的读路径(含 member→guild 反查缓存与权威回源),不另起一条缓存语义;
-// 但只把编号放进响应,整份 Guild 快照不外发(§9.14 最小视图)。
+// 走 GetPlayerGuildID 的**权威**读路径,不吃玩家面板那条 cache-aside 缓存:DS 只在进场时
+// 查这一次,陈旧值写到实体上会整场不再纠正(理由详见 biz.GetPlayerGuildID)。
+// 只把编号放进响应,整份 Guild 快照不外发(§9.14 最小视图)。
 func (s *GuildService) GetPlayerGuild(ctx context.Context, req *guildv1.GetPlayerGuildRequest) (*guildv1.GetPlayerGuildResponse, error) {
 	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
 		return &guildv1.GetPlayerGuildResponse{Code: code}, nil
+	}
+	// 令牌门,与 team 侧 GetPlayerTeam 同口径:RequireToken 因为全仓无内部 Go 调用方,
+	// 不绑 Type / Pod / MatchID 因为反查与哪台 DS、哪一局无关。
+	if err := s.dsGuard.Check(ctx, middleware.DSScope{RequireToken: true}); err != nil {
+		return &guildv1.GetPlayerGuildResponse{Code: toProtoCode(err)}, nil
 	}
 	playerID := req.GetPlayerId()
 	if playerID == 0 {
 		return &guildv1.GetPlayerGuildResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
 
-	g, err := s.uc.GetMyGuild(ctx, playerID)
+	guildID, hasGuild, err := s.uc.GetPlayerGuildID(ctx, playerID)
 	if err != nil {
 		return &guildv1.GetPlayerGuildResponse{Code: toProtoCode(err)}, nil
 	}
-	if g == nil || g.GetGuildId() == 0 {
+	if !hasGuild {
 		// 不在任何公会是正常态,不是错误。
 		return &guildv1.GetPlayerGuildResponse{Code: commonv1.ErrCode_OK, HasGuild: false}, nil
 	}
 	return &guildv1.GetPlayerGuildResponse{
 		Code:     commonv1.ErrCode_OK,
 		HasGuild: true,
-		GuildId:  g.GetGuildId(),
+		GuildId:  guildID,
 	}, nil
 }
 

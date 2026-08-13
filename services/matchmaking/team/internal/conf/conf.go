@@ -13,6 +13,11 @@ type Config struct {
 	config.Base `yaml:",inline" mapstructure:",squash"`
 
 	Team TeamConf `yaml:"team" json:"team"`
+
+	// DSAuth DS 回调服务令牌校验(verify-only)。GetPlayerTeam 是 DS 内部东西向反查,
+	// systemOnly 只证明「不带玩家 JWT」,证明不了「调用方是 DS」;本配置提供后者。
+	// mode 默认 off(不校验),与接线前行为一致。
+	DSAuth config.DSAuthConf `yaml:"ds_auth,omitempty" json:"ds_auth,omitempty"`
 }
 
 // TeamConf 是 team 服务私有配置。
@@ -208,6 +213,7 @@ func (c *Config) ValidateJoinPolicy() error {
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发 panic。
 func (c *Config) Defaults() {
+	c.DSAuth.Defaults()
 	if c.Team.InviteTTL == 0 {
 		c.Team.InviteTTL = config.Duration(60 * time.Second)
 	}

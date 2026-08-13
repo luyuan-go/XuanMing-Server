@@ -31,6 +31,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/dbguard"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/safego"
@@ -188,6 +189,18 @@ func main() {
 	}
 	groupUC := biz.NewGroupUsecase(groupRepo, cfg.Guild)
 	guildSvc := service.NewGuildService(guildUC, guildSF, requestSF)
+
+	// DS 回调令牌守卫:GetPlayerGuild 经 :8444 进来的调用须带 DS 服务令牌。
+	// mode=off(默认)→ dsGuard 为 nil,Check 直接放行,与接线前完全一致。
+	dsGuard, derr := middleware.NewDSCallbackGuardFromConf(cfg.DSAuth)
+	if derr != nil {
+		helper.Errorw("msg", "ds_auth_guard_init_failed", "err", derr)
+		os.Exit(1)
+	}
+	guildSvc.SetDSCallbackGuard(dsGuard)
+	if dsGuard != nil {
+		helper.Infow("msg", "ds_callback_guard_ready", "mode", dsGuard.Mode().String())
+	}
 	groupSvc := service.NewGroupService(groupUC, groupSF)
 
 	// 终态入会申请保留期清理:只增终态行 90 天后批删,增长有界(§9.24,biz/sweep.go)。

@@ -837,6 +837,25 @@ static_resources:
                   cluster: mail_cluster
                   timeout: 15s
                   idle_timeout: 60s
+              # ----- Hub DS → team/guild 社交归属反查(2026-08-12)-----
+              # DS 在玩家进场时按 player_id 反查队伍 / 公会编号,写到实体上复制给全场,
+              # 「谁和谁是一伙的」才有权威来源。两个方法在服务端都有 systemOnly 门(带玩家
+              # JWT 的调用一律拒),这里只补 DS 面路由。集群内等价配置见
+              # deploy/k8s/agones/16-ds-envoy.yaml;两处必须同增同减。
+              # 超时取 5s(与集群侧一致):进场路径上的只读反查,失败按未知处理不阻塞出生,
+              # 没有理由等到 15s。
+              - match:
+                  path: "/pandora.team.v1.TeamService/GetPlayerTeam"
+                route:
+                  cluster: team_cluster
+                  timeout: 5s
+                  idle_timeout: 60s
+              - match:
+                  path: "/pandora.guild.v1.GuildService/GetPlayerGuild"
+                route:
+                  cluster: guild_cluster
+                  timeout: 5s
+                  idle_timeout: 60s
 
   clusters:
   # ===== login_cluster =====
