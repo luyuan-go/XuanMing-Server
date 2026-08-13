@@ -3325,3 +3325,31 @@ immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致
   - **同日再补(用户问「PVE 现在是所有怪物死亡结算,可能提前结算」)——该前提与代码不符,已按实查记进文档 §2.1**。终局触发只有三个枚举值 `PlayerDied` / `PlayerExtracted` / `TimeLimitReached`(`PandoraBattleSettlementRule.h`,枚举注释明令「只有 `EvaluateTerminal` 一个权威入口,新增原因加枚举值,不得另开并列钩子」),**没有怪物相关触发**;PVE 规则是**撤离制**——整队全部进入终态(死亡或撤离)才结算,有人撤离成功=通关(0)、全灭=未通关(1);怪物死亡回调 `HandleMonsterEntityDied` 只产掉落 + 上报击杀经验,**从不调 `RequestFinishBattle`**(全文件调用点只有死亡/撤离/超时/失败重投四处);`Pandora/Content` 未扫到任何引用结算规则类的资产,即无蓝图子类改写判据。**但「可能提前结算」的担心成立,根因是撤离制判据本身**:单人 PVE 下 roster=1,一个人死就是"整队全终态"→ 立刻失败结算;多人下最后一个活人一撤离就立刻收局。真正的缺口是**「目标达成」与「对局结束」目前是同一件事**,没有任何窗口给玩家捡东西/看战报——这正是结算阶段要解决的。若线上确实见到"怪一清空就结算",需给出 map_id + 日志再查,按当前 C++ 事实不成立。
   - **用户「不想用状态」→ 已写建议方案(文档 §7,未拍板)**:三段式**不需要 phase 枚举状态机**。①**存时刻不存阶段**——权威 DS 只持两个单调钟绝对时刻(`PrepareDeadline` / `BattleDeadline`),阶段是 `Now` 落在哪个区间的**纯函数**,没有 `SetPhase()` 就没有"忘了切状态"的 bug,也不会出现阶段与倒计时两份事实漂移(§9.22 派生值按需计算);②**下发也不发状态,发剩余秒数**(照抄 `BattleRemainingSeconds` 先例,客户端 UI 从秒数派生),代价仍是协议版本 9→10——文档明确**不推荐**用"负值=准备阶段"这类约定编码去省这次 bump(省一次版本换长期歧义);③**结束条件每 tick 求值**(`全员就绪 or 到期`),与现有 `TickBattleTimeLimit` 同款,不要转移表;④真正要存的只有**不可重建的事实**(谁死了/谁撤离了/终局快照冻结没有),那些已经存着了,不属于"阶段状态"。⑤PVE 侧同理:**别给"怪物清空"新加终局触发枚举**(会在唯一权威入口旁开第二个裁决源),胜负判据留在 `UPandoraBattleSettlementRule` 子类里(类头注释已预留"击杀 Boss/存活/护送"是不同子类),并把**「目标达成」与「对局结束」拆开**——目标达成只结束战斗阶段、进结算阶段,不直接收局。
   - **发布线复查更正**:此前记的「placement-preflight 死契约硬阻断每次 online 发布 + 会部署出必 CrashLoop 的 initContainer」**已修**——`online_manifest_contract.ps1` / `start.ps1` 对 `placement-preflight` 的引用 grep 零命中,`ds_auth_activation_contract.ps1:441` 只剩说明注释。另两条仍红(`matchmaker/main.go` 的 `legacySigner` 3 处、`gen_cluster_config.ps1:591` 空 `$PlacementSecretBindings`)。
+- 2026-08-13(策划一键启动两条护栏:dev.env 自举 + 退出码透传)。现场:另一台机器刚更新完双击
+  `策划一键启动-改资源即时生效.cmd`,断在 `[1/4] 基础设施`(`[ERR] env file not found: .../deploy/env/dev.env`),
+  而窗口最后一行仍报「完成(退出码 0)」。两条都是结构性的,不是那台机器的偶发。
+  - **根因① dev.env 永远不会随更新发过去**:`deploy/env/dev.env` 命中 `.gitignore:45` 的 `*.env`,
+    `git ls-files deploy/env/` 只有 `dev.env.example`。也就是说**任何**新机器 / 新克隆第一次跑都必然缺它,
+    而 `docker compose --env-file` 指到不存在的路径直接失败。原实现只打一行「请先执行 Copy-Item ...」
+    就 `exit 1` —— 一键启动实际是两步,且策划多半只看到最后那行「基础设施启动失败」。
+    **修**:新增共享库 `tools/scripts/dev_env_file.ps1`(`Confirm-DevEnvFile`),缺失时按 example 初始化
+    (example 里全是 dev 级默认值:弱口令 + 空 webhook,群告警 URL 留空时 Grafana 不生成对应 receiver,
+    没有一个真 secret);**已存在则绝不覆盖**(本机填的真实 webhook/token 不能被冲掉);连 example 都缺
+    才硬失败(那才是工作区不完整)。先写临时文件再原子改名,双击两次也不会读到写了一半的 dev.env。
+    接线:`start.ps1`(`Resolve-Prerequisites`,online 除外)、`dev_up.ps1`、`dev_down.ps1`、`dev_status.ps1`、
+    `k8s_envoy_bridge.ps1`。**注意 bridge 早就有一份内联自举**(PROGRESS 续「bridge dev.env 自举」),
+    但只修了 k8s 那条路,local / docker 走的 `dev_up.ps1` 一直是硬失败 —— 本次把两份并成一份。
+  - **根因② `&` 调子脚本不会让父脚本失败**。`dev_all.ps1` 每步失败都 `exit 1`,但 `start.ps1` 的
+    `Invoke-Local` 裸调不透传,`switch` 走完就正常结束 → 双击窗口 / Web 管理台拿到 0。
+    同层的 `Invoke-Docker`(`dev_up` 后 `throw`)与 `-Resume` 分支一直是有检查的,**只有 local 这条漏了**。
+    实测复现:裸调版 `exit=0`,加判定版 `exit=1`。**修**:`Invoke-Local` 的两处调用(`-Down` 与正常启动)
+    都判 `$LASTEXITCODE` 并原码带出,正常启动失败时补一行「后端没起来,别去查客户端」的归因。
+  - **护栏**:新增 `tools/scripts/tests/oneclick_devenv_exitcode_contract_test.ps1` 并登记进 `ci_backend.ps1`
+    的 `$contractTests`(全绿才登记)。断言四组:①自举三态真实执行(建出 / 不覆盖 / example 也缺时抛错,
+    全程在临时目录,不碰仓库里的 dev.env);②五个入口脚本都接了自举;③除共享库外不许再有内联的
+    `Copy-Item ... dev.env.example`(防再分叉,k8s 那份就是这么长出来的);④AST 取 `Invoke-Local` 函数体,
+    每处 `dev_all.ps1` 调用后必须有 `$LASTEXITCODE` 判定并 `exit`。**已做变异验证**:把退出码判定摘掉后
+    测试转红(`exit=1`),装回即绿 —— 不是空跑的测试。退出码这条尤其需要门禁,它的回归表现是
+    「窗口报绿、后端其实没起来」,人眼 review 最容易放过。
+  - **未做**:`reset_data_service_schema.ps1` 也吃 `--env-file`,但它只用于栈已经跑起来后的破坏性重置,
+    彼时 dev.env 必然存在,故不接自举、也不进契约测试的入口清单。

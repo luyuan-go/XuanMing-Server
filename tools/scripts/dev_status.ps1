@@ -9,6 +9,10 @@ $ProjectRoot = Resolve-Path "$PSScriptRoot/../.."
 $ComposeFile = "$ProjectRoot/deploy/docker-compose.dev.yml"
 $EnvFile     = "$ProjectRoot/deploy/env/dev.env"
 
+# 同 dev_up / dev_down:缺 dev.env 时 compose ps 会直接报错,状态一行都看不到。
+. "$PSScriptRoot/dev_env_file.ps1"
+Confirm-DevEnvFile -ProjectRoot $ProjectRoot
+
 Write-Host "===== Pandora dev infra status =====" -ForegroundColor Cyan
 docker compose -f $ComposeFile --env-file $EnvFile ps
 

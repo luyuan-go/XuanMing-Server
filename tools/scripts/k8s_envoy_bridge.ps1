@@ -55,6 +55,7 @@ function Test-KubeContextIsLocalMinikube([string]$Context, [string]$Profile) {
 
 # Envoy dev TLS 证书校验 / 自愈(与 dev_up.ps1 复用同一套逻辑)。
 . "$ScriptDir/envoy_cert.ps1"
+. "$ScriptDir/dev_env_file.ps1"
 
 # Essential = 登录→Hub→匹配→Battle→结算 闭环必需的服务;非必需(社交/拍卖/交易等)
 # 即便 Pod 没起来,也不该让整个 bridge / e2e 直接失败(只 WARN 跳过该 port-forward)。
@@ -464,12 +465,10 @@ function Stop-EnvoyForRecreate {
 Write-Ok "port-forward context 已锁定:$KubeContext"
 
 Ensure-File $ComposeFile
-# dev.env 被 git 忽略(真实 webhook/token 不入库);新机器首次跑时按 example 初始化——
-# 与 example 头部「首次使用:Copy-Item ...」的引导一致,把这步自动化(值全是 dev 级默认)。
-if (-not (Test-Path $EnvFile) -and (Test-Path "$EnvFile.example")) {
-    Copy-Item "$EnvFile.example" $EnvFile
-    Write-Info "已从 dev.env.example 初始化 $EnvFile(dev 默认值;真实 webhook/token 自行改写,不会入库)。"
-}
+# dev.env 被 git 忽略(真实 webhook/token 不入库);新机器首次跑时按 example 初始化。
+# 这段原来是本文件独有的内联实现,现已提到 dev_env_file.ps1 —— local / docker 走的
+# dev_up.ps1 当时没有自举,同样的「新机器缺 dev.env」在那条路上是硬失败(2026-08-12 现场)。
+Confirm-DevEnvFile -ProjectRoot $ProjectRoot
 Ensure-File $EnvFile
 Ensure-File (Join-Path $ProjectRoot 'deploy/envoy/envoy.yaml')
 # cert.pem / key.pem 不止判存在:必须是有效 PEM(key.pem 损坏会让 Envoy 启动直接退出)。

@@ -18,6 +18,8 @@ $EnvFile     = "$ProjectRoot/deploy/env/dev.env"
 
 # Envoy dev TLS 证书校验 / 自愈(缺失或损坏的 cert.pem/key.pem 会让 Envoy 启动直接退出)。
 . "$PSScriptRoot/envoy_cert.ps1"
+# 本机 dev.env 自举:被 git 忽略 → 新机器必然缺,而缺了 --env-file 会直接失败。
+. "$PSScriptRoot/dev_env_file.ps1"
 
 Write-Host "===== Pandora dev infra up =====" -ForegroundColor Cyan
 Write-Host "Project:      $ProjectRoot"
@@ -29,9 +31,14 @@ if (-not (Test-Path $ComposeFile)) {
     Write-Host "[ERR] compose file not found: $ComposeFile" -ForegroundColor Red
     exit 1
 }
-if (-not (Test-Path $EnvFile)) {
-    Write-Host "[ERR] env file not found: $EnvFile" -ForegroundColor Red
-    Write-Host "      请先执行:Copy-Item deploy/env/dev.env.example deploy/env/dev.env,再填写本机 secret。" -ForegroundColor Yellow
+# dev.env 命中 .gitignore 的 `*.env`,受版本控制的只有 dev.env.example —— 任何新机器 / 新克隆
+# 第一次跑都必然没有它。原来只打一行「请先执行 Copy-Item ...」就 exit 1,等于把「一键启动」
+# 变成两步,而策划多半只看到最后一行「基础设施启动失败」。现在按 example 自动初始化(里面
+# 全是 dev 级默认值,没有真 secret);连 example 都缺才是工作区不完整,那时才硬失败。
+try {
+    Confirm-DevEnvFile -ProjectRoot $ProjectRoot
+} catch {
+    Write-Host "[ERR] $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
 

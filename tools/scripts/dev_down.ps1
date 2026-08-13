@@ -14,6 +14,11 @@ $ProjectRoot = Resolve-Path "$PSScriptRoot/../.."
 $ComposeFile = "$ProjectRoot/deploy/docker-compose.dev.yml"
 $EnvFile     = "$ProjectRoot/deploy/env/dev.env"
 
+# 停机也吃 --env-file:dev.env 缺失(新机器没跑过启动就先双击了停止)会让 compose 直接报错,
+# 于是「一键停止」也失败。与 dev_up 用同一份自举逻辑。
+. "$PSScriptRoot/dev_env_file.ps1"
+Confirm-DevEnvFile -ProjectRoot $ProjectRoot
+
 Write-Host "===== Pandora dev infra down =====" -ForegroundColor Cyan
 
 if ($Volumes) {

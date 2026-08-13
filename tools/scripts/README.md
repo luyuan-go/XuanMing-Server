@@ -47,6 +47,7 @@ fail-closed、招募列表恒空）。生成器会拒绝公开 dev key、短 key
 | 脚本 | 用途 | 被谁调用 |
 |---|---|---|
 | `envoy_cert.ps1` | Envoy TLS 证书校验/自愈(共享库) | `dev_up.ps1`、`install_shared_dev_ca.ps1`、`k8s_envoy_bridge.ps1` |
+| `dev_env_file.ps1` | 本机 `deploy/env/dev.env` 自举(被 git 忽略,新机器必然缺;共享库) | `start.ps1`、`dev_up.ps1`、`dev_down.ps1`、`dev_status.ps1`、`k8s_envoy_bridge.ps1` |
 | `install_shared_dev_ca.ps1` | 安装全队共享开发 CA | 手动(见 `deploy/dev-ca/README.md`) |
 | `import_dev_ca.ps1` | 客户端信任开发 CA 证书 | 手动 |
 
@@ -78,4 +79,5 @@ fail-closed、招募列表恒空）。生成器会拒绝公开 dev key、短 key
 | `tests/gen_cluster_b1_contract_test.ps1` | B1 signer/verifier、Model-B callback、Stable/Canary allocator 配置生成契约 | 手动/CI |
 | `tests/gen_cluster_team_resume_auth_contract_test.ps1` | Team→Matchmaker 服务身份 key:两端成对、与 login 那把独立、-Prod 必填与跨域复用反例 | 手动/CI |
 | `tests/configtable_gen_svn_status_test.ps1` | 导表失败归因用的 SVN 判定(取版本号 / 未提交判定,含"干净副本 ≠ 没装 svn")行为测试 | 手动/CI |
+| `tests/oneclick_devenv_exitcode_contract_test.ps1` | 策划一键启动两条护栏:dev.env 自举三态(建/不覆盖/工作区不全硬失败)+ `Invoke-Local` 必须透传 dev_all 退出码 | 手动/CI |
 | `tests/infra_etcd_persistence_contract_test.ps1` | 本地 etcd PVC/Recreate 持久化契约与反例 | 手动/CI |

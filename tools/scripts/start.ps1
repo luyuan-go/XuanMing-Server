@@ -205,6 +205,9 @@ Sync-ProcessPathFromRegistry
 . (Join-Path $ScriptDir 'lib/ds_auth_activation_contract.ps1')
 . (Join-Path $ScriptDir 'lib/dsticket_keyset_contract.ps1')
 . (Join-Path $ScriptDir 'lib/dsticket_rotation_contract.ps1')
+# 本机 dev.env 自举(被 git 忽略 → 新机器必然缺)。start.ps1 自己也在恢复 / 状态查询处
+# 用 --env-file $EnvFile,所以入口这一层也要接。
+. (Join-Path $ScriptDir 'dev_env_file.ps1')
 # rotation contract 自身在加载期开启 StrictMode；start.ps1 是历史运维入口，
 # 未全面满足 StrictMode Latest，因此只共享其纯函数契约后恢复本脚本既有语义。
 Set-StrictMode -Off
@@ -3825,6 +3828,14 @@ function Assert-LocalEdgePortsFree {
 
 function Resolve-Prerequisites([string]$mode) {
     Write-Step "检查必要工具($mode 模式)"
+    # deploy/env/dev.env 命中 .gitignore 的 `*.env`,受版本控制的只有 dev.env.example ——
+    # 新机器 / 新克隆第一次跑必然没有它,而 docker compose 的 --env-file 指到不存在的路径会
+    # 直接失败(2026-08-12 现场:另一台机器刚更新完双击一键启动,断在 [1/4] 基础设施)。
+    # 放在这一层而不是只放 dev_up.ps1:这一步就是策划眼里的「前置检查」,信息出现在他正看的
+    # 那一段;dev_up / dev_down / dev_status 各自也接了同一个函数,单独跑它们同样自愈。
+    # -Check 干跑也照建:缺这个文件时报「工具全部就绪」本身就是假的,建完才是真就绪。
+    # online 是远端集群,不碰本机 compose,跳过。
+    if ($mode -ne 'online') { Confirm-DevEnvFile -ProjectRoot $ProjectRoot }
     $allOk = $true
     switch ($mode) {
         'local' {
@@ -4169,6 +4180,7 @@ function Stop-LocalStackForK8s {
 function Invoke-Local {
     if ($Down) {
         & "$ScriptDir/dev_all.ps1" -Down
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         return
     }
     Write-Step "local 模式:基础设施(docker) + 22 个 go 服务(宿主进程)"
@@ -4192,6 +4204,15 @@ function Invoke-Local {
     }
 
     & "$ScriptDir/dev_all.ps1"
+    # dev_all.ps1 每一步失败都会 exit 1,但 `&` 调子脚本**不会**让本脚本失败 —— 不透传的话
+    # start.ps1 走完 switch 就正常结束,双击窗口 / Web 管理台拿到的是「完成(退出码 0)」,
+    # 而基础设施其实压根没起来(2026-08-12 现场:另一台机器缺 dev.env,[1/4] 就断了,外层照报 0)。
+    # 一键启动的绿灯必须等于「真的起来了」,否则策划只会去查客户端。docker 分支(见 Invoke-Docker)
+    # 一直是有检查的,只有 local 这条漏了。
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "local 模式启动失败(见上方第一条 [ERR];退出码 $LASTEXITCODE)。后端没起来,别去查客户端。"
+        exit $LASTEXITCODE
+    }
 }
 
 # ===== 导表(-GenTables):策划 xlsx → 服务端配置表 =====

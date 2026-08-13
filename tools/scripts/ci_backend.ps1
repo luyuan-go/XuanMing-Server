@@ -202,6 +202,9 @@ $contractTests = @(
     'tools/scripts/tests/go_test_skip_audit_contract_test.ps1'
     # Jenkins 一次性 MySQL/TiDB 生命周期、回环隔离、无库名 DSN 与 post always 清理。
     'tools/scripts/tests/ci_db_contract_test.ps1'
+    # 策划一键启动的两条护栏(2026-08-12):dev.env 自举 + 启动失败必须带出非零退出码。
+    # 后者尤其需要门禁 —— 它的回归表现是「窗口报绿、后端没起来」,人眼 review 最容易放过。
+    'tools/scripts/tests/oneclick_devenv_exitcode_contract_test.ps1'
 )
 $contractFailed = @()
 foreach ($rel in $contractTests) {
