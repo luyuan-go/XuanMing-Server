@@ -103,16 +103,22 @@ func validRequiredSchemaMetadata() requiredSchemaMetadata {
 
 func TestValidateRequiredSchemaAcrossBackends(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, bc backendCase) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// 读元数据与 DDL 分开计时:别让前者吃掉后者的预算(ddlTimeout 见 guild_repo_mysql_test.go)。
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := ValidateRequiredSchema(ctx, bc.db); err != nil {
 			t.Fatalf("[%s] final schema gate: %v", bc.name, err)
 		}
 
-		if _, err := bc.db.ExecContext(ctx, `ALTER TABLE guilds DROP COLUMN pending_request_count`); err != nil {
+		ddlCtx, ddlCancel := context.WithTimeout(context.Background(), ddlTimeout)
+		defer ddlCancel()
+		if _, err := bc.db.ExecContext(ddlCtx, `ALTER TABLE guilds DROP COLUMN pending_request_count`); err != nil {
 			t.Fatalf("[%s] 构造旧 schema: %v", bc.name, err)
 		}
-		err := ValidateRequiredSchema(ctx, bc.db)
+
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel2()
+		err := ValidateRequiredSchema(ctx2, bc.db)
 		if err == nil || !strings.Contains(err.Error(), "guilds.pending_request_count") {
 			t.Fatalf("[%s] 旧 schema 未被启动门禁拒绝: %v", bc.name, err)
 		}

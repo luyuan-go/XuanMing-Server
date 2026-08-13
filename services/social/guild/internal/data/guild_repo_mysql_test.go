@@ -97,6 +97,12 @@ var ddlStatements = []string{
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 }
 
+// ddlTimeout 是建库 / 建表 / ALTER 这类 DDL 的兜底超时(只防挂死,不做延迟断言)。
+// 给得比读写用例宽,是因为 DDL 天然是秒级:TiDB 的 online DDL 要等 schema lease
+// 全网重载,而 CI 把 MySQL/TiDB/TiKV/Kafka 挤在同一台机器上跑,整机争用时实测能
+// 把一条 DROP COLUMN 拖到 5s 以上(backend-dev #28 即因此误报红灯)。
+const ddlTimeout = 30 * time.Second
+
 // idGen 生成测试用递增 ID(避免与真实 snowflake 冲突;测试库独立,无所谓)。
 var idGen uint64 = 1
 
@@ -138,8 +144,13 @@ func openTempDB(t *testing.T, dsn string) (*sql.DB, func()) {
 	if err := admin.PingContext(ctx); err != nil {
 		t.Fatalf("已给出测试 DSN 但无法连接(不允许静默 PASS):%v", err)
 	}
+	// 建库 / 建表走 ddlTimeout,与连通性检查分开计时:DDL 是秒级操作(TiDB 还要等
+	// schema lease 重载),和「连不上」不是同一类故障,共用一个紧预算只会把整机
+	// 争用误报成建表失败。
+	ddlCtx, ddlCancel := context.WithTimeout(context.Background(), ddlTimeout)
+	defer ddlCancel()
 	dbName := fmt.Sprintf("pandora_guild_it_%d", time.Now().UnixNano())
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+dbName+"` DEFAULT CHARSET utf8mb4"); err != nil {
+	if _, err := admin.ExecContext(ddlCtx, "CREATE DATABASE `"+dbName+"` DEFAULT CHARSET utf8mb4"); err != nil {
 		t.Fatalf("建临时库失败:%v", err)
 	}
 
@@ -152,7 +163,7 @@ func openTempDB(t *testing.T, dsn string) (*sql.DB, func()) {
 	}
 	db.SetMaxOpenConns(16) // 需要多连接才能真正并发出行锁竞争
 	for _, stmt := range ddlStatements {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
+		if _, err := db.ExecContext(ddlCtx, stmt); err != nil {
 			_ = db.Close()
 			t.Fatalf("建表失败:%v\nSQL: %s", err, stmt)
 		}
