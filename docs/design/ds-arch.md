@@ -538,6 +538,10 @@ Client:
 
 ### 6.2 Battle → Hub
 
+> **待做(2026-08-12 提出,未拍板)**:对局要切成**准备 / 战斗 / 结算**三段,「退出场景」应挂到
+> 结算阶段结束这个边界上,而不是现在这样由客户端在 `BattleEnded` 之后自行发起。需求、现状核对
+> 与待拍板清单见 [`match-phase-lifecycle.md`](match-phase-lifecycle.md);拍板前本节流程不变。
+
 ```
 Battle DS 战斗结束
    ▼
