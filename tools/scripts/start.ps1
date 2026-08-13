@@ -5195,7 +5195,7 @@ function Get-MinikubeImageIds([string[]]$MinikubeArgs = @()) {
 #   ② admin 0.0.0.0→127.0.0.1(与 DS 面同一收紧理由:admin 未鉴权,不得暴露 Pod IP 上)。
 #   ③ 上游 address: host.docker.internal → 同 namespace Service 短名,按同一 socket_address
 #      块里的 port_value 映射(端口=服务一一对应,见 infra.md §6);任何未映射端口 fail-fast。
-function Convert-EdgeEnvoyConfigForCluster([string]$Text) {
+function Convert-EdgeEnvoyConfigForCluster([string]$Text, [string]$Namespace = 'pandora') {
     $portSvc = @{
         20001 = 'login'; 20002 = 'player'; 20003 = 'data-service'; 20004 = 'friend'; 20005 = 'chat'
         20006 = 'player-locator'; 20007 = 'leaderboard'; 20008 = 'guild'; 20009 = 'mail'; 20010 = 'team'
@@ -5224,7 +5224,15 @@ function Convert-EdgeEnvoyConfigForCluster([string]$Text) {
             $upPort = [int]$Matches[1]
             if (-not $portSvc.ContainsKey($upPort)) { throw "edge envoy 变换:上游端口 $upPort 无 Service 映射,请补 Convert-EdgeEnvoyConfigForCluster 的 portSvc 表(infra.md §6)。" }
             $indent = [regex]::Match($out[$pendingAddrIdx], '^\s*').Value
-            $out[$pendingAddrIdx] = "${indent}address: $($portSvc[$upPort])"
+            # 必须写**全限定名**,不能只写短名(login / team / …)。
+            #
+            # 短名要靠 Pod 的 DNS 搜索域补全;搜索域一旦没生效,解析会落到宿主 DNS,而
+            # Docker Desktop 的 DNS 对任何未知名字都返回自己的网关 192.168.65.254 ——
+            # 于是 18 个上游"解析成功"却全部指向一个没有这些服务的地址,Envoy 连不上,
+            # 客户端拿到 503 且**看不出是 DNS 问题**(clusters 里明明有地址)。线上实测过一次:
+            #     login_cluster::192.168.65.254:20001  cx_connect_fail=19  rq_error=20
+            # 集群内的 DS 版网关(16-ds-envoy.yaml)一直写全限定名,从未出过这个故障。
+            $out[$pendingAddrIdx] = "${indent}address: $($portSvc[$upPort]).$Namespace.svc.cluster.local"
             $pendingAddrIdx = -1; $replaced++
         }
         $out.Add($emit)
@@ -6049,7 +6057,7 @@ function Invoke-K8s {
     }
     # 边缘 Envoy 镜像钉定 tag(edge-envoy.yaml),新节点/新机器没有时从宿主 load 或联网补齐。
     Ensure-EnvoyImageInMinikube -MinikubeProfile $mkProfile -Image 'envoyproxy/envoy:v1.38.1'
-    $edgeCfgText = Convert-EdgeEnvoyConfigForCluster (Get-Content -LiteralPath $hostEnvoyConfigFile -Raw)
+    $edgeCfgText = Convert-EdgeEnvoyConfigForCluster -Text (Get-Content -LiteralPath $hostEnvoyConfigFile -Raw) -Namespace $K8sNamespace
     $edgeCfgTmp = Join-Path ([System.IO.Path]::GetTempPath()) "pandora-edge-envoy-$PID.yaml"
     Set-Content -LiteralPath $edgeCfgTmp -Value $edgeCfgText -Encoding utf8NoBOM
     kubectl @kubectlContextArgs create configmap pandora-edge-envoy-config --from-file=envoy.yaml=$edgeCfgTmp -n $K8sNamespace `

@@ -69,7 +69,7 @@ spec:
               # 本 tag 已在 artifact root(snapshots r1977-dirty-20260812-031503),宿主缺镜像时
               # start.ps1 会按 tag 从可达制品根重建。完整依据与告诫见
               # 20-fleet-battle.yaml 该行注释。
-              image: pandora/hub-ds:r1981-jenkins-20260812-070505
+              image: pandora/hub-ds:r1987-dirty-20260812-093733
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

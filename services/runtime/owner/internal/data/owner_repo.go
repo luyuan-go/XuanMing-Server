@@ -33,6 +33,17 @@ const (
 	OwnerPhaseAdmitted int8 = 2
 )
 
+// renewSlowProbeThreshold 是续租分段计时的打印阈值。
+//
+// 为什么要这个探针:owner 的 RPC 延迟是「中位 1ms、P90 65ms、最大 19397ms」的极端长尾,
+// 而外部指标已逐条排除行锁争用(Innodb_row_lock_waits 仅 4 次,慢调用却有 148 次)、
+// fsync(直连实测提交 ≤51ms)、连接池饥饿(MaxOpen=32 远未打满)与基础设施
+// (同集群 player_locator / team / login 慢调用为 0)。剩余可能都在本函数内部,
+// 而从进程外无法再分辨是卡在取连接、SQL 还是提交。
+//
+// 取 300ms:中位是 1ms,正常调用不可能触发;而观测到的长尾都在秒级,不会漏。
+const renewSlowProbeThreshold = 300 * time.Millisecond
+
 // transition 审计 op 取值。
 const (
 	transitionOpBegin   int8 = 1
@@ -429,11 +440,36 @@ func (r *MySQLOwnerRepo) Admit(ctx context.Context, playerID, ownerEpoch uint64,
 }
 
 func (r *MySQLOwnerRepo) RenewInstanceLease(ctx context.Context, target OwnerTarget, lease time.Duration) (int64, error) {
+	// 分段计时:owner 的 RPC 延迟呈现「中位 1ms、最大 19s」的长尾,而外部指标全部排除了
+	// 行锁争用(Innodb_row_lock_waits 只有个位数)、fsync(实测 ≤51ms)、连接池饥饿
+	// (MaxOpen=32 远未打满)与基础设施(同集群其它服务慢调用为 0)。剩下的可能都在本函数
+	// 内部,而从外部无法再分辨。这里按阶段留时,只在超阈值时打印,不刷屏。
+	stageStart := time.Now()
+	var tBegin, tSelect, tCommit time.Duration
+
 	tx, err := r.db.BeginTx(ctx, nil)
+	tBegin = time.Since(stageStart)
 	if err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "begin renew tx: %v", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		total := time.Since(stageStart)
+		if total < renewSlowProbeThreshold {
+			return
+		}
+		// database/sql 的池等待是独立于本次调用的全局计数,一并带出:WaitCount 增长
+		// 说明卡在拿连接而不是卡在 SQL,两者的修法完全不同。
+		st := r.db.Stats()
+		plog.With(ctx).Warnw("msg", "owner_renew_lease_slow",
+			"instance_uid", target.InstanceUID, "pod", target.PodName,
+			"total_ms", total.Milliseconds(),
+			"begin_tx_ms", tBegin.Milliseconds(),
+			"select_for_update_ms", tSelect.Milliseconds(),
+			"commit_ms", tCommit.Milliseconds(),
+			"pool_in_use", st.InUse, "pool_idle", st.Idle,
+			"pool_wait_count", st.WaitCount, "pool_wait_ms", st.WaitDuration.Milliseconds())
+	}()
 
 	now := nowUnixMs()
 	newDeadline := now + lease.Milliseconds()
@@ -442,9 +478,11 @@ func (r *MySQLOwnerRepo) RenewInstanceLease(ctx context.Context, target OwnerTar
 		storedEpoch    uint32
 		storedDeadline int64
 	)
+	selStart := time.Now()
 	qerr := tx.QueryRowContext(ctx,
 		`SELECT instance_epoch, lease_deadline_ms FROM ds_instance_lease WHERE instance_uid = ? FOR UPDATE`,
 		target.InstanceUID).Scan(&storedEpoch, &storedDeadline)
+	tSelect = time.Since(selStart)
 	switch {
 	case errors.Is(qerr, sql.ErrNoRows):
 		const ins = `INSERT INTO ds_instance_lease (instance_uid, pod_name, instance_epoch, release_track, lease_deadline_ms, updated_at_ms)
@@ -485,7 +523,10 @@ VALUES (?, ?, ?, ?, ?, ?)`
 			}
 		}
 	}
-	if cerr := tx.Commit(); cerr != nil {
+	commitStart := time.Now()
+	cerr := tx.Commit()
+	tCommit = time.Since(commitStart)
+	if cerr != nil {
 		return 0, errcode.New(errcode.ErrInternal, "commit renew uid=%s: %v", target.InstanceUID, cerr)
 	}
 	return newDeadline, nil

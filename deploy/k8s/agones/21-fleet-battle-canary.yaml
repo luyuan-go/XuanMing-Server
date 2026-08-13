@@ -64,7 +64,7 @@ spec:
               # 一键启动整条链就断在这里。四份 Fleet 同版是硬约束(§9.21),不是风格问题。
               # 注:canary 与 stable 钉同一 tag = 灰度轨当前无差异版本,只作容量/轨道演练;
               # 真正灰度时本行必须换成与 stable **不同** digest 的新镜像。
-              image: pandora/battle-ds:r1981-jenkins-20260812-070505
+              image: pandora/battle-ds:r1987-dirty-20260812-093733
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

@@ -32,6 +32,23 @@ spec:
             - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_0900_ai_ci
             - --max_connections=500
+            # ⚠️ 以下两项**放宽持久化,仅限本地开发**。生产绝不可照搬(线上也用不到本文件:
+            # overlays/online/kustomization.yaml 只引用 ../../services,不含 infra/)。
+            #
+            # 为什么要放宽:默认的 trx_commit=1 + sync_binlog=1 意味着**每次事务提交做两次 fsync**,
+            # 而本地数据目录是 emptyDir → minikube 容器层 → Docker Desktop 虚拟磁盘,这条链上的
+            # fsync 在 Windows 上慢到 0.7~4.5 秒。实测 owner 服务续租的分段计时:
+            #     total=1681ms  commit=1680ms  begin_tx=0  select=0  pool_wait=0
+            # 即延迟 100% 在 commit,与连接池、查询、锁全无关系。
+            #
+            # 后果不只是"慢":owner 提交卡住 → hub-allocator 调 QueryOwner 超时 → 准入 fail-closed
+            # → 玩家被踢 → 重连清掉社交缓存 → 队友血条颜色解析不出来。一条 fsync 抖动能把
+            # 整条进场链打断。
+            #
+            # trx_commit=2:提交只写 OS 缓存,由后台每秒 fsync。进程崩溃不丢数据,整机断电最多丢 1 秒。
+            # sync_binlog=0:binlog 落盘交给 OS。本地无从库、无 PITR 需求。
+            - --innodb-flush-log-at-trx-commit=2
+            - --sync-binlog=0
           env:
             - { name: MYSQL_ROOT_PASSWORD, value: pandora_dev_root }
             - { name: MYSQL_USER, value: pandora }
