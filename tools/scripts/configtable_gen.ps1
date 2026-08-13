@@ -244,6 +244,31 @@ function Get-TableWorkingCopyChanges([string]$Root) {
     return , $changed
 }
 
+# 表头漂移这类错,configtable_sync.ps1 能全自动处理 —— 但它要改 .proto 并重生 pb,
+# 依赖 go + buf。策划机器上两者都没有(configtable_gen.ps1 本身特意做成无 Go 也能跑),
+# 在那里推荐一条注定报「未安装」的命令,只会把一条看得懂的错换成看不懂的错。
+# 所以按本机工具链分流:能跑的人给命令,跑不了的人给"发给谁"。
+function Get-SyncToolchainMissing {
+    $missing = New-Object System.Collections.Generic.List[string]
+    foreach ($c in @('go', 'buf')) {
+        if ($null -eq (Get-Command $c -ErrorAction SilentlyContinue)) { $missing.Add($c) }
+    }
+    return , $missing
+}
+
+function Write-SyncHint([string]$What) {
+    $missing = Get-SyncToolchainMissing
+    if ($missing.Count -eq 0) {
+        Write-Host "      你这台机器有 go + buf,可以自己跑($What 也能自动处理):"
+        Write-Host '        pwsh tools\scripts\configtable_sync.ps1          # 先看差异'
+        Write-Host '        pwsh tools\scripts\configtable_sync.ps1 -Write   # 确认后自动改 proto、重生 pb 并重跑导表'
+        Write-Host '      (删列 / 挪位 / 重名它不自动改,那几种要人判断。)'
+    } else {
+        Write-Host "      程序那边跑一条命令就能自动同步($What),但**你这台机器不行**:缺 $($missing -join ' / ')。"
+        Write-Host '      做法:把上面那行报错原文发给程序,他跑 tools\scripts\configtable_sync.ps1 -Write 即可。'
+    }
+}
+
 if ($genExit -ne 0) {
     Write-Host ''
     Write-Err "导表失败(退出码 $genExit),服务端配置表**没有任何改动**,原来的表还能用。"
@@ -253,10 +278,7 @@ if ($genExit -ne 0) {
         $leaf = ($table -split '[\\/]')[-1]
         Write-Warn2 "原因:$table 里多了第 $col 列「$name」,服务端 proto 还没登记这一列。"
         Write-Host '      这**不是策划能修的**:服务端 proto 要先登记这一列才能导。'
-        Write-Host '      找程序跑一条命令就能自动同步(末尾加列 / 改名都能自动处理):'
-        Write-Host '        pwsh tools\scripts\configtable_sync.ps1          # 先看差异'
-        Write-Host '        pwsh tools\scripts\configtable_sync.ps1 -Write   # 确认后自动加字段并重跑导表'
-        Write-Host '      (只有删列 / 挪位 / 重名它不自动改,那几种要程序手判断。)'
+        Write-SyncHint '末尾加列'
 
         # 未提交 / 已提交,给程序的做法完全不同,这里替策划把话说清楚。
         $wc = Get-TableWorkingCopyChanges $TableRoot
@@ -285,9 +307,7 @@ if ($genExit -ne 0) {
         $col = $Matches[1]; $expect = $Matches[2]; $actual = $Matches[3]
         Write-Warn2 "原因:第 $col 列的列名变了——proto 登记的是「$expect」,xlsx 里现在是「$actual」。"
         Write-Host '      这**不是文件被 Excel 占用**,也不是 SVN 没更新,是服务端 proto 注解需要同步。'
-        Write-Host '      找程序跑一条命令就能自动同步(改名 / 末尾加列都能自动处理):'
-        Write-Host '        pwsh tools\scripts\configtable_sync.ps1          # 先看差异'
-        Write-Host '        pwsh tools\scripts\configtable_sync.ps1 -Write   # 确认后自动改 proto 并重跑导表'
+        Write-SyncHint '列改名'
         Write-Host "      临时想继续导表:把列名改回「$expect」。"
     } elseif ($outText -match '读\s+.*失败|xlsx') {
         Write-Warn2 '原因:某张 xlsx 读不出来。常见是文件正被 Excel 打开、或 SVN 更新到一半。'
