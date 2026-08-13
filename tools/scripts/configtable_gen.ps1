@@ -252,8 +252,11 @@ if ($genExit -ne 0) {
         $table = $Matches[1]; $col = $Matches[2]; $name = $Matches[3]
         $leaf = ($table -split '[\\/]')[-1]
         Write-Warn2 "原因:$table 里多了第 $col 列「$name」,服务端 proto 还没登记这一列。"
-        Write-Host '      这**不是策划能修的**:需要程序在 proto/pandora/config/v1/<表>.proto 里'
-        Write-Host '      加对应字段 + (excel_col) 注解,重生 pb 后才能导。'
+        Write-Host '      这**不是策划能修的**:服务端 proto 要先登记这一列才能导。'
+        Write-Host '      找程序跑一条命令就能自动同步(末尾加列 / 改名都能自动处理):'
+        Write-Host '        pwsh tools\scripts\configtable_sync.ps1          # 先看差异'
+        Write-Host '        pwsh tools\scripts\configtable_sync.ps1 -Write   # 确认后自动加字段并重跑导表'
+        Write-Host '      (只有删列 / 挪位 / 重名它不自动改,那几种要程序手判断。)'
 
         # 未提交 / 已提交,给程序的做法完全不同,这里替策划把话说清楚。
         $wc = Get-TableWorkingCopyChanges $TableRoot
