@@ -235,7 +235,7 @@ membership_healthy=1  upstream_cx_none_healthy=0     ← 假象：Envoy 认为�
 | A-5 | 中 | 为"集群内地址必须全限定名"加机械门禁（CI 扫 `deploy/**` 与生成脚本） | 待指定 | 未开始 | 本档 |
 | A-6 | 高 | 补足观察窗口：至少一轮完整联调 + 一次压测，确认长尾不再打断准入 | 待指定 | 未开始（**需真实使用，无法由工具单独完成**） | 本档 |
 | A-7 | 中 | 验证 edge envoy 修复：重跑 `start.ps1` 后核对 Envoy `/clusters` 解析结果为 ClusterIP | 待指定 | **已可自动核验**（`tools/scripts/tests/edge_envoy_fqdn_contract_test.ps1` 覆盖生成侧；运行期核对脚本见 §12.3） | 本档 |
-| A-8 | 中 | **etcd 的 WAL fsync 是同类风险且无法配置放宽**（A-2 派生）：承载 snowflake 发号 / 配置表 watch / writer lease，同一慢盘上会出现同样的长尾，后果是租约抖动与 writer 交接。需实测 `etcd_disk_wal_fsync_duration_seconds` 并决定是换存储还是接受并监控 | 待指定 | 未开始 | 本档 |
+| A-8 | 中 | **etcd 的 WAL fsync 是同类风险**（A-2 派生） | 待指定 | **已修复待验证**，见 §12.5。（更正：A-2 当时写"无法配置放宽"是**错的**，etcd 有官方 `--unsafe-no-fsync`） | 本档 |
 
 ## 11. 关闭审核
 
@@ -309,4 +309,37 @@ ok  .../owner/internal/service  1.529s
 
 - **A-1**：fsync 直测脚本已就绪，但执行时 `pandora` 命名空间恰被清空（用户正在重跑 `start.ps1`），待栈恢复后执行。§5.1 的"强推断"标注维持不变。
 - **A-6**：观察窗口需真实使用累积，工具无法单独完成。
-- **A-8**：etcd WAL fsync 实测未做。
+- **A-8**：见 §12.5（已修复待验证）。
+
+### 12.5 A-8：etcd 已同样放宽（**更正 §12.2 的一处错误结论**）
+
+§12.2 写 etcd "**无等价放宽开关**"，这是**错的**。etcd 自 3.5 起提供官方 flag，3.6.12 实测存在：
+
+```text
+--unsafe-no-fsync 'false'
+    Disables fsync, unsafe, will cause data loss.
+```
+
+结论更正为：etcd 没有 MySQL `trx_commit=2` 那种"**降级但仍持久**"的中间档（共识存储刻意不提供——fsync 正是它对上层承诺"已确认写不回滚"的物理基础），但**有一个整体关闭的开关**。本地开发用后者。
+
+**为什么本地关掉是安全的**——etcd 里存的东西逐项核对，全部可重建：
+
+| key 前缀 | 性质 | 丢失后果 |
+|---|---|---|
+| `/pandora/leader/`、`/pandora/writerlease/`、`/pandora/snowflake/node/`、`/pandora/ds-auth/` | 租约型，本就靠 lease 存活 | 重新抢占，无损 |
+| `/pandora/cellroute/table/` | 配置表版本键 | 重发布即可 |
+| `/pandora/killswitch/` | 运维开关 | 本地开发无运维意义 |
+
+且 `--unsafe-no-fsync` 只在**硬崩溃**时丢（优雅重启仍会 flush），比 tmpfs 方案（`emptyDir: {medium: Memory}`，每次 Pod 重启必丢）更保守——这是选它而不选 tmpfs 的理由。
+
+**生产必须保留 fsync**：关掉会直接打穿 §9.22「owner 权威已确认写在故障切换后不回滚」，进而打穿 §9.1 一人一 DS。安全前提（`overlays/online` 不引用 `infra/`）已由契约测试机械断言。
+
+契约测试扩到 11 条，新增两条经变异验证：
+
+| 变异 | 结果 |
+|---|---|
+| `--unsafe-no-fsync=true` → `=false` | FAILED，2 条命中 |
+| 整行删除 | FAILED，1 条命中 |
+| 还原 | PASSED |
+
+**待验证**：栈恢复后测 `etcd_disk_wal_fsync_duration_seconds` 前后对比（与 A-1 一起做）。

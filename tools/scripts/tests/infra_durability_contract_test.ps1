@@ -36,8 +36,18 @@ Assert-True ($infra -match '--sync-binlog=0') `
 Assert-True (-not ($infra -match '--innodb-flush-log-at-trx-commit=1')) `
     'infra.yaml 未出现 trx_commit=1(回退哨兵)'
 
+Write-Host '=== ①b 本地 etcd 关闭 fsync(INC-20260812-002 A-8) ==='
+# etcd 每次提交 fsync WAL,在同一块慢盘上与 MySQL 同源同因。它没有 trx_commit=2 那种
+# "降级但仍持久"的中间档(共识存储刻意不提供),只能整个关掉。
+Assert-True ($infra -match '--unsafe-no-fsync=true') `
+    'infra.yaml 声明 etcd --unsafe-no-fsync=true'
+# 反向哨兵:显式写成 false 等于回退。
+Assert-True (-not ($infra -match '--unsafe-no-fsync=false')) `
+    'infra.yaml 未出现 unsafe-no-fsync=false(回退哨兵)'
+
 # 这份放宽只有在"线上不引用 infra/"的前提下才是安全的。前提被破坏时必须立刻失败,
-# 否则会把开发期的弱持久化带上生产。
+# 否则会把开发期的弱持久化带上生产 —— 对 etcd 尤其致命:关掉 fsync 会打穿 §9.22
+# "已确认写在故障切换后不回滚",进而打穿 §9.1 一人一 DS。
 Write-Host '=== ② 线上 overlay 不得引用 infra/(放宽的前提) ==='
 $onlineKust = Get-Content (Join-Path $repoRoot 'deploy/k8s/overlays/online/kustomization.yaml') -Raw
 Assert-True (-not ($onlineKust -match 'infra')) `
