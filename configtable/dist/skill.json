@@ -76,7 +76,6 @@
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/ParagonBoris/GA/GA_Boris_Skill03.GA_Boris_Skill03_C",
       "damage_rate": 6.4,
-      "damage_value": 20,
       "correction_rate": 0.8,
       "effect_count": 1
     },
@@ -91,7 +90,7 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Attack01.GA_Kallari_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 1,
+      "damage_rate": 0.73652697,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -106,7 +105,7 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Attack02.GA_Kallari_Attack02_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 1,
+      "damage_rate": 0.73652697,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -132,7 +131,7 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Skill02.GA_Kallari_Skill02_C",
       "target_select_mode": 1,
       "use_distance": 1300,
-      "damage_rate": 5.3333335,
+      "damage_rate": 3,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -147,8 +146,7 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Skill03.GA_Kallari_Skill03_C",
       "target_select_mode": 1,
       "use_distance": 500,
-      "damage_rate": 6.6666665,
-      "damage_value": 25,
+      "damage_rate": 1.6007984,
       "correction_rate": 0.33333334,
       "effect_count": 3
     },
@@ -213,7 +211,6 @@
       "orient_target_id": 100321,
       "use_distance": 600,
       "damage_rate": 2.6666667,
-      "damage_value": 10,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -239,7 +236,7 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Attack01.GA_Murdock_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 1,
+      "damage_rate": 0.696,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -254,7 +251,7 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Attack02.GA_Murdock_Attack02_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 1,
+      "damage_rate": 0.696,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -265,12 +262,12 @@
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-31-21.Game_skill_icon_for_MMORPG__da_2026-07-07T08-31-21",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 10,
+      "cd_duration": 8,
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Skill01.GA_Murdock_Skill01_C",
       "target_select_mode": 2,
       "orient_target_type": 4,
       "orient_target_id": 100411,
-      "damage_rate": 0.6666667,
+      "damage_rate": 0.168,
       "correction_rate": 0.1,
       "effect_count": 10
     },
@@ -287,7 +284,7 @@
       "orient_target_type": 2,
       "orient_target_id": 100421,
       "use_distance": 1800,
-      "damage_rate": 0.42666668,
+      "damage_rate": 0.3408,
       "correction_rate": 0.16,
       "effect_count": 5
     },
@@ -302,8 +299,7 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Skill03.GA_Murdock_Skill03_C",
       "target_select_mode": 1,
       "use_distance": 2000,
-      "damage_rate": 20,
-      "damage_value": 80,
+      "damage_rate": 2.672,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -366,7 +362,6 @@
       "target_select_mode": 1,
       "use_distance": 800,
       "damage_rate": 10,
-      "damage_value": 5,
       "correction_rate": 0.5,
       "effect_count": 1
     },
@@ -441,7 +436,6 @@
       "target_select_mode": 1,
       "use_distance": 800,
       "damage_rate": 10,
-      "damage_value": 5,
       "correction_rate": 0.5,
       "effect_count": 1
     },
@@ -456,7 +450,7 @@
       "ability_path": "/Game/Test/Role/Hero/P_A_Durgad_01/GA/GA_Durgad_Attack01.GA_Durgad_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 1,
+      "damage_rate": 0.78571427,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -472,7 +466,7 @@
       "target_select_mode": 2,
       "orient_target_type": 1,
       "orient_target_id": 101,
-      "damage_rate": 1.7066667,
+      "damage_rate": 1.6071428,
       "correction_rate": 0.8,
       "effect_count": 1
     },
@@ -485,7 +479,7 @@
       "cd_timing": 1,
       "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/P_A_Durgad_01/GA/GA_Durgad_Skill02.GA_Durgad_Skill02_C",
-      "damage_rate": 2.6666667,
+      "damage_rate": 1.8035715,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -498,8 +492,7 @@
       "cd_timing": 1,
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/P_A_Durgad_01/GA/GA_Durgad_Skill03.GA_Durgad_Skill03_C",
-      "damage_rate": 6.4,
-      "damage_value": 20,
+      "damage_rate": 5.375,
       "correction_rate": 0.8,
       "effect_count": 1
     },
@@ -514,7 +507,7 @@
       "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Attack.GA_Sister_Attack_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 1,
+      "damage_rate": 0.6043956,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -525,13 +518,13 @@
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-58.Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-58",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 10,
+      "cd_duration": 8,
       "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Skill01.GA_Sister_Skill01_C",
       "target_select_mode": 3,
       "orient_target_type": 2,
       "orient_target_id": 100311,
       "use_distance": 600,
-      "damage_rate": 0.26666668,
+      "damage_rate": 0.23626374,
       "correction_rate": 0.1,
       "effect_count": 5
     },
@@ -548,8 +541,7 @@
       "orient_target_type": 2,
       "orient_target_id": 100321,
       "use_distance": 780,
-      "damage_rate": 2.1333334,
-      "damage_value": 10,
+      "damage_rate": 2.1043956,
       "correction_rate": 0.8,
       "effect_count": 1
     },
@@ -575,7 +567,7 @@
       "ability_path": "/Game/Test/Role/Hero/P_M_Princess_01/GA/GA_Princess_Attack01.GA_Princess_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 1,
+      "damage_rate": 0.65,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -586,13 +578,13 @@
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-32-45.Game_skill_icon_for_MMORPG__da_2026-07-07T08-32-45",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 10,
+      "cd_duration": 8,
       "ability_path": "/Game/Test/Role/Hero/P_M_Princess_01/GA/GA_Princess_Skill01.GA_Princess_Skill01_C",
       "target_select_mode": 3,
       "orient_target_type": 2,
       "orient_target_id": 5,
       "use_distance": 800,
-      "damage_rate": 2.1333334,
+      "damage_rate": 2,
       "correction_rate": 0.8,
       "effect_count": 1
     },
@@ -608,7 +600,7 @@
       "target_select_mode": 2,
       "orient_target_type": 4,
       "orient_target_id": 100921,
-      "damage_rate": 2.6666667,
+      "damage_rate": 2.5,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -625,8 +617,7 @@
       "orient_target_type": 2,
       "orient_target_id": 8,
       "use_distance": 1500,
-      "damage_rate": 0.8,
-      "damage_value": 5,
+      "damage_rate": 0.358,
       "correction_rate": 0.1,
       "effect_count": 10
     },
@@ -641,7 +632,7 @@
       "ability_path": "/Game/Test/Role/Hero/P_W_Sally_01/GA/GA_Sally_Attack.GA_Sally_Attack_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 1,
+      "damage_rate": 0.619403,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -652,13 +643,13 @@
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-32-45.Game_skill_icon_for_MMORPG__da_2026-07-07T08-32-45",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 10,
+      "cd_duration": 8,
       "ability_path": "/Game/Test/Role/Hero/P_W_Sally_01/GA/GA_Sally_Skill03.GA_Sally_Skill03_C",
       "target_select_mode": 3,
       "orient_target_type": 2,
       "orient_target_id": 6,
       "use_distance": 960,
-      "damage_rate": 2.6666667,
+      "damage_rate": 1.8955224,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -669,13 +660,13 @@
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-16.Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-16",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 6,
+      "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/P_W_Sally_01/GA/GA_Sally_Skill02.GA_Sally_Skill02_C",
       "target_select_mode": 3,
       "orient_target_type": 2,
       "orient_target_id": 1,
       "use_distance": 800,
-      "damage_rate": 0.4,
+      "damage_rate": 1.6044776,
       "effect_count": 1
     },
     {
@@ -685,10 +676,9 @@
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-43.Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-43",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 20,
+      "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/P_W_Sally_01/GA/GA_Sally_Skill01.GA_Sally_Skill01_C",
-      "damage_rate": 4.266667,
-      "damage_value": 5,
+      "damage_rate": 4.5,
       "correction_rate": 0.8,
       "effect_count": 1
     },
@@ -701,6 +691,7 @@
       "ability_path": "/Game/Test/Role/Monster/Minions/Melee/GA/GA_Melee_Attack01.GA_Melee_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 100,
+      "damage_rate": 1.2666667,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -713,6 +704,7 @@
       "ability_path": "/Game/Test/Role/Monster/Minions/Ranged/GA/GA_Monster_Ranged_Attack01.GA_Monster_Ranged_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 400,
+      "damage_rate": 1.4237288,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -725,6 +717,7 @@
       "ability_path": "/Game/Test/Role/Monster/Minions/M_Orthrus_01/GA/GA_Orthrus_Attack01.GA_Orthrus_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 300,
+      "damage_rate": 1.2666667,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -736,6 +729,7 @@
       "segment": 1,
       "ability_path": "/Game/Test/Role/Monster/Minions/M_AbyssRock_01/GA/GA_AbyssRock_Attack01.GA_AbyssRock_Attack01_C",
       "use_distance": 500,
+      "damage_rate": 1.4408603,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -854,7 +848,7 @@
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken_Attack01.GA_Kraken_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 99999,
-      "damage_rate": 1.67,
+      "damage_rate": 0.875,
       "correction_rate": 1,
       "effect_count": 1
     },
@@ -882,6 +876,7 @@
       "ability_path": "/Game/Test/Role/Monster/Boss/Kraken/GA/GA_Kraken_Skill02.GA_Kraken_Skill02_C",
       "target_select_mode": 1,
       "use_distance": 99999,
+      "damage_rate": 3.9485295,
       "correction_rate": 1,
       "effect_count": 1
     },

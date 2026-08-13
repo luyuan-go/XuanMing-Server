@@ -208,7 +208,7 @@ func TestRealDistMonsterKillExp(t *testing.T) {
 // TestRealDistBattleLaunchURLs 用真实 dist 钉死「关卡表 → DS 启动 URL」的换算结果。
 //
 // 这条替代了 ds_allocator-dev.yaml 里那张已删除的 local_ds.maps 手抄映射(§9.22 影子配置):
-// 现在 allocator 起战斗 DS 时现查本表,所以本用例既是换算回归,也是"表里 8 张战斗图都能开局"
+// 现在 allocator 起战斗 DS 时现查本表,所以本用例既是换算回归,也是"表里 10 张战斗图都能开局"
 // 的机械核对——新增副本只需改 g_关卡.xlsx,这里跟着表走即可,不必再同步第二份清单。
 func TestRealDistBattleLaunchURLs(t *testing.T) {
 	dist := filepath.Join("..", "..", "configtable", "dist")
@@ -234,9 +234,13 @@ func TestRealDistBattleLaunchURLs(t *testing.T) {
 		6:  "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode",
 		7:  "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode",
 		8:  "/Game/ScifiArctic/Maps/ExampleLevel_Artic01?game=/Script/Pandora.PandoraPveGameMode",
-		9:  "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon?game=/Script/Pandora.PandoraBattleGameMode",
+		// 9 原是「PVP战斗」指向 dungeon 图,svn r1987 策划改成「3V3战斗」并换到 MainCity;
+		// 12「2V2战斗」同批新增、同一张图,13 是 3 人档 PVE(与 11 同图、team_size 不同)。
+		9:  "/Game/Test/Level/MainCity?game=/Script/Pandora.PandoraBattleGameMode",
 		10: "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon_Pve?game=/Script/Pandora.PandoraPveGameMode",
 		11: "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk?game=/Script/Pandora.PandoraPveGameMode",
+		12: "/Game/Test/Level/MainCity?game=/Script/Pandora.PandoraBattleGameMode",
+		13: "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk?game=/Script/Pandora.PandoraPveGameMode",
 	}
 	for id, wantURL := range want {
 		got, err := lv.BattleLaunchURL(id)
