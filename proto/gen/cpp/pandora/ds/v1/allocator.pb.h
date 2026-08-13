@@ -6935,6 +6935,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     kAllocationIdFieldNumber = 17,
     kReleaseTrackFieldNumber = 18,
     kPodUidFieldNumber = 19,
+    kRatingPoolFieldNumber = 23,
     kMatchIdFieldNumber = 1,
     kAllocatedAtMsFieldNumber = 8,
     kMapIdFieldNumber = 6,
@@ -7123,6 +7124,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
   ::std::string* PROTOBUF_NONNULL _internal_mutable_pod_uid();
 
   public:
+  // string rating_pool = 23 [json_name = "ratingPool"];
+  void clear_rating_pool() ;
+  [[nodiscard]] const ::std::string& rating_pool() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_rating_pool(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_rating_pool();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_rating_pool();
+  void set_allocated_rating_pool(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_rating_pool() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_rating_pool(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_rating_pool();
+
+  public:
   // uint64 match_id = 1 [json_name = "matchId"];
   void clear_match_id() ;
   [[nodiscard]] ::uint64_t match_id() const;
@@ -7237,8 +7253,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 22,
-                          1, 154,
+      ::google::protobuf::internal::TcParseTable<5, 23,
+                          1, 165,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7278,6 +7294,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     ::google::protobuf::internal::ArenaStringPtr allocation_id_;
     ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::google::protobuf::internal::ArenaStringPtr pod_uid_;
+    ::google::protobuf::internal::ArenaStringPtr rating_pool_;
     ::uint64_t match_id_;
     ::int64_t allocated_at_ms_;
     ::uint32_t map_id_;
@@ -8059,6 +8076,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : publi
   enum : int {
     kPlayerIdsFieldNumber = 2,
     kGameModeFieldNumber = 4,
+    kRatingPoolFieldNumber = 12,
     kMatchIdFieldNumber = 1,
     kMapIdFieldNumber = 3,
     kRatingModeFieldNumber = 11,
@@ -8097,6 +8115,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : publi
   const ::std::string& _internal_game_mode() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_game_mode();
+
+  public:
+  // string rating_pool = 12 [json_name = "ratingPool"];
+  void clear_rating_pool() ;
+  [[nodiscard]] const ::std::string& rating_pool() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_rating_pool(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_rating_pool();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_rating_pool();
+  void set_allocated_rating_pool(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_rating_pool() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_rating_pool(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_rating_pool();
 
   public:
   // uint64 match_id = 1 [json_name = "matchId"];
@@ -8154,8 +8187,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : publi
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 6,
-                          1, 53,
+      ::google::protobuf::internal::TcParseTable<2, 7,
+                          1, 64,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -8186,6 +8219,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : publi
     ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
     ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
     ::google::protobuf::internal::ArenaStringPtr game_mode_;
+    ::google::protobuf::internal::ArenaStringPtr rating_pool_;
     ::uint64_t match_id_;
     ::uint32_t map_id_;
     int rating_mode_;
@@ -8664,7 +8698,7 @@ inline void ResolveBattleTargetResponse::set_allocated_release_track(::std::stri
 inline void AllocateBattleRequest::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t AllocateBattleRequest::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.AllocateBattleRequest.match_id)
@@ -8672,7 +8706,7 @@ inline ::uint64_t AllocateBattleRequest::match_id() const {
 }
 inline void AllocateBattleRequest::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.AllocateBattleRequest.match_id)
 }
 inline ::uint64_t AllocateBattleRequest::_internal_match_id() const {
@@ -8739,7 +8773,7 @@ AllocateBattleRequest::_internal_mutable_player_ids() {
 inline void AllocateBattleRequest::clear_map_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.map_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t AllocateBattleRequest::map_id() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.AllocateBattleRequest.map_id)
@@ -8747,7 +8781,7 @@ inline ::uint32_t AllocateBattleRequest::map_id() const {
 }
 inline void AllocateBattleRequest::set_map_id(::uint32_t value) {
   _internal_set_map_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.AllocateBattleRequest.map_id)
 }
 inline ::uint32_t AllocateBattleRequest::_internal_map_id() const {
@@ -8833,7 +8867,7 @@ inline int AllocateBattleRequest::player_combat_factions_size() const {
 inline void AllocateBattleRequest::clear_player_combat_factions() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_combat_factions_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline const ::pandora::ds::v1::BattlePlayerCombatFaction& AllocateBattleRequest::player_combat_factions(int index) const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -8851,7 +8885,7 @@ inline ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL AllocateBa
   ::pandora::ds::v1::BattlePlayerCombatFaction* _add =
       _internal_mutable_player_combat_factions()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_add:pandora.ds.v1.AllocateBattleRequest.player_combat_factions)
   return _add;
 }
@@ -8862,7 +8896,7 @@ inline const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlaye
 }
 inline ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL
 AllocateBattleRequest::mutable_player_combat_factions() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_mutable_list:pandora.ds.v1.AllocateBattleRequest.player_combat_factions)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_player_combat_factions();
@@ -8882,7 +8916,7 @@ AllocateBattleRequest::_internal_mutable_player_combat_factions() {
 inline void AllocateBattleRequest::clear_rating_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rating_mode_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::pandora::config::v1::LevelRatingMode AllocateBattleRequest::rating_mode() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.AllocateBattleRequest.rating_mode)
@@ -8890,7 +8924,7 @@ inline ::pandora::config::v1::LevelRatingMode AllocateBattleRequest::rating_mode
 }
 inline void AllocateBattleRequest::set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
   _internal_set_rating_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.AllocateBattleRequest.rating_mode)
 }
 inline ::pandora::config::v1::LevelRatingMode AllocateBattleRequest::_internal_rating_mode() const {
@@ -8900,6 +8934,70 @@ inline ::pandora::config::v1::LevelRatingMode AllocateBattleRequest::_internal_r
 inline void AllocateBattleRequest::_internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rating_mode_ = value;
+}
+
+// string rating_pool = 12 [json_name = "ratingPool"];
+inline void AllocateBattleRequest::clear_rating_pool() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_pool_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& AllocateBattleRequest::rating_pool() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.AllocateBattleRequest.rating_pool)
+  return _internal_rating_pool();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AllocateBattleRequest::set_rating_pool(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.rating_pool_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.AllocateBattleRequest.rating_pool)
+}
+inline ::std::string* PROTOBUF_NONNULL AllocateBattleRequest::mutable_rating_pool()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_rating_pool();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.AllocateBattleRequest.rating_pool)
+  return _s;
+}
+inline const ::std::string& AllocateBattleRequest::_internal_rating_pool() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rating_pool_.Get();
+}
+inline void AllocateBattleRequest::_internal_set_rating_pool(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_pool_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AllocateBattleRequest::_internal_mutable_rating_pool() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.rating_pool_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AllocateBattleRequest::release_rating_pool() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.AllocateBattleRequest.rating_pool)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.rating_pool_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.rating_pool_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AllocateBattleRequest::set_allocated_rating_pool(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.rating_pool_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.rating_pool_.IsDefault()) {
+    _impl_.rating_pool_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.AllocateBattleRequest.rating_pool)
 }
 
 // -------------------------------------------------------------------
@@ -12523,7 +12621,7 @@ ListBattlesResponse::_internal_mutable_battles() {
 inline void BattleStorageRecord::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t BattleStorageRecord::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.match_id)
@@ -12531,7 +12629,7 @@ inline ::uint64_t BattleStorageRecord::match_id() const {
 }
 inline void BattleStorageRecord::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.match_id)
 }
 inline ::uint64_t BattleStorageRecord::_internal_match_id() const {
@@ -12790,7 +12888,7 @@ BattleStorageRecord::_internal_mutable_player_ids() {
 inline void BattleStorageRecord::clear_map_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.map_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t BattleStorageRecord::map_id() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.map_id)
@@ -12798,7 +12896,7 @@ inline ::uint32_t BattleStorageRecord::map_id() const {
 }
 inline void BattleStorageRecord::set_map_id(::uint32_t value) {
   _internal_set_map_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.map_id)
 }
 inline ::uint32_t BattleStorageRecord::_internal_map_id() const {
@@ -12878,7 +12976,7 @@ inline void BattleStorageRecord::set_allocated_game_mode(::std::string* PROTOBUF
 inline void BattleStorageRecord::clear_allocated_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allocated_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::int64_t BattleStorageRecord::allocated_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.allocated_at_ms)
@@ -12886,7 +12984,7 @@ inline ::int64_t BattleStorageRecord::allocated_at_ms() const {
 }
 inline void BattleStorageRecord::set_allocated_at_ms(::int64_t value) {
   _internal_set_allocated_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.allocated_at_ms)
 }
 inline ::int64_t BattleStorageRecord::_internal_allocated_at_ms() const {
@@ -12902,7 +13000,7 @@ inline void BattleStorageRecord::_internal_set_allocated_at_ms(::int64_t value) 
 inline void BattleStorageRecord::clear_last_heartbeat_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_heartbeat_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::int64_t BattleStorageRecord::last_heartbeat_ms() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_heartbeat_ms)
@@ -12910,7 +13008,7 @@ inline ::int64_t BattleStorageRecord::last_heartbeat_ms() const {
 }
 inline void BattleStorageRecord::set_last_heartbeat_ms(::int64_t value) {
   _internal_set_last_heartbeat_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_heartbeat_ms)
 }
 inline ::int64_t BattleStorageRecord::_internal_last_heartbeat_ms() const {
@@ -12926,7 +13024,7 @@ inline void BattleStorageRecord::_internal_set_last_heartbeat_ms(::int64_t value
 inline void BattleStorageRecord::clear_player_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_count_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::int32_t BattleStorageRecord::player_count() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.player_count)
@@ -12934,7 +13032,7 @@ inline ::int32_t BattleStorageRecord::player_count() const {
 }
 inline void BattleStorageRecord::set_player_count(::int32_t value) {
   _internal_set_player_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.player_count)
 }
 inline ::int32_t BattleStorageRecord::_internal_player_count() const {
@@ -12950,7 +13048,7 @@ inline void BattleStorageRecord::_internal_set_player_count(::int32_t value) {
 inline void BattleStorageRecord::clear_empty_since_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.empty_since_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::int64_t BattleStorageRecord::empty_since_ms() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.empty_since_ms)
@@ -12958,7 +13056,7 @@ inline ::int64_t BattleStorageRecord::empty_since_ms() const {
 }
 inline void BattleStorageRecord::set_empty_since_ms(::int64_t value) {
   _internal_set_empty_since_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.empty_since_ms)
 }
 inline ::int64_t BattleStorageRecord::_internal_empty_since_ms() const {
@@ -13038,7 +13136,7 @@ inline void BattleStorageRecord::set_allocated_gameserver_uid(::std::string* PRO
 inline void BattleStorageRecord::clear_instance_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_epoch_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t BattleStorageRecord::instance_epoch() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.instance_epoch)
@@ -13046,7 +13144,7 @@ inline ::uint32_t BattleStorageRecord::instance_epoch() const {
 }
 inline void BattleStorageRecord::set_instance_epoch(::uint32_t value) {
   _internal_set_instance_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.instance_epoch)
 }
 inline ::uint32_t BattleStorageRecord::_internal_instance_epoch() const {
@@ -13062,7 +13160,7 @@ inline void BattleStorageRecord::_internal_set_instance_epoch(::uint32_t value) 
 inline void BattleStorageRecord::clear_last_verified_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_verified_gen_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint64_t BattleStorageRecord::last_verified_gen() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_verified_gen)
@@ -13070,7 +13168,7 @@ inline ::uint64_t BattleStorageRecord::last_verified_gen() const {
 }
 inline void BattleStorageRecord::set_last_verified_gen(::uint64_t value) {
   _internal_set_last_verified_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_verified_gen)
 }
 inline ::uint64_t BattleStorageRecord::_internal_last_verified_gen() const {
@@ -13150,7 +13248,7 @@ inline void BattleStorageRecord::set_allocated_last_verified_jti(::std::string* 
 inline void BattleStorageRecord::clear_last_verified_writer_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_verified_writer_epoch_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t BattleStorageRecord::last_verified_writer_epoch() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_verified_writer_epoch)
@@ -13158,7 +13256,7 @@ inline ::uint32_t BattleStorageRecord::last_verified_writer_epoch() const {
 }
 inline void BattleStorageRecord::set_last_verified_writer_epoch(::uint32_t value) {
   _internal_set_last_verified_writer_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_verified_writer_epoch)
 }
 inline ::uint32_t BattleStorageRecord::_internal_last_verified_writer_epoch() const {
@@ -13421,7 +13519,7 @@ BattleStorageRecord::_internal_mutable_player_combat_factions() {
 inline void BattleStorageRecord::clear_ever_had_players() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ever_had_players_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline bool BattleStorageRecord::ever_had_players() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.ever_had_players)
@@ -13429,7 +13527,7 @@ inline bool BattleStorageRecord::ever_had_players() const {
 }
 inline void BattleStorageRecord::set_ever_had_players(bool value) {
   _internal_set_ever_had_players(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.ever_had_players)
 }
 inline bool BattleStorageRecord::_internal_ever_had_players() const {
@@ -13445,7 +13543,7 @@ inline void BattleStorageRecord::_internal_set_ever_had_players(bool value) {
 inline void BattleStorageRecord::clear_rating_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rating_mode_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::pandora::config::v1::LevelRatingMode BattleStorageRecord::rating_mode() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.rating_mode)
@@ -13453,7 +13551,7 @@ inline ::pandora::config::v1::LevelRatingMode BattleStorageRecord::rating_mode()
 }
 inline void BattleStorageRecord::set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
   _internal_set_rating_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.rating_mode)
 }
 inline ::pandora::config::v1::LevelRatingMode BattleStorageRecord::_internal_rating_mode() const {
@@ -13463,6 +13561,70 @@ inline ::pandora::config::v1::LevelRatingMode BattleStorageRecord::_internal_rat
 inline void BattleStorageRecord::_internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rating_mode_ = value;
+}
+
+// string rating_pool = 23 [json_name = "ratingPool"];
+inline void BattleStorageRecord::clear_rating_pool() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_pool_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline const ::std::string& BattleStorageRecord::rating_pool() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.rating_pool)
+  return _internal_rating_pool();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_rating_pool(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  _impl_.rating_pool_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.rating_pool)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_rating_pool()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ::std::string* _s = _internal_mutable_rating_pool();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.rating_pool)
+  return _s;
+}
+inline const ::std::string& BattleStorageRecord::_internal_rating_pool() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rating_pool_.Get();
+}
+inline void BattleStorageRecord::_internal_set_rating_pool(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_pool_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_rating_pool() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.rating_pool_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_rating_pool() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.rating_pool)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000800U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  auto* released = _impl_.rating_pool_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.rating_pool_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleStorageRecord::set_allocated_rating_pool(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  }
+  _impl_.rating_pool_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.rating_pool_.IsDefault()) {
+    _impl_.rating_pool_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.rating_pool)
 }
 
 // -------------------------------------------------------------------

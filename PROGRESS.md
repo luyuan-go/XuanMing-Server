@@ -3353,3 +3353,18 @@ immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致
     「窗口报绿、后端其实没起来」,人眼 review 最容易放过。
   - **未做**:`reset_data_service_schema.ps1` 也吃 `--env-file`,但它只用于栈已经跑起来后的破坏性重置,
     彼时 dev.env 必然存在,故不接自举、也不进契约测试的入口清单。
+- 2026-08-13(表头漂移:真实「新增列」首次发生 + 补双击入口)。现场:策划一键启动 `-GenTables` 整批不产出,
+  报 `技能/j_技能.xlsx 表头出现未登记的第 Y 列 "伤害显示"`(实际是 Y/Z 两列:伤害显示、治疗显示)。
+  - **处置**:`configtable_sync.ps1 -Write -SyncCol 'skill.伤害显示=damage_display:uint32','skill.治疗显示=heal_display:uint32'`
+    → `skill.proto` 追加 `damage_display=25` / `heal_display=26`(编号顺延不回填)→ 自动重生 pb → 重建 exe →
+    重跑导表全过。客户端列登记里这两列都没有,不指定 `-SyncCol` 只会得到占位名 `col_y` / `col_z`。
+    **补齐了上一条「追加字段路径只有单测覆盖」的剩余风险:真实新增列端到端跑通。**
+  - **坑**:`-SyncCol` 传多个值时,`pwsh script.ps1 -SyncCol a,b` 会被原生调用当成**一个字符串**传进去
+    (报「类型 xxx 不受支持」)。要用 `pwsh -Command "& script.ps1 -SyncCol a,b"`,或重复写在同一数组里。
+  - **新增双击入口 `程序一键同步表头.cmd`**(根目录,纯 ASCII 内容 + CRLF + 不写 chcp,遵 cmd-batch-encoding 铁律)。
+    两趟:[1/2] 只报差异不写文件 → 按 Y 确认 → [2/2] `-Write` 改 proto + 重生 pb + 重建 exe + 重跑导表。
+    带参数时直通 `configtable_sync.ps1` 并跳过问答(给 `-SyncCol` 这类高级用法)。`PANDORA_NONINTERACTIVE=1`
+    时停在报告、不 pause(Web 管理台 / CI)。`%ERRORLEVEL%` 一律在 label 分支里取,不放进 `if (...)` 块
+    (块内会在解析期就展开成旧值)。实测:CP936 下双击路径与参数直通路径均 `exit=0`、无解析漂移。
+  - `configtable_gen.ps1` 的失败提示改为首推双击该 .cmd(命令行写法保留作等价说明);策划机缺 go/buf 时
+    提示语也从「他跑一条命令」改成「他双击那个 cmd」。

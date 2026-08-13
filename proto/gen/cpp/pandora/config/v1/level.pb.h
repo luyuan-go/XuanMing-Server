@@ -433,6 +433,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     kAssetPathFieldNumber = 3,
     kGameModeClassFieldNumber = 4,
     kGameModeFieldNumber = 10,
+    kRatingPoolFieldNumber = 17,
     kIdFieldNumber = 1,
     kCategoryFieldNumber = 5,
     kDisableUiShortcutFieldNumber = 6,
@@ -504,6 +505,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
   const ::std::string& _internal_game_mode() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_game_mode();
+
+  public:
+  // string rating_pool = 17 [json_name = "ratingPool", (.pandora.config.v1.excel_col) = "\346\256\265\344\275\215\346\261\240", (.pandora.config.v1.excel_default) = ""];
+  void clear_rating_pool() ;
+  [[nodiscard]] const ::std::string& rating_pool() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_rating_pool(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_rating_pool();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_rating_pool();
+  void set_allocated_rating_pool(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_rating_pool() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_rating_pool(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_rating_pool();
 
   public:
   // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
@@ -630,8 +646,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
-                          0, 89,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 100,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -663,6 +679,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     ::google::protobuf::internal::ArenaStringPtr asset_path_;
     ::google::protobuf::internal::ArenaStringPtr game_mode_class_;
     ::google::protobuf::internal::ArenaStringPtr game_mode_;
+    ::google::protobuf::internal::ArenaStringPtr rating_pool_;
     ::uint32_t id_;
     int category_;
     bool disable_ui_shortcut_;
@@ -913,7 +930,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelTableData final : public ::goo
 inline void LevelRow::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t LevelRow::id() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.id)
@@ -921,7 +938,7 @@ inline ::uint32_t LevelRow::id() const {
 }
 inline void LevelRow::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.id)
 }
 inline ::uint32_t LevelRow::_internal_id() const {
@@ -1129,7 +1146,7 @@ inline void LevelRow::set_allocated_game_mode_class(::std::string* PROTOBUF_NULL
 inline void LevelRow::clear_category() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.category_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::pandora::config::v1::LevelCategory LevelRow::category() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.category)
@@ -1137,7 +1154,7 @@ inline ::pandora::config::v1::LevelCategory LevelRow::category() const {
 }
 inline void LevelRow::set_category(::pandora::config::v1::LevelCategory value) {
   _internal_set_category(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.category)
 }
 inline ::pandora::config::v1::LevelCategory LevelRow::_internal_category() const {
@@ -1153,7 +1170,7 @@ inline void LevelRow::_internal_set_category(::pandora::config::v1::LevelCategor
 inline void LevelRow::clear_disable_ui_shortcut() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.disable_ui_shortcut_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline bool LevelRow::disable_ui_shortcut() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.disable_ui_shortcut)
@@ -1161,7 +1178,7 @@ inline bool LevelRow::disable_ui_shortcut() const {
 }
 inline void LevelRow::set_disable_ui_shortcut(bool value) {
   _internal_set_disable_ui_shortcut(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.disable_ui_shortcut)
 }
 inline bool LevelRow::_internal_disable_ui_shortcut() const {
@@ -1177,7 +1194,7 @@ inline void LevelRow::_internal_set_disable_ui_shortcut(bool value) {
 inline void LevelRow::clear_show_in_match_list() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.show_in_match_list_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline bool LevelRow::show_in_match_list() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.show_in_match_list)
@@ -1185,7 +1202,7 @@ inline bool LevelRow::show_in_match_list() const {
 }
 inline void LevelRow::set_show_in_match_list(bool value) {
   _internal_set_show_in_match_list(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.show_in_match_list)
 }
 inline bool LevelRow::_internal_show_in_match_list() const {
@@ -1201,7 +1218,7 @@ inline void LevelRow::_internal_set_show_in_match_list(bool value) {
 inline void LevelRow::clear_team_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t LevelRow::team_size() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.team_size)
@@ -1209,7 +1226,7 @@ inline ::uint32_t LevelRow::team_size() const {
 }
 inline void LevelRow::set_team_size(::uint32_t value) {
   _internal_set_team_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.team_size)
 }
 inline ::uint32_t LevelRow::_internal_team_size() const {
@@ -1225,7 +1242,7 @@ inline void LevelRow::_internal_set_team_size(::uint32_t value) {
 inline void LevelRow::clear_allow_exit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allow_exit_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline bool LevelRow::allow_exit() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.allow_exit)
@@ -1233,7 +1250,7 @@ inline bool LevelRow::allow_exit() const {
 }
 inline void LevelRow::set_allow_exit(bool value) {
   _internal_set_allow_exit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.allow_exit)
 }
 inline bool LevelRow::_internal_allow_exit() const {
@@ -1313,7 +1330,7 @@ inline void LevelRow::set_allocated_game_mode(::std::string* PROTOBUF_NULLABLE v
 inline void LevelRow::clear_entry_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_mode_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::pandora::config::v1::LevelEntryMode LevelRow::entry_mode() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.entry_mode)
@@ -1321,7 +1338,7 @@ inline ::pandora::config::v1::LevelEntryMode LevelRow::entry_mode() const {
 }
 inline void LevelRow::set_entry_mode(::pandora::config::v1::LevelEntryMode value) {
   _internal_set_entry_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.entry_mode)
 }
 inline ::pandora::config::v1::LevelEntryMode LevelRow::_internal_entry_mode() const {
@@ -1337,7 +1354,7 @@ inline void LevelRow::_internal_set_entry_mode(::pandora::config::v1::LevelEntry
 inline void LevelRow::clear_side_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.side_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t LevelRow::side_count() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.side_count)
@@ -1345,7 +1362,7 @@ inline ::uint32_t LevelRow::side_count() const {
 }
 inline void LevelRow::set_side_count(::uint32_t value) {
   _internal_set_side_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.side_count)
 }
 inline ::uint32_t LevelRow::_internal_side_count() const {
@@ -1361,7 +1378,7 @@ inline void LevelRow::_internal_set_side_count(::uint32_t value) {
 inline void LevelRow::clear_exp_share_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.exp_share_mode_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::pandora::config::v1::LevelExpShareMode LevelRow::exp_share_mode() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.exp_share_mode)
@@ -1369,7 +1386,7 @@ inline ::pandora::config::v1::LevelExpShareMode LevelRow::exp_share_mode() const
 }
 inline void LevelRow::set_exp_share_mode(::pandora::config::v1::LevelExpShareMode value) {
   _internal_set_exp_share_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.exp_share_mode)
 }
 inline ::pandora::config::v1::LevelExpShareMode LevelRow::_internal_exp_share_mode() const {
@@ -1385,7 +1402,7 @@ inline void LevelRow::_internal_set_exp_share_mode(::pandora::config::v1::LevelE
 inline void LevelRow::clear_battle_duration_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_duration_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t LevelRow::battle_duration_seconds() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.battle_duration_seconds)
@@ -1393,7 +1410,7 @@ inline ::uint32_t LevelRow::battle_duration_seconds() const {
 }
 inline void LevelRow::set_battle_duration_seconds(::uint32_t value) {
   _internal_set_battle_duration_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.battle_duration_seconds)
 }
 inline ::uint32_t LevelRow::_internal_battle_duration_seconds() const {
@@ -1409,7 +1426,7 @@ inline void LevelRow::_internal_set_battle_duration_seconds(::uint32_t value) {
 inline void LevelRow::clear_min_team_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.min_team_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t LevelRow::min_team_size() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.min_team_size)
@@ -1417,7 +1434,7 @@ inline ::uint32_t LevelRow::min_team_size() const {
 }
 inline void LevelRow::set_min_team_size(::uint32_t value) {
   _internal_set_min_team_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.min_team_size)
 }
 inline ::uint32_t LevelRow::_internal_min_team_size() const {
@@ -1433,7 +1450,7 @@ inline void LevelRow::_internal_set_min_team_size(::uint32_t value) {
 inline void LevelRow::clear_rating_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rating_mode_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::pandora::config::v1::LevelRatingMode LevelRow::rating_mode() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.rating_mode)
@@ -1441,7 +1458,7 @@ inline ::pandora::config::v1::LevelRatingMode LevelRow::rating_mode() const {
 }
 inline void LevelRow::set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
   _internal_set_rating_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.rating_mode)
 }
 inline ::pandora::config::v1::LevelRatingMode LevelRow::_internal_rating_mode() const {
@@ -1451,6 +1468,70 @@ inline ::pandora::config::v1::LevelRatingMode LevelRow::_internal_rating_mode() 
 inline void LevelRow::_internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rating_mode_ = value;
+}
+
+// string rating_pool = 17 [json_name = "ratingPool", (.pandora.config.v1.excel_col) = "\346\256\265\344\275\215\346\261\240", (.pandora.config.v1.excel_default) = ""];
+inline void LevelRow::clear_rating_pool() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_pool_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& LevelRow::rating_pool() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.rating_pool)
+  return _internal_rating_pool();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void LevelRow::set_rating_pool(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.rating_pool_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.rating_pool)
+}
+inline ::std::string* PROTOBUF_NONNULL LevelRow::mutable_rating_pool()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_rating_pool();
+  // @@protoc_insertion_point(field_mutable:pandora.config.v1.LevelRow.rating_pool)
+  return _s;
+}
+inline const ::std::string& LevelRow::_internal_rating_pool() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rating_pool_.Get();
+}
+inline void LevelRow::_internal_set_rating_pool(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_pool_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL LevelRow::_internal_mutable_rating_pool() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.rating_pool_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE LevelRow::release_rating_pool() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.config.v1.LevelRow.rating_pool)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.rating_pool_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.rating_pool_.Set("", GetArena());
+  }
+  return released;
+}
+inline void LevelRow::set_allocated_rating_pool(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.rating_pool_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.rating_pool_.IsDefault()) {
+    _impl_.rating_pool_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.LevelRow.rating_pool)
 }
 
 // -------------------------------------------------------------------

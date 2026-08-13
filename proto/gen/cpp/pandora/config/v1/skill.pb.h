@@ -262,6 +262,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
     kDamageValueFieldNumber = 21,
     kCorrectionRateFieldNumber = 23,
     kEffectCountFieldNumber = 24,
+    kDamageDisplayFieldNumber = 25,
+    kHealDisplayFieldNumber = 26,
   };
   // string remark = 2 [json_name = "remark", (.pandora.config.v1.excel_col) = "\345\244\207\346\263\250"];
   void clear_remark() ;
@@ -528,11 +530,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
   void _internal_set_effect_count(::uint32_t value);
 
   public:
+  // uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
+  void clear_damage_display() ;
+  [[nodiscard]] ::uint32_t damage_display() const;
+  void set_damage_display(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_damage_display() const;
+  void _internal_set_damage_display(::uint32_t value);
+
+  public:
+  // uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
+  void clear_heal_display() ;
+  [[nodiscard]] ::uint32_t heal_display() const;
+  void set_heal_display(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_heal_display() const;
+  void _internal_set_heal_display(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.SkillRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 24,
+      ::google::protobuf::internal::TcParseTable<5, 26,
                           0, 104,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -585,6 +607,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
     float damage_value_;
     float correction_rate_;
     ::uint32_t effect_count_;
+    ::uint32_t damage_display_;
+    ::uint32_t heal_display_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1593,6 +1617,54 @@ inline ::uint32_t SkillRow::_internal_effect_count() const {
 inline void SkillRow::_internal_set_effect_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.effect_count_ = value;
+}
+
+// uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
+inline void SkillRow::clear_damage_display() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.damage_display_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline ::uint32_t SkillRow::damage_display() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.damage_display)
+  return _internal_damage_display();
+}
+inline void SkillRow::set_damage_display(::uint32_t value) {
+  _internal_set_damage_display(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.damage_display)
+}
+inline ::uint32_t SkillRow::_internal_damage_display() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.damage_display_;
+}
+inline void SkillRow::_internal_set_damage_display(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.damage_display_ = value;
+}
+
+// uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
+inline void SkillRow::clear_heal_display() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heal_display_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint32_t SkillRow::heal_display() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.heal_display)
+  return _internal_heal_display();
+}
+inline void SkillRow::set_heal_display(::uint32_t value) {
+  _internal_set_heal_display(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.heal_display)
+}
+inline ::uint32_t SkillRow::_internal_heal_display() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.heal_display_;
+}
+inline void SkillRow::_internal_set_heal_display(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heal_display_ = value;
 }
 
 // -------------------------------------------------------------------

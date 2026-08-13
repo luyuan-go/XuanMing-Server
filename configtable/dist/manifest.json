@@ -1,6 +1,6 @@
 {
-  "version": 20260812007,
-  "generated_at_ms": 1786616747949,
+  "version": 20260813001,
+  "generated_at_ms": 1786624552355,
   "generator": "configtable-gen@0.1.0",
   "source_rev": "svn-r2010",
   "tables": [
@@ -127,7 +127,7 @@
       "name": "role_level",
       "file": "role_level.json",
       "proto": "pandora.config.v1.RoleLevelTableData",
-      "checksum": "sha256:145ceccf5d814d924db57cd32abbdf9f066efe5b2ec11c9165941ecc5aee69df",
+      "checksum": "sha256:b06ee17087bc4073b4d21b61f46c5894d880280ac8cf36ddc90c6bc7b312654a",
       "rows": 24
     },
     {
@@ -183,7 +183,7 @@
       "name": "skill",
       "file": "skill.json",
       "proto": "pandora.config.v1.SkillTableData",
-      "checksum": "sha256:6c957a5dc2550980600f9401d7af201d320e299edd3fdff45973f20c61d076aa",
+      "checksum": "sha256:5fb8ff1a5973d4747ca9a0eedacdc55669ef533303c3f6c5105901811b453f84",
       "rows": 63
     },
     {

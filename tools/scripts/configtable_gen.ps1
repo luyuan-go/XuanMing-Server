@@ -259,13 +259,15 @@ function Get-SyncToolchainMissing {
 function Write-SyncHint([string]$What) {
     $missing = Get-SyncToolchainMissing
     if ($missing.Count -eq 0) {
-        Write-Host "      你这台机器有 go + buf,可以自己跑($What 也能自动处理):"
+        Write-Host "      你这台机器有 go + buf，可以自己同步（$What 也能自动处理）："
+        Write-Host '        双击仓库根目录的 「程序一键同步表头.cmd」  # 先报差异，确认后按 Y 自动改 proto、重生 pb 并重跑导表'
+        Write-Host '      等价命令行：'
         Write-Host '        pwsh tools\scripts\configtable_sync.ps1          # 先看差异'
         Write-Host '        pwsh tools\scripts\configtable_sync.ps1 -Write   # 确认后自动改 proto、重生 pb 并重跑导表'
-        Write-Host '      (删列 / 挪位 / 重名它不自动改,那几种要人判断。)'
+        Write-Host '      （删列 / 挪位 / 重名它不自动改，那几种要人判断。）'
     } else {
-        Write-Host "      程序那边跑一条命令就能自动同步($What),但**你这台机器不行**:缺 $($missing -join ' / ')。"
-        Write-Host '      做法:把上面那行报错原文发给程序,他跑 tools\scripts\configtable_sync.ps1 -Write 即可。'
+        Write-Host "      程序那边双击一个脚本就能自动同步（$What），但**你这台机器不行**：缺 $($missing -join ' / ')。"
+        Write-Host '      做法：把上面那行报错原文发给程序，他双击仓库根目录的「程序一键同步表头.cmd」即可。'
     }
 }
 

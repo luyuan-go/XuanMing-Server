@@ -51,11 +51,11 @@ constexpr LevelRow::ParseTableT_ LevelRow::InternalGenerateParseTable_(const ::_
     {
       PROTOBUF_FIELD_OFFSET(LevelRow, _impl_._has_bits_),
       0, // no _extensions_
-      16, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294901760,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      16,  // num_field_entries
+      17,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -65,13 +65,10 @@ constexpr LevelRow::ParseTableT_ LevelRow::InternalGenerateParseTable_(const ::_
       ::_pbi::TcParser::GetTable<::pandora::config::v1::LevelRow>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .pandora.config.v1.LevelRatingMode rating_mode = 16 [json_name = "ratingMode", (.pandora.config.v1.excel_col) = "\350\256\241\345\210\206\346\250\241\345\274\217"];
-      {::_pbi::TcParser::FastV32S2,
-       {384, 15, 0,
-        PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.rating_mode_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.id_), 4>(),
-       {8, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.id_), 5>(),
+       {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.id_)}},
       // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
       {::_pbi::TcParser::FastUS1,
@@ -86,54 +83,76 @@ constexpr LevelRow::ParseTableT_ LevelRow::InternalGenerateParseTable_(const ::_
        {34, 2, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.game_mode_class_)}},
       // .pandora.config.v1.LevelCategory category = 5 [json_name = "category", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\347\261\273\345\210\253", (.pandora.config.v1.excel_required) = true];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.category_), 5>(),
-       {40, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.category_), 6>(),
+       {40, 6, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.category_)}},
       // bool disable_ui_shortcut = 6 [json_name = "disableUiShortcut", (.pandora.config.v1.excel_col) = "\347\246\201\346\255\242ui\345\277\253\346\215\267\351\224\256\345\274\200\345\205\263", (.pandora.config.v1.excel_default) = "1"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LevelRow, _impl_.disable_ui_shortcut_), 6>(),
-       {48, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LevelRow, _impl_.disable_ui_shortcut_), 7>(),
+       {48, 7, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.disable_ui_shortcut_)}},
       // bool show_in_match_list = 7 [json_name = "showInMatchList", (.pandora.config.v1.excel_col) = "\345\214\271\351\205\215\345\210\227\350\241\250\346\230\276\347\244\272", (.pandora.config.v1.excel_default) = "0"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LevelRow, _impl_.show_in_match_list_), 7>(),
-       {56, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LevelRow, _impl_.show_in_match_list_), 8>(),
+       {56, 8, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.show_in_match_list_)}},
       // uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.team_size_), 9>(),
-       {64, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.team_size_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.team_size_)}},
       // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LevelRow, _impl_.allow_exit_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LevelRow, _impl_.allow_exit_), 9>(),
+       {72, 9, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.allow_exit_)}},
       // string game_mode = 10 [json_name = "gameMode", (.pandora.config.v1.excel_col) = "\347\216\251\346\263\225\346\250\241\345\274\217", (.pandora.config.v1.excel_default) = ""];
       {::_pbi::TcParser::FastUS1,
        {82, 3, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.game_mode_)}},
       // .pandora.config.v1.LevelEntryMode entry_mode = 11 [json_name = "entryMode", (.pandora.config.v1.excel_col) = "\345\205\245\345\217\243\346\250\241\345\274\217"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.entry_mode_), 10>(),
-       {88, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.entry_mode_), 11>(),
+       {88, 11, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.entry_mode_)}},
       // uint32 side_count = 12 [json_name = "sideCount", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\226\271\346\225\260", (.pandora.config.v1.excel_default) = "0"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.side_count_), 11>(),
-       {96, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.side_count_), 12>(),
+       {96, 12, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.side_count_)}},
       // .pandora.config.v1.LevelExpShareMode exp_share_mode = 13 [json_name = "expShareMode", (.pandora.config.v1.excel_col) = "\347\273\217\351\252\214\345\275\222\345\261\236\346\226\271\345\274\217"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.exp_share_mode_), 12>(),
-       {104, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.exp_share_mode_), 13>(),
+       {104, 13, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.exp_share_mode_)}},
       // uint32 battle_duration_seconds = 14 [json_name = "battleDurationSeconds", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.battle_duration_seconds_), 13>(),
-       {112, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.battle_duration_seconds_), 14>(),
+       {112, 14, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.battle_duration_seconds_)}},
       // uint32 min_team_size = 15 [json_name = "minTeamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260\344\270\213\351\231\220", (.pandora.config.v1.excel_default) = "0"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.min_team_size_), 14>(),
-       {120, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelRow, _impl_.min_team_size_), 15>(),
+       {120, 15, 0,
         PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.min_team_size_)}},
+      // .pandora.config.v1.LevelRatingMode rating_mode = 16 [json_name = "ratingMode", (.pandora.config.v1.excel_col) = "\350\256\241\345\210\206\346\250\241\345\274\217"];
+      {::_pbi::TcParser::FastV32S2,
+       {384, 16, 0,
+        PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.rating_mode_)}},
+      // string rating_pool = 17 [json_name = "ratingPool", (.pandora.config.v1.excel_col) = "\346\256\265\344\275\215\346\261\240", (.pandora.config.v1.excel_default) = ""];
+      {::_pbi::TcParser::FastUS2,
+       {394, 4, 0,
+        PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.rating_pool_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
       {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string asset_path = 3 [json_name = "assetPath", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\350\265\204\346\272\220", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_prefix) = "/"];
@@ -141,38 +160,41 @@ constexpr LevelRow::ParseTableT_ LevelRow::InternalGenerateParseTable_(const ::_
       // string game_mode_class = 4 [json_name = "gameModeClass", (.pandora.config.v1.excel_col) = "GameMode\347\261\273", (.pandora.config.v1.excel_prefix) = "/"];
       {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.game_mode_class_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .pandora.config.v1.LevelCategory category = 5 [json_name = "category", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\347\261\273\345\210\253", (.pandora.config.v1.excel_required) = true];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.category_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.category_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // bool disable_ui_shortcut = 6 [json_name = "disableUiShortcut", (.pandora.config.v1.excel_col) = "\347\246\201\346\255\242ui\345\277\253\346\215\267\351\224\256\345\274\200\345\205\263", (.pandora.config.v1.excel_default) = "1"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.disable_ui_shortcut_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.disable_ui_shortcut_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool show_in_match_list = 7 [json_name = "showInMatchList", (.pandora.config.v1.excel_col) = "\345\214\271\351\205\215\345\210\227\350\241\250\346\230\276\347\244\272", (.pandora.config.v1.excel_default) = "0"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.show_in_match_list_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.show_in_match_list_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.team_size_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.team_size_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.allow_exit_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.allow_exit_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // string game_mode = 10 [json_name = "gameMode", (.pandora.config.v1.excel_col) = "\347\216\251\346\263\225\346\250\241\345\274\217", (.pandora.config.v1.excel_default) = ""];
       {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.game_mode_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .pandora.config.v1.LevelEntryMode entry_mode = 11 [json_name = "entryMode", (.pandora.config.v1.excel_col) = "\345\205\245\345\217\243\346\250\241\345\274\217"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.entry_mode_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.entry_mode_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint32 side_count = 12 [json_name = "sideCount", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\226\271\346\225\260", (.pandora.config.v1.excel_default) = "0"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.side_count_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.side_count_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .pandora.config.v1.LevelExpShareMode exp_share_mode = 13 [json_name = "expShareMode", (.pandora.config.v1.excel_col) = "\347\273\217\351\252\214\345\275\222\345\261\236\346\226\271\345\274\217"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.exp_share_mode_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.exp_share_mode_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint32 battle_duration_seconds = 14 [json_name = "battleDurationSeconds", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.battle_duration_seconds_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.battle_duration_seconds_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 min_team_size = 15 [json_name = "minTeamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260\344\270\213\351\231\220", (.pandora.config.v1.excel_default) = "0"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.min_team_size_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.min_team_size_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .pandora.config.v1.LevelRatingMode rating_mode = 16 [json_name = "ratingMode", (.pandora.config.v1.excel_col) = "\350\256\241\345\210\206\346\250\241\345\274\217"];
-      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.rating_mode_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.rating_mode_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // string rating_pool = 17 [json_name = "ratingPool", (.pandora.config.v1.excel_col) = "\346\256\265\344\275\215\346\261\240", (.pandora.config.v1.excel_default) = ""];
+      {PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.rating_pool_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\32\0\4\12\17\0\0\0\0\0\11\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "\32\0\4\12\17\0\0\0\0\0\11\0\0\0\0\0\0\13\0\0\0\0\0\0"
       "pandora.config.v1.LevelRow"
       "name"
       "asset_path"
       "game_mode_class"
       "game_mode"
+      "rating_pool"
     }},
   };
 }
@@ -192,6 +214,9 @@ inline constexpr LevelRow::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         game_mode_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        rating_pool_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         id_{0u},
@@ -462,7 +487,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_._has_bits_),
-        19, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.asset_path_),
@@ -479,22 +504,24 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.battle_duration_seconds_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.min_team_size_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.rating_mode_),
-        4,
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelRow, _impl_.rating_pool_),
+        5,
         0,
         1,
         2,
-        5,
         6,
         7,
-        9,
         8,
-        3,
         10,
+        9,
+        3,
         11,
         12,
         13,
         14,
         15,
+        16,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::LevelTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -505,7 +532,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::config::v1::LevelRow)},
-        {35, sizeof(::pandora::config::v1::LevelTableData)},
+        {37, sizeof(::pandora::config::v1::LevelTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -516,7 +543,7 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2flevel_2eproto[] ABS
     protodesc_cold) = {
     "\n\035pandora/config/v1/level.proto\022\021pandora"
     ".config.v1\032\035pandora/config/v1/excel.prot"
-    "o\"\255\010\n\010LevelRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
+    "o\"\341\010\n\010LevelRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
     "id\022(\n\004name\030\002 \001(\tB\024\362\222\031\014\345\205\263\345\215\241\345\220\215\347\247\260\370\222\031\001R\004"
     "name\0228\n\nasset_path\030\003 \001(\tB\031\362\222\031\014\345\205\263\345\215\241\350\265\204\346"
     "\272\220\370\222\031\001\212\223\031\001/R\tassetPath\022<\n\017game_mode_clas"
@@ -542,25 +569,26 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2flevel_2eproto[] ABS
     "s\022\?\n\rmin_team_size\030\017 \001(\rB\033\362\222\031\022\351\230\237\344\274\215\344\272\272\346"
     "\225\260\344\270\213\351\231\220\202\223\031\0010R\013minTeamSize\022U\n\013rating_mod"
     "e\030\020 \001(\0162\".pandora.config.v1.LevelRatingM"
-    "odeB\020\362\222\031\014\350\256\241\345\210\206\346\250\241\345\274\217R\nratingMode\"_\n\016Lev"
-    "elTableData\022/\n\004rows\030\001 \003(\0132\033.pandora.conf"
-    "ig.v1.LevelRowR\004rows:\034\352\222\031\024\345\205\263\345\215\241/g_\345\205\263\345\215"
-    "\241.xlsx\220\223\031\001*\213\001\n\016LevelEntryMode\022 \n\034LEVEL_E"
-    "NTRY_MODE_UNSPECIFIED\020\000\022\036\n\032LEVEL_ENTRY_M"
-    "ODE_MATCHMAKE\020\001\022\034\n\030LEVEL_ENTRY_MODE_WALK"
-    "_IN\020\002\022\031\n\025LEVEL_ENTRY_MODE_BOTH\020\003*\250\001\n\021Lev"
-    "elExpShareMode\022$\n LEVEL_EXP_SHARE_MODE_U"
-    "NSPECIFIED\020\000\022!\n\035LEVEL_EXP_SHARE_MODE_LAS"
-    "T_HIT\020\001\022#\n\037LEVEL_EXP_SHARE_MODE_TEAM_SHA"
-    "RE\020\002\022%\n!LEVEL_EXP_SHARE_MODE_DAMAGE_SPLI"
-    "T\020\003*k\n\017LevelRatingMode\022!\n\035LEVEL_RATING_M"
-    "ODE_UNSPECIFIED\020\000\022\032\n\026LEVEL_RATING_MODE_N"
-    "ONE\020\001\022\031\n\025LEVEL_RATING_MODE_ELO\020\002*\242\001\n\rLev"
-    "elCategory\022\036\n\032LEVEL_CATEGORY_UNSPECIFIED"
-    "\020\000\022\030\n\024LEVEL_CATEGORY_LOGIN\020\001\022\036\n\032LEVEL_CA"
-    "TEGORY_ROLE_SELECT\020\002\022\034\n\030LEVEL_CATEGORY_M"
-    "AIN_CITY\020\003\022\031\n\025LEVEL_CATEGORY_BATTLE\020\004b\006p"
-    "roto3"
+    "odeB\020\362\222\031\014\350\256\241\345\210\206\346\250\241\345\274\217R\nratingMode\0222\n\013rat"
+    "ing_pool\030\021 \001(\tB\021\362\222\031\t\346\256\265\344\275\215\346\261\240\202\223\031\000R\nratin"
+    "gPool\"_\n\016LevelTableData\022/\n\004rows\030\001 \003(\0132\033."
+    "pandora.config.v1.LevelRowR\004rows:\034\352\222\031\024\345\205"
+    "\263\345\215\241/g_\345\205\263\345\215\241.xlsx\220\223\031\001*\213\001\n\016LevelEntryMod"
+    "e\022 \n\034LEVEL_ENTRY_MODE_UNSPECIFIED\020\000\022\036\n\032L"
+    "EVEL_ENTRY_MODE_MATCHMAKE\020\001\022\034\n\030LEVEL_ENT"
+    "RY_MODE_WALK_IN\020\002\022\031\n\025LEVEL_ENTRY_MODE_BO"
+    "TH\020\003*\250\001\n\021LevelExpShareMode\022$\n LEVEL_EXP_"
+    "SHARE_MODE_UNSPECIFIED\020\000\022!\n\035LEVEL_EXP_SH"
+    "ARE_MODE_LAST_HIT\020\001\022#\n\037LEVEL_EXP_SHARE_M"
+    "ODE_TEAM_SHARE\020\002\022%\n!LEVEL_EXP_SHARE_MODE"
+    "_DAMAGE_SPLIT\020\003*k\n\017LevelRatingMode\022!\n\035LE"
+    "VEL_RATING_MODE_UNSPECIFIED\020\000\022\032\n\026LEVEL_R"
+    "ATING_MODE_NONE\020\001\022\031\n\025LEVEL_RATING_MODE_E"
+    "LO\020\002*\242\001\n\rLevelCategory\022\036\n\032LEVEL_CATEGORY"
+    "_UNSPECIFIED\020\000\022\030\n\024LEVEL_CATEGORY_LOGIN\020\001"
+    "\022\036\n\032LEVEL_CATEGORY_ROLE_SELECT\020\002\022\034\n\030LEVE"
+    "L_CATEGORY_MAIN_CITY\020\003\022\031\n\025LEVEL_CATEGORY"
+    "_BATTLE\020\004b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fconfig_2fv1_2flevel_2eproto_deps[1] = {
@@ -570,7 +598,7 @@ static ::absl::once_flag descriptor_table_pandora_2fconfig_2fv1_2flevel_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fconfig_2fv1_2flevel_2eproto = {
     false,
     false,
-    1845,
+    1897,
     descriptor_table_protodef_pandora_2fconfig_2fv1_2flevel_2eproto,
     "pandora/config/v1/level.proto",
     &descriptor_table_pandora_2fconfig_2fv1_2flevel_2eproto_once,
@@ -634,7 +662,8 @@ PROTOBUF_NDEBUG_INLINE LevelRow::Impl_::Impl_(
         name_(arena, from.name_),
         asset_path_(arena, from.asset_path_),
         game_mode_class_(arena, from.game_mode_class_),
-        game_mode_(arena, from.game_mode_) {}
+        game_mode_(arena, from.game_mode_),
+        rating_pool_(arena, from.rating_pool_) {}
 
 LevelRow::LevelRow(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -667,7 +696,8 @@ PROTOBUF_NDEBUG_INLINE LevelRow::Impl_::Impl_(
         name_(arena),
         asset_path_(arena),
         game_mode_class_(arena),
-        game_mode_(arena) {}
+        game_mode_(arena),
+        rating_pool_(arena) {}
 
 inline void LevelRow::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -693,6 +723,7 @@ inline void LevelRow::SharedDtor(MessageLite& self) {
   this_._impl_.asset_path_.Destroy();
   this_._impl_.game_mode_class_.Destroy();
   this_._impl_.game_mode_.Destroy();
+  this_._impl_.rating_pool_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -730,7 +761,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.name_.ClearNonDefaultToEmpty();
     }
@@ -743,17 +774,21 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _impl_.game_mode_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.rating_pool_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.show_in_match_list_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.show_in_match_list_));
+        reinterpret_cast<char*>(&_impl_.disable_ui_shortcut_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.disable_ui_shortcut_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.allow_exit_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.rating_mode_) -
-        reinterpret_cast<char*>(&_impl_.allow_exit_)) + sizeof(_impl_.rating_mode_));
+    ::memset(&_impl_.show_in_match_list_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.min_team_size_) -
+        reinterpret_cast<char*>(&_impl_.show_in_match_list_)) + sizeof(_impl_.min_team_size_));
   }
+  _impl_.rating_mode_ = 0;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -778,7 +813,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -817,7 +852,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // .pandora.config.v1.LevelCategory category = 5 [json_name = "category", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\347\261\273\345\210\253", (.pandora.config.v1.excel_required) = true];
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_category() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -826,7 +861,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // bool disable_ui_shortcut = 6 [json_name = "disableUiShortcut", (.pandora.config.v1.excel_col) = "\347\246\201\346\255\242ui\345\277\253\346\215\267\351\224\256\345\274\200\345\205\263", (.pandora.config.v1.excel_default) = "1"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_disable_ui_shortcut() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -835,7 +870,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // bool show_in_match_list = 7 [json_name = "showInMatchList", (.pandora.config.v1.excel_col) = "\345\214\271\351\205\215\345\210\227\350\241\250\346\230\276\347\244\272", (.pandora.config.v1.excel_default) = "0"];
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_show_in_match_list() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -844,7 +879,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_team_size() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -853,7 +888,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_allow_exit() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -872,7 +907,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // .pandora.config.v1.LevelEntryMode entry_mode = 11 [json_name = "entryMode", (.pandora.config.v1.excel_col) = "\345\205\245\345\217\243\346\250\241\345\274\217"];
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_entry_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -881,7 +916,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // uint32 side_count = 12 [json_name = "sideCount", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\226\271\346\225\260", (.pandora.config.v1.excel_default) = "0"];
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_side_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -890,7 +925,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // .pandora.config.v1.LevelExpShareMode exp_share_mode = 13 [json_name = "expShareMode", (.pandora.config.v1.excel_col) = "\347\273\217\351\252\214\345\275\222\345\261\236\346\226\271\345\274\217"];
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_exp_share_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -899,7 +934,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // uint32 battle_duration_seconds = 14 [json_name = "battleDurationSeconds", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_battle_duration_seconds() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -908,7 +943,7 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // uint32 min_team_size = 15 [json_name = "minTeamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260\344\270\213\351\231\220", (.pandora.config.v1.excel_default) = "0"];
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_min_team_size() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -917,11 +952,21 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
   }
 
   // .pandora.config.v1.LevelRatingMode rating_mode = 16 [json_name = "ratingMode", (.pandora.config.v1.excel_col) = "\350\256\241\345\210\206\346\250\241\345\274\217"];
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_rating_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
           16, this_._internal_rating_mode(), target);
+    }
+  }
+
+  // string rating_pool = 17 [json_name = "ratingPool", (.pandora.config.v1.excel_col) = "\346\256\265\344\275\215\346\261\240", (.pandora.config.v1.excel_default) = ""];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_rating_pool().empty()) {
+      const ::std::string& _s = this_._internal_rating_pool();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.config.v1.LevelRow.rating_pool");
+      target = stream->WriteStringMaybeAliased(17, _s, target);
     }
   }
 
@@ -979,84 +1024,93 @@ PROTOBUF_NOINLINE void LevelRow::Clear() {
                                         this_._internal_game_mode());
       }
     }
-    // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+    // string rating_pool = 17 [json_name = "ratingPool", (.pandora.config.v1.excel_col) = "\346\256\265\344\275\215\346\261\240", (.pandora.config.v1.excel_default) = ""];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_rating_pool().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_rating_pool());
+      }
+    }
+    // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // .pandora.config.v1.LevelCategory category = 5 [json_name = "category", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\347\261\273\345\210\253", (.pandora.config.v1.excel_required) = true];
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_category() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_category());
       }
     }
     // bool disable_ui_shortcut = 6 [json_name = "disableUiShortcut", (.pandora.config.v1.excel_col) = "\347\246\201\346\255\242ui\345\277\253\346\215\267\351\224\256\345\274\200\345\205\263", (.pandora.config.v1.excel_default) = "1"];
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (this_._internal_disable_ui_shortcut() != 0) {
-        total_size += 2;
-      }
-    }
-    // bool show_in_match_list = 7 [json_name = "showInMatchList", (.pandora.config.v1.excel_col) = "\345\214\271\351\205\215\345\210\227\350\241\250\346\230\276\347\244\272", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (this_._internal_show_in_match_list() != 0) {
+      if (this_._internal_disable_ui_shortcut() != 0) {
         total_size += 2;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
+    // bool show_in_match_list = 7 [json_name = "showInMatchList", (.pandora.config.v1.excel_col) = "\345\214\271\351\205\215\345\210\227\350\241\250\346\230\276\347\244\272", (.pandora.config.v1.excel_default) = "0"];
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_show_in_match_list() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool allow_exit = 9 [json_name = "allowExit", (.pandora.config.v1.excel_col) = "\346\230\257\345\220\246\350\203\275\351\200\200\345\207\272", (.pandora.config.v1.excel_default) = "0"];
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_allow_exit() != 0) {
         total_size += 2;
       }
     }
     // uint32 team_size = 8 [json_name = "teamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260", (.pandora.config.v1.excel_default) = "0"];
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_team_size() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_team_size());
       }
     }
     // .pandora.config.v1.LevelEntryMode entry_mode = 11 [json_name = "entryMode", (.pandora.config.v1.excel_col) = "\345\205\245\345\217\243\346\250\241\345\274\217"];
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_entry_mode() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_entry_mode());
       }
     }
     // uint32 side_count = 12 [json_name = "sideCount", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\226\271\346\225\260", (.pandora.config.v1.excel_default) = "0"];
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_side_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_side_count());
       }
     }
     // .pandora.config.v1.LevelExpShareMode exp_share_mode = 13 [json_name = "expShareMode", (.pandora.config.v1.excel_col) = "\347\273\217\351\252\214\345\275\222\345\261\236\346\226\271\345\274\217"];
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_exp_share_mode() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_exp_share_mode());
       }
     }
     // uint32 battle_duration_seconds = 14 [json_name = "battleDurationSeconds", (.pandora.config.v1.excel_col) = "\345\257\271\345\261\200\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_battle_duration_seconds() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_battle_duration_seconds());
       }
     }
     // uint32 min_team_size = 15 [json_name = "minTeamSize", (.pandora.config.v1.excel_col) = "\351\230\237\344\274\215\344\272\272\346\225\260\344\270\213\351\231\220", (.pandora.config.v1.excel_default) = "0"];
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_min_team_size() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_min_team_size());
       }
     }
+  }
+   {
     // .pandora.config.v1.LevelRatingMode rating_mode = 16 [json_name = "ratingMode", (.pandora.config.v1.excel_col) = "\350\256\241\345\210\206\346\250\241\345\274\217"];
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_rating_mode() != 0) {
         total_size += 2 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_rating_mode());
@@ -1118,66 +1172,75 @@ void LevelRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_rating_pool().empty()) {
+        _this->_internal_set_rating_pool(from._internal_rating_pool());
+      } else {
+        if (_this->_impl_.rating_pool_.IsDefault()) {
+          _this->_internal_set_rating_pool("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_category() != 0) {
         _this->_impl_.category_ = from._impl_.category_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_disable_ui_shortcut() != 0) {
         _this->_impl_.disable_ui_shortcut_ = from._impl_.disable_ui_shortcut_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_show_in_match_list() != 0) {
-        _this->_impl_.show_in_match_list_ = from._impl_.show_in_match_list_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_show_in_match_list() != 0) {
+        _this->_impl_.show_in_match_list_ = from._impl_.show_in_match_list_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_allow_exit() != 0) {
         _this->_impl_.allow_exit_ = from._impl_.allow_exit_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_team_size() != 0) {
         _this->_impl_.team_size_ = from._impl_.team_size_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_entry_mode() != 0) {
         _this->_impl_.entry_mode_ = from._impl_.entry_mode_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_side_count() != 0) {
         _this->_impl_.side_count_ = from._impl_.side_count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_exp_share_mode() != 0) {
         _this->_impl_.exp_share_mode_ = from._impl_.exp_share_mode_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_battle_duration_seconds() != 0) {
         _this->_impl_.battle_duration_seconds_ = from._impl_.battle_duration_seconds_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_min_team_size() != 0) {
         _this->_impl_.min_team_size_ = from._impl_.min_team_size_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
-      if (from._internal_rating_mode() != 0) {
-        _this->_impl_.rating_mode_ = from._impl_.rating_mode_;
-      }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_rating_mode() != 0) {
+      _this->_impl_.rating_mode_ = from._impl_.rating_mode_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1203,6 +1266,7 @@ void LevelRow::InternalSwap(LevelRow* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.asset_path_, &other->_impl_.asset_path_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_class_, &other->_impl_.game_mode_class_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_, &other->_impl_.game_mode_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.rating_pool_, &other->_impl_.rating_pool_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(LevelRow, _impl_.rating_mode_)
       + sizeof(LevelRow::_impl_.rating_mode_)

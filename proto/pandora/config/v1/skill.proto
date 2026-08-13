@@ -128,6 +128,12 @@ message SkillRow {
   //   不设 (excel_default) = "1":源表第 2-6 行的说明区没给这两列写任何默认值口径,
   //   凭猜在服务端立一份默认只会多出一个会漂移的事实源(§9.22)。
   uint32 effect_count = 24 [(excel_col) = "生效次数"];
+  // 伤害显示(configtable-sync 追加:xlsx 新增列;类型 / 命名来源:人工指定(-sync-col))。
+  // 服务端决策未自动填:如需 (excel_required) / (excel_prefix) / (excel_fk) 请人工补,并补本列业务注释。
+  uint32 damage_display = 25 [(excel_col) = "伤害显示"];
+  // 治疗显示(configtable-sync 追加:xlsx 新增列;类型 / 命名来源:人工指定(-sync-col))。
+  // 服务端决策未自动填:如需 (excel_required) / (excel_prefix) / (excel_fk) 请人工补,并补本列业务注释。
+  uint32 heal_display = 26 [(excel_col) = "治疗显示"];
 }
 
 // SkillTableData 技能表整表容器(dist/skill.json 的根对象;excel_file 注解 = 导表登记)。

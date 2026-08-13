@@ -51,11 +51,11 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
     {
       PROTOBUF_FIELD_OFFSET(SkillRow, _impl_._has_bits_),
       0, // no _extensions_
-      24, 248,  // max_field_number, fast_idx_mask
+      26, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4278190080,  // skipmap
+      4227858432,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      24,  // num_field_entries
+      26,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -162,8 +162,14 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
       {::_pbi::TcParser::FastV32S2,
        {448, 23, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_count_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
+      {::_pbi::TcParser::FastV32S2,
+       {456, 24, 0,
+        PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_display_)}},
+      // uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
+      {::_pbi::TcParser::FastV32S2,
+       {464, 25, 0,
+        PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.heal_display_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -220,6 +226,10 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
       {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.correction_rate_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
       {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_count_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_display_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.heal_display_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -272,7 +282,9 @@ inline constexpr SkillRow::Impl_::Impl_(
         damage_rate_{0},
         damage_value_{0},
         correction_rate_{0},
-        effect_count_{0u} {}
+        effect_count_{0u},
+        damage_display_{0u},
+        heal_display_{0u} {}
 
 template <typename>
 constexpr SkillRow::SkillRow(::_pbi::ConstantInitialized,
@@ -529,7 +541,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_._has_bits_),
-        27, // hasbit index offset
+        29, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.remark_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.name_),
@@ -554,6 +566,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.apply_buffs_to_self_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.correction_rate_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.effect_count_),
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.damage_display_),
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.heal_display_),
         5,
         0,
         1,
@@ -578,6 +592,8 @@ const ::uint32_t
         4,
         22,
         23,
+        24,
+        25,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -588,7 +604,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::config::v1::SkillRow)},
-        {51, sizeof(::pandora::config::v1::SkillTableData)},
+        {55, sizeof(::pandora::config::v1::SkillTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -599,7 +615,7 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_2eproto[] ABS
     protodesc_cold) = {
     "\n\035pandora/config/v1/skill.proto\022\021pandora"
     ".config.v1\032\035pandora/config/v1/excel.prot"
-    "o\"\207\n\n\010SkillRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
+    "o\"\365\n\n\010SkillRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
     "id\022\"\n\006remark\030\002 \001(\tB\n\362\222\031\006\345\244\207\346\263\250R\006remark\022\036"
     "\n\004name\030\003 \001(\tB\n\362\222\031\006\345\220\215\347\247\260R\004name\022#\n\004icon\030\004"
     " \001(\tB\017\362\222\031\006\345\233\276\346\240\207\212\223\031\001/R\004icon\022$\n\007segment\030\005"
@@ -631,9 +647,12 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_2eproto[] ABS
     "fR\020applyBuffsToSelf\0229\n\017correction_rate\030\027"
     " \001(\002B\020\362\222\031\014\344\277\256\346\255\243\347\263\273\346\225\260R\016correctionRate\0223"
     "\n\014effect_count\030\030 \001(\rB\020\362\222\031\014\347\224\237\346\225\210\346\254\241\346\225\260R\013"
-    "effectCount\"_\n\016SkillTableData\022/\n\004rows\030\001 "
-    "\003(\0132\033.pandora.config.v1.SkillRowR\004rows:\034"
-    "\352\222\031\024\346\212\200\350\203\275/j_\346\212\200\350\203\275.xlsx\260\223\031\007b\006proto3"
+    "effectCount\0227\n\016damage_display\030\031 \001(\rB\020\362\222\031"
+    "\014\344\274\244\345\256\263\346\230\276\347\244\272R\rdamageDisplay\0223\n\014heal_dis"
+    "play\030\032 \001(\rB\020\362\222\031\014\346\262\273\347\226\227\346\230\276\347\244\272R\013healDispla"
+    "y\"_\n\016SkillTableData\022/\n\004rows\030\001 \003(\0132\033.pand"
+    "ora.config.v1.SkillRowR\004rows:\034\352\222\031\024\346\212\200\350\203\275"
+    "/j_\346\212\200\350\203\275.xlsx\260\223\031\007b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto_deps[1] = {
@@ -643,7 +662,7 @@ static ::absl::once_flag descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto = {
     false,
     false,
-    1476,
+    1586,
     descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_2eproto,
     "pandora/config/v1/skill.proto",
     &descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto_once,
@@ -700,9 +719,9 @@ SkillRow::SkillRow(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, effect_count_) -
+           offsetof(Impl_, heal_display_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::effect_count_));
+               sizeof(Impl_::heal_display_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.config.v1.SkillRow)
 }
@@ -721,9 +740,9 @@ inline void SkillRow::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, effect_count_) -
+           offsetof(Impl_, heal_display_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::effect_count_));
+               sizeof(Impl_::heal_display_));
 }
 SkillRow::~SkillRow() {
   // @@protoc_insertion_point(destructor:pandora.config.v1.SkillRow)
@@ -809,6 +828,11 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
     ::memset(&_impl_.use_distance_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.effect_count_) -
         reinterpret_cast<char*>(&_impl_.use_distance_)) + sizeof(_impl_.effect_count_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    ::memset(&_impl_.damage_display_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.heal_display_) -
+        reinterpret_cast<char*>(&_impl_.damage_display_)) + sizeof(_impl_.heal_display_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1054,6 +1078,24 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
     }
   }
 
+  // uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (this_._internal_damage_display() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          25, this_._internal_damage_display(), target);
+    }
+  }
+
+  // uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_heal_display() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          26, this_._internal_heal_display(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1244,6 +1286,22 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    // uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (this_._internal_damage_display() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_damage_display());
+      }
+    }
+    // uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_heal_display() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_heal_display());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -1407,6 +1465,18 @@ void SkillRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (from._internal_damage_display() != 0) {
+        _this->_impl_.damage_display_ = from._impl_.damage_display_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_heal_display() != 0) {
+        _this->_impl_.heal_display_ = from._impl_.heal_display_;
+      }
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -1432,8 +1502,8 @@ void SkillRow::InternalSwap(SkillRow* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ability_path_, &other->_impl_.ability_path_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.apply_buffs_to_self_, &other->_impl_.apply_buffs_to_self_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_count_)
-      + sizeof(SkillRow::_impl_.effect_count_)
+      PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.heal_display_)
+      + sizeof(SkillRow::_impl_.heal_display_)
       - PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));
