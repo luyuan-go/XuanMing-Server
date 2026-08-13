@@ -12,7 +12,10 @@
 > ⚠️ **待验证清单见 [PENDING-VERIFICATION](2026-08-04-p0-local-legacy-owner-wiring-PENDING-VERIFICATION.md)**。
 > 其中 Model B / Agones 面（⑦-B 等）**只有代码级证据，本机无法验证**，在真集群证据填上之前一律按未修复对待。
 
-## 0. 一句话结论
+> 🔴 **更正（2026-08-13）**：§6 与 §10 A-6 记为「低 / 当前无消费者」的「local 面未投递
+> `combat-factions`」**已在 2026-08-13 造成同级别 P0**——玩家进 PVE 副本后**根本没有 Pawn**
+> （不是卡加载，是没生成角色）。该判断写下时属实，2026-08-11（客户端 r1971）阵营升为出生
+> 硬前置后失效，而无人回看本档行动项。完整更正、修复与验证见 **§12**。
 
 `Model B`（Redis 授权权威 / Agones）落地后新增的 **owner / admission 权威接线**在 `legacy`（`mode=local`）面**成片漏接**：票据不带实例绑定、心跳不续 owner 实例租约、分配不回传实例身份、DS 拿不到权威花名册与 combat-factions。2026-08-13 的真实本机链路推翻了旧 A-6「combat-factions 当前无消费者」结论：UE 已将它作为出生硬门，缺失时 `RejectSpawn` 且禁止回退默认 Pawn，玩家进图后没有角色。代码修复和自动化验证已完成，但新进程加载与玩家 E2E 尚未验证，故本档不关闭。
 
@@ -94,7 +97,15 @@ LogPandoraPveDungeonLeave: Warning: 单人 PVE 主动退出被拒：result=4
 | 01:06:58 (21:06) | ds_allocator | **修复引入的自锁死**：DS 进程完全未被拉起，对局按空 pod 判弃 | `ds_allocator.err.log`（`pod=` 为空） |
 | 01:14:40 (21:14) | UE 战斗 DS | 死锁修复 + 缺口⑥修复后 `本地 battle 准入元数据已从 env 装载：roster_count=1` | `Pandora_3.log` |
 | 01:15:19 (21:15) | UE 客户端 | 再次 `confirmed BATTLE admission`，链路稳定 | `Pandora.log` |
-| 2026-08-13（精确 UTC 待从受控原始日志回填） | UE 战斗 DS | 玩家进入副本但没有角色；日志确认 combat-factions 未出现，出生被 fail-closed 拒绝 | `present=0 valid=0 mapping_count=0` |
+
+**后续事实（追加，详见 §12）**——上表为 2026-08-04/05 首轮，下表是 A-6 失效到爆雷的时间线。
+
+| UTC 时间 | 组件 | 事件 | 证据 |
+|---|---|---|---|
+| 2026-08-11 11:21 | UE 战斗 DS | 客户端 r1971 把权威阵营升为**出生硬前置**（缺失即 `RejectSpawn`，且同时禁止回退默认 Pawn），并加 `-combat_factions=` 命令行通道作为裸跑兜底。**A-6 的「当前无消费者」自此失效，但无人回看本档** | `svn blame` → r1971（`luhailong` 2026-08-11 07:21:59 -0400） |
+| 2026-08-11 | matchmaker | Go 侧同向收紧：分配器不能携带阵营即 `combat_faction_allocator_unsupported` 定性失败，不再降级开局 | `e27ffc63` |
+| 2026-08-13 03:53:47 | UE 战斗 DS | 两名玩家进 PVE 副本，逐个 `拒绝出生：权威 combat faction 无法解析 player=20356912327458816 present=0 valid=0 mapping_count=0`，随后 `[SpawnPawn] ... 拒绝出生且禁止回退默认 Pawn` | 战斗 DS `Pandora_2.log` |
+| 2026-08-13 03:53:40–03:55:34 | UE 客户端 | 同一窗口客户端全程**没有** `创建主角网络复制回调` / `[AbilityInput] 绑定能力输入完成` / `Activating gameplay camera`（同次会话进大厅时三条齐全），玩家自行断开 | 客户端 `Pandora.log` |
 
 ## 4. 调用链与关键变量
 
@@ -188,7 +199,9 @@ LogPandoraPveDungeonLeave: Warning: 单人 PVE 主动退出被拒：result=4
 - **Confirmed 同型命中**：本档记录的缺口 ①②③④⑥ 即扫描结果本身，均已落码。
 - **结构性隐患**：
   - **`local-off-v1` 的战斗票无法携带实例绑定**（`pkg/auth` 硬约束），导致 UE 侧 census 在该档位结构上不可用。当前以「花名册兜底 Admit」绕过，属**近似**而非等价（见 §10 A-3）。
-  - **2026-08-13 更正（推翻旧结论）**：local 未投递 `combat-factions` 不是可接受的显式取舍。UE 已将其用于出生硬门；真实日志证明映射为空会 `RejectSpawn`，玩家进图无 Pawn。现按缺口⑩修复并保留本条作为结论演进证据。
+  - ~~**local 与 Agones 面存在一处语义差**：Agones 另投 `pandora.dev/combat-factions`，local 的 env 通道未投递阵营映射。单人 PVE 退出不依赖它，但这是显式取舍而非遗漏。~~
+    **（2026-08-04 原判断，已于 2026-08-13 被推翻；按事故纪律保留原文）**
+  - **2026-08-13 更正（推翻上一条）**：local 未投递 `combat-factions` 不是可接受的显式取舍。原判断在写下时属实——彼时阵营解不出会退化为「每人一个独立阵营」，对局照常进行；**2026-08-11 客户端 r1971 把阵营升为出生硬前置并删掉该退化路径后，它就变成了 P0**：映射为空即 `RejectSpawn` 且禁止回退默认 Pawn，玩家进图无 Pawn。现按缺口⑩/⑪修复，详见 §12。
 - **已排除项及理由**：`matchmaker` / `login` / `battle_result` 的 legacy 分支经审计未发现同型 owner 接线漏接。
 - **未覆盖边界**：本次扫描只覆盖 owner 权威接线这一类；**其它 Model B 专属能力（如 eviction order、departure 对账）在 legacy 面的完备性未审计**。
 
@@ -215,6 +228,7 @@ LogPandoraPveDungeonLeave: Warning: 单人 PVE 主动退出被拒：result=4
 | ⑧ **修复引入的自锁死** | 已落码 | `buildEnv` 内误取 `l.mu`，而 `Allocate` 全程持锁（Go 互斥不可重入）；改为按「调用方持锁」约定直接读写 | 新增带 5s 超时的 `TestAllocate_WithPendingRosterDoesNotDeadlock` |
 | ⑨ **ready 等待被单次 Redis 抖动打掉**（**排查中新发现，全部署形态**） | 已落码 | `waitBattleReady` 两个分支（Model B 的 `ReadAuthority` + legacy 的 `GetBattle`）原先任一次读错误即 `return nil, err`；Redis 读超时抛的是**原始错误**→上层判 `ErrUnknown(code=1)`→ matchmaker 回滚 owner Begin → 玩家被弹回大厅。改为**只**容忍传输层错误到下个 tick，deadline 仍是唯一上界；权威判定（battle purge / 分配被取代 / auth fenced / 状态不可推进）保持立即失败 | `TestWaitBattleReady_ToleratesTransientReadError` / `_PersistentReadErrorStillTimesOut` / `_ModelBToleratesTransientReadError` / `_ModelBAuthoritativeLossStillFailsFast`；**Model B 分支真集群未验证（V-10）** |
 | ⑩ local combat-factions env 投递 | 已落码待本机 E2E | `localBattleRosterSink`、pending 台账和 `buildEnv` 扩为 roster/allocation/release/combat-factions 四件套；映射深拷贝，编码复用 `dsmetadata.CanonicalCombatFactions`，任一缺失/多余/不对齐则整份不投 | `TestBuildEnv_BattleAdmissionQuadAllOrNothing`、`TestBuildEnv_CombatFactionsAlignWithCanonicalRoster`；ds_allocator 全模块 test/build/vet 与 Linux `go test -race` 通过；新进程与玩家出生 E2E 未验证 |
+| ⑪ **UE 侧收下第四件 + 修好被抹掉的命令行兜底** | 已落码**未编译** | ①`StageEnvironmentBattleAdmission` 读 `PANDORA_BATTLE_COMBAT_FACTIONS`，复用 annotation 路径同一个 `ParseCanonicalCombatFactions`；阵营**可选但一旦出现必须逐项对齐 roster**（新 DS 撞旧 allocator 时不得连 roster 一起判非法，否则打回缺口⑥）。②`TryBootstrapLocalCombatFactions()` 从 BeginPlay 前段移到 `ApplyAgonesAdmissionMetadata` **之后**——后者按快照整体替换阵营字段，先注入必被无声抹掉，**这正是 `-combat_factions=` 这条兜底自 r1971 起在 mode=local 下从未生效的原因** | **仅代码级**：UE 未编译、未跑 DS。判据留给 E2E：`combat_factions=present faction_count=N` 且不再有 `拒绝出生` |
 | — 配套 | 已落码 | dev 面 Redis `read_timeout`/`write_timeout` 1s→5s（`ds_allocator-dev.yaml` + `hub_allocator-dev.yaml`）。**生产 1s 刻意不动**：放宽只是让超时更难触发，代价是 Redis 真挂时 goroutine 多占 5 倍时间；⑨ 的重试才是正解 | 本机实测（AllocateBattle 59.6s code=1 → 修复后不再整局失败） |
 
 **⑦ 与 ⑦-B 的隔离性与前六处不同，是刻意的（2026-08-04 用户拍板）**：前六处修复都有「运行模式门 + 类型断言门」双重机械隔离，生产二进制里是死代码；⑦/⑦-B **只有运行模式门，没有类型断言**，因此 Agones + legacy authority 的灰度部署与标准 Model B 生产都会执行到。这是有意为之——同一缺陷在这些形态下同样存在，一并修复；安全性由 `ownerReleaseAbandonedPlayersWeak` 的三条边界（回收后时序、exact 身份门、compare-delete）保证，不因部署形态而不同。
@@ -225,6 +239,8 @@ LogPandoraPveDungeonLeave: Warning: 单人 PVE 主动退出被拒：result=4
 
 - 待补：`CLAUDE.md` §9.22 增补「新增 owner 权威接线时，legacy/local 面必须同批实现或显式声明不适用」——见 §10 A-1。
 - 待补：`docs/design/agones-dev.md` 增补「local 面与 Agones 面的能力对照表」，避免下次再靠逐个撞发现差异。
+  **2026-08-13 追加**：这张对照表现在是硬需求而不是"最好有"——A-6 正是因为没有这张表，语义差只以一条行动项的形式散落在事故档里，改动方一侧无从察觉（见 §12）。
+- **待补（2026-08-13 新增，见 §10 A-8）**：把某种能力"暂时没有消费者"写进取舍结论时，必须同时写下**它何时会失效**并留下反向引用；把可选依赖升级为硬前置的改动，必须回看关联 Incident 的行动项。仅"当前无消费者"不构成可长期依赖的安全前提。
 
 ## 8. 验证矩阵
 
@@ -238,11 +254,14 @@ LogPandoraPveDungeonLeave: Warning: 单人 PVE 主动退出被拒：result=4
 | 玩家 E2E：进大厅 | 被踢/超时 | `confirmed HUB admission`，一次成功零重试 | 真实客户端 | `Pandora.log` |
 | 玩家 E2E：进副本 | 对局 FAILED / 超时 | `confirmed BATTLE admission`，5.5 秒确认 | 真实客户端 | `Pandora.log` |
 | 玩家 E2E：**退副本结算** | `result=4 roster_count=0` | **待验证**（花名册已装载 `roster_count=1`，端到端未点击验证） | 真实客户端 | **未完成，本档不关闭的主因** |
+| ⑪ UE 侧编译 | — | **未执行** | `PandoraEditor Win64 Development`（本地 DS 走 `UnrealEditor-Pandora.dll`，旧 DLL 不含新逻辑） | **阻断项**：UE 编译按仓库规矩由用户执行 |
+| 玩家 E2E：**进副本生成 Pawn** | `拒绝出生 present=0 valid=0 mapping_count=0`，客户端无 `创建主角网络复制回调` | **待验证** | 重编 UE + 重启 ds_allocator 后跑一局双人 map 11 | **未完成，A-6 关闭的前置条件** |
 | Agones 集群回归 | — | **未执行** | 需真集群 | **阻断项，保留**（隔离性仅由静态断言与类型系统保证） |
 
 ## 9. 部署、回滚与观察
 
 - **修复 commit**：`8e23b63`（缺口①～④的 Go 改动，由并发会话/工具提交）；缺口⑤⑥、自锁死修复与全部 UE 改动**仍在工作区未提交**。
+- **2026-08-13 追加（缺口⑩⑪）**：Go 侧改动 4 文件（`biz/gameserver.go` 接口、`biz/allocator.go` 调用点、`data/local_allocator.go` 台账+`buildEnv`、`data/local_battle_roster_test.go`），UE 侧改动 4 文件（`PandoraAgonesSubsystem.cpp/.h`、`PandoraBattleGameMode.cpp/.h`），**两侧均未提交**。UE 需重编 `PandoraEditor Win64 Development` 后随 `run_services.ps1 -Action restart` 生效；回滚同上（`git checkout` / `svn revert` + 重编）。同窗口另有一次与本档无关的 Fleet 镜像对齐提交 `7257b481`（未 push、未 apply）。
 - **构建产物**：UE `PandoraEditor Win64 Development`，839/839 Succeeded（2026-08-05 00:56 UTC 最后一次）。
 - **部署时间与目标环境**：本机进程模式，随 `run_services.ps1 -Action restart` 生效。
 - **实际 Pod `imageID` / GameServer provenance**：不适用。
@@ -258,8 +277,9 @@ LogPandoraPveDungeonLeave: Warning: 单人 PVE 主动退出被拒：result=4
 | A-3 | 中 | 缺口④的「花名册兜底 Admit」是**近似**：名册内尚未 travel 到场的玩家会被提前判 `ADMITTED`。当前由 `playerCount>0` + owner 侧 exact CAS + 屏障三重约束兜住，且仅限 legacy 面。若将来 local 能签带绑定的战斗票，应回退为 exact census | 待指定 | 未开始 | 本档 §6 |
 | A-4 | 中 | **退副本结算端到端验证未完成**，本档关闭的前置条件 | 待指定 | 进行中 | 本档 §8 |
 | A-5 | 中 | 缺口⑤的三处超时是人工保持一致的，无机械检查。应加启动期断言：`grpc.timeout > ready_wait_timeout` 且 `ds_allocate_timeout ≥ grpc.timeout` | 待指定 | 未开始 | 本档 §5.4 |
-| A-6 | 高 | **旧结论已推翻**：local 面缺 `combat-factions` 会让 UE 出生硬门 RejectSpawn。Go 修复、单测与 race 已完成；仍须重启加载新二进制并用真实客户端验证玩家生成 Pawn、正常战斗与退出 | 待指定 | 修复已落码，待本机 E2E | 本档缺口⑩ |
+| A-6 | 高 | **旧结论已推翻**（原为「低 / 当前无消费者 / 登记为显式取舍」）：local 面缺 `combat-factions` 会让 UE 出生硬门 `RejectSpawn`，玩家进副本无 Pawn。Go 侧修复、单测与 `-race` 已完成；**UE 侧⑪只有代码、未编译**，仍须重编 + 重启后用真实客户端验证生成 Pawn、正常战斗与退出副本 | 待指定 | 修复已落码，待 UE 编译与本机 E2E | 本档缺口⑩⑪ / §12 |
 | A-7 | 低 | 缺口⑥的关键不变量「roster 必须在 `Allocate` 之前登记」目前**零测试覆盖**：把登记块移到 `Allocate` 之后，现有测试仍全绿而 roster 恒不送达 | 待指定 | 未开始 | 并行审计确认项 |
+| A-8 | 高 | **本档行动项里所有「当前无消费者 / 暂不适用 / 显式取舍」的结论必须绑定复检触发条件**。A-6 就是被两天后的 r1971 悄悄作废、而无人回看本档的：结论没错，是它依赖的前提变了。需要一条机械化手段（至少：这类取舍在代码里留反向引用注释，改动方向性能力时必须回看关联 Incident 行动项） | 待指定 | 未开始 | 本档 §12 |
 
 ## 11. 关闭审核
 
@@ -274,3 +294,62 @@ LogPandoraPveDungeonLeave: Warning: 单人 PVE 主动退出被拒：result=4
 - [x] 文档已脱敏且时间线时区明确
 
 **关闭结论与审批人**：未关闭。
+
+## 12. 事故更正：A-6 的「当前无消费者」判断已被推翻（2026-08-13）
+
+### 12.1 更正内容
+
+| | 2026-08-04 原判断 | 2026-08-13 更正 |
+|---|---|---|
+| 结论 | local 不投 `combat-factions` 是**显式取舍** | 是**遗漏**，且后果与本档其余缺口同级 |
+| 严重级别 | 低 | 高 |
+| 依据 | 「当前无消费者」 | 消费者自 2026-08-11 起存在且是**硬门** |
+| 后果 | 「单人 PVE 退出不依赖它」 | 玩家进副本**根本没有 Pawn** |
+
+### 12.2 原判断当时为什么是对的，何时失效
+
+**不是当初判断错，是它依赖的前提在两天后被改掉且无人回看。**
+
+- 2026-08-04 写下 A-6 时，UE 侧阵营解不出会退化为「每人分配一个独立 Camp」，对局照常开、照常结算——所以「无消费者、可暂缓」成立，本档 §1 也记录了当时「副本内战斗实际正常」。
+- **2026-08-11 11:21 UTC（客户端 r1971）**把阵营升为出生硬前置：`APandoraBattleGameMode::ResolveCampForSpawn` 解不出即 `RejectSpawn`，`AMyGameMode::SpawnDefaultPawnImpl` 同时把 `bOutAllowDefaultFallback` 置 false（连引擎默认 Pawn 都不给），旧退化路径被删除。同批新增 `-combat_factions=` 命令行通道作为裸跑兜底。
+- 同日 Go 侧同向收紧（`e27ffc63`）：matchmaker 拿不到能携带阵营的分配器即 `combat_faction_allocator_unsupported` 定性失败，不再降级开局。
+- 两处收紧都**只覆盖了自己那条路径**：Agones 面有 annotation 通道，裸跑有命令行通道，唯独 **mode=local 的 env 通道没人补**——而本档 A-6 恰好就记着这件事，没人回看。
+
+### 12.3 爆雷形态与判据
+
+2026-08-13 03:53:47 UTC，两名玩家进 map 11：
+
+```text
+# 战斗 DS（Pandora_2.log）
+LogPandoraBattleFlow: Error: 拒绝出生：权威 combat faction 无法解析
+  player=20356912327458816 present=0 valid=0 mapping_count=0。
+  检查 allocator 是否投递了 pandora.dev/combat-factions；本地裸跑 DS 用 -combat_factions= 注入。
+LogTemp: Error: [SpawnPawn] player=... 的权威阵营无法解析，拒绝出生且禁止回退默认 Pawn。
+```
+
+**最省事的客户端侧判据**：进副本后日志里没有 `创建主角网络复制回调`（`AMyEntityPlayerController::OnRep_MainEntity`）、`[AbilityInput] 绑定能力输入完成`、`Activating gameplay camera` 三条——同一次会话进大厅时三条齐全。有此对比即可一刀切到服务端，不必怀疑客户端包。
+
+**排查中两个高误导性表象，记下来免得下次再绕**：
+
+- 队伍面板显示「HP 0 / 3600 阵亡」**不是真死**：`MyTeamStatusPanelUserWidget` 的 Health 取自 ASC（无属性即 0），MaxHealth 取自客户端本地 `CfgRoleLv.Hp`，`bDied = Health<=0`。没 Pawn 会被渲染成"阵亡"。
+- 画面下半屏纯黑也是同一因：没 Pawn 就没 view target。
+
+**为什么它落在"连着但没角色"这个形态**（用于快速排除其它 spawn 门）：battle DS 的另外两道门都不长这样——`SessionRecheckSpawnGate` 复核失败会在 ≤3 次尝试内 Kick，终态门要求本局已进入结算。玩家连接稳定不掉线、又始终没有 Pawn，只可能是阵营这道。
+
+### 12.4 修复与验证
+
+修复见 §7.2 缺口⑩（Go，四件套同投同不投）与⑪（UE，收下第四件 + 修好被抹掉的命令行兜底）。
+
+⑪的第二条是本次顺带挖出的独立缺陷：`ApplyAgonesAdmissionMetadata` 按快照**整体替换**阵营字段（刻意不做部分拼接），而 `TryBootstrapLocalCombatFactions()` 原本排在它**之前**——所以 r1971 起写进 DS 日志指引里的 `-combat_factions=` 兜底，在 mode=local（allocator 已投递准入元数据）下**从未生效过**：注进去当场被抹掉。这意味着「照日志提示注入命令行」这条自救路径此前也是断的。
+
+滚动升级口径（与 annotation 路径同语义，刻意不做成 UE 侧强制四件套）：Go 侧四件套同投同不投；UE 侧 combat-factions **可选，但一旦出现必须逐项对齐 roster**。否则新 DS 撞上旧 allocator 会连 roster 一起判非法，把缺口⑥修好的「退出副本 AuthorityNotReady」一起打回去。
+
+已完成：ds_allocator 全模块 build / vet / test 通过，Linux `go test -race` 通过，新增 `TestBuildEnv_BattleAdmissionQuadAllOrNothing`（含阵营缺失/漏人/含 roster 外玩家三条负例）与 `TestBuildEnv_CombatFactionsAlignWithCanonicalRoster`。
+
+**未完成（A-6 关闭的前置条件）**：UE 未编译、未跑 DS，玩家生成 Pawn 的 E2E 未验证。验收判据：DS 日志出现 `本地 battle 准入元数据已从 env 装载：... combat_factions=present faction_count=2`，且不再出现 `拒绝出生：权威 combat faction 无法解析`。
+
+### 12.5 本次更正的方法论产出（→ A-8）
+
+本档的 fail-closed 设计再次生效：阵营缺失没有变成"队友互相能打的错误对局"，而是变成一次显眼的拒绝。**但和 §5.4 记的一样，fail-closed 只保证安全、不保证可用**——这次它把一条低优先级的登记项直接变成了玩家不可玩。
+
+真正该收的口不是"再补一条通道"，而是：**"当前无消费者"是一个会过期的判断，不能当长期安全前提**。取舍结论必须写下失效条件并留反向引用，把可选依赖升为硬前置的改动必须回看关联 Incident 的行动项。已登记为 A-8 与 §7.3 第四条。

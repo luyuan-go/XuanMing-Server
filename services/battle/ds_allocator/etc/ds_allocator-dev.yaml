@@ -265,5 +265,15 @@ local_ds:
     PANDORA_DS_ADMISSION_ADDR: "127.0.0.1:8444"
     PANDORA_PLAYER_LOCATOR_ADDR: "127.0.0.1:8444"
     PANDORA_BATTLE_RESULT_ADDR: "127.0.0.1:8444"
+    # 进场路径三条只读反查:出战快照(专精 / 预设装备)与队伍 / 公会归属。
+    # 这三个 endpoint 在 UE 的 PandoraDSBackendSubsystem.h 里默认写的是业务 gRPC 端口
+    # (20002 / 20010 / 20008),注释还写着"DS 侧内网直连,不经 Envoy" —— 那个默认值是错的:
+    # DS 走 libcurl HTTP/1.1 grpc-web,打到 h2c 端口只会得到
+    # `Received HTTP/0.9 when not allowed`,每局必失败且只在 DS 日志里留 warn
+    # (装备 / 专精 / 队伍色 / 公会全部按空处理)。必须和其它 endpoint 一样指到 Envoy DS 面。
+    # 集群侧的等价注入见 deploy/k8s/agones/{20,21,30,31}-fleet-*.yaml;两处必须同增同减。
+    PANDORA_PLAYER_SERVICE_ADDR: "127.0.0.1:8444"
+    PANDORA_TEAM_SERVICE_ADDR: "127.0.0.1:8444"
+    PANDORA_GUILD_SERVICE_ADDR: "127.0.0.1:8444"
     # 本地 dev 的 Envoy DS 面 :8444 是明文 grpc-web(见 deploy/envoy/envoy.yaml pandora_ds_listener)。
     PANDORA_DS_ALLOCATOR_TLS: "0"

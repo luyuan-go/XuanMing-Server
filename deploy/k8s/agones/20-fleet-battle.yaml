@@ -156,6 +156,11 @@ spec:
                   value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_GUILD_SERVICE_ADDR
                   value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                # DS 拉玩家出战快照 GetLoadout(专精 / 预设装备);PlayerState 初始化即查,同一 DS 面 Envoy。
+                # 缺这一条时 DS 会退回 .h 里的 127.0.0.1:20002 默认值 —— Pod 内没人监听,
+                # 玩家整局没装备没专精且只在 DS 日志里留一行 warn(2026-08-13 实伤)。
+                - name: PANDORA_PLAYER_SERVICE_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_DS_ALLOCATOR_TLS
                   value: "0"
                 # DSTicket v2(方案 B,RS256 纯本地验票,决策文档 §7):DS 只持公钥 JWKS,无任何玩家票

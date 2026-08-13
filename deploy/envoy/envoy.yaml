@@ -856,6 +856,20 @@ static_resources:
                   cluster: guild_cluster
                   timeout: 5s
                   idle_timeout: 60s
+              # ----- Hub/Battle DS → player.GetLoadout(开战前出战快照)-----
+              # DS 在 PlayerState 初始化时按 player_id 拉专精 / 预设装备,失败按空处理
+              # (装备与专精整局丢失,但不阻断出生)。只放这一个精确方法:DS 不需要
+              # SetEquipment / Grant* 等写接口,放整前缀等于把玩家存档写权限暴露给 DS 网段。
+              # 服务端 resolvePlayerID 在 callerID==0(DS 无玩家 JWT)时以请求体 player_id 为准。
+              # 超时取 10s(不是社交反查的 5s):本方法要向 inventory 二次取实例详情,
+              # 且超时的代价是玩家整局没装备,取值与 UE 侧 PlayerGetLoadout 的 10s
+              # 客户端超时对齐,两边不互相截断。
+              - match:
+                  path: "/pandora.player.v1.PlayerService/GetLoadout"
+                route:
+                  cluster: player_cluster
+                  timeout: 10s
+                  idle_timeout: 60s
 
   clusters:
   # ===== login_cluster =====

@@ -169,6 +169,12 @@ data:
                     route: { cluster: team_cluster, timeout: 5s, idle_timeout: 60s }
                   - match: { path: "/pandora.guild.v1.GuildService/GetPlayerGuild" }
                     route: { cluster: guild_cluster, timeout: 5s, idle_timeout: 60s }
+                  # DS 拉玩家出战快照(专精 / 预设装备),PlayerState 初始化时按 player_id 查。
+                  # 同样只放这一个精确方法:放整前缀等于把 SetEquipment / Grant* 等存档写接口
+                  # 一并暴露给 DS 网段。超时 10s(不是社交反查的 5s):本方法要向 inventory
+                  # 二次取实例详情,且超时的代价是玩家整局没装备,与 UE 侧 10s 客户端超时对齐。
+                  - match: { path: "/pandora.player.v1.PlayerService/GetLoadout" }
+                    route: { cluster: player_cluster, timeout: 10s, idle_timeout: 60s }
       clusters:
       # 回环 admin(仅供 :9902 健康监听器转发 /ready,不对 Pod 外暴露)
       - name: local_admin_cluster
@@ -327,6 +333,22 @@ data:
             - endpoint:
                 address:
                   socket_address: { address: guild.pandora.svc.cluster.local, port_value: 20008 }
+      - name: player_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: player_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: player.pandora.svc.cluster.local, port_value: 20002 }
 ---
 apiVersion: apps/v1
 kind: Deployment
