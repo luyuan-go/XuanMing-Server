@@ -712,6 +712,13 @@ func (u *TeamUsecase) GetTeam(ctx context.Context, teamID uint64) (*teamv1.TeamS
 //
 // 仍要读一次队伍记录:索引可能指向已解散/已过期的队伍,把陈旧 team_id 发给 DS 会让两个
 // 早已不同队的人在场上被判成队友。这里只判定不清理,自愈仍留给 GetMyTeam。
+//
+// 判定以**成员表**为准,不以索引为准。索引是派生投影:退队 / 被踢 / 离线清扫都会走
+// DeletePlayerIndexIfMatches 去删它,但那一步删失败时只打一条 warn(best-effort,不回滚
+// 已经生效的退队)。于是存在这样一个残留窗口 —— 索引还指向队伍 T,T 也确实存在且未解散,
+// 只是这名玩家早已不在 T 的成员表里。只校验「T 存在且未解散」放不掉这种残留,
+// 会把一个已经退队的人当成 T 的队友发给 DS,而 DS 只在进场时查这一次、整场不再纠正。
+// 成员表是队伍归属的权威(§9.22 状态优先查唯一权威,不信派生投影),故以它为准。
 func (u *TeamUsecase) GetPlayerTeamID(ctx context.Context, playerID uint64) (uint64, bool, error) {
 	teamID, found, err := u.repo.GetPlayerTeamID(ctx, playerID)
 	if err != nil {
@@ -726,6 +733,14 @@ func (u *TeamUsecase) GetPlayerTeamID(ctx context.Context, playerID uint64) (uin
 		return 0, false, err
 	}
 	if !found || team.State == stateDisbanded {
+		return 0, false, nil
+	}
+	if !hasMember(team, playerID) {
+		// 索引残留(删索引那一步失败过)。按无队伍处理:错的归属比缺失的归属更糟 ——
+		// 前者让路人整场显示成队友,后者只是逐档回落到阵营矩阵。
+		// 与本函数其余分支同样「只判定不清理」,自愈仍留给 GetMyTeam 的 CAS 删索引。
+		plog.With(ctx).Warnw("msg", "team_player_index_points_to_non_member",
+			"player_id", playerID, "team_id", teamID)
 		return 0, false, nil
 	}
 	return teamID, true, nil
