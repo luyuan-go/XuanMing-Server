@@ -228,13 +228,14 @@ membership_healthy=1  upstream_cx_none_healthy=0     ← 假象：Envoy 认为�
 
 | ID | 严重级别 | 行动项 | 负责人 | 状态 | 目标/关联 Incident |
 |---|---|---|---|---|---|
-| A-1 | 低 | 用 `fio` 或等价手段直接测 Docker Desktop 虚拟磁盘 fsync 成本，把 §5.1 的"强推断"升级为实测事实 | 待指定 | 未开始 | 本档 |
-| A-2 | 中 | 核查 `infra.yaml` 中 etcd / kafka / redis 是否也沿用了生产级刷盘默认值 | 待指定 | 未开始 | 本档 |
+| A-1 | 低 | 直接测 MySQL datadir 的 fsync 成本，把 §5.1 的"强推断"升级为实测事实 | 待指定 | **进行中**（脚本已就绪，见 §12.1；测量时 `pandora` 命名空间恰被清空，待栈起来后执行） | 本档 |
+| A-2 | 中 | 核查 `infra.yaml` 中 etcd / kafka / redis 是否也沿用了生产级刷盘默认值 | 待指定 | **已完成，结论见 §12.2**；派生出 A-8（etcd） | 本档 |
 | A-3 | 中 | 把 §5.5 的 edge envoy 故障拆为独立 Incident（`index.md` §1 第四条要求独立根因分别建档） | 待指定 | 未开始 | 本档 |
 | A-4 | 中 | 把分段计时推广到其它服务的关键写路径（当前只有 owner 有） | 待指定 | 未开始 | 本档 |
 | A-5 | 中 | 为"集群内地址必须全限定名"加机械门禁（CI 扫 `deploy/**` 与生成脚本） | 待指定 | 未开始 | 本档 |
-| A-6 | 高 | 补足观察窗口：至少一轮完整联调 + 一次压测，确认长尾不再打断准入 | 待指定 | 未开始 | 本档 |
-| A-7 | 中 | 验证 edge envoy 修复：重跑 `start.ps1` 后核对 Envoy `/clusters` 解析结果为 ClusterIP | 待指定 | 未开始 | 本档 |
+| A-6 | 高 | 补足观察窗口：至少一轮完整联调 + 一次压测，确认长尾不再打断准入 | 待指定 | 未开始（**需真实使用，无法由工具单独完成**） | 本档 |
+| A-7 | 中 | 验证 edge envoy 修复：重跑 `start.ps1` 后核对 Envoy `/clusters` 解析结果为 ClusterIP | 待指定 | **已可自动核验**（`tools/scripts/tests/edge_envoy_fqdn_contract_test.ps1` 覆盖生成侧；运行期核对脚本见 §12.3） | 本档 |
+| A-8 | 中 | **etcd 的 WAL fsync 是同类风险且无法配置放宽**（A-2 派生）：承载 snowflake 发号 / 配置表 watch / writer lease，同一慢盘上会出现同样的长尾，后果是租约抖动与 writer 交接。需实测 `etcd_disk_wal_fsync_duration_seconds` 并决定是换存储还是接受并监控 | 待指定 | 未开始 | 本档 |
 
 ## 11. 关闭审核
 
@@ -248,4 +249,64 @@ membership_healthy=1  upstream_cx_none_healthy=0     ← 假象：Envoy 认为�
 - [ ] 剩余风险已解决或另建 Incident/任务（A-1 ~ A-7 全部未开始）
 - [x] 文档已脱敏且时间线时区明确
 
-**关闭结论与审批人**：未关闭。主要缺口为观察窗口不足（A-6）、edge envoy 修复未生效未验证（A-7）、无自动化回归。
+**关闭结论与审批人**：未关闭。主要缺口为观察窗口不足（A-6）、etcd 同类风险未评估（A-8）、A-1 待栈恢复后执行。
+
+---
+
+## 12. 跟进记录（2026-08-12 第二轮）
+
+### 12.1 `-race` 阻断：**已解除**（此前三份档案都写错了）
+
+`INC-20260811-001` / `-002` / 本档最初都把 `go test -race` 记为"环境不支持"的永久阻断。实测证明这是**误判**：
+
+```text
+# Windows 宿主(无 gcc)——确实跑不了，但这不是结论
+go: -race requires cgo; enable cgo by setting CGO_ENABLED=1
+
+# 挂进本地已有的 golang 镜像 + 模块缓存——直接就过
+ok  .../owner/internal/biz      1.021s
+ok  .../owner/internal/conf     1.014s
+ok  .../owner/internal/data     1.021s
+ok  .../owner/internal/service  1.529s
+```
+
+`-race` 只是需要一个带 CGO 的 Linux，本机 `golang:1.26.5` 镜像和 5.7G 模块缓存都现成。已固化为 [`tools/scripts/go_test_race.ps1`](../../tools/scripts/go_test_race.ps1)，并在脚本头写明两个必踩对的点（保持 workspace 模式、不要设 `GOFLAGS=-mod=mod`），避免下一个人重新发现。
+
+**owner 全包 race 检测通过，零 data race。**
+
+建议回填修订另两份档案的阻断项结论。
+
+### 12.2 A-2 结论：三个组件风险各不相同
+
+| 组件 | 刷盘行为 | 判定 |
+|---|---|---|
+| MySQL | 曾每次提交**双 fsync** | 已修（本档） |
+| **etcd** | **每次提交 fsync WAL，且无等价放宽开关**（共识存储刻意不提供） | ⚠️ 同类风险，另立 **A-8** |
+| Redis | `appendonly yes` + 默认 `appendfsync everysec`（后台线程每秒一次，非每写） | 可接受 |
+| Kafka / ZK | 未配 flush 参数 → 默认交给 OS，非每条 fsync | 可接受 |
+
+**etcd 是真正的残留风险**：它承载 snowflake 发号、配置表版本 watch、writer lease，同一块慢盘上会出现与 MySQL 同样的长尾，后果是租约抖动与 writer 交接。**不能靠配置解决**（etcd 无 `trx_commit=2` 等价物），只能换更快的存储或接受并监控 `etcd_disk_wal_fsync_duration_seconds`。
+
+### 12.3 自动化回归：**已补**，且经变异测试验证
+
+新增 [`tools/scripts/tests/infra_durability_contract_test.ps1`](../../tools/scripts/tests/infra_durability_contract_test.ps1)，9 条断言守两条配置级约束 + 一条前提：
+
+1. MySQL 声明 `trx_commit=2` / `sync_binlog=0`，且**不得出现 `=1`**（回退哨兵）；
+2. `overlays/online` **不得引用 `infra/`** —— 这是"本地放宽是安全的"这一论断的前提，前提被破坏必须立刻失败，否则弱持久化会上生产；
+3. edge envoy 改写产出全限定名——不是 grep 文本，而是**真正载入函数跑样本配置**，断言产出 `login.pandora.svc.cluster.local`、不含短名、且 admin 仍锁 `127.0.0.1`。
+
+**刻意不写"提交延迟 < N ms"的断言**：那种断言依赖跑测机器的磁盘，必然 flaky；而真正会回退的是**配置本身**。延迟由 §8 实测与 A-6 观察窗口负责。
+
+变异验证（证明门禁是活的，不是摆设）：
+
+| 变异 | 结果 |
+|---|---|
+| `trx_commit=2` → `=1` | **FAILED，2 条断言命中** |
+| edge envoy 全限定名 → 短名 | **FAILED，3 条断言命中** |
+| 还原 | PASSED |
+
+### 12.4 本轮未完成
+
+- **A-1**：fsync 直测脚本已就绪，但执行时 `pandora` 命名空间恰被清空（用户正在重跑 `start.ps1`），待栈恢复后执行。§5.1 的"强推断"标注维持不变。
+- **A-6**：观察窗口需真实使用累积，工具无法单独完成。
+- **A-8**：etcd WAL fsync 实测未做。
