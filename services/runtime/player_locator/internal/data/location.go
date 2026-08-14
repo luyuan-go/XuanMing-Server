@@ -368,11 +368,19 @@ func (r *RedisLocationRepo) BatchGet(ctx context.Context, playerIDs []uint64) (m
 	return out, nil
 }
 
-// RefreshHubLocations 批量续期 HUB 位置 TTL。
+// RefreshHubLocations 批量续期 HUB 位置 TTL,并把整份 census 的 last_alive_ms 推到当下。
 //
 // 两轮 pipeline:
 //  1. HMGET state,hub_pod 批量读(一次往返)
-//  2. 对「state==HUB 且 hub_pod 匹配」的 key 批量 EXPIRE(一次往返)
+//  2. 对「state==HUB 且 hub_pod 匹配」的 key 批量 EXPIRE
+//     ＋对 **census 全员** 的 hub meta touch last_alive_ms(合并成一次往返)
+//
+// 两件事的作用域刻意不同,别把它们合并回同一个 if:
+//   - EXPIRE 写的是 §1 的位置投影,必须严守「非 HUB 态 / 别的 pod 的记录一律不动」;
+//   - last_alive_ms 写的是另一把长 TTL meta key,语义是「最后一次被 Hub DS 观测在场」。
+//     玩家出现在 census 里就是这个事实本身,与投影处于哪一态无关。
+//
+// 返回值 refreshed 只统计 ①(位置 TTL 实际续期条数),保持既有观测语义不变。
 //
 // 非事务:步骤 1→2 之间状态若被并发写成 MATCHING/BATTLE,EXPIRE 只多续一次
 // 30s TTL(无害:对局态由战斗链路持续刷新,且下次写会重置 TTL),不值得上 WATCH。
@@ -402,7 +410,37 @@ func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod stri
 
 	expirePipe := r.rdb.Pipeline()
 	refreshed := 0
+	queued := 0
 	for pid, cmd := range cmds {
+		// Hub meta 承载连接 fence；在线数小时也不能让它先于 location 丢失，否则
+		// 后续 exact Disconnect 只能退化为普通 TTL。
+		//
+		// 顺带把 last_alive_ms 推到本次心跳时刻 —— 这是「最后一次被 Hub DS 观测在场」
+		// 的唯一来源。两类消费方都靠它:
+		//   ① Hub DS 整台崩溃:那种情况下不会有任何 ReportDisconnect，写不出 left_at_ms，
+		//      于是消费方只能查到 UNKNOWN、永远不动作(离线成员一直挂在队伍里);
+		//   ② 位置投影停在**非 HUB 态**却没人续期(撮合失败后 MATCHING 无保活,30s 后
+		//      整 key 消失,人明明坐在大厅里却对 locator 完全不可见 —— INC-20260724-001
+		//      的结构性假阳性正是这个)。
+		//
+		// **刻意放在 state 判定之外**(2026-08-13,INC-20260813-001):census 里出现即证明
+		// 这名玩家此刻连在本台 Hub DS 上,这个事实与位置投影处于哪一态无关。meta 不是
+		// §1 的位置投影(它是另一把长 TTL key,只存 fence 与时刻),写它不会让任何人多出
+		// 第二个可操作 DS,因此不受「非 HUB 态记录一律不动」那条约束管辖。
+		// 脚本自带 EXISTS 守卫:meta 不存在(从没走过 fenced 路径)时是 no-op,不建毒 key。
+		if metaTTL > 0 {
+			// 用 Eval(全文)而不是 Run:Run 在 pipeline 里只发 EVALSHA，脚本没被本连接
+			// 加载过就整批 NOSCRIPT 失败，而 pipeline 内拿不到单命令的自动 fallback。
+			// 脚本仅 ~120 字节，相对一次心跳的 player_ids 可忽略。
+			//
+			// ⚠️ 三个 ARGV 一个都不能少:脚本用 ARGV[3] 做节流比较,少传会在
+			// 「meta 已有 last_alive_ms」时(即第 2 次心跳起)必然 Lua 报错
+			// `attempt to compare number with nil`,整条链静默失效(INC-20260813-001)。
+			touchHubAliveScript.Eval(ctx, expirePipe,
+				[]string{hubMetaKey(pid)}, nowMs, metaTTL.Milliseconds(), AliveTouchThrottle.Milliseconds())
+			queued++
+		}
+
 		vals, err := cmd.Result()
 		if err != nil || len(vals) != 2 {
 			continue
@@ -417,24 +455,10 @@ func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod stri
 			continue // 非 HUB 态 / 别的 pod 的记录不动(不变量 §1)
 		}
 		expirePipe.Expire(ctx, locKey(pid), ttl)
-		// Hub meta 承载连接 fence；在线数小时也不能让它先于 location 丢失，否则
-		// 后续 exact Disconnect 只能退化为普通 TTL。
-		//
-		// 顺带把 last_alive_ms 推到本次心跳时刻 —— 这是「Hub DS 整台崩溃」唯一能留下的
-		// 离开时间线索:那种情况下不会有任何 ReportDisconnect，写不出 left_at_ms，
-		// 于是消费方只能查到 UNKNOWN、永远不动作(离线成员一直挂在队伍里)。
-		// 有了它，最后一次心跳时刻就是「最后一次被观测在线」，精度 ±一个心跳周期(5s)，
-		// 对 180s 级别的阈值绰绰有余。
-		if metaTTL > 0 {
-			// 用 Eval(全文)而不是 Run:Run 在 pipeline 里只发 EVALSHA，脚本没被本连接
-			// 加载过就整批 NOSCRIPT 失败，而 pipeline 内拿不到单命令的自动 fallback。
-			// 脚本仅 ~120 字节，相对一次心跳的 player_ids 可忽略。
-			touchHubAliveScript.Eval(ctx, expirePipe,
-				[]string{hubMetaKey(pid)}, nowMs, metaTTL.Milliseconds())
-		}
+		queued++
 		refreshed++
 	}
-	if refreshed == 0 {
+	if queued == 0 {
 		return 0, nil
 	}
 	if _, err := expirePipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {

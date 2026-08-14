@@ -337,7 +337,12 @@ func (r *RedisTeamRepo) UpdateWithLock(
 	}
 	// WATCH/MULTI/EXEC 乐观锁重试耗尽(§16 TOCTOU / 重试耗尽盲点):某热点队伍被并发写打爆;
 	// 经 in-band 码返回被 access log 记成泛化失败,无 team_id → WARN 留证以识别热点争用。
-	plog.With(ctx).Warnw("msg", "team_update_lock_exhausted", "team_id", teamID, "max_retry", maxRetry)
+	// reason 与 biz 层同一套枚举取值(§11.3 R2:同一个失败在全服务只有一个 reason 名);
+	// 常量定义在 biz 包,data 不反向依赖 biz,故此处写字面量并在两侧注释里互指。
+	plog.With(ctx).Warnw("msg", "team_update_lock_exhausted",
+		"reason", "optimistic_retry_exhausted",
+		"team_id", teamID, "max_retry", maxRetry,
+		"hint", "热点队伍被并发写打爆;调用方会收到 3007,属暂态")
 	return errcode.New(errcode.ErrTeamConcurrent, "team %d update concurrent retry exhausted", teamID)
 }
 

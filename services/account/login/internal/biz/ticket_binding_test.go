@@ -551,3 +551,54 @@ func TestVerifyDSTicketAdmissionBeforeMarkerAndStableRotationRetry(t *testing.T)
 		}
 	})
 }
+
+// battle v2 绑定七要件逐项判定:字段名用于 ds_ticket_binding_rejected 的
+// mismatch_field,可观测性修复(拆开塌成一句 if 的七条件)不得改变任何判定语义。
+func TestBattleV2BindingMismatchField(t *testing.T) {
+	matched := &verifiedDSTicket{
+		DSPodName: "battle-1", DSInstanceUID: "uid-b", DSInstanceEpoch: 3,
+		AllocationID: "alloc-1", ReleaseTrack: "stable",
+	}
+	authority := data.BattleTicketTarget{
+		PodName: "battle-1", InstanceUID: "uid-b", InstanceEpoch: 3,
+		AllocationID: "alloc-1", ReleaseTrack: "stable",
+	}
+	if got := battleV2BindingMismatchField("battle-1", matched, authority); got != "" {
+		t.Fatalf("全部一致必须放行, got mismatch %q", got)
+	}
+	cases := []struct {
+		name      string
+		caller    string
+		mutClaims func(*verifiedDSTicket)
+		mutTarget func(*data.BattleTicketTarget)
+		want      string
+	}{
+		{name: "调用方pod为空", caller: "", want: "caller_ds_pod_empty"},
+		{name: "调用方pod与票不符", caller: "battle-2", want: "caller_ds_pod"},
+		{name: "权威pod漂移", caller: "battle-1",
+			mutTarget: func(tg *data.BattleTicketTarget) { tg.PodName = "battle-9" }, want: "pod_name"},
+		{name: "同名Pod重建uid变化", caller: "battle-1",
+			mutTarget: func(tg *data.BattleTicketTarget) { tg.InstanceUID = "uid-rebuilt" }, want: "instance_uid"},
+		{name: "instance_epoch递增", caller: "battle-1",
+			mutTarget: func(tg *data.BattleTicketTarget) { tg.InstanceEpoch = 4 }, want: "instance_epoch"},
+		{name: "allocation换代", caller: "battle-1",
+			mutTarget: func(tg *data.BattleTicketTarget) { tg.AllocationID = "alloc-2" }, want: "allocation_id"},
+		{name: "灰度换轨", caller: "battle-1",
+			mutTarget: func(tg *data.BattleTicketTarget) { tg.ReleaseTrack = "canary" }, want: "release_track"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			claims := *matched
+			target := authority
+			if tc.mutClaims != nil {
+				tc.mutClaims(&claims)
+			}
+			if tc.mutTarget != nil {
+				tc.mutTarget(&target)
+			}
+			if got := battleV2BindingMismatchField(tc.caller, &claims, target); got != tc.want {
+				t.Fatalf("mismatch field = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

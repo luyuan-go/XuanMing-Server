@@ -156,11 +156,14 @@ func (u *TeamUsecase) allowAction(ctx context.Context, action string, playerID u
 	ok, err := u.rateQuota.Allow(ctx, action, playerID)
 	if err != nil {
 		plog.With(ctx).Warnw("msg", "team_rate_quota_check_failed",
-			"action", action, "player_id", playerID, "err", err)
+			"reason", reasonRateQuotaUnknown,
+			"action", action, "player_id", playerID, "err", err,
+			"fail_open", true)
 		return nil
 	}
 	if !ok {
 		plog.With(ctx).Warnw("msg", "team_rate_quota_rejected",
+			"reason", reasonRateLimited,
 			"action", action, "player_id", playerID)
 		return errcode.New(errcode.ErrRateLimited, "team %s rate limited, retry later", action)
 	}
@@ -217,7 +220,9 @@ func (u *TeamUsecase) maybeTouchTeam(ctx context.Context, team *teamv1.TeamStora
 	u.maybeSweepLastTouch(now)
 	if err := u.repo.TouchTeam(ctx, team.GetTeamId(), playerID, u.activeTTL()); err != nil {
 		plog.With(ctx).Warnw("msg", "team_touch_failed",
-			"player_id", playerID, "team_id", team.GetTeamId(), "err", err)
+			"reason", reasonStoreWriteFailed,
+			"player_id", playerID, "team_id", team.GetTeamId(), "err", err,
+			"hint", "队伍与开放索引未续期,持续失败会让在线队伍被 active_ttl 误回收")
 	}
 	u.syncOpenIndex(ctx, team, team.GetMapId())
 }
@@ -269,6 +274,9 @@ func (u *TeamUsecase) CreateTeam(ctx context.Context, teamID, playerID uint64) (
 
 	// 1. 先写队伍主体(此时索引不指向它,对全世界不可见)。
 	if err := u.repo.Create(ctx, team, ttl); err != nil {
+		plog.With(ctx).Warnw("msg", "team_create_rejected",
+			"reason", reasonStoreWriteFailed,
+			"team_id", teamID, "captain_id", playerID, "err", err)
 		return nil, err
 	}
 
@@ -277,6 +285,13 @@ func (u *TeamUsecase) CreateTeam(ctx context.Context, teamID, playerID uint64) (
 	if err := u.claimPlayerHealingOrphan(ctx, playerID, teamID, ttl); err != nil {
 		// 声明失败(玩家真在其他队) → 回滚删掉自己刚写的主体,避免残留无主队伍。
 		_ = u.repo.DeleteTeam(ctx, teamID)
+		// claimPlayerHealingOrphan 已打了带具体 reason 的拒绝日志(冲突 / 存储失败),
+		// 这里只补一条「建队因此整体失败且已回滚」的收尾,避免只看到一个孤零零的
+		// team_claim_conflict 却不知道主体有没有残留。
+		plog.With(ctx).Warnw("msg", "team_create_rejected",
+			"reason", reasonAlreadyInTeam,
+			"team_id", teamID, "captain_id", playerID,
+			"rolled_back", true, "err", err)
 		return nil, err
 	}
 
@@ -288,7 +303,12 @@ func (u *TeamUsecase) CreateTeam(ctx context.Context, teamID, playerID uint64) (
 	// prevMapID 与 MapId 同为 0(新建队尚未选图),不产生换桶操作。
 	u.syncOpenIndex(ctx, team, team.MapId)
 
-	plog.With(ctx).Debugw("msg", "team_created", "team_id", teamID, "captain_id", playerID)
+	// R1:建队是链路第一个不可逆推进,线上默认 info 级必须能看到(原为 Debug =
+	// 线上一条都不出,"玩家说他建不了队"只能靠猜)。
+	plog.With(ctx).Infow("msg", "team_created", "team_id", teamID, "captain_id", playerID,
+		"state", team.State, "max_size", team.MaxSize)
+	logTeamStateChanged(ctx, teamID, teamv1.TeamState_TEAM_STATE_UNSPECIFIED, team.State,
+		"create", team.GetReadyGeneration(), len(team.Members))
 	// 分片:队伍锁定队长 owner cell(TeamShardKey=captain_id);新建队仅队长一人,region 分布
 	// 为单一,但统一打点便于后续成员加入后对比。router 为 nil(单 Cell)→ 不打。
 	u.logTeamComposition(ctx, team)
@@ -303,18 +323,23 @@ func (u *TeamUsecase) Invite(ctx context.Context, inviteID, teamID, inviterID, t
 	}
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		u.logInviteRejected(ctx, reasonStoreReadFailed, teamID, inviterID, targetPlayerID, inviteID, err)
 		return nil, err
 	}
 	if !found {
+		u.logInviteRejected(ctx, reasonTeamNotFound, teamID, inviterID, targetPlayerID, inviteID, nil)
 		return nil, errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
 	}
 	if team.State == stateDisbanded {
+		u.logInviteRejected(ctx, reasonTeamDisbanded, teamID, inviterID, targetPlayerID, inviteID, nil)
 		return nil, errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 	}
 	if !hasMember(team, inviterID) {
+		u.logInviteRejected(ctx, reasonInviterNotMember, teamID, inviterID, targetPlayerID, inviteID, nil)
 		return nil, errcode.New(errcode.ErrTeamNotFound, "player %d not in team %d", inviterID, teamID)
 	}
 	if len(team.Members) >= int(team.MaxSize) {
+		u.logInviteRejected(ctx, reasonTeamFull, teamID, inviterID, targetPlayerID, inviteID, nil)
 		return nil, errcode.New(errcode.ErrTeamFull, "team %d is full (%d/%d)", teamID, len(team.Members), team.MaxSize)
 	}
 
@@ -322,6 +347,13 @@ func (u *TeamUsecase) Invite(ctx context.Context, inviteID, teamID, inviterID, t
 	// ErrTeamInvitePendingLimit(3008)——不变量 §9-18 写入侧上限,限流+占位在
 	// data 层 Lua 内原子完成。
 	if err := u.repo.SetInvite(ctx, inviteID, teamID, inviterID, targetPlayerID, u.cfg.InviteTTL.Std(), u.cfg.MaxPendingInvites); err != nil {
+		// 这里同时收敛「被邀请人 pending 上限已满(3008)」与「Redis 写失败」两种,
+		// 用错误码把它们区分开:上限是产品语义的拒绝,写失败是故障。
+		reason := reasonInviteStoreFailed
+		if errcode.As(err) == errcode.ErrTeamInvitePendingLimit {
+			reason = "invite_pending_limit_reached"
+		}
+		u.logInviteRejected(ctx, reason, teamID, inviterID, targetPlayerID, inviteID, err)
 		return nil, err
 	}
 
@@ -347,10 +379,39 @@ func (u *TeamUsecase) Invite(ctx context.Context, inviteID, teamID, inviterID, t
 			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_INVITE_SENT, inviteID)
 	}
 
-	plog.With(ctx).Debugw("msg", "team_invite_sent",
+	// R1:邀请令牌已落 Redis(不可逆),且它是"入队"链路的起点。玩家操作级频率,
+	// 升 INFO 才能在"我明明发了邀请他没收到"时区分「没发出去」与「推送丢帧」。
+	plog.With(ctx).Infow("msg", "team_invite_sent",
 		"team_id", teamID, "inviter_id", inviterID,
-		"target_player_id", targetPlayerID, "invite_id", inviteID)
+		"target_player_id", targetPlayerID, "invite_id", inviteID,
+		"push_mode", u.cfg.InvitePushMode, "members", len(team.Members))
 	return team, nil
+}
+
+// logInviteRejected 收口 Invite 的全部拒绝分支(§11.3 R2)。
+//
+// 单独一个助手而不是逐处写 Warnw:邀请有 6 个互不相同的拒绝原因,分散写迟早出现
+// 字段名不一致(team/team_id、target/target_player_id),看板就聚合不起来。
+func (u *TeamUsecase) logInviteRejected(
+	ctx context.Context, reason string,
+	teamID, inviterID, targetPlayerID, inviteID uint64, err error,
+) {
+	plog.With(ctx).Warnw("msg", "team_invite_rejected",
+		"reason", reason,
+		"team_id", teamID, "inviter_id", inviterID,
+		"target_player_id", targetPlayerID, "invite_id", inviteID, "err", err)
+}
+
+// logAcceptInviteRejected 收口 AcceptInvite 令牌校验的拒绝分支(§11.3 R2)。
+//
+// 这四种情况在协议上是同一个错误码(3007 邀请已失效),客户端提示也一样;
+// 只有 reason 能分出"令牌真过期了"/"点了发给别人的邀请"/"令牌与队伍对不上"/"Redis 读失败"。
+func (u *TeamUsecase) logAcceptInviteRejected(
+	ctx context.Context, reason string, teamID, playerID, inviteID uint64, err error,
+) {
+	plog.With(ctx).Warnw("msg", "team_accept_invite_rejected",
+		"reason", reason,
+		"team_id", teamID, "player_id", playerID, "invite_id", inviteID, "err", err)
 }
 
 // AcceptInvite 目标玩家接受邀请加入队伍。
@@ -359,20 +420,27 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 	if inviteID != 0 {
 		inv, found, err := u.repo.GetInvite(ctx, inviteID)
 		if err != nil {
+			u.logAcceptInviteRejected(ctx, reasonInviteLookupFailed, teamID, playerID, inviteID, err)
 			return nil, err
 		}
+		// 三个分支都回同一个 3007/ErrTeamInviteExpired,客户端只看到"邀请已失效" ——
+		// 拆成三个 reason 才分得清「令牌真的过期了」「点了发给别人的邀请」「令牌与队伍对不上」。
 		if !found {
+			u.logAcceptInviteRejected(ctx, reasonInviteNotFound, teamID, playerID, inviteID, nil)
 			return nil, errcode.New(errcode.ErrTeamInviteExpired, "invite %d expired or not found", inviteID)
 		}
 		if inv.TargetPlayerID != playerID {
+			u.logAcceptInviteRejected(ctx, reasonInviteTargetMismatch, teamID, playerID, inviteID, nil)
 			return nil, errcode.New(errcode.ErrTeamInviteExpired, "invite %d target mismatch", inviteID)
 		}
 		if inv.TeamID != teamID {
+			u.logAcceptInviteRejected(ctx, reasonInviteTeamMismatch, teamID, playerID, inviteID, nil)
 			return nil, errcode.New(errcode.ErrTeamInviteExpired, "invite %d team mismatch", inviteID)
 		}
 	}
 
 	// 2. 走共用入队事务(内部先 ClaimPlayer 保不变量 §1,再改成员表)。
+	//    joinTeam 内部已按分支打了带 reason 的拒绝日志,这里不重复。
 	result, err := u.joinTeam(ctx, teamID, playerID)
 	if err != nil {
 		return nil, err
@@ -390,7 +458,13 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 	// 人数变了 → 可能从"招募中"变成"已满",同步开放队伍索引(非权威投影)。
 	u.syncOpenIndex(ctx, result, result.MapId)
 
-	plog.With(ctx).Debugw("msg", "team_accept_invite", "team_id", teamID, "player_id", playerID)
+	// R1:入队是不可逆推进(占了名额、改了队伍状态),必须 INFO。
+	// 带上 new_state:接受邀请会把一支已 READY 的队伍打回 FORMING(新人默认没准备),
+	// 那正是"队长以为能直接开局却点不动"的成因。
+	plog.With(ctx).Infow("msg", "team_accept_invite",
+		"team_id", teamID, "player_id", playerID, "invite_id", inviteID,
+		"new_state", result.State, "members", len(result.Members),
+		"ready_generation", result.GetReadyGeneration())
 	// 分片:成员加入后队伍 region 分布可能变跨 region(影响 §4.4 battle DS 放置)。router 为 nil → 不打。
 	u.logTeamComposition(ctx, result)
 	return result, nil
@@ -421,17 +495,26 @@ func (u *TeamUsecase) joinTeam(ctx context.Context, teamID, playerID uint64) (*t
 	}
 
 	var result *teamv1.TeamStorageRecord
+	// prevState / rejectReason 只用于日志:锁内看到的最后一次取值即本次提交的依据
+	// (乐观锁重试时会被覆盖成最后一轮的值,正是我们要记的那一轮)。
+	var prevState teamv1.TeamState
+	var rejectReason string
 
-	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
+	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
+		prevState = team.State
 		if team.State == stateDisbanded {
+			rejectReason = reasonTeamDisbanded
 			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 		}
 		if len(team.Members) >= int(team.MaxSize) {
+			rejectReason = reasonTeamFull
 			return errcode.New(errcode.ErrTeamFull, "team %d full", teamID)
 		}
 		if hasMember(team, playerID) {
+			rejectReason = reasonAlreadyInTeam
 			return errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", playerID, teamID)
 		}
+		rejectReason = ""
 
 		team.Members = append(team.Members, &teamv1.TeamMemberStorageRecord{PlayerId: playerID})
 		team.UpdatedAtMs = time.Now().UnixMilli()
@@ -452,10 +535,32 @@ func (u *TeamUsecase) joinTeam(ctx context.Context, teamID, playerID uint64) (*t
 	}, ttl); err != nil {
 		if derr := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); derr != nil {
 			plog.With(ctx).Warnw("msg", "team_join_rollback_index_delete_failed",
+				"reason", reasonStoreWriteFailed,
 				"player_id", playerID, "team_id", teamID, "err", derr)
 		}
+		// 锁内没给出 reason 的只剩「乐观锁重试耗尽 / Redis 故障」两类,按错误码区分。
+		if rejectReason == "" {
+			rejectReason = reasonStoreWriteFailed
+			if errcode.As(err) == errcode.ErrTeamConcurrent {
+				rejectReason = reasonOptimisticRetryExhausted
+			}
+		}
+		plog.With(ctx).Warnw("msg", "team_join_rejected",
+			"reason", rejectReason,
+			"team_id", teamID, "player_id", playerID,
+			"team_state", prevState, "err", err)
 		return nil, err
 	}
+
+	// R1:入队成功 = 成员表已改(不可逆)。三条入队路径(接受邀请 / 直接入队 /
+	// 队长同意申请)都收敛到这里,查"这个人到底进没进队"只需一个 msg。
+	plog.With(ctx).Infow("msg", "team_member_joined",
+		"team_id", teamID, "player_id", playerID,
+		"prev_state", prevState, "new_state", result.State,
+		"members", len(result.Members), "max_size", result.MaxSize,
+		"ready_generation", result.GetReadyGeneration())
+	logTeamStateChanged(ctx, teamID, prevState, result.State, "join",
+		result.GetReadyGeneration(), len(result.Members))
 
 	// player index 已由 ClaimPlayer 在锁前原子写入,此处无需再写。
 	return result, nil
@@ -480,22 +585,34 @@ func (u *TeamUsecase) ensureTeamNotCommittedToMatch(ctx context.Context, teamID 
 	}
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_join_gate_rejected",
+			"reason", reasonStoreReadFailed, "team_id", teamID, "err", err)
 		return err
 	}
 	if !found {
+		plog.With(ctx).Warnw("msg", "team_join_gate_rejected",
+			"reason", reasonTeamNotFound, "team_id", teamID)
 		return errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
 	}
 
 	committed, err := u.isTeamCommittedToMatch(ctx, team)
 	if err != nil {
-		plog.With(ctx).Warnw("msg", "team_join_match_gate_unavailable",
-			"team_id", teamID, "captain_id", team.CaptainId, "err", err)
+		// fail-closed 的降级必须带 reason:线上这条码是 ErrUnavailable,access log 里
+		// 只会看到一次失败调用,分不出"matchmaker 挂了"与"队伍真在打"。
+		plog.With(ctx).Warnw("msg", "team_join_gate_rejected",
+			"reason", reasonMatchCommitmentUnknown,
+			"team_id", teamID, "captain_id", team.CaptainId,
+			"fail_closed", true, "err", err)
 		return errcode.NewCause(errcode.ErrUnavailable, err,
 			"team %d match commitment unknown, join rejected", teamID)
 	}
 	if committed {
-		plog.With(ctx).Debugw("msg", "team_join_rejected_match_committed",
-			"team_id", teamID, "captain_id", team.CaptainId)
+		// 原为 Debug:线上默认 info 级下这条一行都不出,而"这支队伍正在打所以你进不去"
+		// 恰恰是玩家最常问的拒绝原因。
+		plog.With(ctx).Warnw("msg", "team_join_gate_rejected",
+			"reason", reasonMatchCommitted,
+			"team_id", teamID, "captain_id", team.CaptainId,
+			"team_state", team.State)
 		return errcode.New(errcode.ErrTeamWrongState,
 			"team %d already committed to a match", teamID)
 	}
@@ -521,14 +638,22 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 	ttl := u.activeTTL()
 	disbandedTTL := u.cfg.DisbandedRetention.Std()
 	var result *teamv1.TeamStorageRecord
+	var prevState teamv1.TeamState
+	var prevCaptainID uint64
+	var rejectReason string
 
-	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
+	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
+		prevState = team.State
+		prevCaptainID = team.CaptainId
 		if team.State == stateDisbanded {
+			rejectReason = reasonTeamDisbanded
 			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 		}
 		if !hasMember(team, playerID) {
+			rejectReason = reasonNotMember
 			return errcode.New(errcode.ErrTeamNotFound, "player %d not in team %d", playerID, teamID)
 		}
+		rejectReason = ""
 
 		team.Members = removeMember(team.Members, playerID)
 		team.UpdatedAtMs = time.Now().UnixMilli()
@@ -549,12 +674,24 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 		result = cloneTeam(team)
 		return nil
 	}, ttl); err != nil {
+		if rejectReason == "" {
+			rejectReason = reasonStoreWriteFailed
+			if errcode.As(err) == errcode.ErrTeamConcurrent {
+				rejectReason = reasonOptimisticRetryExhausted
+			}
+		}
+		plog.With(ctx).Warnw("msg", "team_leave_rejected",
+			"reason", rejectReason,
+			"team_id", teamID, "player_id", playerID,
+			"team_state", prevState, "err", err)
 		return nil, err
 	}
 
 	// 删 player index。CAS:仅当索引仍指向本队才删,防误删玩家并发加入新队的归属。
 	if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); err != nil {
-		plog.With(ctx).Warnw("msg", "team_leave_delete_player_index_failed", "player_id", playerID, "team_id", teamID, "err", err)
+		plog.With(ctx).Warnw("msg", "team_leave_delete_player_index_failed",
+			"reason", reasonStoreWriteFailed,
+			"player_id", playerID, "team_id", teamID, "err", err)
 	}
 
 	// 匹配联动:离队成员若正在排队/确认期 → 撤销整张票据(best-effort,不阻断离队)
@@ -569,6 +706,7 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 		// 队伍没了,残留的入队申请再无人能处理 → 顺手清掉,不留到 TTL(best-effort)。
 		if err := u.repo.DeleteApplications(ctx, teamID); err != nil {
 			plog.With(ctx).Warnw("msg", "team_disband_delete_applications_failed",
+				"reason", reasonStoreWriteFailed,
 				"team_id", teamID, "err", err)
 		}
 		u.pushUpdate(ctx, playerID, memberIDs(result), result,
@@ -578,8 +716,16 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_LEFT, 0)
 	}
 
-	plog.With(ctx).Debugw("msg", "team_leave", "team_id", teamID, "player_id", playerID,
-		"new_state", result.State)
+	// R1:离队是不可逆推进。captain_transferred 显式打出来 —— 队长离队会把权限转给
+	// 第一个成员,而"我怎么突然成队长了 / 谁把图改了"没有这条就无从解释。
+	plog.With(ctx).Infow("msg", "team_leave", "team_id", teamID, "player_id", playerID,
+		"prev_state", prevState, "new_state", result.State,
+		"remaining", len(result.Members),
+		"captain_transferred", prevCaptainID == playerID && result.State != stateDisbanded,
+		"new_captain_id", result.CaptainId,
+		"ready_generation", result.GetReadyGeneration())
+	logTeamStateChanged(ctx, teamID, prevState, result.State, "leave",
+		result.GetReadyGeneration(), len(result.Members))
 	return result, nil
 }
 
@@ -590,20 +736,28 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerID uint64) (*teamv1.TeamStorageRecord, error) {
 	ttl := u.activeTTL()
 	var result *teamv1.TeamStorageRecord
+	var prevState teamv1.TeamState
+	var rejectReason string
 
-	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
+	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
+		prevState = team.State
 		if team.State == stateDisbanded {
+			rejectReason = reasonTeamDisbanded
 			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 		}
 		if team.CaptainId != captainID {
+			rejectReason = reasonNotCaptain
 			return errcode.New(errcode.ErrTeamNotCaptain, "player %d is not captain of team %d", captainID, teamID)
 		}
 		if captainID == targetPlayerID {
+			rejectReason = reasonCaptainSelfKick
 			return errcode.New(errcode.ErrInvalidArg, "captain cannot kick themselves")
 		}
 		if !hasMember(team, targetPlayerID) {
+			rejectReason = reasonNotMember
 			return errcode.New(errcode.ErrTeamNotFound, "player %d not in team %d", targetPlayerID, teamID)
 		}
+		rejectReason = ""
 
 		team.Members = removeMember(team.Members, targetPlayerID)
 		team.UpdatedAtMs = time.Now().UnixMilli()
@@ -615,12 +769,25 @@ func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerI
 		result = cloneTeam(team)
 		return nil
 	}, ttl); err != nil {
+		if rejectReason == "" {
+			rejectReason = reasonStoreWriteFailed
+			if errcode.As(err) == errcode.ErrTeamConcurrent {
+				rejectReason = reasonOptimisticRetryExhausted
+			}
+		}
+		plog.With(ctx).Warnw("msg", "team_kick_rejected",
+			"reason", rejectReason,
+			"team_id", teamID, "captain_id", captainID,
+			"target_player_id", targetPlayerID,
+			"team_state", prevState, "err", err)
 		return nil, err
 	}
 
 	// 删 target player index。CAS:仅当索引仍指向本队才删,防误删被踢者并发加入新队的归属。
 	if err := u.repo.DeletePlayerIndexIfMatches(ctx, targetPlayerID, teamID); err != nil {
-		plog.With(ctx).Warnw("msg", "team_kick_delete_player_index_failed", "player_id", targetPlayerID, "team_id", teamID, "err", err)
+		plog.With(ctx).Warnw("msg", "team_kick_delete_player_index_failed",
+			"reason", reasonStoreWriteFailed,
+			"player_id", targetPlayerID, "team_id", teamID, "err", err)
 	}
 
 	// 匹配联动:被踢成员若正在排队/确认期 → 撤销整张票据(best-effort,不阻断踢人)
@@ -634,8 +801,14 @@ func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerI
 	u.pushUpdate(ctx, captainID, recipients, result,
 		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_KICKED, 0)
 
-	plog.With(ctx).Debugw("msg", "team_kick", "team_id", teamID, "captain_id", captainID,
-		"target_player_id", targetPlayerID)
+	// R1:踢人是不可逆推进,且会把 READY 打回 FORMING(队长会发现开不了局)。
+	plog.With(ctx).Infow("msg", "team_kick", "team_id", teamID, "captain_id", captainID,
+		"target_player_id", targetPlayerID,
+		"prev_state", prevState, "new_state", result.State,
+		"remaining", len(result.Members),
+		"ready_generation", result.GetReadyGeneration())
+	logTeamStateChanged(ctx, teamID, prevState, result.State, "kick",
+		result.GetReadyGeneration(), len(result.Members))
 	return result, nil
 }
 
@@ -643,19 +816,28 @@ func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerI
 func (u *TeamUsecase) SetReady(ctx context.Context, teamID, playerID uint64, ready bool, heroID uint32) (*teamv1.TeamStorageRecord, error) {
 	ttl := u.activeTTL()
 	var result *teamv1.TeamStorageRecord
+	var prevState teamv1.TeamState
+	var prevReady bool
+	var rejectReason string
 
-	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
+	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
+		prevState = team.State
 		if team.State == stateDisbanded {
+			rejectReason = reasonTeamDisbanded
 			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 		}
 		if team.State != stateForming && team.State != stateReady {
+			rejectReason = reasonStateNotAllowed
 			return errcode.New(errcode.ErrTeamWrongState, "team %d state %d not allows set_ready", teamID, team.State)
 		}
 
 		idx := memberIndex(team.Members, playerID)
 		if idx < 0 {
+			rejectReason = reasonNotMember
 			return errcode.New(errcode.ErrTeamNotFound, "player %d not in team %d", playerID, teamID)
 		}
+		rejectReason = ""
+		prevReady = team.Members[idx].Ready
 
 		team.Members[idx].Ready = ready
 		if heroID > 0 {
@@ -674,6 +856,16 @@ func (u *TeamUsecase) SetReady(ctx context.Context, teamID, playerID uint64, rea
 		result = cloneTeam(team)
 		return nil
 	}, ttl); err != nil {
+		if rejectReason == "" {
+			rejectReason = reasonStoreWriteFailed
+			if errcode.As(err) == errcode.ErrTeamConcurrent {
+				rejectReason = reasonOptimisticRetryExhausted
+			}
+		}
+		plog.With(ctx).Warnw("msg", "team_set_ready_rejected",
+			"reason", rejectReason,
+			"team_id", teamID, "player_id", playerID,
+			"want_ready", ready, "team_state", prevState, "err", err)
 		return nil, err
 	}
 
@@ -687,8 +879,16 @@ func (u *TeamUsecase) SetReady(ctx context.Context, teamID, playerID uint64, rea
 	// FORMING ↔ READY 会改变"是否还在招募"(只有 FORMING 才进列表)→ 同步索引。
 	u.syncOpenIndex(ctx, result, result.MapId)
 
-	plog.With(ctx).Debugw("msg", "team_set_ready", "team_id", teamID, "player_id", playerID,
-		"ready", ready, "new_state", result.State)
+	// R1:ready 置位/复位是本链路最关键的一次状态推进 —— INC-20260813-001 里"打完一局
+	// 还挂着 ready"整条线索就断在这里没有 INFO。ready_count/members 让"谁还没准备"
+	// 不必再去翻推送内容;ready_generation 是 EndTeamMatch 复位 CAS 的凭据,必须同框。
+	plog.With(ctx).Infow("msg", "team_set_ready", "team_id", teamID, "player_id", playerID,
+		"prev_ready", prevReady, "ready", ready, "hero_id", heroID,
+		"prev_state", prevState, "new_state", result.State,
+		"ready_count", readyCount(result.Members), "members", len(result.Members),
+		"ready_generation", result.GetReadyGeneration())
+	logTeamStateChanged(ctx, teamID, prevState, result.State, "set_ready",
+		result.GetReadyGeneration(), len(result.Members))
 	return result, nil
 }
 
@@ -696,9 +896,13 @@ func (u *TeamUsecase) SetReady(ctx context.Context, teamID, playerID uint64, rea
 func (u *TeamUsecase) GetTeam(ctx context.Context, teamID uint64) (*teamv1.TeamStorageRecord, error) {
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_get_rejected",
+			"reason", reasonStoreReadFailed, "team_id", teamID, "err", err)
 		return nil, err
 	}
 	if !found {
+		plog.With(ctx).Warnw("msg", "team_get_rejected",
+			"reason", reasonTeamNotFound, "team_id", teamID)
 		return nil, errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
 	}
 	return team, nil
@@ -722,17 +926,33 @@ func (u *TeamUsecase) GetTeam(ctx context.Context, teamID uint64) (*teamv1.TeamS
 func (u *TeamUsecase) GetPlayerTeamID(ctx context.Context, playerID uint64) (uint64, bool, error) {
 	teamID, found, err := u.repo.GetPlayerTeamID(ctx, playerID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_player_team_lookup_failed",
+			"reason", reasonStoreReadFailed, "player_id", playerID, "err", err)
 		return 0, false, err
 	}
 	if !found {
+		// R1:这是 DS 出生编制的**权威判定结果**,一名玩家一次进场只有这一条。
+		// 「大厅里队友不显示成队友 / 队伍人数对不上」的第一现场就在这里 ——
+		// 缺了它,DS 侧只知道自己拿到了空 team_id,查不出后端为什么给空。
+		plog.With(ctx).Infow("msg", "team_player_team_resolved",
+			"player_id", playerID, "has_team", false, "reason", reasonNoTeam)
 		return 0, false, nil
 	}
 
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_player_team_lookup_failed",
+			"reason", reasonStoreReadFailed, "player_id", playerID, "team_id", teamID, "err", err)
 		return 0, false, err
 	}
 	if !found || team.State == stateDisbanded {
+		reason := reasonTeamNotFound
+		if found {
+			reason = reasonTeamDisbanded
+		}
+		plog.With(ctx).Infow("msg", "team_player_team_resolved",
+			"player_id", playerID, "has_team", false,
+			"stale_team_id", teamID, "reason", reason)
 		return 0, false, nil
 	}
 	if !hasMember(team, playerID) {
@@ -740,9 +960,18 @@ func (u *TeamUsecase) GetPlayerTeamID(ctx context.Context, playerID uint64) (uin
 		// 前者让路人整场显示成队友,后者只是逐档回落到阵营矩阵。
 		// 与本函数其余分支同样「只判定不清理」,自愈仍留给 GetMyTeam 的 CAS 删索引。
 		plog.With(ctx).Warnw("msg", "team_player_index_points_to_non_member",
-			"player_id", playerID, "team_id", teamID)
+			"reason", reasonIndexNonMember,
+			"player_id", playerID, "team_id", teamID,
+			"team_state", team.State, "members", len(team.Members))
+		plog.With(ctx).Infow("msg", "team_player_team_resolved",
+			"player_id", playerID, "has_team", false,
+			"stale_team_id", teamID, "reason", reasonIndexNonMember)
 		return 0, false, nil
 	}
+	plog.With(ctx).Infow("msg", "team_player_team_resolved",
+		"player_id", playerID, "has_team", true, "team_id", teamID,
+		"team_state", team.State, "members", len(team.Members),
+		"captain_id", team.CaptainId)
 	return teamID, true, nil
 }
 
@@ -768,7 +997,15 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 		// CAS:仅当索引仍指向该孤儿 teamID 才删,防误删玩家并发建队/入队刚写入的新归属。
 		if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); err != nil {
 			plog.With(ctx).Warnw("msg", "team_stale_player_index_cleanup_failed",
+				"reason", reasonStoreWriteFailed,
 				"player_id", playerID, "team_id", teamID, "err", err)
+		} else {
+			// R1:清索引是不可逆推进(玩家从此可以重新建队)。GetMyTeam 是轮询路径,
+			// 但这条只在真的清掉脏索引那一次触发,不是每轮都出,不违反 R4。
+			// "玩家反复被 3004 挡住建不了队"就是靠它证明自愈到底有没有发生。
+			plog.With(ctx).Infow("msg", "team_stale_player_index_healed",
+				"player_id", playerID, "stale_team_id", teamID,
+				"reason", reasonTeamNotFound)
 		}
 		return nil, false, nil
 	}
@@ -780,6 +1017,8 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 	// 事件,只靠事件会留下永远清不掉的残留成员。玩家打开组队面板时把完整成员列表
 	// 一次交给 offlinewatch；分类与排期均在其内部完成，失败不影响本次读返回。
 	u.inspectTeamPresence(ctx, team)
+	// 兜底:滚动升级期旧 matchmaker 副本不调 EndTeamMatch,那些局释放后队伍会永远停在 READY。
+	// 队长要开下一局必然先看队伍面板,所以这条读路径覆盖了真实风险路径(INC-20260813-001 ②)。
 	return team, true, nil
 }
 
@@ -887,7 +1126,9 @@ func (u *TeamUsecase) syncOpenIndex(ctx context.Context, team *teamv1.TeamStorag
 	expiresAtMs := time.Now().Add(ttl).UnixMilli()
 	if err := u.repo.SyncOpenTeam(ctx, team.TeamId, team.MapId, prevMapID, isOpenForRecruit(team), expiresAtMs, ttl); err != nil {
 		plog.With(ctx).Warnw("msg", "team_open_index_sync_failed",
-			"team_id", team.TeamId, "map_id", team.MapId, "prev_map_id", prevMapID, "err", err)
+			"reason", reasonStoreWriteFailed,
+			"team_id", team.TeamId, "map_id", team.MapId, "prev_map_id", prevMapID,
+			"open", isOpenForRecruit(team), "err", err)
 	}
 }
 
@@ -901,18 +1142,25 @@ func (u *TeamUsecase) SetTeamMap(ctx context.Context, teamID, captainID uint64, 
 	ttl := u.activeTTL()
 	var result *teamv1.TeamStorageRecord
 	var prevMapID uint32
+	var prevState teamv1.TeamState
+	var rejectReason string
 
-	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
+	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
+		prevState = team.State
 		if team.State == stateDisbanded {
+			rejectReason = reasonTeamDisbanded
 			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 		}
 		if team.CaptainId != captainID {
+			rejectReason = reasonNotCaptain
 			return errcode.New(errcode.ErrTeamNotCaptain, "player %d is not captain of team %d", captainID, teamID)
 		}
 		// 已进撮合/战斗的队伍改目标关卡没有意义(本次对局的图早已定死),拒绝以免误导队员。
 		if team.State != stateForming && team.State != stateReady {
+			rejectReason = reasonStateNotAllowed
 			return errcode.New(errcode.ErrTeamWrongState, "team %d state %d not allows set_map", teamID, team.State)
 		}
+		rejectReason = ""
 
 		prevMapID = team.MapId
 		team.MapId = mapID
@@ -920,6 +1168,16 @@ func (u *TeamUsecase) SetTeamMap(ctx context.Context, teamID, captainID uint64, 
 		result = cloneTeam(team)
 		return nil
 	}, ttl); err != nil {
+		if rejectReason == "" {
+			rejectReason = reasonStoreWriteFailed
+			if errcode.As(err) == errcode.ErrTeamConcurrent {
+				rejectReason = reasonOptimisticRetryExhausted
+			}
+		}
+		plog.With(ctx).Warnw("msg", "team_set_map_rejected",
+			"reason", rejectReason,
+			"team_id", teamID, "captain_id", captainID, "map_id", mapID,
+			"team_state", prevState, "err", err)
 		return nil, err
 	}
 
@@ -958,12 +1216,22 @@ func (u *TeamUsecase) ListOpenTeams(ctx context.Context, mapID uint32, limit int
 	}
 	candidates, err := u.repo.ListOpenTeamIDs(ctx, mapID, candidateLimit)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_open_list_rejected",
+			"reason", reasonStoreReadFailed, "map_id", mapID, "limit", limit, "err", err)
 		return nil, err
 	}
 
 	policy := u.joinPolicyProto()
 	out := make([]*teamv1.OpenTeamBrief, 0, limit)
 	skipped := 0
+	// R4 就地聚合:候选逐条打日志会在"找队伍"高频轮询下把同文件的 WARN 冲走。
+	// 四个计数器分别对应四类刷掉原因,循环后随那一条汇总日志一起出。
+	var (
+		skippedReadErr    int
+		skippedNotOpen    int
+		skippedCommitted  int
+		skippedCommitUnkn int
+	)
 
 	for _, teamID := range candidates {
 		if len(out) >= limit {
@@ -972,9 +1240,11 @@ func (u *TeamUsecase) ListOpenTeams(ctx context.Context, mapID uint32, limit int
 		team, found, gerr := u.repo.Get(ctx, teamID)
 		if gerr != nil {
 			skipped++
+			skippedReadErr++
 			continue
 		}
 		if !found || !isOpenForRecruit(team) || (mapID > 0 && team.MapId != mapID) {
+			skippedNotOpen++
 			// 索引脏了。剔除时用权威记录里的 map_id(记录已没就用查询用的 mapID),
 			// 保证摘的是它真正挂着的那个分桶。
 			bucket := mapID
@@ -983,6 +1253,7 @@ func (u *TeamUsecase) ListOpenTeams(ctx context.Context, mapID uint32, limit int
 			}
 			if rerr := u.repo.RemoveOpenTeamCandidate(ctx, teamID, bucket); rerr != nil {
 				plog.With(ctx).Warnw("msg", "team_open_index_prune_failed",
+					"reason", reasonStoreWriteFailed,
 					"team_id", teamID, "map_id", bucket, "err", rerr)
 			}
 			continue
@@ -998,12 +1269,18 @@ func (u *TeamUsecase) ListOpenTeams(ctx context.Context, mapID uint32, limit int
 		// 打成失败没有必要;真正的准入 fail-closed 在 ensureTeamNotCommittedToMatch。
 		if committed, cerr := u.isTeamCommittedToMatch(ctx, team); cerr != nil || committed {
 			if cerr != nil {
+				skippedCommitUnkn++
 				plog.With(ctx).Warnw("msg", "team_open_list_commitment_unknown",
+					"reason", reasonMatchCommitmentUnknown,
 					"team_id", teamID, "captain_id", team.CaptainId, "err", cerr)
 			} else if rerr := u.repo.RemoveOpenTeamCandidate(ctx, teamID, team.MapId); rerr != nil {
 				// 已确认在对局中 → 顺手摘索引自愈,下次浏览就不用再查它。
+				skippedCommitted++
 				plog.With(ctx).Warnw("msg", "team_open_index_prune_failed",
+					"reason", reasonStoreWriteFailed,
 					"team_id", teamID, "map_id", team.MapId, "err", rerr)
+			} else {
+				skippedCommitted++
 			}
 			skipped++
 			continue
@@ -1021,9 +1298,22 @@ func (u *TeamUsecase) ListOpenTeams(ctx context.Context, mapID uint32, limit int
 	}
 
 	if skipped > 0 {
+		// 就地聚合的四个分项:一条日志就能回答"明明有队伍却搜不到"是被哪一类刷掉的,
+		// 不用逐条去翻候选。
 		plog.With(ctx).Warnw("msg", "team_open_list_candidates_skipped",
 			"map_id", mapID, "skipped", skipped, "returned", len(out),
-			"hint", "候选被复核刷掉:读队伍失败 / 已在对局中 / 匹配状态不确定")
+			"candidates", len(candidates),
+			"skipped_read_err", skippedReadErr,
+			"skipped_not_open", skippedNotOpen,
+			"skipped_committed", skippedCommitted,
+			"skipped_commitment_unknown", skippedCommitUnkn,
+			"hint", "候选被复核刷掉:读队伍失败 / 已满或已解散 / 已在对局中 / 匹配状态不确定")
+	} else if skippedNotOpen > 0 {
+		// 索引指向已满 / 已解散的队伍是常态自愈(不是故障),留 Debug 即可:
+		// 真要查"搜不到队伍"时 LOG_LEVEL=debug 单 pod 打开就能看到被剔了多少条。
+		plog.With(ctx).Debugw("msg", "team_open_list_candidates_pruned",
+			"map_id", mapID, "returned", len(out), "candidates", len(candidates),
+			"skipped_not_open", skippedNotOpen)
 	}
 	return out, nil
 }
@@ -1043,23 +1333,29 @@ func (u *TeamUsecase) ApplyToTeam(ctx context.Context, teamID, applicantID uint6
 	}
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		u.logApplyRejected(ctx, reasonStoreReadFailed, teamID, applicantID, 0, err)
 		return false, nil, 0, err
 	}
 	if !found {
+		u.logApplyRejected(ctx, reasonTeamNotFound, teamID, applicantID, 0, nil)
 		return false, nil, 0, errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
 	}
 	if team.State == stateDisbanded {
+		u.logApplyRejected(ctx, reasonTeamDisbanded, teamID, applicantID, team.State, nil)
 		return false, nil, 0, errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 	}
 	if hasMember(team, applicantID) {
+		u.logApplyRejected(ctx, reasonAlreadyInTeam, teamID, applicantID, team.State, nil)
 		return false, nil, 0, errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", applicantID, teamID)
 	}
 	if !isOpenForRecruit(team) {
 		// 满员与状态不对分开报,客户端才能给出正确提示(而不是笼统的"进不去")。
 		if len(team.Members) >= int(team.MaxSize) {
+			u.logApplyRejected(ctx, reasonTeamFull, teamID, applicantID, team.State, nil)
 			return false, nil, 0, errcode.New(errcode.ErrTeamFull,
 				"team %d is full (%d/%d)", teamID, len(team.Members), team.MaxSize)
 		}
+		u.logApplyRejected(ctx, reasonTeamNotRecruiting, teamID, applicantID, team.State, nil)
 		return false, nil, 0, errcode.New(errcode.ErrTeamWrongState,
 			"team %d state %d not recruiting", teamID, team.State)
 	}
@@ -1074,8 +1370,11 @@ func (u *TeamUsecase) ApplyToTeam(ctx context.Context, teamID, applicantID uint6
 		u.pushUpdate(ctx, applicantID, memberIDs(result), result,
 			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
 		u.syncOpenIndex(ctx, result, result.MapId)
-		plog.With(ctx).Debugw("msg", "team_apply_joined_open",
-			"team_id", teamID, "player_id", applicantID)
+		// R1:open 策略下这是"当场入队"的路由判定结果(与 approval 分叉的那一支)。
+		plog.With(ctx).Infow("msg", "team_apply_joined_open",
+			"team_id", teamID, "player_id", applicantID,
+			"join_policy", conf.JoinPolicyOpen,
+			"new_state", result.State, "members", len(result.Members))
 		u.logTeamComposition(ctx, result)
 		return true, result, 0, nil
 	}
@@ -1083,6 +1382,12 @@ func (u *TeamUsecase) ApplyToTeam(ctx context.Context, teamID, applicantID uint6
 	// approval 策略:写申请令牌,等队长审批。
 	expiresAtMs, err := u.repo.ClaimApplication(ctx, teamID, applicantID, u.cfg.ApplyTTL.Std(), u.maxApplications())
 	if err != nil {
+		// 这里同时收敛「本队 pending 申请已达上限」与「Redis 写失败」,用错误码分开。
+		reason := reasonApplicationStoreFailed
+		if errcode.As(err) == errcode.ErrTeamApplyPendingLimit {
+			reason = "application_pending_limit_reached"
+		}
+		u.logApplyRejected(ctx, reason, teamID, applicantID, team.State, err)
 		return false, nil, 0, err
 	}
 
@@ -1091,9 +1396,24 @@ func (u *TeamUsecase) ApplyToTeam(ctx context.Context, teamID, applicantID uint6
 	u.pushUpdate(ctx, applicantID, []uint64{team.CaptainId}, team,
 		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_APPLICATION_RECEIVED, 0)
 
-	plog.With(ctx).Debugw("msg", "team_apply_pending",
-		"team_id", teamID, "player_id", applicantID, "expires_at_ms", expiresAtMs)
+	// R1:申请令牌已落 Redis(占了名额、有 TTL),是"申请"链路的不可逆推进。
+	plog.With(ctx).Infow("msg", "team_apply_pending",
+		"team_id", teamID, "player_id", applicantID,
+		"captain_id", team.CaptainId, "join_policy", conf.JoinPolicyApproval,
+		"expires_at_ms", expiresAtMs)
 	return false, nil, expiresAtMs, nil
+}
+
+// logApplyRejected 收口 ApplyToTeam 的全部拒绝分支(§11.3 R2)。
+// team_state 一并打出来:满员与"不在招募"回的是不同错误码,但玩家看到的都是"进不去"。
+func (u *TeamUsecase) logApplyRejected(
+	ctx context.Context, reason string, teamID, applicantID uint64,
+	teamState teamv1.TeamState, err error,
+) {
+	plog.With(ctx).Warnw("msg", "team_apply_rejected",
+		"reason", reason,
+		"team_id", teamID, "player_id", applicantID,
+		"team_state", teamState, "err", err)
 }
 
 // ListTeamApplications 队长查本队待处理入队申请(只读,拉取兜底)。
@@ -1101,12 +1421,19 @@ func (u *TeamUsecase) ApplyToTeam(ctx context.Context, teamID, applicantID uint6
 func (u *TeamUsecase) ListTeamApplications(ctx context.Context, teamID, captainID uint64) ([]*data.ApplicationRecord, error) {
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_list_applications_rejected",
+			"reason", reasonStoreReadFailed, "team_id", teamID, "captain_id", captainID, "err", err)
 		return nil, err
 	}
 	if !found {
+		plog.With(ctx).Warnw("msg", "team_list_applications_rejected",
+			"reason", reasonTeamNotFound, "team_id", teamID, "captain_id", captainID)
 		return nil, errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
 	}
 	if team.CaptainId != captainID {
+		plog.With(ctx).Warnw("msg", "team_list_applications_rejected",
+			"reason", reasonNotCaptain, "team_id", teamID, "captain_id", captainID,
+			"actual_captain_id", team.CaptainId)
 		return nil, errcode.New(errcode.ErrTeamNotCaptain, "player %d is not captain of team %d", captainID, teamID)
 	}
 	return u.repo.ListApplications(ctx, teamID, u.maxApplications())
@@ -1125,23 +1452,31 @@ func (u *TeamUsecase) ListTeamApplications(ctx context.Context, teamID, captainI
 func (u *TeamUsecase) HandleTeamApplication(ctx context.Context, teamID, captainID, applicantID uint64, accept bool) (*teamv1.TeamStorageRecord, error) {
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		u.logHandleApplicationRejected(ctx, reasonStoreReadFailed, teamID, captainID, applicantID, accept, err)
 		return nil, err
 	}
 	if !found {
+		u.logHandleApplicationRejected(ctx, reasonTeamNotFound, teamID, captainID, applicantID, accept, nil)
 		return nil, errcode.New(errcode.ErrTeamNotFound, "team %d not found", teamID)
 	}
 	if team.State == stateDisbanded {
+		u.logHandleApplicationRejected(ctx, reasonTeamDisbanded, teamID, captainID, applicantID, accept, nil)
 		return nil, errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 	}
 	if team.CaptainId != captainID {
+		u.logHandleApplicationRejected(ctx, reasonNotCaptain, teamID, captainID, applicantID, accept, nil)
 		return nil, errcode.New(errcode.ErrTeamNotCaptain, "player %d is not captain of team %d", captainID, teamID)
 	}
 
 	taken, err := u.repo.TakeApplication(ctx, teamID, applicantID)
 	if err != nil {
+		u.logHandleApplicationRejected(ctx, reasonStoreWriteFailed, teamID, captainID, applicantID, accept, err)
 		return nil, err
 	}
 	if !taken {
+		// 队长连点两次"同意"的第二次会走到这里(令牌已被第一次取走)。没有这条日志时,
+		// 3010 在线上只落 access log 的 DEBUG,"我明明点了同意他却没进来"完全查不出。
+		u.logHandleApplicationRejected(ctx, reasonApplicationNotFound, teamID, captainID, applicantID, accept, nil)
 		return nil, errcode.New(errcode.ErrTeamApplyNotFound,
 			"application of player %d to team %d not found or expired", applicantID, teamID)
 	}
@@ -1150,13 +1485,23 @@ func (u *TeamUsecase) HandleTeamApplication(ctx context.Context, teamID, captain
 		// 拒绝:令牌已消耗、配额已释放,队伍状态不变。不给申请人发推送——
 		// 申请人的等待本来就是有界的(令牌 TTL),到期即恢复可申请,不需要为"被拒"
 		// 单开一条推送通道(§15.3 不为可能的将来预留机制)。
-		plog.With(ctx).Debugw("msg", "team_application_rejected",
-			"team_id", teamID, "captain_id", captainID, "applicant_id", applicantID)
+		// R1:令牌已被消费(不可逆),申请人从此可以重新申请。
+		// msg 保持历史名不改(§11.3 msg 稳定不变);注意它表达的是"队长拒了这份申请"
+		// 这个**业务结果**,与本方法入参/权限被拒的 team_handle_application_rejected 不是一回事。
+		plog.With(ctx).Infow("msg", "team_application_rejected",
+			"team_id", teamID, "captain_id", captainID, "applicant_id", applicantID,
+			"accept", false)
 		return team, nil
 	}
 
+	// joinTeam 内部已按分支打了带 reason 的拒绝日志;这里补一条"令牌已消费但没进成"的
+	// 收尾 —— 那是本方法唯一的已知取舍(令牌不放回),不打就成了静默丢申请。
 	result, err := u.joinTeam(ctx, teamID, applicantID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_application_accept_failed",
+			"reason", "join_failed_after_application_consumed",
+			"team_id", teamID, "captain_id", captainID, "applicant_id", applicantID,
+			"hint", "令牌已消费且不放回(避免幽灵申请),申请人需重新申请", "err", err)
 		return nil, err
 	}
 
@@ -1165,10 +1510,23 @@ func (u *TeamUsecase) HandleTeamApplication(ctx context.Context, teamID, captain
 		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
 	u.syncOpenIndex(ctx, result, result.MapId)
 
-	plog.With(ctx).Debugw("msg", "team_application_accepted",
-		"team_id", teamID, "captain_id", captainID, "applicant_id", applicantID)
+	// R1:队长同意 = 申请人已入队(不可逆),且可能把 READY 打回 FORMING。
+	plog.With(ctx).Infow("msg", "team_application_accepted",
+		"team_id", teamID, "captain_id", captainID, "applicant_id", applicantID,
+		"new_state", result.State, "members", len(result.Members))
 	u.logTeamComposition(ctx, result)
 	return result, nil
+}
+
+// logHandleApplicationRejected 收口 HandleTeamApplication 的拒绝分支(§11.3 R2)。
+// accept 一起打:同一个 3010 在"同意"与"拒绝"两条路径上的含义完全不同。
+func (u *TeamUsecase) logHandleApplicationRejected(
+	ctx context.Context, reason string, teamID, captainID, applicantID uint64, accept bool, err error,
+) {
+	plog.With(ctx).Warnw("msg", "team_handle_application_rejected",
+		"reason", reason,
+		"team_id", teamID, "captain_id", captainID,
+		"applicant_id", applicantID, "accept", accept, "err", err)
 }
 
 // claimPlayerHealingOrphan 原子声明 player→teamID 归属(SETNX,不变量 §1),并对
@@ -1205,20 +1563,24 @@ func (u *TeamUsecase) claimPlayerHealingOrphan(ctx context.Context, playerID, te
 	}
 	if found && existTeam.State != stateDisbanded {
 		// 真冲突(玩家确在他队):排查「为什么玩家进不去队」时需要知道他当前卡在哪支队,
-		// 而 access log 只有错误码 3004。DEBUG 级即可(正常业务拒绝,量不大)。
-		plog.With(ctx).Debugw("msg", "team_claim_conflict",
-			"player_id", playerID, "existing_team_id", existTeamID, "existing_state", existTeam.State)
+		// 而 access log 只有错误码 3004 —— 且 3004 不是 IsServerFault,线上落 rpc_ok=DEBUG,
+		// 完全不可见。原为 Debugw = 线上一条不出,故按 R2 升 WARN 并带枚举 reason。
+		plog.With(ctx).Warnw("msg", "team_claim_conflict",
+			"reason", reasonAlreadyInTeam,
+			"player_id", playerID, "want_team_id", teamID,
+			"existing_team_id", existTeamID, "existing_state", existTeam.State)
 		return errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", playerID, existTeamID)
 	}
 
 	// 孤儿索引:队伍主体已没/已解散。CAS 清掉脏索引(仅当仍指向该 teamID)后重试一次声明。
 	if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, existTeamID); err != nil {
 		plog.With(ctx).Warnw("msg", "team_orphan_player_index_cleanup_failed",
+			"reason", reasonStoreWriteFailed,
 			"player_id", playerID, "team_id", existTeamID, "err", err)
 		return err
 	}
 	plog.With(ctx).Infow("msg", "team_orphan_player_index_healed",
-		"player_id", playerID, "stale_team_id", existTeamID)
+		"player_id", playerID, "stale_team_id", existTeamID, "want_team_id", teamID)
 
 	retryTeamID, claimed, err := u.repo.ClaimPlayer(ctx, playerID, teamID, ttl)
 	if err != nil {
@@ -1226,8 +1588,10 @@ func (u *TeamUsecase) claimPlayerHealingOrphan(ctx context.Context, playerID, te
 	}
 	if !claimed {
 		// 清理与重试之间有人抢先真建队 → 诚实报冲突(自愈后仍撞上,属并发竞争)。
-		plog.With(ctx).Debugw("msg", "team_claim_conflict_after_heal",
-			"player_id", playerID, "existing_team_id", retryTeamID)
+		// 同 team_claim_conflict:3004 在线上不可见,必须自己打 WARN。
+		plog.With(ctx).Warnw("msg", "team_claim_conflict_after_heal",
+			"reason", reasonAlreadyInTeam,
+			"player_id", playerID, "want_team_id", teamID, "existing_team_id", retryTeamID)
 		return errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", playerID, retryTeamID)
 	}
 	return nil
@@ -1253,10 +1617,14 @@ func (u *TeamUsecase) cancelMatchmaking(ctx context.Context, teamID, playerID ui
 			return // 未在排队,常态
 		}
 		plog.With(ctx).Warnw("msg", "team_cancel_matchmaking_failed",
-			"team_id", teamID, "player_id", playerID, "err", err)
+			"reason", "matchmaker_cancel_rpc_failed",
+			"team_id", teamID, "player_id", playerID, "err", err,
+			"hint", "票据仍含已离队成员,靠确认期超时 / TTL 兜底回收")
 		return
 	}
-	plog.With(ctx).Debugw("msg", "team_matchmaking_cancelled_on_leave",
+	// R1:撤票是跨服务的不可逆推进(整张票据连同队友一起退回队列)。原为 Debug =
+	// 线上看不到,于是"我离个队全队被踢出匹配"在日志里没有任何痕迹。
+	plog.With(ctx).Infow("msg", "team_matchmaking_cancelled_on_leave",
 		"team_id", teamID, "player_id", playerID)
 }
 
@@ -1295,7 +1663,9 @@ func (u *TeamUsecase) pushUpdate(
 		payload, err := proto.Marshal(event)
 		if err != nil {
 			plog.With(ctx).Warnw("msg", "team_push_marshal_failed",
-				"team_id", team.GetTeamId(), "to_player_id", pid, "reason", reason.String(), "err", err)
+				"reason", "push_payload_marshal_failed",
+				"team_id", team.GetTeamId(), "to_player_id", pid,
+				"update_reason", reason.String(), "err", err)
 			continue
 		}
 		// PushToPlayers 内部跳过 callerPlayerID == pid 的情况(原则 2)
@@ -1305,8 +1675,14 @@ func (u *TeamUsecase) pushUpdate(
 				// 不再只靠 Warn 日志;被邀请人靠 ListMyPendingInvites 拉取兜底)。
 				InvitePushFailed.WithLabelValues("legacy").Inc()
 			}
+			// ⚠️ 这两条历史上把 TeamUpdateReason 放在 "reason" 字段里,与 §11.3 R2
+			// 规定的「reason = 枚举化拒绝原因」撞名。改挂到 update_reason,
+			// 让 reason 在全服务范围内只有一个含义(否则按 reason 聚合会把两类混在一起)。
 			plog.With(ctx).Warnw("msg", "team_push_failed",
-				"team_id", team.GetTeamId(), "to_player_id", pid, "reason", reason.String(), "err", err)
+				"reason", "push_produce_failed",
+				"team_id", team.GetTeamId(), "to_player_id", pid,
+				"update_reason", reason.String(), "err", err,
+				"hint", "推送是加速器不是权威;客户端靠 GetMyTeam / ListMyPendingInvites 拉取兜底")
 		}
 	}
 }
@@ -1335,6 +1711,7 @@ func (u *TeamUsecase) pushInvite(ctx context.Context, inviterID, targetPlayerID,
 		// 序列化失败只记录告警;邀请令牌已落库,不能把推送弱依赖反向变成业务失败。
 		InvitePushFailed.WithLabelValues("dedicated").Inc()
 		plog.With(ctx).Warnw("msg", "team_invite_marshal_failed",
+			"reason", "push_payload_marshal_failed",
 			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err)
 		return
 	}
@@ -1345,7 +1722,9 @@ func (u *TeamUsecase) pushInvite(ctx context.Context, inviterID, targetPlayerID,
 	if _, err := u.pusher.PushTeamEvent(ctx, inviterID, []uint64{targetPlayerID}, payload, eventTypeInvite); err != nil {
 		InvitePushFailed.WithLabelValues("dedicated").Inc()
 		plog.With(ctx).Warnw("msg", "team_invite_push_failed",
-			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err)
+			"reason", "push_produce_failed",
+			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err,
+			"hint", "被邀请人靠 ListMyPendingInvites 拉取兜底")
 	}
 }
 
@@ -1353,7 +1732,8 @@ func (u *TeamUsecase) pushInvite(ctx context.Context, inviterID, targetPlayerID,
 // 单条 EXPIRE 即可,无需再走一轮 WATCH/MULTI/EXEC 空写。
 func (u *TeamUsecase) refreshDisbandedTTL(ctx context.Context, teamID uint64, ttl time.Duration) {
 	if err := u.repo.ExpireTeam(ctx, teamID, ttl); err != nil {
-		plog.With(ctx).Warnw("msg", "team_refresh_disbanded_ttl_failed", "team_id", teamID, "err", err)
+		plog.With(ctx).Warnw("msg", "team_refresh_disbanded_ttl_failed",
+			"reason", reasonStoreWriteFailed, "team_id", teamID, "err", err)
 	}
 }
 
@@ -1448,4 +1828,20 @@ func memberIDs(team *teamv1.TeamStorageRecord) []uint64 {
 
 func cloneTeam(team *teamv1.TeamStorageRecord) *teamv1.TeamStorageRecord {
 	return proto.Clone(team).(*teamv1.TeamStorageRecord)
+}
+
+// cloneMembers 深拷贝成员列表。
+//
+// BeginTeamMatch 的收据要存一份消费前名单,而**同一份**名单还要返回给 matchmaker 建票。
+// 两者共享底层切片会让「存进队伍记录的快照」与「调用方手里的快照」互为别名 ——
+// 那种别名不会立刻出错,只会在将来某次看似无关的改动里静默串味。
+func cloneMembers(members []*teamv1.TeamMemberStorageRecord) []*teamv1.TeamMemberStorageRecord {
+	if members == nil {
+		return nil
+	}
+	out := make([]*teamv1.TeamMemberStorageRecord, 0, len(members))
+	for _, m := range members {
+		out = append(out, proto.Clone(m).(*teamv1.TeamMemberStorageRecord))
+	}
+	return out
 }

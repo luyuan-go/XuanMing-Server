@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -50,6 +51,95 @@ const (
 	transitionOpAdmit   int8 = 2
 	transitionOpRelease int8 = 3
 )
+
+// barrierWaitInfoThresholdMs 是「屏障未开」从 Debug 升 Info 的剩余等待阈值。
+//
+// 为什么不整条 Debug(2026-08-13 可诊断性审计):线上默认 info 级,整条 Debug =
+// 「玩家匹配好了却进不去」最常见的落点永远查不到。也不能整条 Info:调用方按
+// wait_ms 轮询,BATTLE→* 迁移的屏障可长达 ~27s,短剩余量的收尾轮询会刷屏。
+// 取 5s:HUB 旧 owner 分支屏障恒为 0(不会触发),BATTLE 分支的实质等待必然远超它。
+const barrierWaitInfoThresholdMs int64 = 5000
+
+// transitionDetailMaxLen 是 owner_transition_log.detail 列宽(VARCHAR(512))。
+//
+// 必须在 Go 侧钳制:sql_mode 含 STRICT_TRANS_TABLES(§9.24),超长写入是 Error 1406
+// 而不是截断——那会让一次**本该成功的 owner 迁移**因为审计字段太长而整事务失败。
+// 审计流水信息缺一截可以接受,玩家进不去场景不可以。
+const transitionDetailMaxLen = 512
+
+// transitionDetail 把一次迁移的 exact 实例身份编码进审计流水的 detail 列。
+//
+// 为什么不能只写 pod_name(原实现):Agones 下 Pod 名会被复用,同名 Pod 重建后两行
+// detail 完全一样;而 locator 侧的 join key 是 assignment_id、allocator 侧是
+// allocation_id / match_id —— 只有 pod 名时,「这次 owner 迁移对应哪次 hub assignment /
+// 哪局对局」永远接不上。admit_not_before_ms 则是屏障时刻的唯一持久证据。
+//
+// 格式是给人读的 key=value 串,**没有任何读取方**(全仓仅本文件写入),
+// 因此不构成对外契约;新增字段只往后追加。
+func transitionDetail(t OwnerTarget, admitNotBeforeMs int64, fromPod string) string {
+	s := fmt.Sprintf("pod=%s uid=%s iepoch=%d aid=%s track=%s anb=%d",
+		t.PodName, t.InstanceUID, t.InstanceEpoch, t.AssignmentOrAllocationID, t.ReleaseTrack, admitNotBeforeMs)
+	if fromPod != "" {
+		s += " from_pod=" + fromPod
+	}
+	if len(s) > transitionDetailMaxLen {
+		s = s[:transitionDetailMaxLen]
+	}
+	return s
+}
+
+// admitMismatchReason 把 Admit 那个「任一项不匹配都拒」的合取条件拆成单一枚举 reason
+// (§11.3 R2:一个 if 收敛了 N 个条件的,必须拆成 N 个 reason)。判定顺序与 if 内一致。
+func admitMismatchReason(found bool, rec OwnerRecord, ownerEpoch uint64, operationID string, target OwnerTarget) string {
+	switch {
+	case !found:
+		return "record_absent"
+	case rec.OwnerEpoch != ownerEpoch:
+		return "epoch_mismatch"
+	case rec.OperationID != operationID:
+		return "operation_mismatch"
+	case rec.OwnerType == OwnerTypeNone:
+		return "owner_type_none"
+	case !rec.Target.Equal(target):
+		return "target_mismatch"
+	}
+	return "unknown"
+}
+
+// releaseNoopReason 同上,拆 Release 的迟到 no-op 合取条件。
+func releaseNoopReason(found bool, rec OwnerRecord, ownerEpoch uint64, operationID string) string {
+	switch {
+	case !found:
+		return "record_absent"
+	case rec.OwnerEpoch != ownerEpoch:
+		return "epoch_mismatch"
+	case rec.OperationID != operationID:
+		return "operation_mismatch"
+	case rec.OwnerType == OwnerTypeNone:
+		return "already_released"
+	}
+	return "unknown"
+}
+
+// logTransitionNoop 记录 BeginTransition 的两条 no-op 收敛分支(§11.3 R1)。
+//
+// 为什么这也算「阶段推进」:allocator 反复投递同一实例而玩家实际卡住时,现象是
+// 「Begin 一直返回 OK 但 epoch 不动」。成功路径与 no-op 路径若都不打日志,
+// 「权威认为已经在这台了」与「权威根本没收到请求」在日志上完全无法区分。
+// 每次真实进场至多几条(重连 / 重复交付),不属高频路径。
+func logTransitionNoop(ctx context.Context, kind string, playerID uint64, rec OwnerRecord, reqTarget OwnerTarget) {
+	plog.With(ctx).Infow("msg", "owner_transition_noop",
+		"player_id", playerID, "kind", kind,
+		"owner_epoch", rec.OwnerEpoch, "owner_type", rec.OwnerType, "phase", rec.Phase,
+		"operation_id", rec.OperationID,
+		"pod", rec.Target.PodName, "instance_uid", rec.Target.InstanceUID,
+		"instance_epoch", rec.Target.InstanceEpoch,
+		"cur_assignment_id", rec.Target.AssignmentOrAllocationID,
+		"req_assignment_id", reqTarget.AssignmentOrAllocationID,
+		"release_track", rec.Target.ReleaseTrack,
+		"admit_not_before_ms", rec.AdmitNotBeforeMs,
+		"lease_deadline_ms", rec.LeaseDeadlineMs)
+}
 
 // OwnerTarget exact DS 实例身份(对齐 pkg/placement.Target 语义;同名换实例不相等)。
 type OwnerTarget struct {
@@ -254,6 +344,7 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 		if cerr := tx.Commit(); cerr != nil {
 			return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit replay begin player=%d: %v", playerID, cerr)
 		}
+		logTransitionNoop(ctx, "idempotent_replay", playerID, rec, target)
 		return rec, nil
 	}
 
@@ -287,6 +378,7 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 		if cerr := tx.Commit(); cerr != nil {
 			return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit same-instance begin player=%d: %v", playerID, cerr)
 		}
+		logTransitionNoop(ctx, "same_instance", playerID, rec, target)
 		return rec, nil
 	}
 
@@ -333,6 +425,11 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 	// 无旧 owner → 无需屏障(没有要围栏的旧 DS)。
 	now := nowUnixMs()
 	admitNotBefore := now
+	// 屏障算成多少、走的哪一支、读到的旧租约截止是多少 —— 这三件事此前只活在本函数栈上,
+	// 落库后连表都还原不出(2026-08-03「匹配没反应」事故的根因正是这个值算大了)。
+	// 提两个局部变量出来只为把它们打进日志,分流逻辑本身一字未动。
+	barrierSource := "no_old_battle_owner"
+	var oldLeaseDeadlineMs int64
 	if rec.OwnerType == OwnerTypeBattle && rec.Target.InstanceUID != "" {
 		oldDeadline, derr := readLeaseDeadline(ctx, tx, rec.Target.InstanceUID, true)
 		if derr != nil {
@@ -343,6 +440,8 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 			base = oldDeadline
 		}
 		admitNotBefore = base + skewMargin.Milliseconds()
+		barrierSource = "battle_old_lease"
+		oldLeaseDeadlineMs = oldDeadline
 	}
 
 	newRec := OwnerRecord{
@@ -365,7 +464,7 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 		return OwnerRecord{}, errcode.New(errcode.ErrInternal, "cas owner_record player=%d: %v", playerID, uerr)
 	}
 	if aerr := appendTransitionLog(ctx, tx, playerID, rec.OwnerEpoch, newRec.OwnerEpoch,
-		transitionOpBegin, operationID, target.PodName); aerr != nil {
+		transitionOpBegin, operationID, transitionDetail(target, admitNotBefore, rec.Target.PodName)); aerr != nil {
 		return OwnerRecord{}, aerr
 	}
 	newDeadline, derr := readLeaseDeadline(ctx, tx, target.InstanceUID, false)
@@ -376,6 +475,28 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 	if cerr := tx.Commit(); cerr != nil {
 		return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit begin player=%d: %v", playerID, cerr)
 	}
+	// §9.1 的唯一权威事实点(§11.3 R1):epoch 何时 N→N+1、从哪台 DS 换到哪台、
+	// 屏障算成多久走的哪一支。这些只在 MySQL 行里而行会被下一次迁移覆盖 ——
+	// 「玩家卡在旧 DS / 同时在两个 DS」时的时间线,缺了这条就无法还原。
+	// 频次 = 每玩家每次真实进场一条(重复投递已在上面两条 no-op 分支收敛),非高频。
+	plog.With(ctx).Infow("msg", "owner_transition_begun",
+		"player_id", playerID,
+		"from_epoch", rec.OwnerEpoch, "to_epoch", newRec.OwnerEpoch,
+		"operation_id", operationID,
+		"from_owner_type", rec.OwnerType, "owner_type", ownerType,
+		"from_pod", rec.Target.PodName, "from_instance_uid", rec.Target.InstanceUID,
+		"from_instance_epoch", rec.Target.InstanceEpoch,
+		"from_assignment_id", rec.Target.AssignmentOrAllocationID,
+		"to_pod", target.PodName, "to_instance_uid", target.InstanceUID,
+		"to_instance_epoch", target.InstanceEpoch,
+		"assignment_or_allocation_id", target.AssignmentOrAllocationID,
+		"release_track", target.ReleaseTrack,
+		"barrier_source", barrierSource,
+		"admit_not_before_ms", admitNotBefore,
+		"barrier_wait_ms", admitNotBefore-now,
+		"old_lease_deadline_ms", oldLeaseDeadlineMs,
+		"skew_margin_ms", skewMargin.Milliseconds(),
+		"lease_deadline_ms", newDeadline)
 	return newRec, nil
 }
 
@@ -394,11 +515,26 @@ func (r *MySQLOwnerRepo) Admit(ctx context.Context, playerID, ownerEpoch uint64,
 		rec.OwnerType == OwnerTypeNone || !rec.Target.Equal(target) {
 		// fail-closed:任何一项不匹配都拒(旧 epoch / 换代实例 / 伪造 operation 都进不来)。
 		// owner fencing 的核心拒绝点(§9.22),恰是要能查到的脑裂 / stale writer 信号 → WARN。
+		//
+		// 两侧的 exact 实例身份必须并排打出来(§11.3 R3):这条日志是「玩家同时在两个 DS」
+		// 的核心证据,只报一个 target_match=false 等于只知道「不匹配」,查不出是哪台 DS
+		// 在试图接管、它自认是哪个 assignment。
 		plog.With(ctx).Warnw("msg", "owner_admit_identity_mismatch",
 			"player_id", playerID, "found", found,
+			"reason", admitMismatchReason(found, rec, ownerEpoch, operationID, target),
 			"req_epoch", ownerEpoch, "current_epoch", rec.OwnerEpoch,
 			"req_op", operationID, "current_op", rec.OperationID,
-			"target_match", rec.Target.Equal(target), "owner_type", rec.OwnerType)
+			"target_match", rec.Target.Equal(target), "owner_type", rec.OwnerType,
+			"cur_phase", rec.Phase,
+			"req_pod", target.PodName, "req_instance_uid", target.InstanceUID,
+			"req_instance_epoch", target.InstanceEpoch,
+			"req_assignment_id", target.AssignmentOrAllocationID,
+			"req_release_track", target.ReleaseTrack,
+			"cur_pod", rec.Target.PodName, "cur_instance_uid", rec.Target.InstanceUID,
+			"cur_instance_epoch", rec.Target.InstanceEpoch,
+			"cur_assignment_id", rec.Target.AssignmentOrAllocationID,
+			"cur_release_track", rec.Target.ReleaseTrack,
+			"cur_updated_at_ms", rec.UpdatedAtMs)
 		return rec, 0, errcode.New(errcode.ErrOwnerIdentityMismatch,
 			"admit identity mismatch player=%d epoch=%d op=%s", playerID, ownerEpoch, operationID)
 	}
@@ -407,23 +543,48 @@ func (r *MySQLOwnerRepo) Admit(ctx context.Context, playerID, ownerEpoch uint64,
 		if cerr := tx.Commit(); cerr != nil {
 			return OwnerRecord{}, 0, errcode.New(errcode.ErrInternal, "commit replay admit player=%d: %v", playerID, cerr)
 		}
+		// 与 owner_admitted 分开命名:排查时必须能区分「本次真的完成了交接」与
+		// 「回包丢了在重放」,否则看到 OK 却不知道玩家是刚进去还是早就进去了。
+		plog.With(ctx).Infow("msg", "owner_admit_replayed",
+			"player_id", playerID, "owner_epoch", ownerEpoch, "operation_id", operationID,
+			"owner_type", rec.OwnerType, "pod", rec.Target.PodName,
+			"instance_uid", rec.Target.InstanceUID, "instance_epoch", rec.Target.InstanceEpoch,
+			"assignment_or_allocation_id", rec.Target.AssignmentOrAllocationID,
+			"admitted_at_ms", rec.UpdatedAtMs)
 		return rec, 0, nil
 	}
 	now := nowUnixMs()
 	if now < rec.AdmitNotBeforeMs {
 		// 屏障未开:WAIT 语义(§9.23),带剩余毫秒退避重试;安全优先但不永久卡(watchdog 驱动)。
-		// 调用方按 wait_ms 轮询,故 DEBUG 避免刷屏;LOG_LEVEL=debug 时可观测迁移是否卡在屏障。
-		plog.With(ctx).Debugw("msg", "owner_admit_barrier_wait",
-			"player_id", playerID, "owner_epoch", ownerEpoch, "wait_ms", rec.AdmitNotBeforeMs-now)
-		return rec, rec.AdmitNotBeforeMs - now, errcode.New(errcode.ErrOwnerBarrierNotOpen,
-			"admit barrier not open player=%d wait_ms=%d", playerID, rec.AdmitNotBeforeMs-now)
+		//
+		// 级别按剩余等待量分档(2026-08-13 可诊断性审计,§11.3 R1):
+		// 原实现整条 Debug,而线上默认 info —— 「玩家匹配好了却进不去」最常见的落点
+		// 于是永不出现,运维只看到玩家反复 Admit 拿不到 ADMITTED,分不清是屏障没开
+		// 还是身份不匹配。剩余 ≥ 阈值时升 Info(真的在等),收尾轮询仍留 Debug 不刷屏。
+		waitMs := rec.AdmitNotBeforeMs - now
+		h := plog.With(ctx)
+		kvs := []any{"msg", "owner_admit_barrier_wait",
+			"player_id", playerID, "owner_epoch", ownerEpoch, "operation_id", operationID,
+			"owner_type", rec.OwnerType, "pod", rec.Target.PodName,
+			"instance_uid", rec.Target.InstanceUID, "instance_epoch", rec.Target.InstanceEpoch,
+			"assignment_or_allocation_id", rec.Target.AssignmentOrAllocationID,
+			"admit_not_before_ms", rec.AdmitNotBeforeMs, "wait_ms", waitMs,
+			"elapsed_since_begin_ms", now - rec.UpdatedAtMs}
+		if waitMs >= barrierWaitInfoThresholdMs {
+			h.Infow(kvs...)
+		} else {
+			h.Debugw(kvs...)
+		}
+		return rec, waitMs, errcode.New(errcode.ErrOwnerBarrierNotOpen,
+			"admit barrier not open player=%d wait_ms=%d", playerID, waitMs)
 	}
 	const upd = `UPDATE owner_record SET phase = ?, updated_at_ms = ? WHERE player_id = ? AND owner_epoch = ?`
 	if _, uerr := tx.ExecContext(ctx, upd, OwnerPhaseAdmitted, now, playerID, ownerEpoch); uerr != nil {
 		return OwnerRecord{}, 0, errcode.New(errcode.ErrInternal, "admit update player=%d: %v", playerID, uerr)
 	}
+	admitNotBefore := rec.AdmitNotBeforeMs
 	if aerr := appendTransitionLog(ctx, tx, playerID, rec.OwnerEpoch, rec.OwnerEpoch,
-		transitionOpAdmit, operationID, target.PodName); aerr != nil {
+		transitionOpAdmit, operationID, transitionDetail(target, admitNotBefore, "")); aerr != nil {
 		return OwnerRecord{}, 0, aerr
 	}
 	rec.Phase = OwnerPhaseAdmitted
@@ -436,6 +597,18 @@ func (r *MySQLOwnerRepo) Admit(ctx context.Context, playerID, ownerEpoch uint64,
 	if cerr := tx.Commit(); cerr != nil {
 		return OwnerRecord{}, 0, errcode.New(errcode.ErrInternal, "commit admit player=%d: %v", playerID, cerr)
 	}
+	// §9.23 的服务端完成点(§11.3 R1):「玩家到底进没进新 DS」此前只能靠 DS 侧日志反推,
+	// 屏障实际等了多久也算不出来(判据⑤)。barrier_waited_ms 就是从屏障时刻到提交的实测值。
+	plog.With(ctx).Infow("msg", "owner_admitted",
+		"player_id", playerID, "owner_epoch", ownerEpoch, "operation_id", operationID,
+		"owner_type", rec.OwnerType,
+		"pod", rec.Target.PodName, "instance_uid", rec.Target.InstanceUID,
+		"instance_epoch", rec.Target.InstanceEpoch,
+		"assignment_or_allocation_id", rec.Target.AssignmentOrAllocationID,
+		"release_track", rec.Target.ReleaseTrack,
+		"admit_not_before_ms", admitNotBefore,
+		"barrier_waited_ms", now-admitNotBefore,
+		"lease_deadline_ms", deadline)
 	return rec, 0, nil
 }
 
@@ -513,6 +686,17 @@ VALUES (?, ?, ?, ?, ?, ?)`
 				return 0, errcode.New(errcode.ErrInternal, "backfill lease epoch uid=%s: %v", target.InstanceUID, uerr)
 			}
 		}
+		if now > storedDeadline && storedDeadline > 0 {
+			// 失租:上一次 deadline 已经过去了才来续。这是 owner 侧**唯一**的失租证据 ——
+			// §9.22 的安全论证(旧 DS 最晚停止可玩时间 < 新 DS 最早可玩时间)整个建立在
+			// lease 时间线上,而续租成功是热路径不能逐条打,不打这一刻就永远回答不了
+			// 「某实例的租约什么时候断过、断了多久」。仅在真的断过时打,天然低频。
+			plog.With(ctx).Warnw("msg", "owner_lease_lapsed",
+				"instance_uid", target.InstanceUID, "pod", target.PodName,
+				"instance_epoch", target.InstanceEpoch, "stored_epoch", storedEpoch,
+				"prev_deadline_ms", storedDeadline, "lapsed_ms", now-storedDeadline,
+				"new_deadline_ms", newDeadline)
+		}
 		if newDeadline <= storedDeadline {
 			// deadline 只前进:乱序/迟到续租幂等返回现值,不回退。
 			newDeadline = storedDeadline
@@ -548,9 +732,24 @@ func (r *MySQLOwnerRepo) Release(ctx context.Context, playerID, ownerEpoch uint6
 		if cerr := tx.Commit(); cerr != nil {
 			return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit noop release player=%d: %v", playerID, cerr)
 		}
+		// no-op 时 owner 记录仍指向那台已死的 DS,玩家「卡在旧 DS」直到下一次 BeginTransition,
+		// 而 RPC 返回 OK + 当前记录、access log 记 rpc_ok(DEBUG)—— 排查时完全看不出
+		// 释放请求到过、被以什么理由拒了(login 登出释放与 allocator 回滚/终局释放都走这条)。
+		plog.With(ctx).Warnw("msg", "owner_release_noop",
+			"player_id", playerID,
+			"reason", releaseNoopReason(found, rec, ownerEpoch, operationID),
+			"found", found,
+			"req_epoch", ownerEpoch, "current_epoch", rec.OwnerEpoch,
+			"req_operation_id", operationID, "current_operation_id", rec.OperationID,
+			"current_owner_type", rec.OwnerType, "current_phase", rec.Phase,
+			"current_pod", rec.Target.PodName, "current_instance_uid", rec.Target.InstanceUID,
+			"current_instance_epoch", rec.Target.InstanceEpoch,
+			"current_assignment_id", rec.Target.AssignmentOrAllocationID,
+			"current_updated_at_ms", rec.UpdatedAtMs)
 		return rec, nil
 	}
 	now := nowUnixMs()
+	released := rec.Target // Target 下面会被清空,先留一份给审计流水与日志
 	const upd = `UPDATE owner_record SET owner_type = ?, phase = ?, pod_name = '', instance_uid = '',
  instance_epoch = 0, assignment_or_allocation_id = '', release_track = '', updated_at_ms = ?
  WHERE player_id = ? AND owner_epoch = ?`
@@ -558,9 +757,10 @@ func (r *MySQLOwnerRepo) Release(ctx context.Context, playerID, ownerEpoch uint6
 		return OwnerRecord{}, errcode.New(errcode.ErrInternal, "release update player=%d: %v", playerID, uerr)
 	}
 	if aerr := appendTransitionLog(ctx, tx, playerID, rec.OwnerEpoch, rec.OwnerEpoch,
-		transitionOpRelease, operationID, ""); aerr != nil {
+		transitionOpRelease, operationID, transitionDetail(released, rec.AdmitNotBeforeMs, "")); aerr != nil {
 		return OwnerRecord{}, aerr
 	}
+	releasedType := rec.OwnerType
 	rec.OwnerType = OwnerTypeNone
 	rec.Phase = OwnerPhaseNone
 	rec.Target = OwnerTarget{}
@@ -569,6 +769,16 @@ func (r *MySQLOwnerRepo) Release(ctx context.Context, playerID, ownerEpoch uint6
 	if cerr := tx.Commit(); cerr != nil {
 		return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit release player=%d: %v", playerID, cerr)
 	}
+	// 释放是三个不可逆推进点的最后一个(§11.3 R1):没有它就无法证明玩家是「被正常放开」
+	// 还是「记录还挂在旧 DS 上」——两者在 owner_record 上都表现为 owner_type=none/仍有值,
+	// 而时间线只在这条日志与审计流水里。
+	plog.With(ctx).Infow("msg", "owner_released",
+		"player_id", playerID, "owner_epoch", ownerEpoch, "operation_id", operationID,
+		"released_owner_type", releasedType,
+		"pod", released.PodName, "instance_uid", released.InstanceUID,
+		"instance_epoch", released.InstanceEpoch,
+		"assignment_or_allocation_id", released.AssignmentOrAllocationID,
+		"release_track", released.ReleaseTrack)
 	return rec, nil
 }
 

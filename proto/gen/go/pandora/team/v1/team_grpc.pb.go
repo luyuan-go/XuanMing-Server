@@ -44,6 +44,7 @@ const (
 	TeamService_ListTeamApplications_FullMethodName  = "/pandora.team.v1.TeamService/ListTeamApplications"
 	TeamService_HandleTeamApplication_FullMethodName = "/pandora.team.v1.TeamService/HandleTeamApplication"
 	TeamService_BeginTeamMatch_FullMethodName        = "/pandora.team.v1.TeamService/BeginTeamMatch"
+	TeamService_EndTeamMatch_FullMethodName          = "/pandora.team.v1.TeamService/EndTeamMatch"
 	TeamService_GetPlayerTeam_FullMethodName         = "/pandora.team.v1.TeamService/GetPlayerTeam"
 )
 
@@ -74,9 +75,26 @@ type TeamServiceClient interface {
 	HandleTeamApplication(ctx context.Context, in *HandleTeamApplicationRequest, opts ...grpc.CallOption) (*HandleTeamApplicationResponse, error)
 	// ── 内部:组票前的 roster fence(matchmaker 专用,不对客户端开放)─────────────
 	//
-	// BeginTeamMatch 在 team 自己的乐观锁内**原子地**完成「校验 + 冻结名单 + 返回快照」。
+	// BeginTeamMatch 在 team 自己的乐观锁内**原子地**完成
+	// 「校验 + 冻结名单 + **消费 ready** + 返回消费前快照」。
 	//
-	// 为什么必须有它:matchmaker 原先用只读 GetTeam 取名单,而 team 侧的自动摘人
+	// # ready 是一次开局授权,在这里被一次性消费(方案 A,2026-08-13 拍板)
+	//
+	// 队伍的 ready 不是「一个可以反复使用的状态」,而是**一次 StartMatch 的单次授权**。
+	// 本 RPC 在同一把锁里把它兑掉:清空本次名单成员的 ready、把队伍转回 FORMING,
+	// 并返回**消费前**的名单快照给 matchmaker 建票。
+	//
+	// 这样「一次 ready 意图最多授权一次 StartMatch」就是一把乐观锁的直接后果,
+	// 而不是要靠赛后一条可能丢失、可能迟到、可能跨代的复位 RPC 去维持的东西。
+	// 由此消失的整类问题:ACK 丢失后重投抹掉新意图、离队重入的 player_id 级 ABA、
+	// 「claim 已释放但 End 还没到」窗口里用旧 ready 开出下一局、以及发布顺序依赖。
+	//
+	// 代价(已知并接受):排队取消、准入闸拒绝、成局失败之后,玩家都要**重新点准备**。
+	// 失败方向是安全的 —— 多按一次,不会多开一局。
+	//
+	// 重试语义见 MatchStartReceipt:同一 attempt 的重试拿回同一份快照,不会消费两次。
+	//
+	// 为什么名单必须在锁内冻结:matchmaker 原先用只读 GetTeam 取名单,而 team 侧的自动摘人
 	// (离线超时)用的是另一把锁,两者跨服务凑不出共同线性化点 —— 于是存在
 	// 「闸门放行 → 名单被冻进票据 → 才把人摘走」的窗口,结果是人在票据里却不在队伍里,
 	// 被拉进一场自己不在场的对局。把「读名单」升级成「在锁内读并上锁」,窗口才真正消失。
@@ -89,6 +107,30 @@ type TeamServiceClient interface {
 	//
 	// 因此这把锁不是权威状态,只是一个有界互斥窗口,不得被解释成「队伍在对局中」。
 	BeginTeamMatch(ctx context.Context, in *BeginTeamMatchRequest, opts ...grpc.CallOption) (*BeginTeamMatchResponse, error)
+	// EndTeamMatch 对局结束后复位队伍准备状态。
+	//
+	// # 它不再是正确性路径(方案 A,2026-08-13 拍板)
+	//
+	// 事故的第一根因是 team 侧**没有任何一条 match-ended 路径**:一局打完队伍仍是
+	// TEAM_STATE_READY、全员 ready 原样保留,队长可以在队友还卡在结算界面时立刻再开一局
+	// (当天仅隔 75 秒),把人冻进新票据 —— DS 拿到 6 人 roster 只进来 5 个。
+	//
+	// 修法有两条路。曾经的 v2 走「ready 保留到赛后,由本 RPC 复位」,但那要求本 RPC 携带完整
+	// 代际 fence 才能跨代幂等(ACK 丢失 → 玩家 re-ready → 旧 outbox 重投抹掉新意图),
+	// 且 claim 释放到 End 成功之间仍留着用旧 ready 开下一局的窗口。
+	//
+	// 拍板改走方案 A:**ready 在 BeginTeamMatch 里被一次性消费**(见该 RPC)。
+	// 于是「一次 ready 意图最多授权一次 StartMatch」由一把乐观锁保证,根本不存在
+	// 「结束后还欠一次复位」的状态,本 RPC 也就不再承担任何正确性。
+	//
+	// # 那为什么还留着
+	//
+	// 纯粹为**滚动升级共存窗口**:新 matchmaker 可能打到**旧 team**(Begin 还不消费 ready),
+	// 那种组合下仍靠本 RPC 复位,否则事故行为会在升级窗口内复现。等 team 全量升级后,
+	// 下一个版本可以连同调用方一起删除(§9.21 加法演进,先停止调用再删接口)。
+	//
+	// 对**新 team** 而言本 RPC 已是准 no-op:ready 早在 Begin 就清空了,重复调用零写零推送。
+	EndTeamMatch(ctx context.Context, in *EndTeamMatchRequest, opts ...grpc.CallOption) (*EndTeamMatchResponse, error)
 	// ── 内部:按 player_id 反查队伍编号(DS 出生编制专用,不对客户端开放)────────────
 	//
 	// DS 在玩家进场时需要把「谁和谁是一伙的」写到实体上,否则大厅里所有玩家共用玩家阵营,
@@ -261,6 +303,16 @@ func (c *teamServiceClient) BeginTeamMatch(ctx context.Context, in *BeginTeamMat
 	return out, nil
 }
 
+func (c *teamServiceClient) EndTeamMatch(ctx context.Context, in *EndTeamMatchRequest, opts ...grpc.CallOption) (*EndTeamMatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EndTeamMatchResponse)
+	err := c.cc.Invoke(ctx, TeamService_EndTeamMatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *teamServiceClient) GetPlayerTeam(ctx context.Context, in *GetPlayerTeamRequest, opts ...grpc.CallOption) (*GetPlayerTeamResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetPlayerTeamResponse)
@@ -298,9 +350,26 @@ type TeamServiceServer interface {
 	HandleTeamApplication(context.Context, *HandleTeamApplicationRequest) (*HandleTeamApplicationResponse, error)
 	// ── 内部:组票前的 roster fence(matchmaker 专用,不对客户端开放)─────────────
 	//
-	// BeginTeamMatch 在 team 自己的乐观锁内**原子地**完成「校验 + 冻结名单 + 返回快照」。
+	// BeginTeamMatch 在 team 自己的乐观锁内**原子地**完成
+	// 「校验 + 冻结名单 + **消费 ready** + 返回消费前快照」。
 	//
-	// 为什么必须有它:matchmaker 原先用只读 GetTeam 取名单,而 team 侧的自动摘人
+	// # ready 是一次开局授权,在这里被一次性消费(方案 A,2026-08-13 拍板)
+	//
+	// 队伍的 ready 不是「一个可以反复使用的状态」,而是**一次 StartMatch 的单次授权**。
+	// 本 RPC 在同一把锁里把它兑掉:清空本次名单成员的 ready、把队伍转回 FORMING,
+	// 并返回**消费前**的名单快照给 matchmaker 建票。
+	//
+	// 这样「一次 ready 意图最多授权一次 StartMatch」就是一把乐观锁的直接后果,
+	// 而不是要靠赛后一条可能丢失、可能迟到、可能跨代的复位 RPC 去维持的东西。
+	// 由此消失的整类问题:ACK 丢失后重投抹掉新意图、离队重入的 player_id 级 ABA、
+	// 「claim 已释放但 End 还没到」窗口里用旧 ready 开出下一局、以及发布顺序依赖。
+	//
+	// 代价(已知并接受):排队取消、准入闸拒绝、成局失败之后,玩家都要**重新点准备**。
+	// 失败方向是安全的 —— 多按一次,不会多开一局。
+	//
+	// 重试语义见 MatchStartReceipt:同一 attempt 的重试拿回同一份快照,不会消费两次。
+	//
+	// 为什么名单必须在锁内冻结:matchmaker 原先用只读 GetTeam 取名单,而 team 侧的自动摘人
 	// (离线超时)用的是另一把锁,两者跨服务凑不出共同线性化点 —— 于是存在
 	// 「闸门放行 → 名单被冻进票据 → 才把人摘走」的窗口,结果是人在票据里却不在队伍里,
 	// 被拉进一场自己不在场的对局。把「读名单」升级成「在锁内读并上锁」,窗口才真正消失。
@@ -313,6 +382,30 @@ type TeamServiceServer interface {
 	//
 	// 因此这把锁不是权威状态,只是一个有界互斥窗口,不得被解释成「队伍在对局中」。
 	BeginTeamMatch(context.Context, *BeginTeamMatchRequest) (*BeginTeamMatchResponse, error)
+	// EndTeamMatch 对局结束后复位队伍准备状态。
+	//
+	// # 它不再是正确性路径(方案 A,2026-08-13 拍板)
+	//
+	// 事故的第一根因是 team 侧**没有任何一条 match-ended 路径**:一局打完队伍仍是
+	// TEAM_STATE_READY、全员 ready 原样保留,队长可以在队友还卡在结算界面时立刻再开一局
+	// (当天仅隔 75 秒),把人冻进新票据 —— DS 拿到 6 人 roster 只进来 5 个。
+	//
+	// 修法有两条路。曾经的 v2 走「ready 保留到赛后,由本 RPC 复位」,但那要求本 RPC 携带完整
+	// 代际 fence 才能跨代幂等(ACK 丢失 → 玩家 re-ready → 旧 outbox 重投抹掉新意图),
+	// 且 claim 释放到 End 成功之间仍留着用旧 ready 开下一局的窗口。
+	//
+	// 拍板改走方案 A:**ready 在 BeginTeamMatch 里被一次性消费**(见该 RPC)。
+	// 于是「一次 ready 意图最多授权一次 StartMatch」由一把乐观锁保证,根本不存在
+	// 「结束后还欠一次复位」的状态,本 RPC 也就不再承担任何正确性。
+	//
+	// # 那为什么还留着
+	//
+	// 纯粹为**滚动升级共存窗口**:新 matchmaker 可能打到**旧 team**(Begin 还不消费 ready),
+	// 那种组合下仍靠本 RPC 复位,否则事故行为会在升级窗口内复现。等 team 全量升级后,
+	// 下一个版本可以连同调用方一起删除(§9.21 加法演进,先停止调用再删接口)。
+	//
+	// 对**新 team** 而言本 RPC 已是准 no-op:ready 早在 Begin 就清空了,重复调用零写零推送。
+	EndTeamMatch(context.Context, *EndTeamMatchRequest) (*EndTeamMatchResponse, error)
 	// ── 内部:按 player_id 反查队伍编号(DS 出生编制专用,不对客户端开放)────────────
 	//
 	// DS 在玩家进场时需要把「谁和谁是一伙的」写到实体上,否则大厅里所有玩家共用玩家阵营,
@@ -378,6 +471,9 @@ func (UnimplementedTeamServiceServer) HandleTeamApplication(context.Context, *Ha
 }
 func (UnimplementedTeamServiceServer) BeginTeamMatch(context.Context, *BeginTeamMatchRequest) (*BeginTeamMatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BeginTeamMatch not implemented")
+}
+func (UnimplementedTeamServiceServer) EndTeamMatch(context.Context, *EndTeamMatchRequest) (*EndTeamMatchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EndTeamMatch not implemented")
 }
 func (UnimplementedTeamServiceServer) GetPlayerTeam(context.Context, *GetPlayerTeamRequest) (*GetPlayerTeamResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPlayerTeam not implemented")
@@ -672,6 +768,24 @@ func _TeamService_BeginTeamMatch_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TeamService_EndTeamMatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EndTeamMatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).EndTeamMatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_EndTeamMatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).EndTeamMatch(ctx, req.(*EndTeamMatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TeamService_GetPlayerTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPlayerTeamRequest)
 	if err := dec(in); err != nil {
@@ -756,6 +870,10 @@ var TeamService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BeginTeamMatch",
 			Handler:    _TeamService_BeginTeamMatch_Handler,
+		},
+		{
+			MethodName: "EndTeamMatch",
+			Handler:    _TeamService_EndTeamMatch_Handler,
 		},
 		{
 			MethodName: "GetPlayerTeam",

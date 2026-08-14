@@ -688,3 +688,100 @@ Loki 端口 **3100**(compose 宿主直查),保留 7 天,filesystem 存储(volume
 {service="matchmaker"} | json | msg="rpc_slow"          # 慢请求
 {service="team"} | json | latency_ms > 200              # 按数值字段过滤
 ```
+
+### 11.3 核心链路可诊断性契约(2026-08-13)
+
+§11.1 管的是"单条日志怎么写";本节管的是"**一条玩家链路整体能不能被查**"。适用于六条玩家主链路
+——**登录 / 匹配 / 进入 / 结算 / 退出 / 重连**——横跨 Go 后端、UE 客户端、Hub DS、Battle DS 四类进程。
+
+#### 验收判据
+
+给一个 `player_id`(或 `match_id`)和一个时间窗口,**只看日志**必须能回答:
+
+1. **走到哪一步了** —— 链路上每个状态推进 / 不可逆决策点都有一条稳定 `msg` 名的日志;
+2. **在哪一步断的** —— 每个提前 return / 拒绝 / 降级 / 重试耗尽分支都有日志,且带**枚举化 reason**;
+3. **为什么** —— 带上做判断时用的依据字段(不是只有一句 `err` 文本);
+4. **跨进程接得上** —— client → 后端各服务 → DS 能靠 `trace_id` / `player_id` / `match_id` 串起来;
+5. **慢在哪** —— 跨阶段耗时能算出来(打 `elapsed_ms`,或两条日志阶段名稳定且都有 ts)。
+
+#### R1 阶段推进打 INFO,一个阶段一条
+
+**不可逆状态推进**与**路由 / 权威判定结果**打 `Infow`,每玩家每链路每阶段至多一条。
+判据:这条日志缺了,就再也无法证明"玩家当时到底走了哪个分支"。典型:登录路由判到 Battle 还是 Hub、
+hub 准入通过、玩家离场、结算落库、match claim 状态迁移。
+
+⚠️ **这类日志不准打 Debug**。这是本轮审计最常见的问题:`login_ok` / `battle_result_recorded` /
+`match_start_accepted` / ADMIT_BARRIER 等级至关重要的行全是 Debug,线上默认 info 级下**一条都不出**。
+
+#### R2 拒绝 / 降级必须带枚举 reason,打 WARN
+
+每个拒绝分支打 `Warnw` 且带 `reason` 字段,取值来自**固定枚举**(snake_case 常量,不是自由文本)。
+一个 `if` 里收敛了 N 个条件的,必须把 N 个条件拆成 N 个 reason —— 否则"被拒了"查得到、"为什么被拒"查不到。
+
+**不能靠 access log 兜底**:`pkg/middleware/logging.go` 只对 `errcode.IsServerFault`
+(仅 `ErrUnknown` / `ErrInternal` / `ErrTimeout` / `ErrUnavailable` 四个)升 ERROR;
+`ErrInvalidArg` / `ErrUnauthorized` / `ErrInvalidState` / `ErrHubNoAvailable` 以及全部 fencing 码(>999)
+都落 `rpc_ok` = **DEBUG**。也就是说:**业务拒绝在线上默认级别下完全不可见,必须由业务代码自己显式打。**
+
+#### R3 必带 join key
+
+| 链路 | 必带字段 |
+|---|---|
+| 全部 | `trace_id`(经 `plog.With(ctx)` 自动) |
+| 登录 | `player_id`、`account`、`device_id`、路由判定结果 |
+| 匹配 | `player_id`、`ticket_id`、`match_id`、`team_id` |
+| 进入 / 退出 | `player_id`、`hub_assignment_id`、`ds_pod`、`admission_id` / `admission_seq` |
+| 结算 | `match_id`、`player_id`、`ds_pod`、`ds_instance_epoch` |
+| 重连 | `player_id`、`match_id`、`owner_epoch`、`presence_state` |
+
+**`player_id` 不会自动带上**:`plog.With(ctx)` 只在玩家 JWT 面(`pkg/middleware/auth.go`)自动注入。
+login 是未鉴权面、DS 回调面走 `AuthOptional()` 且 DS 不带 `x-pandora-player-id` ——
+**这两类面上 `player_id` 必须手写**,否则日志定位不到人。
+
+`match_id` / `team_id` 同理:`plog.WithMatchID` / `plog.WithTeamID` 存在,**但历史上全仓零调用**。
+凡在请求内部解析出 `match_id` / `team_id` 的链路,应在解析成功处把它写进 ctx,让后续同请求日志自动带上。
+
+#### R4 高频路径不打 INFO
+
+心跳、事实流(`ReportProgress`)、GM 轮询、presence 续期、每帧 / 每 tick 路径:成功侧一律 `Debugw`
+(UE 侧 `Verbose`);异常侧才升级。循环内逐条打日志一律改**就地聚合**(循环内累加 `failed/firstErr/sample`,
+循环后一条)或 `pkg/log.Window`(首错 + 每窗口一条 + 期间累计 + 恢复一条)。
+
+理由:`location_set` 这类日志挂在每玩家每次心跳上,500 人/hub 下会把同文件里的 WARN 拒绝彻底冲走。
+**降 Debug 是安全的** —— `LOG_LEVEL=debug` 可对单 pod 临时全开。
+
+#### msg 命名
+
+`<域>_<对象>_<结果>`,snake_case,稳定不变(日志系统按 `msg` 聚合告警,改名等于打断看板)。
+成对的阶段用同词根:`hub_admitted` / `hub_departed`、`match_claim_created` / `match_claim_released`。
+
+#### 跨进程 trace 关联(2026-08-13 打通)
+
+后端 server 侧 `Trace()` middleware **优先采纳**入站 `x-pandora-trace-id`,没有才自己生成 UUID;
+客户端面 envoy 只剥离身份头(`x-pandora-player-id` / `x-pandora-jwt-payload`),**不剥这个头**。
+UE 两侧的注入点各只有一处:
+
+| 进程 | 注入点 | trace 前缀 |
+|---|---|---|
+| UE 客户端 | `PandoraBackendSubsystem::SendUnary` / `MakeGrpcWebRequest` | `ue` |
+| UE DS | `PandoraDSBackendSubsystem::CallUnary` | `ds` |
+
+常量与生成器统一在 `FPandoraGrpcWeb::TraceIdHeader` / `MakeTraceId(前缀)`(客户端与 DS 共用一份,
+防止两份副本漂移)。
+
+⚠️ **入站值有闸门**:该头由客户端 / DS 完全控制且会写进全链每条日志,故 `extractTraceID` 只采纳
+**≤64 字符且只含 `[A-Za-z0-9_-]`** 的值,否则丢弃并另行生成(见 `pkg/middleware/trace.go`
+`isSafeTraceID`)。换行会让按行切分的日志管道把一条拆成多条、伪造出看似来自其它服务的日志行。
+UE 侧生成器产出 `<2 字符前缀> + 32 位十六进制` = 34 字符,天然落在闸门内 ——
+**改 UE 侧生成格式前必须先确认仍过闸,否则关联会静默断掉(不报错、不降级,只是从此再也串不起来)。**
+
+#### UE 侧补充
+
+- 必须用 `MY_LOG`,**不得用 `UE_LOG`**(客户端 `CLAUDE.md` 硬规定);消息文本用中文。
+- 级别取舍与后端不同,因为两侧的量级不同:
+  - **客户端**:玩家侧 unary RPC 是低频用户操作,请求发出 / 完成一律 `Log`,保留完整轨迹 ——
+    玩家投诉时往往只有默认级别的日志可用。
+  - **DS**:同一条管线上跑着心跳 / 事实流 / GM 轮询,500 人/hub 下逐条打会冲走故障行,
+    故成功侧 `Verbose`、慢调用(≥`SlowCallLogThresholdMs`=1000ms)升 `Log`、失败 `Warning`。
+- **票据验签拒绝**必须带 `player_id` + 枚举 reason,不能只回一句自由文本 `OutError`:
+  DS 拒票时后端侧完全无感,DS 日志是唯一证据。

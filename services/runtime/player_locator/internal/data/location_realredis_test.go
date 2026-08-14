@@ -263,3 +263,100 @@ func TestRealRedis_TouchAlive不凭空建Meta(t *testing.T) {
 		t.Fatalf("不得为无 meta 玩家建 key(会成为无法接受 HUB 写的毒 key): exists=%d err=%v", n, err)
 	}
 }
+
+// ── INC-20260813-001 回归 ────────────────────────────────────────────────────
+
+// touchHubAliveScript 用 ARGV[3] 做节流比较,而 RefreshHubLocations 里那次内联 Eval
+// 曾**只传两个 ARGV**(2026-08-12 加节流时漏改)。后果是隐蔽的:第一次心跳时 meta 还没有
+// last_alive_ms,`prev` 为 nil,短路不进比较分支 → 通过;从**第二次**心跳起 `prev` 非 nil,
+// `(now - prev) < tonumber(nil)` 直接 Lua 报错,整批 EVAL 失败。
+//
+// 因为 EXPIRE 与 EVAL 在同一 pipeline 里各自独立执行,位置 TTL 照常续上,**只有
+// last_alive_ms 静默停更**——线上唯一可见的症状是每 5s 一条 hub_presence_refresh_failed
+// 与 `cmdstat_eval failed_calls` 一路涨(实测 1109/1152 = 96%)。
+//
+// 判据必须落在**第二跳**:只跑一跳的用例在修复前也是绿的。
+func TestRealRedis_RefreshHubLocations第二跳不得Lua报错(t *testing.T) {
+	repo, _ := newRealRedis(t)
+	ctx := context.Background()
+	pid := realRedisPlayerBase + 8
+	fence := connFence("assign-A", "adm-1", 1)
+	if ok, err := repo.ActivateHubPresence(ctx, pid, fence, time.Hour); err != nil || !ok {
+		t.Fatalf("commit: ok=%v err=%v", ok, err)
+	}
+	if err := repo.SetGuarded(ctx, pid, LocationRecord{
+		State: 3, HubPod: "hub-1", HubPresenceFence: fence,
+	}, time.Hour, 1, nil); err != nil {
+		t.Fatalf("SetGuarded: %v", err)
+	}
+
+	// 第一跳:meta 还没有 last_alive_ms,修复前后都能过。
+	if n, err := repo.RefreshHubLocations(ctx, "hub-1", []uint64{pid}, time.Hour, time.Hour); err != nil || n != 1 {
+		t.Fatalf("第一跳: n=%d err=%v", n, err)
+	}
+	// 第二跳:meta 已有 last_alive_ms → 修复前必然 Lua 报错。
+	if n, err := repo.RefreshHubLocations(ctx, "hub-1", []uint64{pid}, time.Hour, time.Hour); err != nil || n != 1 {
+		t.Fatalf("第二跳必须与第一跳同样成功(ARGV[3] 漏传会在这里炸): n=%d err=%v", n, err)
+	}
+	// 再来两跳,确认不是一次性的。
+	for i := 0; i < 2; i++ {
+		if _, err := repo.RefreshHubLocations(ctx, "hub-1", []uint64{pid}, time.Hour, time.Hour); err != nil {
+			t.Fatalf("第 %d 跳: %v", i+3, err)
+		}
+	}
+}
+
+// census 全员都要刷 last_alive_ms —— **包括位置投影不是 HUB 的那些人**。
+//
+// 为什么:matchmaker 撮合成局会把成员写成 MATCHING,而 MATCHING **没有任何保活**
+// (RefreshHubLocations 只续 state==HUB)。这局若失败/取消,matchmaker 按设计不回写 HUB,
+// 于是玩家明明坐在大厅里,位置 key 却在 30s 后整条消失、last_alive_ms 也停在进 MATCHING
+// 那一刻 —— 对一切按 presence 判定的消费方而言等同「早已离线」。
+// INC-20260724-001 的成局最终门 100% 假阳性、以及 INC-20260813-001 的 StartMatch 在线闸
+// 若照搬同一信号会误伤所有人,根子都在这里。
+//
+// 边界同样要守住:last_alive_ms 是另一把 meta key,可以按 census 写;
+// **位置投影的 TTL 绝不能**跟着一起续(那会破不变量 §1 的「非 HUB 态记录一律不动」)。
+func TestRealRedis_RefreshHubLocations按census刷新非HUB态的last_alive(t *testing.T) {
+	repo, client := newRealRedis(t)
+	ctx := context.Background()
+	pid := realRedisPlayerBase + 9
+	fence := connFence("assign-A", "adm-1", 1)
+	if ok, err := repo.ActivateHubPresence(ctx, pid, fence, time.Hour); err != nil || !ok {
+		t.Fatalf("commit: ok=%v err=%v", ok, err)
+	}
+	// 玩家人在大厅,但位置投影停在撮合态(matchmaker NotifyMatching 写的,失败后无人回写)。
+	if err := repo.SetGuarded(ctx, pid, LocationRecord{
+		State: 4 /* MATCHING */, MatchID: 777,
+	}, 10*time.Minute, 1, nil); err != nil {
+		t.Fatalf("SetGuarded: %v", err)
+	}
+	// 造一个「很久以前」的 last_alive_ms,好让节流窗口(30s)不挡住本次推进。
+	stale := time.Now().Add(-time.Hour).UnixMilli()
+	if err := client.HSet(ctx, hubMetaKey(pid), "last_alive_ms", stale).Err(); err != nil {
+		t.Fatalf("HSet: %v", err)
+	}
+
+	// Hub DS 心跳把他报在 census 里 —— 这就是「此刻他连在本台 Hub 上」的权威事实。
+	// 位置不是 HUB,所以 refreshed 计数必须是 0(位置 TTL 一条都没续)。
+	n, err := repo.RefreshHubLocations(ctx, "hub-1", []uint64{pid}, time.Hour, time.Hour)
+	if err != nil {
+		t.Fatalf("RefreshHubLocations: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("非 HUB 态的位置 TTL 绝不能续(不变量 §1): refreshed=%d want=0", n)
+	}
+
+	got, err := repo.BatchGetLastSeen(ctx, []uint64{pid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[pid] <= stale {
+		t.Fatalf("census 里的玩家必须刷新 last_alive_ms,否则坐在大厅也会被判早已离线: got=%d stale=%d", got[pid], stale)
+	}
+
+	// 反向断言:位置 key 的 TTL 没有被续到一小时(仍是 SetGuarded 时的 10 分钟量级)。
+	if ttl, err := client.TTL(ctx, locKey(pid)).Result(); err != nil || ttl > 11*time.Minute {
+		t.Fatalf("非 HUB 态位置 TTL 被误续: ttl=%v err=%v", ttl, err)
+	}
+}

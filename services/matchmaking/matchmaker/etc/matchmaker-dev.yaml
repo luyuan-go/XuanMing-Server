@@ -52,6 +52,10 @@ match:
   ds_local_profile: "local-off-v1"
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
   team_addr: "127.0.0.1:20010"
+  # allow_missing_team: 留空 team_addr 的显式开关,默认 false(= 留空即启动失败)。
+  # 留空的后果是**静默**的:StartMatch 不再校验队伍,对局结束也不再复位准备状态
+  # (INC-20260813-001 第一根因)。要跑不带 team 的骨架就显式写 true。
+  # allow_missing_team: false
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS);留空用 StubDSAllocator
   ds_allocator_addr: "127.0.0.1:20020"
   # locator_addr: player_locator 服务 gRPC 直连地址（成局→MATCHING / 就绪→BATTLE 位置上报 + StartMatch 前置查战斗态）;留空不上报也不拦截
@@ -65,6 +69,12 @@ match:
   # one shared secret would let either service impersonate the other.
   # Must equal team-dev.yaml team.match_resume_auth_secret.
   team_resume_auth_secret: "pandora-dev-team-resume-auth-key-v1!"
+  # ── 反方向:签 matchmaker→team 的 BeginTeamMatch / EndTeamMatch(A-13)───────────
+  # ⚠️ 必须与上面那把**不同**(上面那把是 matchmaker 验**入站**用的,共用等于互相可冒充)。
+  # 必须等于 team-dev.yaml 的 team.match_call_auth_secret / match_call_auth_audience。
+  # 留空 = 不签名:team 侧按其 match_call_auth_require 决定观察放行还是拒。
+  team_call_auth_secret: "pandora-dev-match-call-auth-key-v1!!"
+  team_call_auth_audience: "team"
   # Matchmaker→DS allocator signed exact allocation abort only.
   allocation_abort_auth_secret: "pandora-dev-allocation-abort-auth-key-v1!"
   allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"
@@ -87,6 +97,21 @@ match:
   # (§9.22:presence key miss 不能单独证明玩家离开,不得冒充 OFFLINE);③ 具备可秒级回滚的开关。
   # 决策待办见 docs/incidents/2026-07-24-p0-matchmaker-orphan-start-claim-freeze.md 的 D2。
   liveness_gate_enabled: false
+  # start_presence_grace: StartMatch 在线闸的宽限窗(INC-20260813-001)。
+  # 判据是「距最后一次被 Hub DS 观测在场过去多久」,不是「此刻 locator 查不查得到」——
+  # 后者正是上面两道门被关掉的原因。last_alive_ms 由 Hub DS 心跳按 census 全员每 5s 续期,
+  # 坐在大厅里的人恒为「刚刚」,真关掉客户端的人才会涨过本窗。
+  # 拿不到任何离开基线时判 UNKNOWN 放行(§9.22);locator 查不通按 battle_gate_fail_open 决定。
+  # 取值须 >> Hub 心跳周期(5s)且 << team 的 offline_leave.threshold(180s)。**负值关闭整道闸**。
+  start_presence_grace: "30s"
+  # queue_absence_reap_after: 排队票离线回收的判死窗(INC-20260814-001 隔夜幽灵票)。
+  # 非终态 ticket 是持久状态,排队后关客户端既无 CancelMatch 也无任何链路转终态
+  # (team offline_leave 刻意不联动且单人队不处理;liveness_gate 已回退关闭),
+  # 隔夜旧票会与次日新玩家成局。本回收与 start_presence_grace 同一条证据链
+  # (按「离开多久」判,UNKNOWN 放行,presence 查询失败整轮跳过绝不误删),
+  # 与 liveness_gate 无关、其关闭时也生效。两处消费:队列 10s 周期扫除 + 成局装箱前复查。
+  # 取值须 > start_presence_grace(排队中掉线重连是常态,过小会踢掉正在重连的人)。**负值关闭**。
+  queue_absence_reap_after: "120s"
   # map_id: 战斗地图配置 ID(对齐 g_关卡.xlsx,6=MobaLevel MOBA战斗)
   map_id: 6
   # game_mode: 战斗模式标识,透传给 ds_allocator

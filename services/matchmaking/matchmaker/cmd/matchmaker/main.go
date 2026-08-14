@@ -35,6 +35,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	"github.com/luyuancpp/pandora/pkg/leader/etcdleader"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/offlinewatch"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
@@ -149,7 +150,18 @@ func main() {
 	// 5. team gRPC reader(弱依赖:team_addr 留空 → 跳过队伍校验)
 	var reader biz.TeamReader
 	if cfg.Match.TeamAddr != "" {
-		tr := data.NewGrpcTeamReader(cfg.Match.TeamAddr)
+		// A-13:给 matchmaker→team 的组票 / 复位调用签名。未配密钥则不签,
+		// team 侧按其 match_call_auth_require 决定观察放行还是拒(两边可分两次发布配上)。
+		var teamSigner *internalrpcauth.Signer
+		if cfg.Match.TeamCallAuthSecret != "" {
+			s, sErr := internalrpcauth.NewSigner(cfg.Match.TeamCallAuthSecret, "matchmaker", cfg.Match.TeamCallAuthAudience)
+			if sErr != nil {
+				helper.Errorw("msg", "team_call_signer_init_failed", "err", sErr)
+				os.Exit(1)
+			}
+			teamSigner = s
+		}
+		tr := data.NewGrpcTeamReader(cfg.Match.TeamAddr, teamSigner)
 		defer func() { _ = tr.Close() }()
 		reader = tr
 		helper.Infow("msg", "team_reader_ready", "team_addr", cfg.Match.TeamAddr)
@@ -271,16 +283,23 @@ func main() {
 	// player_locator gRPC notifier（弱依赖：locator_addr 留空 → 不上报位置）
 	// 撮合成局→MATCHING、全员确认就绪→BATTLE（不变量 §1）
 	var locator biz.LocationNotifier
+	var presence biz.PresenceReader
 	if cfg.Match.LocatorAddr != "" {
 		locatorConn := grpcclient.MustDialInsecure(cfg.Match.LocatorAddr)
 		ln := data.NewGrpcLocationNotifier(locatorConn)
 		defer func() { _ = ln.Close() }()
 		locator = ln
-		helper.Infow("msg", "locator_notifier_ready", "locator_addr", cfg.Match.LocatorAddr)
+		// StartMatch 在线闸复用同一条连接。刻意直接用 pkg/offlinewatch 那份 reader:
+		// 「玩家离开大厅多久了」全仓只能有一个判定口径,team 自动退队与本闸读同一份事实
+		// (见 biz.PresenceReader 注释)。
+		presence = offlinewatch.NewGrpcPresenceReader(locatorConn)
+		helper.Infow("msg", "locator_notifier_ready", "locator_addr", cfg.Match.LocatorAddr,
+			"start_presence_grace", cfg.Match.StartPresenceGrace.Std().String())
 	} else {
-		helper.Warnw("msg", "locator_addr_empty", "hint", "match state (MATCHING/BATTLE) will not be reported to player_locator")
+		helper.Warnw("msg", "locator_addr_empty", "hint", "match state (MATCHING/BATTLE) will not be reported to player_locator; StartMatch presence gate disabled")
 	}
 	uc := biz.NewMatchUsecase(repo, reader, pusher, allocator, matchSF, locator, cfg.Match)
+	uc.SetPresenceReader(presence)
 	if ctStore != nil {
 		uc.SetConfigTables(ctStore)
 	}

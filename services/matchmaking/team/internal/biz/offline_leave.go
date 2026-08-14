@@ -6,11 +6,28 @@
 //	                                          │ kafka: pandora.player.presence
 //	                                          ▼
 //	                          pkg/offlinewatch(排到期 → 到点回查 locator 权威)
-//	                                          │ 判定 offline 且已满 threshold
-//	                                          ▼
-//	                              TeamUsecase.OnPlayerOffline(本文件)
+//	                                          │
+//	              ┌───────────────────────────┴───────────────────────────┐
+//	              │ 不在线,未满 threshold                                  │ 不在线,已满 threshold
+//	              ▼                                                       ▼
+//	  TeamUsecase.OnPlayerPresenceLost                       TeamUsecase.OnPlayerOffline
+//	  (取消他的准备,队伍掉出 READY,人还在队里)                (把人摘出队伍)
 //
-// # 三道闸,少一道都会出事
+// # 为什么要两档(INC-20260813-001)
+//
+// 180s 的 threshold 是留给弱网 / 地铁 / 重连的余量,**不该缩**。但在这段时间里,
+// 「他还留在队伍里」会被下游误读成「他有资格被拉进对局」:队长点开始匹配时,matchmaker
+// 把一个已经不在大厅的人原样冻进票据,战斗 DS 拿到 N 人 roster 却只进来 N-1 个。
+//
+// 留人(为了重连)与可开局(需要人在场)本来就是两个判断,现在分开:软档只动准备状态,
+// 玩家回来自己重新点一下即可;硬档才动队伍成员。
+//
+// ⚠️ **本档不是 INC-20260813-001 的第一根因**。那次事故的缺席者全程没有掉线 ——
+// 他打完上一局先退出战斗,还在「结算 → 回大厅 → 重登」路上,队长 75 秒后就开了下一局。
+// 真正的缺口是 team 侧没有 match-ended 复位路径(见下面的 EndTeamMatch);
+// 本档是掉线场景的纵深防御,任何离线阈值都覆盖不到「正常玩家还没走回来」这一形态。
+//
+// # 三道闸,少一道都会出事(硬档 OnPlayerOffline)
 //
 //  1. **此刻真的不在线**:由 offlinewatch 回查 locator 得出。locator 查不通一律不动作
 //     (§9.22 不确定不得冒充 OFFLINE),本文件不再重复判。
@@ -44,6 +61,7 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	teamv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/team/v1"
@@ -139,6 +157,235 @@ func (u *TeamUsecase) OnPlayerOffline(ctx context.Context, playerID uint64, offl
 	return u.removeOfflineMember(ctx, teamID, playerID, offlineSinceMs)
 }
 
+// errReadyNoChange 是锁内的「没什么可改的」哨兵:让 UpdateWithLock 放弃写回。
+// 不是错误,外层统一映射成 nil —— 否则一个挂机离线的玩家会让他所在队伍每 15s
+// 白写一次 Redis 并广播一次无意义的推送。
+var errReadyNoChange = errors.New("team: ready state unchanged")
+
+// OnPlayerPresenceLost 实现 offlinewatch.PresenceLostHandler:成员此刻不在线,
+// 但还没满 offline_leave.threshold。
+//
+// # 它和 OnPlayerOffline 的分工
+//
+//	不在线,未满阈值(本函数)   → 取消他的准备,队伍掉出 READY。**人留在队伍里。**
+//	不在线,已满阈值(OnPlayerOffline)→ 把人摘出队伍。
+//
+// 那 180s 阈值是留给弱网 / 地铁 / 重连的余量,**不该缩**。但在这段时间里,
+// 「他还留在队伍里」会被下游误读成「他有资格被拉进对局」:队长点开始匹配时,
+// 一个已经不在大厅的人被原样冻进票据,DS 拿到 N 人却只进来 N-1 个。
+// 本函数把两件事分开:留人(为了重连)与可开局(需要人在场)不是同一个判断。
+//
+// 队长因此根本点不动「开始匹配」(队伍不是 READY),不需要先撞一个错误码才知道出了事;
+// 玩家重连回来自己重新点准备即可 —— 与「队友取消准备」完全同一套语义,客户端零改动。
+//
+// # 幂等 / 无变化即无写
+//
+// 本回调在玩家离线期间每轮 Observe 都会来一次。锁外先廉价判一次、锁内再判一次,
+// 没有实际变化就用哨兵放弃写回 —— 否则一个挂机离线的玩家会让他所在队伍每 15s 白写一次
+// Redis 并广播一次无意义的推送。
+func (u *TeamUsecase) OnPlayerPresenceLost(ctx context.Context, playerID uint64, sinceMs int64) error {
+	if !u.offlineLeaveEnabled() || playerID == 0 {
+		return nil
+	}
+	teamID, found, err := u.repo.GetPlayerTeamID(ctx, playerID)
+	if err != nil {
+		return err // 读不通 → 下轮重来,绝不当成「他没队伍」
+	}
+	if !found || teamID == 0 {
+		return nil
+	}
+	team, found, err := u.repo.Get(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	// 终态 / 已不含该成员 / 单人队一律不动。旧 player→team 索引的收敛是 OnPlayerOffline
+	// 的职责(它有 due/claim 闭环能保证重试),本函数不重复那条链。
+	if !found || team.State == stateDisbanded || !hasMember(team, playerID) || len(team.Members) <= 1 {
+		return nil
+	}
+
+	result, err := u.clearMemberReady(ctx, teamID, readyClearOpts{targets: []uint64{playerID}})
+	if err != nil {
+		return err
+	}
+	if result == nil {
+		return nil // 并发路径已经改过了
+	}
+	u.publishReadyCleared(ctx, result)
+	plog.With(ctx).Infow("msg", "team_presence_lost_unready",
+		"team_id", teamID, "player_id", playerID, "since_ms", sinceMs,
+		"new_state", result.State, "members", len(result.Members))
+	return nil
+}
+
+// EndTeamMatch 对局结束后复位队伍准备状态(matchmaker 在 ReleaseMatch 时调用)。
+//
+// # 这是本事故的**第一根因**(INC-20260813-001 v2)
+//
+// 在此之前 team 侧**没有任何一条 match-ended 路径** —— 全仓只有 LeaveTeam / Kick /
+// 离线摘人会把 State 打回 FORMING。于是一局打完,队伍仍停在 TEAM_STATE_READY、
+// 全员 ready 标记原样保留,队长可以在队友还卡在结算界面 / 回大厅路上的时候立刻再开一局。
+// 事故当天队员阵亡后先退了战斗(比结算还早 13 秒),队长距他退出仅 **75 秒**就开了下一局,
+// 而他此时才刚 login 回来、停在选角界面 —— 于是被原样冻进新票据,DS 拿到 6 人只进来 5 个。
+//
+// 注意这跟「掉线」无关:他全程没有任何异常,只是**连打第二局的正常窗口**。
+// 所以光靠离线判定(不论阈值多短)都堵不住,必须有这条 match-ended 复位。
+//
+// # 语义
+//
+// 打完一局回大厅 = 必须重新点准备。除了堵住上述窗口,它也符合玩家预期(避免"手滑连开")。
+//
+// # 幂等与终态
+//
+// battle_result 的 outbox 会把 ReleaseMatch 重投到成功为止,所以本方法必然被重复调用:
+// 已复位过再调是零写零推送。队伍已解散 / 已不存在 / 成员已不在队,一律**返回成功** ——
+// 那些都是「本就没什么可复位的」,报错只会让 outbox 永远重试下去。
+// # 跨代幂等靠 expectedGen,不靠 player_ids
+//
+// outbox 会重投,所以本方法必然被重复调用。光看「谁还挂着 ready」是**不够**的:
+// ACK 丢失后玩家重新点了准备 / 离队重入 / 队长已开新局,重投照样把新意图抹平。
+// expectedGen 是 BeginTeamMatch 冻结名单那一刻的 ready 代际,只有它仍等于当前代际
+// 才复位 —— 任何 ready 意图变更都会推进代际(见 ready_generation.go),重投自然落空。
+//
+// expectedGen==0 = 代际未知(滚动升级窗口的旧 matchmaker / 旧 team 记录),
+// 退化为「只在当前确实还挂着 ready 时复位一次」。不是跨代安全的,但严格优于完全不复位。
+func (u *TeamUsecase) EndTeamMatch(ctx context.Context, teamID uint64, playerIDs []uint64, expectedGen uint64) error {
+	if teamID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "team_id required")
+	}
+	result, err := u.clearMemberReady(ctx, teamID, readyClearOpts{
+		targets:     playerIDs,
+		expectedGen: expectedGen,
+	})
+	if err != nil {
+		if errors.Is(err, offlinewatch.ErrDeferred) {
+			// 组票租约在手 = 队长已经开了**下一局**。租约是秒级自净的,
+			// 交给上游 outbox 下一轮重投即可(此时改 ready 会与那一局的冻结名单打架)。
+			return errcode.New(errcode.ErrTeamConcurrent,
+				"team %d roster locked by another match start", teamID)
+		}
+		return err
+	}
+	if result == nil {
+		return nil // 已经复位过 / 队伍已终态:幂等成功
+	}
+	u.publishReadyCleared(ctx, result)
+	plog.With(ctx).Infow("msg", "team_match_ended_unready",
+		"team_id", teamID, "players", len(playerIDs),
+		"new_state", result.State, "members", len(result.Members))
+	return nil
+}
+
+// clearMemberReady 是「取消部分成员的准备、必要时把队伍打回 FORMING」的共同实现。
+//
+// 两个调用方(掉线软化 / 对局结束复位)的差别只有触发原因与日志,**写路径必须完全一致** ——
+// 一处漏了 syncOpenIndex 或推送,另一处的玩家就会对着一个不会刷新的面板点半天。
+//
+// targets 为空 = 全队。返回 (nil, nil) 表示「没什么可改的」,调用方按幂等成功处理。
+// 返回 offlinewatch.ErrDeferred 表示组票租约在手,调用方自行决定怎么重试。
+type readyClearOpts struct {
+	// targets 要取消准备的成员;空 = 全队。
+	targets []uint64
+	// expectedGen 非 0 时做 CAS:当前 ready 代际必须等于它才动手(跨代幂等,见 EndTeamMatch)。
+	expectedGen uint64
+}
+
+func (u *TeamUsecase) clearMemberReady(
+	ctx context.Context, teamID uint64, opts readyClearOpts,
+) (*teamv1.TeamStorageRecord, error) {
+	targets := opts.targets
+	var result *teamv1.TeamStorageRecord
+	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
+		if team.State == stateDisbanded {
+			return errReadyNoChange
+		}
+		// 跨代 CAS:代际已经往前走了,说明这条复位对应的那一局早已翻篇
+		// (玩家重新点了准备 / 离队重入 / 队长开了新局)。按幂等成功处理,绝不能抹掉新意图。
+		if opts.expectedGen != 0 && team.GetReadyGeneration() != opts.expectedGen {
+			return errReadyNoChange
+		}
+		// ★ 与 matchmaker 的共同线性化点,同 removeOfflineMember:BeginTeamMatch 已经
+		// (或正在)把这份名单冻进票据,这时改 ready 会让票据里的快照与队伍打架。
+		// 租约是秒级自净,推迟一轮即可。
+		if rosterLockedForMatch(team) {
+			return offlinewatch.ErrDeferred
+		}
+		if !readyNeedsClearing(team, targets) {
+			return errReadyNoChange
+		}
+		for _, idx := range readyTargetIndexes(team, targets) {
+			team.Members[idx].Ready = false
+		}
+		if team.State == stateReady {
+			team.State = stateForming // 少一个人在场 / 刚打完一局,就不再是「全员已准备」
+		}
+		team.UpdatedAtMs = time.Now().UnixMilli()
+		result = cloneTeam(team)
+		return nil
+	}, u.activeTTL()); err != nil {
+		switch {
+		case errors.Is(err, errReadyNoChange):
+			return nil, nil
+		case errors.Is(err, offlinewatch.ErrDeferred):
+			return nil, err
+		case errcode.As(err) == errcode.ErrTeamNotFound, errcode.As(err) == errcode.ErrTeamWrongState:
+			return nil, nil // 队伍已没了 / 已终态:本就没什么可复位的
+		case errcode.As(err) == errcode.ErrTeamConcurrent:
+			// 乐观锁重试耗尽,暂态。用 ErrDeferred 而非普通 error,免得正常竞争刷 Warn。
+			return nil, offlinewatch.ErrDeferred
+		default:
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+// publishReadyCleared 收口 ready 复位后的对外动作,两个调用方共用。
+//
+// 复用 MEMBER_READY:这条推送表达的事实就是「成员的准备状态变了」,客户端既有的刷新
+// 逻辑一字不用改。刻意不新增 reason 枚举 —— 客户端在本推送到达时的动作与队友手动取消
+// 准备完全相同(§15.3:没有真实差异就不加协议面)。将来产品要区分文案时再按 §9.21 加法演进。
+func (u *TeamUsecase) publishReadyCleared(ctx context.Context, result *teamv1.TeamStorageRecord) {
+	u.pushUpdate(ctx, 0, memberIDs(result), result,
+		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_READY, 0)
+	// FORMING ↔ READY 改变「是否还在招募」→ 同步开放索引(同 SetReady)。
+	u.syncOpenIndex(ctx, result, result.MapId)
+}
+
+// readyTargetIndexes 把 targets 映射成队伍内的下标;targets 为空 = 全队。
+// 不在队伍里的 id 直接忽略(对局期间离队是正常的)。
+func readyTargetIndexes(team *teamv1.TeamStorageRecord, targets []uint64) []int {
+	if len(targets) == 0 {
+		idxs := make([]int, 0, len(team.Members))
+		for i := range team.Members {
+			idxs = append(idxs, i)
+		}
+		return idxs
+	}
+	idxs := make([]int, 0, len(targets))
+	for _, pid := range targets {
+		if idx := memberIndex(team.Members, pid); idx >= 0 {
+			idxs = append(idxs, idx)
+		}
+	}
+	return idxs
+}
+
+// readyNeedsClearing 判断「还有没有东西要复位」。两件事任一成立就要动:
+// 目标成员里还有人挂着 ready,或队伍还停在 READY(理论上后者由前者推出,分开判是为了
+// 兜住历史脏数据 —— 一支 READY 却没人 ready 的队伍照样能让队长点开始匹配)。
+func readyNeedsClearing(team *teamv1.TeamStorageRecord, targets []uint64) bool {
+	if team.State == stateReady {
+		return true
+	}
+	for _, idx := range readyTargetIndexes(team, targets) {
+		if team.Members[idx].Ready {
+			return true
+		}
+	}
+	return false
+}
+
 // removeOfflineMember 把成员摘出队伍。核心与 LeaveTeam 同源(同一把乐观锁、同样的
 // 队长转移 / READY 回退 / 索引清理),差别只有:推送原因不同、且不撤匹配票据。
 func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID uint64, offlineSinceMs int64) error {
@@ -147,7 +394,7 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 	var result *teamv1.TeamStorageRecord
 	var terminalNeedsIndexCleanup bool
 
-	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
+	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
 		// 锁内重查一遍:从上面的读到这里之间,他可能已经自己离队 / 被踢 / 队伍已解散。
 		if team.State == stateDisbanded {
 			terminalNeedsIndexCleanup = true
@@ -346,7 +593,7 @@ func (u *TeamUsecase) BeginTeamMatch(
 
 	var result *teamv1.TeamStorageRecord
 	var expiresAtMs int64
-	if err := u.repo.UpdateWithLock(ctx, teamID, u.cfg.OptimisticRetry, func(team *teamv1.TeamStorageRecord) error {
+	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
 		if team.State == stateDisbanded {
 			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 		}

@@ -254,6 +254,27 @@ func main() {
 		os.Exit(1)
 	}
 	svc.SetDSCallbackGuard(dsGuard)
+
+	// matchmaker → team 的组票 / 复位调用验签(A-13)。三档可降级,见 conf.MatchCallAuthSecret:
+	// 留空=不验;配了+require=false 观察期(验不过只 WARN);require=true 强制。
+	if cfg.Team.MatchCallAuthSecret != "" {
+		replay, rerr := internalrpcauth.NewRedisReplayStore(rdb, "pandora:team:match-call:nonce:")
+		if rerr != nil {
+			helper.Errorw("msg", "match_call_replay_store_init_failed", "err", rerr)
+			os.Exit(1)
+		}
+		v, verr := internalrpcauth.NewVerifier(cfg.Team.MatchCallAuthSecret, "matchmaker",
+			cfg.Team.MatchCallAuthAudience, 0, replay)
+		if verr != nil {
+			helper.Errorw("msg", "match_call_verifier_init_failed", "err", verr)
+			os.Exit(1)
+		}
+		svc.SetMatchCallAuth(v, cfg.Team.MatchCallAuthRequire)
+		helper.Infow("msg", "match_call_verifier_ready", "require", cfg.Team.MatchCallAuthRequire)
+	} else {
+		helper.Warnw("msg", "match_call_verifier_disabled",
+			"hint", "team.match_call_auth_secret 留空:BeginTeamMatch/EndTeamMatch 只有 systemOnly,集群内任何 Pod 都可调")
+	}
 	if dsGuard != nil {
 		helper.Infow("msg", "ds_callback_guard_ready", "mode", dsGuard.Mode().String())
 	}

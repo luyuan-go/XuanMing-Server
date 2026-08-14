@@ -56,7 +56,19 @@ type TeamReader interface {
 	// 分属两把锁,凑不出共同线性化点 —— 于是存在「读到名单 → 那个人被摘走 → 才建票」
 	// 的窗口,结果是人在票据里却已不在队伍里,被拉进一场自己不在场的对局。
 	// BeginTeamMatch 上的是秒级自净租约,只需覆盖到 ClaimPlayer 落地。
-	BeginTeamMatch(ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64) (*teamv1.Team, error)
+	// 返回的第二个值是冻结这份名单那一刻的 ready 代际(INC-20260813-001 ①):
+	// 必须原样带进 match 记录,并在 EndTeamMatch 回传做 CAS。0 = 旧 team 服务没回。
+	BeginTeamMatch(ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64) (*teamv1.Team, uint64, error)
+	// EndTeamMatch 对局结束后复位队伍准备状态(INC-20260813-001)。
+	//
+	// 与 BeginTeamMatch 成对:Begin 冻结名单开一局,End 在这局释放时把队伍打回 FORMING。
+	// **少了 End 那一半**,一局打完队伍仍停在 READY、全员 ready 标记原样保留,
+	// 队长可以在队友还卡在结算界面 / 回大厅路上的时候立刻再开一局,把他们冻进新票据。
+	//
+	// 幂等:ReleaseMatch 由 battle_result outbox 重投到成功为止,本调用必然重复。
+	// team 侧对「已复位 / 队伍已解散 / 成员已离队」一律返回成功,不会让 outbox 空转。
+	// expectedReadyGeneration 是 Begin 时拿到的代际,team 侧据此做跨代 CAS。
+	EndTeamMatch(ctx context.Context, teamID uint64, playerIDs []uint64, expectedReadyGeneration uint64) error
 }
 
 // MatchEventPusher 把 match 进度事件推给玩家(kafka pandora.match.progress)。
@@ -123,6 +135,26 @@ type LocationNotifier interface {
 	FindOfflinePlayers(ctx context.Context, playerIDs []uint64) ([]uint64, error)
 }
 
+// PresenceReader 是 StartMatch 在线闸对 player_locator 的只读依赖。
+//
+// 形状与 pkg/offlinewatch.PresenceReader 一字不差,`*offlinewatch.GrpcPresenceReader`
+// 直接满足本接口 —— 这是刻意的:「玩家离开大厅多久了」全仓只有那一份判定口径
+// (locator 权威 = BatchGetLocation 判此刻在不在场 + BatchGetLastSeen 判离开了多久),
+// team 的自动退队与本闸必须读同一份事实,否则两边会对同一个玩家给出相反的结论。
+// 在这里重新定义一遍接口而不是直接 import 类型,只是为了让 biz 保持消费者侧接口的
+// 惯例(便于单测注入),不代表另起一套判定。
+//
+// 三态必须严格区分:整批查不通一律返回 error,**绝不允许把查不通压成空 map** ——
+// 那等价于宣布全队离线,会让 locator 抖一下就没人能开局(§9.22)。
+type PresenceReader interface {
+	// BatchOnline 返回此刻在 locator 有位置记录的玩家集合(在场即在线,
+	// 不区分 HUB/MATCHING/BATTLE/LOGIN_PENDING)。
+	BatchOnline(ctx context.Context, playerIDs []uint64) (map[uint64]bool, error)
+	// BatchLastSeen 返回「最后一次被 Hub DS 观测在场的时刻」(unix ms)。
+	// 优先是 left_at_ms(显式离开),退化到 last_alive_ms(心跳 census);缺席 = UNKNOWN。
+	BatchLastSeen(ctx context.Context, playerIDs []uint64) (map[uint64]int64, error)
+}
+
 // IDGenerator 生成唯一 match_id(snowflake)。
 type IDGenerator interface {
 	Generate() uint64
@@ -154,6 +186,10 @@ type MatchUsecase struct {
 	idGen     IDGenerator
 	locator   LocationNotifier // 可为 nil（本机不起 player_locator 时不上报位置）
 	cfg       conf.MatchConf
+
+	// presence 是 StartMatch 在线闸的权威读入口(见 ensureAllPresent)。
+	// 可为 nil:locator 未配 / 显式关闭本闸时整道跳过,行为与 2026-08-13 之前完全一致。
+	presence PresenceReader
 
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2 两级撮合)。
 	// 可为 nil:单 Cell / dev / 阶段 1~2 不分区,matchOnce 退化为单桶贪心(与历史行为一致)。
@@ -626,6 +662,144 @@ func (u *MatchUsecase) ensureNoneInBattle(ctx context.Context, members []*matchv
 	return nil
 }
 
+// SetPresenceReader 注入 StartMatch 在线闸的权威读入口(main.go 用 locator conn 构造)。
+// nil-safe:不注入时整道闸跳过,与本闸落地前行为完全一致。
+func (u *MatchUsecase) SetPresenceReader(p PresenceReader) { u.presence = p }
+
+// startPresenceGrace 返回在线闸的宽限窗;<=0 表示整道闸关闭。
+func (u *MatchUsecase) startPresenceGrace() time.Duration { return u.cfg.StartPresenceGrace.Std() }
+
+// ensureAllPresent 拦截「把已经离开大厅的队友冻进对局票据」(INC-20260813-001)。
+//
+// # 这道闸补的是哪个洞
+//
+// StartMatch 此前的门只有:关卡表 → 进法 → 冻结名单 → 人数下限 → no-show 退避 →
+// 战斗中(ensureNoneInBattle)→ claim 预检。**没有任何一道看「人还在不在」**。
+// 于是队员关掉客户端后,只要还没到 team 的 offline_leave.threshold(180s),他就仍是
+// 队伍里一个 ready 成员,被原样冻进票据 → DS 拿到 N 人 roster 却只进来 N-1 人。
+//
+// 队伍里保留他是**对的**(那 180s 是留给弱网 / 地铁 / 重连的余量,不该缩)。
+// 错的是把「还留在队伍里」当成了「有资格被拉进对局」——这是两件事,本闸把它们分开。
+//
+// # 判据刻意不是「locator 里查不查得到」
+//
+// 位置投影在**正常路径**上就会短暂缺席:撮合失败后玩家停在 MATCHING 而 MATCHING 无
+// 保活(30s 后整 key 消失,人却好端端坐在大厅);切线换 Hub 也有换手窗口。
+// INC-20260724-001 的成局最终门正是按缺席判死,结果是**结构上 100% 假阳性**,
+// 玩家静止不动也必被判离线,最后只能整道关掉。
+//
+// 本闸因此按「离开了多久」判:
+//
+//	不在场  且  now - lastSeen >= grace   → 拒
+//	不在场  且  拿不到任何 lastSeen 基线    → 放行(UNKNOWN 不得冒充 OFFLINE,§9.22)
+//	在场                                  → 放行
+//
+// lastSeen 的两级来源都由 locator 维护(BatchGetLastSeen):显式离开写 left_at_ms,
+// 拿不到时退到 last_alive_ms —— 后者由 Hub DS 心跳按 **census 全员** 每 5s 续期
+// (2026-08-13 同批修复),所以坐在大厅里的人这个值恒为「刚刚」,与位置投影处于哪一态
+// 无关;真关掉客户端的人才会一路涨过 grace。假阳性的结构性来源就此消失。
+//
+// # 依赖不可用时
+//
+// 与 ensureNoneInBattle 完全同款:默认 fail-closed 返回 ErrUnavailable 让客户端重试,
+// 只有 dev 显式 battle_gate_fail_open=true 才降级 Warn 放行。理由也相同 ——
+// 拿不准就别开局,重来一次的代价远小于拉起一场缺员的对局。
+//
+// # 位置刻意在 resolveMembers 之后
+//
+// 必须用 BeginTeamMatch **冻结后**的那份名单来查,才和票据里最终写进去的是同一批人;
+// 放在冻结之前查等于查了一份可能已经变了的名单。
+func (u *MatchUsecase) ensureAllPresent(ctx context.Context, members []*matchv1.MatchMemberStorageRecord) error {
+	grace := u.startPresenceGrace()
+	if u.presence == nil || grace <= 0 || len(members) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(members))
+	for _, m := range members {
+		if m.GetPlayerId() != 0 {
+			ids = append(ids, m.GetPlayerId())
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	offline, longestMs, op, err := u.absentBeyond(ctx, ids, grace)
+	if err != nil {
+		return u.presenceGateUnavailable(ctx, op, err)
+	}
+	if len(offline) == 0 {
+		return nil
+	}
+	plog.With(ctx).Warnw("msg", "match_start_member_offline",
+		"offline_players", offline, "members", len(ids),
+		"grace", grace.String(), "longest_absent_ms", longestMs)
+	// 服务端 error 文本带 player_id 列表，供拒绝日志定位是谁缺席。当前 StartMatchResponse
+	// 只返回 code + match_id，这段文本不会过线；客户端若要点名须另加结构化响应字段。
+	return errcode.New(errcode.ErrMatchMemberOffline,
+		"players %v left the hub more than %s ago; cannot start match", offline, grace)
+}
+
+// absentBeyond 按「离开了多久」找出这批玩家里已离场超过 window 的人
+// (StartMatch 在线闸与排队票离线回收共用的判据核心,契约见 ensureAllPresent 文档):
+//
+//	在场                          → 放行
+//	不在场 且 拿不到任何离开基线    → UNKNOWN 放行(§9.22,不得冒充 OFFLINE)
+//	不在场 且 now-lastSeen ≥ window → 判离场
+//
+// 返回的 op 标记哪一跳查询失败("batch_online"/"batch_last_seen"),供调用方按各自
+// 的依赖故障策略收口(入队闸 fail-closed / 回收路径弱依赖跳过)。
+// 稳态下全员在线,第二跳 BatchLastSeen 完全省掉。
+func (u *MatchUsecase) absentBeyond(ctx context.Context, ids []uint64, window time.Duration) (offline []uint64, longestMs int64, op string, err error) {
+	online, err := u.presence.BatchOnline(ctx, ids)
+	if err != nil {
+		return nil, 0, "batch_online", err
+	}
+	absent := make([]uint64, 0, len(ids))
+	for _, pid := range ids {
+		if !online[pid] {
+			absent = append(absent, pid)
+		}
+	}
+	if len(absent) == 0 {
+		return nil, 0, "", nil
+	}
+	lastSeen, err := u.presence.BatchLastSeen(ctx, absent)
+	if err != nil {
+		return nil, 0, "batch_last_seen", err
+	}
+
+	nowMs := time.Now().UnixMilli()
+	for _, pid := range absent {
+		since, ok := lastSeen[pid]
+		if !ok || since <= 0 {
+			// 没有任何离开基线(从没上过线 / 已超保留期 / Hub DS 整台挂掉时压根没上报)。
+			// UNKNOWN 一律放行:这条判据的代价方向是「宁可放过一个,不可误杀在线的」。
+			continue
+		}
+		elapsed := nowMs - since
+		if elapsed < window.Milliseconds() {
+			continue // 刚离开,可能正在重连
+		}
+		offline = append(offline, pid)
+		if elapsed > longestMs {
+			longestMs = elapsed
+		}
+	}
+	return offline, longestMs, "", nil
+}
+
+// presenceGateUnavailable 收口在线闸的依赖故障分支(与 ensureNoneInBattle 同策略)。
+func (u *MatchUsecase) presenceGateUnavailable(ctx context.Context, op string, err error) error {
+	if u.cfg.BattleGateFailOpen {
+		plog.With(ctx).Warnw("msg", "match_start_presence_gate_fail_open", "op", op, "err", err)
+		return nil
+	}
+	plog.With(ctx).Errorw("msg", "match_start_presence_gate_fail_closed", "op", op, "err", err)
+	return errcode.New(errcode.ErrUnavailable,
+		"locator unavailable, cannot verify hub presence (%s): %v", op, err)
+}
+
 func (u *MatchUsecase) ticketTTL() time.Duration { return u.cfg.TicketTTL.Std() }
 func (u *MatchUsecase) matchTTL() time.Duration  { return u.cfg.MatchTTL.Std() }
 
@@ -697,14 +871,24 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 // startMatchAdmitted 是 StartMatch 过冷却门之后的主体(拆出以便失败路径统一释放冷却)。
 func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32, entryChoice configpb.LevelEntryMode) (uint64, error) {
 	// 进法先落定:后续的下限判定、票据落库、撮合分流全用这一个结果,不各自再解析一遍。
+	// 每道门的拒绝都必须留证。此前所有失败分支都是裸 `return 0, err`,一行日志都不打 ——
+	// 服务端因此完全看不见「谁在什么时候被哪道门拒了」,INC-20260813-001 排查时只能靠
+	// envoy 访问日志的响应体字节数反推(成功 49B / 只回 code 43B)。
+	reject := func(gate string, err error) (uint64, error) {
+		plog.With(ctx).Warnw("msg", "match_start_rejected",
+			"gate", gate, "code", int(errcode.As(err)), "team_id", teamID,
+			"captain_id", captainID, "map_id", mapID, "err", err)
+		return 0, err
+	}
+
 	entryMode, err := u.resolveEntryMode(mapID, entryChoice)
 	if err != nil {
-		return 0, err
+		return reject("entry_mode", err)
 	}
 
 	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID, mapID)
 	if err != nil {
-		return 0, err
+		return reject("resolve_members", err)
 	}
 
 	// 直进人数下限(关卡表 min_team_size):人没凑够时玩家自己进,至少要够这么多人。
@@ -714,8 +898,8 @@ func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID,
 	// 撮合入口不判本闸:它的目标恒是凑满 team_size(≥ min,加载期已校验),天然满足。
 	if entryMode == configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN {
 		if min := u.minTeamSizeForMap(mapID); len(members) < min {
-			return 0, errcode.New(errcode.ErrMatchTeamTooSmall,
-				"map %d requires at least %d players to walk in, got %d", mapID, min, len(members))
+			return reject("min_team_size", errcode.New(errcode.ErrMatchTeamTooSmall,
+				"map %d requires at least %d players to walk in, got %d", mapID, min, len(members)))
 		}
 	}
 
@@ -723,18 +907,27 @@ func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID,
 	// reason=no_show 时对 roster 记罚(10min 窗内首次免罚,第 2 次起指数退避),这里只读执行。
 	// 只有 no_show 记罚——正常结算、断线重连、主动取消都不计,正常玩家无感。
 	if err := u.checkNoShowPenalty(ctx, members); err != nil {
-		return 0, err
+		return reject("no_show_penalty", err)
 	}
 
 	// P0 修复(2026-07-15,codex P0-8):战斗中玩家不得入队。claim(preflight/SETNX)只拦
 	// "已在撒配链路里"的玩家;若上一局已 ReleaseMatch 但玩家仍在 DS 内(或 GM 拉入),
 	// 唯一能拦住的是 locator BATTLE 状态门(不变量 §1 一人一 DS)。
 	if err := u.ensureNoneInBattle(ctx, members); err != nil {
-		return 0, err
+		return reject("in_battle", err)
+	}
+
+	// 在线闸(INC-20260813-001)。位置刻意夹在这里:
+	//   - 必须在 resolveMembers 之后 —— 要查的是 BeginTeamMatch **冻结后**的那份名单,
+	//     与最终写进票据的是同一批人;
+	//   - 放在 preflightStartClaims 之前 —— claim 是有副作用的写(SETNX 占坑),
+	//     能在无副作用的读闸上拒掉的,就不要先去占坑再回滚。
+	if err := u.ensureAllPresent(ctx, members); err != nil {
+		return reject("member_offline", err)
 	}
 
 	if err := u.preflightStartClaims(ctx, members); err != nil {
-		return 0, err
+		return reject("start_claim", err)
 	}
 
 	nowMs := time.Now().UnixMilli()
@@ -756,7 +949,7 @@ func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID,
 	// RPC 的唯一提交点是 durable operation。票据主体→成员 compare-claim→queue ZADD
 	// 由服务生命周期 worker 推进；玩家断线、RPC ctx 取消或进程重启都不会中断 saga。
 	if err := u.repo.CreateStartOperation(ctx, op, u.ticketTTL()); err != nil {
-		return 0, err
+		return reject("create_start_operation", err)
 	}
 
 	plog.With(ctx).Debugw("msg", "match_start_accepted", "ticket_id", ticketID, "operation_id", op.OperationId, "team_id", teamID,
@@ -1202,7 +1395,7 @@ func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uin
 	// 在 team 的乐观锁内冻结名单(见 TeamReader.BeginTeamMatch)。READY / 队长 / 存在性
 	// 三项校验都挪到了那把锁里 —— 在这里再查一遍只会重新打开刚消灭的窗口。
 	// 租约用 rosterLockLeaseMs:够覆盖本函数返回后到 ClaimPlayer 落地这一小段即可。
-	team, err := u.reader.BeginTeamMatch(ctx, teamID, captainID, rosterLockOperationID(teamID, captainID), rosterLockLeaseMs)
+	team, readyGen, err := u.reader.BeginTeamMatch(ctx, teamID, captainID, rosterLockOperationID(teamID, captainID), rosterLockLeaseMs)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1220,6 +1413,8 @@ func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uin
 			Mmr:      tm.Mmr,
 			HeroId:   tm.HeroId,
 			Confirm:  confirmPending,
+			// 冻结名单那一刻的 team ready 代际;ReleaseMatch 回传给 EndTeamMatch 做跨代 CAS。
+			TeamReadyGeneration: readyGen,
 		})
 		sum += tm.Mmr
 	}
@@ -1443,6 +1638,9 @@ func (u *MatchUsecase) ReleaseMatch(ctx context.Context, matchID uint64, fallbac
 
 	// 收集成员 + 本局票据(match 镜像若已过期则仅靠 fallback 兜底清 claim)。
 	playerSet := make(map[uint64]struct{})
+	// teamRosters:本局 roster 按队伍分组,供释放时复位各队的准备状态
+	// (INC-20260813-001 第一根因:此前 team 侧没有任何 match-ended 路径)。
+	teamRosters := make(map[uint64]*teamRoster)
 	var ticketIDs []uint64
 	matchFound := false
 
@@ -1454,6 +1652,7 @@ func (u *MatchUsecase) ReleaseMatch(ctx context.Context, matchID uint64, fallbac
 		for _, pid := range memberPlayerIDs(m.Members) {
 			playerSet[pid] = struct{}{}
 		}
+		collectTeamRosters(teamRosters, m.Members)
 	}
 	for _, pid := range fallbackPlayerIDs {
 		if pid != 0 {
@@ -1506,6 +1705,7 @@ func (u *MatchUsecase) ReleaseMatch(ctx context.Context, matchID uint64, fallbac
 					playerSet[member.GetPlayerId()] = struct{}{}
 				}
 			}
+			collectTeamRosters(teamRosters, ticket.GetMembers())
 		}
 	}
 
@@ -1539,14 +1739,110 @@ func (u *MatchUsecase) ReleaseMatch(ctx context.Context, matchID uint64, fallbac
 		return joined
 	}
 
+	// 复位各队的准备状态(INC-20260813-001 第一根因)。
+	//
+	// 放在 claim 释放**之后**、DeleteMatch **之前**:
+	//   - 之后 —— claim 是玩家能不能开下一局的硬闸,不能被队伍状态的可用性拖住;
+	//   - 之前 —— 失败时保留 canonical match,让 battle_result 的 outbox 按同一份 roster
+	//     重投重试。吞掉这一步就等于让队伍永远停在 READY,那正是本事故的第一根因。
+	// team 侧对「已复位 / 队伍已解散 / 成员已离队」一律返回 OK,不会让 outbox 空转。
+	if err := u.endTeamMatches(ctx, matchID, teamRosters); err != nil {
+		return err
+	}
+
 	// 所有成员清理明确成功后，才硬删 match 镜像 + 移出 active。
 	if err := u.repo.DeleteMatch(ctx, matchID); err != nil {
 		return err
 	}
 
 	plog.With(ctx).Infow("msg", "match_released", "match_id", matchID,
-		"match_found", matchFound, "players", len(playerSet), "tickets", len(ticketIDs))
+		"match_found", matchFound, "players", len(playerSet), "tickets", len(ticketIDs),
+		"teams", len(teamRosters))
 	return nil
+}
+
+// collectTeamRosters 把成员按 team_id 分组累加(去重)。team_id==0 的成员是单人入口,
+// 没有队伍可复位,直接跳过。
+// teamRoster 是「本局属于某支队伍的成员 + 冻结时的 ready 代际」。
+//
+// 代际必须跟着 roster 一起带到 EndTeamMatch —— 它是跨代幂等的唯一凭据:
+// outbox 重投时若玩家已重新点准备 / 队长已开新局,代际早已前进,CAS 失败即 no-op,
+// 不会抹掉新意图(INC-20260813-001 ①)。
+type teamRoster struct {
+	players []uint64
+	// readyGeneration 取自本队任一成员(同队必然同值,都来自同一次 BeginTeamMatch)。
+	// 0 = 旧记录 / 旧 team 服务没回代际,EndTeamMatch 退化为「只在还挂着 ready 时复位」。
+	readyGeneration uint64
+}
+
+func collectTeamRosters(out map[uint64]*teamRoster, members []*matchv1.MatchMemberStorageRecord) {
+	for _, m := range members {
+		teamID, pid := m.GetTeamId(), m.GetPlayerId()
+		if teamID == 0 || pid == 0 {
+			continue
+		}
+		r := out[teamID]
+		if r == nil {
+			r = &teamRoster{}
+			out[teamID] = r
+		}
+		if r.readyGeneration == 0 {
+			r.readyGeneration = m.GetTeamReadyGeneration()
+		}
+		exists := false
+		for _, have := range r.players {
+			if have == pid {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			r.players = append(r.players, pid)
+		}
+	}
+}
+
+// endTeamMatches 逐队复位准备状态。任一队失败即整体返回错误,由上游 outbox 重投。
+// reader 未注入(team_addr 未配的骨架联调)时整段跳过,行为与本链落地前一致。
+//
+// # 滚动升级共存窗口刻意做成「无顺序依赖」(§9.21)
+//
+// 本调用是 matchmaker 新增的**跨服务出站依赖**。若把 team 未升级(Unimplemented)也当成
+// 普通失败,就等于给发布引入一条「team 必须先于 matchmaker 上线」的顺序约束 ——
+// 而 §9.21 要求滚动升级双向兼容,不得依赖发布顺序;真依赖顺序的话,顺序一旦搞错,
+// outbox 会一直空转、canonical match 持续积压,且**没有任何机械手段能拦住这种搞错**。
+//
+// 所以这里把两类错误分开:
+//   - `ErrNotImplemented`(对端还没这个能力)→ **弱依赖降级**:Warn + 跳过。
+//     降级是安全的 —— 跳过的后果恰好等于本修复落地之前的行为(队伍停在 READY),
+//     不产生任何新的错误状态;而 team 一旦滚上新版本,此后每一局的释放都会正常复位。
+//     反过来若在这里 fail-closed,团队状态**同样**停在 READY(调用根本没成功),
+//     只是额外多了一堆积压 —— 严格更差。
+//   - 其它任何错误(team 挂了 / 超时 / 业务冲突)→ 如实上抛,由 outbox 重投到成功。
+func (u *MatchUsecase) endTeamMatches(ctx context.Context, matchID uint64, rosters map[uint64]*teamRoster) error {
+	if u.reader == nil || len(rosters) == 0 {
+		return nil
+	}
+	var joined error
+	for teamID, r := range rosters {
+		players := r.players
+		err := u.reader.EndTeamMatch(ctx, teamID, players, r.readyGeneration)
+		if err == nil {
+			continue
+		}
+		if errcode.As(err) == errcode.ErrNotImplemented {
+			// 共存窗口:重试永远不会成功,重投只会积压。
+			plog.With(ctx).Warnw("msg", "match_release_end_team_unsupported",
+				"match_id", matchID, "team_id", teamID, "err", err,
+				"hint", "team 尚未滚到带 EndTeamMatch 的版本;本局队伍不复位准备状态(等同修复前行为),team 升级后自动恢复")
+			continue
+		}
+		plog.With(ctx).Warnw("msg", "match_release_end_team_failed",
+			"match_id", matchID, "team_id", teamID, "players", len(players), "err", err,
+			"hint", "队伍会停在 READY,队长可能带着还没回大厅的队友再开一局;outbox 会重试")
+		joined = errors.Join(joined, fmt.Errorf("end team match team=%d: %w", teamID, err))
+	}
+	return joined
 }
 
 // releasePlayerClaim 释放单个玩家的 player→ticket 归属,但仅当其当前 claim 确属本局
@@ -2763,6 +3059,11 @@ func (u *MatchUsecase) matchTickOnce(ctx context.Context) {
 		if err := u.livenessSweepOnce(ctx); err != nil {
 			plog.With(ctx).Warnw("msg", "liveness_sweep_failed", "err", err)
 		}
+		// 排队票离线回收(INC-20260814-001):与上一道共用节流,证据链却不同——
+		// 按「离开多久」判(absentBeyond),liveness_gate 关闭时也生效。
+		if err := u.queueAbsenceSweepOnce(ctx); err != nil {
+			plog.With(ctx).Warnw("msg", "queue_absence_sweep_failed", "err", err)
+		}
 	}
 }
 
@@ -3373,6 +3674,11 @@ func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchT
 	if err := u.tryFormCooldown(ctx, ticket.TicketId); err != nil {
 		return err
 	}
+	// 成局前离场复查(INC-20260814-001):solo/walk-in 票同样可能是隔夜幽灵票
+	// (单人排队后关客户端,恰好是本事故的形状),不复查就直接白拉一台 DS。
+	if err := u.rejectAbsentTickets(ctx, []*matchv1.MatchTicketStorageRecord{ticket}); err != nil {
+		return err
+	}
 	// 每次成局用新雪花 match_id,与 formMatch(撮合路径)同型。此前 solo 复用
 	// ticket_id 做 match_id:退票重排队不换 ticket_id ⇒ 同一 match_id 反复成局,
 	// 会撞 ds_allocator 侧保留 2h 的 uncertain/abandoned claim(同上决策文档 §2.3,
@@ -3427,7 +3733,8 @@ func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchT
 
 	u.notifyMatching(ctx, memberPlayerIDs(members), matchID)
 	plog.With(ctx).Infow("msg", "solo_match_found", "match_id", matchID, "ticket_id", ticket.TicketId,
-		"players", len(members), "operation_id", queued.GetAllocationOperationId())
+		"players", len(members), "operation_id", queued.GetAllocationOperationId(),
+		"ticket_age_ms", oldestTicketAgeMs(now, []*matchv1.MatchTicketStorageRecord{ticket}))
 	// 只持久登记 allocation job；后台 worker 负责 Allocate→placement→READY。
 	return nil
 }
@@ -3449,6 +3756,16 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTi
 	// 生效,否则同一批票据每 tick 重新组局→分配→再失败,与 solo 是同一个风暴。
 	if u.anyTicketInFormCooldown(ctx, sides) {
 		return errcode.New(errcode.ErrRateLimited, "tickets in form cooldown")
+	}
+	// 成局前离场复查(INC-20260814-001):扫除是 10s 节流的,旧票可能在两次扫除之间
+	// 被凑进局。这里用**装箱后的最终票据集合**再查一次,含离场超窗成员的票当场回收,
+	// 无辜票据留在队列由下轮重新凑局,不整组陪葬。
+	flat := make([]*matchv1.MatchTicketStorageRecord, 0, totalTickets)
+	for _, side := range sides {
+		flat = append(flat, side...)
+	}
+	if err := u.rejectAbsentTickets(ctx, flat); err != nil {
+		return err
 	}
 	matchID := u.idGen.Generate()
 	now := time.Now().UnixMilli()
@@ -3542,8 +3859,16 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTi
 	// 推 FOUND → CONFIRM 进度给全体(原则 3 例外:含发起方)
 	u.pushProgress(ctx, matchID, stageFound, members, "", match.MapId)
 	u.pushProgress(ctx, matchID, stageConfirm, members, "", match.MapId)
+	// ticket_ids + 票龄进日志(INC-20260814-001 可观测性缺口):此前只有 players=N,
+	// 幽灵票成局后要跨三个服务的日志反查才能定位到隔夜旧票。
+	oldestAgeMs := oldestTicketAgeMs(now, flat)
 	plog.With(ctx).Infow("msg", "match_found", "match_id", matchID, "players", len(members),
-		"auto_confirm", u.cfg.AutoConfirmMatch)
+		"auto_confirm", u.cfg.AutoConfirmMatch, "ticket_ids", ticketIDs,
+		"oldest_ticket_age_ms", oldestAgeMs)
+	if oldestAgeMs > staleTicketWarnAge.Milliseconds() {
+		plog.With(ctx).Warnw("msg", "stale_ticket_matched", "match_id", matchID,
+			"oldest_ticket_age_ms", oldestAgeMs, "ticket_ids", ticketIDs)
+	}
 	if u.cfg.AutoConfirmMatch {
 		plog.With(ctx).Debugw("msg", "match_allocation_queued", "match_id", matchID,
 			"operation_id", queued.GetAllocationOperationId())
@@ -3740,6 +4065,169 @@ func (u *MatchUsecase) livenessSweepOnce(ctx context.Context) error {
 			"ticket_id", t.TicketId, "members", len(t.Members))
 	}
 	return nil
+}
+
+// ── 排队票离线回收(INC-20260814-001) ─────────────────────────────────────────
+
+// queueAbsenceReapAfter 返回排队票离线回收的判死窗;<=0 表示整条回收关闭。
+func (u *MatchUsecase) queueAbsenceReapAfter() time.Duration {
+	return u.cfg.QueueAbsenceReapAfter.Std()
+}
+
+// queueAbsenceSweepOnce 周期回收「玩家已离场超过判死窗」的排队票(INC-20260814-001
+// 隔夜幽灵票:排队后关客户端,无任何链路把非终态票转终态,次日被拿去和新玩家成局)。
+//
+// 与 livenessSweepOnce(已回退关闭)的本质区别是证据:那道门按「locator 此刻查不查得到」
+// 判死,对正常路径上的投影缺席是结构性假阳性(INC-20260724-001);本回收按「离开了多久」
+// 判(absentBeyond:BatchOnline + BatchGetLastSeen,UNKNOWN 一律放行),证据由 Hub DS
+// 心跳按 census 全员持续续期,坐在大厅里的人 last_alive_ms 恒为「刚刚」,不会被误杀。
+//
+// 弱依赖:presence 未注入 / 窗口关闭 → 跳过;查询失败 → Warn 后整轮跳过,绝不在
+// 不确定时删票。删除守卫:reapAbsentTicket 的 DeleteTicketIfUnmatched(WATCH CAS),
+// 撞上并发撮合预留则放弃(该票已进 match,交给确认期/DS roster 到齐期限兜底)。
+func (u *MatchUsecase) queueAbsenceSweepOnce(ctx context.Context) error {
+	window := u.queueAbsenceReapAfter()
+	if u.presence == nil || window <= 0 {
+		return nil
+	}
+	ticketIDs, err := u.repo.RangeQueueTickets(ctx)
+	if err != nil {
+		return err
+	}
+	if len(ticketIDs) == 0 {
+		return nil
+	}
+
+	tickets := make([]*matchv1.MatchTicketStorageRecord, 0, len(ticketIDs))
+	playerIDs := make([]uint64, 0, len(ticketIDs))
+	for _, tid := range ticketIDs {
+		t, found, gerr := u.repo.GetTicket(ctx, tid)
+		if gerr != nil || !found || t.MatchId != 0 {
+			continue // 已消失 / 已进 match 的票据不归本回收管
+		}
+		tickets = append(tickets, t)
+		playerIDs = append(playerIDs, memberPlayerIDs(t.Members)...)
+	}
+	if len(tickets) == 0 {
+		return nil
+	}
+
+	offline, _, op, err := u.absentBeyond(ctx, playerIDs, window)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "queue_absence_sweep_skipped", "op", op, "err", err)
+		return nil // 弱依赖:presence 抖动不误删任何票
+	}
+	if len(offline) == 0 {
+		return nil
+	}
+	offlineSet := make(map[uint64]struct{}, len(offline))
+	for _, pid := range offline {
+		offlineSet[pid] = struct{}{}
+	}
+
+	for _, t := range tickets {
+		absent := ticketAbsentMembers(t, offlineSet)
+		if len(absent) == 0 {
+			continue
+		}
+		u.reapAbsentTicket(ctx, t, absent, "sweep")
+	}
+	return nil
+}
+
+// rejectAbsentTickets 成局装箱前的最终复查(与队列扫除同判据、同判死窗):任一票含
+// 离场超窗成员 → 当场回收该票并拒绝本次成局,其余无辜票留队下轮再凑。堵的是扫除
+// 节流间隔(10s)内旧票恰好被凑进局的竞态窗——没有这道复查,幽灵票在两次扫除之间
+// 仍能成局一次。
+//
+// 弱依赖方向与扫除一致但动作相反:presence 查询失败 → 放行成局(fail-open)。
+// 本复查是纵深防御,不给 locator 抖动阻断全部成局的权力;真离线成员被凑进去后,
+// 由 DS 侧 roster 到齐期限(roster_join_deadline)兜底回收对局。
+func (u *MatchUsecase) rejectAbsentTickets(ctx context.Context, tickets []*matchv1.MatchTicketStorageRecord) error {
+	window := u.queueAbsenceReapAfter()
+	if u.presence == nil || window <= 0 || len(tickets) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(tickets))
+	for _, t := range tickets {
+		ids = append(ids, memberPlayerIDs(t.Members)...)
+	}
+	offline, _, op, err := u.absentBeyond(ctx, ids, window)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "match_form_absence_check_skipped", "op", op, "err", err)
+		return nil
+	}
+	if len(offline) == 0 {
+		return nil
+	}
+	offlineSet := make(map[uint64]struct{}, len(offline))
+	for _, pid := range offline {
+		offlineSet[pid] = struct{}{}
+	}
+	reaped := 0
+	for _, t := range tickets {
+		absent := ticketAbsentMembers(t, offlineSet)
+		if len(absent) == 0 {
+			continue
+		}
+		if u.reapAbsentTicket(ctx, t, absent, "form_recheck") {
+			reaped++
+		}
+	}
+	return errcode.New(errcode.ErrMatchMemberOffline,
+		"players %v absent beyond %s; reaped %d stale ticket(s) before forming match",
+		offline, window, reaped)
+}
+
+// reapAbsentTicket CAS 回收一张仍未撮合的陈旧票并释放全体成员归属。
+// 撞上并发预留(票已进 match)或删除失败 → 放弃返回 false,下轮扫除/成局复查兜底。
+func (u *MatchUsecase) reapAbsentTicket(ctx context.Context, t *matchv1.MatchTicketStorageRecord, absent []uint64, via string) bool {
+	deleted, _, derr := u.repo.DeleteTicketIfUnmatched(ctx, t.TicketId)
+	if derr != nil || !deleted {
+		return false
+	}
+	u.rollbackClaims(ctx, t.TicketId, memberPlayerIDs(t.Members))
+	// FAILED 推给票据全体成员:同票在线队友立刻知道排队被取消;离场者本人收不到,
+	// 重连后 GetMatchProgress 兜底。
+	u.pushProgress(ctx, t.TicketId, stageFailed, t.Members, "", t.MapId)
+	queuedMs := int64(0)
+	if t.GetEnqueuedAtMs() > 0 {
+		queuedMs = time.Now().UnixMilli() - t.GetEnqueuedAtMs()
+	}
+	plog.With(ctx).Infow("msg", "queue_absence_reaped_ticket",
+		"ticket_id", t.TicketId, "members", len(t.Members),
+		"absent_players", absent, "queued_ms", queuedMs, "via", via)
+	return true
+}
+
+// ticketAbsentMembers 返回票内命中离场集合的成员列表。
+func ticketAbsentMembers(t *matchv1.MatchTicketStorageRecord, offline map[uint64]struct{}) []uint64 {
+	var out []uint64
+	for _, m := range t.GetMembers() {
+		if _, off := offline[m.GetPlayerId()]; off {
+			out = append(out, m.GetPlayerId())
+		}
+	}
+	return out
+}
+
+// staleTicketWarnAge 成局时最老票据排队时长的告警阈值:超过即打 stale_ticket_matched。
+// 正常撮合排队远短于此;命中多半意味着离线回收链路失效(INC-20260814-001 的形状)。
+const staleTicketWarnAge = 10 * time.Minute
+
+// oldestTicketAgeMs 返回这批票据里最老一张的排队时长(ms);全部无 enqueued_at_ms
+// (滚动升级期旧票)时返回 0,调用方按「无票龄信息」处理,不触发告警。
+func oldestTicketAgeMs(nowMs int64, tickets []*matchv1.MatchTicketStorageRecord) int64 {
+	var oldestEnqueued int64
+	for _, t := range tickets {
+		if at := t.GetEnqueuedAtMs(); at > 0 && (oldestEnqueued == 0 || at < oldestEnqueued) {
+			oldestEnqueued = at
+		}
+	}
+	if oldestEnqueued == 0 {
+		return 0
+	}
+	return nowMs - oldestEnqueued
 }
 
 // ── push 辅助 ─────────────────────────────────────────────────────────────────

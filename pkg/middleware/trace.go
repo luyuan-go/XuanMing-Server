@@ -83,14 +83,49 @@ func Trace() middleware.Middleware {
 	}
 }
 
+// MaxTraceIDLen 是入站 trace_id 的长度上限。UUID 是 36 字符,留一倍余量给
+// 「客户端本地 trace + 序号」这类拼接格式,超出即视为不可信、改为服务端重新生成。
+const MaxTraceIDLen = 64
+
 // extractTraceID 从 Kratos transport 抽象中拿 trace_id(server 入站方向)。
+//
+// ⚠️ 客户端面(:8443)的 envoy 只无条件剥离 x-pandora-player-id / x-pandora-jwt-payload
+// 这两个**身份**头,x-pandora-trace-id 是原样透传的——即 UE 客户端 / DS 自带的 trace_id
+// 会被后端全链采纳并写进每一条日志。trace_id 不是信任边界(不参与鉴权、不做 metric label),
+// 采纳外部值正是跨进程串联所必需;但取值本身必须先过闸,否则一个畸形客户端就能往全服日志里
+// 灌任意长度 / 任意字节的内容(日志膨胀、下游日志系统解析异常、伪造出以假乱真的 trace 行)。
+// 故这里只接受「有界长度 + 安全字符集」的值,不合规一律丢弃并由调用方生成新的。
 func extractTraceID(ctx context.Context) string {
 	if tr, ok := transport.FromServerContext(ctx); ok {
-		if v := tr.RequestHeader().Get(MetadataKeyTraceID); v != "" {
+		if v := tr.RequestHeader().Get(MetadataKeyTraceID); isSafeTraceID(v) {
 			return v
 		}
 	}
 	return ""
+}
+
+// isSafeTraceID 判定入站 trace_id 是否可直接采纳。
+//
+// 允许字符集 = ASCII 字母数字 + '-' + '_',覆盖 UUID、hex、base64url 风格的 ID。
+// 显式排除空格 / 控制字符 / 换行 / 非 ASCII:换行会让按行切分的日志管道把一条日志
+// 拆成多条(可伪造出看似来自其它服务的日志行),控制字符与多字节序列则会打穿下游
+// 解析器。空值返回 false,让调用方走生成分支。
+func isSafeTraceID(v string) bool {
+	if v == "" || len(v) > MaxTraceIDLen {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		c := v[i]
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9':
+		case c == '-' || c == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // extractPlayerID 从 metadata 拿 player_id(Envoy / gateway 鉴权后注入到 header)。

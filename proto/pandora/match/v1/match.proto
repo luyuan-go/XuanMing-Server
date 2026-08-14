@@ -277,6 +277,14 @@ message MatchMemberStorageRecord {
   MatchConfirmStatus confirm   = 6;  // 确认期状态
   // 7-9 reserved
   reserved 7 to 9;
+  // team_ready_generation:BeginTeamMatch 冻结本队名单那一刻的 ready 代际
+  // (INC-20260813-001 ①)。ReleaseMatch 调 EndTeamMatch 时原样回传,作为
+  // 「这次复位对应的正是这一局」的 CAS 凭据。
+  //
+  // 挂在成员上而不是另起一个 per-team 结构:它本就是「这名成员是在 team 的哪一代被冻进来的」,
+  // 同队成员取值必然相同,而 match 记录的成员列表本来就整条透传 —— 不需要任何新的装配。
+  // 0 = 旧 team / 旧 matchmaker 写的记录,EndTeamMatch 按「代际未知」退化处理。
+  uint64 team_ready_generation = 10;
 }
 
 // MatchTicketStorageRecord 是排队票据(一个 team = 一张票)。

@@ -413,6 +413,32 @@ type AllocatorConf struct {
 	// 上限保证 no-show 不会比普通空场还晚回收)。
 	NoShowBattleTimeout config.Duration `yaml:"no_show_battle_timeout,omitempty" json:"no_show_battle_timeout,omitempty"`
 
+	// RosterJoinDeadline 花名册到齐期限(默认 45s;**负值**关闭整道闸,0=用默认)。
+	//
+	// 上面两个阈值都只管「一个人都没有」,拦不住**来了但没来齐**:INC-20260813-001 里
+	// DS 拿到 6 人 roster、只进来 5 个,player_count 恒为 5,空场计时器一次都没起过,
+	// 一场 3v2 就这么打完了(DS 的终局判定还按 roster=6 算)。
+	//
+	// 判据是 DS 心跳捎带的**在场名单**(census)与 roster 的差集,不是 player_count ——
+	// 数字对不上只能说明少人,说不出少的是谁,也就没法只罚缺席者。DS 不上报 census
+	// (legacy / local-off-v1 档)时本闸整道跳过,绝不拿 roster 数量硬猜。
+	//
+	// 只在**开局阶段**生效:一旦全员同时在场过(roster_ever_complete 置位)就永久豁免,
+	// 此后的掉线交回 EmptyBattleTimeout。少了这条,任何一次局中掉线都会在 deadline 后
+	// 把一场正打着的对局判弃 —— 那比本事故严重得多。
+	//
+	// 默认 45s(用户拍板)。**这是一个显式的取舍,不是推导出来的安全上界**:
+	//   - 偏短的收益:在场那几位少干等。缺员局本来就打不成,拖满两分半是纯浪费;
+	//   - 偏短的代价:客户端冷加载慢的人可能来不及连进来,把一局**本可成立**的对局判弃。
+	// 严格安全的上界是 DSTicket v2 TTL(120s)+ 余量 = 150s —— 票据过期后缺席者物理上
+	// 再也进不来,那之后判弃绝不会误伤。45s 用可用性换了体验,须用实测复核:
+	// **上线前必须量「DS ready → 最后一个 Join succeeded」的 P99**,超过本值就得调大。
+	//
+	// 下限 RosterJoinDeadlineFloor(30s)防手滑配出「加载慢一点就被判弃」。
+	// 刻意**不**复用 NoShowTimeoutFloor(60s):那条守的是「全场没人」,允许等更久;
+	// 本闸守的是「差几个人」,在场玩家在干等,两者的时间尺度本就不同。
+	RosterJoinDeadline config.Duration `yaml:"roster_join_deadline,omitempty" json:"roster_join_deadline,omitempty"`
+
 	// ── no-show 记账 → 进入侧退避(anti-abuse §4.3③/§6 第 8 项,2026-08-10 拍板温和档)──
 	// 只有 reason=no_show 的空场判弃才记账(正常结算 / 断线重连 / 主动取消都不计);
 	// 记账在本服务(判弃权威),执行在 matchmaker StartMatch(读 pandora:rl:match:noshowcd)。
@@ -489,6 +515,22 @@ const (
 	// 正在 travel」的正常玩家,把防刷改动变成"玩家进不去场景"(§9.20 红线)。
 	// 手滑配 1s 必须被钳住并留日志,而不是静默生效。
 	NoShowTimeoutFloor = 60 * time.Second
+
+	// DefaultRosterJoinDeadline 花名册到齐期限的默认值(用户拍板 45s)。
+	// 取舍与实测要求见 RosterJoinDeadline 注释 —— 它不是安全上界,是可用性与体验的折中。
+	DefaultRosterJoinDeadline = 45 * time.Second
+
+	// RosterJoinDeadlineFloor 到齐期限下限护栏。配得比这更短会开始误杀「正在加载地图 /
+	// 还在 travel」的正常玩家 —— 那是把一局本可成立的对局判弃,比晚回收严重。
+	RosterJoinDeadlineFloor = 30 * time.Second
+
+	// DefaultReadyWaitTimeout 是 ReadyWaitTimeout 未配时的兜底,仅供
+	// ResolveRosterJoinArmWindow 推导时间窗用(实际等待逻辑另有 editor/packaged 分档)。
+	DefaultReadyWaitTimeout = 120 * time.Second
+
+	// RosterJoinArmSlack 是到齐期限武装窗的余量,取一个心跳周期量级:
+	// 时间窗判定发生在心跳里,少了余量会在边界上抖动(同一局忽而可武装忽而不可)。
+	RosterJoinArmSlack = 30 * time.Second
 )
 
 // ResolveNoShowTimeout 返回「从未连入」(ever_had_players=false)局实际生效的空场回收阈值。
@@ -519,6 +561,54 @@ func (c AllocatorConf) ResolveNoShowTimeout() time.Duration {
 		noShow = empty
 	}
 	return noShow
+}
+
+// ResolveRosterJoinDeadline 解析花名册到齐期限,含钳制与禁用语义。
+// 负值 = 显式关闭整道闸;0 = 默认 45s;正值钳到 [RosterJoinDeadlineFloor, +∞)。
+//
+// 刻意**不**用 EmptyBattleTimeout 做上限(no-show 那条要):本闸判的是开局到齐,
+// 与「打到一半全员掉线」的回收窗没有可比性,拿后者钳前者只会把语义搅在一起。
+// ResolveRosterJoinArmWindow 返回「到齐期限这道闸还允许被武装」的时间窗,自 allocated_at_ms 起算。
+// 超过本窗后任何副本都**永不**再武装本闸,即使 roster_ever_complete 还没被置位。
+//
+// # 为什么光有 roster_ever_complete 不够(滚动升级)
+//
+// roster_ever_complete 是「本局曾经全员同时在场」的记忆,由**新版**副本写。滚动升级时:
+// 一局在**旧副本**手里已经全员到齐过(没人写这个标记)→ 打到一半有人掉线 → 心跳被**新副本**
+// 接手 → 新副本看到 census 缺人且标记为假 → 起表 → deadline 到 → **判弃一场正在打的对局**。
+// 那比本闸要防的缺员局严重得多。
+//
+// 时间窗只能保护**已经超过窗口**的老 battle:过窗后新副本无论是否见过到齐事实都不会动手。
+// 它不能保护窗口内的混版接管 —— 旧副本已见过全员到齐、新副本接手时恰好缺人的局仍会
+// 被误武装。因此本守卫只是纵深防御,不能代替 observe → policy generation enforce 的发布协议。
+//
+// 取值 = ReadyWaitTimeout + RosterJoinDeadline + 一个心跳周期的余量:
+// 必须盖住「分配 → DS 报 ready → 玩家 travel/加载/连入」的最坏合法耗时,否则会把
+// 冷启动慢的正常局提前放过(漏防);又不能大到覆盖整局(那就退回上面那个危险)。
+func (c AllocatorConf) ResolveRosterJoinArmWindow() time.Duration {
+	deadline := c.ResolveRosterJoinDeadline()
+	if deadline <= 0 {
+		return 0 // 闸本身关着
+	}
+	ready := c.ReadyWaitTimeout.Std()
+	if ready <= 0 {
+		ready = DefaultReadyWaitTimeout
+	}
+	return ready + deadline + RosterJoinArmSlack
+}
+
+func (c AllocatorConf) ResolveRosterJoinDeadline() time.Duration {
+	d := c.RosterJoinDeadline.Std()
+	switch {
+	case d < 0:
+		return 0 // 显式关闭
+	case d == 0:
+		d = DefaultRosterJoinDeadline
+	}
+	if d < RosterJoinDeadlineFloor {
+		d = RosterJoinDeadlineFloor
+	}
+	return d
 }
 
 // Defaults 填默认值。

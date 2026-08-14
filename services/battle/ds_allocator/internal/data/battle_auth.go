@@ -26,6 +26,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/dsauthrecord"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 )
 
@@ -135,6 +136,18 @@ type BattleHeartbeatInput struct {
 	// 心跳且首尾跨度 ≥SpanMs。Beats≤1 且 SpanMs≤0 时门关闭(零值兼容旧行为)。
 	StabilityBeats  int
 	StabilitySpanMs int64
+	// RosterJoinDeadline 花名册到齐期限(INC-20260813-001),0 = 关闭本闸。
+	// 上面两个空场阈值都只管「一个人都没有」,拦不住「来了但没来齐」。
+	RosterJoinDeadline time.Duration
+	// RosterJoinArmWindow 是本闸「还允不允许被武装」的时间窗(自 allocated_at 起算)。
+	// 滚动升级中新副本接手一局**老** battle 时,过窗即不动手 —— 否则会把「局中掉线」
+	// 误判成「开局没到齐」,判弃一场正在打的对局(推导见 conf.ResolveRosterJoinArmWindow)。
+	RosterJoinArmWindow time.Duration
+	// CensusPresent / ActivePlayerIDs 是 DS 上报的真实在场名单。
+	// **CensusPresent=false 时本闸整道跳过** —— 拿 PlayerCount 硬猜既说不出缺的是谁
+	// (就没法只罚缺席者),也会在 legacy / local-off-v1 档把每一局都判成缺员。
+	CensusPresent   bool
+	ActivePlayerIDs []uint64
 }
 
 // BattleActivateResult 同时承载 pending→active ACK 和事务提交后的 Battle 镜像。
@@ -146,10 +159,13 @@ type BattleActivateResult struct {
 	// FirstAbandon 只在本事务首次把 active battle 推进为 abandoned 时为 true；
 	// 外层仅赢家执行一次 Pod 回收，补偿投递仍可由 sweep 幂等重试。
 	FirstAbandon bool
-	Terminal     bool
-	HeartbeatMs  int64
-	Active       BattleCredentialIdentity
-	Battle       *dsv1.BattleStorageRecord
+	// RosterIncomplete 表示本次判弃的原因是「花名册没到齐」(INC-20260813-001),
+	// 而不是空场。外层据此改记罚对象:只罚缺席者,不罚按时到场的人。
+	RosterIncomplete bool
+	Terminal         bool
+	HeartbeatMs      int64
+	Active           BattleCredentialIdentity
+	Battle           *dsv1.BattleStorageRecord
 }
 
 // BattleAbandonResult 是 sweep 原子 stale 判定与终止结果。
@@ -340,6 +356,42 @@ func (r *RedisBattleAuthRepo) marshalBattleTransition(previous, next *dsv1.Battl
 }
 
 var errBattleAuthStale = errcode.New(errcode.ErrUnauthorized, "battle ds credential not authoritative")
+
+// battleAuthStale 打一条带**枚举 reason** 的授权拒绝日志,再返回同一个 errBattleAuthStale。
+//
+// 为什么必须有:ActivateHeartbeat 里有近十条互不相同的 fencing 规则,全部收敛成同一个
+// errBattleAuthStale(= ErrUnauthorized)。而 ErrUnauthorized 不属 errcode.IsServerFault,
+// pkg/middleware/logging.go 只把它记成 rpc_ok=DEBUG —— 线上默认 info 级下,
+// 「DS 的心跳被拒了」和「为什么被拒」**两件事都看不见**。这正是 §11.3 R2 点名的形态:
+// "一个 if 收敛了 N 个条件的,必须拆成 N 个 reason"。
+//
+// 返回值与行为**完全不变**(同一个 sentinel,同一个错误码),只多一条日志。
+// 每个拒绝点至多打一条:bizErr 一旦置位,外层 CAS 循环立即 return,不会因 WATCH 重跑重复。
+func battleAuthStale(
+	ctx context.Context, matchID uint64, id BattleCredentialIdentity, reason string, kv ...any,
+) error {
+	fields := []any{
+		"msg", "battle_ds_auth_rejected", "match_id", matchID, "reason", reason,
+		"pod", id.PodName, "uid", id.InstanceUID, "epoch", id.InstanceEpoch,
+		"gen", id.Gen, "jti", id.JTI, "writer_epoch", id.WriterEpoch,
+	}
+	plog.With(ctx).Warnw(append(fields, kv...)...)
+	return errBattleAuthStale
+}
+
+// ActivateHeartbeat 的授权拒绝 reason 枚举(§11.3 R2)。命名对齐各自的判定依据,
+// 一条规则一个值,snake_case 稳定不变。
+const (
+	authRejectIdentityInvalid    = "credential_identity_invalid"   // 五元组不全 / 已过期
+	authRejectBindingMismatch    = "authority_binding_mismatch"    // auth↔battle 绑定或 pod/uid/epoch/writer_epoch 对不上
+	authRejectTerminatingPhase   = "auth_terminating_non_terminal" // TERMINATING 但对局非终态或凭据不匹配
+	authRejectPhaseLocked        = "auth_phase_locked"             // QUARANTINED 等锁定相位
+	authRejectNoUsableCredential = "no_usable_credential"          // 相位/pending/active 组合都不构成可用凭据
+	authRejectGenBelowHighWater  = "gen_below_high_water"          // 代际低于高水位(旧凭据重放)
+	authRejectPromoteOnTerminal  = "promote_on_terminal_battle"    // 终态对局上提升新凭据
+	authRejectStateNotReadyRun   = "promote_state_not_ready"       // 首次激活自报的 state 不是 ready/running
+)
+
 var errBattleResultNotRecorded = errcode.New(errcode.ErrInvalidState, "battle result is not authoritatively recorded")
 var errBattleResultCommitted = errcode.New(errcode.ErrInvalidState, "battle result already committed; credential rotation is fenced")
 
@@ -743,7 +795,8 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 		return BattleActivateResult{}, errcode.New(errcode.ErrInvalidArg, "battle heartbeat requires match/ttls/player_count/state")
 	}
 	if !validBattleIdentity(id, serverNowMs) {
-		return BattleActivateResult{}, errBattleAuthStale
+		return BattleActivateResult{}, battleAuthStale(ctx, matchID, id, authRejectIdentityInvalid,
+			"exp_ms", id.ExpMs, "server_now_ms", serverNowMs)
 	}
 	aKey, bKey := battleAuthKey(matchID), battleKey(matchID)
 	rKey := dsauthrecord.BattleResultReceiptKey(matchID)
@@ -752,7 +805,9 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 	for attempt := 0; attempt < battleAuthCASRetries; attempt++ {
 		serverNowMs = r.now().UnixMilli()
 		if !validBattleIdentity(id, serverNowMs) {
-			return BattleActivateResult{}, errBattleAuthStale
+			// 重试期间凭据过期:与入口那条同 reason,靠 attempt 字段区分。
+			return BattleActivateResult{}, battleAuthStale(ctx, matchID, id, authRejectIdentityInvalid,
+				"exp_ms", id.ExpMs, "server_now_ms", serverNowMs, "attempt", attempt)
 		}
 		var bizErr error
 		out = BattleActivateResult{}
@@ -767,25 +822,33 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 				auth.DsPodName != id.PodName || auth.InstanceUid != id.InstanceUID ||
 				auth.InstanceEpoch != id.InstanceEpoch || id.WriterEpoch != BattleDSWriterEpochV2 ||
 				!battleAuthRecordV2Exact(auth) {
-				bizErr = errBattleAuthStale
+				// 最常见的一条:pod 重建 / 重分配后旧 DS 还在心跳,或 writer_epoch 不是 v2。
+				// 把权威侧的实际值一并打出来,才能一眼看出是哪一格对不上。
+				bizErr = battleAuthStale(ctx, matchID, id, authRejectBindingMismatch,
+					"auth_pod", auth.DsPodName, "auth_uid", auth.InstanceUid,
+					"auth_epoch", auth.InstanceEpoch, "auth_allocation_id", auth.AllocationId,
+					"battle_allocation_id", battle.GetAllocationId(), "battle_state", battle.GetState())
 				return bizErr
 			}
 			// 终态后的同一 active 凭据允许拿到 stop/ACK，但永不续心跳或刷新 TTL；
 			// QUARANTINED 及其它锁定组合仍严格拒绝。
 			if auth.Phase == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING {
 				if battleTerminal(battle.State) && battleCredentialMatches(auth.Active, id, serverNowMs) {
-					out = activateResult(auth, battle, false, false, true)
+					out = activateResult(auth, battle, false, false, false, true)
 					_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 						pipe.Exists(ctx, aKey, bKey)
 						return nil
 					})
 					return err
 				}
-				bizErr = errBattleAuthStale
+				bizErr = battleAuthStale(ctx, matchID, id, authRejectTerminatingPhase,
+					"battle_state", battle.GetState())
 				return bizErr
 			}
 			if battleAuthPhaseLocked(auth.Phase) {
-				bizErr = errBattleAuthStale
+				bizErr = battleAuthStale(ctx, matchID, id, authRejectPhaseLocked,
+					"phase", auth.Phase.String(), "battle_state", battle.GetState(),
+					"hint", "授权已被隔离/回收链锁死,该实例不可能再被授权;这台 DS 会收到 stop")
 				return bizErr
 			}
 
@@ -801,11 +864,16 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 				battleCredentialComplete(auth.Active, auth, serverNowMs) &&
 				battleCredentialMatches(auth.Active, id, serverNowMs):
 			default:
-				bizErr = errBattleAuthStale
+				bizErr = battleAuthStale(ctx, matchID, id, authRejectNoUsableCredential,
+					"phase", auth.Phase.String(), "delivered_rv", auth.DeliveredRv,
+					"has_pending", auth.GetPending() != nil, "has_active", auth.GetActive() != nil,
+					"hint", "凭据既不匹配 pending 也不匹配 active:多半是凭据投递未完成或 DS 拿的是上一代")
 				return bizErr
 			}
 			if auth.HighWaterGen < id.Gen {
-				bizErr = errBattleAuthStale
+				bizErr = battleAuthStale(ctx, matchID, id, authRejectGenBelowHighWater,
+					"high_water_gen", auth.HighWaterGen,
+					"hint", "上报代际高于权威高水位 = 凭据不可能出自本权威")
 				return bizErr
 			}
 			if promote {
@@ -830,7 +898,8 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 			}
 			if battleTerminal(battle.State) {
 				if promote {
-					bizErr = errBattleAuthStale
+					bizErr = battleAuthStale(ctx, matchID, id, authRejectPromoteOnTerminal,
+						"battle_state", battle.State)
 					return bizErr
 				}
 				auth.Phase = dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING
@@ -856,12 +925,14 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 					return nil
 				})
 				if err == nil {
-					out = activateResult(auth, battle, false, false, true)
+					out = activateResult(auth, battle, false, false, false, true)
 				}
 				return err
 			}
 			if promote && in.State != "ready" && in.State != "running" {
-				bizErr = errBattleAuthStale
+				bizErr = battleAuthStale(ctx, matchID, id, authRejectStateNotReadyRun,
+					"reported_state", in.State, "battle_state", battle.GetState(),
+					"hint", "首次激活只接受 DS 自报 ready/running;其它值(含被白名单归一成空串的)一律拒")
 				return bizErr
 			}
 			if promote && auth.Active == nil {
@@ -891,6 +962,8 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 					return err
 				}
 			}
+			// 与 promote 同一层作用域:WATCH 冲突重跑时整个闭包重来,标记天然按轮重置。
+			rosterIncomplete := false
 			if promote {
 				auth.Active = auth.Pending
 				auth.Pending = nil
@@ -927,6 +1000,31 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 					battle.EmptySinceMs = serverNowMs
 				case timeout > 0 && serverNowMs-battle.EmptySinceMs >= timeout.Milliseconds():
 					battle.State = "abandoned"
+				}
+
+				// 花名册到齐期限(INC-20260813-001)。与上面的空场两档并列:那两档看
+				// PlayerCount==0,本档看 census 与 roster 的差集 —— 「6 人 roster 只进来 5 个」
+				// 时 PlayerCount 恒为 5(非 0),空场计时器一次都不会起。
+				//
+				// 只在开局阶段生效(!RosterEverComplete):曾经全员同时在场过就永久豁免,
+				// 此后的掉线交回 EmptyBattleTimeout。少了这条,局中掉线会在 deadline 后
+				// 判弃一场正打着的对局 —— 比本事故严重得多。
+				// 武装窗(滚动升级纵深防御):roster_ever_complete 只有**新版**副本会写。旧副本手里
+				// 已到齐过的局被新副本接手时,光看标记会把「局中掉线」误判成「开局没到齐」,
+				// deadline 到就判弃一场正在打的对局。按 battle 年龄判定,对任何副本同一答案。
+				if battle.State != "abandoned" && !battle.RosterEverComplete &&
+					in.RosterJoinDeadline > 0 && in.CensusPresent &&
+					rosterGateArmable(battle.AllocatedAtMs, serverNowMs, in.RosterJoinArmWindow.Milliseconds()) {
+					switch {
+					case len(rosterAbsentIDs(battle.PlayerIds, in.ActivePlayerIDs)) == 0:
+						battle.RosterEverComplete = true
+						battle.RosterIncompleteSinceMs = 0
+					case battle.RosterIncompleteSinceMs == 0:
+						battle.RosterIncompleteSinceMs = serverNowMs
+					case serverNowMs-battle.RosterIncompleteSinceMs >= in.RosterJoinDeadline.Milliseconds():
+						battle.State = "abandoned"
+						rosterIncomplete = true
+					}
 				}
 			}
 			battle.GameserverUid = auth.InstanceUid
@@ -966,7 +1064,7 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 				return nil
 			})
 			if err == nil {
-				out = activateResult(auth, battle, promote, firstAbandon, terminal)
+				out = activateResult(auth, battle, promote, firstAbandon, rosterIncomplete, terminal)
 			}
 			return err
 		}, aKey, bKey, rKey, sKey)
@@ -999,12 +1097,13 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 	return BattleActivateResult{}, errcode.New(errcode.ErrInternal, "battle %d activate heartbeat cas retry exhausted", matchID)
 }
 
-func activateResult(auth *dsv1.BattleDSAuthStorageRecord, battle *dsv1.BattleStorageRecord, first, firstAbandon, terminal bool) BattleActivateResult {
+func activateResult(auth *dsv1.BattleDSAuthStorageRecord, battle *dsv1.BattleStorageRecord, first, firstAbandon, rosterIncomplete, terminal bool) BattleActivateResult {
 	return BattleActivateResult{
-		FirstActivation: first,
-		FirstAbandon:    firstAbandon,
-		Terminal:        terminal,
-		HeartbeatMs:     auth.LastActiveHeartbeatMs,
+		FirstActivation:  first,
+		FirstAbandon:     firstAbandon,
+		RosterIncomplete: rosterIncomplete,
+		Terminal:         terminal,
+		HeartbeatMs:      auth.LastActiveHeartbeatMs,
 		Active: BattleCredentialIdentity{
 			PodName:       auth.DsPodName,
 			InstanceUID:   auth.Active.GetInstanceUid(),
@@ -1404,11 +1503,27 @@ func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64
 				}
 				return err
 			}
+			// 这两条挡住的是 sweep 的**判弃权**:拒了就代表这局既不会被判弃、
+			// 也不会回收 GameServer(fail-closed,方向正确),但以前只回一个
+			// ErrUnauthorized,上层 model_b_sweep_authority_check_failed 打出来的
+			// err 文本对两种情况完全一样,分不清是记录格式旧还是 auth↔battle 串了。
 			if !battleAuthRecordV2Exact(auth) {
+				plog.With(ctx).Warnw("msg", "battle_sweep_authority_rejected",
+					"match_id", matchID, "reason", authRejectBindingMismatch,
+					"detail", "auth_record_not_v2_exact", "pod", battle.GetDsPodName(),
+					"battle_state", battle.GetState(), "auth_phase", auth.GetPhase().String(),
+					"hint", "本局不会被判弃也不会回收 GS(fail-closed);持续出现即 GS 占位泄漏来源")
 				bizErr = errBattleAuthStale
 				return bizErr
 			}
 			if !authorityBindingMatches(auth, battle) {
+				plog.With(ctx).Warnw("msg", "battle_sweep_authority_rejected",
+					"match_id", matchID, "reason", authRejectBindingMismatch,
+					"detail", "auth_battle_binding_mismatch", "pod", battle.GetDsPodName(),
+					"auth_pod", auth.GetDsPodName(), "auth_uid", auth.GetInstanceUid(),
+					"auth_allocation_id", auth.GetAllocationId(),
+					"battle_allocation_id", battle.GetAllocationId(),
+					"battle_state", battle.GetState())
 				bizErr = errBattleAuthStale
 				return bizErr
 			}
@@ -2464,4 +2579,36 @@ func containsBattleHashTag(key string, matchID uint64) bool {
 	}
 	close := open + 1 + closeOffset
 	return key[open+1:close] == strconv.FormatUint(matchID, 10)
+}
+
+// rosterAbsentIDs 返回 roster 里没出现在 census 中的玩家(保持 roster 原序)。
+//
+// 只在 BattleHeartbeatInput.CensusPresent 为真时调用:census 缺席时返回「全员缺席」
+// 会把每一局都判弃,那道守卫必须留在调用点,本函数不替它兜底。
+func rosterAbsentIDs(roster, census []uint64) []uint64 {
+	if len(roster) == 0 {
+		return nil
+	}
+	present := make(map[uint64]struct{}, len(census))
+	for _, id := range census {
+		present[id] = struct{}{}
+	}
+	var absent []uint64
+	for _, id := range roster {
+		if _, ok := present[id]; !ok {
+			absent = append(absent, id)
+		}
+	}
+	return absent
+}
+
+// rosterGateArmable 与 biz 侧同名函数同语义(判据是 battle 年龄,对任何副本同一答案)。
+// 刻意各留一份而不跨层共享:两条心跳路径(legacy / Model B)本就分处两层,
+// 为一个 3 行纯函数建跨层依赖不值当;语义漂移由两侧各自的用例钉死。
+func rosterGateArmable(allocatedAtMs, nowMs, armWindowMs int64) bool {
+	if armWindowMs <= 0 || allocatedAtMs <= 0 {
+		return false
+	}
+	age := nowMs - allocatedAtMs
+	return age >= 0 && age <= armWindowMs
 }

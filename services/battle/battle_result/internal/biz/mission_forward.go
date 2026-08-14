@@ -16,6 +16,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/safego"
 )
@@ -64,23 +65,31 @@ func (u *BattleResultUsecase) forwardMissionBatch(ctx context.Context) (int, err
 		if ctx.Err() != nil {
 			return forwarded, ctx.Err()
 		}
+		rowCtx := withOutboxTrace(ctx)
 		key := progressIdempotencyKey(r.MatchID, r.Seq, r.PlayerID, "mission")
-		if ferr := u.missionReporter.ReportMissionFact(ctx, r.PlayerID,
+		if ferr := u.missionReporter.ReportMissionFact(rowCtx, r.PlayerID,
 			r.Category, r.SlotValue, r.Amount, key); ferr != nil {
-			plog.With(ctx).Warnw("msg", "mission_fact_forward_failed",
+			plog.With(rowCtx).Warnw("msg", "mission_fact_forward_failed",
 				"id", r.ID, "match_id", r.MatchID, "seq", r.Seq, "player_id", r.PlayerID,
-				"category", r.Category, "err", ferr)
-			if derr := u.repo.DeferMissionOutbox(ctx, r.ID); derr != nil {
+				"category", r.Category, "slot_value", r.SlotValue, "amount", r.Amount,
+				"idempotency_key", key, "code", int32(errcode.As(ferr)), "err", ferr)
+			if derr := u.repo.DeferMissionOutbox(rowCtx, r.ID); derr != nil {
 				// 退避失败只告警:下轮 Fetch 仍会取到该行重试,at-least-once 不受影响。
-				plog.With(ctx).Warnw("msg", "mission_outbox_defer_failed", "id", r.ID, "err", derr)
+				plog.With(rowCtx).Warnw("msg", "mission_outbox_defer_failed", "id", r.ID, "err", derr)
 			}
 			continue
 		}
-		if derr := u.repo.DeleteMissionOutbox(ctx, r.ID); derr != nil {
+		if derr := u.repo.DeleteMissionOutbox(rowCtx, r.ID); derr != nil {
 			// 删行失败 → 下轮重投同一事实;mission 侧收据 uk 幂等吸收,不会重复计进度。
-			plog.With(ctx).Warnw("msg", "mission_outbox_delete_failed", "id", r.ID, "err", derr)
+			plog.With(rowCtx).Warnw("msg", "mission_outbox_delete_failed", "id", r.ID, "err", derr)
 			continue
 		}
+		// 任务进度是玩家可见资产(领奖依据):失败有逐行日志、成功只有聚合 count 时,
+		// 「这一局的杀怪为什么没计进任务」事后无从对账(出箱行已删)。
+		plog.With(rowCtx).Infow("msg", "mission_fact_delivered",
+			"id", r.ID, "match_id", r.MatchID, "seq", r.Seq, "player_id", r.PlayerID,
+			"category", r.Category, "slot_value", r.SlotValue, "amount", r.Amount,
+			"idempotency_key", key)
 		forwarded++
 	}
 	if forwarded > 0 {

@@ -44,6 +44,7 @@ config_table:
 
 match:
   team_addr: "team.pandora.svc.cluster.local:20010"
+  # allow_missing_team 留空即 false:生产绝不允许 team_addr 为空(见 matchmaker-dev.yaml 同项注释)。
   ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:20020"
   locator_addr: "player-locator.pandora.svc.cluster.local:20006"
   # 独立 Login→Matchmaker 服务身份 key；不得复用 JWT / DS callback key。
@@ -54,6 +55,13 @@ match:
   # 且轮换变成全有全无。必须等于 team 的 team.match_resume_auth_secret。
   # 留空不会回落到 login 那把：team 会被 matchmaker 拒(code=7) ⇒ 入队 fail-closed、招募列表恒空。
   team_resume_auth_secret: "__TEAM_RESUME_AUTH_SECRET_32B__"
+  # ── 反方向:签 matchmaker→team 的 BeginTeamMatch / EndTeamMatch(A-13)───────────
+  # ⚠️ 必须与上面那把**不同**(上面那把是 matchmaker 验入站用的)。
+  # 必须等于 team-prod.yaml 的 team.match_call_auth_secret / match_call_auth_audience。
+  # 发布顺序:先两边都配上密钥(team 侧 require 保持 false 观察),确认 observed 日志归零后,
+  # 再单独发一次配置把 team 的 match_call_auth_require 翻 true。
+  team_call_auth_secret: "__MATCH_CALL_AUTH_SECRET_32B__"
+  team_call_auth_audience: "team"
   allocation_abort_auth_secret: "__ALLOCATION_ABORT_AUTH_SECRET_32B__"
   allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"
   # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 livenessSweep + 成局最终门 findOfflineMembers)。
@@ -63,6 +71,15 @@ match:
   # 过期后无法重建,该玩家再排队的票据也会被 livenessSweep 误删。故两道门一起关。
   # 重开前置与决策待办见 matchmaker-dev.yaml 同项注释 + 事故档 D2。
   liveness_gate_enabled: false
+  # start_presence_grace: StartMatch 在线闸的宽限窗(INC-20260813-001)。
+  # 与上面两道门的关键差别:判「离开了多久」而不是「此刻查不查得到」,因此不存在那两道门的
+  # 结构性假阳性(依赖 Hub DS 心跳按 census 全员续期 last_alive_ms,同批落地)。
+  # 完整说明见 matchmaker-dev.yaml 同项注释。**负值关闭整道闸**。
+  start_presence_grace: "30s"
+  # queue_absence_reap_after: 排队票离线回收判死窗(INC-20260814-001 隔夜幽灵票)。
+  # 与 liveness_gate 无关、其关闭时也生效;判据同 start_presence_grace(按「离开多久」判,
+  # UNKNOWN 放行,presence 查询失败绝不删票)。完整说明见 matchmaker-dev.yaml 同项注释。**负值关闭**。
+  queue_absence_reap_after: "120s"
   map_id: 1
   game_mode: "5v5_ranked"
   confirm_timeout: "15s"

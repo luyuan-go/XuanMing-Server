@@ -38,9 +38,26 @@ service TeamService {
 
   // ── 内部:组票前的 roster fence(matchmaker 专用,不对客户端开放)─────────────
   //
-  // BeginTeamMatch 在 team 自己的乐观锁内**原子地**完成「校验 + 冻结名单 + 返回快照」。
+  // BeginTeamMatch 在 team 自己的乐观锁内**原子地**完成
+  // 「校验 + 冻结名单 + **消费 ready** + 返回消费前快照」。
   //
-  // 为什么必须有它:matchmaker 原先用只读 GetTeam 取名单,而 team 侧的自动摘人
+  // # ready 是一次开局授权,在这里被一次性消费(方案 A,2026-08-13 拍板)
+  //
+  // 队伍的 ready 不是「一个可以反复使用的状态」,而是**一次 StartMatch 的单次授权**。
+  // 本 RPC 在同一把锁里把它兑掉:清空本次名单成员的 ready、把队伍转回 FORMING,
+  // 并返回**消费前**的名单快照给 matchmaker 建票。
+  //
+  // 这样「一次 ready 意图最多授权一次 StartMatch」就是一把乐观锁的直接后果,
+  // 而不是要靠赛后一条可能丢失、可能迟到、可能跨代的复位 RPC 去维持的东西。
+  // 由此消失的整类问题:ACK 丢失后重投抹掉新意图、离队重入的 player_id 级 ABA、
+  // 「claim 已释放但 End 还没到」窗口里用旧 ready 开出下一局、以及发布顺序依赖。
+  //
+  // 代价(已知并接受):排队取消、准入闸拒绝、成局失败之后,玩家都要**重新点准备**。
+  // 失败方向是安全的 —— 多按一次,不会多开一局。
+  //
+  // 重试语义见 MatchStartReceipt:同一 attempt 的重试拿回同一份快照,不会消费两次。
+  //
+  // 为什么名单必须在锁内冻结:matchmaker 原先用只读 GetTeam 取名单,而 team 侧的自动摘人
   // (离线超时)用的是另一把锁,两者跨服务凑不出共同线性化点 —— 于是存在
   // 「闸门放行 → 名单被冻进票据 → 才把人摘走」的窗口,结果是人在票据里却不在队伍里,
   // 被拉进一场自己不在场的对局。把「读名单」升级成「在锁内读并上锁」,窗口才真正消失。
@@ -52,6 +69,31 @@ service TeamService {
   //     此后整场对局的占用判定仍由 matchmaker 的 player→ticket claim(ResolvePlayerMatchContext)负责。
   // 因此这把锁不是权威状态,只是一个有界互斥窗口,不得被解释成「队伍在对局中」。
   rpc BeginTeamMatch(BeginTeamMatchRequest) returns (BeginTeamMatchResponse);
+
+  // EndTeamMatch 对局结束后复位队伍准备状态。
+  //
+  // # 它不再是正确性路径(方案 A,2026-08-13 拍板)
+  //
+  // 事故的第一根因是 team 侧**没有任何一条 match-ended 路径**:一局打完队伍仍是
+  // TEAM_STATE_READY、全员 ready 原样保留,队长可以在队友还卡在结算界面时立刻再开一局
+  // (当天仅隔 75 秒),把人冻进新票据 —— DS 拿到 6 人 roster 只进来 5 个。
+  //
+  // 修法有两条路。曾经的 v2 走「ready 保留到赛后,由本 RPC 复位」,但那要求本 RPC 携带完整
+  // 代际 fence 才能跨代幂等(ACK 丢失 → 玩家 re-ready → 旧 outbox 重投抹掉新意图),
+  // 且 claim 释放到 End 成功之间仍留着用旧 ready 开下一局的窗口。
+  //
+  // 拍板改走方案 A:**ready 在 BeginTeamMatch 里被一次性消费**(见该 RPC)。
+  // 于是「一次 ready 意图最多授权一次 StartMatch」由一把乐观锁保证,根本不存在
+  // 「结束后还欠一次复位」的状态,本 RPC 也就不再承担任何正确性。
+  //
+  // # 那为什么还留着
+  //
+  // 纯粹为**滚动升级共存窗口**:新 matchmaker 可能打到**旧 team**(Begin 还不消费 ready),
+  // 那种组合下仍靠本 RPC 复位,否则事故行为会在升级窗口内复现。等 team 全量升级后,
+  // 下一个版本可以连同调用方一起删除(§9.21 加法演进,先停止调用再删接口)。
+  //
+  // 对**新 team** 而言本 RPC 已是准 no-op:ready 早在 Begin 就清空了,重复调用零写零推送。
+  rpc EndTeamMatch(EndTeamMatchRequest) returns (EndTeamMatchResponse);
 
   // ── 内部:按 player_id 反查队伍编号(DS 出生编制专用,不对客户端开放)────────────
   //
@@ -157,6 +199,64 @@ message TeamStorageRecord {
   // 任何按「是不是在打」做的判断都不得读这两个字段(§9.22 不重复影子状态)。
   int64  match_lock_until_ms       = 11;
   string match_lock_operation_id   = 12;
+
+  // ── ready 代际 + 待复位标记(INC-20260813-001 ①②)────────────────────────────
+  //
+  // ready_generation:**任何改变「谁准备好了」的写都必须推进它**(SetReady / 入队 / 离队 /
+  // 踢人 / 掉线软化 / 对局结束复位)。它是 EndTeamMatch 的 CAS 依据 ——
+  // 没有它,一条迟到的旧局释放会把**下一局**的准备状态清掉:
+  // ACK 丢失 → outbox 重投 → 期间玩家已重新点准备 / 离队重入 / 队长已开新局,
+  // 旧重投照样把 ready 抹平。有了它,旧重投的 expected 对不上当前代际,直接 no-op。
+  //
+  // 单调、只增、不回退;0 = 旧记录(滚动升级前写的),按「代际未知」处理 —— 见 EndTeamMatchRequest。
+  uint64 ready_generation = 13;
+
+  // 14 曾是 pending_match_reset_gen(「进过一局还没复位」的 durable 标记)。
+  // 那是「ready 保留到赛后复位」那一版的兜底;方案 A 把 ready 改成 Begin 时一次性消费后,
+  // 整条路径失去存在理由(不存在任何一局「结束后还欠一次复位」),连同兜底一起删除。
+  // 该字段从未部署过,编号直接回收;保留 reserved 防将来误用。
+  reserved 14;
+
+  // match_start_receipt:上一次 BeginTeamMatch 消费 ready 的收据(方案 A)。
+  //
+  // 存在的唯一理由是**响应丢失后的重试**:ready 已被消费、队伍已转 FORMING,
+  // 没有收据的话 matchmaker 的重试只会拿到「队伍未准备」—— 玩家明明刚点过准备,
+  // 却被要求重新点,而第一次调用其实是成功的。收据让同一次尝试的重试拿回
+  // **同一份**消费前名单,既不重复消费也不误报失败(§9.23 端到端幂等)。
+  MatchStartReceipt match_start_receipt = 15;
+}
+
+// MatchStartReceipt 是「这一代 ready 已经被哪一次组票消费掉了」的凭据(方案 A)。
+//
+// # 重入判定为什么必须同时看 attempt_id 与 post_ready_generation
+//
+// 只看 attempt_id 不够:matchmaker 的 attempt_id 取自 (team_id, captain_id),
+// 对同一个队长的**每一局都相同**(它原本是为「重试续租同一把锁」设计的)。
+// 只按它判重入,队长打完一局、全队重新点准备后再开一局,会被误认成上一局的重试,
+// 拿回一份**过期名单** —— 那比本次事故更糟。
+//
+// post_ready_generation 是消费**之后**的代际。任何 ready 意图变更都会推进代际
+// (见 ready_generation.go),于是:
+//   - 真·重试(玩家什么都没动)→ 当前代际仍等于它 → 判重入,返回同一份快照;
+//   - 第二次真实点击(玩家重新点过准备)→ 代际早已前进 → 不是重入 → 正常重新消费。
+//
+// 这一条同时让**旧 matchmaker 打到新 team 也安全**:它那个跨局复用的 operation_id
+// 不再有害。因此方案 A 不需要「谁必须先上线」的发布顺序约束(§9.21)。
+message MatchStartReceipt {
+  // attempt_id:消费掉这一代 ready 的 BeginTeamMatchRequest.operation_id。
+  string attempt_id = 1;
+  // roster:消费**前**的队伍快照(各成员当时的 ready 位仍为 true)。
+  // 重试必须拿回它而不是当前队伍 —— 当前队伍的 ready 已经被清空了。
+  // 用存储侧结构:本消息内嵌在 TeamStorageRecord 里,不外露给客户端(§5.8/§9.14)。
+  repeated TeamMemberStorageRecord roster = 2;
+  // consumed_ready_generation:被消费掉的那一代(消费前代际),供排障对账。
+  uint64 consumed_ready_generation = 3;
+  // post_ready_generation:消费落定后的代际,是重入判定的 CAS 依据(见上)。
+  uint64 post_ready_generation = 4;
+  // created_at_ms:开收据的时刻。超过重入窗后即使前两项都匹配也不再当重试 ——
+  // 那时队伍处于 FORMING,玩家本就该重新点准备。窗口是 fail-safe 方向的兜底,
+  // 防「消费后长期无人操作,很久以后的一次真实点击被误当成重试」。
+  int64 created_at_ms = 5;
 }
 
 // ===== RPC =====
@@ -511,8 +611,12 @@ message BeginTeamMatchRequest {
   uint64 team_id      = 1;
   // captain_id 取自 matchmaker 已校验的 JWT sub;team 侧仍会复核它确实是本队队长。
   uint64 captain_id   = 2;
-  // operation_id:本次进场的稳定 operation(§9.23)。同 operation 重入必须幂等续租,
-  // 不得因为「已经上锁」就把自己的重试判成冲突。
+  // operation_id:本次进场尝试的 attempt id(§9.23)。同 attempt 重入必须幂等 ——
+  // 既不得因为「已经上锁」把自己的重试判成冲突,也不得对同一次尝试**消费两次** ready。
+  //
+  // ⚠ 它只要求「跨客户端重试稳定」,**不要求全局唯一**:matchmaker 现取
+  // (team_id, captain_id),对同一队长的每一局都相同。跨局的区分由收据里的
+  // post_ready_generation 完成,不靠这个字段(见 MatchStartReceipt)。
   string operation_id = 3;
   // lease_ms:租约时长。取值只需覆盖「组票 → ClaimPlayer 落地」,秒级即可;
   // 服务端会钳到 [min, max] 防误配成 0(永不生效)或过长(拖住摘人)。
@@ -521,11 +625,48 @@ message BeginTeamMatchRequest {
 
 message BeginTeamMatchResponse {
   pandora.common.v1.ErrCode code = 1;
-  // team:上锁那一刻的权威快照。matchmaker **必须**用它建票,
-  // 不得再另发 GetTeam —— 那等于把刚消灭的窗口重新打开一次。
+  // team:**消费前**那一刻的权威快照(成员 ready 位仍为 true)。
+  // matchmaker 必须用它建票,不得再另发 GetTeam —— 那读到的是消费**后**的队伍
+  // (ready 已清空、状态已转 FORMING),既不是这一局的名单,也会把刚消灭的窗口重新打开。
   Team team = 2;
   // lease_expires_at_ms:租约截止,供 matchmaker 判断自己是否已超时(超时须重新 Begin)。
+  //
+  // 方案 A 下租约只剩**一个**职责:挡住「冻结名单 → ClaimPlayer 落地」这段时间里的
+  // 自动摘人(TOCTOU)。它不再承担任何 ready 正确性 —— ready 在同一把锁里已经消费掉了。
   int64 lease_expires_at_ms = 3;
+  // ready_generation:**被本次消费掉**的那一代 ready(消费前代际)。
+  //
+  // 方案 A 下它不再是正确性凭据(没有任何后续 RPC 拿它做 CAS),只用于两件事:
+  //   ①排障对账 —— 把一张票据与 team 侧的哪一次 ready 意图对上;
+  //   ②滚动升级共存窗口里,新 matchmaker 打到**旧 team**时仍按老路子回传给 EndTeamMatch。
+  // 0 = 旧 team 服务没回。
+  uint64 ready_generation = 4;
+}
+
+message EndTeamMatchRequest {
+  uint64 team_id = 1;
+  // player_ids:本局 roster 里属于该队伍的成员。
+  // 只复位他们而不是全队,是为了不误伤**对局期间新加入、且自己已经点过准备**的人 ——
+  // 他没参与这一局,凭什么被这一局的结束复位。留空 = 复位全队(调用方拿不到名单时的兜底)。
+  repeated uint64 player_ids = 2;
+
+  // expected_ready_generation:调用方 Begin 时拿到的 ready 代际。
+  //
+  // team 侧只在 `team.ready_generation == expected` 时才复位。方案 A 下新 team 的 ready
+  // 早在 Begin 就消费掉了,本字段因此几乎总是对不上、本 RPC 几乎总是 no-op —— 这是**对的**:
+  // 它只在「新 matchmaker + 旧 team」这一种共存组合里真正动手。
+  //
+  // 保留 CAS 而不是无条件复位,是因为那种组合下旧 team 的 ready 仍是保留语义,
+  // 无条件复位会把玩家在结算期间重新点上的准备抹掉(旧 v2 的原始缺陷)。
+  //
+  // **0 = 代际未知**(旧 team 没回过代际,或旧 matchmaker 没带)。此时退化为
+  // 「只在当前确实还是 READY / 有人挂着 ready 时复位一次」。不是跨代安全的,
+  // 但严格优于「完全不复位」—— 那正是本事故的第一根因。
+  uint64 expected_ready_generation = 3;
+}
+
+message EndTeamMatchResponse {
+  pandora.common.v1.ErrCode code = 1;
 }
 
 // GetPlayerTeam:内部东西向只读。Envoy 是按 /pandora.team.v1.TeamService/ 整前缀放行的,

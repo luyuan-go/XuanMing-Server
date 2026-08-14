@@ -2965,6 +2965,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchMemberStorageRecord final : pu
     kHeroIdFieldNumber = 4,
     kSideFieldNumber = 5,
     kConfirmFieldNumber = 6,
+    kTeamReadyGenerationFieldNumber = 10,
   };
   // uint64 player_id = 1 [json_name = "playerId"];
   void clear_player_id() ;
@@ -3026,11 +3027,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchMemberStorageRecord final : pu
   void _internal_set_confirm(::pandora::match::v1::MatchConfirmStatus value);
 
   public:
+  // uint64 team_ready_generation = 10 [json_name = "teamReadyGeneration"];
+  void clear_team_ready_generation() ;
+  [[nodiscard]] ::uint64_t team_ready_generation() const;
+  void set_team_ready_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_ready_generation() const;
+  void _internal_set_team_ready_generation(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.match.v1.MatchMemberStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3065,6 +3076,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchMemberStorageRecord final : pu
     ::uint32_t hero_id_;
     ::int32_t side_;
     int confirm_;
+    ::uint64_t team_ready_generation_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7773,6 +7785,30 @@ inline ::pandora::match::v1::MatchConfirmStatus MatchMemberStorageRecord::_inter
 inline void MatchMemberStorageRecord::_internal_set_confirm(::pandora::match::v1::MatchConfirmStatus value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.confirm_ = value;
+}
+
+// uint64 team_ready_generation = 10 [json_name = "teamReadyGeneration"];
+inline void MatchMemberStorageRecord::clear_team_ready_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_ready_generation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t MatchMemberStorageRecord::team_ready_generation() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchMemberStorageRecord.team_ready_generation)
+  return _internal_team_ready_generation();
+}
+inline void MatchMemberStorageRecord::set_team_ready_generation(::uint64_t value) {
+  _internal_set_team_ready_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchMemberStorageRecord.team_ready_generation)
+}
+inline ::uint64_t MatchMemberStorageRecord::_internal_team_ready_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_ready_generation_;
+}
+inline void MatchMemberStorageRecord::_internal_set_team_ready_generation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_ready_generation_ = value;
 }
 
 // -------------------------------------------------------------------

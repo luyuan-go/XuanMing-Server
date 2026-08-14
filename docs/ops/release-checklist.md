@@ -181,6 +181,25 @@ pwsh tools/scripts/import_dev_ca.ps1
 2. 构建与发布版本同源的 migration 镜像，运行一次性 migration Job；全部目标验收通过才继续
 3. 完成下述 DS B1 / Stable-Canary 发布门禁；先预热 Canary（权重 0），验收后才逐级放量
 4. 后端用 `*-prod.yaml` 滚动部署,确认 dev_skip_password/reflection 关
+   - ⛔ **INC-20260813-001 v2 当前禁止发布**。复核证明“team 先于 matchmaker”只是必要条件,
+     不是充分条件；详见
+     [`decision-revisit-team-match-lifecycle-and-roster-rollout.md`](../design/decision-revisit-team-match-lifecycle-and-roster-rollout.md)。
+     当前 `EndTeamMatch` 没有 match/member/ready generation，旧 outbox 重投可清掉玩家新一轮
+     ready；claim 释放到 End 成功之间仍可复用旧 ready 开下一局。
+   - 不得把 `Unimplemented` 直接 Warn 后当成功来“消除顺序”。这会让该局永久跳过复位，旧行为
+     本身正是本 P0 的第一根因，不是安全降级。新旧 matchmaker RollingUpdate 共存时，
+     battle_result 的长期 ClusterIP gRPC 连接还可能钉在旧 Pod；旧 Pod 会 ACK ReleaseMatch 并
+     删除 outbox，却从不调 End。
+   - 当前 `start.ps1` 会一次 apply 整个 overlay，并先向全部 Deployment 发 restart、之后才逐个
+     wait；`Get-ServiceList` 的文本顺序不构成 rollout 屏障。在最终代际协议落地前，A-11 只能
+     保持阻断；若最终仍保留 End，需用 blue-green/versioned endpoint 或 quiesce 阻止旧 caller
+     ACK。回滚必须反向：先让 matchmaker/matchmaker-pve 全量停调，再退 team。
+   - ds_allocator 的 45s roster deadline 同样不得直接随二副本 RollingUpdate 激活。必须先
+     observe-only 全量采证，再只给全量新副本后创建的 policy generation 开 enforce；legacy /
+     存量局默认不执行，否则可能把 rollout 时已局中掉线的正在进行对局误判弃。
+   - 通用规则仍是 expand → migrate → contract；弱依赖降级只有在“跳过不会保留或制造错误
+     状态”时才成立。新增跨服务 RPC 必须登记旧新 caller/callee 矩阵、live capability、失败停点
+     和反向 rollback，并落为 fail-closed 机械门。
 5. Envoy 换公网 CA 证书 + 真实域名
 6. UE 用生产 ini 打 **Shipping** 包
 7. 用真机 / 干净环境(没装过 mkcert CA)验证登录链路:登录 → 进大厅 → 匹配 → 战斗 → 结算

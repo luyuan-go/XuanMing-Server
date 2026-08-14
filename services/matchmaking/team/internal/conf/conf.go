@@ -65,6 +65,28 @@ type TeamConf struct {
 	MatchResumeAuthSecret   string `yaml:"match_resume_auth_secret,omitempty" json:"match_resume_auth_secret,omitempty"`
 	MatchResumeAuthAudience string `yaml:"match_resume_auth_audience,omitempty" json:"match_resume_auth_audience,omitempty"`
 
+	// ── 反方向:matchmaker → team 的组票 / 复位调用鉴权(INC-20260813-001 A-13)───────
+	//
+	// BeginTeamMatch / EndTeamMatch 是 matchmaker 专用的东西向接口,但 `systemOnly` 只能
+	// 证明「本次调用不带玩家 JWT」——集群内网里任何 Pod 都满足。而这两个方法一个能给**任意**
+	// 队伍上 roster 租约(反复调 = 让那支队伍永远开不了局),一个能把**任意**队伍打回 FORMING。
+	// 因此必须像 team→matchmaker 那样验签,caller 固定 "matchmaker"。
+	//
+	// **这把密钥必须与 MatchResumeAuthSecret 不同**:那把是 team 拿去签**出站**调用的,
+	// 两边共用等于让任一方能冒充另一方(与该字段注释里 login/team 分域同理)。
+	//
+	// 三档,刻意做成可降级(§9.21 共存窗口不得靠发布顺序):
+	//   - 留空          → 完全不验(现状,滚动升级期先滚 team 不会打断任何调用);
+	//   - 配了 + require=false(默认)→ **观察期**:验不过只 WARN 后放行,用于确认
+	//     matchmaker 已全量滚上带签名的版本(看日志里 rejected 归零);
+	//   - 配了 + require=true         → 强制:验不过一律 ERR_PERMISSION_DENY。
+	//
+	// 正确上线顺序因此是「两边都配密钥 → 观察 → 翻 require」,每一步单独都安全,
+	// 不存在「谁必须先上线」的隐含约束。
+	MatchCallAuthSecret   string `yaml:"match_call_auth_secret,omitempty" json:"match_call_auth_secret,omitempty"`
+	MatchCallAuthAudience string `yaml:"match_call_auth_audience,omitempty" json:"match_call_auth_audience,omitempty"`
+	MatchCallAuthRequire  bool   `yaml:"match_call_auth_require,omitempty" json:"match_call_auth_require,omitempty"`
+
 	// InvitePushMode 邀请推送模式(金丝雀灰度用)。老客户端只认 TeamUpdateEvent(reason=INVITE_SENT),
 	// 新客户端只认独立的 TeamInviteEvent(event_type=INVITE=1、已不再从 TeamUpdateEvent 读邀请)。
 	// 两代客户端各认各的 payload,单一模式无法同时喂饱两代 → 灰度共存期必须"双发"。

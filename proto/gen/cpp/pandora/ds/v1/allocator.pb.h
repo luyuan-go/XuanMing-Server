@@ -6945,8 +6945,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     kLastVerifiedGenFieldNumber = 14,
     kInstanceEpochFieldNumber = 13,
     kLastVerifiedWriterEpochFieldNumber = 16,
-    kEverHadPlayersFieldNumber = 21,
     kRatingModeFieldNumber = 22,
+    kEverHadPlayersFieldNumber = 21,
+    kRosterEverCompleteFieldNumber = 25,
+    kRosterIncompleteSinceMsFieldNumber = 24,
   };
   // repeated uint64 player_ids = 5 [json_name = "playerIds"];
   [[nodiscard]] int player_ids_size()
@@ -7229,16 +7231,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
   void _internal_set_last_verified_writer_epoch(::uint32_t value);
 
   public:
-  // bool ever_had_players = 21 [json_name = "everHadPlayers"];
-  void clear_ever_had_players() ;
-  [[nodiscard]] bool ever_had_players() const;
-  void set_ever_had_players(bool value);
-
-  private:
-  bool _internal_ever_had_players() const;
-  void _internal_set_ever_had_players(bool value);
-
-  public:
   // .pandora.config.v1.LevelRatingMode rating_mode = 22 [json_name = "ratingMode"];
   void clear_rating_mode() ;
   [[nodiscard]] ::pandora::config::v1::LevelRatingMode rating_mode() const;
@@ -7249,12 +7241,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
   void _internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value);
 
   public:
+  // bool ever_had_players = 21 [json_name = "everHadPlayers"];
+  void clear_ever_had_players() ;
+  [[nodiscard]] bool ever_had_players() const;
+  void set_ever_had_players(bool value);
+
+  private:
+  bool _internal_ever_had_players() const;
+  void _internal_set_ever_had_players(bool value);
+
+  public:
+  // bool roster_ever_complete = 25 [json_name = "rosterEverComplete"];
+  void clear_roster_ever_complete() ;
+  [[nodiscard]] bool roster_ever_complete() const;
+  void set_roster_ever_complete(bool value);
+
+  private:
+  bool _internal_roster_ever_complete() const;
+  void _internal_set_roster_ever_complete(bool value);
+
+  public:
+  // int64 roster_incomplete_since_ms = 24 [json_name = "rosterIncompleteSinceMs"];
+  void clear_roster_incomplete_since_ms() ;
+  [[nodiscard]] ::int64_t roster_incomplete_since_ms() const;
+  void set_roster_incomplete_since_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_roster_incomplete_since_ms() const;
+  void _internal_set_roster_incomplete_since_ms(::int64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          1, 165,
+      ::google::protobuf::internal::TcParseTable<5, 25,
+                          1, 173,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7304,8 +7326,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     ::uint64_t last_verified_gen_;
     ::uint32_t instance_epoch_;
     ::uint32_t last_verified_writer_epoch_;
-    bool ever_had_players_;
     int rating_mode_;
+    bool ever_had_players_;
+    bool roster_ever_complete_;
+    ::int64_t roster_incomplete_since_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -13519,7 +13543,7 @@ BattleStorageRecord::_internal_mutable_player_combat_factions() {
 inline void BattleStorageRecord::clear_ever_had_players() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ever_had_players_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline bool BattleStorageRecord::ever_had_players() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.ever_had_players)
@@ -13527,7 +13551,7 @@ inline bool BattleStorageRecord::ever_had_players() const {
 }
 inline void BattleStorageRecord::set_ever_had_players(bool value) {
   _internal_set_ever_had_players(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.ever_had_players)
 }
 inline bool BattleStorageRecord::_internal_ever_had_players() const {
@@ -13543,7 +13567,7 @@ inline void BattleStorageRecord::_internal_set_ever_had_players(bool value) {
 inline void BattleStorageRecord::clear_rating_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rating_mode_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::pandora::config::v1::LevelRatingMode BattleStorageRecord::rating_mode() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.rating_mode)
@@ -13551,7 +13575,7 @@ inline ::pandora::config::v1::LevelRatingMode BattleStorageRecord::rating_mode()
 }
 inline void BattleStorageRecord::set_rating_mode(::pandora::config::v1::LevelRatingMode value) {
   _internal_set_rating_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.rating_mode)
 }
 inline ::pandora::config::v1::LevelRatingMode BattleStorageRecord::_internal_rating_mode() const {
@@ -13625,6 +13649,54 @@ inline void BattleStorageRecord::set_allocated_rating_pool(::std::string* PROTOB
     _impl_.rating_pool_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.rating_pool)
+}
+
+// int64 roster_incomplete_since_ms = 24 [json_name = "rosterIncompleteSinceMs"];
+inline void BattleStorageRecord::clear_roster_incomplete_since_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_incomplete_since_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline ::int64_t BattleStorageRecord::roster_incomplete_since_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.roster_incomplete_since_ms)
+  return _internal_roster_incomplete_since_ms();
+}
+inline void BattleStorageRecord::set_roster_incomplete_since_ms(::int64_t value) {
+  _internal_set_roster_incomplete_since_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.roster_incomplete_since_ms)
+}
+inline ::int64_t BattleStorageRecord::_internal_roster_incomplete_since_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.roster_incomplete_since_ms_;
+}
+inline void BattleStorageRecord::_internal_set_roster_incomplete_since_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_incomplete_since_ms_ = value;
+}
+
+// bool roster_ever_complete = 25 [json_name = "rosterEverComplete"];
+inline void BattleStorageRecord::clear_roster_ever_complete() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_ever_complete_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline bool BattleStorageRecord::roster_ever_complete() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.roster_ever_complete)
+  return _internal_roster_ever_complete();
+}
+inline void BattleStorageRecord::set_roster_ever_complete(bool value) {
+  _internal_set_roster_ever_complete(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.roster_ever_complete)
+}
+inline bool BattleStorageRecord::_internal_roster_ever_complete() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.roster_ever_complete_;
+}
+inline void BattleStorageRecord::_internal_set_roster_ever_complete(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_ever_complete_ = value;
 }
 
 // -------------------------------------------------------------------

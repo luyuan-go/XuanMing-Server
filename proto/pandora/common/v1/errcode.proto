@@ -45,6 +45,10 @@ enum ErrCode {
   // 登出,允许自动换新)可判别:客户端对本码只能转交互登录,不得自动完整 Login 反顶
   // 新设备(INC-20260722-004 R4 P0 互踢循环)。
   ERR_SESSION_SUPERSEDED = 14;
+  // 对端**这个版本**还没有这个能力(gRPC Unimplemented 的业务侧对应物)。与 ERR_UNAVAILABLE
+  // 的区别是**能不能靠重试解决**:Unavailable 重试终将成功,本码重试永远不会成功,
+  // 只能等对端滚上新版本。用于 §9.21 滚动升级共存窗口的弱依赖降级(见 pkg/errcode 注释)。
+  ERR_NOT_IMPLEMENTED = 15;
 
   // 1000-1999 login
   ERR_LOGIN_ACCOUNT_NOT_FOUND  = 1001;
@@ -94,6 +98,12 @@ enum ErrCode {
   ERR_MATCH_INVALID_MAP        = 4008;  // map_id 不在关卡表或非战斗类关卡,拒绝开匹配
   ERR_MATCH_TEAM_TOO_SMALL     = 4009;  // 直进人数不足关卡表 min_team_size 下限(客户端提示"还差几人")
   ERR_MATCH_ENTRY_MODE_DENIED  = 4010;  // 该关卡不允许这种进法,或表允许两种而请求未明确选择
+  // 队伍里有成员此刻不在大厅(已离线 / 登录了但还没进大厅),不能把他冻进对局票据
+  // (INC-20260813-001)。与 ERR_MATCH_TEAM_NOT_READY 刻意分开:「没点准备」队长能催,
+  // 「已经掉线」只能等他回来或先踢出去,玩家侧动作完全不同。
+  // 当前 StartMatchResponse 只过线 code + match_id，客户端拿不到 biz error 文本里的
+  // player_id；若产品要点名，须另加结构化响应字段。
+  ERR_MATCH_MEMBER_OFFLINE     = 4011;
 
   // 5000-5999 DS / Hub allocator
   ERR_DS_NO_AVAILABLE          = 5001;

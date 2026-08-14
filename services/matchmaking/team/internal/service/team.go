@@ -44,6 +44,11 @@ type TeamService struct {
 	// 与 login / battle_result / ds_allocator / hub_allocator / inventory / player_locator
 	// 同一套守卫,同一份 ds_auth 配置。
 	dsGuard *middleware.DSCallbackGuard
+
+	// matchCallAuth 校验 BeginTeamMatch / EndTeamMatch 确实来自 matchmaker(见 match_call_auth.go)。
+	// nil = 未配密钥,整道跳过;matchCallRequire=false 时验不过只 WARN 放行(观察期)。
+	matchCallAuth    internalRequestVerifier
+	matchCallRequire bool
 }
 
 // SetDSCallbackGuard 由 main.go 在构造后注入;不调用即 mode=off。
@@ -68,10 +73,14 @@ func NewTeamService(uc *biz.TeamUsecase, teamSF, inviteSF snowflakeGen) *TeamSer
 func (s *TeamService) CreateTeam(ctx context.Context, _ *teamv1.CreateTeamRequest) (*teamv1.CreateTeamResponse, error) {
 	playerID := callerID(ctx)
 	if playerID == 0 {
+		logRPCRejected(ctx, "CreateTeam", reasonUnauthenticated)
 		return &teamv1.CreateTeamResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 
 	teamID := s.teamSF.Generate()
+	// R3:team_id 是本链路的 join key,刚发号就写进 ctx —— biz / data 层后续每条日志
+	// 由 plog.With(ctx) 自动带上,不必逐处手写(WithTeamID 历史上全仓零调用)。
+	ctx = plog.WithTeamID(ctx, teamID)
 	rec, err := s.uc.CreateTeam(ctx, teamID, playerID)
 	if err != nil {
 		return &teamv1.CreateTeamResponse{Code: toProtoCode(err)}, nil
@@ -87,11 +96,21 @@ func (s *TeamService) CreateTeam(ctx context.Context, _ *teamv1.CreateTeamReques
 func (s *TeamService) Invite(ctx context.Context, req *teamv1.InviteRequest) (*teamv1.InviteResponse, error) {
 	inviterID := callerID(ctx)
 	if inviterID == 0 {
+		logRPCRejected(ctx, "Invite", reasonUnauthenticated)
 		return &teamv1.InviteResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetTeamId() == 0 || req.GetTargetPlayerId() == 0 {
+		// 一个 if 两个条件 → 两个 reason(R2):缺 team_id 是客户端队伍态丢了,
+		// 缺 target 是选人 UI 没传上来,排查方向完全不同。
+		reason := reasonMissingTeamID
+		if req.GetTeamId() != 0 {
+			reason = reasonMissingTargetPlayerID
+		}
+		logRPCRejected(ctx, "Invite", reason,
+			"team_id", req.GetTeamId(), "target_player_id", req.GetTargetPlayerId())
 		return &teamv1.InviteResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	inviteID := s.inviteSF.Generate()
 	rec, err := s.uc.Invite(ctx, inviteID, req.GetTeamId(), inviterID, req.GetTargetPlayerId())
@@ -113,11 +132,14 @@ func (s *TeamService) Invite(ctx context.Context, req *teamv1.InviteRequest) (*t
 func (s *TeamService) AcceptInvite(ctx context.Context, req *teamv1.AcceptInviteRequest) (*teamv1.AcceptInviteResponse, error) {
 	playerID := callerID(ctx)
 	if playerID == 0 {
+		logRPCRejected(ctx, "AcceptInvite", reasonUnauthenticated)
 		return &teamv1.AcceptInviteResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetTeamId() == 0 {
+		logRPCRejected(ctx, "AcceptInvite", reasonMissingTeamID, "invite_id", req.GetInviteId())
 		return &teamv1.AcceptInviteResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	rec, err := s.uc.AcceptInvite(ctx, req.GetInviteId(), req.GetTeamId(), playerID)
 	if err != nil {
@@ -133,11 +155,14 @@ func (s *TeamService) AcceptInvite(ctx context.Context, req *teamv1.AcceptInvite
 func (s *TeamService) LeaveTeam(ctx context.Context, req *teamv1.LeaveTeamRequest) (*teamv1.LeaveTeamResponse, error) {
 	playerID := callerID(ctx)
 	if playerID == 0 {
+		logRPCRejected(ctx, "LeaveTeam", reasonUnauthenticated)
 		return &teamv1.LeaveTeamResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetTeamId() == 0 {
+		logRPCRejected(ctx, "LeaveTeam", reasonMissingTeamID)
 		return &teamv1.LeaveTeamResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	rec, err := s.uc.LeaveTeam(ctx, req.GetTeamId(), playerID)
 	if err != nil {
@@ -153,11 +178,19 @@ func (s *TeamService) LeaveTeam(ctx context.Context, req *teamv1.LeaveTeamReques
 func (s *TeamService) Kick(ctx context.Context, req *teamv1.KickRequest) (*teamv1.KickResponse, error) {
 	captainID := callerID(ctx)
 	if captainID == 0 {
+		logRPCRejected(ctx, "Kick", reasonUnauthenticated)
 		return &teamv1.KickResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetTeamId() == 0 || req.GetTargetPlayerId() == 0 {
+		reason := reasonMissingTeamID
+		if req.GetTeamId() != 0 {
+			reason = reasonMissingTargetPlayerID
+		}
+		logRPCRejected(ctx, "Kick", reason,
+			"team_id", req.GetTeamId(), "target_player_id", req.GetTargetPlayerId())
 		return &teamv1.KickResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	rec, err := s.uc.Kick(ctx, req.GetTeamId(), captainID, req.GetTargetPlayerId())
 	if err != nil {
@@ -173,11 +206,14 @@ func (s *TeamService) Kick(ctx context.Context, req *teamv1.KickRequest) (*teamv
 func (s *TeamService) SetReady(ctx context.Context, req *teamv1.SetReadyRequest) (*teamv1.SetReadyResponse, error) {
 	playerID := callerID(ctx)
 	if playerID == 0 {
+		logRPCRejected(ctx, "SetReady", reasonUnauthenticated, "want_ready", req.GetReady())
 		return &teamv1.SetReadyResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetTeamId() == 0 {
+		logRPCRejected(ctx, "SetReady", reasonMissingTeamID, "want_ready", req.GetReady())
 		return &teamv1.SetReadyResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	rec, err := s.uc.SetReady(ctx, req.GetTeamId(), playerID, req.GetReady(), req.GetHeroId())
 	if err != nil {
@@ -192,8 +228,10 @@ func (s *TeamService) SetReady(ctx context.Context, req *teamv1.SetReadyRequest)
 // GetTeam 查询队伍(只读,无鉴权要求,team_id 即授权)。
 func (s *TeamService) GetTeam(ctx context.Context, req *teamv1.GetTeamRequest) (*teamv1.GetTeamResponse, error) {
 	if req.GetTeamId() == 0 {
+		logRPCRejected(ctx, "GetTeam", reasonMissingTeamID)
 		return &teamv1.GetTeamResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	rec, err := s.uc.GetTeam(ctx, req.GetTeamId())
 	if err != nil {
@@ -210,6 +248,7 @@ func (s *TeamService) GetTeam(ctx context.Context, req *teamv1.GetTeamRequest) (
 func (s *TeamService) GetMyTeam(ctx context.Context, _ *teamv1.GetMyTeamRequest) (*teamv1.GetMyTeamResponse, error) {
 	playerID := callerID(ctx)
 	if playerID == 0 {
+		logRPCRejected(ctx, "GetMyTeam", reasonUnauthenticated)
 		return &teamv1.GetMyTeamResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 
@@ -234,6 +273,7 @@ func (s *TeamService) GetMyTeam(ctx context.Context, _ *teamv1.GetMyTeamRequest)
 func (s *TeamService) ListMyPendingInvites(ctx context.Context, _ *teamv1.ListMyPendingInvitesRequest) (*teamv1.ListMyPendingInvitesResponse, error) {
 	playerID := callerID(ctx)
 	if playerID == 0 {
+		logRPCRejected(ctx, "ListMyPendingInvites", reasonUnauthenticated)
 		return &teamv1.ListMyPendingInvitesResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 
@@ -263,11 +303,14 @@ func (s *TeamService) ListMyPendingInvites(ctx context.Context, _ *teamv1.ListMy
 func (s *TeamService) SetTeamMap(ctx context.Context, req *teamv1.SetTeamMapRequest) (*teamv1.SetTeamMapResponse, error) {
 	captainID := callerID(ctx)
 	if captainID == 0 {
+		logRPCRejected(ctx, "SetTeamMap", reasonUnauthenticated, "map_id", req.GetMapId())
 		return &teamv1.SetTeamMapResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetTeamId() == 0 {
+		logRPCRejected(ctx, "SetTeamMap", reasonMissingTeamID, "map_id", req.GetMapId())
 		return &teamv1.SetTeamMapResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	rec, err := s.uc.SetTeamMap(ctx, req.GetTeamId(), captainID, req.GetMapId())
 	if err != nil {
@@ -287,6 +330,7 @@ func (s *TeamService) SetTeamMap(ctx context.Context, req *teamv1.SetTeamMapRequ
 func (s *TeamService) ListOpenTeams(ctx context.Context, req *teamv1.ListOpenTeamsRequest) (*teamv1.ListOpenTeamsResponse, error) {
 	playerID := callerID(ctx)
 	if playerID == 0 {
+		logRPCRejected(ctx, "ListOpenTeams", reasonUnauthenticated, "map_id", req.GetMapId())
 		return &teamv1.ListOpenTeamsResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 
@@ -305,11 +349,14 @@ func (s *TeamService) ListOpenTeams(ctx context.Context, req *teamv1.ListOpenTea
 func (s *TeamService) ApplyToTeam(ctx context.Context, req *teamv1.ApplyToTeamRequest) (*teamv1.ApplyToTeamResponse, error) {
 	playerID := callerID(ctx)
 	if playerID == 0 {
+		logRPCRejected(ctx, "ApplyToTeam", reasonUnauthenticated, "team_id", req.GetTeamId())
 		return &teamv1.ApplyToTeamResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetTeamId() == 0 {
+		logRPCRejected(ctx, "ApplyToTeam", reasonMissingTeamID)
 		return &teamv1.ApplyToTeamResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	joined, rec, expiresAtMs, err := s.uc.ApplyToTeam(ctx, req.GetTeamId(), playerID)
 	if err != nil {
@@ -331,11 +378,14 @@ func (s *TeamService) ApplyToTeam(ctx context.Context, req *teamv1.ApplyToTeamRe
 func (s *TeamService) ListTeamApplications(ctx context.Context, req *teamv1.ListTeamApplicationsRequest) (*teamv1.ListTeamApplicationsResponse, error) {
 	captainID := callerID(ctx)
 	if captainID == 0 {
+		logRPCRejected(ctx, "ListTeamApplications", reasonUnauthenticated, "team_id", req.GetTeamId())
 		return &teamv1.ListTeamApplicationsResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetTeamId() == 0 {
+		logRPCRejected(ctx, "ListTeamApplications", reasonMissingTeamID)
 		return &teamv1.ListTeamApplicationsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	recs, err := s.uc.ListTeamApplications(ctx, req.GetTeamId(), captainID)
 	if err != nil {
@@ -358,11 +408,20 @@ func (s *TeamService) ListTeamApplications(ctx context.Context, req *teamv1.List
 func (s *TeamService) HandleTeamApplication(ctx context.Context, req *teamv1.HandleTeamApplicationRequest) (*teamv1.HandleTeamApplicationResponse, error) {
 	captainID := callerID(ctx)
 	if captainID == 0 {
+		logRPCRejected(ctx, "HandleTeamApplication", reasonUnauthenticated,
+			"team_id", req.GetTeamId(), "applicant_id", req.GetApplicantId())
 		return &teamv1.HandleTeamApplicationResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetTeamId() == 0 || req.GetApplicantId() == 0 {
+		reason := reasonMissingTeamID
+		if req.GetTeamId() != 0 {
+			reason = reasonMissingApplicantID
+		}
+		logRPCRejected(ctx, "HandleTeamApplication", reason,
+			"team_id", req.GetTeamId(), "applicant_id", req.GetApplicantId(), "accept", req.GetAccept())
 		return &teamv1.HandleTeamApplicationResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 
 	rec, err := s.uc.HandleTeamApplication(ctx, req.GetTeamId(), captainID, req.GetApplicantId(), req.GetAccept())
 	if err != nil {
@@ -391,7 +450,7 @@ func callerID(ctx context.Context) uint64 {
 func systemOnly(ctx context.Context) commonv1.ErrCode {
 	if id := callerID(ctx); id != 0 {
 		plog.With(ctx).Warnw("msg", "team_authz_denied",
-			"reason", "system_rpc_by_client", "caller_id", id)
+			"reason", reasonSystemRPCByClient, "caller_id", id)
 		return commonv1.ErrCode_ERR_PERMISSION_DENY
 	}
 	return commonv1.ErrCode_OK
@@ -408,6 +467,24 @@ func toProtoCode(err error) commonv1.ErrCode {
 // captain_id 由它从已校验的 JWT sub 透传过来,team 侧仍会复核那确实是本队队长
 // (§9.6 派生判定服务端重算,不因为「内部调用」就免检)。
 func (s *TeamService) BeginTeamMatch(ctx context.Context, req *teamv1.BeginTeamMatchRequest) (*teamv1.BeginTeamMatchResponse, error) {
+	// 本方法此前**一道守卫都没有**(2026-08-13 补)。Envoy 按 `/pandora.team.v1.TeamService/`
+	// 整前缀路由,带玩家 JWT 的客户端同样打得到它 —— 而它能给**任意**队伍上一把 roster 租约,
+	// 反复调用即可让那支队伍始终处于「被别人的组票占住」状态,队长自己反而开不了局。
+	// 这与 GetPlayerTeam 是同一类东西向接口,用同一道门。
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &teamv1.BeginTeamMatchResponse{Code: code}, nil
+	}
+	// systemOnly 只挡住「带玩家 JWT 的客户端」;这一道才校验调用方**确实是 matchmaker**。
+	if code := s.verifyMatchCall(ctx, teamv1.TeamService_BeginTeamMatch_FullMethodName, req.GetTeamId()); code != commonv1.ErrCode_OK {
+		return &teamv1.BeginTeamMatchResponse{Code: code}, nil
+	}
+	// R3:内部东西向面既没有玩家 JWT(player_id 不会自动注入)、也没人写过 team_id。
+	// 两个 key 必须在这里手写进 ctx,否则 matchmaker→team 这一段在日志里与队长本人
+	// 完全串不起来 —— "队长点了开始匹配之后发生了什么"就断在服务边界上。
+	// ⚠️ 必须放在 systemOnly / verifyMatchCall **之后**:systemOnly 判的就是
+	// ctx 里有没有 player_id,提前写进去会把这道门直接打穿。
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
+	ctx = plog.WithPlayerID(ctx, req.GetCaptainId())
 	team, expiresAtMs, err := s.uc.BeginTeamMatch(ctx,
 		req.GetTeamId(), req.GetCaptainId(), req.GetOperationId(), req.GetLeaseMs())
 	if err != nil {
@@ -417,7 +494,31 @@ func (s *TeamService) BeginTeamMatch(ctx context.Context, req *teamv1.BeginTeamM
 		Code:             commonv1.ErrCode_OK,
 		Team:             s.uc.TeamToProto(team),
 		LeaseExpiresAtMs: expiresAtMs,
+		// 冻结这份名单那一刻的 ready 代际。matchmaker 必须原样带进 match 记录,
+		// 并在 EndTeamMatch 回传 —— 它是「这次复位对应的正是这一局」的唯一凭据。
+		ReadyGeneration: team.GetReadyGeneration(),
 	}, nil
+}
+
+// EndTeamMatch 对局结束后复位队伍准备状态(matchmaker 专用,内部东西向)。
+//
+// **必须 systemOnly**,与 BeginTeamMatch 不同:Begin 拿队长身份当授权(只有本队队长
+// 能给自己队上一把 5s 自净的租约,越权收益近乎为零);而本方法能把任意队伍打回 FORMING,
+// 客户端可达就等于一个「让任何队伍开不了局」的骚扰口子。Envoy 是按
+// /pandora.team.v1.TeamService/ 整前缀放行的,不显式拒就是对客户端开放。
+func (s *TeamService) EndTeamMatch(ctx context.Context, req *teamv1.EndTeamMatchRequest) (*teamv1.EndTeamMatchResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &teamv1.EndTeamMatchResponse{Code: code}, nil
+	}
+	if code := s.verifyMatchCall(ctx, teamv1.TeamService_EndTeamMatch_FullMethodName, req.GetTeamId()); code != commonv1.ErrCode_OK {
+		return &teamv1.EndTeamMatchResponse{Code: code}, nil
+	}
+	// R3:同 BeginTeamMatch —— 内部面不会自动带 team_id。放在两道门之后。
+	ctx = plog.WithTeamID(ctx, req.GetTeamId())
+	if err := s.uc.EndTeamMatch(ctx, req.GetTeamId(), req.GetPlayerIds(), req.GetExpectedReadyGeneration()); err != nil {
+		return &teamv1.EndTeamMatchResponse{Code: toProtoCode(err)}, nil
+	}
+	return &teamv1.EndTeamMatchResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
 // GetPlayerTeam 按 player_id 反查队伍编号(内部东西向,DS 出生编制专用)。
@@ -440,8 +541,13 @@ func (s *TeamService) GetPlayerTeam(ctx context.Context, req *teamv1.GetPlayerTe
 	}
 	playerID := req.GetPlayerId()
 	if playerID == 0 {
+		logRPCRejected(ctx, "GetPlayerTeam", reasonMissingPlayerID)
 		return &teamv1.GetPlayerTeamResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	// R3:DS 回调面走 AuthOptional 且 DS 不带 x-pandora-player-id —— player_id 必须手写,
+	// 否则"某个玩家进场后队友颜色不对"在 team 侧完全定位不到人。
+	// 放在 systemOnly / dsGuard **之后**(systemOnly 判的就是 ctx 里有没有 player_id)。
+	ctx = plog.WithPlayerID(ctx, playerID)
 
 	teamID, hasTeam, err := s.uc.GetPlayerTeamID(ctx, playerID)
 	if err != nil {

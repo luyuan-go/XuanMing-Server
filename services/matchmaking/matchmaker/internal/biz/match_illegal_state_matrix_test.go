@@ -23,17 +23,17 @@ func (r illegalStateTeamReader) GetTeam(context.Context, uint64) (*teamv1.Team, 
 
 // BeginTeamMatch 复刻真实 team 侧在锁内做的三项校验(存在 / READY / 队长),
 // 让这张非法状态矩阵表继续覆盖到组票入口 —— 校验挪进了 team 的锁,断言不能跟着丢。
-func (r illegalStateTeamReader) BeginTeamMatch(_ context.Context, teamID, captainID uint64, _ string, _ int64) (*teamv1.Team, error) {
+func (r illegalStateTeamReader) BeginTeamMatch(_ context.Context, teamID, captainID uint64, _ string, _ int64) (*teamv1.Team, uint64, error) {
 	if r.team == nil {
-		return nil, errcode.New(errcode.ErrMatchTeamNotReady, "team %d not found", teamID)
+		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d not found", teamID)
 	}
 	if r.team.State != teamv1.TeamState_TEAM_STATE_READY {
-		return nil, errcode.New(errcode.ErrMatchTeamNotReady, "team %d not ready (state=%d)", teamID, r.team.State)
+		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d not ready (state=%d)", teamID, r.team.State)
 	}
 	if r.team.CaptainId != captainID {
-		return nil, errcode.New(errcode.ErrTeamNotCaptain, "player %d not captain of team %d", captainID, teamID)
+		return nil, 0, errcode.New(errcode.ErrTeamNotCaptain, "player %d not captain of team %d", captainID, teamID)
 	}
-	return r.team, nil
+	return r.team, 0, nil
 }
 
 type selectiveBattleLocator struct {
@@ -276,4 +276,10 @@ func TestConcurrentDuplicateStartMatchConvergesToOneLiveTicket(t *testing.T) {
 	if ids, err := f.repo.RangeQueueTickets(ctx); err != nil || len(ids) != 1 || ids[0] != claimedTicket {
 		t.Fatalf("duplicate starts must converge to one queued ticket: claim=%d ids=%v err=%v", claimedTicket, ids, err)
 	}
+}
+
+// EndTeamMatch 在这张矩阵里不是被测对象(它只在 ReleaseMatch 路径上),
+// 补一个成功桩即可满足接口;它自己的用例在 release_end_team_match_test.go。
+func (r illegalStateTeamReader) EndTeamMatch(context.Context, uint64, []uint64, uint64) error {
+	return nil
 }

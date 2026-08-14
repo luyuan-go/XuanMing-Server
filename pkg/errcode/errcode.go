@@ -51,6 +51,18 @@ const (
 	// 完整 Login,会轮换服务端会话 jti 反顶新设备,两台设备形成互踢死循环
 	// (INC-20260722-004 R4 P0)。客户端对本码只能转交互登录,由玩家显式决定是否夺回会话。
 	ErrSessionSuperseded Code = 14
+	// ErrNotImplemented 对端**这个版本**还没有这个能力(gRPC `Unimplemented` 的业务侧对应物)。
+	//
+	// 它与 ErrUnavailable(10)的区别是**能不能靠重试解决**,这个区别决定调用方的行为:
+	//   - ErrUnavailable  = 对端会做,只是这次没做成 → 退避重试,重试终将成功;
+	//   - ErrNotImplemented = 对端根本不会做 → **重试永远不会成功**,只能等它滚上新版本。
+	//
+	// 用途是 §9.21 滚动升级的共存窗口:新调用方先于被调方上线时,若把
+	// `Unimplemented` 当成普通失败无限重试,补偿链(outbox 等)会一直空转并积压。
+	// 正确姿势是把它识别成「对端还没升级」——按弱依赖降级放行、留 Warn 与指标,
+	// 等被调方上线后新请求自然恢复。**降级必须是真的安全**(跳过这一步不会破坏正确性),
+	// 否则应当继续 fail-closed 而不是套用本码。
+	ErrNotImplemented Code = 15
 )
 
 // login(1000-1999)
@@ -114,6 +126,12 @@ const (
 	// ErrMatchEntryModeDenied 该关卡不允许请求所选的进法,或关卡表两种都开放而请求未明确选择。
 	// 后者是 fail-closed 的刻意选择(§17.3):不替玩家猜入口。
 	ErrMatchEntryModeDenied Code = 4010
+	// ErrMatchMemberOffline 队伍里有成员此刻不在大厅(已离线 / 登录了但还没进大厅),
+	// 不能把他冻进对局票据(INC-20260813-001)。刻意与 ErrMatchTeamNotReady 分开:
+	// 「没点准备」队长能催,「已经掉线」只能等他回来或先踢出去,玩家侧动作完全不同。
+	// biz error 文本会带离线成员 player_id 供服务端日志排障；当前 StartMatchResponse 只过线
+	// code + match_id，客户端拿不到这段文本。若产品要点名，须新增结构化响应字段。
+	ErrMatchMemberOffline Code = 4011
 )
 
 // ds_allocator / hub_allocator(5000-5999)

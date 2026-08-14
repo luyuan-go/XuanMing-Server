@@ -366,6 +366,12 @@ func main() {
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	// 6.1 后台 player.update 出箱发布器(W4 ⑨ 可靠补偿,随进程生命周期启停)
+	//
+	// 这里刻意保持 context.Background():进程启动期没有任何请求 ctx 可供 plog.Detach 复制,
+	// Detach(Background()) 与 Background() 完全等价。后台 worker 的 trace_id 缺口在**行级**
+	// 解决 —— 每个 publisher 处理单行时用 biz.withOutboxTrace 现铸一条 trace_id,让本服日志
+	// 与下游 player / inventory / mission / matchmaker 的 access log 落在同一个值上
+	// (出箱行本身不带原始请求 trace_id,那需要给出箱表加列)。
 	pubCtx, pubCancel := context.WithCancel(context.Background())
 	defer pubCancel()
 

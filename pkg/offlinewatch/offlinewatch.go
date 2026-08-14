@@ -77,6 +77,31 @@ type Handler interface {
 	OnPlayerOffline(ctx context.Context, playerID uint64, offlineSinceMs int64) error
 }
 
+// PresenceLostHandler 是 Handler 的**可选**扩展:玩家此刻查不到位置、且已经拿到权威的
+// 离开基线,但**还没满 Threshold**。Handler 实现了本接口,Watcher 就会在观测到这一刻时
+// 顺带回调一次;没实现则整条路径不存在,行为与本接口落地前完全一致。
+//
+// # 为什么需要两档而不是一档
+//
+// Threshold 那一档管的是**破坏性动作**(把人摘出队伍),所以必须给足重连余量(team 是 180s)。
+// 但在那 180s 里,「他还在队伍里」被下游误读成了「他有资格被拉进对局」——INC-20260813-001
+// 就是这么把一个已经关掉客户端的人冻进了对局票据。
+//
+// 这一档管的是**软化状态**:取消准备、界面置灰这类玩家自己一点就能恢复的东西。
+// 判据同样是 locator 权威(不是 kafka 事件),只是不等满阈值。
+//
+// 契约:
+//   - **必须幂等且必须自己判「有没有变化」**。本回调在玩家离线期间会被**反复**调用
+//     (每轮 Observe 一次),实现方要在没有实际变化时直接返回 nil 且不产生写。
+//     骨架刻意不做去重:去重状态是调度状态,不该寄生到业务或另起一份影子存储(§16.10)。
+//   - 返回 error 只记日志、不影响 Observe 的其余玩家,也不改变 Threshold 那一档的排期。
+//     业务暂缓(如队伍正被组票租约占住)返回 ErrDeferred,免得每次正常竞争都刷 Warn。
+//   - 与 OnPlayerOffline 一样,破坏性写必须自己在权威路径做 CAS / fence;
+//     本回调前的 locator 读只缩小竞态窗口,不是线性化点。
+type PresenceLostHandler interface {
+	OnPlayerPresenceLost(ctx context.Context, playerID uint64, sinceMs int64) error
+}
+
 // ErrDeferred 表示业务前置条件当前不满足,但任务不能视为完成。
 //
 // 例如玩家所在队伍正被一场对局占住:本轮不能摘人,对局结束后仍要继续复查。
@@ -179,6 +204,10 @@ type Watcher struct {
 	h      Handler
 	opts   Options
 
+	// lost 是 h 的可选扩展面(见 PresenceLostHandler),New 里一次性类型断言得到。
+	// nil = 业务没实现,整条软化路径不存在。
+	lost PresenceLostHandler
+
 	dueKey      string
 	evidenceKey string
 
@@ -203,10 +232,12 @@ func New(rdb redis.UniversalClient, reader PresenceReader, h Handler, opts Optio
 	if err := opts.normalize(); err != nil {
 		return nil, err
 	}
+	lost, _ := h.(PresenceLostHandler)
 	return &Watcher{
 		rdb:    rdb,
 		reader: reader,
 		h:      h,
+		lost:   lost,
 		opts:   opts,
 		// hash tag 括住 namespace:整个队列固定落一个 slot,ZRANGEBYSCORE 才能在
 		// Redis Cluster 下正常工作。due + evidence 共用同一 hash tag,Lua 才能原子
@@ -360,11 +391,14 @@ func (w *Watcher) Observe(ctx context.Context, playerIDs []uint64) error {
 				continue
 			}
 
+			sinceMs := int64(0)
 			if ms := lastSeen[pid]; ms > 0 {
+				sinceMs = ms
 				_, err = w.upsertEvidence(ctx, pid, ms)
 			} else if observed, ok := snapshot[pid]; ok {
 				// 已有 evidence 只能来自先前的权威 last-seen / 离场事件。复用 upsert
 				// 同时修复极端情况下 evidence 存在但 due 缺失的调度索引漂移。
+				sinceMs = observed
 				_, err = w.upsertEvidence(ctx, pid, observed)
 			} else {
 				continue
@@ -372,9 +406,33 @@ func (w *Watcher) Observe(ctx context.Context, playerIDs []uint64) error {
 			if err != nil {
 				return err
 			}
+			// 软化档回调(见 PresenceLostHandler)。落在这里而不是 Sweep 的 waiting 分支:
+			// upsertEvidence 把 due 排在 `离开时刻 + Threshold`,所以一次正常离场在满阈值
+			// **之前根本不会被 Sweep 扫到** —— waiting 分支对新鲜离场是不可达代码,
+			// 把回调挂在那里等于挂了个永不触发的钩子。Observe 才是每轮都真正跑到这批人的路径
+			// (team 的 teamRosterSource 每轮提名 + 打开组队面板的读路径兜底)。
+			w.notifyPresenceLost(ctx, pid, sinceMs)
 		}
 	}
 	return nil
+}
+
+// notifyPresenceLost 触发软化档回调。best-effort:失败只记日志,绝不影响本轮其余玩家的
+// 观测与排期 —— 破坏性的那一档(OnPlayerOffline)有自己的 due/claim/retry 闭环,
+// 不能让一个软化动作的失败把它拖住。业务下一轮 Observe 自然重来。
+func (w *Watcher) notifyPresenceLost(ctx context.Context, playerID uint64, sinceMs int64) {
+	if w.lost == nil || sinceMs <= 0 {
+		return
+	}
+	if err := w.lost.OnPlayerPresenceLost(ctx, playerID, sinceMs); err != nil {
+		if errors.Is(err, ErrDeferred) {
+			plog.With(ctx).Debugw("msg", "offlinewatch_presence_lost_deferred",
+				"namespace", w.opts.Namespace, "player_id", playerID, "err", err)
+			return
+		}
+		plog.With(ctx).Warnw("msg", "offlinewatch_presence_lost_failed",
+			"namespace", w.opts.Namespace, "player_id", playerID, "err", err)
+	}
 }
 
 // Sweep 跑一轮到期复查。导出是为了单测能用受控时钟直接驱动,不必等真实 ticker。

@@ -48,6 +48,15 @@ team:
   # 生产环境请换成 ≥32 字节的随机密钥,勿沿用 dev 示例值。
   match_resume_auth_secret: "CHANGE-ME-team-resume-auth-key-32bytes-min"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
+  # ── 反方向:验 matchmaker 调 BeginTeamMatch / EndTeamMatch(A-13)────────────────
+  # ⚠️ 必须与上面那把**不同**(那把是 team 签出站用的,共用等于互相可冒充)。
+  # 对应 matchmaker 的 team_call_auth_secret / team_call_auth_audience。
+  match_call_auth_secret: "CHANGE-ME-match-call-auth-key-32bytes-min"
+  match_call_auth_audience: "team"
+  # ⚠️ 首次上线保持 false(观察期):先确认 matchmaker 已**全量**滚上带签名的版本
+  # (日志 team_match_call_auth_observed 归零),再单独发一次配置把它翻 true。
+  # 直接上 true 会在共存窗口里把还没签名的旧 matchmaker 全部拒掉。
+  match_call_auth_require: false
 
   # 离线观察的 locator 来源（真实 K8s Service gRPC 端口）。
   locator_addr: "player-locator.pandora.svc.cluster.local:20006"

@@ -67,8 +67,23 @@ func logDSAuthReject(ctx context.Context, rpc, stage string, matchID uint64, rep
 // ReportResult 同步上报一场对局结算(幂等)。
 func (s *BattleResultService) ReportResult(ctx context.Context, req *battlev1.ReportResultRequest) (*battlev1.ReportResultResponse, error) {
 	if req.GetResult() == nil || req.GetResult().GetMatchId() == 0 {
+		plog.With(ctx).Warnw("msg", "ds_report_result_rejected",
+			"reason", "missing_match_id",
+			"hint", "DS 上报结算缺 result / match_id,请求在鉴权前就被拒")
 		return &battlev1.ReportResultResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	// §11.3 R3:DS 回调面没有玩家 JWT,plog.With(ctx) 不会自动带 player_id / match_id。
+	// 在 match_id 解析成功处写进 ctx,本请求后续**所有**日志(含 data 层、退避失败等
+	// 没手写 match_id 的那些)自动带上这个 join key。
+	ctx = plog.WithMatchID(ctx, req.GetResult().GetMatchId())
+	// 链路第一站留痕(§11.3 R1):没有这条时,「打完没结算」分不清是 DS 根本没上报,
+	// 还是上报了被后面某道门拒掉(鉴权码全是业务码,access log 只记 rpc_ok/DEBUG)。
+	// 每场对局一条(DS 重试会各留一条,与后面的 idempotent_hit 成对)。
+	plog.With(ctx).Infow("msg", "battle_result_received",
+		"match_id", req.GetResult().GetMatchId(), "ds_pod_name", req.GetResult().GetDsPodName(),
+		"players", len(req.GetResult().GetStats()), "winner_team", req.GetResult().GetWinnerTeam(),
+		"outcome", req.GetResult().GetOutcome().String(),
+		"final_progress_seq", req.GetFinalProgressSeq())
 	// DS 回调范围绑定:battle 令牌 match_id 必须等于上报的 match_id
 	// (防拿 A 局令牌伪造 B 局结算;不变量 §9.2 结算幂等 + §9.6 DS 不可信)。
 	// RequireToken:纯 DS 回调,enforce 下无令牌直连一律拒(堵绕过 Envoy 的东西向旁路,审核 P1)。
@@ -123,8 +138,13 @@ func (s *BattleResultService) ReportResult(ctx context.Context, req *battlev1.Re
 // + 水位表打终局标记,双重保证迟到进度一律拒(僵尸 DS fencing)。
 func (s *BattleResultService) ReportProgress(ctx context.Context, req *battlev1.ReportProgressRequest) (*battlev1.ReportProgressResponse, error) {
 	if req.GetMatchId() == 0 || len(req.GetEvents()) == 0 {
+		plog.With(ctx).Warnw("msg", "ds_report_progress_rejected",
+			"reason", "missing_match_id_or_events",
+			"match_id", req.GetMatchId(), "events", len(req.GetEvents()))
 		return &battlev1.ReportProgressResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	// 同 ReportResult:在解析成功处把 match_id 写进 ctx 作为本请求的 join key(§11.3 R3)。
+	ctx = plog.WithMatchID(ctx, req.GetMatchId())
 	_, credential, err := s.dsGuard.CheckBattleCredential(ctx, middleware.DSScope{Type: auth.DSTypeBattle, MatchID: req.GetMatchId(), RequireToken: true})
 	if err != nil {
 		logDSAuthReject(ctx, "ReportProgress", "check_credential", req.GetMatchId(), "", "", err)

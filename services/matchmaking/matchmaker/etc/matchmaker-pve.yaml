@@ -59,6 +59,15 @@ match:
   ds_local_profile: "local-off-v1"
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
   team_addr: "127.0.0.1:20010"
+  # 签 matchmaker→team 的 BeginTeamMatch / EndTeamMatch(A-13)。
+  # **必须与 team-dev.yaml 的 match_call_auth_secret 一致** —— pve 与 pvp 两个实例
+  # 打的是同一台 team,team 侧 require=true 时不配这里会让 PVE 直接开不了局。
+  team_call_auth_secret: "pandora-dev-match-call-auth-key-v1!!"
+  team_call_auth_audience: "team"
+  # allow_missing_team: 留空 team_addr 的显式开关,默认 false(= 留空即启动失败)。
+  # 留空的后果是**静默**的:StartMatch 不再校验队伍,对局结束也不再复位准备状态
+  # (INC-20260813-001 第一根因)。要跑不带 team 的骨架就显式写 true。
+  # allow_missing_team: false
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(成局后拉战斗 DS);留空用 StubDSAllocator
   ds_allocator_addr: "127.0.0.1:20020"
   # ds_allocate_timeout: 调 ds_allocator.AllocateBattle 的客户端超时(默认 60s)。
@@ -78,6 +87,14 @@ match:
   # 成局超过 locator TTL(30s)后全员必然被判离线(本事故实测 31.07s 判死,玩家静止不动亦然)。
   # 完整机械证明、重开前置与决策待办见 matchmaker-dev.yaml 同项注释。
   liveness_gate_enabled: false
+  # start_presence_grace: StartMatch 在线闸的宽限窗(INC-20260813-001)。
+  # 与上面两道门的关键差别:判「离开了多久」而不是「此刻查不查得到」,因此不存在那两道门的
+  # 结构性假阳性。完整说明见 matchmaker-dev.yaml 同项注释。**负值关闭整道闸**。
+  start_presence_grace: "30s"
+  # queue_absence_reap_after: 排队票离线回收判死窗(INC-20260814-001 隔夜幽灵票;
+  # PVE walk-in 票同样覆盖——solo 成局前也过同一道复查)。完整说明见 matchmaker-dev.yaml
+  # 同项注释。**负值关闭**。
+  queue_absence_reap_after: "120s"
   # map_id: PVE 默认副本(客户端 StartMatchRequest.map_id=0 时的兜底;对齐 g_关卡.xlsx,7=SonglinTown 松林镇副本)
   map_id: 7
   # game_mode: PVE 撮合池命名空间 + 透传 ds_allocator(DS env PANDORA_GAME_MODE / Agones label)

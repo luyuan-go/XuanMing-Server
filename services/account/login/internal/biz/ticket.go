@@ -314,7 +314,8 @@ func (u *TicketUsecase) issueBattleDSTicketV2(
 		(target.ReleaseTrack != auth.ReleaseTrackStable && target.ReleaseTrack != auth.ReleaseTrackCanary) {
 		h.Warnw("msg", "battle_ticket_v2_target_incomplete",
 			"player_id", playerID, "match_id", matchID, "pod", target.PodName,
-			"uid", target.InstanceUID, "epoch", target.InstanceEpoch, "allocation_id", target.AllocationID)
+			"uid", target.InstanceUID, "epoch", target.InstanceEpoch, "allocation_id", target.AllocationID,
+			"release_track", target.ReleaseTrack)
 		return nil, errcode.New(errcode.ErrUnavailable,
 			"battle ticket v2 requires complete DS instance identity from roster authority")
 	}
@@ -332,10 +333,16 @@ func (u *TicketUsecase) issueBattleDSTicketV2(
 		h.Errorw("msg", "sign_ds_ticket_v2_failed", "err", err, "player_id", playerID, "match_id", matchID)
 		return nil, errcode.New(errcode.ErrInternal, "sign v2 battle ticket failed: %v", err)
 	}
-	h.Debugw("msg", "ds_ticket_v2_issued",
+	// §9.3 五要件里 battle 侧的那一半必须落盘并且是 INFO:DS 侧报
+	// 「battle v2 ticket no longer matches roster authority」时,需要对比
+	// 「签发瞬间的实例身份」与「核销瞬间的 roster 权威」;此前签发侧只留了 pod + allocation_id,
+	// 且是 Debug(线上 info 级一条都不出),两边日志根本对不上。
+	h.Infow("msg", "ds_ticket_v2_issued",
 		"player_id", playerID, "ds_type", "battle", "match_id", matchID,
 		"jti", jti, "exp_ms", expMs, "region_id", regionID, "cell_id", cellID,
-		"pod", target.PodName, "allocation_id", target.AllocationID)
+		"pod", target.PodName, "allocation_id", target.AllocationID,
+		"ds_instance_uid", target.InstanceUID, "ds_instance_epoch", target.InstanceEpoch,
+		"release_track", target.ReleaseTrack, "sess_jti", sessJTI, "ds_addr", target.DSAddr)
 	return &DSTicketResult{
 		Ticket:       tok,
 		JTI:          jti,
@@ -478,9 +485,19 @@ func (u *TicketUsecase) verifyDSTicket(
 		if targetErr != nil {
 			return nil, targetErr
 		}
-		if dsPodName == "" || dsPodName != claims.DSPodName || target.PodName != claims.DSPodName ||
-			target.InstanceUID != claims.DSInstanceUID || target.InstanceEpoch != claims.DSInstanceEpoch ||
-			target.AllocationID != claims.AllocationID || target.ReleaseTrack != claims.ReleaseTrack {
+		if field := battleV2BindingMismatchField(dsPodName, claims, target); field != "" {
+			// 七个条件原本塌成一句话且**静默 return**:DS 侧只会说「准入被拒」,login 侧
+			// 连哪个字段不一致都不记。换 DS 版本(release_track stable→canary)或
+			// instance_epoch 递增导致的全服进不去副本,只能靠猜。
+			h.Warnw("msg", "ds_ticket_binding_rejected",
+				"player_id", claims.PlayerID, "ds_type", claims.DSType, "ds_pod", dsPodName,
+				"jti", claims.JTI, "match_id", claims.MatchID, "mismatch_field", field,
+				"ticket_pod", claims.DSPodName, "ticket_uid", claims.DSInstanceUID,
+				"ticket_instance_epoch", claims.DSInstanceEpoch,
+				"ticket_allocation_id", claims.AllocationID, "ticket_release_track", claims.ReleaseTrack,
+				"authority_pod", target.PodName, "authority_uid", target.InstanceUID,
+				"authority_instance_epoch", target.InstanceEpoch,
+				"authority_allocation_id", target.AllocationID, "authority_release_track", target.ReleaseTrack)
 			return nil, errcode.New(errcode.ErrLoginTicketInvalid, "battle v2 ticket no longer matches roster authority")
 		}
 	} else if claims.DSType == string(auth.DSTypeHub) {
@@ -490,10 +507,30 @@ func (u *TicketUsecase) verifyDSTicket(
 				return nil, errcode.New(errcode.ErrUnavailable, "hub v2 assignment checker unavailable")
 			}
 			if dsPodName == "" || dsPodName != claims.DSPodName {
+				field := "caller_ds_pod"
+				if dsPodName == "" {
+					field = "caller_ds_pod_empty"
+				}
+				h.Warnw("msg", "ds_ticket_binding_rejected",
+					"player_id", claims.PlayerID, "ds_type", claims.DSType, "ds_pod", dsPodName,
+					"jti", claims.JTI, "mismatch_field", field,
+					"ticket_pod", claims.DSPodName, "ticket_uid", claims.DSInstanceUID,
+					"ticket_instance_epoch", claims.DSInstanceEpoch,
+					"ticket_hub_assignment_id", claims.HubAssignmentID,
+					"ticket_release_track", claims.ReleaseTrack)
 				return nil, errcode.New(errcode.ErrUnauthorized, "hub v2 ticket target pod mismatch")
 			}
 			if err := checker.CheckCurrentB1(ctx, claims.PlayerID, claims.DSPodName, claims.DSInstanceUID,
 				claims.DSInstanceEpoch, claims.HubAssignmentID, claims.ReleaseTrack); err != nil {
+				// 归属权威说这张票绑的 assignment/实例已不是当前的(Transfer / Release /
+				// 同名 Pod 重建 / 灰度换轨)。err 里有权威侧口径,票内五要件在这里给出。
+				h.Warnw("msg", "ds_ticket_binding_rejected", "err", err,
+					"player_id", claims.PlayerID, "ds_type", claims.DSType, "ds_pod", dsPodName,
+					"jti", claims.JTI, "mismatch_field", "hub_assignment_authority",
+					"ticket_pod", claims.DSPodName, "ticket_uid", claims.DSInstanceUID,
+					"ticket_instance_epoch", claims.DSInstanceEpoch,
+					"ticket_hub_assignment_id", claims.HubAssignmentID,
+					"ticket_release_track", claims.ReleaseTrack)
 				return nil, err
 			}
 		} else {
@@ -501,11 +538,31 @@ func (u *TicketUsecase) verifyDSTicket(
 			binding := hubBindingFromClaims(claims)
 			if binding.Complete() {
 				if err := u.checkHubAssignment(ctx, claims.PlayerID, dsPodName, binding); err != nil {
+					h.Warnw("msg", "ds_ticket_binding_rejected", "err", err,
+						"player_id", claims.PlayerID, "ds_type", claims.DSType, "ds_pod", dsPodName,
+						"jti", claims.JTI, "mismatch_field", "hub_assignment_authority_legacy",
+						"ticket_pod", claims.DSPodName, "ticket_uid", claims.DSInstanceUID,
+						"ticket_protocol_epoch", claims.DSProtocolEpoch,
+						"ticket_credential_gen", claims.DSCredentialGen,
+						"ticket_hub_assignment_id", claims.HubAssignmentID)
 					return nil, err
 				}
 			} else if !binding.Empty() {
+				// 部分字段有、部分没有 = 签发面半截升级,比完全没有更危险(不能当兼容旧票放过)。
+				h.Warnw("msg", "ds_ticket_binding_rejected",
+					"player_id", claims.PlayerID, "ds_type", claims.DSType, "ds_pod", dsPodName,
+					"jti", claims.JTI, "mismatch_field", "binding_incomplete",
+					"ticket_pod", claims.DSPodName, "ticket_uid", claims.DSInstanceUID,
+					"ticket_protocol_epoch", claims.DSProtocolEpoch,
+					"ticket_credential_gen", claims.DSCredentialGen,
+					"ticket_hub_assignment_id", claims.HubAssignmentID)
 				return nil, errcode.New(errcode.ErrLoginTicketInvalid, "hub ticket has incomplete assignment binding")
 			} else if u.requireHubAssignmentBinding {
+				// 空绑定旧票撞上已激活的 binding 栅栏:滚动窗口没排空干净的典型信号。
+				h.Warnw("msg", "ds_ticket_binding_rejected",
+					"player_id", claims.PlayerID, "ds_type", claims.DSType, "ds_pod", dsPodName,
+					"jti", claims.JTI, "mismatch_field", "binding_missing",
+					"hint", "require_hub_assignment_binding 已开,但收到无绑定的旧签发面票据")
 				return nil, errcode.New(errcode.ErrLoginTicketInvalid, "hub ticket missing required assignment binding")
 			}
 		}
@@ -536,6 +593,11 @@ func (u *TicketUsecase) verifyDSTicket(
 			return nil, markErr
 		}
 		if status != data.AdmissionMarkerCreated && status != data.AdmissionMarkerExisting {
+			// 与 PeekAdmission 的 Conflict 同类(双准入 / 重放安全信号),但发生在原子
+			// MarkUsedByAdmission 这一步:Peek 之后、Mark 之前有别的 admission 抢占了这张票。
+			h.Warnw("msg", "ds_ticket_admission_marker_conflict",
+				"jti", claims.JTI, "player_id", claims.PlayerID, "ds_pod", dsPodName,
+				"ds_type", claims.DSType, "admission_id", admissionID, "marker_status", int(status))
 			return nil, errcode.New(errcode.ErrLoginTicketReplayed, "ticket admission marker conflict")
 		}
 	} else if admission == nil && u.jtiRepo != nil && claims.JTI != "" {
@@ -741,6 +803,34 @@ func hubBindingFromAdmission(admission data.DSAdmissionBinding, assignmentID str
 		WriterEpoch: admission.WriterEpoch, ExpMs: admission.ExpMs, Kid: admission.Kid,
 		TokenSHA256: admission.TokenSHA256, ReleaseTrack: admission.ReleaseTrack,
 	}
+}
+
+// battleV2BindingMismatchField 逐项核对 battle v2 票据与 roster 权威的绑定七要件,
+// 返回**第一个**不一致的字段名;全部一致返回 ""。
+//
+// 七个条件与判定语义和历史版本(塌成一句 if 的写法)完全一致,拆开只为可观测:
+// 调用方把返回的字段名连同票内/权威侧两份值一起打进 ds_ticket_binding_rejected,
+// 否则换 DS 版本(release_track)或 instance_epoch 递增导致的全服拒入只能靠猜。
+// 顺序有意义:先验调用方身份(caller pod),再验票据与权威的实例五要件——
+// 前者不匹配时后者的对比值没有意义。
+func battleV2BindingMismatchField(dsPodName string, claims *verifiedDSTicket, target data.BattleTicketTarget) string {
+	switch {
+	case dsPodName == "":
+		return "caller_ds_pod_empty"
+	case dsPodName != claims.DSPodName:
+		return "caller_ds_pod"
+	case target.PodName != claims.DSPodName:
+		return "pod_name"
+	case target.InstanceUID != claims.DSInstanceUID:
+		return "instance_uid"
+	case target.InstanceEpoch != claims.DSInstanceEpoch:
+		return "instance_epoch"
+	case target.AllocationID != claims.AllocationID:
+		return "allocation_id"
+	case target.ReleaseTrack != claims.ReleaseTrack:
+		return "release_track"
+	}
+	return ""
 }
 
 func (u *TicketUsecase) checkHubAssignment(

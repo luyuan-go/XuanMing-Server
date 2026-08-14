@@ -58,9 +58,21 @@ type MatchConf struct {
 	// 生产配置里两者皆无时仍是启动失败(维持既有 fail-closed,不存在静默降级)。
 	DSLocalProfile string `yaml:"ds_local_profile,omitempty" json:"ds_local_profile,omitempty"`
 
-	// TeamAddr 是 team 服务 gRPC 直连地址(StartMatch 时拉取队伍快照校验 READY)。
-	// 留空则 StartMatch 跳过 team 校验(本机不起 team 也能跑撮合骨架)。
+	// TeamAddr 是 team 服务 gRPC 直连地址。它现在承载**两条**必需链路:
+	// ①StartMatch 组票(BeginTeamMatch 冻结名单);②对局结束复位准备状态(EndTeamMatch)。
+	// 留空 = 两条都不走 —— 而且是**静默**不走(见 AllowMissingTeam)。
 	TeamAddr string `yaml:"team_addr,omitempty" json:"team_addr,omitempty"`
+
+	// AllowMissingTeam 是「允许 team_addr 留空」的显式开关,默认 false(= 留空即启动失败)。
+	//
+	// 为什么要有这道门(INC-20260813-001):留空的后果是**静默**的 ——
+	// StartMatch 不再校验队伍(任何玩家可为任意 team_id 开局),对局结束也不再复位准备状态
+	// (正是本次事故的第一根因)。两者都不报错、不打 ERROR,配错了没有任何人会发现。
+	// 这与事故本身同一类失效形状,因此按 fail-closed 处理:要跳过必须写明白。
+	//
+	// 零值即安全(同 battle_gate_fail_open):骨架联调要跳过 team 就显式写
+	// `allow_missing_team: true`,写下这一行的人就知道自己关掉了什么。
+	AllowMissingTeam bool `yaml:"allow_missing_team,omitempty" json:"allow_missing_team,omitempty"`
 
 	// DSAllocatorAddr 是 ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS)。
 	// 留空则用 StubDSAllocator(W4 ① 行为,返回固定 mock 地址 + mock 票据)。
@@ -89,6 +101,18 @@ type MatchConf struct {
 	// key rotation all-or-nothing. Leaving it empty keeps Team locked out
 	// (fail-closed), it does not fall back to Login's key.
 	TeamResumeAuthSecret string `yaml:"team_resume_auth_secret,omitempty" json:"team_resume_auth_secret,omitempty"`
+
+	// TeamCallAuthSecret / TeamCallAuthAudience 是**反方向**的凭据:matchmaker 调 team 的
+	// BeginTeamMatch / EndTeamMatch 时签名,caller 固定 "matchmaker"(INC-20260813-001 A-13)。
+	// 对应 team 的 match_call_auth_secret/audience。
+	//
+	// **必须与 TeamResumeAuthSecret 不同**:那把是 matchmaker 验**入站**的,
+	// 共用等于让任一方能冒充另一方。
+	//
+	// 留空 → 不签名。team 侧按其 match_call_auth_require 决定放行(观察期)还是拒。
+	// 上线顺序是「两边配密钥 → 观察 → 翻 require」,每一步单独都安全(§9.21 不靠发布顺序)。
+	TeamCallAuthSecret   string `yaml:"team_call_auth_secret,omitempty" json:"team_call_auth_secret,omitempty"`
+	TeamCallAuthAudience string `yaml:"team_call_auth_audience,omitempty" json:"team_call_auth_audience,omitempty"`
 	// AllocationAbortAuth authenticates only Matchmaker→DS allocator's exact
 	// pre-admission abort request. It must not reuse Login resume, player JWT,
 	// or DS callback trust-domain keys.
@@ -110,6 +134,37 @@ type MatchConf struct {
 	// 尚未上报该字段前开启，会把全部在线玩家在 locator TTL（30s）后误判离线、扫掉排队票据。
 	// 必须等 Hub DS 侧联发后才可开启；关闭时行为与旧版一致（仅靠票据 TTL / 确认超时兜底）。
 	LivenessGateEnabled bool `yaml:"liveness_gate_enabled,omitempty" json:"liveness_gate_enabled,omitempty"`
+
+	// StartPresenceGrace 是 StartMatch 在线闸的宽限窗(默认 30s;**负值**关闭整道闸,0=用默认)。
+	//
+	// 闸的判据不是「此刻 locator 里查得到位置」,而是「距离最后一次被 Hub DS 观测在场
+	// 已经过去多久」(locator BatchGetLastSeen:优先 left_at_ms,退到 last_alive_ms)。
+	// 只有**查不到位置**且**超过本窗**才拒——拿不到任何离开基线时判 UNKNOWN 放行(§9.22)。
+	//
+	// 为什么必须是「时长」而不是「在不在线」(INC-20260724-001 的教训):位置投影本身会
+	// 在正常路径上短暂缺席(撮合失败后 MATCHING 无保活、切线换 Hub 的换手窗口),
+	// 直接按缺席判死是**结构性 100% 假阳性**。last_alive_ms 由 Hub DS 心跳按 census 全员
+	// 续期(每 5s),坐在大厅里的人这个值恒为「刚刚」,真掉线的人才会一路涨上去。
+	//
+	// 取值:必须 >> 一个 Hub 心跳周期(5s)且 << team 的 offline_leave.threshold(180s)。
+	// 30s 同时也贴合 locator 的 location_ttl,便于对照排障。
+	StartPresenceGrace config.Duration `yaml:"start_presence_grace,omitempty" json:"start_presence_grace,omitempty"`
+
+	// QueueAbsenceReapAfter 是排队票离线回收的判死窗(默认 120s;**负值**关闭整条回收,0=用默认)。
+	//
+	// 堵的洞(INC-20260814-001 隔夜幽灵票):非终态 ticket 是持久状态,玩家排队后关掉
+	// 客户端,既无 CancelMatch、无任何链路把票转终态(team offline_leave 刻意不联动且
+	// 单人队不处理;liveness_gate 已回退关闭),隔夜旧票会与次日新玩家成局——幽灵对手。
+	//
+	// 判据与 StartPresenceGrace 同一条证据链(BatchOnline + BatchGetLastSeen,按「离开了
+	// 多久」判,UNKNOWN 不得冒充 OFFLINE),**不是**已坑掉的 liveness_gate「此刻查不到即
+	// 判死」那套(INC-20260724-001 结构性假阳性)。两处消费:队列周期扫除
+	// (queueAbsenceSweepOnce)+ 成局装箱前复查(rejectAbsentTickets)。
+	//
+	// 取值:必须 > StartPresenceGrace(30s,入队闸)且建议 < ticket_ttl(30m)。排队中掉线
+	// 重连是常态(切后台/弱网),窗口过小会把正在重连的人踢出队列;120s 取 team
+	// offline_leave.threshold(180s)以下、远大于一次重登耗时,待实测复核。
+	QueueAbsenceReapAfter config.Duration `yaml:"queue_absence_reap_after,omitempty" json:"queue_absence_reap_after,omitempty"`
 	// MapId 撮合成局后请求的战斗地图配置 ID(配置表 ID,uint32)。
 	MapId uint32 `yaml:"map_id,omitempty" json:"map_id,omitempty"`
 
@@ -249,6 +304,12 @@ func (c *Config) Defaults() {
 	if c.Match.StartMatchCooldown == 0 {
 		c.Match.StartMatchCooldown = config.Duration(3 * time.Second)
 	}
+	if c.Match.StartPresenceGrace == 0 {
+		c.Match.StartPresenceGrace = config.Duration(30 * time.Second)
+	}
+	if c.Match.QueueAbsenceReapAfter == 0 {
+		c.Match.QueueAbsenceReapAfter = config.Duration(120 * time.Second)
+	}
 	if c.Match.MatchFormCooldown == 0 {
 		c.Match.MatchFormCooldown = config.Duration(5 * time.Second)
 	}
@@ -301,6 +362,13 @@ func (c *Config) Defaults() {
 // Validate rejects service-auth configurations that would silently reopen the
 // internal resolver or collapse independent trust domains.
 func (c *Config) Validate() error {
+	// team_addr 留空的后果是静默的(不校验队伍 + 不复位准备状态,见字段注释),
+	// 与 INC-20260813-001 同一类失效形状,因此要跳过必须显式声明。
+	if c.Match.TeamAddr == "" && !c.Match.AllowMissingTeam {
+		return fmt.Errorf("match.team_addr is required: empty silently disables both team validation " +
+			"on StartMatch and ready reset on match end (INC-20260813-001); " +
+			"set match.allow_missing_team=true to run the skeleton without team")
+	}
 	if err := internalrpcauth.ValidateSecret(c.Match.MatchResumeAuthSecret); err != nil {
 		return fmt.Errorf("match.match_resume_auth_secret invalid: %w", err)
 	}

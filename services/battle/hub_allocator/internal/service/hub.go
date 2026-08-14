@@ -17,6 +17,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
@@ -60,14 +61,31 @@ func (s *HubService) SetLocalAdmission(b bool) { s.localAdmission = b }
 // AssignHub 为玩家分配大厅 DS 分片(login 登录成功后调)。
 func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest) (*hubv1.AssignHubResponse, error) {
 	if req.GetPlayerId() == 0 {
+		plog.With(ctx).Warnw("msg", "hub_assign_rejected",
+			"player_id", req.GetPlayerId(), "region", req.GetRegion(),
+			"reason", reasonMissingPlayerID, "code", int32(commonv1.ErrCode_ERR_INVALID_ARG))
 		return &hubv1.AssignHubResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	// R3 join key:team_id / source_match_id 在这里解析成功,写进 ctx,让本请求后续
+	// 所有 plog.With(ctx) 自动带上(plog.WithTeamID / WithMatchID)。player_id 走
+	// AuthOptional 面不会自动带,一律逐条手写。
+	if teamID := req.GetTeamId(); teamID != 0 {
+		ctx = plog.WithTeamID(ctx, teamID)
+	}
+	if sourceMatchID := req.GetSourceMatchId(); sourceMatchID != 0 {
+		ctx = plog.WithMatchID(ctx, sourceMatchID)
 	}
 	// source_match_id:login 三态门证明原对局终局后透传的 Battle→Hub 回流 fence,
 	// 盖进 hub 票据 claim(内部控制面调用,信任链与 role_id 同源)。
 	// session_jti(R6 复审 P0-3):login 透传的请求方会话 jti,盖进本次 hub 票据 sjti claim。
 	res, err := s.uc.AssignHub(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId(), req.GetSourceMatchId(), req.GetSessionJti())
 	if err != nil {
-		return &hubv1.AssignHubResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		plog.With(ctx).Warnw("msg", "hub_assign_failed",
+			"player_id", req.GetPlayerId(), "region", req.GetRegion(), "role_id", req.GetRoleId(),
+			"has_session_jti", req.GetSessionJti() != "",
+			"reason", bizRejectReason(err), "code", int32(code), "err", err)
+		return &hubv1.AssignHubResponse{Code: code}, nil
 	}
 	return &hubv1.AssignHubResponse{
 		Code:       commonv1.ErrCode_OK,
@@ -81,10 +99,17 @@ func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest)
 // ReleaseHub 玩家离开大厅(登出/进战斗)。
 func (s *HubService) ReleaseHub(ctx context.Context, req *hubv1.ReleaseHubRequest) (*hubv1.ReleaseHubResponse, error) {
 	if req.GetPlayerId() == 0 {
+		plog.With(ctx).Warnw("msg", "hub_release_rejected",
+			"player_id", req.GetPlayerId(),
+			"reason", reasonMissingPlayerID, "code", int32(commonv1.ErrCode_ERR_INVALID_ARG))
 		return &hubv1.ReleaseHubResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
 	if err := s.uc.ReleaseHub(ctx, req.GetPlayerId()); err != nil {
-		return &hubv1.ReleaseHubResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		plog.With(ctx).Warnw("msg", "hub_release_failed",
+			"player_id", req.GetPlayerId(),
+			"reason", bizRejectReason(err), "code", int32(code), "err", err)
+		return &hubv1.ReleaseHubResponse{Code: code}, nil
 	}
 	return &hubv1.ReleaseHubResponse{Code: commonv1.ErrCode_OK}, nil
 }
@@ -101,11 +126,18 @@ func (s *HubService) EnsureHubDepartureForBattle(ctx context.Context,
 // TransferHub 跨分片传送(玩家点传送点)。
 func (s *HubService) TransferHub(ctx context.Context, req *hubv1.TransferHubRequest) (*hubv1.TransferHubResponse, error) {
 	if req.GetPlayerId() == 0 {
+		plog.With(ctx).Warnw("msg", "hub_transfer_rejected",
+			"player_id", req.GetPlayerId(), "target_hub_id", req.GetTargetHubId(),
+			"reason", reasonMissingPlayerID, "code", int32(commonv1.ErrCode_ERR_INVALID_ARG))
 		return &hubv1.TransferHubResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
 	res, err := s.uc.TransferHub(ctx, req.GetPlayerId(), req.GetTargetHubId())
 	if err != nil {
-		return &hubv1.TransferHubResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		plog.With(ctx).Warnw("msg", "hub_transfer_failed",
+			"player_id", req.GetPlayerId(), "target_hub_id", req.GetTargetHubId(),
+			"reason", bizRejectReason(err), "code", int32(code), "err", err)
+		return &hubv1.TransferHubResponse{Code: code}, nil
 	}
 	return &hubv1.TransferHubResponse{
 		Code:         commonv1.ErrCode_OK,
@@ -126,6 +158,11 @@ func (s *HubService) ListHubs(ctx context.Context, req *hubv1.ListHubsRequest) (
 // Heartbeat 处理大厅 DS 心跳上报(Hub DS 每 5s 调)。
 func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest) (*hubv1.HeartbeatResponse, error) {
 	if req.GetHubPodName() == "" {
+		// R4:心跳是高频路径,成功侧一条都不打;失败侧必须打 —— 一台 DS 报不上心跳就永远
+		// 出不了 warming、不可被 AssignHub 选中,玩家侧只表现为 ErrHubNoAvailable。
+		plog.With(ctx).Warnw("msg", "hub_heartbeat_rejected",
+			"pod", req.GetHubPodName(), "player_count", req.GetPlayerCount(), "state", req.GetState(),
+			"reason", reasonMissingPod, "code", int32(commonv1.ErrCode_ERR_INVALID_ARG))
 		return &hubv1.HeartbeatResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
 	// DS 回调令牌校验:hub 令牌的 sub(pod)必须等于上报的 hub_pod_name
@@ -136,7 +173,11 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 	// → cred=nil,走原代际门路径,取 claims.Gen() 透传。off/permissive 下 claims/cred 均 nil → tokenGen=0。
 	claims, cred, err := s.dsGuard.CheckHubCredential(ctx, pmw.DSScope{Type: auth.DSTypeHub, Pod: req.GetHubPodName(), RequireToken: true})
 	if err != nil {
-		return &hubv1.HeartbeatResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		plog.With(ctx).Warnw("msg", "hub_heartbeat_rejected",
+			"pod", req.GetHubPodName(), "state", req.GetState(),
+			"reason", reasonCredentialCheckFailed, "code", int32(code), "err", err)
+		return &hubv1.HeartbeatResponse{Code: code}, nil
 	}
 	var res *biz.HeartbeatResult
 	if cred != nil {
@@ -153,6 +194,12 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 	} else if s.modelBAuthority {
 		// Model B 权威下**删除 legacy 回退**(审核二轮 CE1/CE2):仅带 legacy 令牌(无 Model B 凭据)
 		// 的心跳一律拒,不给旧令牌借心跳保活/翻 ready。off/permissive 不会进此分支(那时不是 Model B)。
+		plog.With(ctx).Warnw("msg", "hub_heartbeat_rejected",
+			"pod", req.GetHubPodName(), "state", req.GetState(),
+			"token_gen", claimsGen(claims),
+			"reason", reasonLegacyCredentialUnderModelB,
+			"code", int32(commonv1.ErrCode_ERR_UNAUTHORIZED),
+			"hint", "DS 只带 legacy 令牌(无 uid/epoch/jti);该 pod 永远翻不到 ready,需重发凭据/重打 DS 包")
 		return &hubv1.HeartbeatResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	} else {
 		var tokenGen uint64
@@ -313,6 +360,113 @@ func (s *HubService) TransferToLine(ctx context.Context, req *hubv1.TransferToLi
 }
 
 // ── 辅助 ──────────────────────────────────────────────────────────────────────
+
+// 日志 reason 枚举(infra.md §11.3 R2:一个 if 收敛了 N 个条件的必须拆成 N 个 reason;
+// snake_case 常量,不是自由文本)。这里全部是**入参/凭据门**的拒绝原因 —— 它们返回的
+// ERR_INVALID_ARG / ERR_UNAUTHORIZED 都不是 errcode.IsServerFault,pkg/middleware/logging.go
+// 只会记成 rpc_ok(DEBUG),线上 info 级完全不可见,必须由本层自己打出来。
+const (
+	reasonNotModelBAuthority          = "not_model_b_authority"
+	reasonMissingPlayerID             = "missing_player_id"
+	reasonMissingAssignmentID         = "missing_assignment_id"
+	reasonMissingPod                  = "missing_pod"
+	reasonMissingAdmissionID          = "missing_admission_id"
+	reasonMissingAdmissionSeq         = "missing_admission_seq"
+	reasonNoModelBCredential          = "no_model_b_credential"
+	reasonCredentialCheckFailed       = "credential_check_failed"
+	reasonLegacyCredentialUnderModelB = "legacy_credential_under_model_b"
+	reasonNoSessionPlayerID           = "no_session_player_id"
+	reasonBizRejected                 = "biz_rejected"
+	reasonUnknown                     = "unknown"
+)
+
+// modelBAdmissionArgReason 把 AcknowledgeAdmission / AcknowledgeDeparture 里那个
+// **一个 INVALID_ARG 收敛 6 个条件**的入参门拆回唯一枚举 reason(R2)。
+//
+// 判定顺序刻意与 if 的短路顺序逐字一致:调用方只在已经判定要拒绝时才调用它,
+// 因此这里返回的就是"第一个不满足的条件",与拒绝原因严格同源。
+//
+// 为什么必须区分:modelBAuthority 配错(部署形态,要改配置重启)与 DS 没带
+// admission_seq(客户端/DS 版本不对,要重打包)处置方案完全相反,而 DS 侧
+// ShouldCompleteQueuedHubDeparture 只认 code==0 才出队,非 0 按 1s 周期无限重试
+// (2026-08-06 事故),再犯时必须能从后端日志一眼分出是哪一个字段缺失。
+func modelBAdmissionArgReason(modelBAuthority bool, playerID uint64,
+	assignmentID, pod, admissionID string, admissionSeq uint64,
+) string {
+	switch {
+	case !modelBAuthority:
+		return reasonNotModelBAuthority
+	case playerID == 0:
+		return reasonMissingPlayerID
+	case assignmentID == "":
+		return reasonMissingAssignmentID
+	case pod == "":
+		return reasonMissingPod
+	case admissionID == "":
+		return reasonMissingAdmissionID
+	case admissionSeq == 0:
+		return reasonMissingAdmissionSeq
+	}
+	return reasonUnknown
+}
+
+// localAdmissionArgReason 是 mode=local 通道(只校验三元组)的同款拆分。
+func localAdmissionArgReason(playerID uint64, assignmentID, pod string) string {
+	switch {
+	case playerID == 0:
+		return reasonMissingPlayerID
+	case assignmentID == "":
+		return reasonMissingAssignmentID
+	case pod == "":
+		return reasonMissingPod
+	}
+	return reasonUnknown
+}
+
+// bizRejectReason 把 biz 上抛的 errcode 收敛成稳定的 snake_case reason,用于
+// "同一个错误码两种截然不同的处置"场景下的日志分流(如 ErrHubNoAvailable 既可能是
+// 真没容量、也可能是 CAS 并发耗尽 —— 后者在 biz 侧另有 hub_assign_cas_exhausted)。
+func bizRejectReason(err error) string {
+	switch errcode.As(err) {
+	case errcode.ErrInvalidArg:
+		return "invalid_arg"
+	case errcode.ErrUnauthorized:
+		return "unauthorized"
+	case errcode.ErrInvalidState:
+		return "invalid_state"
+	case errcode.ErrUnavailable:
+		return "upstream_unavailable"
+	case errcode.ErrSessionSuperseded:
+		return "session_superseded"
+	case errcode.ErrLocatorConflict:
+		return "locator_conflict"
+	case errcode.ErrHubNoAvailable:
+		return "hub_no_available"
+	case errcode.ErrHubTransferFailed:
+		return "hub_transfer_failed"
+	case errcode.ErrHubLineFull:
+		return "hub_line_full"
+	case errcode.ErrHubTransferCooldown:
+		return "hub_transfer_cooldown"
+	case errcode.ErrHubTransferNotInHub:
+		return "hub_transfer_not_in_hub"
+	case errcode.ErrOwnerBarrierNotOpen:
+		return "owner_barrier_not_open"
+	case errcode.ErrOwnerEpochConflict:
+		return "owner_epoch_conflict"
+	case errcode.ErrOwnerIdentityMismatch:
+		return "owner_identity_mismatch"
+	}
+	return reasonBizRejected
+}
+
+// claimsGen 只为日志取 legacy 令牌代际(nil-safe);claims==nil(off/permissive)时为 0。
+func claimsGen(claims *auth.DSCallbackClaims) uint64 {
+	if claims == nil {
+		return 0
+	}
+	return claims.Gen()
+}
 
 // toProtoCode 把 pkg/errcode 1:1 映射成 proto enum(数值相同)。
 func toProtoCode(err error) commonv1.ErrCode {

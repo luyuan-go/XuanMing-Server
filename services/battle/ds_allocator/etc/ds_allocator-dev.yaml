@@ -141,6 +141,22 @@ allocator:
   # DS 空转烧资源)。主路径是 DS 侧空场计时器自结算(agones-dev.md §2.4),此阈值应大于
   # DS 侧计时器,且必须远大于战斗断线重连窗口(~30s)。设负值禁用。
   empty_battle_timeout: "5m"
+  # roster_join_deadline: 花名册到齐期限(默认 45s,下限 30s;负值关闭整道闸)。INC-20260813-001。
+  # 上面那条只管「一个人都没有」,拦不住「来了但没来齐」——6 人 roster 只进来 5 个时
+  # player_count 恒为 5,空场计时器一次都不会起,一场 3v2 照常打完。
+  # 判据是 DS 心跳捎带的**在场名单**(census)与 roster 的差集;DS 不上报 census
+  # (legacy / local-off-v1)时整道跳过,绝不拿数量硬猜。
+  # 只在开局阶段生效,两道独立守卫:
+  #   ① roster_ever_complete —— 全员同时在场过一次即永久豁免(精确,但只有新版副本会写);
+  #   ② 武装窗 = ready_wait_timeout + 本值 + 30s —— 自 allocated_at 起算,过窗任何副本都不再武装。
+  # ② 是给滚动升级用的:旧副本手里已到齐过的局没有 ① 的记忆,被新副本接手时光看 ①
+  # 会把「局中掉线」误判成「开局没到齐」,45s 后判弃一场**正在打的对局**。武装窗无需配置,
+  # 自动推导;它也是为什么 ready_wait_timeout 配得越大、本闸的有效窗口越长。
+  # 判弃时只罚缺席者 —— 按时到场的人是受害者,不该再吃一次进入侧退避。
+  # ⚠️ 45s 是「让在场玩家少干等」的取舍,不是安全上界(严格安全上界 = DSTicket TTL 120s
+  # + 余量 = 150s,那之后缺席者物理上再也进不来)。上线前必须实测
+  # 「DS ready → 最后一个 Join succeeded」的 P99,超过 45s 就得调大,否则会误杀冷加载慢的玩家。
+  roster_join_deadline: "45s"
   # mock_ds_addr_host: W4 ② MockGameServerAllocator 返回的假 DS host
   mock_ds_addr_host: "127.0.0.1"
   # mock_ds_port_base: Mock 端口基址(每场 port = base + match_id % range)

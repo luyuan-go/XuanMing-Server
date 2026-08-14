@@ -22,6 +22,7 @@ package biz
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	loginv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/login/v1"
@@ -112,12 +113,121 @@ func (u *LoginUsecase) resolveResumeFromOwner(ctx context.Context, playerID uint
 		return true, waitResume(loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN,
 			ownerUnknownRetryAfterMs)
 	}
+	nowMs := time.Now().UnixMilli()
 	route := ownerTypeToResumeRoute(v.OwnerType)
 	if route == loginv1.ResumeRoute_RESUME_ROUTE_UNSPECIFIED {
 		// owner 权威明确回答"无归属":这是首次进场,不是故障,交旧链继续。
+		// 这也是「对局没了」的另一半答案——owner 回答无归属会让玩家走首次进场链
+		// 重新分配一台 Hub,这个事实此前完全不可见。
+		u.logOwnerPlacementResolved(ctx, playerID, false, ResumeContextResult{}, v, nowMs)
 		return false, ResumeContextResult{}
 	}
-	return true, applyOwnerPlacement(ResumeContextResult{Route: route}, v, time.Now().UnixMilli())
+	out := applyOwnerPlacement(ResumeContextResult{Route: route}, v, nowMs)
+	u.logOwnerPlacementResolved(ctx, playerID, true, out, v, nowMs)
+	return true, out
+}
+
+// ownerResolveLogState 是 owner_placement_resolved 的去重键:§9.23 三元组
+// (entry_state, owner_epoch, exact target)+ 判定结果。必须是可比较类型(结构体相等)。
+type ownerResolveLogState struct {
+	decided       bool
+	entryState    loginv1.ResumeEntryState
+	waitReason    loginv1.ResumeWaitReason
+	placement     loginv1.ResumePlacementState
+	route         loginv1.ResumeRoute
+	ownerEpoch    uint64
+	operationID   string
+	podName       string
+	instanceUID   string
+	instanceEpoch uint32
+	targetID      string // hub_assignment_id 或 allocation_id
+}
+
+// ownerResolveLogDedupMax 是去重表的硬上限(§9.18 有界纪律)。满了整表清空——
+// 代价只是清空后每个在线玩家多打一条 Info,换来内存严格有界、无需 TTL 清理任务。
+const ownerResolveLogDedupMax = 4096
+
+// ownerResolveLogDedup 是 owner placement 日志的「状态变化才打 Info」去重表(§11.3 R4)。
+//
+// 为什么需要:resolveResumeFromOwner 同时被 GetResumeContext(客户端退避轮询入口)调用,
+// 同一个玩家会在几秒内反复进来。不去重就会把这条关键判定日志刷成噪音;直接降 Debug
+// 又会让线上(info 级)看不到 ADMIT_BARRIER → TARGET 这类状态迁移。
+// 折中:三元组变了打 Info(迁移一条不漏),重复态降 Debug(稳定态不刷屏)。
+//
+// 非权威、进程内、重启即空,只影响日志级别,不影响任何返回值。
+type ownerResolveLogDedup struct {
+	mu   sync.Mutex
+	last map[uint64]ownerResolveLogState
+}
+
+// changed 记录本次状态,返回它是否与上次已记录的状态不同。
+func (d *ownerResolveLogDedup) changed(playerID uint64, cur ownerResolveLogState) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if prev, ok := d.last[playerID]; ok && prev == cur {
+		return false
+	}
+	if d.last == nil || len(d.last) >= ownerResolveLogDedupMax {
+		d.last = make(map[uint64]ownerResolveLogState, 64)
+	}
+	d.last[playerID] = cur
+	return true
+}
+
+// logOwnerPlacementResolved 落盘 §9.23 唯一路由权威的判定结果(§11.3 R1)。
+//
+// 为什么必须有:①「对局没了」的另一半答案在 decided=false(owner 说无归属 → 重新分配
+// 一台 Hub);②「登录一直转圈」时要能区分是 admit 屏障没开(正常等待,看
+// admit_barrier_remain_ms)还是 owner 记录坏了;③ 客户端幂等 no-op 依据的
+// (entry_state, exact target, owner_epoch) 三元组必须在服务端可复现。
+func (u *LoginUsecase) logOwnerPlacementResolved(
+	ctx context.Context, playerID uint64, decided bool,
+	out ResumeContextResult, v data.OwnerPlacementView, nowMs int64,
+) {
+	state := ownerResolveLogState{
+		decided:       decided,
+		entryState:    out.EntryState,
+		waitReason:    out.WaitReason,
+		placement:     out.PlacementState,
+		route:         out.Route,
+		ownerEpoch:    out.OwnerEpoch,
+		operationID:   out.OperationID,
+		podName:       out.DSPodName,
+		instanceUID:   out.DSInstanceUID,
+		instanceEpoch: out.DSInstanceEpoch,
+		targetID:      out.HubAssignmentID + out.AllocationID,
+	}
+	fields := []any{
+		"msg", "owner_placement_resolved",
+		"player_id", playerID,
+		"decided", decided,
+		"owner_type", v.OwnerType,
+		"owner_phase", v.Phase,
+		"route", out.Route.String(),
+		"entry_state", out.EntryState.String(),
+		"wait_reason", out.WaitReason.String(),
+		"placement_state", out.PlacementState.String(),
+		"owner_epoch", out.OwnerEpoch,
+		"operation_id", out.OperationID,
+		"ds_pod", out.DSPodName,
+		"ds_instance_uid", out.DSInstanceUID,
+		"ds_instance_epoch", out.DSInstanceEpoch,
+		"hub_assignment_id", out.HubAssignmentID,
+		"allocation_id", out.AllocationID,
+		"release_track", out.ReleaseTrack,
+		"retry_after_ms", out.RetryAfterMs,
+		"admit_not_before_ms", v.AdmitNotBeforeMs,
+		"admit_barrier_remain_ms", v.AdmitNotBeforeMs - nowMs,
+		"lease_deadline_ms", v.LeaseDeadlineMs,
+		"lease_remain_ms", v.LeaseDeadlineMs - nowMs,
+		"lease_skew_margin_ms", ownerLeaseSkewMarginMs,
+	}
+	if u.ownerResolveLog.changed(playerID, state) {
+		plog.With(ctx).Infow(fields...)
+		return
+	}
+	// 退避轮询里的重复态:同一三元组已打过 Info,降 Debug 防刷屏。
+	plog.With(ctx).Debugw(fields...)
 }
 
 // applyOwnerPlacement 纯函数:把 owner 权威记录翻译成 §9.23 的进场状态。

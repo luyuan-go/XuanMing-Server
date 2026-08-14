@@ -332,6 +332,51 @@ func (u *AllocatorUsecase) battleTTL() time.Duration { return u.cfg.BattleTTL.St
 // readyWaitTimeout 是 AllocateBattle 等待 DS ready 心跳的最长时间(默认 10s)。
 func (u *AllocatorUsecase) readyWaitTimeout() time.Duration { return u.cfg.ReadyWaitTimeout.Std() }
 
+// 分配 / 就绪等待 / 心跳 / 回收链路的拒绝 reason 枚举(infra.md §11.3 R2)。
+//
+// 全部取自**已经存在的判定分支**,一个分支一个常量:凡一个 if 里收敛了多个条件的,
+// 都按条件拆开。"进不去副本"的三类根因(没有可用 GameServer / Agones 分配失败 /
+// roster 没到齐被判弃)必须能靠 reason 直接分开统计,不能只看到一句"分配失败"。
+//
+// snake_case 常量,稳定不变(日志系统按 msg+reason 聚合)。
+const (
+	// AllocateBattle 入参与 claim 阶段。
+	reasonAllocMatchIDRequired = "match_id_required"
+	reasonAllocRosterInvalid   = "roster_invalid"
+	reasonAllocFactionsInvalid = "combat_factions_invalid"
+	reasonAllocClaimFailed     = "claim_write_failed"
+	reasonAllocTrackInvalid    = "release_track_invalid"
+	reasonAllocFinalizeLost    = "finalize_claim_lost"
+	// 幂等重试 / claim 输家(awaitExistingAllocation)。
+	reasonAwaitClaimMissing       = "claim_record_missing"
+	reasonAwaitReleaseUnconfirmed = "preactive_release_unconfirmed"
+	// waitBattleReady 的提前失败(每条对应一个既有 return,不合并)。
+	reasonWaitAuthorityPurged   = "authority_purged"
+	reasonWaitAllocSuperseded   = "allocation_superseded"
+	reasonWaitAuthOutsideGrace  = "auth_missing_outside_grace"
+	reasonWaitAuthProvisionDead = "auth_provision_stalled"
+	reasonWaitStateReclaimed    = "state_reclaimed"
+	reasonWaitAuthPhaseFenced   = "auth_phase_fenced"
+	reasonWaitRecordGone        = "battle_record_gone"
+	reasonWaitCtxDone           = "caller_ctx_done"
+	// 心跳链路。
+	reasonHeartbeatModelBOff          = "redis_authority_disabled"
+	reasonHeartbeatCensusInconsistent = "player_count_exceeds_census"
+	reasonHeartbeatAuthorityRead      = "authority_read_failed"
+	reasonHeartbeatActivateRejected   = "activate_rejected"
+	reasonHeartbeatOwnerLease         = "owner_lease_renew_failed"
+	reasonHeartbeatDepartureReconcile = "departure_reconcile_failed"
+	reasonHeartbeatUpdateFailed       = "battle_update_failed"
+	// 心跳 stop 指令(Model B),按判定依据分档。
+	reasonStopTerminalAuth    = "auth_terminating"
+	reasonStopBattleMissing   = "battle_record_missing"
+	reasonStopBattleEnded     = "battle_ended"
+	reasonStopBattleAbandoned = "battle_abandoned"
+	// 回收 / 释放。
+	reasonReleaseTupleIncomplete = "expected_tuple_incomplete"
+	reasonReleasePodUIDMissing   = "expected_pod_uid_missing"
+)
+
 // ── RPC 1:AllocateBattle ──────────────────────────────────────────────────────
 
 // AllocateResult 是 AllocateBattle 的出参。
@@ -429,10 +474,13 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 	ratingPool string,
 ) (*AllocateResult, error) {
 	if matchID == 0 {
+		plog.With(ctx).Warnw("msg", "battle_allocate_refused", "reason", reasonAllocMatchIDRequired)
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
 	canonicalPlayers, _, rosterErr := dsmetadata.CanonicalRoster(playerIDs)
 	if rosterErr != nil {
+		plog.With(ctx).Warnw("msg", "battle_allocate_refused", "reason", reasonAllocRosterInvalid,
+			"match_id", matchID, "players", len(playerIDs), "err", rosterErr)
 		return nil, errcode.New(errcode.ErrInvalidArg, "invalid battle roster: %v", rosterErr)
 	}
 	playerIDs = canonicalPlayers
@@ -441,6 +489,10 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		canonicalFactionPlayers, _, factionErr := dsmetadata.CanonicalCombatFactions(
 			playerIDs, combatFactionByPlayer)
 		if factionErr != nil {
+			plog.With(ctx).Warnw("msg", "battle_allocate_refused", "reason", reasonAllocFactionsInvalid,
+				"match_id", matchID, "players", len(playerIDs),
+				"factions", len(combatFactionByPlayer), "err", factionErr,
+				"hint", "阵营快照与 roster 对不上;DS 侧 ResolveCampForSpawn 解不出权威阵营会 RejectSpawn")
 			return nil, errcode.New(errcode.ErrInvalidArg, "invalid battle combat factions: %v", factionErr)
 		}
 		playerIDs = canonicalFactionPlayers
@@ -475,6 +527,12 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 	}
 	claimed, existing, err := u.repo.ClaimBattle(ctx, claim, u.battleTTL())
 	if err != nil {
+		// claim 是整条分配链的第一步。这一步失败时此前一行日志都没有,matchmaker 只看到
+		// 一个错误码 —— "分配不到 DS"到底是没到 Agones 还是 Agones 没货,查不出来。
+		plog.With(ctx).Warnw("msg", "battle_allocate_refused", "reason", reasonAllocClaimFailed,
+			"match_id", matchID, "allocation_id", allocationID, "players", len(playerIDs),
+			"map_id", mapID, "err", err,
+			"hint", "还没走到 Agones:Redis 权威写失败,与 Fleet 容量无关")
 		return nil, err
 	}
 	if !claimed {
@@ -529,7 +587,15 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		podName, addr, actualReleaseTrack, err = u.alloc.Allocate(ctx, matchID, mapID, gameMode, desiredReleaseTrack)
 	}
 	if err != nil {
-		plog.With(ctx).Errorw("msg", "gameserver_allocate_failed", "match_id", matchID, "err", err)
+		// R2:reason 必须能把"Fleet 没有空闲 GameServer"(要扩容)与"控制面调用失败"
+		// (要查 k8s / 网络)分开——两者的处置完全不同,而以前它们共用一条日志。
+		allocReason := "control_plane_failed"
+		if errcode.As(err) == errcode.ErrDSNoAvailable {
+			allocReason = "no_available_gameserver"
+		}
+		plog.With(ctx).Errorw("msg", "gameserver_allocate_failed", "match_id", matchID,
+			"reason", allocReason, "allocation_id", allocationID, "map_id", mapID,
+			"game_mode", gameMode, "release_track", desiredReleaseTrack, "err", err)
 		if u.modelB {
 			// POST transport、响应解析、严格 GET 任一步失败都可能对应“已应用但结果迟到”。
 			// 永久 uncertain claim 是唯一安全结果：不自动 Release/Delete、不恢复 TTL，
@@ -558,6 +624,10 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		actualReleaseTrack = authoritative.ReleaseTrack
 	}
 	if !releasetrack.Valid(actualReleaseTrack) {
+		plog.With(ctx).Errorw("msg", "battle_allocate_refused", "reason", reasonAllocTrackInvalid,
+			"match_id", matchID, "allocation_id", allocationID, "pod", podName,
+			"desired_track", desiredReleaseTrack, "actual_track", actualReleaseTrack,
+			"hint", "§9.21 灰度轨道粘滞被破坏,已分配的 pod 会被立即回收")
 		u.cleanupAllocatedBattle(ctx, matchID, allocationID, podName, authoritative)
 		return nil, errcode.New(errcode.ErrDSAllocationFailed,
 			"allocator returned invalid actual release_track %q", actualReleaseTrack)
@@ -617,6 +687,10 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 				"battle %d allocation finalize unavailable", matchID)
 		}
 		// legacy 路径仍可按 allocation_id 清理；它没有 POST 结果未知的 persistent fence。
+		plog.With(ctx).Warnw("msg", "battle_allocate_refused", "reason", reasonAllocFinalizeLost,
+			"match_id", matchID, "allocation_id", allocationID, "pod", podName,
+			"finalized", finalized, "err", err,
+			"hint", "claim 已不属本次分配(被回收或被新分配取代),刚拿到的 pod 会被回收")
 		u.cleanupAllocatedBattle(ctx, matchID, allocationID, podName, authoritative)
 		if err != nil {
 			return nil, err
@@ -634,7 +708,13 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		}
 	}
 
-	plog.With(ctx).Debugw("msg", "battle_warming", "match_id", matchID, "pod", podName, "ds_addr", addr, "players", len(playerIDs))
+	// R1:这是本次分配唯一一条"pod 已定、身份已定格、开始等 DS 就绪"的阶段推进。
+	// 缺了它就无法证明"分配到底有没有走到 Agones 这一步"。线上默认 info 级下
+	// Debugw 一条都不出,故升 Infow(每 match 至多一条)。
+	plog.With(ctx).Infow("msg", "battle_warming", "match_id", matchID, "pod", podName,
+		"ds_addr", addr, "players", len(playerIDs), "allocation_id", allocationID,
+		"uid", battle.GameserverUid, "release_track", actualReleaseTrack,
+		"ready_wait", u.readyWaitTimeout().String())
 
 	// 等 DS 用正确 match_id/pod 的心跳上报 ready/running,后端才把 ds_addr 回给 matchmaker。
 	res, werr := u.waitBattleReady(ctx, matchID, podName, allocationID)
@@ -677,7 +757,11 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		return nil, err
 	}
 
-	plog.With(ctx).Debugw("msg", "battle_ready_after_heartbeat", "match_id", matchID, "pod", podName, "ds_addr", addr)
+	// R1:分配链的终点(owner 已定案、ds_addr 即将回给 matchmaker),与 battle_warming
+	// 成对。两条都有 ts 就能算出"等 DS 冷启动花了多久"(判据 5)。
+	plog.With(ctx).Infow("msg", "battle_ready_after_heartbeat", "match_id", matchID, "pod", podName,
+		"ds_addr", addr, "allocation_id", allocationID, "uid", res.GameserverUID,
+		"epoch", res.InstanceEpoch, "players", len(playerIDs))
 	return res, nil
 }
 
@@ -874,6 +958,9 @@ func (u *AllocatorUsecase) awaitExistingAllocation(
 	existing *dsv1.BattleStorageRecord,
 ) (*AllocateResult, error) {
 	if existing == nil {
+		plog.With(ctx).Warnw("msg", "battle_allocate_refused", "reason", reasonAwaitClaimMissing,
+			"match_id", matchID,
+			"hint", "claim 输家但读不回赢家的记录:记录已被回收或 TTL 过期,matchmaker 需重试")
 		return nil, errcode.New(errcode.ErrDSAllocationFailed, "battle %d allocation claim missing", matchID)
 	}
 	if existing.State == stateAllocationUncertain || existing.State == stateAllocationReconciling {
@@ -887,12 +974,20 @@ func (u *AllocatorUsecase) awaitExistingAllocation(
 	if existing.State == statePreactiveReleasing || existing.State == stateAllocationAbort {
 		// 外部 UID 条件删除尚未得到明确成功；永久 release fence 必须继续
 		// 阻止本请求发第二次 GSA POST。回收可由幂等 sweep 重试，但安全不依赖重试。
+		// 这条分支此前完全静默:玩家进不去而后端日志里连"为什么不给分配"都没有。
+		plog.With(ctx).Warnw("msg", "battle_allocate_refused", "reason", reasonAwaitReleaseUnconfirmed,
+			"match_id", matchID, "state", existing.State, "allocation_id", existing.GetAllocationId(),
+			"pod", existing.GetDsPodName(),
+			"hint", "上一次分配的 GameServer 回收未确认,永久 fence 阻止本次再分配;等 sweep 收敛后重试")
 		return nil, errcode.New(errcode.ErrUnavailable,
 			"battle %d preactive gameserver release is not confirmed", matchID)
 	}
 	if !u.modelB && battleReadyForPod(existing, existing.DsPodName, matchID, existing.AllocatedAtMs) {
-		plog.With(ctx).Debugw("msg", "allocate_idempotent_hit", "match_id", matchID,
-			"ds_addr", existing.DsAddr, "state", existing.State, "allocation_id", existing.AllocationId)
+		// R1:这是一次**路由判定结果**(本次重试直接复用已就绪的实例,不再分配)。
+		// 它是"同一个 match 为什么两次拿到同一个 ds_addr"的唯一证据,不能只在 Debug。
+		plog.With(ctx).Infow("msg", "allocate_idempotent_hit", "match_id", matchID,
+			"ds_addr", existing.DsAddr, "state", existing.State, "allocation_id", existing.AllocationId,
+			"pod", existing.GetDsPodName())
 		return allocateResultFromBattle(existing), nil
 	}
 	if existing.State != stateAllocating && existing.State != stateWarming &&
@@ -941,7 +1036,11 @@ func battleWaitStateProgressable(state string) bool {
 // 提前失败分两类:回收/接管所有权已属他人的一律携带 errBattleWaitOwnershipLost(owner 不得
 // 再 cleanup);其余错误 owner 照旧 cleanup。
 func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, podName, allocationID string) (*AllocateResult, error) {
-	deadline := time.Now().Add(u.readyWaitTimeout())
+	// waitStart 只用于日志的 waited_ms(§11.3 判据 5「慢在哪」):同一条 msg 上
+	// 「等了多久才失败」区分得出"一进来就被判死"与"等满了 ready_wait"。
+	// 不参与任何判定——上界仍只由 deadline 决定。
+	waitStart := time.Now()
+	deadline := waitStart.Add(u.readyWaitTimeout())
 	ticker := time.NewTicker(readyPollInterval)
 	defer ticker.Stop()
 	// auth 缺失的累计观察时长(单调):owner 完成 provision 后才进入 wait,正常路径永不缺
@@ -986,11 +1085,22 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 			// 只可能是判死回收链已 purge 或 TTL 到期,本分配不可能再 ready,立即失败让
 			// matchmaker 重试,不得空转满 ready_wait(实测 141.85s 总耗时的根因)。
 			if !snapshot.BattleFound {
+				// 以下每条 return 都曾是**完全静默**的:玩家进不去副本时,后端只留下
+				// 上层一句自由文本 err,分不清"记录被回收""被新分配取代""授权被隔离"
+				// ——三者的排查方向完全不同。每条按 §11.3 R2 补一个枚举 reason。
+				plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitAuthorityPurged,
+					"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+					"auth_found", snapshot.AuthFound, "waited_ms", time.Since(waitStart).Milliseconds(),
+					"hint", "battle 键已被判死回收链 purge 或 TTL 到期,本分配不可能再 ready")
 				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d authority purged while waiting ready (auth_found=%t)",
 					matchID, snapshot.AuthFound)
 			}
 			if allocationID != "" && b.AllocationId != allocationID {
+				plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitAllocSuperseded,
+					"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+					"current_allocation_id", b.AllocationId, "state", b.State,
+					"waited_ms", time.Since(waitStart).Milliseconds())
 				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d allocation superseded", matchID)
 			}
@@ -1004,6 +1114,9 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 			//     冷加载宽限空等 120s,fail-fast 交 sweep 按 grace 回收。
 			if !snapshot.AuthFound {
 				if b.State != stateAllocating && b.State != stateWarming {
+					plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitAuthOutsideGrace,
+						"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+						"state", b.State, "waited_ms", time.Since(waitStart).Milliseconds())
 					return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 						"battle %d missing auth outside allocation grace while waiting ready: state=%s",
 						matchID, b.State)
@@ -1011,6 +1124,11 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 				if authMissingSince.IsZero() {
 					authMissingSince = time.Now()
 				} else if time.Since(authMissingSince) > u.cfg.HeartbeatTimeout.Std() {
+					plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitAuthProvisionDead,
+						"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+						"state", b.State, "auth_missing_ms", time.Since(authMissingSince).Milliseconds(),
+						"grace", u.cfg.HeartbeatTimeout.Std().String(),
+						"hint", "凭据投递(Redis stage→K8s PATCH→delivered CAS)半失败残留,交 sweep 按 grace 回收")
 					return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 						"battle %d auth provisioning stalled beyond grace while waiting ready: state=%s",
 						matchID, b.State)
@@ -1021,6 +1139,11 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 			// 状态白名单(复审 P1-3):终态、abort/uncertain/release 各类墓碑与未知状态
 			// 一律视为回收/对账链已接管,立即携带所有权哨兵失败。
 			if !battleWaitStateProgressable(b.State) {
+				plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitStateReclaimed,
+					"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+					"state", b.State, "authority", "redis",
+					"waited_ms", time.Since(waitStart).Milliseconds(),
+					"hint", "该分配已被回收/对账链接管(终态或各类墓碑),owner 不再 cleanup")
 				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d reclaimed while waiting ready: state=%s", matchID, b.State)
 			}
@@ -1029,6 +1152,11 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 			if snapshot.AuthFound {
 				if phase := snapshot.Auth.GetPhase(); phase == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
 					phase == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_QUARANTINED {
+					plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitAuthPhaseFenced,
+						"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+						"phase", phase.String(), "state", b.State,
+						"waited_ms", time.Since(waitStart).Milliseconds(),
+						"hint", "battle 投影还是 warming/ready 的半状态,但授权已被永久 fence,不可能再放行")
 					return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 						"battle %d auth fenced while waiting ready: phase=%s state=%s",
 						matchID, phase.String(), b.State)
@@ -1074,15 +1202,26 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 			}
 			// wait 由 finalize 之后进入,镜像消失只可能是回收/TTL,同 modelB 立即失败。
 			if !found {
+				plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitRecordGone,
+					"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+					"authority", "legacy", "waited_ms", time.Since(waitStart).Milliseconds())
 				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d record gone while waiting ready", matchID)
 			}
 			if allocationID != "" && b.AllocationId != allocationID {
+				plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitAllocSuperseded,
+					"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+					"current_allocation_id", b.AllocationId, "authority", "legacy",
+					"waited_ms", time.Since(waitStart).Milliseconds())
 				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d allocation superseded", matchID)
 			}
 			// legacy 同用白名单:滚动共存期也可能读到 modelB 写下的墓碑状态,一律不等。
 			if !battleWaitStateProgressable(b.State) {
+				plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitStateReclaimed,
+					"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+					"state", b.State, "authority", "legacy",
+					"waited_ms", time.Since(waitStart).Milliseconds())
 				return nil, errcode.NewCause(errcode.ErrDSAllocationFailed, errBattleWaitOwnershipLost,
 					"battle %d reclaimed while waiting ready: state=%s", matchID, b.State)
 			}
@@ -1096,6 +1235,13 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 		}
 		select {
 		case <-ctx.Done():
+			// 调用方(matchmaker)先放弃了。以前这条只返回 ctx.Err(),上层原样透传,
+			// 日志里既看不出"是谁先撤的",也看不出已经等了多久。
+			plog.With(ctx).Warnw("msg", "battle_ready_wait_aborted", "reason", reasonWaitCtxDone,
+				"match_id", matchID, "pod", podName, "allocation_id", allocationID,
+				"waited_ms", time.Since(waitStart).Milliseconds(),
+				"ready_wait", u.readyWaitTimeout().String(), "err", ctx.Err(),
+				"hint", "入站 ctx 已取消/超时,owner 会用 detached ctx 回收 pod 与 warming 镜像")
 			return nil, ctx.Err()
 		case <-ticker.C:
 		}
@@ -1111,7 +1257,10 @@ func (u *AllocatorUsecase) failReadyWaitTimeout(
 	allocation *data.AuthoritativeGameServerAllocation,
 	owner bool,
 ) error {
-	plog.With(ctx).Warnw("msg", "battle_ready_wait_timeout", "match_id", matchID, "pod", podName)
+	plog.With(ctx).Warnw("msg", "battle_ready_wait_timeout", "match_id", matchID, "pod", podName,
+		"allocation_id", allocationID, "ready_wait", u.readyWaitTimeout().String(), "owner", owner,
+		"hint", "DS 在等待窗口内没上报 ready/running 心跳:查该 pod 的 DS 进程日志与镜像关卡表;"+
+			"owner=true 时本调用会回收 pod 并删 warming 镜像")
 	if owner {
 		u.cleanupAllocatedBattle(ctx, matchID, allocationID, podName, allocation)
 	}
@@ -1184,11 +1333,30 @@ func (u *AllocatorUsecase) releaseGameServer(
 	allocation *data.AuthoritativeGameServerAllocation,
 ) error {
 	if !u.modelB {
-		return u.alloc.Release(ctx, podName)
+		rerr := u.alloc.Release(ctx, podName)
+		if rerr == nil {
+			// 删除权留证(项目红线 never-delete-allocated-gameserver-20260803):
+			// 每次真正回收 DS 都必须留下「删了什么」。legacy 面按 pod 名回收,没有
+			// UID precondition,更需要能事后核对删的是不是该删的那台。
+			plog.With(ctx).Infow("msg", "battle_gameserver_released", "match_id", matchID,
+				"pod", podName, "authority", "legacy", "precondition", "pod_name_only")
+		}
+		return rerr
 	}
 	if matchID == 0 || allocation == nil || allocation.InstanceUID == "" ||
 		allocation.InstanceEpoch == 0 || allocation.AllocationID == "" || podName == "" ||
 		allocation.PodName != podName {
+		// allocation 可能为 nil,字段单独取,不在日志表达式里解引用。
+		var uid, allocID, allocPod string
+		var epoch uint32
+		if allocation != nil {
+			uid, allocID, allocPod, epoch =
+				allocation.InstanceUID, allocation.AllocationID, allocation.PodName, allocation.InstanceEpoch
+		}
+		plog.With(ctx).Warnw("msg", "battle_gameserver_release_refused", "reason", reasonReleaseTupleIncomplete,
+			"match_id", matchID, "pod", podName, "has_allocation", allocation != nil,
+			"uid", uid, "epoch", epoch, "allocation_id", allocID, "allocation_pod", allocPod,
+			"hint", "身份不全一律不删(宁可占位):这正是防误删 exact 身份门在起作用")
 		return errcode.New(errcode.ErrInvalidState,
 			"battle Model B release requires complete expected GameServer tuple")
 	}
@@ -1204,12 +1372,24 @@ func (u *AllocatorUsecase) releaseGameServer(
 		allocation.PodUID = podUID
 	}
 	if allocation.PodUID == "" {
+		plog.With(ctx).Warnw("msg", "battle_gameserver_release_refused", "reason", reasonReleasePodUIDMissing,
+			"match_id", matchID, "pod", podName, "uid", allocation.InstanceUID,
+			"epoch", allocation.InstanceEpoch, "allocation_id", allocation.AllocationID,
+			"hint", "拿不到 Pod UID 就没有 DELETE precondition,绝不按名字删")
 		return errcode.New(errcode.ErrInvalidState,
 			"battle Model B release requires durable expected Pod UID")
 	}
 	if err := u.authoritativeAlloc.ReleaseExpected(ctx, allocation); err != nil {
 		return err
 	}
+	// 删除权留证(项目红线:绝不误删 Allocated GameServer)。这一条是"删了什么、
+	// 依据是什么"的权威记录:UID+PodUID 双 precondition 已在 data 层生效,这里把
+	// 生效的那组身份完整落盘,事后能逐字段核对删的是不是该删的实例。
+	plog.With(ctx).Infow("msg", "battle_gameserver_released", "match_id", matchID,
+		"pod", podName, "uid", allocation.InstanceUID, "pod_uid", allocation.PodUID,
+		"epoch", allocation.InstanceEpoch, "allocation_id", allocation.AllocationID,
+		"release_track", allocation.ReleaseTrack, "authority", "redis",
+		"precondition", "gs_uid+pod_uid")
 	// 外部 UID 条件回收明确成功后先写 durable teardown proof，再允许
 	// 上层 purge/expire battle+auth。proof 写失败必须整体返错保留永久
 	// release fence；后续重试 ReleaseExpected(404 幂等成功)可补齐证明。
@@ -1625,7 +1805,11 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 	if err := u.repo.DeleteBattle(ctx, matchID); err != nil {
 		return err
 	}
-	plog.With(ctx).Debugw("msg", "battle_released", "match_id", matchID, "pod", battle.DsPodName, "reason", reason)
+	// R1:对局记录被删除是不可逆状态推进,且与 battle_warming / battle_ready_after_heartbeat
+	// 成对收尾。缺了它就无法证明"这局到底是正常回收的还是被 sweep 判弃的"。
+	plog.With(ctx).Infow("msg", "battle_released", "match_id", matchID, "pod", battle.DsPodName,
+		"reason", reason, "state", battle.State, "players", len(battle.GetPlayerIds()),
+		"allocation_id", battle.GetAllocationId(), "authority", "legacy")
 	return nil
 }
 
@@ -2013,9 +2197,15 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 	acknowledgedDepartureIDs []string,
 ) (*HeartbeatResult, error) {
 	if !u.modelB {
+		plog.With(ctx).Warnw("msg", "battle_heartbeat_refused", "reason", reasonHeartbeatModelBOff,
+			"match_id", matchID, "pod", id.PodName)
 		return nil, errcode.New(errcode.ErrInvalidState, "battle Redis authority is not enabled")
 	}
 	if snapshotPresent && playerCount > int32(len(activePlayerIDs)) {
+		plog.With(ctx).Warnw("msg", "battle_heartbeat_refused", "reason", reasonHeartbeatCensusInconsistent,
+			"match_id", matchID, "pod", id.PodName, "player_count", playerCount,
+			"census", len(activePlayerIDs),
+			"hint", "DS 自报在场人数比它给出的完整名单还多,名单不可信,整跳拒绝")
 		return nil, errcode.New(errcode.ErrInvalidArg,
 			"battle heartbeat player_count=%d exceeds complete owner census=%d",
 			playerCount, len(activePlayerIDs))
@@ -2027,6 +2217,9 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 	// heartbeat with zero Redis state transition.
 	preflightSnapshot, preflightReadErr := u.authRepo.ReadAuthority(ctx, matchID)
 	if preflightReadErr != nil {
+		plog.With(ctx).Warnw("msg", "battle_heartbeat_refused", "reason", reasonHeartbeatAuthorityRead,
+			"match_id", matchID, "pod", id.PodName, "err", preflightReadErr,
+			"hint", "Redis 权威读失败,本跳零状态转移;连续失败会走满 15s 心跳超时被判弃")
 		return nil, preflightReadErr
 	}
 	if preflightSnapshot.BattleFound && preflightSnapshot.Battle != nil &&
@@ -2053,8 +2246,22 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 		NoShowTimeout:      u.cfg.ResolveNoShowTimeout(),
 		StabilityBeats:     u.cfg.ActivationStabilityBeats,
 		StabilitySpanMs:    u.cfg.ActivationStabilitySpan.Std().Milliseconds(),
+		// 花名册到齐期限(INC-20260813-001)。census 未上报时 data 层整道跳过 ——
+		// 拿 player_count 硬猜会把每一局都判成缺员。
+		RosterJoinDeadline:  u.cfg.ResolveRosterJoinDeadline(),
+		RosterJoinArmWindow: u.cfg.ResolveRosterJoinArmWindow(),
+		CensusPresent:       snapshotPresent,
+		ActivePlayerIDs:     activePlayerIDs,
 	})
 	if err != nil {
+		// 这是 Model B 心跳唯一的授权/fencing 判定点,原来失败**一条日志都没有**:
+		// errBattleAuthStale 是 ErrUnauthorized,access log 只落 rpc_ok=DEBUG。
+		// 「DS 在跑但后端认为它没心跳」这类故障以前在后端完全查不出来。
+		// 具体是哪一条 fencing 规则拒的,见 data 层同 trace_id 的 battle_ds_auth_rejected。
+		plog.With(ctx).Warnw("msg", "battle_heartbeat_refused", "reason", reasonHeartbeatActivateRejected,
+			"match_id", matchID, "pod", id.PodName, "uid", id.InstanceUID, "epoch", id.InstanceEpoch,
+			"gen", id.Gen, "writer_epoch", id.WriterEpoch, "state", state,
+			"player_count", playerCount, "code", int32(errcode.As(err)), "err", err)
 		return nil, err
 	}
 	if out.ActivationPending {
@@ -2073,6 +2280,13 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 	}
 	if lerr := renewOwnerLeaseGate(ctx, u.ownerLease, u.ownerLeaseRequired,
 		id.PodName, id.InstanceUID, id.InstanceEpoch, ownerLeaseTrack); lerr != nil {
+		// 只有 required(contract 强依赖)档会走到这里;弱依赖档由 renewOwnerLeaseGate
+		// 内部按窗口限流 Warn 后放行。强依赖失败 = 心跳整跳失败 = DS 会自我 fencing 停玩,
+		// 是"玩家突然被踢出副本"的直接原因,必须显式留证。
+		plog.With(ctx).Warnw("msg", "battle_heartbeat_refused", "reason", reasonHeartbeatOwnerLease,
+			"match_id", matchID, "pod", id.PodName, "uid", id.InstanceUID,
+			"epoch", id.InstanceEpoch, "release_track", ownerLeaseTrack, "err", lerr,
+			"hint", "owner 权威租约续写是强依赖档;DS 拿不到响应会按 §9.22 自我 fencing")
 		return nil, lerr
 	}
 	// owner 迁移准入代提交(owner-authority.md migrate ③,近似:授权 census 即准入证据;
@@ -2101,20 +2315,52 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 			}, snapshotPresent, censusCapabilityVersion, censusID,
 			activePlayerIDs, acknowledgedDepartureIDs)
 		if reconcileErr != nil {
+			plog.With(ctx).Warnw("msg", "battle_heartbeat_refused", "reason", reasonHeartbeatDepartureReconcile,
+				"match_id", matchID, "pod", id.PodName, "census_present", snapshotPresent,
+				"census", len(activePlayerIDs), "acked_departures", len(acknowledgedDepartureIDs),
+				"err", reconcileErr,
+				"hint", "Battle→Hub 物理离场对账失败,驱逐单发不出去,玩家可能卡在"+
+					"「退出副本」上;下一跳心跳会重试")
 			return nil, reconcileErr
 		}
 		result.EvictionOrders = orders
+		if len(orders) > 0 {
+			// R4:心跳是高频路径,成功侧 Debugw。驱逐单是"玩家退出副本"链上唯一
+			// 从后端流向 DS 的指令,查"点了退出没反应"必须能看到它到底发没发出去。
+			plog.With(ctx).Debugw("msg", "battle_eviction_orders_issued", "match_id", matchID,
+				"pod", id.PodName, "orders", len(orders), "census", len(activePlayerIDs))
+		}
 	}
 	if out.FirstAbandon && out.Battle != nil {
+		// 缺员判弃时只罚缺席者:census 就在手边,直接按它与 roster 求差集,
+		// 不必让 data 层把名单再回传一遍(它已经用同一份输入做过判定)。
+		var absentees []uint64
+		if out.RosterIncomplete {
+			absentees = rosterAbsentees(out.Battle.PlayerIds, activePlayerIDs)
+		}
 		finished := u.finishEmptyAbandon(ctx, matchID, out.Battle.DsPodName,
 			out.Battle.GameserverUid, out.Battle.PodUid, out.Battle.AllocationId,
 			out.Battle.ReleaseTrack, out.Battle.InstanceEpoch,
 			out.Battle.PlayerIds, out.Battle.MapId, out.Battle.GameMode,
-			!out.Battle.GetEverHadPlayers())
+			!out.Battle.GetEverHadPlayers(), out.RosterIncomplete, absentees)
 		result.Command = finished.Command
 		return result, nil
 	}
 	if out.Terminal || out.Battle == nil || out.Battle.State == stateEnded || out.Battle.State == stateAbandoned {
+		// R2:一个 if 收敛了四个条件,按判定依据拆成四个 reason —— "DS 被叫停"是
+		// 玩家侧「突然被踢回大厅」的直接上游,只知道停了、不知道凭什么停,查不下去。
+		stopReason := reasonStopTerminalAuth
+		switch {
+		case out.Battle == nil:
+			stopReason = reasonStopBattleMissing
+		case out.Battle.State == stateEnded:
+			stopReason = reasonStopBattleEnded
+		case out.Battle.State == stateAbandoned:
+			stopReason = reasonStopBattleAbandoned
+		}
+		plog.With(ctx).Warnw("msg", "battle_heartbeat_stop_commanded", "reason", stopReason,
+			"match_id", matchID, "pod", id.PodName, "uid", id.InstanceUID,
+			"epoch", id.InstanceEpoch, "state", out.Battle.GetState())
 		result.Command = commandStop
 		return result, nil
 	}
@@ -2225,6 +2471,8 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 	playerCount int32, state string, tsMs int64, snapshotPresent bool, activePlayerIDs []uint64,
 ) (*HeartbeatResult, error) {
 	if matchID == 0 {
+		plog.With(ctx).Warnw("msg", "battle_heartbeat_refused", "reason", reasonAllocMatchIDRequired,
+			"pod", podName, "authority", "legacy")
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
 	now := time.Now().UnixMilli()
@@ -2256,13 +2504,21 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 	var abandonPlayers []uint64
 	var abandonMapID uint32
 	var abandonGameMode string
+	// 花名册到齐期限(INC-20260813-001):空场两档都只管「一个人都没有」,
+	// 拦不住「来了但没来齐」。缺席者单列,判弃时只罚他们。
+	var abandonRosterIncomplete bool
+	var abandonAbsentees []uint64
 	emptyTimeoutMs := u.cfg.EmptyBattleTimeout.Std().Milliseconds()
 	noShowTimeoutMs := u.cfg.ResolveNoShowTimeout().Milliseconds()
+	rosterDeadlineMs := u.cfg.ResolveRosterJoinDeadline().Milliseconds()
+	rosterArmWindowMs := u.cfg.ResolveRosterJoinArmWindow().Milliseconds()
 	err := u.repo.UpdateBattleWithLock(ctx, matchID, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
 		// CAS 冲突重跑时以最后一轮为准,每轮重置出参标记
 		refreshActive = false
 		emptyAbandoned = false
 		abandonNoShow = false
+		abandonRosterIncomplete = false
+		abandonAbsentees = nil
 		if b.State == stateAllocationUncertain || b.State == stateAllocationReconciling ||
 			b.State == stateAllocationEmptyFence ||
 			b.State == statePreactiveReleasing || b.State == stateAllocationAbort {
@@ -2317,6 +2573,46 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 				abandonPlayers = append([]uint64(nil), b.PlayerIds...)
 				abandonMapID = b.MapId
 				abandonGameMode = b.GameMode
+			}
+
+			// 花名册到齐期限(INC-20260813-001)。与上面的空场两档并列而不是嵌套:
+			// 那两档看 player_count==0,本档看 census 与 roster 的差集 —— 事故当天
+			// player_count 恒为 5(非 0),空场计时器一次都没起过,3v2 照常打完。
+			//
+			// 只在**开局阶段**生效(!RosterEverComplete):曾经到齐过的局此后任何掉线
+			// 都交回 EmptyBattleTimeout,否则局中掉线会在 deadline 后判弃一场正打着的对局。
+			//
+			// 武装窗(§5 滚动升级):roster_ever_complete 是**新版**副本才写的记忆,
+			// 旧副本手里已经到齐过的局不会有它。滚动升级时那种局一旦被新副本接手,
+			// 光看标记会把「局中掉线」误判成「开局没到齐」,45s 后判弃一场**正在打的对局**。
+			// 时间窗只保护已经过窗的老局；窗口内旧副本见过到齐、新副本接手时正好缺人的局
+			// 仍可能被误武装。它是纵深防御,发布仍须 observe → policy generation enforce。
+			if !emptyAbandoned && !b.RosterEverComplete && rosterDeadlineMs > 0 && snapshotPresent &&
+				rosterGateArmable(b.AllocatedAtMs, now, rosterArmWindowMs) {
+				absent := rosterAbsentees(b.PlayerIds, activePlayerIDs)
+				switch {
+				case len(absent) == 0:
+					// 全员同时在场过一次就永久豁免。
+					b.RosterEverComplete = true
+					b.RosterIncompleteSinceMs = 0
+				case b.RosterIncompleteSinceMs == 0:
+					b.RosterIncompleteSinceMs = now
+				case now-b.RosterIncompleteSinceMs >= rosterDeadlineMs:
+					b.State = stateAbandoned
+					emptyAbandoned = true
+					abandonRosterIncomplete = true
+					abandonNoShow = false // 罚只记缺席者,不按 no-show 全员记
+					abandonAbsentees = absent
+					abandonPod = b.DsPodName
+					abandonUID = b.GameserverUid
+					abandonPodUID = b.PodUid
+					abandonAllocationID = b.AllocationId
+					abandonReleaseTrack = b.ReleaseTrack
+					abandonInstanceEpoch = b.InstanceEpoch
+					abandonPlayers = append([]uint64(nil), b.PlayerIds...)
+					abandonMapID = b.MapId
+					abandonGameMode = b.GameMode
+				}
 			}
 		}
 		// 对局活跃(ready/running,且未被空场超时判弃):记下玩家名单 + ds_addr,供心跳后续期 BATTLE 位置。
@@ -2383,18 +2679,27 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 			u.killStrandedDS(ctx, matchID, podName, "orphan")
 			return &HeartbeatResult{Command: commandStop}, nil
 		default:
+			// 上面三条哨兵之外的失败(乐观锁重试耗尽、Redis 不可用等)以前直接透传,
+			// 后端零日志。它会让本跳心跳不落库,连续发生就是 15s 判弃的前因。
+			plog.With(ctx).Warnw("msg", "battle_heartbeat_refused", "reason", reasonHeartbeatUpdateFailed,
+				"match_id", matchID, "pod", podName, "state", state,
+				"player_count", playerCount, "authority", "legacy",
+				"code", int32(errcode.As(err)), "err", err)
 			return nil, err
 		}
 	}
 	if becameReady {
-		// 验收日志:Battle DS heartbeat match_id=<id> pod=<pod> state=running/ready
-		plog.With(ctx).Debugw("msg", "battle_ds_heartbeat_ready", "match_id", matchID, "pod", podName, "state", state)
+		// R1:warming → ready/running 的首次迁移,是"DS 起来了"的唯一凭证,也是
+		// AllocateBattle 得以放行 matchmaker 的那一跳。每对局至多一条,升 Infow。
+		plog.With(ctx).Infow("msg", "battle_ds_heartbeat_ready", "match_id", matchID,
+			"pod", podName, "state", state, "player_count", playerCount, "authority", "legacy")
 	}
 	if emptyAbandoned {
-		// 空场超时判弃:回收 pod + 投递补偿 + 移出 active,回 stop 指令令 DS 停机。
+		// 空场 / 缺员超时判弃:回收 pod + 投递补偿 + 移出 active,回 stop 指令令 DS 停机。
 		return u.finishEmptyAbandon(ctx, matchID, abandonPod, abandonUID,
 			abandonPodUID, abandonAllocationID, abandonReleaseTrack, abandonInstanceEpoch,
-			abandonPlayers, abandonMapID, abandonGameMode, abandonNoShow), nil
+			abandonPlayers, abandonMapID, abandonGameMode, abandonNoShow,
+			abandonRosterIncomplete, abandonAbsentees), nil
 	}
 	// owner 权威实例租约双写 + 在场玩家准入代提交(与 Model B 心跳同语义,见函数注释)。
 	// 时序同 owner-authority.md §4:必须在心跳响应返回前完成租约续写。
@@ -2440,6 +2745,29 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 		u.refreshBattleLocations(ctx, refreshPlayers, matchID, refreshAddr)
 	}
 	return &HeartbeatResult{Command: commandNone}, nil
+}
+
+// rosterAbsentees 返回 roster 里没出现在 census 中的玩家(保持 roster 原序,便于日志比对)。
+//
+// 输入语义严格:census 必须是 DS 上报的**真实在场名单**,不是 roster 也不是数量。
+// 拿数量判只能得到「少了几个」,说不出少的是谁 —— 而「只罚缺席者、不罚在场的人」
+// 恰恰要求点名到人。调用方负责保证 census 确实存在(snapshotPresent),
+// 本函数不替它兜底:census 缺席时返回「全员缺席」会把每一局都判弃。
+func rosterAbsentees(roster, census []uint64) []uint64 {
+	if len(roster) == 0 {
+		return nil
+	}
+	present := make(map[uint64]struct{}, len(census))
+	for _, id := range census {
+		present[id] = struct{}{}
+	}
+	var absent []uint64
+	for _, id := range roster {
+		if _, ok := present[id]; !ok {
+			absent = append(absent, id)
+		}
+	}
+	return absent
 }
 
 // recordNoShowPenalties 对 no-show 判弃的 roster 全员记账,并按温和档指数退避布罚:
@@ -2507,17 +2835,29 @@ func (u *AllocatorUsecase) finishEmptyAbandon(
 	mapID uint32,
 	gameMode string,
 	noShow bool,
+	rosterIncomplete bool,
+	absentees []uint64,
 ) *HeartbeatResult {
-	// reason 区分两档阈值:no_show = 从头到尾没人连入(可能是刷进出副本的滥用,
-	// 也可能是客户端进场链路断了);all_disconnected = 有人打过但全员掉线未归。
-	// 两者的排查方向完全不同,日志必须能分开统计(否则滥用会被当成“玩家网络差”)。
+	// reason 区分三档:no_show = 从头到尾没人连入(可能是刷进出副本的滥用,也可能是
+	// 客户端进场链路断了);all_disconnected = 有人打过但全员掉线未归;
+	// roster_incomplete = 来了但没来齐(INC-20260813-001)。
+	// 三者的排查方向完全不同,日志必须能分开统计(否则滥用会被当成“玩家网络差”)。
 	reason, timeout := "all_disconnected", u.cfg.EmptyBattleTimeout.Std()
-	if noShow {
+	switch {
+	case rosterIncomplete:
+		reason, timeout = "roster_incomplete", u.cfg.ResolveRosterJoinDeadline()
+	case noShow:
 		reason, timeout = "no_show", u.cfg.ResolveNoShowTimeout()
 	}
 	plog.With(ctx).Warnw("msg", "battle_abandoned_empty_timeout",
-		"match_id", matchID, "pod", podName, "reason", reason, "empty_timeout", timeout.String())
-	if noShow {
+		"match_id", matchID, "pod", podName, "reason", reason, "empty_timeout", timeout.String(),
+		"roster", len(playerIDs), "absentees", absentees)
+	switch {
+	case rosterIncomplete:
+		// **只罚缺席者**。在场那几位是受害者:他们按时连进来了,局却因为别人没到而作废,
+		// 再给他们记一笔退避等于让「队友掉线」变成自己的惩罚(§6 第 8 项的温和档精神)。
+		u.recordNoShowPenalties(ctx, matchID, absentees)
+	case noShow:
 		// no-show 记账 → 进入侧退避(§6 第 8 项)。放在判弃 CAS 已提交之后的收口点:
 		// FirstAbandon/emptyAbandoned 保证每局至多进入一次,天然不重复记账。
 		// 只罚 no_show——all_disconnected 是「打过但掉线」,可能是网络问题,不记。
@@ -3237,6 +3577,14 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			}
 		}
 	}
+	// R4 就地聚合:sweep 每 SweepInterval(默认 5s)跑一轮,逐项打 INFO 会把同文件里的
+	// WARN 拒绝冲走。整轮只出一条 Debugw,足以回答"扫了几个、处理了几个、耗时多少"
+	// (§11.3 判据 5),异常侧(预算耗尽 / 各类失败)另有独立 WARN,不受本条级别影响。
+	if len(stale) > 0 {
+		plog.With(ctx).Debugw("msg", "allocation_sweep_round_done", "stale", len(stale),
+			"processed", processed, "deferred", len(stale)-processed,
+			"elapsed_ms", time.Since(roundStart).Milliseconds(), "budget", budget.String())
+	}
 	// 孤儿 Allocated GameServer 对账清扫(biz/orphan_gameserver.go):按分钟节流,
 	// 只处理「无任何权威记录引用」的 GS,与上面按记录驱动的判弃链互不重叠。
 	u.reconcileOrphanGameServersIfDue(ctx, time.Now())
@@ -3311,4 +3659,19 @@ func (u *AllocatorUsecase) deliverAbandoned(ctx context.Context, matchID uint64,
 	}
 	plog.With(ctx).Debugw("msg", "ds_lifecycle_published", "match_id", matchID)
 	return true
+}
+
+// rosterGateArmable 判断「花名册到齐期限」这道闸此刻还允不允许被武装。
+//
+// 判据是本局的年龄(自 allocated_at 起算)而不是任何进程内状态 —— 它必须对**任何副本**
+// 给出同一答案,滚动升级中接手心跳的新副本才不会对一局老 battle 做出与前任不同的判断。
+//
+// allocated_at 缺失(旧记录 / mock)时返回 false:拿不到年龄就不武装。这是刻意的 fail-safe
+// 方向 —— 漏防一局缺员局,远好过误判弃一局正在打的对局。
+func rosterGateArmable(allocatedAtMs, nowMs, armWindowMs int64) bool {
+	if armWindowMs <= 0 || allocatedAtMs <= 0 {
+		return false
+	}
+	age := nowMs - allocatedAtMs
+	return age >= 0 && age <= armWindowMs
 }

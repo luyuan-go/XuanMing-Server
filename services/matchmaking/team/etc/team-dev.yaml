@@ -55,6 +55,20 @@ team:
   # 且必须与 login 那把 match_resume_auth_secret 不同(独立信任域)。
   match_resume_auth_secret: "pandora-dev-team-resume-auth-key-v1!"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
+  # ── 反方向:验 matchmaker 调 BeginTeamMatch / EndTeamMatch(INC-20260813-001 A-13)──
+  # systemOnly 只证明「没带玩家 JWT」,集群内任何 Pod 都满足;而这两个方法一个能给任意队伍
+  # 上 roster 租约(反复调 = 让那支队伍永远开不了局),一个能把任意队伍打回 FORMING。
+  #
+  # ⚠️ 必须与上面那把 match_resume_auth_secret **不同** —— 那把是 team 签**出站**用的,
+  # 共用等于让任一方能冒充另一方。对应 matchmaker 的 team_call_auth_secret。
+  #
+  # 三档:留空=不验;配了+require=false(观察期,验不过只 WARN 放行);require=true=强制。
+  # 上线顺序「两边配密钥 → 观察 team_match_call_auth_observed 归零 → 翻 require」,
+  # 每一步单独都安全,不存在「谁必须先上线」(§9.21)。
+  match_call_auth_secret: "pandora-dev-match-call-auth-key-v1!!"
+  match_call_auth_audience: "team"
+  # dev 直接强制:本机两侧同时起,没有共存窗口,开着才能真正测到这道门。
+  match_call_auth_require: true
 
   # locator_addr: player_locator gRPC 直连地址,离线观察的判定依据来源。
   locator_addr: "127.0.0.1:20006"

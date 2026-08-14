@@ -26,6 +26,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -246,27 +248,64 @@ func (u *BattleResultUsecase) ReportAuthorizedResult(
 	terminalRelease data.TerminalReleaseRecord,
 	finalProgressSeq uint64,
 ) (bool, error) {
-	if err := validateAuthorizedResultRoster(result, terminalRelease.PlayerIDs); err != nil {
+	if reason, samplePlayerID, err := validateAuthorizedResultRoster(result, terminalRelease.PlayerIDs); err != nil {
+		// 整场结算被判 ErrUnauthorized 的闸门。ErrUnauthorized 不属 errcode.IsServerFault,
+		// access log 走 rpc_ok(DEBUG)、service 层 logDSAuthReject 也不覆盖 biz 返回的错误
+		// → 不在这里留证就是全链零日志。中途掉线导致 DS 少报一个 stat、或多报一个观战/替补 ID,
+		// 玩家表现为「打完什么都没有」,运维必须能区分它与「DS 根本没上报」。
+		plog.With(ctx).Warnw("msg", "battle_result_roster_rejected",
+			"match_id", terminalRelease.MatchID, "ds_pod_name", terminalRelease.DSPodName,
+			"reason", reason,
+			"reported_players", len(result.GetStats()),
+			"authority_players", len(terminalRelease.PlayerIDs),
+			"sample_player_id", samplePlayerID,
+			"code", int32(errcode.As(err)), "err", err,
+			"hint", "DS 上报 stats 名单 ≠ canonical roster,本场结算整体拒绝(不落库、不发段位、不发掉落)")
 		return false, err
 	}
 	return u.reportResult(ctx, result, &terminalRelease, finalProgressSeq)
 }
 
+// roster 校验拒绝原因枚举(§11.3 R2:一个 if 收敛的 N 个条件必须拆成 N 个 reason)。
+// 只作日志判据,不参与控制流:每个 reason 对应的返回错误与拆分前逐字节一致。
+const (
+	rosterRejectNilResult       = "nil_result"
+	rosterRejectAuthorityEmpty  = "authority_roster_empty"
+	rosterRejectCountMismatch   = "count_mismatch"
+	rosterRejectAuthorityZeroID = "authority_zero_player_id"
+	rosterRejectAuthorityDup    = "authority_duplicate_player"
+	rosterRejectReportedZeroID  = "reported_zero_player_id"
+	rosterRejectReportedDup     = "reported_duplicate_player"
+	rosterRejectOutsider        = "reported_outsider"
+)
+
 // validateAuthorizedResultRoster binds every settlement side effect to the
 // canonical BattleStorageRecord roster captured by the credential checker.
 // Equality is set-based because stat order is not an authority signal, while
 // duplicate stats, omissions and outsiders are all rejected before MMR/DB work.
-func validateAuthorizedResultRoster(result *battlev1.BattleResult, authoritative []uint64) error {
-	if result == nil || len(authoritative) == 0 || len(result.GetStats()) != len(authoritative) {
-		return errcode.New(errcode.ErrUnauthorized, "battle result roster does not match authority")
+//
+// 返回值 (reason, samplePlayerID, err):reason / samplePlayerID 只供调用方打日志
+// (哪一项对不上、哪个 player_id 是第一现场),err 与拆分前完全一致。
+func validateAuthorizedResultRoster(result *battlev1.BattleResult, authoritative []uint64) (string, uint64, error) {
+	rosterMismatch := func(reason string, samplePlayerID uint64) (string, uint64, error) {
+		return reason, samplePlayerID, errcode.New(errcode.ErrUnauthorized, "battle result roster does not match authority")
+	}
+	if result == nil {
+		return rosterMismatch(rosterRejectNilResult, 0)
+	}
+	if len(authoritative) == 0 {
+		return rosterMismatch(rosterRejectAuthorityEmpty, 0)
+	}
+	if len(result.GetStats()) != len(authoritative) {
+		return rosterMismatch(rosterRejectCountMismatch, 0)
 	}
 	want := make(map[uint64]struct{}, len(authoritative))
 	for _, playerID := range authoritative {
 		if playerID == 0 {
-			return errcode.New(errcode.ErrUnauthorized, "battle authority roster is invalid")
+			return rosterRejectAuthorityZeroID, 0, errcode.New(errcode.ErrUnauthorized, "battle authority roster is invalid")
 		}
 		if _, duplicate := want[playerID]; duplicate {
-			return errcode.New(errcode.ErrUnauthorized, "battle authority roster is invalid")
+			return rosterRejectAuthorityDup, playerID, errcode.New(errcode.ErrUnauthorized, "battle authority roster is invalid")
 		}
 		want[playerID] = struct{}{}
 	}
@@ -274,17 +313,17 @@ func validateAuthorizedResultRoster(result *battlev1.BattleResult, authoritative
 	for _, stat := range result.GetStats() {
 		playerID := stat.GetPlayerId()
 		if playerID == 0 {
-			return errcode.New(errcode.ErrUnauthorized, "battle result roster contains an invalid player")
+			return rosterRejectReportedZeroID, 0, errcode.New(errcode.ErrUnauthorized, "battle result roster contains an invalid player")
 		}
 		if _, duplicate := seen[playerID]; duplicate {
-			return errcode.New(errcode.ErrUnauthorized, "battle result roster contains a duplicate player")
+			return rosterRejectReportedDup, playerID, errcode.New(errcode.ErrUnauthorized, "battle result roster contains a duplicate player")
 		}
 		if _, member := want[playerID]; !member {
-			return errcode.New(errcode.ErrUnauthorized, "battle result roster contains an unauthorized player")
+			return rosterRejectOutsider, playerID, errcode.New(errcode.ErrUnauthorized, "battle result roster contains an unauthorized player")
 		}
 		seen[playerID] = struct{}{}
 	}
-	return nil
+	return "", 0, nil
 }
 
 // canonicalGameModePVECoop 是 PVE walk-in 部署的 canonical game_mode
@@ -339,6 +378,7 @@ func settlementRatingPool(terminalRelease *data.TerminalReleaseRecord) string {
 }
 
 func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1.BattleResult, terminalRelease *data.TerminalReleaseRecord, finalProgressSeq uint64) (bool, error) {
+	startedAt := time.Now()
 	if result == nil || result.GetMatchId() == 0 {
 		return false, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
@@ -406,7 +446,16 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 		return false, errcode.New(errcode.ErrInvalidArg, "completed terminal release proof cannot settle abandoned match %d", result.GetMatchId())
 	}
 	if terminalRelease != nil {
-		if err := prepareTerminalRelease(result, terminalRelease, u.cfg.TerminalReleaseGrace.Std()); err != nil {
+		if reason, err := prepareTerminalRelease(result, terminalRelease, u.cfg.TerminalReleaseGrace.Std()); err != nil {
+			// 这里返回的 ErrUnauthorized / ErrInvalidState 都不属 errcode.IsServerFault,
+			// access log 走 rpc_ok(DEBUG)。其中 grace_out_of_range 是**纯配置错误**:
+			// 配错一次会让**每一场**正常结算失败且监控面全绿,必须 ERROR 留证。
+			plog.With(ctx).Errorw("msg", "terminal_release_proof_rejected",
+				"match_id", result.GetMatchId(), "allocation_id", terminalRelease.AllocationID,
+				"ds_pod_name", terminalRelease.DSPodName, "reported_pod", result.GetDsPodName(),
+				"reason", reason, "grace_ms", u.cfg.TerminalReleaseGrace.Std().Milliseconds(),
+				"code", int32(errcode.As(err)), "err", err,
+				"hint", "终态回收证明校验失败,本场结算整体拒绝;reason=grace_out_of_range 时是配置错误(全服失败)")
 			return false, err
 		}
 	}
@@ -424,16 +473,47 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 
 	already, settleInfo, err := u.repo.SaveResult(ctx, result, outbox, dropOutbox, terminalRelease, finalProgressSeq)
 	if err != nil {
+		// SaveResult 的每一个失败点都返回 ErrBattleResultDBWrite(6003),而 6003 **不在**
+		// errcode.IsServerFault 白名单里 → access log 走 rpc_ok(DEBUG)。不在这里打 ERROR,
+		// 线上 info 级下 MySQL 抖动 / 死锁 / 字段截断 / terminal_release_outbox 写失败导致的
+		// **整场结算失败在本服零日志**,只能从 DS 侧看到拿着 6003 无限重试。
+		plog.With(ctx).Errorw("msg", "battle_result_persist_failed",
+			"match_id", result.GetMatchId(), "ds_pod_name", result.GetDsPodName(),
+			"outcome", result.GetOutcome().String(), "players", len(result.GetStats()),
+			"outbox_rows", len(outbox), "drop_rows", len(dropOutbox),
+			"has_terminal_release", terminalRelease != nil,
+			"final_progress_seq", finalProgressSeq,
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"code", int32(errcode.As(err)), "err", err,
+			"hint", "本场结算未落库,DS 会按同一 match_id 重试;查 MySQL 侧错误(死锁/超长/schema 漂移)")
 		return false, err
 	}
 	if already {
-		plog.With(ctx).Infow("msg", "battle_result_idempotent_hit", "match_id", result.GetMatchId())
+		// 幂等命中本身是良性的,但「同 pod 重试」与「换了 pod 的僵尸 DS 重放」性质完全不同
+		// (后者是 fencing 事件),必须能从这一条日志上区分。
+		credentialPod := ""
+		if terminalRelease != nil {
+			credentialPod = terminalRelease.DSPodName
+		}
+		plog.With(ctx).Infow("msg", "battle_result_idempotent_hit",
+			"match_id", result.GetMatchId(), "ds_pod_name", result.GetDsPodName(),
+			"credential_pod", credentialPod, "players", len(result.GetStats()),
+			"outcome", result.GetOutcome().String(), "final_progress_seq", finalProgressSeq,
+			"authorized", terminalRelease != nil)
 		return true, nil
 	}
 
-	plog.With(ctx).Debugw("msg", "battle_result_recorded",
-		"match_id", result.GetMatchId(), "winner_team", result.GetWinnerTeam(),
-		"outcome", result.GetOutcome().String(), "players", len(result.GetStats()))
+	// 整条结算链**唯一**一条「这一局已落库」的状态推进日志(§11.3 R1 不可逆推进打 INFO)。
+	// 历史上是 Debugw,而 ABANDONED 补偿路径的 battle_abandoned_recorded 是 Infow ——
+	// 正常结算反而线上不可见,「这局到底结没结算」只能查库不能查日志。
+	plog.With(ctx).Infow("msg", "battle_result_recorded",
+		"match_id", result.GetMatchId(), "ds_pod_name", result.GetDsPodName(),
+		"winner_team", result.GetWinnerTeam(),
+		"outcome", result.GetOutcome().String(), "players", len(result.GetStats()),
+		"rating_pool", ratingPool, "map_id", result.GetMapId(), "game_mode", result.GetGameMode(),
+		"drop_rows", len(dropOutbox), "drops_suppressed", settleInfo.DropsSuppressed,
+		"final_progress_seq", finalProgressSeq, "applied_seq", settleInfo.LastAppliedSeq,
+		"duration_ms", time.Since(startedAt).Milliseconds())
 
 	// 实时进度通道对账 + 单一权威路径观测(realtime-progression.md §5):
 	// 掉落发放权已归实时通道时,结算上报的 dropped_item_config_ids 只作审计不再发放。
@@ -453,27 +533,66 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 	return false, nil
 }
 
-func prepareTerminalRelease(result *battlev1.BattleResult, rec *data.TerminalReleaseRecord, grace time.Duration) error {
-	if result == nil || rec == nil || rec.MatchID == 0 || rec.MatchID != result.GetMatchId() ||
-		rec.AllocationID == "" || rec.DSPodName == "" || rec.DSPodName != result.GetDsPodName() ||
-		rec.GameserverUID == "" || rec.InstanceEpoch == 0 || rec.AuthGen == 0 ||
-		rec.AuthJTI == "" || rec.AuthExpMs <= 0 || rec.AuthKid == "" ||
-		rec.AuthTokenSHA256 == "" || rec.AuthWriterEpoch != auth.DSAuthWriterEpochV2 ||
-		rec.AuthorizedAtMs <= 0 || rec.AuthorizedAtMs >= rec.AuthExpMs || rec.ReleasedAtMs != 0 ||
-		len(rec.PlayerIDs) == 0 {
-		return errcode.New(errcode.ErrUnauthorized, "terminal release proof is incomplete or not bound to result")
+// prepareTerminalRelease 校验并定格终态回收证明。
+//
+// 返回值 (reason, err):reason 只供调用方打日志(§11.3 R2 —— 原实现把 19 个子条件塌成
+// 一句话,pod / jti / exp / writer_epoch / 配置 grace 哪一项对不上完全查不出来);
+// err 与拆分前逐字节一致,控制流不变。
+func prepareTerminalRelease(result *battlev1.BattleResult, rec *data.TerminalReleaseRecord, grace time.Duration) (string, error) {
+	incomplete := func(reason string) (string, error) {
+		return reason, errcode.New(errcode.ErrUnauthorized, "terminal release proof is incomplete or not bound to result")
+	}
+	switch {
+	case result == nil:
+		return incomplete("nil_result")
+	case rec == nil:
+		return incomplete("nil_proof")
+	case rec.MatchID == 0:
+		return incomplete("missing_match_id")
+	case rec.MatchID != result.GetMatchId():
+		return incomplete("match_id_mismatch")
+	case rec.AllocationID == "":
+		return incomplete("missing_allocation_id")
+	case rec.DSPodName == "":
+		return incomplete("missing_pod")
+	case rec.DSPodName != result.GetDsPodName():
+		return incomplete("pod_mismatch")
+	case rec.GameserverUID == "":
+		return incomplete("missing_gameserver_uid")
+	case rec.InstanceEpoch == 0:
+		return incomplete("missing_instance_epoch")
+	case rec.AuthGen == 0:
+		return incomplete("missing_auth_gen")
+	case rec.AuthJTI == "":
+		return incomplete("missing_jti")
+	case rec.AuthExpMs <= 0:
+		return incomplete("invalid_exp")
+	case rec.AuthKid == "":
+		return incomplete("missing_kid")
+	case rec.AuthTokenSHA256 == "":
+		return incomplete("missing_token_sha")
+	case rec.AuthWriterEpoch != auth.DSAuthWriterEpochV2:
+		return incomplete("writer_epoch_mismatch")
+	case rec.AuthorizedAtMs <= 0:
+		return incomplete("invalid_authorized_at")
+	case rec.AuthorizedAtMs >= rec.AuthExpMs:
+		return incomplete("authorized_at_not_before_exp")
+	case rec.ReleasedAtMs != 0:
+		return incomplete("already_released")
+	case len(rec.PlayerIDs) == 0:
+		return incomplete("empty_roster")
 	}
 	if grace < 5*time.Second || grace > 2*time.Minute {
-		return errcode.New(errcode.ErrInvalidState, "terminal release grace is outside [5s,2m]")
+		return "grace_out_of_range", errcode.New(errcode.ErrInvalidState, "terminal release grace is outside [5s,2m]")
 	}
 	nowMs := time.Now().UnixMilli()
 	if rec.AuthorizedAtMs > nowMs {
-		return errcode.New(errcode.ErrUnauthorized, "terminal release authorization time is in the future")
+		return "authorized_in_future", errcode.New(errcode.ErrUnauthorized, "terminal release authorization time is in the future")
 	}
 	rec.ReleaseAfterMs = nowMs + grace.Milliseconds()
 	rec.ReleasedAtMs = 0 // 只允许 phase1 worker 经 MySQL CAS 推进，调用方不能伪造。
 	rec.CreatedAtMs = 0  // MySQL writer owns created_at_ms; caller不能伪造。
-	return nil
+	return "", nil
 }
 
 // ── HandleAbandoned:DS 崩溃补偿 ───────────────────────────────────────────────
@@ -514,6 +633,12 @@ func (u *BattleResultUsecase) HandleAbandoned(ctx context.Context, matchID uint6
 	// 僵尸 DS 再上报进度一律拒;崩溃前已入账的经验 / 掉落按需求保留不回滚。
 	already, _, err := u.repo.SaveResult(ctx, result, outbox, nil, nil, 0)
 	if err != nil {
+		// 与正常结算同因:ErrBattleResultDBWrite(6003) 不是 server fault,不打就零日志。
+		// 补偿记录写不进去 = DS 崩溃后玩家段位既不回滚也无战报,必须 ERROR。
+		plog.With(ctx).Errorw("msg", "battle_abandoned_persist_failed",
+			"match_id", matchID, "players", len(playerIDs), "map_id", mapID, "game_mode", gameMode,
+			"outbox_rows", len(outbox), "code", int32(errcode.As(err)), "err", err,
+			"hint", "ABANDONED 补偿未落库,ds.lifecycle 消费会重试;查 MySQL 侧错误")
 		return err
 	}
 	if already {
@@ -555,8 +680,12 @@ func (u *BattleResultUsecase) assignMMR(ctx context.Context, result *battlev1.Ba
 		m, err := u.mmr.GetMMR(ctx, s.GetPlayerId(), ratingPool)
 		if err != nil {
 			m = u.cfg.BaseMMR
+			// match_id 必须手写:DS 回调面没有玩家 JWT,plog.With(ctx) 不会自动带 player_id,
+			// match_id 也要到 service 层 WithMatchID 才有;缺了这条就接不回具体一局。
 			plog.With(ctx).Warnw("msg", "mmr_read_failed_fallback_base",
-				"player_id", s.GetPlayerId(), "rating_pool", ratingPool, "err", err)
+				"match_id", result.GetMatchId(),
+				"player_id", s.GetPlayerId(), "rating_pool", ratingPool,
+				"base_mmr", u.cfg.BaseMMR, "err", err)
 		}
 		if s.GetTeam() == winnerTeamA {
 			sum0 += m
@@ -638,6 +767,11 @@ func (u *BattleResultUsecase) buildDropOutbox(ctx context.Context, result *battl
 		stacks := make([]uint32, 0, capHint)
 		instances := make([]uint32, 0, capHint)
 		truncated := false
+		// 被过滤掉的 ID 去重收集:「打完没掉落」最常见的真因就是 item/drop 表漏配某个 ID,
+		// 只报「报了 N 个全被过滤」而不给 ID,排障没有落点(实时通道那条
+		// progress_facts_skipped 反而带了 sample_item_config_id,两边口径必须一致)。
+		filteredIDs := map[uint32]struct{}{}
+		var sampleFilteredID uint32
 		for _, id := range reported {
 			def, ok := u.battleItemDefinition(id)
 			if id != 0 && ok && def.Droppable {
@@ -651,6 +785,13 @@ func (u *BattleResultUsecase) buildDropOutbox(ctx context.Context, result *battl
 				} else {
 					stacks = append(stacks, id)
 				}
+				continue
+			}
+			if _, seen := filteredIDs[id]; !seen {
+				filteredIDs[id] = struct{}{}
+				if sampleFilteredID == 0 {
+					sampleFilteredID = id
+				}
 			}
 		}
 		if truncated {
@@ -662,7 +803,10 @@ func (u *BattleResultUsecase) buildDropOutbox(ctx context.Context, result *battl
 		if len(allowed) == 0 {
 			// DS 上报了掉落但全不在白名单 → 记一条 Warn(可能是配置漏项或 DS 越权尝试)。
 			plog.With(ctx).Warnw("msg", "battle_drop_all_filtered",
-				"match_id", result.GetMatchId(), "player_id", s.GetPlayerId(), "reported", len(reported))
+				"match_id", result.GetMatchId(), "player_id", s.GetPlayerId(),
+				"reported", len(reported),
+				"distinct_item_ids", len(filteredIDs), "sample_item_config_id", sampleFilteredID,
+				"hint", "item/drop 表漏配该 ID(改表)或 DS 上报未授权掉落(安全信号)")
 			continue
 		}
 		recs = append(recs, data.DropOutboxRecord{
@@ -671,6 +815,20 @@ func (u *BattleResultUsecase) buildDropOutbox(ctx context.Context, result *battl
 		})
 	}
 	return recs
+}
+
+// withOutboxTrace 给后台出箱 worker 的**单行单次投递**现铸一个 trace_id(不变量 §9.8,
+// §11.3 R3 join key)。
+//
+// 出箱行落库时没有记下原始请求的 trace_id(要给出箱表加列,属 schema 改动),而后台
+// publisher 的根 ctx 是进程级的、本就不带 trace_id —— 结果是 worker 侧「发放失败 /
+// 发放成功」日志 trace_id 恒空,与 player / inventory / mission / matchmaker 侧的 access log
+// 没有任何共同字段,只能靠幂等键人肉拼。pkg/middleware.Trace 的 client 分支**优先取 ctx 里的
+// trace_id**(取不到才自己现生成、且不回写调用方),所以在这里先铸一个,本服日志与下游
+// access log 就落在同一个 trace_id 上。同一行重试会拿到新的 trace_id(每次投递一条链路),
+// 跨重试的关联键是日志里同时打出的 outbox_id + 幂等键。
+func withOutboxTrace(ctx context.Context) context.Context {
+	return plog.WithTraceID(ctx, uuid.NewString())
 }
 
 // ── player.update 事务出箱发布器(W4 ⑨,不变量 §4)─────────────────────────────
@@ -717,10 +875,17 @@ func (u *BattleResultUsecase) publishOutboxBatch(ctx context.Context) (int, erro
 	}
 	published := 0
 	for _, r := range recs {
-		if perr := u.pusher.PushPlayerUpdate(ctx, r.PlayerID, r.Payload); perr != nil {
+		rowCtx := withOutboxTrace(ctx)
+		if perr := u.pusher.PushPlayerUpdate(rowCtx, r.PlayerID, r.Payload); perr != nil {
+			// 批级 outbox_publish_batch_failed 说不出卡在谁身上;段位事件按 player_id 保序,
+			// 卡住的这一行会挡住该玩家后续所有 player.update。
+			plog.With(rowCtx).Warnw("msg", "outbox_publish_failed",
+				"player_id", r.PlayerID, "outbox_id", r.ID, "published_before", published,
+				"code", int32(errcode.As(perr)), "err", perr,
+				"hint", "本轮中断保留出箱行下轮重试(同玩家保序);持续失败查 kafka producer")
 			return published, perr // 本轮中断,保留出箱行下轮重试
 		}
-		if derr := u.repo.DeleteOutbox(ctx, r.ID); derr != nil {
+		if derr := u.repo.DeleteOutbox(rowCtx, r.ID); derr != nil {
 			return published, derr
 		}
 		published++
@@ -790,11 +955,19 @@ func (u *BattleResultUsecase) publishMatchReleaseBatch(ctx context.Context) (int
 	released := 0
 	var joined error
 	for _, rec := range recs {
-		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		rowCtx := withOutboxTrace(ctx)
+		callCtx, cancel := context.WithTimeout(rowCtx, 10*time.Second)
 		rerr := u.releaser.ReleaseMatch(callCtx, rec.MatchID, rec.PlayerIDs)
 		cancel()
 		if rerr != nil {
+			// 逐行留证:批级聚合的 match_release_batch_failed 说不出「是哪一局没释放」,
+			// 而没释放的直接后果是玩家回 Hub 再次 StartMatch 撞 4002(残留 claim)。
 			nextMs := time.Now().Add(matchReleaseRetryDelay(rec.AttemptCount)).UnixMilli()
+			plog.With(rowCtx).Warnw("msg", "match_release_failed",
+				"match_id", rec.MatchID, "outbox_id", rec.ID, "players", len(rec.PlayerIDs),
+				"attempt", rec.AttemptCount, "next_attempt_at_ms", nextMs,
+				"code", int32(errcode.As(rerr)), "err", rerr,
+				"hint", "matchmaker 撮合状态未释放,玩家回 Hub 再匹配可能撞 ErrMatchAlreadyMatching(4002)")
 			if derr := u.repo.DeferMatchReleaseOutbox(ctx, rec.ID, nextMs); derr != nil {
 				joined = errors.Join(joined, rerr, derr)
 			} else {
@@ -806,6 +979,9 @@ func (u *BattleResultUsecase) publishMatchReleaseBatch(ctx context.Context) (int
 			joined = errors.Join(joined, derr)
 			continue
 		}
+		plog.With(rowCtx).Infow("msg", "match_release_published",
+			"match_id", rec.MatchID, "outbox_id", rec.ID, "players", len(rec.PlayerIDs),
+			"attempt", rec.AttemptCount)
 		released++
 	}
 	return released, joined
@@ -858,26 +1034,33 @@ func (u *BattleResultUsecase) publishTerminalReleaseBatch(ctx context.Context) (
 			return finalized, errcode.New(errcode.ErrInvalidState,
 				"terminal release outbox id=%d has invalid released_at_ms", rec.ID)
 		}
-		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		rowCtx := withOutboxTrace(ctx)
+		callCtx, cancel := context.WithTimeout(rowCtx, 10*time.Second)
 		if rec.ReleasedAtMs == 0 {
 			err := u.terminalRelay.ReleaseTerminal(callCtx, rec)
 			cancel()
 			if err != nil {
 				// Redis/K8s unknown 绝不能推进 DB phase；永久墓碑/原始行保留重试。
-				plog.With(ctx).Warnw("msg", "terminal_release_phase1_failed",
+				plog.With(rowCtx).Warnw("msg", "terminal_release_phase1_failed",
 					"match_id", rec.MatchID, "allocation_id", rec.AllocationID,
-					"pod", rec.DSPodName, "err", err)
+					"pod", rec.DSPodName, "outbox_id", rec.ID,
+					"code", int32(errcode.As(err)), "err", err)
 				continue
 			}
-			marked, err := u.repo.MarkTerminalReleaseReleased(ctx, rec.ID, time.Now().UnixMilli())
+			marked, err := u.repo.MarkTerminalReleaseReleased(rowCtx, rec.ID, time.Now().UnixMilli())
 			if err != nil {
 				// UID delete 已成功但 durable ACK 未知：phase1 绝不 expire Redis。
 				// 下轮按 DB 真实状态重读；0 则重放 UID delete，>0 则进入 finalize。
 				return finalized, err
 			}
 			if !marked {
-				plog.With(ctx).Debugw("msg", "terminal_release_phase1_already_advanced",
+				plog.With(rowCtx).Debugw("msg", "terminal_release_phase1_already_advanced",
 					"match_id", rec.MatchID, "outbox_id", rec.ID)
+			} else {
+				// 不可逆推进(Redis terminal/receipt CAS 已完成 + MySQL 已 durable 标记)。
+				plog.With(rowCtx).Infow("msg", "terminal_release_phase1_done",
+					"match_id", rec.MatchID, "allocation_id", rec.AllocationID,
+					"pod", rec.DSPodName, "outbox_id", rec.ID)
 			}
 			continue
 		}
@@ -887,16 +1070,23 @@ func (u *BattleResultUsecase) publishTerminalReleaseBatch(ctx context.Context) (
 		if err != nil {
 			// finalize 响应未知绝不能 DELETE released 行；重试只校验/Expire 同 proof，
 			// 绝不再次删除 K8s。若 TTL 已自然清空全部墓碑，服务端按幂等成功返回。
-			plog.With(ctx).Warnw("msg", "terminal_release_finalize_failed",
+			plog.With(rowCtx).Warnw("msg", "terminal_release_finalize_failed",
 				"match_id", rec.MatchID, "allocation_id", rec.AllocationID,
-				"pod", rec.DSPodName, "err", err)
+				"pod", rec.DSPodName, "outbox_id", rec.ID,
+				"code", int32(errcode.As(err)), "err", err)
 			continue
 		}
-		if err := u.repo.DeleteTerminalReleaseOutbox(ctx, rec.ID); err != nil {
+		if err := u.repo.DeleteTerminalReleaseOutbox(rowCtx, rec.ID); err != nil {
 			// finalize 已成功但 DB delete 失败：released 行保留。下一轮只重放
 			// finalize；即使墓碑 TTL 已过、三键都不存在，也会幂等重认成功。
 			return finalized, err
 		}
+		// 落在 DELETE 之后:先打日志再落库时,库操作失败会让日志与库状态互相矛盾,
+		// 排障会按"已完成"处理(同 progress_unknown_fact_stream_stopped 的纪律)。
+		plog.With(rowCtx).Infow("msg", "terminal_release_finalized",
+			"match_id", rec.MatchID, "allocation_id", rec.AllocationID,
+			"pod", rec.DSPodName, "outbox_id", rec.ID,
+			"released_at_ms", rec.ReleasedAtMs)
 		finalized++
 	}
 	if finalized > 0 {
@@ -961,15 +1151,30 @@ func (u *BattleResultUsecase) publishDropBatch(ctx context.Context) (int, error)
 	}
 	granted := 0
 	for _, r := range recs {
-		if gerr := u.deliverDropRecord(ctx, r); gerr != nil {
+		rowCtx := withOutboxTrace(ctx)
+		idempotencyKey := dropIdempotencyKey(r.MatchID, r.PlayerID)
+		if gerr := u.deliverDropRecord(rowCtx, r); gerr != nil {
 			// 任一路由失败都保留整行；已成功的另一路由靠独立幂等键回放，不会重复入账。
-			plog.With(ctx).Warnw("msg", "drop_grant_failed", "player_id", r.PlayerID,
-				"items", len(r.ItemConfigIDs), "err", gerr)
+			// match_id / outbox_id / 幂等键必须打全:没有它们时「某玩家某局掉落没进背包」
+			// 只能靠 player_id 在 inventory 侧大海捞针。
+			plog.With(rowCtx).Warnw("msg", "drop_grant_failed",
+				"match_id", r.MatchID, "player_id", r.PlayerID, "outbox_id", r.ID,
+				"items", len(r.ItemConfigIDs), "stack_items", len(r.StackItemConfigIDs),
+				"instance_items", len(r.InstanceItemConfigIDs),
+				"idempotency_key", idempotencyKey,
+				"code", int32(errcode.As(gerr)), "err", gerr,
+				"hint", "出箱行保留下轮重试(at-least-once);持续失败查 inventory / mail 侧同 trace_id")
 			continue
 		}
-		if derr := u.repo.DeleteDropOutbox(ctx, r.ID); derr != nil {
+		if derr := u.repo.DeleteDropOutbox(rowCtx, r.ID); derr != nil {
 			return granted, derr
 		}
+		// 资产变更必须有逐玩家台账:失败有行、成功没行时,「掉落到底发没发」在出箱行被删后
+		// 只能反查 inventory。这是每场对局每玩家至多一条,不是高频路径(§11.3 R1/R4)。
+		plog.With(rowCtx).Infow("msg", "drop_grant_delivered",
+			"match_id", r.MatchID, "player_id", r.PlayerID, "outbox_id", r.ID,
+			"stack_items", len(r.StackItemConfigIDs), "instance_items", len(r.InstanceItemConfigIDs),
+			"idempotency_key", idempotencyKey)
 		granted++
 	}
 	if granted > 0 {
@@ -1010,12 +1215,15 @@ func (u *BattleResultUsecase) deliverDropRecord(ctx context.Context, r data.Drop
 		// 只有实例背包满才允许转邮件；堆叠物品已走计数模型，不应进入装备邮件链。
 		if u.mailSender != nil && errcode.As(err) == errcode.ErrInventoryCapacityFull {
 			if merr := u.mailSender.SendOverflowMail(ctx, r.PlayerID, instances, instanceKey); merr != nil {
-				plog.With(ctx).Warnw("msg", "drop_overflow_mail_failed", "player_id", r.PlayerID,
-					"items", len(instances), "err", merr)
+				plog.With(ctx).Warnw("msg", "drop_overflow_mail_failed",
+					"match_id", r.MatchID, "player_id", r.PlayerID, "outbox_id", r.ID,
+					"items", len(instances), "idempotency_key", instanceKey,
+					"code", int32(errcode.As(merr)), "err", merr)
 				return merr
 			}
-			plog.With(ctx).Infow("msg", "drop_overflow_mailed", "player_id", r.PlayerID,
-				"items", len(instances))
+			plog.With(ctx).Infow("msg", "drop_overflow_mailed",
+				"match_id", r.MatchID, "player_id", r.PlayerID, "outbox_id", r.ID,
+				"items", len(instances), "idempotency_key", instanceKey)
 			return nil
 		}
 		return err

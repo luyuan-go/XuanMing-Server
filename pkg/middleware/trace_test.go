@@ -10,6 +10,7 @@ package middleware
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/go-kratos/kratos/v2/transport"
@@ -181,4 +182,75 @@ func TestTraceClientHopConcurrentWithReplySend(t *testing.T) {
 	}
 	close(stop)
 	<-done
+}
+
+// TestTraceServerHopRejectsUnsafeInbound:入站 trace_id 必须先过「有界长度 + 安全字符集」闸。
+//
+// 背景:客户端面 envoy 只剥离身份头(x-pandora-player-id / x-pandora-jwt-payload),
+// x-pandora-trace-id 原样透传,即该值由 UE 客户端 / DS 完全控制且会写进全链每条日志。
+// 不合规的值必须被丢弃并改为服务端生成,绝不能原样落进 ctx。
+func TestTraceServerHopRejectsUnsafeInbound(t *testing.T) {
+	cases := []struct {
+		name    string
+		inbound string
+	}{
+		{"换行伪造日志行", "abc\ndef"},
+		{"回车", "abc\rdef"},
+		{"制表符", "abc\tdef"},
+		{"空格", "abc def"},
+		{"控制字符", "abc\x00def"},
+		{"非 ASCII", "追踪-中文"},
+		{"超长", strings.Repeat("a", MaxTraceIDLen+1)},
+		{"JSON 注入", `abc","level":"error"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := newMockTransport()
+			tr.reqHeader.Set(MetadataKeyTraceID, tc.inbound)
+			ctx := transport.NewServerContext(context.Background(), tr)
+
+			var handlerCtx context.Context
+			if _, err := Trace()(noopHandler(&handlerCtx))(ctx, nil); err != nil {
+				t.Fatalf("Trace server hop: %v", err)
+			}
+			got, _ := handlerCtx.Value(plog.CtxKeyTraceID).(string)
+			if got == tc.inbound {
+				t.Fatalf("不安全的入站 trace_id 被原样采纳: %q", got)
+			}
+			if got == "" {
+				t.Fatal("丢弃不安全入站值后未生成替代 trace_id")
+			}
+			if !isSafeTraceID(got) {
+				t.Fatalf("生成的替代 trace_id 自身不合规: %q", got)
+			}
+		})
+	}
+}
+
+// TestTraceServerHopAcceptsSafeInbound:合规入站值必须原样采纳,否则跨进程串不起来。
+func TestTraceServerHopAcceptsSafeInbound(t *testing.T) {
+	cases := []string{
+		"550e8400-e29b-41d4-a716-446655440000", // UUID
+		"0123456789abcdef",                     // hex
+		"ue_client-42",                         // 下划线 + 连字符
+		strings.Repeat("a", MaxTraceIDLen),     // 边界:恰好等于上限
+	}
+	for _, inbound := range cases {
+		t.Run(inbound, func(t *testing.T) {
+			tr := newMockTransport()
+			tr.reqHeader.Set(MetadataKeyTraceID, inbound)
+			ctx := transport.NewServerContext(context.Background(), tr)
+
+			var handlerCtx context.Context
+			if _, err := Trace()(noopHandler(&handlerCtx))(ctx, nil); err != nil {
+				t.Fatalf("Trace server hop: %v", err)
+			}
+			if got, _ := handlerCtx.Value(plog.CtxKeyTraceID).(string); got != inbound {
+				t.Fatalf("handler ctx trace_id = %q, want %q", got, inbound)
+			}
+			if got := tr.replyHeader.Get(MetadataKeyTraceID); got != inbound {
+				t.Fatalf("reply header trace_id = %q, want %q", got, inbound)
+			}
+		})
+	}
 }

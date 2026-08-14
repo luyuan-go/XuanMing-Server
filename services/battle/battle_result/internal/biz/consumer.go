@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/IBM/sarama"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -27,6 +28,8 @@ func (u *BattleResultUsecase) BattleResultHandler() kafkax.Handler {
 		if err := proto.Unmarshal(msg.Value, result); err != nil {
 			return kafkax.Poison(errcode.New(errcode.ErrBattleResultDecode, "decode battle.result offset=%d: %v", msg.Offset, err))
 		}
+		// 同 DSLifecycleHandler:kafka 消费面无 trace_id,现铸一个并写入 match_id join key。
+		ctx = plog.WithMatchID(plog.WithTraceID(ctx, uuid.NewString()), result.GetMatchId())
 		_, err := u.ReportResult(ctx, result, 0)
 		return err
 	}
@@ -44,6 +47,15 @@ func (u *BattleResultUsecase) DSLifecycleHandler() kafkax.Handler {
 			plog.With(ctx).Debugw("msg", "ds_lifecycle_ignored", "phase", evt.GetPhase().String(), "match_id", evt.GetMatchId())
 			return nil
 		}
+		// kafkax 不透传 trace_id(pkg/kafkax 里没有任何 trace 接线),消费侧 ctx 恒空。
+		// DS 崩溃补偿是「打完没结算」的另一半答案,必须能按 match_id 查、按 trace_id 串起
+		// 本次消费产生的全部下游写(§9.8 / §11.3 R3)。同一 offset 重投会拿到新 trace_id,
+		// 跨重试的关联键是 match_id。
+		ctx = plog.WithMatchID(plog.WithTraceID(ctx, uuid.NewString()), evt.GetMatchId())
+		plog.With(ctx).Infow("msg", "ds_lifecycle_abandoned_received",
+			"match_id", evt.GetMatchId(), "players", len(evt.GetPlayerIds()),
+			"map_id", evt.GetMapId(), "game_mode", evt.GetGameMode(),
+			"ts_ms", evt.GetTsMs(), "kafka_offset", msg.Offset)
 		return u.HandleAbandoned(ctx, evt.GetMatchId(), evt.GetPlayerIds(), evt.GetMapId(), evt.GetGameMode(), evt.GetTsMs())
 	}
 }

@@ -303,6 +303,25 @@ message BattleStorageRecord {
   // battle_result 结算时按本值调用 player.UpdateMMR(rating_pool=...) 分区入账;
   // 空值 + ELO(旧记录)回落到默认池,见 battle_result 的 settlementRatingPool。
   string rating_pool = 23;
+  // roster_incomplete_since_ms:「花名册尚未到齐」的起始时刻(INC-20260813-001)。
+  //
+  // DS 心跳带在场名单(census)时,若 roster 里还有人没连进来就盖章起计时;人补齐则清零;
+  // 持续超过 allocator.roster_join_deadline → 判 abandoned(reason=roster_incomplete)。
+  //
+  // 与 empty_since_ms 的分工:那条管「一个人都没有」,本条管「来了但没来齐」。
+  // 前者拦不住 5 打 6 —— 事故当天 DS 拿到 6 人 roster、进来 5 个,player_count 恒为 5,
+  // 空场计时器一次都没起过,缺员局照常打完。
+  int64 roster_incomplete_since_ms = 24;
+  // roster_ever_complete:本局是否**曾经**全员同时在场。一经置位不再清零。
+  //
+  // 这是「到齐期限」只在开局阶段生效的开关,不是观测字段:少了它,任何一次局中掉线都会
+  // 重新盖 roster_incomplete_since_ms,并在 deadline 后把一场正打着的对局判弃 ——
+  // 那比本次事故严重得多。曾经到齐过的局此后只受 empty_battle_timeout(全员掉线)管辖。
+  //
+  // ⚠ 仅保留 unknown field 不等于滚动语义安全：若“到齐”只被旧副本看见，切到新副本时
+  // 已有局中掉线，新副本会把存量局当从未到齐并在 deadline 后误判弃。当前 v2 发布阻断；
+  // 最终须 observe→enforce，并只对全量新副本之后创建的 policy generation 执行期限。
+  bool roster_ever_complete = 25;
 }
 
 // ===== Model B Battle DS 回调授权状态机 =====
