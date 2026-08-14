@@ -9,7 +9,7 @@
     },
     {
       "id": 100701,
-      "remark": "拳击",
+      "remark": "横扫",
       "name": "普通攻击",
       "icon": "/Game/Test/UI/Skill/Boris_attack.Boris_attack",
       "segment": 1,
@@ -18,10 +18,10 @@
       "ability_path": "/Game/Test/Role/Hero/P_A_Durgad_01/GA/GA_Durgad_Attack01.GA_Durgad_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 0.78571427,
+      "damage_rate": 0.7777778,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 44
+      "damage_display": 49
     },
     {
       "id": 100711,
@@ -35,38 +35,41 @@
       "target_select_mode": 2,
       "orient_target_type": 1,
       "orient_target_id": 101,
-      "damage_rate": 1.6071428,
+      "damage_rate": 1.6031746,
       "correction_rate": 0.8,
       "effect_count": 1,
-      "damage_display": 90
+      "damage_display": 101,
+      "effect_description": "向指定地点冲锋，被冲撞的敌人造成101点伤害，并眩晕2秒。"
     },
     {
       "id": 100721,
-      "remark": "聚吼",
+      "remark": "群体牵引",
       "name": "能量壁垒",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-27-29.Game_skill_icon_for_MMORPG__da_2026-07-07T08-27-29",
       "segment": 1,
       "cd_timing": 1,
       "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/P_A_Durgad_01/GA/GA_Durgad_Skill02.GA_Durgad_Skill02_C",
-      "damage_rate": 1.8035715,
+      "damage_rate": 2,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 101
+      "damage_display": 126,
+      "effect_description": "将周围400码的所有敌人拉扯到自己身边，并造成126点伤害。"
     },
     {
       "id": 100731,
-      "remark": "群突刺",
+      "remark": "狂杖群刺",
       "name": "破裂震击",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-28-06.Game_skill_icon_for_MMORPG__da_2026-07-07T08-28-06",
       "segment": 1,
       "cd_timing": 1,
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/P_A_Durgad_01/GA/GA_Durgad_Skill03.GA_Durgad_Skill03_C",
-      "damage_rate": 5.375,
+      "damage_rate": 6.269841,
       "correction_rate": 0.8,
       "effect_count": 1,
-      "damage_display": 301
+      "damage_display": 395,
+      "effect_description": "攻击范围500码范围的所有敌方，造成395点伤害，并眩晕5秒。"
     },
     {
       "id": 100401,
@@ -75,14 +78,14 @@
       "icon": "/Game/Test/UI/Skill/Murdock_attack.Murdock_attack",
       "segment": 1,
       "cd_timing": 1,
-      "cd_duration": 2,
+      "cd_duration": 1.5,
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Attack01.GA_Murdock_Attack01_C",
       "target_select_mode": 1,
-      "use_distance": 1500,
-      "damage_rate": 0.696,
+      "use_distance": 2000,
+      "damage_rate": 0.616,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 87
+      "damage_display": 77
     },
     {
       "id": 100402,
@@ -91,18 +94,18 @@
       "icon": "/Game/Test/UI/Skill/Murdock_attack.Murdock_attack",
       "segment": 2,
       "cd_timing": 1,
-      "cd_duration": 2,
+      "cd_duration": 1.5,
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Attack02.GA_Murdock_Attack02_C",
       "target_select_mode": 1,
-      "use_distance": 1500,
-      "damage_rate": 0.696,
+      "use_distance": 2000,
+      "damage_rate": 0.616,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 87
+      "damage_display": 77
     },
     {
       "id": 100411,
-      "remark": "狙杀",
+      "remark": "机枪扫射",
       "name": "霜冻射击",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-31-21.Game_skill_icon_for_MMORPG__da_2026-07-07T08-31-21",
       "segment": 1,
@@ -112,10 +115,11 @@
       "target_select_mode": 2,
       "orient_target_type": 4,
       "orient_target_id": 100411,
-      "damage_rate": 0.168,
+      "damage_rate": 0.24,
       "correction_rate": 0.1,
       "effect_count": 10,
-      "damage_display": 210
+      "damage_display": 300,
+      "effect_description": "极快速的射击，造成范围内所有敌人总计300点伤害。"
     },
     {
       "id": 100421,
@@ -129,15 +133,16 @@
       "target_select_mode": 3,
       "orient_target_type": 2,
       "orient_target_id": 100421,
-      "use_distance": 1800,
-      "damage_rate": 0.3408,
+      "use_distance": 2200,
+      "damage_rate": 0.48,
       "correction_rate": 0.16,
       "effect_count": 5,
-      "damage_display": 213
+      "damage_display": 300,
+      "effect_description": "照明一个区域，隐身将被照出来，同时照明范围的所有敌人受到总计300点伤害，和30%减速。"
     },
     {
       "id": 100431,
-      "remark": "穿刺狙击",
+      "remark": "电磁狙击",
       "name": "绝命狙击",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-32-17.Game_skill_icon_for_MMORPG__da_2026-07-07T08-32-17",
       "segment": 1,
@@ -145,11 +150,12 @@
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/ParagonMurdock/GA/GA_Murdock_Skill03.GA_Murdock_Skill03_C",
       "target_select_mode": 1,
-      "use_distance": 2000,
-      "damage_rate": 2.672,
+      "use_distance": 3500,
+      "damage_rate": 7.504,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 334
+      "damage_display": 938,
+      "effect_description": "对目标及一条直线的所有敌人造成938点伤害，被选定目标无法躲闪。"
     },
     {
       "id": 100201,
@@ -165,7 +171,7 @@
       "damage_rate": 0.73652697,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 123
+      "damage_display": 62
     },
     {
       "id": 100202,
@@ -178,10 +184,10 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Attack02.GA_Kallari_Attack02_C",
       "target_select_mode": 1,
       "use_distance": 300,
-      "damage_rate": 0.73652697,
+      "damage_rate": 0.37125748,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 123
+      "damage_display": 62
     },
     {
       "id": 100211,
@@ -192,11 +198,12 @@
       "cd_timing": 1,
       "cd_duration": 10,
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Skill01.GA_Kallari_Skill01_C",
-      "effect_count": 1
+      "effect_count": 1,
+      "effect_description": "隐身后敌方看不见你。"
     },
     {
       "id": 100221,
-      "remark": "暗袭",
+      "remark": "闪现突袭",
       "name": "背身一击",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-37-47.Game_skill_icon_for_MMORPG__da_2026-07-07T08-37-47",
       "segment": 1,
@@ -205,14 +212,15 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Skill02.GA_Kallari_Skill02_C",
       "target_select_mode": 1,
       "use_distance": 1300,
-      "damage_rate": 3,
+      "damage_rate": 3.4011977,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 501
+      "damage_display": 568,
+      "effect_description": "闪现到敌人身后并造成568点伤害。"
     },
     {
       "id": 100231,
-      "remark": "处刑",
+      "remark": "致命处刑",
       "name": "终结处决",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-27.Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-27",
       "segment": 1,
@@ -221,14 +229,15 @@
       "ability_path": "/Game/Test/Role/Hero/ParagonKallari/GA/GA_Kallari_Skill03.GA_Kallari_Skill03_C",
       "target_select_mode": 1,
       "use_distance": 500,
-      "damage_rate": 1.6007984,
+      "damage_rate": 2.025948,
       "correction_rate": 0.33333334,
       "effect_count": 3,
-      "damage_display": 802
+      "damage_display": 1015,
+      "effect_description": "一次超高额的攻击，造成1015点伤害。"
     },
     {
       "id": 100901,
-      "remark": "寒击",
+      "remark": "寒冰箭",
       "name": "普通攻击",
       "icon": "/Game/Test/UI/Skill/Crunch_attack.Crunch_attack",
       "segment": 1,
@@ -237,10 +246,10 @@
       "ability_path": "/Game/Test/Role/Hero/P_M_Princess_01/GA/GA_Princess_Attack01.GA_Princess_Attack01_C",
       "target_select_mode": 1,
       "use_distance": 1500,
-      "damage_rate": 0.65,
+      "damage_rate": 0.62,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 65
+      "damage_display": 62
     },
     {
       "id": 100911,
@@ -255,10 +264,11 @@
       "orient_target_type": 2,
       "orient_target_id": 5,
       "use_distance": 800,
-      "damage_rate": 2,
+      "damage_rate": 1.98,
       "correction_rate": 0.8,
       "effect_count": 1,
-      "damage_display": 200
+      "damage_display": 198,
+      "effect_description": "将冰环内的敌人冻住3秒，并造成198点伤害。"
     },
     {
       "id": 100921,
@@ -275,11 +285,12 @@
       "damage_rate": 2.5,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 250
+      "damage_display": 250,
+      "effect_description": "将敌人推开500码，同时减速50%持续3秒，并造成250点伤害。"
     },
     {
       "id": 100931,
-      "remark": "暴雪",
+      "remark": "暴风雪",
       "name": "暴风雪",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-43.Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-43",
       "segment": 1,
@@ -290,14 +301,15 @@
       "orient_target_type": 2,
       "orient_target_id": 8,
       "use_distance": 1500,
-      "damage_rate": 0.358,
+      "damage_rate": 0.75,
       "correction_rate": 0.1,
       "effect_count": 10,
-      "damage_display": 358
+      "damage_display": 750,
+      "effect_description": "在暴风雪内造成总计750点伤害，并减速50%。"
     },
     {
       "id": 101001,
-      "remark": "火击",
+      "remark": "火球书",
       "name": "普通攻击",
       "icon": "/Game/Test/UI/Skill/Crunch_attack.Crunch_attack",
       "segment": 1,
@@ -305,15 +317,15 @@
       "cd_duration": 2,
       "ability_path": "/Game/Test/Role/Hero/P_W_Sally_01/GA/GA_Sally_Attack.GA_Sally_Attack_C",
       "target_select_mode": 1,
-      "use_distance": 1500,
-      "damage_rate": 0.619403,
+      "use_distance": 1200,
+      "damage_rate": 0.5597015,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 83
+      "damage_display": 75
     },
     {
       "id": 101011,
-      "remark": "陨火",
+      "remark": "陨石术",
       "name": "陨石术",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-32-45.Game_skill_icon_for_MMORPG__da_2026-07-07T08-32-45",
       "segment": 1,
@@ -324,14 +336,15 @@
       "orient_target_type": 2,
       "orient_target_id": 6,
       "use_distance": 960,
-      "damage_rate": 1.8955224,
+      "damage_rate": 2.8059702,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 254
+      "damage_display": 376,
+      "effect_description": "在陨石范围内的敌人收到376点伤害。"
     },
     {
       "id": 101021,
-      "remark": "闪现",
+      "remark": "爆裂闪现",
       "name": "闪现",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-16.Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-16",
       "segment": 1,
@@ -342,27 +355,29 @@
       "orient_target_type": 2,
       "orient_target_id": 1,
       "use_distance": 800,
-      "damage_rate": 1.6044776,
+      "damage_rate": 1.4626865,
       "effect_count": 1,
-      "damage_display": 215
+      "damage_display": 196,
+      "effect_description": "闪现到目标位置，闪现原点范围300码和目标点范围300码的所有敌人都会受到196点伤害。"
     },
     {
       "id": 101031,
-      "remark": "群定身",
+      "remark": "爆震音波",
       "name": "定身术",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-43.Game_skill_icon_for_MMORPG__da_2026-07-07T08-33-43",
       "segment": 1,
       "cd_timing": 1,
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/P_W_Sally_01/GA/GA_Sally_Skill01.GA_Sally_Skill01_C",
-      "damage_rate": 4.5,
+      "damage_rate": 5.044776,
       "correction_rate": 0.8,
       "effect_count": 1,
-      "damage_display": 603
+      "damage_display": 676,
+      "effect_description": "范围500码的所有敌人定身5秒，并造成676点伤害。"
     },
     {
       "id": 100801,
-      "remark": "圣击",
+      "remark": "神圣攻击",
       "name": "普通攻击",
       "icon": "/Game/Test/UI/Skill/Dekker_attack.Dekker_attack",
       "segment": 1,
@@ -370,15 +385,15 @@
       "cd_duration": 2,
       "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Attack.GA_Sister_Attack_C",
       "target_select_mode": 1,
-      "use_distance": 1500,
-      "damage_rate": 1.2087913,
+      "use_distance": 1000,
+      "damage_rate": 1.1098901,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 110
+      "damage_display": 101
     },
     {
       "id": 100811,
-      "remark": "伤疗环",
+      "remark": "伤疗双环",
       "name": "电子力场",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-58.Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-58",
       "segment": 1,
@@ -393,11 +408,12 @@
       "correction_rate": 0.1,
       "effect_count": 5,
       "damage_display": 215,
-      "heal_display": 172
+      "heal_display": 258,
+      "effect_description": "在环内的敌人持续造成总共215点伤害，环内的友军持续获得总共258点治疗。"
     },
     {
       "id": 100821,
-      "remark": "牵引",
+      "remark": "惩戒引聚",
       "name": "引力旋涡",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-30-25.Game_skill_icon_for_MMORPG__da_2026-07-07T08-30-25",
       "segment": 1,
@@ -407,15 +423,16 @@
       "target_select_mode": 3,
       "orient_target_type": 2,
       "orient_target_id": 100321,
-      "use_distance": 780,
+      "use_distance": 900,
       "damage_rate": 3,
       "correction_rate": 0.8,
       "effect_count": 1,
-      "damage_display": 273
+      "damage_display": 273,
+      "effect_description": "将技能范围内的所有敌人持续拉扯到环中心，持续3秒，并造成273点伤害。"
     },
     {
       "id": 100831,
-      "remark": "圣光",
+      "remark": "圣光群护",
       "name": "纯净庇护",
       "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-30-53.Game_skill_icon_for_MMORPG__da_2026-07-07T08-30-53",
       "segment": 1,
@@ -423,7 +440,8 @@
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Skill03.GA_Sister_Skill03_C",
       "effect_count": 1,
-      "heal_display": 301
+      "heal_display": 492,
+      "effect_description": "给所有队友恢复20%气血，并获得无敌效果，持续3秒。"
     },
     {
       "id": 100101,
@@ -680,7 +698,7 @@
       "damage_rate": 0.8,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 12
+      "damage_display": 18
     },
     {
       "id": 100621,
@@ -694,7 +712,7 @@
       "damage_rate": 0.53333336,
       "correction_rate": 0.1,
       "effect_count": 1,
-      "damage_display": 12
+      "damage_display": 18
     },
     {
       "id": 100631,

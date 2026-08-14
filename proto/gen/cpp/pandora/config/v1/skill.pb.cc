@@ -51,11 +51,11 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
     {
       PROTOBUF_FIELD_OFFSET(SkillRow, _impl_._has_bits_),
       0, // no _extensions_
-      26, 248,  // max_field_number, fast_idx_mask
+      27, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4227858432,  // skipmap
+      4160749568,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      26,  // num_field_entries
+      27,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -67,8 +67,8 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.id_), 5>(),
-       {8, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.id_), 6>(),
+       {8, 6, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.id_)}},
       // string remark = 2 [json_name = "remark", (.pandora.config.v1.excel_col) = "\345\244\207\346\263\250"];
       {::_pbi::TcParser::FastUS1,
@@ -83,72 +83,72 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
        {34, 2, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.icon_)}},
       // uint32 segment = 5 [json_name = "segment", (.pandora.config.v1.excel_col) = "\346\256\265\346\225\260"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.segment_), 6>(),
-       {40, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.segment_), 7>(),
+       {40, 7, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.segment_)}},
       // uint32 next_segment_id = 6 [json_name = "nextSegmentId", (.pandora.config.v1.excel_col) = "\344\270\213\344\270\200\346\256\265ID"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.next_segment_id_), 7>(),
-       {48, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.next_segment_id_), 8>(),
+       {48, 8, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.next_segment_id_)}},
       // uint32 cd_timing = 7 [json_name = "cdTiming", (.pandora.config.v1.excel_col) = "\345\206\267\345\215\264\346\227\266\346\234\272"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.cd_timing_), 8>(),
-       {56, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.cd_timing_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.cd_timing_)}},
       // float cd_duration = 8 [json_name = "cdDuration", (.pandora.config.v1.excel_col) = "\345\206\267\345\215\264\346\227\266\351\225\277"];
       {::_pbi::TcParser::FastF32S1,
-       {69, 9, 0,
+       {69, 10, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.cd_duration_)}},
       // bool disable_move = 9 [json_name = "disableMove", (.pandora.config.v1.excel_col) = "\347\246\201\346\255\242\347\247\273\345\212\250"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillRow, _impl_.disable_move_), 13>(),
-       {72, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillRow, _impl_.disable_move_), 14>(),
+       {72, 14, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.disable_move_)}},
       // string ability_path = 10 [json_name = "abilityPath", (.pandora.config.v1.excel_col) = "\350\203\275\345\212\233\350\265\204\346\272\220", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_prefix) = "/"];
       {::_pbi::TcParser::FastUS1,
        {82, 3, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.ability_path_)}},
       // uint32 target_select_mode = 11 [json_name = "targetSelectMode", (.pandora.config.v1.excel_col) = "\347\233\256\346\240\207\351\200\211\346\213\251\346\250\241\345\274\217"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.target_select_mode_), 10>(),
-       {88, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.target_select_mode_), 11>(),
+       {88, 11, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.target_select_mode_)}},
       // uint32 orient_target_type = 12 [json_name = "orientTargetType", (.pandora.config.v1.excel_col) = "\346\226\271\344\275\215\347\261\273\345\236\213"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.orient_target_type_), 11>(),
-       {96, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.orient_target_type_), 12>(),
+       {96, 12, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.orient_target_type_)}},
       // uint32 orient_target_id = 13 [json_name = "orientTargetId", (.pandora.config.v1.excel_col) = "\346\226\271\344\275\215\351\205\215\347\275\256Id"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.orient_target_id_), 12>(),
-       {104, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.orient_target_id_), 13>(),
+       {104, 13, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.orient_target_id_)}},
       // uint32 target_camp = 14 [json_name = "targetCamp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.target_camp_), 15>(),
-       {112, 15, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillRow, _impl_.target_camp_), 16>(),
+       {112, 16, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.target_camp_)}},
       // float use_distance = 15 [json_name = "useDistance", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\346\226\275\346\224\276\350\214\203\345\233\264"];
       {::_pbi::TcParser::FastF32S1,
-       {125, 16, 0,
+       {125, 17, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.use_distance_)}},
       // float hate_to_target = 16 [json_name = "hateToTarget", (.pandora.config.v1.excel_col) = "\345\257\271\347\233\256\346\240\207\344\273\207\346\201\250\345\200\274"];
       {::_pbi::TcParser::FastF32S2,
-       {389, 17, 0,
+       {389, 18, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.hate_to_target_)}},
       // float hate_to_enemy = 17 [json_name = "hateToEnemy", (.pandora.config.v1.excel_col) = "\345\257\271\346\225\214\344\272\272\344\273\207\346\201\250\345\200\274"];
       {::_pbi::TcParser::FastF32S2,
-       {397, 18, 0,
+       {397, 19, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.hate_to_enemy_)}},
       // bool need_fight_state = 18 [json_name = "needFightState", (.pandora.config.v1.excel_col) = "\351\234\200\350\246\201\346\210\230\346\226\227\347\212\266\346\200\201"];
       {::_pbi::TcParser::FastV8S2,
-       {400, 14, 0,
+       {400, 15, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.need_fight_state_)}},
       // uint32 rot_mode = 19 [json_name = "rotMode", (.pandora.config.v1.excel_col) = "\350\275\254\345\220\221\346\250\241\345\274\217"];
       {::_pbi::TcParser::FastV32S2,
-       {408, 19, 0,
+       {408, 20, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.rot_mode_)}},
       // float damage_rate = 20 [json_name = "damageRate", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\344\274\244\345\256\263\347\263\273\346\225\260"];
       {::_pbi::TcParser::FastF32S2,
-       {421, 20, 0,
+       {421, 21, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_rate_)}},
       // float damage_value = 21 [json_name = "damageValue", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\344\274\244\345\256\263\345\233\272\345\256\232\345\200\274"];
       {::_pbi::TcParser::FastF32S2,
-       {429, 21, 0,
+       {429, 22, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_value_)}},
       // string apply_buffs_to_self = 22 [json_name = "applyBuffsToSelf", (.pandora.config.v1.excel_col) = "\345\257\271\350\207\252\350\272\253\345\272\224\347\224\250Buff"];
       {::_pbi::TcParser::FastUS2,
@@ -156,21 +156,24 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.apply_buffs_to_self_)}},
       // float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
       {::_pbi::TcParser::FastF32S2,
-       {445, 22, 0,
+       {445, 23, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.correction_rate_)}},
       // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
       {::_pbi::TcParser::FastV32S2,
-       {448, 23, 0,
+       {448, 24, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_count_)}},
       // uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
       {::_pbi::TcParser::FastV32S2,
-       {456, 24, 0,
+       {456, 25, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_display_)}},
       // uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
       {::_pbi::TcParser::FastV32S2,
-       {464, 25, 0,
+       {464, 26, 0,
         PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.heal_display_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // string effect_description = 27 [json_name = "effectDescription", (.pandora.config.v1.excel_col) = "\346\225\210\346\236\234\350\257\264\346\230\216"];
+      {::_pbi::TcParser::FastUS2,
+       {474, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_description_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -179,7 +182,7 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
       65535, 65535
     }}, {{
       // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string remark = 2 [json_name = "remark", (.pandora.config.v1.excel_col) = "\345\244\207\346\263\250"];
       {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.remark_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string name = 3 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\220\215\347\247\260"];
@@ -187,59 +190,62 @@ constexpr SkillRow::ParseTableT_ SkillRow::InternalGenerateParseTable_(const ::_
       // string icon = 4 [json_name = "icon", (.pandora.config.v1.excel_col) = "\345\233\276\346\240\207", (.pandora.config.v1.excel_prefix) = "/"];
       {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.icon_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 segment = 5 [json_name = "segment", (.pandora.config.v1.excel_col) = "\346\256\265\346\225\260"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.segment_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.segment_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 next_segment_id = 6 [json_name = "nextSegmentId", (.pandora.config.v1.excel_col) = "\344\270\213\344\270\200\346\256\265ID"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.next_segment_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.next_segment_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 cd_timing = 7 [json_name = "cdTiming", (.pandora.config.v1.excel_col) = "\345\206\267\345\215\264\346\227\266\346\234\272"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.cd_timing_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.cd_timing_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // float cd_duration = 8 [json_name = "cdDuration", (.pandora.config.v1.excel_col) = "\345\206\267\345\215\264\346\227\266\351\225\277"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.cd_duration_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.cd_duration_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // bool disable_move = 9 [json_name = "disableMove", (.pandora.config.v1.excel_col) = "\347\246\201\346\255\242\347\247\273\345\212\250"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.disable_move_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.disable_move_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // string ability_path = 10 [json_name = "abilityPath", (.pandora.config.v1.excel_col) = "\350\203\275\345\212\233\350\265\204\346\272\220", (.pandora.config.v1.excel_required) = true, (.pandora.config.v1.excel_prefix) = "/"];
       {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.ability_path_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 target_select_mode = 11 [json_name = "targetSelectMode", (.pandora.config.v1.excel_col) = "\347\233\256\346\240\207\351\200\211\346\213\251\346\250\241\345\274\217"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.target_select_mode_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.target_select_mode_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 orient_target_type = 12 [json_name = "orientTargetType", (.pandora.config.v1.excel_col) = "\346\226\271\344\275\215\347\261\273\345\236\213"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.orient_target_type_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.orient_target_type_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 orient_target_id = 13 [json_name = "orientTargetId", (.pandora.config.v1.excel_col) = "\346\226\271\344\275\215\351\205\215\347\275\256Id"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.orient_target_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.orient_target_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 target_camp = 14 [json_name = "targetCamp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.target_camp_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.target_camp_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // float use_distance = 15 [json_name = "useDistance", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\346\226\275\346\224\276\350\214\203\345\233\264"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.use_distance_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.use_distance_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // float hate_to_target = 16 [json_name = "hateToTarget", (.pandora.config.v1.excel_col) = "\345\257\271\347\233\256\346\240\207\344\273\207\346\201\250\345\200\274"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.hate_to_target_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.hate_to_target_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // float hate_to_enemy = 17 [json_name = "hateToEnemy", (.pandora.config.v1.excel_col) = "\345\257\271\346\225\214\344\272\272\344\273\207\346\201\250\345\200\274"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.hate_to_enemy_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.hate_to_enemy_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // bool need_fight_state = 18 [json_name = "needFightState", (.pandora.config.v1.excel_col) = "\351\234\200\350\246\201\346\210\230\346\226\227\347\212\266\346\200\201"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.need_fight_state_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.need_fight_state_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 rot_mode = 19 [json_name = "rotMode", (.pandora.config.v1.excel_col) = "\350\275\254\345\220\221\346\250\241\345\274\217"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.rot_mode_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.rot_mode_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // float damage_rate = 20 [json_name = "damageRate", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\344\274\244\345\256\263\347\263\273\346\225\260"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_rate_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_rate_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // float damage_value = 21 [json_name = "damageValue", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\344\274\244\345\256\263\345\233\272\345\256\232\345\200\274"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_value_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_value_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // string apply_buffs_to_self = 22 [json_name = "applyBuffsToSelf", (.pandora.config.v1.excel_col) = "\345\257\271\350\207\252\350\272\253\345\272\224\347\224\250Buff"];
       {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.apply_buffs_to_self_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.correction_rate_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.correction_rate_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_count_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_count_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_display_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.damage_display_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
-      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.heal_display_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.heal_display_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string effect_description = 27 [json_name = "effectDescription", (.pandora.config.v1.excel_col) = "\346\225\210\346\236\234\350\257\264\346\230\216"];
+      {PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.effect_description_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\32\0\6\4\4\0\0\0\0\0\14\0\0\0\0\0\0\0\0\0\0\0\23\0\0\0\0\0\0\0\0\0"
+      "\32\0\6\4\4\0\0\0\0\0\14\0\0\0\0\0\0\0\0\0\0\0\23\0\0\0\0\22\0\0\0\0"
       "pandora.config.v1.SkillRow"
       "remark"
       "name"
       "icon"
       "ability_path"
       "apply_buffs_to_self"
+      "effect_description"
     }},
   };
 }
@@ -262,6 +268,9 @@ inline constexpr SkillRow::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         apply_buffs_to_self_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        effect_description_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         id_{0u},
@@ -541,7 +550,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_._has_bits_),
-        29, // hasbit index offset
+        30, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.remark_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.name_),
@@ -568,32 +577,34 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.effect_count_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.damage_display_),
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.heal_display_),
-        5,
+        PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillRow, _impl_.effect_description_),
+        6,
         0,
         1,
         2,
-        6,
         7,
         8,
         9,
-        13,
-        3,
         10,
+        14,
+        3,
         11,
         12,
-        15,
+        13,
         16,
         17,
         18,
-        14,
         19,
+        15,
         20,
         21,
-        4,
         22,
+        4,
         23,
         24,
         25,
+        26,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::config::v1::SkillTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -604,7 +615,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::config::v1::SkillRow)},
-        {55, sizeof(::pandora::config::v1::SkillTableData)},
+        {57, sizeof(::pandora::config::v1::SkillTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -615,7 +626,7 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_2eproto[] ABS
     protodesc_cold) = {
     "\n\035pandora/config/v1/skill.proto\022\021pandora"
     ".config.v1\032\035pandora/config/v1/excel.prot"
-    "o\"\365\n\n\010SkillRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
+    "o\"\266\013\n\010SkillRow\022\032\n\002id\030\001 \001(\rB\n\362\222\031\002ID\370\222\031\001R\002"
     "id\022\"\n\006remark\030\002 \001(\tB\n\362\222\031\006\345\244\207\346\263\250R\006remark\022\036"
     "\n\004name\030\003 \001(\tB\n\362\222\031\006\345\220\215\347\247\260R\004name\022#\n\004icon\030\004"
     " \001(\tB\017\362\222\031\006\345\233\276\346\240\207\212\223\031\001/R\004icon\022$\n\007segment\030\005"
@@ -650,9 +661,11 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_2eproto[] ABS
     "effectCount\0227\n\016damage_display\030\031 \001(\rB\020\362\222\031"
     "\014\344\274\244\345\256\263\346\230\276\347\244\272R\rdamageDisplay\0223\n\014heal_dis"
     "play\030\032 \001(\rB\020\362\222\031\014\346\262\273\347\226\227\346\230\276\347\244\272R\013healDispla"
-    "y\"_\n\016SkillTableData\022/\n\004rows\030\001 \003(\0132\033.pand"
-    "ora.config.v1.SkillRowR\004rows:\034\352\222\031\024\346\212\200\350\203\275"
-    "/j_\346\212\200\350\203\275.xlsx\260\223\031\007b\006proto3"
+    "y\022\?\n\022effect_description\030\033 \001(\tB\020\362\222\031\014\346\225\210\346\236"
+    "\234\350\257\264\346\230\216R\021effectDescription\"_\n\016SkillTable"
+    "Data\022/\n\004rows\030\001 \003(\0132\033.pandora.config.v1.S"
+    "killRowR\004rows:\034\352\222\031\024\346\212\200\350\203\275/j_\346\212\200\350\203\275.xlsx\260"
+    "\223\031\007b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto_deps[1] = {
@@ -662,7 +675,7 @@ static ::absl::once_flag descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto = {
     false,
     false,
-    1586,
+    1651,
     descriptor_table_protodef_pandora_2fconfig_2fv1_2fskill_2eproto,
     "pandora/config/v1/skill.proto",
     &descriptor_table_pandora_2fconfig_2fv1_2fskill_2eproto_once,
@@ -699,7 +712,8 @@ PROTOBUF_NDEBUG_INLINE SkillRow::Impl_::Impl_(
         name_(arena, from.name_),
         icon_(arena, from.icon_),
         ability_path_(arena, from.ability_path_),
-        apply_buffs_to_self_(arena, from.apply_buffs_to_self_) {}
+        apply_buffs_to_self_(arena, from.apply_buffs_to_self_),
+        effect_description_(arena, from.effect_description_) {}
 
 SkillRow::SkillRow(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -733,7 +747,8 @@ PROTOBUF_NDEBUG_INLINE SkillRow::Impl_::Impl_(
         name_(arena),
         icon_(arena),
         ability_path_(arena),
-        apply_buffs_to_self_(arena) {}
+        apply_buffs_to_self_(arena),
+        effect_description_(arena) {}
 
 inline void SkillRow::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -760,6 +775,7 @@ inline void SkillRow::SharedDtor(MessageLite& self) {
   this_._impl_.icon_.Destroy();
   this_._impl_.ability_path_.Destroy();
   this_._impl_.apply_buffs_to_self_.Destroy();
+  this_._impl_.effect_description_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -797,7 +813,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.remark_.ClearNonDefaultToEmpty();
     }
@@ -813,26 +829,29 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       _impl_.apply_buffs_to_self_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.effect_description_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.next_segment_id_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.next_segment_id_));
+        reinterpret_cast<char*>(&_impl_.segment_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.segment_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.cd_timing_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.target_camp_) -
-        reinterpret_cast<char*>(&_impl_.cd_timing_)) + sizeof(_impl_.target_camp_));
+    ::memset(&_impl_.next_segment_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.need_fight_state_) -
+        reinterpret_cast<char*>(&_impl_.next_segment_id_)) + sizeof(_impl_.need_fight_state_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
-    ::memset(&_impl_.use_distance_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.effect_count_) -
-        reinterpret_cast<char*>(&_impl_.use_distance_)) + sizeof(_impl_.effect_count_));
+    ::memset(&_impl_.target_camp_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.correction_rate_) -
+        reinterpret_cast<char*>(&_impl_.target_camp_)) + sizeof(_impl_.correction_rate_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
-    ::memset(&_impl_.damage_display_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
+    ::memset(&_impl_.effect_count_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.heal_display_) -
-        reinterpret_cast<char*>(&_impl_.damage_display_)) + sizeof(_impl_.heal_display_));
+        reinterpret_cast<char*>(&_impl_.effect_count_)) + sizeof(_impl_.heal_display_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -858,7 +877,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -897,7 +916,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 segment = 5 [json_name = "segment", (.pandora.config.v1.excel_col) = "\346\256\265\346\225\260"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_segment() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -906,7 +925,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 next_segment_id = 6 [json_name = "nextSegmentId", (.pandora.config.v1.excel_col) = "\344\270\213\344\270\200\346\256\265ID"];
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_next_segment_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -915,7 +934,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 cd_timing = 7 [json_name = "cdTiming", (.pandora.config.v1.excel_col) = "\345\206\267\345\215\264\346\227\266\346\234\272"];
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_cd_timing() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -924,7 +943,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // float cd_duration = 8 [json_name = "cdDuration", (.pandora.config.v1.excel_col) = "\345\206\267\345\215\264\346\227\266\351\225\277"];
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_cd_duration()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -933,7 +952,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // bool disable_move = 9 [json_name = "disableMove", (.pandora.config.v1.excel_col) = "\347\246\201\346\255\242\347\247\273\345\212\250"];
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_disable_move() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -952,7 +971,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 target_select_mode = 11 [json_name = "targetSelectMode", (.pandora.config.v1.excel_col) = "\347\233\256\346\240\207\351\200\211\346\213\251\346\250\241\345\274\217"];
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_target_select_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -961,7 +980,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 orient_target_type = 12 [json_name = "orientTargetType", (.pandora.config.v1.excel_col) = "\346\226\271\344\275\215\347\261\273\345\236\213"];
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_orient_target_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -970,7 +989,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 orient_target_id = 13 [json_name = "orientTargetId", (.pandora.config.v1.excel_col) = "\346\226\271\344\275\215\351\205\215\347\275\256Id"];
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_orient_target_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -979,7 +998,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 target_camp = 14 [json_name = "targetCamp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_target_camp() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -988,7 +1007,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // float use_distance = 15 [json_name = "useDistance", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\346\226\275\346\224\276\350\214\203\345\233\264"];
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_use_distance()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -997,7 +1016,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // float hate_to_target = 16 [json_name = "hateToTarget", (.pandora.config.v1.excel_col) = "\345\257\271\347\233\256\346\240\207\344\273\207\346\201\250\345\200\274"];
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_hate_to_target()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -1006,7 +1025,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // float hate_to_enemy = 17 [json_name = "hateToEnemy", (.pandora.config.v1.excel_col) = "\345\257\271\346\225\214\344\272\272\344\273\207\346\201\250\345\200\274"];
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_hate_to_enemy()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -1015,7 +1034,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // bool need_fight_state = 18 [json_name = "needFightState", (.pandora.config.v1.excel_col) = "\351\234\200\350\246\201\346\210\230\346\226\227\347\212\266\346\200\201"];
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_need_fight_state() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -1024,7 +1043,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 rot_mode = 19 [json_name = "rotMode", (.pandora.config.v1.excel_col) = "\350\275\254\345\220\221\346\250\241\345\274\217"];
-  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
     if (this_._internal_rot_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1033,7 +1052,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // float damage_rate = 20 [json_name = "damageRate", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\344\274\244\345\256\263\347\263\273\346\225\260"];
-  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_damage_rate()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -1042,7 +1061,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // float damage_value = 21 [json_name = "damageValue", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\344\274\244\345\256\263\345\233\272\345\256\232\345\200\274"];
-  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_damage_value()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -1061,7 +1080,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
-  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_correction_rate()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -1070,7 +1089,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
-  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
     if (this_._internal_effect_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1079,7 +1098,7 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
-  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
     if (this_._internal_damage_display() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1088,11 +1107,21 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
   }
 
   // uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
-  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
     if (this_._internal_heal_display() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           26, this_._internal_heal_display(), target);
+    }
+  }
+
+  // string effect_description = 27 [json_name = "effectDescription", (.pandora.config.v1.excel_col) = "\346\225\210\346\236\234\350\257\264\346\230\216"];
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_effect_description().empty()) {
+      const ::std::string& _s = this_._internal_effect_description();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.config.v1.SkillRow.effect_description");
+      target = stream->WriteStringMaybeAliased(27, _s, target);
     }
   }
 
@@ -1157,145 +1186,152 @@ PROTOBUF_NOINLINE void SkillRow::Clear() {
                                         this_._internal_apply_buffs_to_self());
       }
     }
-    // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+    // string effect_description = 27 [json_name = "effectDescription", (.pandora.config.v1.excel_col) = "\346\225\210\346\236\234\350\257\264\346\230\216"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_effect_description().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_effect_description());
+      }
+    }
+    // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // uint32 segment = 5 [json_name = "segment", (.pandora.config.v1.excel_col) = "\346\256\265\346\225\260"];
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_segment() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_segment());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 next_segment_id = 6 [json_name = "nextSegmentId", (.pandora.config.v1.excel_col) = "\344\270\213\344\270\200\346\256\265ID"];
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_next_segment_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_next_segment_id());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 cd_timing = 7 [json_name = "cdTiming", (.pandora.config.v1.excel_col) = "\345\206\267\345\215\264\346\227\266\346\234\272"];
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_cd_timing() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_cd_timing());
       }
     }
     // float cd_duration = 8 [json_name = "cdDuration", (.pandora.config.v1.excel_col) = "\345\206\267\345\215\264\346\227\266\351\225\277"];
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_cd_duration()) != 0) {
         total_size += 5;
       }
     }
     // uint32 target_select_mode = 11 [json_name = "targetSelectMode", (.pandora.config.v1.excel_col) = "\347\233\256\346\240\207\351\200\211\346\213\251\346\250\241\345\274\217"];
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_target_select_mode() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_target_select_mode());
       }
     }
     // uint32 orient_target_type = 12 [json_name = "orientTargetType", (.pandora.config.v1.excel_col) = "\346\226\271\344\275\215\347\261\273\345\236\213"];
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_orient_target_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_orient_target_type());
       }
     }
     // uint32 orient_target_id = 13 [json_name = "orientTargetId", (.pandora.config.v1.excel_col) = "\346\226\271\344\275\215\351\205\215\347\275\256Id"];
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_orient_target_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_orient_target_id());
       }
     }
     // bool disable_move = 9 [json_name = "disableMove", (.pandora.config.v1.excel_col) = "\347\246\201\346\255\242\347\247\273\345\212\250"];
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_disable_move() != 0) {
         total_size += 2;
       }
     }
     // bool need_fight_state = 18 [json_name = "needFightState", (.pandora.config.v1.excel_col) = "\351\234\200\350\246\201\346\210\230\346\226\227\347\212\266\346\200\201"];
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_need_fight_state() != 0) {
         total_size += 3;
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // uint32 target_camp = 14 [json_name = "targetCamp", (.pandora.config.v1.excel_col) = "\351\230\265\350\220\245"];
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_target_camp() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_target_camp());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // float use_distance = 15 [json_name = "useDistance", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\346\226\275\346\224\276\350\214\203\345\233\264"];
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_use_distance()) != 0) {
         total_size += 5;
       }
     }
     // float hate_to_target = 16 [json_name = "hateToTarget", (.pandora.config.v1.excel_col) = "\345\257\271\347\233\256\346\240\207\344\273\207\346\201\250\345\200\274"];
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_hate_to_target()) != 0) {
         total_size += 6;
       }
     }
     // float hate_to_enemy = 17 [json_name = "hateToEnemy", (.pandora.config.v1.excel_col) = "\345\257\271\346\225\214\344\272\272\344\273\207\346\201\250\345\200\274"];
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_hate_to_enemy()) != 0) {
         total_size += 6;
       }
     }
     // uint32 rot_mode = 19 [json_name = "rotMode", (.pandora.config.v1.excel_col) = "\350\275\254\345\220\221\346\250\241\345\274\217"];
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (this_._internal_rot_mode() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_rot_mode());
       }
     }
     // float damage_rate = 20 [json_name = "damageRate", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\344\274\244\345\256\263\347\263\273\346\225\260"];
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_damage_rate()) != 0) {
         total_size += 6;
       }
     }
     // float damage_value = 21 [json_name = "damageValue", (.pandora.config.v1.excel_col) = "\346\212\200\350\203\275\344\274\244\345\256\263\345\233\272\345\256\232\345\200\274"];
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_damage_value()) != 0) {
         total_size += 6;
       }
     }
     // float correction_rate = 23 [json_name = "correctionRate", (.pandora.config.v1.excel_col) = "\344\277\256\346\255\243\347\263\273\346\225\260"];
-    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_correction_rate()) != 0) {
         total_size += 6;
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
     // uint32 effect_count = 24 [json_name = "effectCount", (.pandora.config.v1.excel_col) = "\347\224\237\346\225\210\346\254\241\346\225\260"];
-    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (this_._internal_effect_count() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_effect_count());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
     // uint32 damage_display = 25 [json_name = "damageDisplay", (.pandora.config.v1.excel_col) = "\344\274\244\345\256\263\346\230\276\347\244\272"];
-    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
       if (this_._internal_damage_display() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_damage_display());
       }
     }
     // uint32 heal_display = 26 [json_name = "healDisplay", (.pandora.config.v1.excel_col) = "\346\262\273\347\226\227\346\230\276\347\244\272"];
-    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
       if (this_._internal_heal_display() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_heal_display());
@@ -1366,112 +1402,121 @@ void SkillRow::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_effect_description().empty()) {
+        _this->_internal_set_effect_description(from._internal_effect_description());
+      } else {
+        if (_this->_impl_.effect_description_.IsDefault()) {
+          _this->_internal_set_effect_description("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_segment() != 0) {
         _this->_impl_.segment_ = from._impl_.segment_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_next_segment_id() != 0) {
-        _this->_impl_.next_segment_id_ = from._impl_.next_segment_id_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_next_segment_id() != 0) {
+        _this->_impl_.next_segment_id_ = from._impl_.next_segment_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_cd_timing() != 0) {
         _this->_impl_.cd_timing_ = from._impl_.cd_timing_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_cd_duration()) != 0) {
         _this->_impl_.cd_duration_ = from._impl_.cd_duration_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_target_select_mode() != 0) {
         _this->_impl_.target_select_mode_ = from._impl_.target_select_mode_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_orient_target_type() != 0) {
         _this->_impl_.orient_target_type_ = from._impl_.orient_target_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_orient_target_id() != 0) {
         _this->_impl_.orient_target_id_ = from._impl_.orient_target_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_disable_move() != 0) {
         _this->_impl_.disable_move_ = from._impl_.disable_move_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_need_fight_state() != 0) {
         _this->_impl_.need_fight_state_ = from._impl_.need_fight_state_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
-      if (from._internal_target_camp() != 0) {
-        _this->_impl_.target_camp_ = from._impl_.target_camp_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_target_camp() != 0) {
+        _this->_impl_.target_camp_ = from._impl_.target_camp_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_use_distance()) != 0) {
         _this->_impl_.use_distance_ = from._impl_.use_distance_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_hate_to_target()) != 0) {
         _this->_impl_.hate_to_target_ = from._impl_.hate_to_target_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_hate_to_enemy()) != 0) {
         _this->_impl_.hate_to_enemy_ = from._impl_.hate_to_enemy_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_rot_mode() != 0) {
         _this->_impl_.rot_mode_ = from._impl_.rot_mode_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_damage_rate()) != 0) {
         _this->_impl_.damage_rate_ = from._impl_.damage_rate_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_damage_value()) != 0) {
         _this->_impl_.damage_value_ = from._impl_.damage_value_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_correction_rate()) != 0) {
         _this->_impl_.correction_rate_ = from._impl_.correction_rate_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (from._internal_effect_count() != 0) {
         _this->_impl_.effect_count_ = from._impl_.effect_count_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
-    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
       if (from._internal_damage_display() != 0) {
         _this->_impl_.damage_display_ = from._impl_.damage_display_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
       if (from._internal_heal_display() != 0) {
         _this->_impl_.heal_display_ = from._impl_.heal_display_;
       }
@@ -1501,6 +1546,7 @@ void SkillRow::InternalSwap(SkillRow* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_, &other->_impl_.icon_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ability_path_, &other->_impl_.ability_path_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.apply_buffs_to_self_, &other->_impl_.apply_buffs_to_self_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.effect_description_, &other->_impl_.effect_description_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(SkillRow, _impl_.heal_display_)
       + sizeof(SkillRow::_impl_.heal_display_)

@@ -134,6 +134,9 @@ message SkillRow {
   // 治疗显示(configtable-sync 追加:xlsx 新增列;类型 / 命名来源:人工指定(-sync-col))。
   // 服务端决策未自动填:如需 (excel_required) / (excel_prefix) / (excel_fk) 请人工补,并补本列业务注释。
   uint32 heal_display = 26 [(excel_col) = "治疗显示"];
+  // 效果说明(configtable-sync 追加:xlsx 新增列;类型 / 命名来源:人工指定(-sync-col))。
+  // 服务端决策未自动填:如需 (excel_required) / (excel_prefix) / (excel_fk) 请人工补,并补本列业务注释。
+  string effect_description = 27 [(excel_col) = "效果说明"];
 }
 
 // SkillTableData 技能表整表容器(dist/skill.json 的根对象;excel_file 注解 = 导表登记)。

@@ -61,7 +61,7 @@
       "remark": "控场辅助Dekker技能2",
       "pos_option": 2,
       "circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_02.NS_Decal_CycleRange_02,480",
-      "out_range_circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_03.NS_Decal_CycleRange_03,480"
+      "out_range_circles": "/Game/Fx/SkillRangeLocator/NS_Decal_CycleRange_03.NS_Decal_CycleRange_03,400"
     },
     {
       "id": 100331,

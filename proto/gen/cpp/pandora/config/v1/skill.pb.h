@@ -243,6 +243,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
     kIconFieldNumber = 4,
     kAbilityPathFieldNumber = 10,
     kApplyBuffsToSelfFieldNumber = 22,
+    kEffectDescriptionFieldNumber = 27,
     kIdFieldNumber = 1,
     kSegmentFieldNumber = 5,
     kNextSegmentIdFieldNumber = 6,
@@ -338,6 +339,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
   const ::std::string& _internal_apply_buffs_to_self() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_apply_buffs_to_self(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_apply_buffs_to_self();
+
+  public:
+  // string effect_description = 27 [json_name = "effectDescription", (.pandora.config.v1.excel_col) = "\346\225\210\346\236\234\350\257\264\346\230\216"];
+  void clear_effect_description() ;
+  [[nodiscard]] const ::std::string& effect_description() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_effect_description(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_effect_description();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_effect_description();
+  void set_allocated_effect_description(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_effect_description() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_effect_description(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_effect_description();
 
   public:
   // uint32 id = 1 [json_name = "id", (.pandora.config.v1.excel_col) = "ID", (.pandora.config.v1.excel_required) = true];
@@ -554,8 +570,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 26,
-                          0, 104,
+      ::google::protobuf::internal::TcParseTable<5, 27,
+                          0, 122,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -588,6 +604,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillRow final : public ::google::p
     ::google::protobuf::internal::ArenaStringPtr icon_;
     ::google::protobuf::internal::ArenaStringPtr ability_path_;
     ::google::protobuf::internal::ArenaStringPtr apply_buffs_to_self_;
+    ::google::protobuf::internal::ArenaStringPtr effect_description_;
     ::uint32_t id_;
     ::uint32_t segment_;
     ::uint32_t next_segment_id_;
@@ -847,7 +864,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTableData final : public ::goo
 inline void SkillRow::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t SkillRow::id() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.id)
@@ -855,7 +872,7 @@ inline ::uint32_t SkillRow::id() const {
 }
 inline void SkillRow::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.id)
 }
 inline ::uint32_t SkillRow::_internal_id() const {
@@ -1063,7 +1080,7 @@ inline void SkillRow::set_allocated_icon(::std::string* PROTOBUF_NULLABLE value)
 inline void SkillRow::clear_segment() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.segment_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t SkillRow::segment() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.segment)
@@ -1071,7 +1088,7 @@ inline ::uint32_t SkillRow::segment() const {
 }
 inline void SkillRow::set_segment(::uint32_t value) {
   _internal_set_segment(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.segment)
 }
 inline ::uint32_t SkillRow::_internal_segment() const {
@@ -1087,7 +1104,7 @@ inline void SkillRow::_internal_set_segment(::uint32_t value) {
 inline void SkillRow::clear_next_segment_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_segment_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t SkillRow::next_segment_id() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.next_segment_id)
@@ -1095,7 +1112,7 @@ inline ::uint32_t SkillRow::next_segment_id() const {
 }
 inline void SkillRow::set_next_segment_id(::uint32_t value) {
   _internal_set_next_segment_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.next_segment_id)
 }
 inline ::uint32_t SkillRow::_internal_next_segment_id() const {
@@ -1111,7 +1128,7 @@ inline void SkillRow::_internal_set_next_segment_id(::uint32_t value) {
 inline void SkillRow::clear_cd_timing() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cd_timing_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t SkillRow::cd_timing() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.cd_timing)
@@ -1119,7 +1136,7 @@ inline ::uint32_t SkillRow::cd_timing() const {
 }
 inline void SkillRow::set_cd_timing(::uint32_t value) {
   _internal_set_cd_timing(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.cd_timing)
 }
 inline ::uint32_t SkillRow::_internal_cd_timing() const {
@@ -1135,7 +1152,7 @@ inline void SkillRow::_internal_set_cd_timing(::uint32_t value) {
 inline void SkillRow::clear_cd_duration() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cd_duration_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline float SkillRow::cd_duration() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.cd_duration)
@@ -1143,7 +1160,7 @@ inline float SkillRow::cd_duration() const {
 }
 inline void SkillRow::set_cd_duration(float value) {
   _internal_set_cd_duration(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.cd_duration)
 }
 inline float SkillRow::_internal_cd_duration() const {
@@ -1159,7 +1176,7 @@ inline void SkillRow::_internal_set_cd_duration(float value) {
 inline void SkillRow::clear_disable_move() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.disable_move_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline bool SkillRow::disable_move() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.disable_move)
@@ -1167,7 +1184,7 @@ inline bool SkillRow::disable_move() const {
 }
 inline void SkillRow::set_disable_move(bool value) {
   _internal_set_disable_move(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.disable_move)
 }
 inline bool SkillRow::_internal_disable_move() const {
@@ -1247,7 +1264,7 @@ inline void SkillRow::set_allocated_ability_path(::std::string* PROTOBUF_NULLABL
 inline void SkillRow::clear_target_select_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_select_mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t SkillRow::target_select_mode() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.target_select_mode)
@@ -1255,7 +1272,7 @@ inline ::uint32_t SkillRow::target_select_mode() const {
 }
 inline void SkillRow::set_target_select_mode(::uint32_t value) {
   _internal_set_target_select_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.target_select_mode)
 }
 inline ::uint32_t SkillRow::_internal_target_select_mode() const {
@@ -1271,7 +1288,7 @@ inline void SkillRow::_internal_set_target_select_mode(::uint32_t value) {
 inline void SkillRow::clear_orient_target_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.orient_target_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t SkillRow::orient_target_type() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.orient_target_type)
@@ -1279,7 +1296,7 @@ inline ::uint32_t SkillRow::orient_target_type() const {
 }
 inline void SkillRow::set_orient_target_type(::uint32_t value) {
   _internal_set_orient_target_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.orient_target_type)
 }
 inline ::uint32_t SkillRow::_internal_orient_target_type() const {
@@ -1295,7 +1312,7 @@ inline void SkillRow::_internal_set_orient_target_type(::uint32_t value) {
 inline void SkillRow::clear_orient_target_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.orient_target_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t SkillRow::orient_target_id() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.orient_target_id)
@@ -1303,7 +1320,7 @@ inline ::uint32_t SkillRow::orient_target_id() const {
 }
 inline void SkillRow::set_orient_target_id(::uint32_t value) {
   _internal_set_orient_target_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.orient_target_id)
 }
 inline ::uint32_t SkillRow::_internal_orient_target_id() const {
@@ -1319,7 +1336,7 @@ inline void SkillRow::_internal_set_orient_target_id(::uint32_t value) {
 inline void SkillRow::clear_target_camp() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_camp_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t SkillRow::target_camp() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.target_camp)
@@ -1327,7 +1344,7 @@ inline ::uint32_t SkillRow::target_camp() const {
 }
 inline void SkillRow::set_target_camp(::uint32_t value) {
   _internal_set_target_camp(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.target_camp)
 }
 inline ::uint32_t SkillRow::_internal_target_camp() const {
@@ -1343,7 +1360,7 @@ inline void SkillRow::_internal_set_target_camp(::uint32_t value) {
 inline void SkillRow::clear_use_distance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.use_distance_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline float SkillRow::use_distance() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.use_distance)
@@ -1351,7 +1368,7 @@ inline float SkillRow::use_distance() const {
 }
 inline void SkillRow::set_use_distance(float value) {
   _internal_set_use_distance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.use_distance)
 }
 inline float SkillRow::_internal_use_distance() const {
@@ -1367,7 +1384,7 @@ inline void SkillRow::_internal_set_use_distance(float value) {
 inline void SkillRow::clear_hate_to_target() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hate_to_target_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline float SkillRow::hate_to_target() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.hate_to_target)
@@ -1375,7 +1392,7 @@ inline float SkillRow::hate_to_target() const {
 }
 inline void SkillRow::set_hate_to_target(float value) {
   _internal_set_hate_to_target(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.hate_to_target)
 }
 inline float SkillRow::_internal_hate_to_target() const {
@@ -1391,7 +1408,7 @@ inline void SkillRow::_internal_set_hate_to_target(float value) {
 inline void SkillRow::clear_hate_to_enemy() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hate_to_enemy_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline float SkillRow::hate_to_enemy() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.hate_to_enemy)
@@ -1399,7 +1416,7 @@ inline float SkillRow::hate_to_enemy() const {
 }
 inline void SkillRow::set_hate_to_enemy(float value) {
   _internal_set_hate_to_enemy(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.hate_to_enemy)
 }
 inline float SkillRow::_internal_hate_to_enemy() const {
@@ -1415,7 +1432,7 @@ inline void SkillRow::_internal_set_hate_to_enemy(float value) {
 inline void SkillRow::clear_need_fight_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.need_fight_state_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline bool SkillRow::need_fight_state() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.need_fight_state)
@@ -1423,7 +1440,7 @@ inline bool SkillRow::need_fight_state() const {
 }
 inline void SkillRow::set_need_fight_state(bool value) {
   _internal_set_need_fight_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.need_fight_state)
 }
 inline bool SkillRow::_internal_need_fight_state() const {
@@ -1439,7 +1456,7 @@ inline void SkillRow::_internal_set_need_fight_state(bool value) {
 inline void SkillRow::clear_rot_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rot_mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t SkillRow::rot_mode() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.rot_mode)
@@ -1447,7 +1464,7 @@ inline ::uint32_t SkillRow::rot_mode() const {
 }
 inline void SkillRow::set_rot_mode(::uint32_t value) {
   _internal_set_rot_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.rot_mode)
 }
 inline ::uint32_t SkillRow::_internal_rot_mode() const {
@@ -1463,7 +1480,7 @@ inline void SkillRow::_internal_set_rot_mode(::uint32_t value) {
 inline void SkillRow::clear_damage_rate() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.damage_rate_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline float SkillRow::damage_rate() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.damage_rate)
@@ -1471,7 +1488,7 @@ inline float SkillRow::damage_rate() const {
 }
 inline void SkillRow::set_damage_rate(float value) {
   _internal_set_damage_rate(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.damage_rate)
 }
 inline float SkillRow::_internal_damage_rate() const {
@@ -1487,7 +1504,7 @@ inline void SkillRow::_internal_set_damage_rate(float value) {
 inline void SkillRow::clear_damage_value() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.damage_value_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline float SkillRow::damage_value() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.damage_value)
@@ -1495,7 +1512,7 @@ inline float SkillRow::damage_value() const {
 }
 inline void SkillRow::set_damage_value(float value) {
   _internal_set_damage_value(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.damage_value)
 }
 inline float SkillRow::_internal_damage_value() const {
@@ -1575,7 +1592,7 @@ inline void SkillRow::set_allocated_apply_buffs_to_self(::std::string* PROTOBUF_
 inline void SkillRow::clear_correction_rate() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.correction_rate_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline float SkillRow::correction_rate() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.correction_rate)
@@ -1583,7 +1600,7 @@ inline float SkillRow::correction_rate() const {
 }
 inline void SkillRow::set_correction_rate(float value) {
   _internal_set_correction_rate(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.correction_rate)
 }
 inline float SkillRow::_internal_correction_rate() const {
@@ -1599,7 +1616,7 @@ inline void SkillRow::_internal_set_correction_rate(float value) {
 inline void SkillRow::clear_effect_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.effect_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t SkillRow::effect_count() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.effect_count)
@@ -1607,7 +1624,7 @@ inline ::uint32_t SkillRow::effect_count() const {
 }
 inline void SkillRow::set_effect_count(::uint32_t value) {
   _internal_set_effect_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.effect_count)
 }
 inline ::uint32_t SkillRow::_internal_effect_count() const {
@@ -1623,7 +1640,7 @@ inline void SkillRow::_internal_set_effect_count(::uint32_t value) {
 inline void SkillRow::clear_damage_display() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.damage_display_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline ::uint32_t SkillRow::damage_display() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.damage_display)
@@ -1631,7 +1648,7 @@ inline ::uint32_t SkillRow::damage_display() const {
 }
 inline void SkillRow::set_damage_display(::uint32_t value) {
   _internal_set_damage_display(value);
-  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.damage_display)
 }
 inline ::uint32_t SkillRow::_internal_damage_display() const {
@@ -1647,7 +1664,7 @@ inline void SkillRow::_internal_set_damage_display(::uint32_t value) {
 inline void SkillRow::clear_heal_display() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.heal_display_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline ::uint32_t SkillRow::heal_display() const {
   // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.heal_display)
@@ -1655,7 +1672,7 @@ inline ::uint32_t SkillRow::heal_display() const {
 }
 inline void SkillRow::set_heal_display(::uint32_t value) {
   _internal_set_heal_display(value);
-  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.heal_display)
 }
 inline ::uint32_t SkillRow::_internal_heal_display() const {
@@ -1665,6 +1682,70 @@ inline ::uint32_t SkillRow::_internal_heal_display() const {
 inline void SkillRow::_internal_set_heal_display(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.heal_display_ = value;
+}
+
+// string effect_description = 27 [json_name = "effectDescription", (.pandora.config.v1.excel_col) = "\346\225\210\346\236\234\350\257\264\346\230\216"];
+inline void SkillRow::clear_effect_description() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_description_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& SkillRow::effect_description() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.SkillRow.effect_description)
+  return _internal_effect_description();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SkillRow::set_effect_description(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.effect_description_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.config.v1.SkillRow.effect_description)
+}
+inline ::std::string* PROTOBUF_NONNULL SkillRow::mutable_effect_description()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_effect_description();
+  // @@protoc_insertion_point(field_mutable:pandora.config.v1.SkillRow.effect_description)
+  return _s;
+}
+inline const ::std::string& SkillRow::_internal_effect_description() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effect_description_.Get();
+}
+inline void SkillRow::_internal_set_effect_description(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_description_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SkillRow::_internal_mutable_effect_description() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.effect_description_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SkillRow::release_effect_description() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.config.v1.SkillRow.effect_description)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.effect_description_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.effect_description_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SkillRow::set_allocated_effect_description(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.effect_description_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.effect_description_.IsDefault()) {
+    _impl_.effect_description_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.SkillRow.effect_description)
 }
 
 // -------------------------------------------------------------------

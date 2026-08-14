@@ -1,8 +1,8 @@
 {
-  "version": 20260813001,
-  "generated_at_ms": 1786624552355,
+  "version": 20260814001,
+  "generated_at_ms": 1786706036857,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-r2010",
+  "source_rev": "svn-r2030",
   "tables": [
     {
       "name": "chest_drop",
@@ -127,7 +127,7 @@
       "name": "role_level",
       "file": "role_level.json",
       "proto": "pandora.config.v1.RoleLevelTableData",
-      "checksum": "sha256:b06ee17087bc4073b4d21b61f46c5894d880280ac8cf36ddc90c6bc7b312654a",
+      "checksum": "sha256:5bfb1d822f381ab204cfa79493ef3a14ddbd9efd3bc29ca6ddef939206d23035",
       "rows": 24
     },
     {
@@ -162,7 +162,7 @@
       "name": "skill_circle",
       "file": "skill_circle.json",
       "proto": "pandora.config.v1.SkillCircleTableData",
-      "checksum": "sha256:8f064a88acc612acf06c95cba92ff48c36140e4d5c3eb69dce289f3310213728",
+      "checksum": "sha256:4a8afae2422692ac5db773f696fb27969e42525eaeaede6173c6379140ac87f9",
       "rows": 11
     },
     {
@@ -183,7 +183,7 @@
       "name": "skill",
       "file": "skill.json",
       "proto": "pandora.config.v1.SkillTableData",
-      "checksum": "sha256:5fb8ff1a5973d4747ca9a0eedacdc55669ef533303c3f6c5105901811b453f84",
+      "checksum": "sha256:7c453b9eb2abe405423ebb71906d6d1c1269822a2415f62a2afb70db17f74772",
       "rows": 63
     },
     {
