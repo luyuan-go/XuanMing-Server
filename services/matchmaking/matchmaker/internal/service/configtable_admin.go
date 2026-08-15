@@ -29,7 +29,10 @@ func NewConfigTableAdminService(store *configtable.Store, activeDir string) *Con
 // ReloadConfigTable 重读 active 目录并原子切换。
 // 幂等:同 version 重复调用 no-op;失败保留旧表并返回定位原因(hotreload doc §6 语义)。
 func (s *ConfigTableAdminService) ReloadConfigTable(ctx context.Context, req *configv1.ReloadConfigTableRequest) (*configv1.ReloadConfigTableResponse, error) {
-	if callerID(ctx) != 0 {
+	if caller := callerID(ctx); caller != 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "ReloadConfigTable",
+			"reason", "player_jwt_not_allowed", "player_id", caller,
+			"expect_version", req.GetExpectVersion())
 		return &configv1.ReloadConfigTableResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY,
 			Detail: "player-facing calls are not allowed"}, nil
 	}

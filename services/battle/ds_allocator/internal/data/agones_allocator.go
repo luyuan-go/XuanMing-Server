@@ -48,6 +48,48 @@ const (
 	battleAllocationMetadataKey       = "pandora.dev/allocation-id"
 )
 
+// Agones 分配 / 回收链路的拒绝 reason 枚举(infra.md §11.3 R2)。
+//
+// 为什么必须由这一层自己打:本文件的所有失败最终只以**一个 err 字符串**冒泡到 biz 的
+// gameserver_allocate_failed —— selector 选了哪几个 Fleet、apiserver 回了什么 status、
+// Agones 说的是 UnAllocated(没空闲)还是 Contention(抢占冲突)、严格回读时到底是哪个
+// annotation 对不上,全都留在这里。缺了它们,"玩家进不去副本"在后端只看得到一句
+// "分配失败",分不清是容量不足、Fleet 名写错,还是 apiserver 抖动。
+//
+// snake_case 常量,稳定不变(日志系统按 msg+reason 聚合告警)。
+const (
+	// 分配 POST 与入参。
+	agonesRejectTrackInvalid       = "release_track_invalid"
+	agonesRejectFleetNotConfigured = "fleet_not_configured"
+	agonesRejectMarshalFailed      = "request_marshal_failed"
+	agonesRejectTransportFailed    = "apiserver_call_failed"
+	agonesRejectHTTPError          = "apiserver_http_error"
+	agonesRejectDecodeFailed       = "response_decode_failed"
+	agonesRejectNoAvailable        = "no_available_gameserver"
+	agonesRejectStatusIncomplete   = "allocation_status_incomplete"
+	// Model B 权威分配的入参与选中后严格回读。
+	agonesRejectAllocationIDInvalid = "allocation_id_invalid"
+	agonesRejectRosterInvalid       = "roster_invalid"
+	agonesRejectFactionsMissing     = "combat_factions_missing"
+	agonesRejectFactionsInvalid     = "combat_factions_invalid"
+	agonesRejectStrictGetGSFailed   = "strict_get_gameserver_failed"
+	agonesRejectBindingMismatch     = "gameserver_binding_mismatch"
+	agonesRejectStrictGetPodFailed  = "strict_get_pod_failed"
+	agonesRejectPodOwnerMismatch    = "pod_owner_mismatch"
+	// 不确定分配的只读对账。
+	agonesRejectResolveListFailed = "resolve_list_failed"
+	agonesRejectResolveAmbiguous  = "allocation_id_ambiguous"
+	agonesRejectResolveBinding    = "resolved_binding_mismatch"
+	agonesRejectResolvePod        = "resolved_pod_mismatch"
+	// 凭据投递与回收。
+	agonesRejectCredentialUnconfirmed = "credential_patch_unconfirmed"
+	agonesRejectReleasePodUIDMissing  = "durable_pod_uid_missing"
+	agonesRejectReleaseNotConfirmed   = "release_not_confirmed"
+	agonesRejectReleaseProbeFailed    = "release_pre_probe_failed"
+	agonesRejectReleaseHTTPError      = "release_http_error"
+	agonesRejectPodUIDPreflight       = "pod_uid_preflight_mismatch"
+)
+
 type battleFleetRoute struct {
 	stable string
 	canary string
@@ -278,6 +320,8 @@ type deletePreconditions struct {
 //  2. 通用 Fleet(Loader 模式,分配后按 map-id label travel)作兜底。
 func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (string, string, string, error) {
 	if !releasetrack.Valid(releaseTrack) {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectTrackInvalid,
+			"match_id", matchID, "map_id", mapID, "release_track", releaseTrack)
 		return "", "", "", errcode.New(errcode.ErrInvalidArg, "agones: invalid release_track %q", releaseTrack)
 	}
 	meta := &gsaMetadata{Labels: map[string]string{
@@ -322,10 +366,18 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 		parsedAllocationID.Version() != uuid.Version(4) || parsedAllocationID.Variant() != uuid.RFC4122 ||
 		parsedAllocationID.String() != allocationID ||
 		!releasetrack.Valid(releaseTrack) {
+		// R2:一个 if 收敛了"没 match_id / allocation_id 不是规范 UUIDv4 / track 非法"三类因,
+		// 把判据字段都带上才能分开 —— 否则只能看到一句"参数不合法"。
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectAllocationIDInvalid,
+			"match_id", matchID, "allocation_id", allocationID, "map_id", mapID,
+			"release_track", releaseTrack, "parse_err", parseErr)
 		return nil, errcode.New(errcode.ErrInvalidArg, "agones: match_id and allocation_id required")
 	}
 	canonicalPlayers, roster, rosterErr := dsmetadata.CanonicalRoster(playerIDs)
 	if rosterErr != nil || len(canonicalPlayers) == 0 {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectRosterInvalid,
+			"match_id", matchID, "allocation_id", allocationID, "players", len(playerIDs),
+			"canonical_players", len(canonicalPlayers), "err", rosterErr)
 		return nil, errcode.New(errcode.ErrInvalidArg, "agones: invalid battle roster: %v", rosterErr)
 	}
 	// 阵营与名单是同一份对局定义的两半,不可分割:一场对局就是「谁在场 + 每人属于哪一方」。
@@ -333,6 +385,10 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 	// 每人一个独立阵营的混战——队友互相能打,而且看起来一切正常(能进图、能打、能结算),
 	// 错误被玩成了功能。缺阵营现在与缺名单同级,一律在写 annotation 前拒绝。
 	if len(combatFactionByPlayer) == 0 {
+		// 这一条对应玩家侧的"进图没角色 / 队友互相能打":缺阵营必须在写 annotation 前就拒,
+		// 而后端必须看得到是谁没传 —— 否则只能靠 DS 日志反推。
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectFactionsMissing,
+			"match_id", matchID, "allocation_id", allocationID, "players", len(canonicalPlayers))
 		return nil, errcode.New(errcode.ErrInvalidArg,
 			"agones: battle combat factions required for match %d", matchID)
 	}
@@ -341,6 +397,9 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 	canonicalPlayers, combatFactions, factionErr = dsmetadata.CanonicalCombatFactions(
 		canonicalPlayers, combatFactionByPlayer)
 	if factionErr != nil {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectFactionsInvalid,
+			"match_id", matchID, "allocation_id", allocationID, "players", len(canonicalPlayers),
+			"factions", len(combatFactionByPlayer), "err", factionErr)
 		return nil, errcode.New(errcode.ErrInvalidArg,
 			"agones: invalid battle combat factions: %v", factionErr)
 	}
@@ -364,6 +423,10 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 	partial.PodName, partial.Addr = podName, addr
 	gs, err := a.getGameServer(ctx, podName)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectStrictGetGSFailed,
+			"match_id", matchID, "allocation_id", allocationID, "pod", podName,
+			"release_track", selectedTrack, "err", err,
+			"hint", "POST 已选中但回读不到该 GameServer;该 Pod 会由 allocation_id 对账链回收")
 		return partial, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: strict GET selected gameserver %s failed: %v", podName, err)
 	}
@@ -378,6 +441,16 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 		gs.Metadata.Annotations[battleCombatFactionsAnnotationKey] != combatFactions ||
 		!releasetrack.Valid(actualReleaseTrack) || actualReleaseTrack != selectedTrack ||
 		gs.Metadata.Annotations[releaseTrackMetadataKey] != actualReleaseTrack {
+		// 逐项带出"期望 vs 实际",否则只能看到"binding incomplete"而不知道是名字、UID、
+		// 花名册、阵营还是 release_track 对不上。
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectBindingMismatch,
+			"match_id", matchID, "allocation_id", allocationID, "pod", podName,
+			"got_name", gs.Metadata.Name, "uid", gs.Metadata.UID, "rv", gs.Metadata.ResourceVersion,
+			"label_match_id", gs.Metadata.Labels["pandora.dev/match-id"],
+			"label_allocation_id", gs.Metadata.Labels[battleAllocationMetadataKey],
+			"roster_match", gs.Metadata.Annotations[battleRosterAnnotationKey] == roster,
+			"factions_match", gs.Metadata.Annotations[battleCombatFactionsAnnotationKey] == combatFactions,
+			"want_release_track", selectedTrack, "got_release_track", actualReleaseTrack)
 		return partial, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: selected gameserver identity/binding incomplete: want_name=%q name=%q uid=%q rv=%q",
 			podName, gs.Metadata.Name, gs.Metadata.UID, gs.Metadata.ResourceVersion)
@@ -386,14 +459,27 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 	partial.ResourceVersion = gs.Metadata.ResourceVersion
 	pod, err := a.getPod(ctx, podName)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectStrictGetPodFailed,
+			"match_id", matchID, "allocation_id", allocationID, "pod", podName,
+			"uid", gs.Metadata.UID, "err", err)
 		return partial, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: strict GET selected pod %s failed: %v", podName, err)
 	}
 	if !podOwnedByGameServer(pod, podName, gs.Metadata.UID) {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectPodOwnerMismatch,
+			"match_id", matchID, "allocation_id", allocationID, "pod", podName,
+			"pod_uid", pod.Metadata.UID, "uid", gs.Metadata.UID)
 		return partial, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: selected pod identity/owner incomplete: pod=%q pod_uid=%q gameserver_uid=%q",
 			podName, pod.Metadata.UID, gs.Metadata.UID)
 	}
+	// R1:权威分配落定是不可逆推进(从此这台 exact 实例就是本局的唯一目标)。
+	// biz 的 battle_warming 只有 pod;这里才有 uid / pod_uid / rv 三件 exact 身份,
+	// 重连签票与回收 fencing 全靠它们对账。每局一条,不属高频路径。
+	plog.With(ctx).Infow("msg", "gameserver_allocate_bound", "match_id", matchID,
+		"allocation_id", allocationID, "pod", podName, "ds_addr", addr, "uid", gs.Metadata.UID,
+		"pod_uid", pod.Metadata.UID, "rv", gs.Metadata.ResourceVersion,
+		"release_track", actualReleaseTrack, "players", len(canonicalPlayers), "map_id", mapID)
 	return &AuthoritativeGameServerAllocation{
 		PodName:            podName,
 		Addr:               addr,
@@ -460,10 +546,20 @@ func (a *AgonesGameServerAllocator) ResolveAllocationByID(
 	}
 	switch len(list.Items) {
 	case 0:
+		// 零对象 = 权威缺席(POST 未生效)。这是"不确定分配"的唯一良性结局,
+		// 也是后续"可以安全地当作没分配过"的依据,必须留证。
+		plog.With(ctx).Infow("msg", "gameserver_allocation_resolved_absent", "match_id", matchID,
+			"allocation_id", allocationID, "map_id", mapID)
 		return nil, false, nil
 	case 1:
 		// Continue below.
 	default:
+		// 同一个 allocation_id 出现多个 GameServer = 每局一台的不变量被破坏,
+		// 不得猜、不得自动删,必须人工介入 —— 故这是 ERROR 而非 WARN。
+		plog.With(ctx).Errorw("msg", "gameserver_allocation_resolve_rejected",
+			"reason", agonesRejectResolveAmbiguous, "match_id", matchID,
+			"allocation_id", allocationID, "gameservers", len(list.Items),
+			"hint", "同一 allocation_id 对应多台 GameServer;不自动回收,需运维确认")
 		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: allocation_id %s is ambiguous: gameservers=%d", allocationID, len(list.Items))
 	}
@@ -483,19 +579,37 @@ func (a *AgonesGameServerAllocator) ResolveAllocationByID(
 		// 让它按空值匹配上、进入正常回收链，比把它悬空更安全；新分配已在写入侧强制非空。
 		gs.Metadata.Annotations[battleCombatFactionsAnnotationKey] != combatFactions ||
 		!releasetrack.Valid(actualTrack) || gs.Metadata.Annotations[releaseTrackMetadataKey] != actualTrack {
+		plog.With(ctx).Warnw("msg", "gameserver_allocation_resolve_rejected",
+			"reason", agonesRejectResolveBinding, "match_id", matchID,
+			"allocation_id", allocationID, "pod", gs.Metadata.Name, "uid", gs.Metadata.UID,
+			"label_match_id", gs.Metadata.Labels["pandora.dev/match-id"],
+			"label_map_id", gs.Metadata.Labels["pandora.dev/map-id"],
+			"roster_match", gs.Metadata.Annotations[battleRosterAnnotationKey] == roster,
+			"factions_match", gs.Metadata.Annotations[battleCombatFactionsAnnotationKey] == combatFactions,
+			"release_track", actualTrack)
 		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: allocation_id %s resolved GameServer binding is incomplete or conflicting",
 			allocationID)
 	}
 	pod, err := a.getPod(ctx, gs.Metadata.Name)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "gameserver_allocation_resolve_rejected",
+			"reason", agonesRejectStrictGetPodFailed, "match_id", matchID,
+			"allocation_id", allocationID, "pod", gs.Metadata.Name, "err", err)
 		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: resolve allocation_id %s pod %s: %v", allocationID, gs.Metadata.Name, err)
 	}
 	if !podOwnedByGameServer(pod, gs.Metadata.Name, gs.Metadata.UID) {
+		plog.With(ctx).Warnw("msg", "gameserver_allocation_resolve_rejected",
+			"reason", agonesRejectResolvePod, "match_id", matchID, "allocation_id", allocationID,
+			"pod", gs.Metadata.Name, "pod_uid", pod.Metadata.UID, "uid", gs.Metadata.UID)
 		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: allocation_id %s associated Pod identity is incomplete", allocationID)
 	}
+	// R1:不确定分配被对账回一台 exact 实例 = 权威结论落定(后续要么接管要么回收)。
+	plog.With(ctx).Infow("msg", "gameserver_allocation_resolved", "match_id", matchID,
+		"allocation_id", allocationID, "pod", gs.Metadata.Name, "uid", gs.Metadata.UID,
+		"pod_uid", pod.Metadata.UID, "release_track", actualTrack)
 	return &AuthoritativeGameServerAllocation{
 		PodName:            gs.Metadata.Name,
 		InstanceUID:        gs.Metadata.UID,
@@ -572,7 +686,10 @@ func (a *AgonesGameServerAllocator) allocateOnceWithMetadata(
 		// INC-20260724-001 L8:fleet 名未配置是**配置错误**,不是容量事实。
 		// 报 ErrDSNoAvailable(5001) 会把它混进"无空闲副本"的容量口径,让运维照着扩容排查。
 		// 上游 matchmaker 对 5001/5002 处理完全一致(都算确定性失败),故改码不影响行为,
-		// 只把语义归位。
+		// 只把语义归位。日志同理必须把“是哪条轨道没配 fleet”写清楚。
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectFleetNotConfigured,
+			"match_id", matchID, "map_id", mapID, "release_track", releaseTrack,
+			"hint", "agones.fleet_name / canary_fleet_name 未配;这是配置错误不是容量不足")
 		return "", "", errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: no %s fleet configured", releaseTrack)
 	}
@@ -596,31 +713,63 @@ func (a *AgonesGameServerAllocator) allocateOnceWithMetadata(
 	}
 	payload, err := json.Marshal(reqBody)
 	if err != nil {
+		plog.With(ctx).Errorw("msg", "gameserver_allocate_rejected", "reason", agonesRejectMarshalFailed,
+			"match_id", matchID, "map_id", mapID, "release_track", releaseTrack, "err", err)
 		return "", "", errcode.New(errcode.ErrDSAllocationFailed, "agones: marshal request: %v", err)
 	}
 
 	url := fmt.Sprintf("%s/apis/allocation.agones.dev/v1/namespaces/%s/gameserverallocations",
 		a.apiServer, a.namespace)
 
+	// §11.3 判据 5「慢在哪」:GSA POST 是整条进入链上唯一要等 apiserver 的同步调用,
+	// 每次尝试(canary → stable 回退是两次)各自计时,否则只能看到一个合并总时长。
+	startedAt := time.Now()
+	selectedFleets := make([]string, 0, len(selectors))
+	for _, s := range selectors {
+		selectedFleets = append(selectedFleets, s.MatchLabels[fleetLabelKey])
+	}
+
 	respBytes, status, err := a.do(ctx, http.MethodPost, url, payload)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectTransportFailed,
+			"match_id", matchID, "map_id", mapID, "release_track", releaseTrack,
+			"fleets", selectedFleets, "elapsed_ms", time.Since(startedAt).Milliseconds(), "err", err,
+			"hint", "apiserver 不可达/超时:本次 POST 结果未知,上游会保留 allocation_id 对账")
 		return "", "", errcode.New(errcode.ErrDSAllocationFailed, "agones: allocate match %d: %v", matchID, err)
 	}
 	if status < 200 || status >= 300 {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectHTTPError,
+			"match_id", matchID, "map_id", mapID, "release_track", releaseTrack,
+			"fleets", selectedFleets, "http_status", status,
+			"elapsed_ms", time.Since(startedAt).Milliseconds(), "body", truncate(respBytes, 256))
 		return "", "", errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: allocate match %d http %d: %s", matchID, status, truncate(respBytes, 256))
 	}
 
 	var resp gsaResponse
 	if err := json.Unmarshal(respBytes, &resp); err != nil {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectDecodeFailed,
+			"match_id", matchID, "release_track", releaseTrack, "http_status", status,
+			"elapsed_ms", time.Since(startedAt).Milliseconds(), "err", err)
 		return "", "", errcode.New(errcode.ErrDSAllocationFailed, "agones: decode response: %v", err)
 	}
 	// state 只有 "Allocated" 才表示拿到了 GameServer;UnAllocated / Contention = 无空闲。
 	if resp.Status.State != "Allocated" {
+		// 容量不足是"进不去副本"的头号根因。带上 state 与候选 Fleet:
+		// UnAllocated=真没空闲副本(该扩容),Contention=并发抢占(重试即可),两者处置截然不同。
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectNoAvailable,
+			"match_id", matchID, "map_id", mapID, "release_track", releaseTrack,
+			"fleets", selectedFleets, "state", resp.Status.State,
+			"elapsed_ms", time.Since(startedAt).Milliseconds(),
+			"hint", "UnAllocated=无空闲 GameServer(看 fleet 容量/扩容);Contention=并发抢占")
 		return "", "", errcode.New(errcode.ErrDSNoAvailable,
 			"agones: no gameserver for match %d (state=%q)", matchID, resp.Status.State)
 	}
 	if resp.Status.GameServerName == "" || resp.Status.Address == "" || len(resp.Status.Ports) == 0 {
+		plog.With(ctx).Warnw("msg", "gameserver_allocate_rejected", "reason", agonesRejectStatusIncomplete,
+			"match_id", matchID, "release_track", releaseTrack, "pod", resp.Status.GameServerName,
+			"addr", resp.Status.Address, "ports", len(resp.Status.Ports),
+			"elapsed_ms", time.Since(startedAt).Milliseconds())
 		return "", "", errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: incomplete status for match %d: name=%q addr=%q ports=%d",
 			matchID, resp.Status.GameServerName, resp.Status.Address, len(resp.Status.Ports))
@@ -631,6 +780,11 @@ func (a *AgonesGameServerAllocator) allocateOnceWithMetadata(
 		host = a.advertiseHost
 	}
 	addr := fmt.Sprintf("%s:%d", host, resp.Status.Ports[0].Port)
+	// R1:拿到 GameServer 是进入链的第一个不可逆推进。每局至多两条(canary 回退时),
+	// 带 fleet 与 elapsed_ms 才答得了"分配到哪个 Fleet / Agones 这一步慢不慢"。
+	plog.With(ctx).Infow("msg", "gameserver_allocated", "match_id", matchID, "map_id", mapID,
+		"pod", resp.Status.GameServerName, "ds_addr", addr, "release_track", releaseTrack,
+		"fleets", selectedFleets, "elapsed_ms", time.Since(startedAt).Milliseconds())
 	return resp.Status.GameServerName, addr, nil
 }
 
@@ -686,8 +840,20 @@ func (a *AgonesGameServerAllocator) DeliverCredential(
 		confirmErr = confirmCredentialDelivery(confirmed, allocation, annotations)
 	}
 	if confirmErr == nil {
+		// R4 邻居项:凭据投递每局一次但会随轮换重试,成功侧 Debugw;
+		// 激活这个不可逆推进已由 biz 的 battle_ds_credential_activated 打 Info。
+		plog.With(ctx).Debugw("msg", "ds_credential_delivered", "pod", allocation.PodName,
+			"uid", allocation.InstanceUID, "allocation_id", allocation.AllocationID,
+			"patch_status", patchStatus, "annotations", len(annotations))
 		return confirmed.Metadata.ResourceVersion, nil
 	}
+	// 投递未被严格确认 = DS 拿不到回调凭据 = 该局心跳全部会被拒。这是
+	// “DS 起来了但后端当它不存在”的直接上游,必须带 patch_status 与 confirm_err 分开定位。
+	plog.With(ctx).Warnw("msg", "ds_credential_delivery_rejected",
+		"reason", agonesRejectCredentialUnconfirmed, "pod", allocation.PodName,
+		"uid", allocation.InstanceUID, "allocation_id", allocation.AllocationID,
+		"patch_status", patchStatus, "patch_err", patchErr, "confirm_err", confirmErr,
+		"hint", "凭据未落到 GameServer annotation;DS 心跳会被判未授权,分配将失败回收")
 	return "", errcode.New(errcode.ErrDSAllocationFailed,
 		"agones: credential PATCH not strictly confirmed: patch_status=%d patch_err=%v patch_body=%q confirm_err=%v",
 		patchStatus, patchErr, truncate(patchBody, 256), confirmErr)

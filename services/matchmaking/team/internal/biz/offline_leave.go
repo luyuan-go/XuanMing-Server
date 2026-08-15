@@ -105,17 +105,29 @@ func (u *TeamUsecase) OnPlayerOffline(ctx context.Context, playerID uint64, offl
 	if !u.offlineLeaveEnabled() || playerID == 0 {
 		return nil
 	}
+	// R3:offlinewatch 是定时任务面,ctx 里没有玩家 JWT —— player_id 不写进 ctx 的话,
+	// 这一整条自动摘人链在日志里与该玩家的其它记录完全串不起来。
+	ctx = plog.WithPlayerID(ctx, playerID)
 
 	teamID, found, err := u.repo.GetPlayerTeamID(ctx, playerID)
 	if err != nil {
+		// R2:读不通就重试(绝不当成「他没队伍」)。不打日志的话,一个持续读失败的
+		// 玩家会永远留在队伍里,而外部只看到"人一直没被摘掉"。
+		plog.With(ctx).Warnw("msg", "team_offline_leave_rejected",
+			"reason", reasonStoreReadFailed, "player_id", playerID,
+			"stage", "player_index", "err", err)
 		return err // 读不通 → 重试,绝不当成「他没队伍」
 	}
 	if !found || teamID == 0 {
 		return nil // 不在任何队伍,正常路径
 	}
+	ctx = plog.WithTeamID(ctx, teamID)
 
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_offline_leave_rejected",
+			"reason", reasonStoreReadFailed, "player_id", playerID, "team_id", teamID,
+			"stage", "team_record", "err", err)
 		return err
 	}
 	if !found || team.State == stateDisbanded || !hasMember(team, playerID) {
@@ -124,6 +136,9 @@ func (u *TeamUsecase) OnPlayerOffline(ctx context.Context, playerID uint64, offl
 		return u.deleteOfflinePlayerIndex(ctx, playerID, teamID)
 	}
 	if len(team.Members) <= 1 {
+		// R4:单人队每轮复查都会走到这里,只能 Debug。
+		plog.With(ctx).Debugw("msg", "team_offline_leave_skipped",
+			"reason", reasonSingleMemberTeam, "player_id", playerID, "team_id", teamID)
 		return nil // 单人队不动(见文件头「刻意不做的事」)
 	}
 
@@ -132,12 +147,15 @@ func (u *TeamUsecase) OnPlayerOffline(ctx context.Context, playerID uint64, offl
 	committed, err := u.isTeamCommittedToMatch(ctx, team)
 	if err != nil {
 		plog.With(ctx).Warnw("msg", "team_offline_leave_commitment_unknown",
-			"team_id", teamID, "player_id", playerID, "err", err)
+			"reason", reasonMatchCommitmentUnknown,
+			"team_id", teamID, "player_id", playerID,
+			"captain_id", team.CaptainId, "fail_closed", true, "err", err)
 		return err
 	}
 	if committed {
 		plog.With(ctx).Debugw("msg", "team_offline_leave_skipped_match_committed",
-			"team_id", teamID, "player_id", playerID)
+			"reason", reasonMatchCommitted,
+			"team_id", teamID, "player_id", playerID, "team_state", team.State)
 		// 对局占用是暂态，不是处理终态。返回 ErrDeferred 让 offlinewatch 保留到期项，
 		// 票据释放后自动重查；返回 nil 会永久删任务，只能碰运气等下一次事件。
 		return offlinewatch.ErrDeferred
@@ -147,10 +165,14 @@ func (u *TeamUsecase) OnPlayerOffline(ctx context.Context, playerID uint64, offl
 	playerCommitted, err := u.matchCommitment.IsPlayerCommittedToMatch(ctx, playerID)
 	if err != nil {
 		plog.With(ctx).Warnw("msg", "team_offline_leave_player_commitment_unknown",
-			"team_id", teamID, "player_id", playerID, "err", err)
+			"reason", reasonPlayerCommitmentUnknown,
+			"team_id", teamID, "player_id", playerID, "fail_closed", true, "err", err)
 		return err
 	}
 	if playerCommitted {
+		plog.With(ctx).Debugw("msg", "team_offline_leave_skipped_match_committed",
+			"reason", reasonPlayerCommitted,
+			"team_id", teamID, "player_id", playerID)
 		return offlinewatch.ErrDeferred
 	}
 
@@ -187,24 +209,49 @@ func (u *TeamUsecase) OnPlayerPresenceLost(ctx context.Context, playerID uint64,
 	if !u.offlineLeaveEnabled() || playerID == 0 {
 		return nil
 	}
+	// R3:同 OnPlayerOffline —— 定时任务面没有玩家 JWT,join key 必须手写。
+	ctx = plog.WithPlayerID(ctx, playerID)
 	teamID, found, err := u.repo.GetPlayerTeamID(ctx, playerID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_presence_lost_rejected",
+			"reason", reasonStoreReadFailed, "player_id", playerID,
+			"stage", "player_index", "err", err)
 		return err // 读不通 → 下轮重来,绝不当成「他没队伍」
 	}
 	if !found || teamID == 0 {
 		return nil
 	}
+	ctx = plog.WithTeamID(ctx, teamID)
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_presence_lost_rejected",
+			"reason", reasonStoreReadFailed, "player_id", playerID, "team_id", teamID,
+			"stage", "team_record", "err", err)
 		return err
 	}
 	// 终态 / 已不含该成员 / 单人队一律不动。旧 player→team 索引的收敛是 OnPlayerOffline
 	// 的职责(它有 due/claim 闭环能保证重试),本函数不重复那条链。
 	if !found || team.State == stateDisbanded || !hasMember(team, playerID) || len(team.Members) <= 1 {
+		// R4:玩家离线期间每轮 Observe 都会来一次,只能 Debug。四个条件拆开报,
+		// 否则"他为什么没被取消准备"分不出是队伍没了还是他早已不在队里。
+		reason := reasonTeamNotFound
+		switch {
+		case found && team.State == stateDisbanded:
+			reason = reasonTeamDisbanded
+		case found && !hasMember(team, playerID):
+			reason = reasonNotMember
+		case found:
+			reason = reasonSingleMemberTeam
+		}
+		plog.With(ctx).Debugw("msg", "team_presence_lost_skipped",
+			"reason", reason, "player_id", playerID, "team_id", teamID)
 		return nil
 	}
 
-	result, err := u.clearMemberReady(ctx, teamID, readyClearOpts{targets: []uint64{playerID}})
+	result, err := u.clearMemberReady(ctx, teamID, readyClearOpts{
+		targets: []uint64{playerID},
+		cause:   "presence_lost",
+	})
 	if err != nil {
 		return err
 	}
@@ -214,7 +261,9 @@ func (u *TeamUsecase) OnPlayerPresenceLost(ctx context.Context, playerID uint64,
 	u.publishReadyCleared(ctx, result)
 	plog.With(ctx).Infow("msg", "team_presence_lost_unready",
 		"team_id", teamID, "player_id", playerID, "since_ms", sinceMs,
-		"new_state", result.State, "members", len(result.Members))
+		"new_state", result.State, "members", len(result.Members),
+		"ready_count", readyCount(result.Members),
+		"ready_generation", result.GetReadyGeneration())
 	return nil
 }
 
@@ -250,17 +299,38 @@ func (u *TeamUsecase) OnPlayerPresenceLost(ctx context.Context, playerID uint64,
 // expectedGen==0 = 代际未知(滚动升级窗口的旧 matchmaker / 旧 team 记录),
 // 退化为「只在当前确实还挂着 ready 时复位一次」。不是跨代安全的,但严格优于完全不复位。
 func (u *TeamUsecase) EndTeamMatch(ctx context.Context, teamID uint64, playerIDs []uint64, expectedGen uint64) error {
+	started := time.Now()
 	if teamID == 0 {
+		plog.With(ctx).Warnw("msg", "team_match_end_rejected",
+			"reason", reasonMissingArg,
+			"players", len(playerIDs), "expected_ready_generation", expectedGen)
 		return errcode.New(errcode.ErrInvalidArg, "team_id required")
+	}
+	if expectedGen == 0 {
+		// R2:滚动升级共存窗口(旧 matchmaker / 旧 team 记录没有代际)。此时复位退化成
+		// 「只要还挂着 ready 就清一次」,不是跨代安全的 —— 出现即说明还有旧副本在跑,
+		// 必须可见,否则事后无法解释"为什么某次复位把新点的准备抹掉了"。
+		plog.With(ctx).Warnw("msg", "team_match_end_legacy_generation",
+			"reason", reasonLegacyReadyRevoked,
+			"team_id", teamID, "players", len(playerIDs),
+			"hint", "调用方未回传 ready 代际(旧副本共存窗口),复位退化为非跨代安全")
 	}
 	result, err := u.clearMemberReady(ctx, teamID, readyClearOpts{
 		targets:     playerIDs,
 		expectedGen: expectedGen,
+		cause:       "match_end",
 	})
 	if err != nil {
 		if errors.Is(err, offlinewatch.ErrDeferred) {
 			// 组票租约在手 = 队长已经开了**下一局**。租约是秒级自净的,
 			// 交给上游 outbox 下一轮重投即可(此时改 ready 会与那一局的冻结名单打架)。
+			// clearMemberReady 已按分支打过带 reason 的 deferred 日志,这里只补收尾。
+			plog.With(ctx).Warnw("msg", "team_match_end_rejected",
+				"reason", reasonRosterLocked,
+				"team_id", teamID, "players", len(playerIDs),
+				"expected_ready_generation", expectedGen,
+				"elapsed_ms", time.Since(started).Milliseconds(),
+				"hint", "上游 outbox 会重投;返回 3007 属暂态")
 			return errcode.New(errcode.ErrTeamConcurrent,
 				"team %d roster locked by another match start", teamID)
 		}
@@ -272,7 +342,11 @@ func (u *TeamUsecase) EndTeamMatch(ctx context.Context, teamID uint64, playerIDs
 	u.publishReadyCleared(ctx, result)
 	plog.With(ctx).Infow("msg", "team_match_ended_unready",
 		"team_id", teamID, "players", len(playerIDs),
-		"new_state", result.State, "members", len(result.Members))
+		"expected_ready_generation", expectedGen,
+		"new_state", result.State, "members", len(result.Members),
+		"ready_count", readyCount(result.Members),
+		"ready_generation", result.GetReadyGeneration(),
+		"elapsed_ms", time.Since(started).Milliseconds())
 	return nil
 }
 
@@ -288,6 +362,10 @@ type readyClearOpts struct {
 	targets []uint64
 	// expectedGen 非 0 时做 CAS:当前 ready 代际必须等于它才动手(跨代幂等,见 EndTeamMatch)。
 	expectedGen uint64
+	// cause 只用于日志(§11.3 R1 的 cause 词根:presence_lost / match_end)。
+	// 两个调用方共用同一段写路径,不带它就分不出"这次没复位"是掉线软化还是对局结束。
+	// **不参与任何判定** —— 加它是为了可诊断性,不是为了分叉行为。
+	cause string
 }
 
 func (u *TeamUsecase) clearMemberReady(
@@ -295,22 +373,52 @@ func (u *TeamUsecase) clearMemberReady(
 ) (*teamv1.TeamStorageRecord, error) {
 	targets := opts.targets
 	var result *teamv1.TeamStorageRecord
+	// prevState 只用于日志:锁内看到的最后一次取值即本次提交的依据(乐观锁重试时
+	// 会被覆盖成最后一轮的值,正是我们要记的那一轮)。放在闭包外,重试不会重复打日志。
+	var prevState teamv1.TeamState
 	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
+		prevState = team.State
 		if team.State == stateDisbanded {
+			// R4:队伍已解散是常态终态(outbox 迟到重投 / 离线玩家挂机),Debug。
+			plog.With(ctx).Debugw("msg", "team_ready_clear_skipped",
+				"reason", reasonTeamDisbanded, "cause", opts.cause,
+				"team_id", teamID, "targets", len(targets))
 			return errReadyNoChange
 		}
 		// 跨代 CAS:代际已经往前走了,说明这条复位对应的那一局早已翻篇
 		// (玩家重新点了准备 / 离队重入 / 队长开了新局)。按幂等成功处理,绝不能抹掉新意图。
 		if opts.expectedGen != 0 && team.GetReadyGeneration() != opts.expectedGen {
+			// R2:这是**设计内**的幂等落空,但必须可见 —— INC-20260813-001 里
+			// "打完一局还挂着 ready" 的对立面就是"复位被 CAS 挡了却没人知道"。
+			// 只在 expectedGen != 0(EndTeamMatch)时可达,不会被离线软化路径刷屏。
+			plog.With(ctx).Warnw("msg", "team_ready_clear_skipped",
+				"reason", reasonReadyGenerationMismatch, "cause", opts.cause,
+				"team_id", teamID,
+				"expected_ready_generation", opts.expectedGen,
+				"current_ready_generation", team.GetReadyGeneration(),
+				"team_state", team.State, "members", len(team.Members),
+				"ready_count", readyCount(team.Members),
+				"hint", "代际已推进 = 这条复位对应的那一局早已翻篇,按幂等成功处理")
 			return errReadyNoChange
 		}
 		// ★ 与 matchmaker 的共同线性化点,同 removeOfflineMember:BeginTeamMatch 已经
 		// (或正在)把这份名单冻进票据,这时改 ready 会让票据里的快照与队伍打架。
 		// 租约是秒级自净,推迟一轮即可。
 		if rosterLockedForMatch(team) {
+			plog.With(ctx).Warnw("msg", "team_ready_clear_deferred",
+				"reason", reasonRosterLocked, "cause", opts.cause,
+				"team_id", teamID,
+				"lock_until_ms", team.GetMatchLockUntilMs(),
+				"lock_operation_id", team.GetMatchLockOperationId(),
+				"hint", "组票租约在手,秒级自净;调用方退避后重来")
 			return offlinewatch.ErrDeferred
 		}
 		if !readyNeedsClearing(team, targets) {
+			// R4:离线玩家每轮 Observe 都会走到这里,只能 Debug。
+			plog.With(ctx).Debugw("msg", "team_ready_clear_skipped",
+				"reason", reasonReadyAlreadyCleared, "cause", opts.cause,
+				"team_id", teamID, "team_state", team.State,
+				"targets", len(targets), "ready_count", readyCount(team.Members))
 			return errReadyNoChange
 		}
 		for _, idx := range readyTargetIndexes(team, targets) {
@@ -329,14 +437,30 @@ func (u *TeamUsecase) clearMemberReady(
 		case errors.Is(err, offlinewatch.ErrDeferred):
 			return nil, err
 		case errcode.As(err) == errcode.ErrTeamNotFound, errcode.As(err) == errcode.ErrTeamWrongState:
+			// R4:队伍已没了 / 已终态是常态(outbox 迟到重投),Debug 即可。
+			plog.With(ctx).Debugw("msg", "team_ready_clear_skipped",
+				"reason", reasonTeamNotFound, "cause", opts.cause,
+				"team_id", teamID, "err", err)
 			return nil, nil // 队伍已没了 / 已终态:本就没什么可复位的
 		case errcode.As(err) == errcode.ErrTeamConcurrent:
 			// 乐观锁重试耗尽,暂态。用 ErrDeferred 而非普通 error,免得正常竞争刷 Warn。
+			// data 层已打过 team_update_lock_exhausted,这里只补上"是哪条业务被挡了"。
+			plog.With(ctx).Warnw("msg", "team_ready_clear_deferred",
+				"reason", reasonOptimisticRetryExhausted, "cause", opts.cause,
+				"team_id", teamID, "targets", len(targets),
+				"expected_ready_generation", opts.expectedGen)
 			return nil, offlinewatch.ErrDeferred
 		default:
+			plog.With(ctx).Warnw("msg", "team_ready_clear_failed",
+				"reason", reasonStoreWriteFailed, "cause", opts.cause,
+				"team_id", teamID, "targets", len(targets), "err", err)
 			return nil, err
 		}
 	}
+	// 状态机轨迹与其它写路径共用同一个 msg;cause 取调用方词根(presence_lost / match_end),
+	// from == to 时 helper 自己会跳过,不会污染轨迹。
+	logTeamStateChanged(ctx, teamID, prevState, result.State, opts.cause,
+		result.GetReadyGeneration(), len(result.Members))
 	return result, nil
 }
 
@@ -393,20 +517,35 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 	disbandedTTL := u.cfg.DisbandedRetention.Std()
 	var result *teamv1.TeamStorageRecord
 	var terminalNeedsIndexCleanup bool
+	// 锁内判定依据只用于日志(同 team.go 各写路径)。
+	var (
+		rejectReason  string
+		prevState     teamv1.TeamState
+		prevCaptainID uint64
+		prevMembers   int
+		lockUntilMs   int64
+	)
 
 	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
+		prevState = team.State
+		prevCaptainID = team.CaptainId
+		prevMembers = len(team.Members)
+		lockUntilMs = team.GetMatchLockUntilMs()
 		// 锁内重查一遍:从上面的读到这里之间,他可能已经自己离队 / 被踢 / 队伍已解散。
 		if team.State == stateDisbanded {
 			terminalNeedsIndexCleanup = true
+			rejectReason = reasonTeamDisbanded
 			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 		}
 		if !hasMember(team, playerID) {
 			terminalNeedsIndexCleanup = true
+			rejectReason = reasonNotMember
 			return errcode.New(errcode.ErrTeamNotFound, "player %d not in team %d", playerID, teamID)
 		}
 		// 锁内再确认一次人数:并发摘人时不能把最后一个成员也摘掉(那等于自动解散队伍,
 		// 超出了「移除离线队员」的授权范围)。
 		if len(team.Members) <= 1 {
+			rejectReason = reasonNoTeammateToKeep
 			return errcode.New(errcode.ErrTeamWrongState, "team %d has no teammate to keep", teamID)
 		}
 		// ★ 与 matchmaker 的共同线性化点:BeginTeamMatch 在**同一把锁**内上的租约。
@@ -414,9 +553,11 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 		// 「人在票据里、却不在队伍里」。两个操作现在只能有一个赢,窗口不再存在。
 		// 租约是秒级且会自净,所以这里推迟重试即可,不需要任何补偿。
 		if rosterLockedForMatch(team) {
+			rejectReason = reasonRosterLocked
 			return errcode.New(errcode.ErrTeamConcurrent,
 				"team %d roster locked for matchmaking until %d", teamID, team.GetMatchLockUntilMs())
 		}
+		rejectReason = ""
 
 		team.Members = removeMember(team.Members, playerID)
 		team.UpdatedAtMs = time.Now().UnixMilli()
@@ -432,6 +573,26 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 		result = cloneTeam(team)
 		return nil
 	}, ttl); err != nil {
+		if rejectReason == "" {
+			rejectReason = reasonStoreWriteFailed
+			if errcode.As(err) == errcode.ErrTeamConcurrent {
+				rejectReason = reasonOptimisticRetryExhausted
+			}
+		}
+		// R2:自动摘人被挡住是常态(租约竞争 / 玩家已自行离队),但"为什么没摘掉"
+		// 必须查得出来 —— 否则只看到一个离线成员一直挂在队里。终态分支走 Debug
+		// (每轮复查都会命中),暂态 / 故障分支走 Warn。
+		if rejectReason == reasonTeamDisbanded || rejectReason == reasonNotMember ||
+			rejectReason == reasonNoTeammateToKeep {
+			plog.With(ctx).Debugw("msg", "team_offline_leave_skipped",
+				"reason", rejectReason, "team_id", teamID, "player_id", playerID,
+				"team_state", prevState, "members", prevMembers)
+		} else {
+			plog.With(ctx).Warnw("msg", "team_offline_leave_deferred",
+				"reason", rejectReason, "team_id", teamID, "player_id", playerID,
+				"team_state", prevState, "members", prevMembers,
+				"lock_until_ms", lockUntilMs, "err", err)
+		}
 		// 主体不存在 / 已解散 / 已不含玩家时，仍须收敛此前读到的旧归属索引。
 		// 单人队则保留其正常归属；其余错误由骨架退避后重排。
 		switch errcode.As(err) {
@@ -474,7 +635,13 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 		"team_id", teamID, "player_id", playerID,
 		"offline_since_ms", offlineSinceMs,
 		"threshold", u.cfg.OfflineLeave.Threshold.String(),
-		"new_state", result.State, "remaining", len(result.Members))
+		"prev_state", prevState, "new_state", result.State,
+		"remaining", len(result.Members),
+		"captain_transferred", prevCaptainID == playerID,
+		"new_captain_id", result.CaptainId,
+		"ready_generation", result.GetReadyGeneration())
+	logTeamStateChanged(ctx, teamID, prevState, result.State, "offline_leave",
+		result.GetReadyGeneration(), len(result.Members))
 	u.compensateIfCommittedDuringRemoval(ctx, teamID, playerID)
 	if indexErr != nil {
 		return indexErr
@@ -488,7 +655,9 @@ func (u *TeamUsecase) removeOfflineMember(ctx context.Context, teamID, playerID 
 func (u *TeamUsecase) deleteOfflinePlayerIndex(ctx context.Context, playerID, teamID uint64) error {
 	if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); err != nil {
 		plog.With(ctx).Warnw("msg", "team_offline_leave_delete_player_index_failed",
-			"player_id", playerID, "team_id", teamID, "err", err)
+			"reason", reasonStoreWriteFailed,
+			"player_id", playerID, "team_id", teamID, "err", err,
+			"hint", "旧归属索引未收敛,玩家会被 3004 挡住建不了新队;复查任务保留,下轮重试")
 		return err
 	}
 	return nil
@@ -511,7 +680,9 @@ func (u *TeamUsecase) inspectTeamPresence(ctx context.Context, team *teamv1.Team
 	ids := memberIDs(team)
 	if err := u.presence.Observe(ctx, ids); err != nil {
 		plog.With(ctx).Warnw("msg", "team_presence_observe_failed",
-			"team_id", team.GetTeamId(), "members", len(ids), "err", err)
+			"reason", reasonPresenceObserveFail,
+			"team_id", team.GetTeamId(), "members", len(ids), "err", err,
+			"hint", "只影响离线兜底提名;本次读返回不受影响")
 	}
 }
 
@@ -541,6 +712,7 @@ func (u *TeamUsecase) compensateIfCommittedDuringRemoval(ctx context.Context, te
 	if err != nil {
 		OfflineLeaveRace.WithLabelValues("recheck_failed").Inc()
 		plog.With(ctx).Errorw("msg", "team_offline_leave_race_recheck_failed",
+			"reason", reasonRaceRecheckFailed,
 			"team_id", teamID, "player_id", playerID, "err", err,
 			"impact", "member already removed; cannot tell whether a ticket froze him in during the window")
 		return
@@ -553,6 +725,7 @@ func (u *TeamUsecase) compensateIfCommittedDuringRemoval(ctx context.Context, te
 	// 确认期 → 等价该玩家拒绝确认(match 失败,其余票据退回队列)。
 	OfflineLeaveRace.WithLabelValues("compensated").Inc()
 	plog.With(ctx).Warnw("msg", "team_offline_leave_race_compensated",
+		"reason", reasonRaceTicketFroze,
 		"team_id", teamID, "player_id", playerID,
 		"detail", "match ticket froze this member between the gate check and the team write; cancelling it so the team rematches without him")
 	u.cancelMatchmaking(ctx, teamID, playerID)
@@ -580,7 +753,14 @@ const (
 func (u *TeamUsecase) BeginTeamMatch(
 	ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64,
 ) (*teamv1.TeamStorageRecord, int64, error) {
+	started := time.Now()
 	if teamID == 0 || captainID == 0 || operationID == "" {
+		// 一个 if 三个条件 → 三个 reason 分不开时,至少把三项原值一起打出来:
+		// matchmaker 传空 operation_id 与传空 captain_id 的排查方向完全不同。
+		plog.With(ctx).Warnw("msg", "team_match_start_rejected",
+			"reason", reasonMissingArg,
+			"team_id", teamID, "captain_id", captainID,
+			"operation_id", operationID, "lease_ms", leaseMs)
 		return nil, 0, errcode.New(errcode.ErrInvalidArg, "team_id, captain_id and operation_id required")
 	}
 	lease := time.Duration(leaseMs) * time.Millisecond
@@ -593,24 +773,46 @@ func (u *TeamUsecase) BeginTeamMatch(
 
 	var result *teamv1.TeamStorageRecord
 	var expiresAtMs int64
+	// 锁内看到的判定依据只用于日志:乐观锁重试时会被覆盖成最后一轮的取值,
+	// 那正是本次提交真正依据的那一轮(与 team.go 各写路径同一套写法)。
+	var (
+		rejectReason  string
+		prevState     teamv1.TeamState
+		prevCaptainID uint64
+		prevMembers   int
+		prevReady     int
+		lockUntilMs   int64
+		lockOwnerOp   string
+	)
 	if err := u.updateTeam(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
+		prevState = team.State
+		prevCaptainID = team.CaptainId
+		prevMembers = len(team.Members)
+		prevReady = readyCount(team.Members)
+		lockUntilMs = team.GetMatchLockUntilMs()
+		lockOwnerOp = team.GetMatchLockOperationId()
 		if team.State == stateDisbanded {
+			rejectReason = reasonTeamDisbanded
 			return errcode.New(errcode.ErrTeamWrongState, "team %d disbanded", teamID)
 		}
 		if team.CaptainId != captainID {
+			rejectReason = reasonNotCaptain
 			return errcode.New(errcode.ErrTeamNotCaptain, "player %d is not captain of team %d", captainID, teamID)
 		}
 		// 与 matchmaker 原先在 resolveMembers 里做的校验保持一致,只是挪进了锁内。
 		if team.State != stateReady {
+			rejectReason = reasonTeamNotReady
 			return errcode.New(errcode.ErrTeamWrongState, "team %d not ready (state=%d)", teamID, team.State)
 		}
 		now := time.Now().UnixMilli()
 		if team.MatchLockUntilMs > now && team.MatchLockOperationId != operationID {
 			// 另一次组票的租约还没到期。这是正常竞争(队长连点 / 并发重试),
 			// 调用方退避重来即可,不是错误状态。
+			rejectReason = reasonRosterLocked
 			return errcode.New(errcode.ErrTeamConcurrent,
 				"team %d roster locked by operation %s until %d", teamID, team.MatchLockOperationId, team.MatchLockUntilMs)
 		}
+		rejectReason = ""
 		expiresAtMs = now + lease.Milliseconds()
 		team.MatchLockUntilMs = expiresAtMs
 		team.MatchLockOperationId = operationID
@@ -618,12 +820,44 @@ func (u *TeamUsecase) BeginTeamMatch(
 		result = cloneTeam(team)
 		return nil
 	}, u.activeTTL()); err != nil {
+		// 锁内没给出 reason 的只剩「队伍不存在 / 乐观锁重试耗尽 / Redis 故障」三类。
+		if rejectReason == "" {
+			switch errcode.As(err) {
+			case errcode.ErrTeamNotFound:
+				rejectReason = reasonTeamNotFound
+			case errcode.ErrTeamConcurrent:
+				rejectReason = reasonOptimisticRetryExhausted
+			default:
+				rejectReason = reasonStoreWriteFailed
+			}
+		}
+		// R2:这是「队长点了开始匹配却没进匹配」的**唯一**服务端证据。matchmaker 侧
+		// 只看得到一个错误码,team 侧不打就两边都断线。依据字段(队伍状态 / 人数 /
+		// ready 数 / 当前租约持有者)必须同框,否则查不出到底是没准备还是被别人占着。
+		plog.With(ctx).Warnw("msg", "team_match_start_rejected",
+			"reason", rejectReason,
+			"team_id", teamID, "captain_id", captainID,
+			"operation_id", operationID,
+			"team_state", prevState, "actual_captain_id", prevCaptainID,
+			"members", prevMembers, "ready_count", prevReady,
+			"lock_until_ms", lockUntilMs, "lock_operation_id", lockOwnerOp,
+			"elapsed_ms", time.Since(started).Milliseconds(), "err", err)
 		return nil, 0, err
 	}
 
-	plog.With(ctx).Debugw("msg", "team_match_roster_locked",
+	// R1:上租约锁 = 这一局的名单从此刻起被冻结(不可逆推进,且是 matchmaker 建票的输入)。
+	// 原为 Debug = 线上默认 info 级一条都不出,于是"点了开始匹配之后发生了什么"在
+	// team 侧完全空白,只能从 matchmaker 那一侧猜。
+	plog.With(ctx).Infow("msg", "team_match_roster_locked",
 		"team_id", teamID, "captain_id", captainID, "operation_id", operationID,
-		"lease_ms", lease.Milliseconds(), "expires_at_ms", expiresAtMs, "members", len(result.Members))
+		"lease_ms", lease.Milliseconds(), "expires_at_ms", expiresAtMs,
+		"members", len(result.Members), "ready_count", readyCount(result.Members),
+		"ready_generation", result.GetReadyGeneration(),
+		"elapsed_ms", time.Since(started).Milliseconds())
+	// 冻结那一刻每个成员的 (id, ready, hero) 三元组。INC-20260813-001(3v3 打成 3v2)
+	// 事后唯一能还原"到底是谁没进去"的取证点;helper 早就写好了却一直没人调用。
+	// reentry:同 operation_id 续租 = matchmaker 的重试,不是一次新的冻结。
+	logMatchRosterFrozen(ctx, teamID, captainID, operationID, result, lockOwnerOp == operationID)
 	return result, expiresAtMs, nil
 }
 
@@ -672,6 +906,13 @@ func (s *teamRosterSource) NextBatch(ctx context.Context, limit int) ([]uint64, 
 	}
 	ids, next, err := s.repo.ScanPlayerIndex(ctx, s.cursor, int64(limit))
 	if err != nil {
+		// R2:扫描是「整队一起掉线」时唯一的候选来源。它持续失败 = 残留成员永远
+		// 没人提名,而调用方只看到一个 error 往上抛。带上游标位置,便于判断是不是
+		// 卡在同一段 keyspace(而不是偶发抖动)。
+		plog.With(ctx).Warnw("msg", "team_roster_scan_failed",
+			"reason", reasonStoreReadFailed,
+			"cursor", s.cursor, "limit", limit, "round", s.rounds,
+			"scanned_in_round", s.scannedInRound, "err", err)
 		return nil, err
 	}
 	s.cursor = next

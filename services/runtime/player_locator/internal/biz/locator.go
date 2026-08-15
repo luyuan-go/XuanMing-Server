@@ -49,6 +49,35 @@ const (
 // optimisticRetry 是 SetGuarded WATCH/MULTI/EXEC 的 CAS 冲突重试次数。
 const optimisticRetry = 3
 
+// 拒绝 reason 枚举(§11.3 R2:reason 必须是固定 snake_case 枚举串,不是自由文本)。
+//
+// 为什么要收成常量:这些串是日志系统按 reason 聚合告警的维度,散落字面量必然漂移
+// (同一个原因两处写法不同 → 看板漏计)。取值口径 = 「触发这次拒绝的那个具体条件」,
+// 一个 if 收敛 N 个条件时必须拆成 N 个(否则"被拒了"查得到、"为什么被拒"查不到)。
+const (
+	// SetLocation 入参形状校验。
+	reasonSetPlayerIDZero        = "player_id_zero"
+	reasonSetStateOutOfRange     = "state_out_of_range"
+	reasonSetHubPodMissing       = "hub_pod_missing"
+	reasonSetHubFenceIncomplete  = "hub_fence_incomplete"
+	reasonSetMatchIDMissing      = "match_id_missing"
+	reasonSetBattleTargetMissing = "battle_match_or_pod_missing"
+	reasonSetHubFenceOnNonHub    = "hub_fence_on_non_hub_state"
+
+	// HUB presence 代际闸(长 TTL meta,与 location CAS 分两步)。
+	reasonSetPresenceStale      = "stale_hub_presence"
+	reasonSetPresenceSuperseded = "hub_presence_superseded_before_commit"
+
+	// ReportDisconnect / RefreshHubLocations / 查询面入参与 fence 拒绝。
+	reasonDisconnectHubPodMissing  = "hub_pod_missing"
+	reasonDisconnectPlayerIDZero   = "player_id_zero"
+	reasonDisconnectFenceIncmplete = "hub_fence_incomplete"
+	reasonDisconnectFenceMismatch  = "hub_fence_or_state_mismatch"
+	reasonRefreshHubPodMissing     = "hub_pod_missing"
+	reasonQueryPlayerIDZero        = "player_id_zero"
+	reasonSubscriberIDZero         = "subscriber_id_zero"
+)
+
 // LocationInput 是 SetLocation 的入参(从 service 层 proto 翻译)。
 type LocationInput struct {
 	PlayerID         uint64
@@ -179,6 +208,26 @@ func (u *LocatorUsecase) SetCellRouter(r *cellroute.Router) {
 	u.router = r
 }
 
+// logSetRejected 记录一次 SetLocation 的提前拒绝(§11.3 R2)。
+//
+// 为什么必须显式打:service handler 把这些 errcode 转成 in-band Code 后返回 nil error,
+// access log 只会记 rpc_ok(DEBUG);而 ErrInvalidArg / ErrLocatorConflict 都不在
+// errcode.IsServerFault 里,线上默认 info 级下**一条都看不到**——玩家 presence 写不进去
+// 的现场因此完全无痕。频次 = 每次被拒一条,正常链路恒 0。
+func logSetRejected(ctx context.Context, reason string, in LocationInput, extra ...any) {
+	kvs := []any{"msg", "locator_set_rejected",
+		"reason", reason,
+		"player_id", in.PlayerID,
+		"presence_state", in.State,
+		"hub_pod", in.HubPod, "battle_pod", in.BattlePod,
+		"fence_match_id", in.MatchID,
+		"assignment_id", in.HubPresenceFence.AssignmentID,
+		"admission_id", in.HubPresenceFence.AdmissionID,
+		"admission_seq", in.HubPresenceFence.AdmissionSeq,
+	}
+	plog.With(ctx).Warnw(append(kvs, extra...)...)
+}
+
 // SetLocation 写入 redis hash。
 //
 // 校验:
@@ -189,29 +238,37 @@ func (u *LocatorUsecase) SetCellRouter(r *cellroute.Router) {
 //   - state=BATTLE → battle_pod 非空
 func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) error {
 	if in.PlayerID == 0 {
+		logSetRejected(ctx, reasonSetPlayerIDZero, in)
 		return errcode.New(errcode.ErrInvalidArg, "player_id must > 0")
 	}
 	if in.State < LocationStateUnspecified || in.State > LocationStateBattle {
+		logSetRejected(ctx, reasonSetStateOutOfRange, in,
+			"min_state", LocationStateUnspecified, "max_state", LocationStateBattle)
 		return errcode.New(errcode.ErrInvalidArg, "invalid state=%d", in.State)
 	}
 	switch in.State {
 	case LocationStateHub:
 		if in.HubPod == "" {
+			logSetRejected(ctx, reasonSetHubPodMissing, in)
 			return errcode.New(errcode.ErrInvalidArg, "HUB state requires hub_pod")
 		}
 		if !in.HubPresenceFence.isZero() && !in.HubPresenceFence.isComplete() {
+			logSetRejected(ctx, reasonSetHubFenceIncomplete, in)
 			return errcode.New(errcode.ErrInvalidArg, "hub presence fence must be complete or empty")
 		}
 	case LocationStateMatching:
 		if in.MatchID == 0 {
+			logSetRejected(ctx, reasonSetMatchIDMissing, in)
 			return errcode.New(errcode.ErrInvalidArg, "MATCHING state requires match_id")
 		}
 	case LocationStateBattle:
 		if in.MatchID == 0 || in.BattlePod == "" {
+			logSetRejected(ctx, reasonSetBattleTargetMissing, in)
 			return errcode.New(errcode.ErrInvalidArg, "BATTLE state requires match_id + battle_pod")
 		}
 	}
 	if in.State != LocationStateHub && !in.HubPresenceFence.isZero() {
+		logSetRejected(ctx, reasonSetHubFenceOnNonHub, in)
 		return errcode.New(errcode.ErrInvalidArg, "hub presence fence is only valid for HUB state")
 	}
 
@@ -233,6 +290,12 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 			return err
 		}
 		if !accepted {
+			// 长 TTL meta 判定本次 HUB 写来自旧代连接(同 assignment 内 seq 回退 / 同序 ABA /
+			// 已离开的 admission 重放 / fenced 当前代下的 legacy 降级写)。这是本服务
+			// 「玩家秒重连后被旧连接迟到写顶回去」的唯一拦截点,必须留证。
+			// 期望值(当前代)在 Lua 内比对,取不到,故并排打出本次 incoming 全量身份 +
+			// 已知的当前 hub_pod,供与 locator_guard_rejected / hub_allocator 侧对账。
+			logSetRejected(ctx, reasonSetPresenceStale, in)
 			return errcode.New(errcode.ErrLocatorConflict,
 				"player %d reject stale HUB presence assignment=%s admission_seq=%d",
 				in.PlayerID, in.HubPresenceFence.AssignmentID, in.HubPresenceFence.AdmissionSeq)
@@ -254,7 +317,22 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 		rec.MatchID = 0
 		rec.BattlePod = ""
 	}
-	if err := u.repo.SetGuarded(ctx, in.PlayerID, rec, u.ttl, optimisticRetry, guardTransition(ctx, in, resolvedHubFence)); err != nil {
+	// prev* 只做观测:守卫闭包本就拿到了「写之前的当前记录」,把它记下来是为了在写成功后
+	// 判断这次到底是**状态迁移**(HUB↔BATTLE↔MATCHING,低频、必须 Info)还是**同态续期**
+	// (每次心跳一条、只能 Debug)。CAS 重试时守卫会被多调几次,最后一次即实际提交所依据的
+	// 那份快照。纯赋值,不参与任何判定,行为与原先一字不差。
+	var (
+		prevFound   bool
+		prevState   int32
+		prevMatchID uint64
+		prevHubPod  string
+	)
+	guard := guardTransition(ctx, in, resolvedHubFence)
+	observedGuard := func(cur data.LocationRecord, found bool) error {
+		prevFound, prevState, prevMatchID, prevHubPod = found, cur.State, cur.MatchID, cur.HubPod
+		return guard(cur, found)
+	}
+	if err := u.repo.SetGuarded(ctx, in.PlayerID, rec, u.ttl, optimisticRetry, observedGuard); err != nil {
 		return err
 	}
 	if in.State == LocationStateHub {
@@ -266,13 +344,21 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 			// validate 后 exact Disconnect 可能先缩 TTL/写 left_at，随后本 SetGuarded 又把
 			// 同 fence TTL 刷长；commit 会因 left_at 拒绝。此时必须再做一次 exact 收缩
 			// 补偿。若位置已经被更新代或对局态替换，data 层 exact guard 会零副作用。
+			compensated := false
 			if resolvedHubFence.IsComplete() {
 				if _, _, shrinkErr := u.repo.ShrinkHubTTL(
 					ctx, in.HubPod, in.PlayerID, resolvedHubFence, disconnectGrace); shrinkErr != nil {
+					// 补偿失败 = location TTL 被刷长了但 meta 拒绝确认:玩家的 presence 会比
+					// 真实在场多活一个 TTL。这条是 ErrUnavailable(access log 会记 ERROR),
+					// 但那里没有 player_id / fence,单看 access log 无法定位到人。
+					logSetRejected(ctx, reasonSetPresenceSuperseded, in,
+						"compensated", false, "compensate_err", shrinkErr)
 					return errcode.NewCause(errcode.ErrUnavailable, shrinkErr,
 						"hub presence meta commit rejected and TTL compensation failed player=%d", in.PlayerID)
 				}
+				compensated = true
 			}
+			logSetRejected(ctx, reasonSetPresenceSuperseded, in, "compensated", compensated)
 			return errcode.New(errcode.ErrLocatorConflict,
 				"player %d hub presence superseded before meta commit", in.PlayerID)
 		}
@@ -293,10 +379,34 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 	if u.presence != nil {
 		u.presence.Notify(in.PlayerID, in.State)
 	}
-	plog.With(ctx).Infow("msg", "location_set",
-		"player_id", in.PlayerID, "state", in.State,
-		"hub_pod", in.HubPod, "match_id", in.MatchID, "battle_pod", in.BattlePod,
+	// §11.3 R1 vs R4 的分界就在这里:
+	//   - **状态迁移**(首次上线 / HUB↔MATCHING↔BATTLE 互切)是低频的链路阶段推进,
+	//     「presence 什么时候从 HUB 变 BATTLE」只能靠它回答 → Info,每次真实迁移一条;
+	//   - **同态续期**(下面的 location_set)挂在每玩家每次心跳上 → Debug。
+	// 两条分开打而不是一条带 changed 标志:前者要在生产默认 info 级下可见,后者绝不能。
+	if !prevFound || prevState != in.State {
+		plog.With(ctx).Infow("msg", "location_state_changed",
+			"player_id", in.PlayerID,
+			"prev_found", prevFound,
+			"prev_presence_state", prevState, "presence_state", in.State,
+			"prev_hub_pod", prevHubPod, "hub_pod", in.HubPod,
+			"prev_match_id", prevMatchID, "battle_pod", in.BattlePod,
+			"assignment_id", in.HubPresenceFence.AssignmentID,
+			"admission_seq", in.HubPresenceFence.AdmissionSeq,
+			"ttl_ms", u.ttl.Milliseconds())
+	}
+	// §11.3 R4:这条挂在**每玩家每次心跳**上(Hub 上报 / 对局位置续期),500 人/hub 下
+	// 按 Info 打会把同文件里的 locator_guard_rejected / locator_set_rejected 彻底冲走
+	// ——那些才是排障要看的行。降 Debug 是安全的:排障时对单个 pod 临时 LOG_LEVEL=debug 即可。
+	// (2026-08-15 级别修正:原为 Infow。)
+	// match_id 由 service 层写进 ctx(plog.WithMatchID),此处不再重复带,避免同名字段打两遍。
+	plog.With(ctx).Debugw("msg", "location_set",
+		"player_id", in.PlayerID, "presence_state", in.State,
+		"hub_pod", in.HubPod, "battle_pod", in.BattlePod,
+		"assignment_id", in.HubPresenceFence.AssignmentID,
+		"admission_seq", in.HubPresenceFence.AdmissionSeq,
 		"ttl_ms", u.ttl.Milliseconds())
+
 	// 分片:位置写成功后观测本玩家位置锁定的 owner 落点(位置是 owner 数据,须锁定
 	// 玩家 owner cell 以保单写者须号,不变量 §1)。router 为 nil(单 Cell)→ 不打。
 	u.logLocationPlacement(ctx, in.PlayerID, in.State)
@@ -343,11 +453,14 @@ func guardTransition(ctx context.Context, in LocationInput, incomingHubFence dat
 	// service handler 把 ErrLocatorConflict 转成 in-band Code 后返回 nil error,access log
 	// 只会记 rpc_ok(DEBUG),故必须在拒绝点显式留证,否则线上出「玩家被莫名踢出战斗 /
 	// 顶号」类问题时无日志可查(本服务最大盲点)。
-	reject := func(reason string, cur data.LocationRecord) {
-		plog.With(ctx).Warnw("msg", "locator_guard_rejected",
+	reject := func(reason string, cur data.LocationRecord, extra ...any) {
+		kvs := []any{"msg", "locator_guard_rejected",
 			"reason", reason, "player_id", in.PlayerID,
-			"cur_state", cur.State, "cur_match_id", cur.MatchID,
-			"new_state", in.State, "fence_match_id", in.MatchID, "hub_pod", in.HubPod)
+			"cur_state", cur.State, "presence_state", cur.State, "cur_match_id", cur.MatchID,
+			"cur_hub_pod", cur.HubPod, "cur_battle_pod", cur.BattlePod,
+			"new_state", in.State, "fence_match_id", in.MatchID, "hub_pod", in.HubPod,
+			"cur_updated_at_ms", cur.UpdatedAtMs}
+		plog.With(ctx).Warnw(append(kvs, extra...)...)
 	}
 	return func(cur data.LocationRecord, found bool) error {
 		if !found {
@@ -362,7 +475,11 @@ func guardTransition(ctx context.Context, in LocationInput, incomingHubFence dat
 				// 已经有带 fence 的当前连接,就不再接受不带 fence 的写覆盖它 ——
 				// 否则一台还没升级的旧 DS 能把新连接的投影降级回「谁也说不清是哪条连接」。
 				if incomingFence.IsZero() {
-					reject("legacy_hub_write_downgrades_fenced_presence", cur)
+					reject("legacy_hub_write_downgrades_fenced_presence", cur,
+						"cur_assignment_id", currentFence.AssignmentID,
+						"cur_admission_id", currentFence.AdmissionID,
+						"cur_admission_seq", currentFence.AdmissionSeq,
+						"req_assignment_id", "", "req_admission_id", "", "req_admission_seq", uint64(0))
 					return errcode.New(errcode.ErrLocatorConflict,
 						"player %d reject legacy HUB write over fenced current presence", in.PlayerID)
 				}
@@ -371,7 +488,13 @@ func guardTransition(ctx context.Context, in LocationInput, incomingHubFence dat
 				// 跨 assignment 不在这里判 —— 那是 hub_allocator 的归属权威说了算,
 				// locator 是投影不是 owner authority(§9.22)。
 				if !incomingFence.IsComplete() {
-					reject("incomplete_hub_presence_fence", cur)
+					reject("incomplete_hub_presence_fence", cur,
+						"cur_assignment_id", currentFence.AssignmentID,
+						"cur_admission_id", currentFence.AdmissionID,
+						"cur_admission_seq", currentFence.AdmissionSeq,
+						"req_assignment_id", incomingFence.AssignmentID,
+						"req_admission_id", incomingFence.AdmissionID,
+						"req_admission_seq", incomingFence.AdmissionSeq)
 					return errcode.New(errcode.ErrLocatorConflict,
 						"player %d reject incomplete HUB presence fence", in.PlayerID)
 				}
@@ -379,7 +502,15 @@ func guardTransition(ctx context.Context, in LocationInput, incomingHubFence dat
 					(incomingFence.AdmissionSeq < currentFence.AdmissionSeq ||
 						(incomingFence.AdmissionSeq == currentFence.AdmissionSeq &&
 							incomingFence.AdmissionID != currentFence.AdmissionID)) {
-					reject("stale_hub_presence_generation", cur)
+					// 期望值 vs 实际值并排(§11.3 R2):只报「被拒了」查不出是哪条旧连接在迟到夺回,
+					// 而这正是「玩家秒重连后又被顶回旧连接」现场的唯一判据。
+					reject("stale_hub_presence_generation", cur,
+						"cur_assignment_id", currentFence.AssignmentID,
+						"cur_admission_id", currentFence.AdmissionID,
+						"cur_admission_seq", currentFence.AdmissionSeq,
+						"req_assignment_id", incomingFence.AssignmentID,
+						"req_admission_id", incomingFence.AdmissionID,
+						"req_admission_seq", incomingFence.AdmissionSeq)
 					return errcode.New(errcode.ErrLocatorConflict,
 						"player %d reject stale HUB admission assignment=%s current_seq=%d incoming_seq=%d",
 						in.PlayerID, currentFence.AssignmentID,
@@ -432,6 +563,8 @@ func guardTransition(ctx context.Context, in LocationInput, incomingHubFence dat
 // GetLocation 读 redis hash;key 不存在返回 OFFLINE 占位记录(不报错)。
 func (u *LocatorUsecase) GetLocation(ctx context.Context, playerID uint64) (LocationOutput, error) {
 	if playerID == 0 {
+		plog.With(ctx).Warnw("msg", "locator_query_rejected",
+			"reason", reasonQueryPlayerIDZero, "rpc", "GetLocation", "player_id", playerID)
 		return LocationOutput{}, errcode.New(errcode.ErrInvalidArg, "player_id must > 0")
 	}
 	rec, found, err := u.repo.Get(ctx, playerID)
@@ -440,8 +573,18 @@ func (u *LocatorUsecase) GetLocation(ctx context.Context, playerID uint64) (Loca
 	}
 	if !found {
 		// 不变量 §1:不存在等价 OFFLINE,客户端 / DS 看到这个就知道"玩家不在线"
+		//
+		// §11.3 R4:查询是高频路径(好友面板 / 登录路由 / 重连判定都在反复拉),只能 Debug。
+		// 但必须有 —— 「重连时 locator 到底告诉调用方什么」是 key miss 被误当成「已离开旧 DS」
+		// 这类事故(§9.22)的第一手证据；LOG_LEVEL=debug 单 pod 临时开即可取证。
+		plog.With(ctx).Debugw("msg", "location_queried",
+			"player_id", playerID, "found", false, "presence_state", LocationStateOffline)
 		return LocationOutput{State: LocationStateOffline}, nil
 	}
+	plog.With(ctx).Debugw("msg", "location_queried",
+		"player_id", playerID, "found", true, "presence_state", rec.State,
+		"hub_pod", rec.HubPod, "battle_pod", rec.BattlePod,
+		"loc_match_id", rec.MatchID, "updated_at_ms", rec.UpdatedAtMs)
 	return LocationOutput{
 		State:       rec.State,
 		HubPod:      rec.HubPod,
@@ -489,6 +632,8 @@ func (u *LocatorUsecase) BatchGetLocation(ctx context.Context, playerIDs []uint6
 // 不触发 presence 通知(续期不是状态变更)。
 func (u *LocatorUsecase) RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64) (int, error) {
 	if hubPod == "" {
+		plog.With(ctx).Warnw("msg", "locator_refresh_rejected",
+			"reason", reasonRefreshHubPodMissing, "requested", len(playerIDs))
 		return 0, errcode.New(errcode.ErrInvalidArg, "hub_pod must not be empty")
 	}
 	if len(playerIDs) == 0 {
@@ -498,6 +643,12 @@ func (u *LocatorUsecase) RefreshHubLocations(ctx context.Context, hubPod string,
 	if err != nil {
 		return 0, err
 	}
+	// §11.3 R4:Hub DS 心跳携带(每 5s 一次、一次带全场百人),只能 Debug。
+	// requested vs refreshed 的差值是「多少人的 presence 没被续上」的唯一可观测量
+	// (差值持续偏大 = 那批玩家的位置投影正在 30s TTL 后静默蒸发)。
+	plog.With(ctx).Debugw("msg", "location_hub_refreshed",
+		"hub_pod", hubPod, "requested", len(playerIDs), "refreshed", refreshed,
+		"ttl_ms", u.ttl.Milliseconds())
 	return refreshed, nil
 }
 
@@ -519,9 +670,13 @@ const defaultLastSeenRetention = time.Hour
 // 不触发 presence 通知——缩 TTL 不是状态变更,真离线由 key 过期体现。
 func (u *LocatorUsecase) ReportDisconnect(ctx context.Context, hubPod string, playerID uint64, fence HubPresenceFence) (bool, error) {
 	if hubPod == "" {
+		plog.With(ctx).Warnw("msg", "locator_disconnect_rejected",
+			"reason", reasonDisconnectHubPodMissing, "player_id", playerID)
 		return false, errcode.New(errcode.ErrInvalidArg, "hub_pod must not be empty")
 	}
 	if playerID == 0 {
+		plog.With(ctx).Warnw("msg", "locator_disconnect_rejected",
+			"reason", reasonDisconnectPlayerIDZero, "hub_pod", hubPod)
 		return false, errcode.New(errcode.ErrInvalidArg, "player_id must > 0")
 	}
 	if fence.isZero() {
@@ -543,6 +698,10 @@ func (u *LocatorUsecase) ReportDisconnect(ctx context.Context, hubPod string, pl
 		return false, nil
 	}
 	if !fence.isComplete() {
+		plog.With(ctx).Warnw("msg", "locator_disconnect_rejected",
+			"reason", reasonDisconnectFenceIncmplete, "player_id", playerID, "hub_pod", hubPod,
+			"req_assignment_id", fence.AssignmentID, "req_admission_id", fence.AdmissionID,
+			"req_admission_seq", fence.AdmissionSeq)
 		return false, errcode.New(errcode.ErrInvalidArg, "hub presence fence must be complete or empty")
 	}
 
@@ -551,7 +710,19 @@ func (u *LocatorUsecase) ReportDisconnect(ctx context.Context, hubPod string, pl
 		return false, err
 	}
 	if !accepted {
-		return false, nil // state/pod/fence 任一不匹配：正常的迟到请求，严格不留痕。
+		// state/pod/fence 任一不匹配：正常的迟到请求，严格不留痕。
+		//
+		// “不留痕”指的是 **不留副作用**,不是不留日志:这正是旧连接 / 旧 assignment 的
+		// 迟到 Logout 被 fencing 掉的瞬间。RPC 仍返 OK(shrunk=false),access log 记 DEBUG
+		// —— 不打这条,「断线上报到底有没有生效」在线上完全无法回答。
+		// 当前代际(期望值)在 Lua 内比对取不到,故打出本次 incoming 全量身份,
+		// 与同一玩家的 location_state_changed / locator_guard_rejected 对账即可定位是哪一代。
+		plog.With(ctx).Warnw("msg", "locator_disconnect_rejected",
+			"reason", reasonDisconnectFenceMismatch, "player_id", playerID, "hub_pod", hubPod,
+			"req_assignment_id", fence.AssignmentID, "req_admission_id", fence.AdmissionID,
+			"req_admission_seq", fence.AdmissionSeq,
+			"grace_ms", disconnectGrace.Milliseconds())
+		return false, nil
 	}
 
 	// location exact 守卫通过后才写 meta。若重连在两步之间推进了 meta，旧 fence
@@ -592,6 +763,8 @@ func (u *LocatorUsecase) BatchGetLastSeen(ctx context.Context, playerIDs []uint6
 // ClearLocation Unlink redis hash。
 func (u *LocatorUsecase) ClearLocation(ctx context.Context, playerID uint64) error {
 	if playerID == 0 {
+		plog.With(ctx).Warnw("msg", "locator_query_rejected",
+			"reason", reasonQueryPlayerIDZero, "rpc", "ClearLocation", "player_id", playerID)
 		return errcode.New(errcode.ErrInvalidArg, "player_id must > 0")
 	}
 	if err := u.repo.Delete(ctx, playerID); err != nil {
@@ -601,7 +774,9 @@ func (u *LocatorUsecase) ClearLocation(ctx context.Context, playerID uint64) err
 	if u.presence != nil {
 		u.presence.Notify(playerID, LocationStateOffline)
 	}
-	plog.With(ctx).Infow("msg", "location_cleared", "player_id", playerID)
+	// §11.3 R1:清位置是 presence 投影的不可逆推进(登出 / 强制下线),低频 → Info。
+	plog.With(ctx).Infow("msg", "location_cleared",
+		"player_id", playerID, "presence_state", LocationStateOffline)
 	return nil
 }
 
@@ -609,6 +784,9 @@ func (u *LocatorUsecase) ClearLocation(ctx context.Context, playerID uint64) err
 // presence 未启用时为 no-op(纯拉模式),不报错。
 func (u *LocatorUsecase) SubscribePresence(subscriberID uint64, watchedIDs []uint64) error {
 	if subscriberID == 0 {
+		plog.With(context.Background()).Warnw("msg", "locator_query_rejected",
+			"reason", reasonSubscriberIDZero, "rpc", "SubscribePresence",
+			"watched_count", len(watchedIDs))
 		return errcode.New(errcode.ErrInvalidArg, "subscriber_id must > 0")
 	}
 	if u.presence != nil {
@@ -620,6 +798,8 @@ func (u *LocatorUsecase) SubscribePresence(subscriberID uint64, watchedIDs []uin
 // UnsubscribePresence 退订(关闭好友面板时)。presence 未启用时为 no-op。
 func (u *LocatorUsecase) UnsubscribePresence(subscriberID uint64) error {
 	if subscriberID == 0 {
+		plog.With(context.Background()).Warnw("msg", "locator_query_rejected",
+			"reason", reasonSubscriberIDZero, "rpc", "UnsubscribePresence")
 		return errcode.New(errcode.ErrInvalidArg, "subscriber_id must > 0")
 	}
 	if u.presence != nil {

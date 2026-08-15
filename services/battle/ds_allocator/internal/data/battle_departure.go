@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 )
 
@@ -36,6 +37,48 @@ const (
 	// admission owner，而不是仅 PostLogin ActivePlayers。
 	BattlePlayerCensusCapabilityVersionV1 uint32 = 1
 )
+
+// 离场日志的拒绝原因枚举。离场是 Battle→Hub 回流的唯一物理证明，任何一条拒绝都会
+// 让玩家停在“旧 DS 还没放手”的等待里，因此每个 early return 都必须能按 reason 检索。
+const (
+	// EnsurePlayerDeparture（Hub 侧申请离场证明）。
+	departureRejectExpectedIncomplete    = "departure_expected_incomplete"
+	departureRejectTeardownTupleConflict = "teardown_proof_tuple_conflict"
+	departureRejectIdempotencyConflict   = "departure_idempotency_tuple_conflict"
+	departureRejectJournalFull           = "departure_journal_full"
+	departureRejectSourceMissing         = "battle_source_missing_without_teardown_proof"
+	departureRejectSourceTupleMismatch   = "battle_source_tuple_mismatch"
+	departureRejectPlayerNotInRoster     = "player_not_in_authoritative_roster"
+	departureRejectCASExhausted          = "departure_cas_retry_exhausted"
+	// ReconcilePlayerDepartures(DS 心跳上报 census 时对账)。
+	departureRejectHeartbeatSourceIncomplete   = "heartbeat_source_incomplete"
+	departureRejectCensusZeroPlayer            = "census_contains_zero_player"
+	departureRejectCensusDuplicatePlayer       = "census_contains_duplicate_player"
+	departureRejectAckIDEmpty                  = "acknowledged_departure_id_empty"
+	departureRejectAckIDDuplicate              = "acknowledged_departure_id_duplicate"
+	departureRejectCensusCapabilityTooOld      = "census_capability_or_id_missing"
+	departureRejectCensusPayloadWithoutPresent = "census_payload_without_present"
+	departureRejectAckBeforeIssue              = "ack_before_order_issued"
+	departureRejectAckWhileActive              = "ack_while_player_still_active"
+	departureRejectAckUnknownID                = "ack_unknown_departure_id"
+	departureRejectReconcileCASExhausted       = "departure_reconcile_cas_retry_exhausted"
+	// RecordInstanceTeardown(整实例回收证明)。
+	departureRejectTeardownIncomplete   = "teardown_source_incomplete"
+	departureRejectTeardownCASExhausted = "teardown_proof_cas_retry_exhausted"
+)
+
+// departureRejected 统一带齐 R3 要求的实例 join key，避免每个 early return 手抄四个字段。
+func departureRejected(
+	ctx context.Context, msg string, matchID uint64,
+	source BattleDepartureSource, reason string, kv ...any,
+) {
+	fields := []any{
+		"msg", msg, "reason", reason, "match_id", matchID,
+		"ds_pod", source.DSPodName, "ds_uid", source.GameServerUID,
+		"ds_instance_epoch", source.InstanceEpoch, "allocation_id", source.AllocationID,
+	}
+	plog.With(ctx).Warnw(append(fields, kv...)...)
+}
 
 func battleDepartureJournalKey(matchID uint64) string {
 	return fmt.Sprintf("pandora:ds:departures:{%d}", matchID)

@@ -14,6 +14,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -60,6 +61,7 @@ func (s *HubService) SetLocalAdmission(b bool) { s.localAdmission = b }
 
 // AssignHub 为玩家分配大厅 DS 分片(login 登录成功后调)。
 func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest) (*hubv1.AssignHubResponse, error) {
+	startedAt := time.Now()
 	if req.GetPlayerId() == 0 {
 		plog.With(ctx).Warnw("msg", "hub_assign_rejected",
 			"player_id", req.GetPlayerId(), "region", req.GetRegion(),
@@ -84,9 +86,17 @@ func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest)
 		plog.With(ctx).Warnw("msg", "hub_assign_failed",
 			"player_id", req.GetPlayerId(), "region", req.GetRegion(), "role_id", req.GetRoleId(),
 			"has_session_jti", req.GetSessionJti() != "",
-			"reason", bizRejectReason(err), "code", int32(code), "err", err)
+			"reason", bizRejectReason(err), "code", int32(code),
+			"elapsed_ms", time.Since(startedAt).Milliseconds(), "err", err)
 		return &hubv1.AssignHubResponse{Code: code}, nil
 	}
+	// R1 阶段推进:AssignHub 返回 = 玩家拿到了进 Hub 的权威路由 + 票据。biz 侧
+	// hub_assigned 只覆盖"新占座"分支,幂等重签(已有归属)分支不打——这里补一条
+	// 覆盖全部成功出口,并带上跨阶段耗时(§11.3 验收判据 5「慢在哪」)。
+	plog.With(ctx).Infow("msg", "hub_assign_ok",
+		"player_id", req.GetPlayerId(), "region", req.GetRegion(), "role_id", req.GetRoleId(),
+		"ds_pod", res.HubPodName, "shard_id", res.ShardID, "has_ticket", res.HubTicket != "",
+		"elapsed_ms", time.Since(startedAt).Milliseconds())
 	return &hubv1.AssignHubResponse{
 		Code:       commonv1.ErrCode_OK,
 		HubDsAddr:  res.HubDSAddr,
@@ -118,6 +128,11 @@ func (s *HubService) ReleaseHub(ctx context.Context, req *hubv1.ReleaseHubReques
 func (s *HubService) EnsureHubDepartureForBattle(ctx context.Context,
 	req *hubv1.EnsureHubDepartureForBattleRequest,
 ) (*hubv1.EnsureHubDepartureForBattleResponse, error) {
+	// 恒拒的死接口:ErrServiceDisabled 不是 IsServerFault,access log 落 DEBUG。
+	// 若还有旧调用方在打它(混版部署 / 未升级的 battle 侧),线上必须看得见。
+	plog.With(ctx).Warnw("msg", "hub_departure_for_battle_rejected",
+		"player_id", req.GetPlayerId(),
+		"reason", reasonServiceDisabled, "code", int32(errcode.ErrServiceDisabled))
 	return &hubv1.EnsureHubDepartureForBattleResponse{
 		Code: commonv1.ErrCode(errcode.ErrServiceDisabled),
 	}, nil
@@ -150,8 +165,15 @@ func (s *HubService) TransferHub(ctx context.Context, req *hubv1.TransferHubRequ
 func (s *HubService) ListHubs(ctx context.Context, req *hubv1.ListHubsRequest) (*hubv1.ListHubsResponse, error) {
 	hubs, err := s.uc.ListHubs(ctx, req.GetRegion())
 	if err != nil {
-		return &hubv1.ListHubsResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		// R4:成功侧不打(GM/运维轮询),失败侧必须打——它与 AssignHub 共用 ListShards,
+		// 这里失败往往就是 "没有可用 hub" 的同源证据。
+		plog.With(ctx).Warnw("msg", "hub_list_failed",
+			"region", req.GetRegion(),
+			"reason", bizRejectReason(err), "code", int32(code), "err", err)
+		return &hubv1.ListHubsResponse{Code: code}, nil
 	}
+	plog.With(ctx).Debugw("msg", "hub_list_ok", "region", req.GetRegion(), "hubs", len(hubs))
 	return &hubv1.ListHubsResponse{Code: commonv1.ErrCode_OK, Hubs: hubs}, nil
 }
 
@@ -209,7 +231,30 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 		res, err = s.uc.Heartbeat(ctx, req.GetHubPodName(), req.GetPlayerCount(), req.GetState(), req.GetTsMs(), tokenGen)
 	}
 	if err != nil {
-		return &hubv1.HeartbeatResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		// R4:心跳成功侧一条不打;失败侧必须打。biz 内部只对部分分支(拓扑未确认)
+		// 有日志,ActivateHeartbeat 的 stale/相位锁定 fail-closed 返回 ErrUnauthorized ——
+		// 它不是 IsServerFault,access log 只记 rpc_ok(DEBUG),线上完全不可见,
+		// 而它正是"这台 DS 永远翻不到 ready → ErrHubNoAvailable"的根因。
+		plog.With(ctx).Warnw("msg", "hub_heartbeat_failed",
+			"ds_pod", req.GetHubPodName(), "state", req.GetState(),
+			"player_count", req.GetPlayerCount(), "model_b", cred != nil,
+			"reason", bizRejectReason(err), "code", int32(code), "err", err)
+		return &hubv1.HeartbeatResponse{Code: code}, nil
+	}
+	// R4:心跳是 5s/台 的高频路径,成功侧一律 Debug。但下发控制指令(drain/stop)
+	// 与驱逐单是不可逆的阶段推进(R1),只在非空时升 Info——它们只在排空/整合/
+	// 顶号清退时出现,频率与分片数同阶,不会冲走 WARN。
+	if res.Command != "" || len(res.EvictionOrders) > 0 {
+		plog.With(ctx).Infow("msg", "hub_heartbeat_command_issued",
+			"ds_pod", req.GetHubPodName(), "command", res.Command,
+			"grace_seconds", res.GraceSeconds, "eviction_orders", len(res.EvictionOrders),
+			"instance_uid", res.AcceptedInstanceUID, "writer_epoch", res.AcceptedWriterEpoch)
+	} else {
+		plog.With(ctx).Debugw("msg", "hub_heartbeat_ok",
+			"ds_pod", req.GetHubPodName(), "state", req.GetState(),
+			"player_count", req.GetPlayerCount(),
+			"accepted_gen", res.AcceptedTokenGen, "instance_uid", res.AcceptedInstanceUID)
 	}
 	// 在线保活:把心跳捎带的在场 player_ids 转发 locator 续 HUB 位置 TTL
 	// (biz 内 goroutine 异步 + 独立超时,locator 抖动不拖慢心跳响应)。
@@ -240,6 +285,7 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 // AcknowledgeAdmission 只接受 :8444 DS callback credential；请求里的 player/assignment
 // 仍须由 Redis reservation + 当前 active instance identity 二次核验。
 func (s *HubService) AcknowledgeAdmission(ctx context.Context, req *hubv1.AcknowledgeAdmissionRequest) (*hubv1.AcknowledgeAdmissionResponse, error) {
+	startedAt := time.Now()
 	// local-off-v1:没有 Redis 授权面可消费 reservation,也没有 DS 回调令牌可验
 	// (ds_auth.mode=off → CheckHubCredential 恒返回 cred=nil)。走下面的 Model B 分支
 	// 只会得到 INVALID_ARG/UNAUTHORIZED,而 DS 侧 ShouldRetry 把这两个码当"明确拒绝"
@@ -247,72 +293,190 @@ func (s *HubService) AcknowledgeAdmission(ctx context.Context, req *hubv1.Acknow
 	// 改走 legacy 准入:仍复核归属三元组,并推进与 Model B 同一个 owner Admit 完成点。
 	if !s.modelBAuthority && s.localAdmission {
 		if req.GetPlayerId() == 0 || req.GetAssignmentId() == "" || req.GetHubPodName() == "" {
+			plog.With(ctx).Warnw("msg", "hub_admission_rejected",
+				"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+				"ds_pod", req.GetHubPodName(), "channel", channelLocal,
+				"reason", localAdmissionArgReason(req.GetPlayerId(), req.GetAssignmentId(), req.GetHubPodName()),
+				"code", int32(commonv1.ErrCode_ERR_INVALID_ARG))
 			return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 		}
 		result, err := s.uc.AcknowledgeLocalAdmission(ctx, req.GetPlayerId(),
 			req.GetAssignmentId(), req.GetHubPodName())
 		if err != nil {
-			return &hubv1.AcknowledgeAdmissionResponse{Code: toProtoCode(err)}, nil
+			code := toProtoCode(err)
+			plog.With(ctx).Warnw("msg", "hub_admission_failed",
+				"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+				"ds_pod", req.GetHubPodName(), "channel", channelLocal,
+				"reason", bizRejectReason(err), "code", int32(code),
+				"elapsed_ms", time.Since(startedAt).Milliseconds(), "err", err)
+			return &hubv1.AcknowledgeAdmissionResponse{Code: code}, nil
 		}
+		logAdmissionOutcome(ctx, req.GetPlayerId(), req.GetAssignmentId(), req.GetHubPodName(),
+			"", 0, channelLocal, result.Admitted, startedAt)
 		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_OK, Admitted: result.Admitted}, nil
 	}
 	if !s.modelBAuthority || req.GetPlayerId() == 0 || req.GetAssignmentId() == "" ||
 		req.GetHubPodName() == "" || req.GetAdmissionId() == "" || req.GetAdmissionSeq() == 0 {
+		// 一个 INVALID_ARG 收敛 6 个条件 → 拆回唯一枚举 reason(R2)。DS 侧只认 code==0
+		// 才出队,非 0 按 1s 周期无限重试(2026-08-06 事故),必须能一眼分出是哪个字段。
+		plog.With(ctx).Warnw("msg", "hub_admission_rejected",
+			"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+			"ds_pod", req.GetHubPodName(), "admission_id", req.GetAdmissionId(),
+			"admission_seq", req.GetAdmissionSeq(), "channel", channelModelB,
+			"reason", modelBAdmissionArgReason(s.modelBAuthority, req.GetPlayerId(),
+				req.GetAssignmentId(), req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq()),
+			"code", int32(commonv1.ErrCode_ERR_INVALID_ARG))
 		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
 	_, cred, err := s.dsGuard.CheckHubCredential(ctx, pmw.DSScope{
 		Type: auth.DSTypeHub, Pod: req.GetHubPodName(), RequireToken: true,
 	})
 	if err != nil {
-		return &hubv1.AcknowledgeAdmissionResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		plog.With(ctx).Warnw("msg", "hub_admission_rejected",
+			"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+			"ds_pod", req.GetHubPodName(), "admission_id", req.GetAdmissionId(),
+			"admission_seq", req.GetAdmissionSeq(), "channel", channelModelB,
+			"reason", reasonCredentialCheckFailed, "code", int32(code), "err", err)
+		return &hubv1.AcknowledgeAdmissionResponse{Code: code}, nil
 	}
 	if cred == nil {
+		plog.With(ctx).Warnw("msg", "hub_admission_rejected",
+			"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+			"ds_pod", req.GetHubPodName(), "admission_id", req.GetAdmissionId(),
+			"admission_seq", req.GetAdmissionSeq(), "channel", channelModelB,
+			"reason", reasonNoModelBCredential,
+			"code", int32(commonv1.ErrCode_ERR_UNAUTHORIZED))
 		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	result, err := s.uc.AcknowledgeAdmission(ctx, req.GetPlayerId(), req.GetAssignmentId(),
 		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(), req.GetSessionJti(),
 		hubCredentialFromGuard(cred))
 	if err != nil {
-		return &hubv1.AcknowledgeAdmissionResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		plog.With(ctx).Warnw("msg", "hub_admission_failed",
+			"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+			"ds_pod", req.GetHubPodName(), "admission_id", req.GetAdmissionId(),
+			"admission_seq", req.GetAdmissionSeq(), "channel", channelModelB,
+			"instance_uid", cred.InstanceUID, "writer_epoch", cred.WriterEpoch,
+			"has_session_jti", req.GetSessionJti() != "",
+			"reason", bizRejectReason(err), "code", int32(code),
+			"elapsed_ms", time.Since(startedAt).Milliseconds(), "err", err)
+		return &hubv1.AcknowledgeAdmissionResponse{Code: code}, nil
 	}
+	logAdmissionOutcome(ctx, req.GetPlayerId(), req.GetAssignmentId(), req.GetHubPodName(),
+		req.GetAdmissionId(), req.GetAdmissionSeq(), channelModelB, result.Admitted, startedAt)
 	return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_OK, Admitted: result.Admitted}, nil
+}
+
+// logAdmissionOutcome 把准入结果分成两条稳定事件:admitted=true 是不可逆阶段推进(R1,Info);
+// admitted=false 是“OK 包里的拒绝”——ledger 未能把 reservation 转成 connected owner,
+// 它不带错误码、access log 完全看不见,但 DS 侧会据此拒开 spawn gate(R2,Warn)。
+func logAdmissionOutcome(ctx context.Context, playerID uint64, assignmentID, pod,
+	admissionID string, admissionSeq uint64, channel string, admitted bool, startedAt time.Time,
+) {
+	if !admitted {
+		plog.With(ctx).Warnw("msg", "hub_admission_rejected",
+			"player_id", playerID, "hub_assignment_id", assignmentID, "ds_pod", pod,
+			"admission_id", admissionID, "admission_seq", admissionSeq, "channel", channel,
+			"reason", reasonLedgerNotAdmitted,
+			"elapsed_ms", time.Since(startedAt).Milliseconds())
+		return
+	}
+	plog.With(ctx).Infow("msg", "hub_admitted",
+		"player_id", playerID, "hub_assignment_id", assignmentID, "ds_pod", pod,
+		"admission_id", admissionID, "admission_seq", admissionSeq, "channel", channel,
+		"elapsed_ms", time.Since(startedAt).Milliseconds())
 }
 
 // AcknowledgeDeparture exact 删除当前 admission owner；Conflict 返回 OK+departed=false，
 // 让旧连接停止重试且不影响已接管的新连接。
 func (s *HubService) AcknowledgeDeparture(ctx context.Context, req *hubv1.AcknowledgeDepartureRequest) (*hubv1.AcknowledgeDepartureResponse, error) {
+	startedAt := time.Now()
 	// local-off-v1:与上面 AcknowledgeAdmission 同源的 legacy 离场通道。走下面 Model B 分支
 	// 只会恒返回 INVALID_ARG(与请求内容无关),而 DS 侧 Departure 队列只认 code=0 才出队,
 	// 结果是每秒一次的永久重试刷屏 + 队列项永不释放(2026-08-06 实测)。
 	if !s.modelBAuthority && s.localAdmission {
 		if req.GetPlayerId() == 0 || req.GetAssignmentId() == "" || req.GetHubPodName() == "" {
+			plog.With(ctx).Warnw("msg", "hub_departure_rejected",
+				"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+				"ds_pod", req.GetHubPodName(), "channel", channelLocal,
+				"reason", localAdmissionArgReason(req.GetPlayerId(), req.GetAssignmentId(), req.GetHubPodName()),
+				"code", int32(commonv1.ErrCode_ERR_INVALID_ARG))
 			return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 		}
 		result, err := s.uc.AcknowledgeLocalDeparture(ctx, req.GetPlayerId(),
 			req.GetAssignmentId(), req.GetHubPodName())
 		if err != nil {
-			return &hubv1.AcknowledgeDepartureResponse{Code: toProtoCode(err)}, nil
+			code := toProtoCode(err)
+			plog.With(ctx).Warnw("msg", "hub_departure_failed",
+				"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+				"ds_pod", req.GetHubPodName(), "channel", channelLocal,
+				"reason", bizRejectReason(err), "code", int32(code),
+				"elapsed_ms", time.Since(startedAt).Milliseconds(), "err", err)
+			return &hubv1.AcknowledgeDepartureResponse{Code: code}, nil
 		}
+		plog.With(ctx).Infow("msg", "hub_departed",
+			"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+			"ds_pod", req.GetHubPodName(), "channel", channelLocal,
+			"departed", result.Departed, "conflict", false,
+			"elapsed_ms", time.Since(startedAt).Milliseconds())
 		return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_OK, Departed: result.Departed}, nil
 	}
 	if !s.modelBAuthority || req.GetPlayerId() == 0 || req.GetAssignmentId() == "" ||
 		req.GetHubPodName() == "" || req.GetAdmissionId() == "" || req.GetAdmissionSeq() == 0 {
+		plog.With(ctx).Warnw("msg", "hub_departure_rejected",
+			"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+			"ds_pod", req.GetHubPodName(), "admission_id", req.GetAdmissionId(),
+			"admission_seq", req.GetAdmissionSeq(), "channel", channelModelB,
+			"reason", modelBAdmissionArgReason(s.modelBAuthority, req.GetPlayerId(),
+				req.GetAssignmentId(), req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq()),
+			"code", int32(commonv1.ErrCode_ERR_INVALID_ARG))
 		return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
 	_, cred, err := s.dsGuard.CheckHubCredential(ctx, pmw.DSScope{
 		Type: auth.DSTypeHub, Pod: req.GetHubPodName(), RequireToken: true,
 	})
 	if err != nil {
-		return &hubv1.AcknowledgeDepartureResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		plog.With(ctx).Warnw("msg", "hub_departure_rejected",
+			"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+			"ds_pod", req.GetHubPodName(), "admission_id", req.GetAdmissionId(),
+			"admission_seq", req.GetAdmissionSeq(), "channel", channelModelB,
+			"reason", reasonCredentialCheckFailed, "code", int32(code), "err", err)
+		return &hubv1.AcknowledgeDepartureResponse{Code: code}, nil
 	}
 	if cred == nil {
+		plog.With(ctx).Warnw("msg", "hub_departure_rejected",
+			"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+			"ds_pod", req.GetHubPodName(), "admission_id", req.GetAdmissionId(),
+			"admission_seq", req.GetAdmissionSeq(), "channel", channelModelB,
+			"reason", reasonNoModelBCredential,
+			"code", int32(commonv1.ErrCode_ERR_UNAUTHORIZED))
 		return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	result, err := s.uc.AcknowledgeDeparture(ctx, req.GetPlayerId(), req.GetAssignmentId(),
 		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(), hubCredentialFromGuard(cred))
 	if err != nil {
-		return &hubv1.AcknowledgeDepartureResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		plog.With(ctx).Warnw("msg", "hub_departure_failed",
+			"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+			"ds_pod", req.GetHubPodName(), "admission_id", req.GetAdmissionId(),
+			"admission_seq", req.GetAdmissionSeq(), "channel", channelModelB,
+			"instance_uid", cred.InstanceUID, "writer_epoch", cred.WriterEpoch,
+			"reason", bizRejectReason(err), "code", int32(code),
+			"elapsed_ms", time.Since(startedAt).Milliseconds(), "err", err)
+		return &hubv1.AcknowledgeDepartureResponse{Code: code}, nil
 	}
+	// R1 阶段推进与 hub_admitted 成对。conflict=true 是旧连接晚到的 Logout(已被新
+	// admission 接管),对旧连接是“停止重试”、对新连接零影响,带 reason 字段区分。
+	plog.With(ctx).Infow("msg", "hub_departed",
+		"player_id", req.GetPlayerId(), "hub_assignment_id", req.GetAssignmentId(),
+		"ds_pod", req.GetHubPodName(), "admission_id", req.GetAdmissionId(),
+		"admission_seq", req.GetAdmissionSeq(), "channel", channelModelB,
+		"instance_uid", cred.InstanceUID,
+		"departed", result.Departed, "conflict", result.Conflict,
+		"elapsed_ms", time.Since(startedAt).Milliseconds())
 	return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_OK, Departed: result.Departed}, nil
 }
 
@@ -320,11 +484,20 @@ func (s *HubService) AcknowledgeDeparture(ctx context.Context, req *hubv1.Acknow
 func (s *HubService) ListHubLines(ctx context.Context, req *hubv1.ListHubLinesRequest) (*hubv1.ListHubLinesResponse, error) {
 	playerID := pmw.PlayerIDFromContext(ctx)
 	if playerID == 0 {
+		plog.With(ctx).Warnw("msg", "hub_list_lines_rejected",
+			"region", req.GetRegion(),
+			"reason", reasonNoSessionPlayerID, "code", int32(commonv1.ErrCode_ERR_UNAUTHORIZED))
 		return &hubv1.ListHubLinesResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	views, err := s.uc.ListHubLinesForPlayer(ctx, playerID, req.GetRegion())
 	if err != nil {
-		return &hubv1.ListHubLinesResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		// 切线 UI 的数据源。它与 AssignHub 共用 routableShardViews:这里报错 = 玩家看到
+		// 空线路列表,与 ErrHubNoAvailable 同根。错误码多为 ErrInvalidState(非 ServerFault)。
+		plog.With(ctx).Warnw("msg", "hub_list_lines_failed",
+			"player_id", playerID, "region", req.GetRegion(),
+			"reason", bizRejectReason(err), "code", int32(code), "err", err)
+		return &hubv1.ListHubLinesResponse{Code: code}, nil
 	}
 	lines := make([]*hubv1.HubLine, 0, len(views))
 	for _, v := range views {
@@ -337,19 +510,36 @@ func (s *HubService) ListHubLines(ctx context.Context, req *hubv1.ListHubLinesRe
 			IsCurrent:   v.IsCurrent,
 		})
 	}
+	plog.With(ctx).Debugw("msg", "hub_list_lines_ok",
+		"player_id", playerID, "region", req.GetRegion(), "lines", len(lines))
 	return &hubv1.ListHubLinesResponse{Code: commonv1.ErrCode_OK, Lines: lines}, nil
 }
 
 // TransferToLine 玩家主动切换到指定线路(换实例,player_id 取自 JWT sub)。
 func (s *HubService) TransferToLine(ctx context.Context, req *hubv1.TransferToLineRequest) (*hubv1.TransferToLineResponse, error) {
+	startedAt := time.Now()
 	playerID := pmw.PlayerIDFromContext(ctx)
 	if playerID == 0 {
+		plog.With(ctx).Warnw("msg", "hub_line_transfer_rejected",
+			"target_shard_id", req.GetTargetShardId(),
+			"reason", reasonNoSessionPlayerID, "code", int32(commonv1.ErrCode_ERR_UNAUTHORIZED))
 		return &hubv1.TransferToLineResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	res, err := s.uc.TransferToLineForPlayer(ctx, playerID, req.GetTargetShardId())
 	if err != nil {
-		return &hubv1.TransferToLineResponse{Code: toProtoCode(err)}, nil
+		code := toProtoCode(err)
+		// 全部拒绝码(ErrHubLineFull / ErrHubTransferCooldown / ErrHubTransferNotInHub /
+		// ErrInvalidState)都不是 IsServerFault → access log 只记 DEBUG,必须在这里打。
+		plog.With(ctx).Warnw("msg", "hub_line_transfer_failed",
+			"player_id", playerID, "target_shard_id", req.GetTargetShardId(),
+			"reason", bizRejectReason(err), "code", int32(code),
+			"elapsed_ms", time.Since(startedAt).Milliseconds(), "err", err)
+		return &hubv1.TransferToLineResponse{Code: code}, nil
 	}
+	plog.With(ctx).Infow("msg", "hub_line_transferred",
+		"player_id", playerID, "target_shard_id", req.GetTargetShardId(),
+		"new_shard_id", res.NewShardID, "line_no", res.LineNo,
+		"elapsed_ms", time.Since(startedAt).Milliseconds())
 	return &hubv1.TransferToLineResponse{
 		Code:         commonv1.ErrCode_OK,
 		NewHubDsAddr: res.NewHubDSAddr,
@@ -378,6 +568,18 @@ const (
 	reasonNoSessionPlayerID           = "no_session_player_id"
 	reasonBizRejected                 = "biz_rejected"
 	reasonUnknown                     = "unknown"
+	// reasonLedgerNotAdmitted:ledger 未能把 reservation 转成 connected owner。
+	// 它返回 code=OK + admitted=false,access log 记 rpc_ok(DEBUG),不打就彻底看不见。
+	reasonLedgerNotAdmitted = "ledger_not_admitted"
+	// reasonServiceDisabled:placement 路由体系已硬切删除,旧调用方残留。
+	reasonServiceDisabled = "service_disabled"
+)
+
+// 准入 / 离场的两条通道标签(channel 字段):同一个 msg 下区分 Model B 与 local 旧面,
+// 排障时不用反推部署形态。
+const (
+	channelModelB = "model_b"
+	channelLocal  = "local"
 )
 
 // modelBAdmissionArgReason 把 AcknowledgeAdmission / AcknowledgeDeparture 里那个

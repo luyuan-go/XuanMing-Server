@@ -150,7 +150,11 @@ func progressKindName(kind data.ProgressGrantKind) string {
 // isolatedProgressAction 强制 consume/discard 独占 ReportProgress 批。这样 action 的
 // 业务失败不会让同一批已接受的 pickup claim 被 UE 整批释放，也不存在一个 action 被
 // 拆成多个下游事务后部分成功的问题。
-func isolatedProgressAction(events []*battlev1.BattleProgressEvent) (*progressActionRequest, error) {
+//
+// 返回值 (action, reason, err):reason 只供调用方打日志(§11.3 R2 —— 两个拒绝条件
+// 「批型不合法」与「count 越硬上限」历史上都零日志,DS 侧只看到整批 InvalidArg);
+// err 与拆分前逐字节一致,控制流不变。err 非 nil 时调用方必定立即返回,不读 action。
+func isolatedProgressAction(events []*battlev1.BattleProgressEvent) (*progressActionRequest, string, error) {
 	var action *progressActionRequest
 	for _, e := range events {
 		var candidate *progressActionRequest
@@ -168,17 +172,17 @@ func isolatedProgressAction(events []*battlev1.BattleProgressEvent) (*progressAc
 		}
 		if candidate != nil {
 			if action != nil || len(events) != 1 {
-				return nil, errcode.New(errcode.ErrInvalidArg,
+				return candidate, "action_not_isolated", errcode.New(errcode.ErrInvalidArg,
 					"consume/discard must be exactly one fact in an isolated ReportProgress batch")
 			}
 			action = candidate
 		}
 	}
 	if action != nil && (action.Count == 0 || action.Count > maxBattleItemActionCountHard) {
-		return nil, errcode.New(errcode.ErrInvalidArg,
+		return action, "action_count_out_of_hard_range", errcode.New(errcode.ErrInvalidArg,
 			"battle item action count %d out of hard range (max %d)", action.Count, maxBattleItemActionCountHard)
 	}
-	return action, nil
+	return action, "", nil
 }
 
 // applyExpShare 按千分比权重切一份经验,向下取整(拆成商余两段算,等价 total*share/1000
@@ -217,8 +221,21 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			rosterSet[pid] = struct{}{}
 		}
 	}
-	action, err := isolatedProgressAction(events)
+	action, actionReason, err := isolatedProgressAction(events)
 	if err != nil {
+		// 整批明确拒绝(DS 据契约丢批)。历史上这两个条件零日志:UE 侧只看到 InvalidArg,
+		// 后端查不到「是批型不合法还是 count 越硬上限」。
+		kv := []any{"msg", "progress_batch_rejected",
+			"match_id", matchID, "reason", actionReason, "events", len(events)}
+		if action != nil {
+			kv = append(kv, "seq", action.Seq, "player_id", action.PlayerID,
+				"kind", progressKindName(action.Kind),
+				"item_config_id", action.ItemConfigID, "count", action.Count,
+				"hard_max", maxBattleItemActionCountHard)
+		}
+		kv = append(kv, "code", int32(errcode.As(err)), "err", err,
+			"hint", "consume/discard 必须独占整批且 count 在硬上限内,否则整批拒收")
+		plog.With(ctx).Warnw(kv...)
 		return 0, err
 	}
 	if action != nil {
@@ -245,6 +262,12 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 
 	wm, err := u.repo.GetProgressWatermark(ctx, matchID)
 	if err != nil {
+		// 读不到水位 = 本批既不能接受也不能拒绝(DS 会原批重试)。不留证时,
+		// 「DS 一直重试上报进度」在本服只表现为零日志。
+		plog.With(ctx).Warnw("msg", "progress_watermark_read_failed",
+			"match_id", matchID, "events", len(events),
+			"code", int32(errcode.As(err)), "err", err,
+			"hint", "水位读失败,本批未入账;DS 原批重试")
 		return 0, err
 	}
 	// 已接受 action 的终态回放优先于 settled/stopped 门。否则 inventory 已完成但
@@ -688,6 +711,15 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			plog.With(ctx).Errorw("msg", "progress_cap_rejected",
 				"match_id", matchID, "batch_exp", batchExp, "batch_items", batchItems,
 				"players", len(playerDeltas), "err", err)
+		} else {
+			// 水位 CAS 竞争 / 事务瞬时失败(ErrUnavailable 等)。DS 会原批重试,
+			// 反复失败时本服历史上一条日志都没有 —— 「进度一直不入账」查不到原因。
+			plog.With(ctx).Warnw("msg", "progress_apply_failed",
+				"match_id", matchID, "expected_seq", lastSeq, "new_seq", newSeq,
+				"events", len(events), "grant_rows", len(rows), "mission_rows", len(missionRows),
+				"batch_exp", batchExp, "batch_items", batchItems, "players", len(playerDeltas),
+				"code", int32(errcode.As(err)), "err", err,
+				"hint", "水位 CAS 失败 / 已结算 / DB 瞬时错误,本批整体回滚;DS 原批重试")
 		}
 		return 0, err
 	}
@@ -728,6 +760,11 @@ func (u *BattleResultUsecase) completeProgressAction(ctx context.Context, matchI
 	for {
 		action, found, err := u.repo.GetProgressAction(ctx, matchID, req.Seq, req.PlayerID, req.Kind)
 		if err != nil {
+			// 读不到 durable outcome:UE 拿不到确定结果,会同 seq 同 payload 重试。
+			plog.With(ctx).Warnw("msg", "progress_action_lookup_failed",
+				"match_id", matchID, "seq", req.Seq, "player_id", req.PlayerID,
+				"kind", progressKindName(req.Kind), "path", "outcome_read",
+				"code", int32(errcode.As(err)), "err", err)
 			return 0, err
 		}
 		if !found {
@@ -780,6 +817,10 @@ func (u *BattleResultUsecase) completeProgressAction(ctx context.Context, matchI
 
 		row, ok, err := u.repo.FetchProgressOutboxForPlayer(ctx, matchID, req.PlayerID, req.Seq)
 		if err != nil {
+			plog.With(ctx).Warnw("msg", "progress_action_lookup_failed",
+				"match_id", matchID, "seq", req.Seq, "player_id", req.PlayerID,
+				"kind", progressKindName(req.Kind), "path", "outbox_read",
+				"code", int32(errcode.As(err)), "err", err)
 			return 0, err
 		}
 		if !ok {
@@ -788,6 +829,10 @@ func (u *BattleResultUsecase) completeProgressAction(ctx context.Context, matchI
 			// invariant violation remains retryable and is never ACKed.
 			action, found, err = u.repo.GetProgressAction(ctx, matchID, req.Seq, req.PlayerID, req.Kind)
 			if err != nil {
+				plog.With(ctx).Warnw("msg", "progress_action_lookup_failed",
+					"match_id", matchID, "seq", req.Seq, "player_id", req.PlayerID,
+					"kind", progressKindName(req.Kind), "path", "outcome_reread",
+					"code", int32(errcode.As(err)), "err", err)
 				return 0, err
 			}
 			if found && action.Status != data.ProgressActionPending {
@@ -850,11 +895,13 @@ func (u *BattleResultUsecase) publishProgressBatch(ctx context.Context) (int, er
 	processed := 0
 	for _, r := range recs {
 		rowCtx := withOutboxTrace(ctx)
+		rowStartedAt := time.Now()
 		if _, err := u.processProgressRecord(rowCtx, r); err != nil {
 			plog.With(rowCtx).Warnw("msg", "progress_outbox_delivery_failed",
 				"id", r.ID, "match_id", r.MatchID, "seq", r.Seq, "player_id", r.PlayerID,
 				"kind", progressKindName(r.Kind), "exp_delta", r.ExpDelta,
 				"items", len(r.ItemConfigIDs), "item_count", r.ItemCount,
+				"elapsed_ms", time.Since(rowStartedAt).Milliseconds(),
 				"code", int32(errcode.As(err)), "err", err,
 				"hint", "出箱行退避后下轮重试(at-least-once);持续失败查 player / inventory 侧同 trace_id")
 			u.deferProgressRow(rowCtx, r.ID)

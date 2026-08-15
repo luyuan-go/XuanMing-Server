@@ -20,6 +20,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 )
 
 // LocationRecord 是写入 / 读出 redis 的中间结构(避免 data 层依赖 proto)。
@@ -315,6 +316,14 @@ func (r *RedisLocationRepo) SetGuarded(
 		}
 		return errcode.New(errcode.ErrInternal, "redis location set: %v", txErr)
 	}
+	// WATCH/MULTI/EXEC 连续 maxRetry+1 次都被并发写打断。返回的是 ErrLocatorConflict
+	// (in-band 业务码 → access log 只记 DEBUG),不显式打就完全不可见;而现象是
+	// 「玩家位置怎么写都写不进去」,与守卫拒绝、redis 故障三者线上无法区分。
+	plog.With(ctx).Warnw("msg", "locator_set_cas_exhausted",
+		"reason", "optimistic_retry_exhausted",
+		"player_id", playerID, "presence_state", rec.State,
+		"hub_pod", rec.HubPod, "battle_pod", rec.BattlePod,
+		"attempts", maxRetry+1, "ttl_ms", ttl.Milliseconds())
 	return errcode.New(errcode.ErrLocatorConflict, "player %d location set concurrent retry exhausted", playerID)
 }
 

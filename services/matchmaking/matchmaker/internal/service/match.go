@@ -54,17 +54,26 @@ func NewMatchService(uc *biz.MatchUsecase, sf snowflakeGen, resumeAuth internalR
 func (s *MatchService) StartMatch(ctx context.Context, req *matchv1.StartMatchRequest) (*matchv1.StartMatchResponse, error) {
 	captainID := callerID(ctx)
 	if captainID == 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "StartMatch",
+			"reason", "missing_caller_identity", "team_id", req.GetTeamId(), "map_id", req.GetMapId())
 		return &matchv1.StartMatchResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	// team_id==0 是合法的**单人入口**(单排撮合 / 单人进副本),名单即 JWT 身份本人。
 	// 不再要求「先建一个 1 人队」——那是用组队机制模拟单人,多一次 RPC 与一个失败点。
 	// 成员解析与人数校验统一在 biz.resolveMembers,这里不重复判定。
 
+	// join key(infra.md §11.3 R3):team_id 写进 ctx,本请求后续所有日志自动带上,
+	// 不必每条手写(plog.With 只自动注入 JWT 面的 player_id)。
+	if teamID := req.GetTeamId(); teamID != 0 {
+		ctx = plog.WithTeamID(ctx, teamID)
+	}
+
 	// entry_mode 是玩家的**选择**(§17.2),不是权威数据:能不能这么进由 biz 按关卡表
 	// fail-closed 判定。这里只透传,不在 service 层预判——第二份判定就是漂移的来源。
 	ticketID := s.sf.Generate()
 	id, err := s.uc.StartMatch(ctx, ticketID, req.GetTeamId(), captainID, req.GetMapId(), req.GetEntryMode())
 	if err != nil {
+		// 具体被哪道门拒(gate/reason)由 biz 打 match_start_rejected,这里不重复。
 		return &matchv1.StartMatchResponse{Code: toProtoCode(err)}, nil
 	}
 	return &matchv1.StartMatchResponse{Code: commonv1.ErrCode_OK, MatchId: id}, nil
@@ -81,8 +90,12 @@ func (s *MatchService) CancelMatch(ctx context.Context, req *matchv1.CancelMatch
 		playerID = req.GetPlayerId()
 	}
 	if playerID == 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "CancelMatch",
+			"reason", "missing_caller_identity")
 		return &matchv1.CancelMatchResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
+	// 内部路径(team 联动撤票)callerID==0,plog 不会自动注入 player_id,手写进 ctx。
+	ctx = plog.WithPlayerID(ctx, playerID)
 	if err := s.uc.CancelMatch(ctx, playerID); err != nil {
 		return &matchv1.CancelMatchResponse{Code: toProtoCode(err)}, nil
 	}
@@ -93,11 +106,16 @@ func (s *MatchService) CancelMatch(ctx context.Context, req *matchv1.CancelMatch
 func (s *MatchService) ConfirmMatch(ctx context.Context, req *matchv1.ConfirmMatchRequest) (*matchv1.ConfirmMatchResponse, error) {
 	playerID := callerID(ctx)
 	if playerID == 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "ConfirmMatch",
+			"reason", "missing_caller_identity", "match_id", req.GetMatchId())
 		return &matchv1.ConfirmMatchResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	if req.GetMatchId() == 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "ConfirmMatch",
+			"reason", "missing_match_id", "accept", req.GetAccept())
 		return &matchv1.ConfirmMatchResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	ctx = plog.WithMatchID(ctx, req.GetMatchId())
 	if err := s.uc.ConfirmMatch(ctx, playerID, req.GetMatchId(), req.GetAccept()); err != nil {
 		return &matchv1.ConfirmMatchResponse{Code: toProtoCode(err)}, nil
 	}
@@ -111,7 +129,12 @@ func (s *MatchService) ConfirmMatch(ctx context.Context, req *matchv1.ConfirmMat
 func (s *MatchService) GetMatchProgress(ctx context.Context, req *matchv1.GetMatchProgressRequest) (*matchv1.GetMatchProgressResponse, error) {
 	caller := callerID(ctx)
 	if caller == 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "GetMatchProgress",
+			"reason", "missing_caller_identity", "match_id", req.GetMatchId())
 		return &matchv1.GetMatchProgressResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+	if req.GetMatchId() != 0 {
+		ctx = plog.WithMatchID(ctx, req.GetMatchId())
 	}
 	prog, err := s.uc.GetMatchProgress(ctx, caller, req.GetMatchId())
 	if err != nil {
@@ -127,13 +150,22 @@ func (s *MatchService) GetMatchProgress(ctx context.Context, req *matchv1.GetMat
 //     可用任意 match_id 摧毁他人在局撮合状态(删票据/claim/match,griefing + 绕过不变量 §1)。
 //   - 按 match_id(+ 兜底 player_ids)操作;幂等,重复调用 / 已释放均返回 OK。
 func (s *MatchService) ReleaseMatch(ctx context.Context, req *matchv1.ReleaseMatchRequest) (*matchv1.ReleaseMatchResponse, error) {
-	if callerID(ctx) != 0 {
+	if caller := callerID(ctx); caller != 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "ReleaseMatch",
+			"reason", "player_jwt_not_allowed", "match_id", req.GetMatchId(), "player_id", caller)
 		return &matchv1.ReleaseMatchResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
 	}
 	if req.GetMatchId() == 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "ReleaseMatch",
+			"reason", "missing_match_id", "players", len(req.GetPlayerIds()))
 		return &matchv1.ReleaseMatchResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	// 内部面(battle_result 调用,不带玩家 JWT):match_id 手写进 ctx,
+	// 释放链后续日志自动带 join key。
+	ctx = plog.WithMatchID(ctx, req.GetMatchId())
 	if err := s.uc.ReleaseMatch(ctx, req.GetMatchId(), req.GetPlayerIds()); err != nil {
+		plog.With(ctx).Warnw("msg", "match_release_rejected", "reason", "usecase_failed",
+			"code", int(errcode.As(err)), "players", len(req.GetPlayerIds()), "err", err)
 		return &matchv1.ReleaseMatchResponse{Code: toProtoCode(err)}, nil
 	}
 	return &matchv1.ReleaseMatchResponse{Code: commonv1.ErrCode_OK}, nil
@@ -147,32 +179,52 @@ func (s *MatchService) ReleaseMatch(ctx context.Context, req *matchv1.ReleaseMat
 // Login consumes them for cold reconnect instead of rebuilding a weaker ticket
 // from the short-TTL roster projection.
 func (s *MatchService) ResolvePlayerMatchContext(ctx context.Context, req *matchv1.ResolvePlayerMatchContextRequest) (*matchv1.ResolvePlayerMatchContextResponse, error) {
-	if callerID(ctx) != 0 {
+	if caller := callerID(ctx); caller != 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "ResolvePlayerMatchContext",
+			"reason", "player_jwt_not_allowed", "player_id", caller)
 		return &matchv1.ResolvePlayerMatchContextResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
 	}
 	if req.GetPlayerId() == 0 {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "ResolvePlayerMatchContext",
+			"reason", "missing_player_id")
 		return &matchv1.ResolvePlayerMatchContextResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	// 内部面无 JWT,player_id 必须手写进 ctx(§11.3 R3)。
+	ctx = plog.WithPlayerID(ctx, req.GetPlayerId())
 	if s.resumeAuth == nil {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "ResolvePlayerMatchContext",
+			"reason", "resume_auth_unconfigured")
 		return &matchv1.ResolvePlayerMatchContextResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
 	}
 	if err := s.resumeAuth.Verify(ctx, matchv1.MatchService_ResolvePlayerMatchContext_FullMethodName, req.GetPlayerId()); err != nil {
 		code := commonv1.ErrCode_ERR_PERMISSION_DENY
+		reason := "resume_auth_signature_rejected"
 		if errors.Is(err, internalrpcauth.ErrUnavailable) {
 			code = commonv1.ErrCode_ERR_UNAVAILABLE
+			reason = "resume_auth_replay_store_unavailable"
 		}
 		plog.With(ctx).Warnw("msg", "resolve_match_context_service_auth_rejected",
+			"reason", reason,
 			"player_id", req.GetPlayerId(), "replay_authority_unavailable", code == commonv1.ErrCode_ERR_UNAVAILABLE)
 		return &matchv1.ResolvePlayerMatchContextResponse{Code: code}, nil
 	}
 	if s.resumeResolver == nil {
+		plog.With(ctx).Warnw("msg", "match_rpc_rejected", "rpc", "ResolvePlayerMatchContext",
+			"reason", "resume_resolver_unconfigured")
 		return &matchv1.ResolvePlayerMatchContextResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
 	}
 	resolved, err := s.resumeResolver.ResolvePlayerMatchContext(ctx, req.GetPlayerId())
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "resolve_match_context_failed", "reason", "resolve_unavailable",
+			"code", int(errcode.As(err)), "player_id", req.GetPlayerId(), "err", err)
 		return &matchv1.ResolvePlayerMatchContextResponse{Code: toProtoCode(err)}, nil
 	}
 	resolved.Code = commonv1.ErrCode_OK
+	plog.With(ctx).Infow("msg", "resolve_match_context_ok",
+		"player_id", req.GetPlayerId(), "state", resolved.GetState().String(),
+		"stage", resolved.GetStage().String(), "ticket_id", resolved.GetTicketId(),
+		"match_id", resolved.GetMatchId(), "map_id", resolved.GetMapId(),
+		"game_mode", resolved.GetGameMode(), "has_battle_ticket", resolved.GetBattleTicket() != "")
 	return resolved, nil
 }
 

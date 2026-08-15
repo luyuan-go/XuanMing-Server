@@ -785,3 +785,74 @@ UE 侧生成器产出 `<2 字符前缀> + 32 位十六进制` = 34 字符,天然
     故成功侧 `Verbose`、慢调用(≥`SlowCallLogThresholdMs`=1000ms)升 `Log`、失败 `Warning`。
 - **票据验签拒绝**必须带 `player_id` + 枚举 reason,不能只回一句自由文本 `OutError`:
   DS 拒票时后端侧完全无感,DS 日志是唯一证据。
+
+### 11.4 排障速查手册(2026-08-15 落地)
+
+§11.3 是"怎么写";本节是"出事了怎么查"。前提:Grafana → Explore → Loki 数据源
+(部署形态与端口见 §11.2)。
+
+#### 第一步永远是同一条:按人拉全链
+
+```logql
+{service=~".+"} | json | player_id="1001"
+```
+
+跨进程串联换 `trace_id`(UE 客户端注入 `ue` 前缀、UE DS 注入 `ds` 前缀,见 §11.3):
+
+```logql
+{service=~".+"} | json | trace_id="ue3f2a91c4e8b7d605a1b2c3d4e5f6071"
+```
+
+`player_id` 查不到人时优先怀疑**该服务面没手写 player_id**(login 未鉴权面、DS 回调面
+`plog.With(ctx)` 不会自动注入,见 §11.3 R3),而不是"没走到这个服务"。
+
+#### 按链路的关键事件名
+
+排障时先只看这几个 `msg`,能立刻定位"走到哪一步断的";确认阶段后再放开该服务全量日志。
+
+| 链路 | 推进事件(INFO) | 断点事件(WARN/ERROR) |
+|---|---|---|
+| 登录 | `login_ok`、`select_role_ok`、`logout_ok` | `login_account_not_found`、`login_password_mismatch`、`login_account_lookup_failed`、`select_role_rejected`、`select_role_persist_failed` |
+| 路由判定 | `hub_route_allowed_terminal_battle`、`login_battle_reconnect`、`resume_context_returned` | `hub_route_rejected`、`hub_route_rejected_active_battle`、`hub_route_gate_locator_degraded`、`first_entry_role_required` |
+| 匹配 | `match_start_accepted`、`match_canceled` | `match_start_rejected`、`match_start_claim_conflict`、`match_start_member_in_battle`、`match_start_presence_gate_fail_closed`、`match_cancel_failed` |
+| 组队 | `team_my_team_resolved`、`team_match_roster_locked` | `team_match_start_rejected`、`team_application_slot_rejected`、`team_invite_slot_rejected`、`team_update_store_failed` |
+| 进 Hub | `hub_assign_ok`、`hub_assigned`、`hub_admitted`、`ds_ticket_issued`、`ds_ticket_v2_issued` | `hub_assign_failed`、`hub_no_routable_shard`、`hub_select_rejected`、`hub_admission_rejected`、`hub_admission_barrier_not_open`、`ds_ticket_admission_rejected`、`ds_ticket_replayed` |
+| 进 Battle | `gameserver_allocated`、`battle_target_resolved`、`battle_allocate_ok` | `gameserver_allocate_rejected`、`battle_target_refused`、`battle_endpoint_rejected` |
+| 结算 | `battle_result_recorded` | `battle_result_rejected`、`progress_batch_rejected`、`progress_apply_failed`、`battle_abandoned_rejected` |
+| 退出 / 离场 | `hub_departed`、`hub_released`、`battle_release_refused`、`logout_owner_released` | `hub_departure_failed`、`hub_departure_rejected`、`terminal_release_mark_failed`、`logout_owner_release_failed_weak` |
+| 重连 / 归属 | `owner_transition_begun`、`owner_admitted`、`owner_released`、`location_state_changed` | `owner_epoch_conflict`、`owner_admit_barrier_wait`、`owner_lease_lapsed`、`owner_admit_identity_mismatch`、`locator_set_rejected` |
+
+#### 常用查法
+
+```logql
+# 某玩家进不去场景:一次看完所有拒绝原因
+{service=~".+"} | json | player_id="1001" | reason!=""
+
+# 按拒绝原因聚合,找面上问题(而不是单个玩家问题)
+sum by (reason) (count_over_time({service="hub_allocator"} | json | reason!="" [10m]))
+
+# 一场对局的完整结算链
+{service=~".+"} | json | match_id="123456789"
+
+# 归属被抢/脑裂嫌疑:CAS 冲突都带期望值 vs 实际值
+{service="owner"} | json | msg="owner_epoch_conflict"
+
+# 容量问题:hub 挑不出机器时,日志带当时各候选的占用/上限
+{service="hub_allocator"} | json | msg="hub_no_routable_shard"
+
+# 慢在哪
+{service=~".+"} | json | player_id="1001" | elapsed_ms > 1000
+```
+
+#### 查不到东西时的自检顺序
+
+1. **级别**:该行是不是 `Debugw`?线上默认 `info`。高频路径(心跳 / `ReportProgress` /
+   presence 续期 / GM 轮询)按 §11.3 R4 **本来就是 Debug**,要临时对单个 pod 开
+   `LOG_LEVEL=debug` 再查,不要因为查不到就把它改回 Info。
+2. **业务拒绝不进 access log**:`ErrInvalidArg` / `ErrUnauthorized` / `ErrInvalidState` /
+   `ErrHubNoAvailable` 和全部 fencing 码(>999)在 `rpc_failed` 里**看不到**(只有
+   `errcode.IsServerFault` 那四个才升 ERROR)。要找业务拒绝一律按 `reason` 查,别指望 access log。
+3. **join key 缺失**:`player_id` / `match_id` / `team_id` 没带上,多半是该处没走
+   `plog.WithPlayerID/WithMatchID/WithTeamID` 注入 ctx。补注入点,别在每行手写。
+4. **DS 侧**:DS 拒票 / 拒准入时后端可能完全无感,要去 UE DS 的日志里找(k8s 模式下
+   Alloy 已采 Agones DS Pod 的 UE log,同一个 Loki 里)。

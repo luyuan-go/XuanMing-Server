@@ -331,6 +331,32 @@ func (u *MatchUsecase) validateMapID(mapID uint32) error {
 	return nil
 }
 
+// mapRejectReason 把 validateMapID 的拒绝原因重新归一成固定枚举串(仅供日志,只读、无副作用)。
+// 单看 errcode 分不出「不是战斗关卡」与「玩法模式不属本实例」——两者同为 ErrMatchInvalidMap,
+// 而排障时这两件事的处置完全不同(改表 vs 改路由头 / 重新热更)。
+func (u *MatchUsecase) mapRejectReason(mapID uint32) string {
+	if u.tables == nil {
+		return "map_gate_unexpected"
+	}
+	tb := u.tables.Tables()
+	if tb == nil {
+		return "config_table_not_loaded"
+	}
+	effective := mapID
+	if effective == 0 {
+		effective = u.cfg.MapId
+	}
+	if !tb.Level.IsBattleLevel(effective) {
+		return "map_not_battle_level"
+	}
+	if row, ok := tb.Level.ByID(effective); ok {
+		if rowMode := row.GetGameMode(); rowMode != "" && rowMode != u.cfg.GameMode {
+			return "map_game_mode_mismatch"
+		}
+	}
+	return "map_gate_unexpected"
+}
+
 // teamSizeForMap 取某副本(map_id)的一方人数:关卡表 team_size>0 时按表(「策划填表即用」,
 // 每个副本各自 1v1 / 5v5),否则回退服务端全局 cfg.TeamSize。回退是契约明确的合法路径,不是错误:
 // 未启用配置表(u.tables==nil,dev / 历史口径)、或表内该行 team_size==0(proto 契约:0=沿用全局兜底),
@@ -649,13 +675,19 @@ func (u *MatchUsecase) ensureNoneInBattle(ctx context.Context, members []*matchv
 		inBattle, err := u.locator.IsInBattle(ctx, m.PlayerId)
 		if err != nil {
 			if u.cfg.BattleGateFailOpen {
-				plog.With(ctx).Warnw("msg", "locator_is_in_battle_failed_fail_open", "player_id", m.PlayerId, "err", err)
+				plog.With(ctx).Warnw("msg", "locator_is_in_battle_failed_fail_open",
+					"reason", "battle_gate_locator_unavailable", "fail_open", true,
+					"player_id", m.PlayerId, "err", err)
 				continue
 			}
-			plog.With(ctx).Errorw("msg", "locator_is_in_battle_failed_fail_closed", "player_id", m.PlayerId, "err", err)
+			plog.With(ctx).Errorw("msg", "locator_is_in_battle_failed_fail_closed",
+				"reason", "battle_gate_locator_unavailable", "fail_open", false,
+				"player_id", m.PlayerId, "err", err)
 			return errcode.New(errcode.ErrUnavailable, "locator unavailable, cannot verify battle state for player %d: %v", m.PlayerId, err)
 		}
 		if inBattle {
+			plog.With(ctx).Warnw("msg", "match_start_member_in_battle",
+				"reason", "member_in_battle", "player_id", m.PlayerId, "team_id", m.GetTeamId())
 			return errcode.New(errcode.ErrMatchInBattle, "player %d in battle", m.PlayerId)
 		}
 	}
@@ -732,6 +764,7 @@ func (u *MatchUsecase) ensureAllPresent(ctx context.Context, members []*matchv1.
 		return nil
 	}
 	plog.With(ctx).Warnw("msg", "match_start_member_offline",
+		"reason", "member_absent_beyond_grace",
 		"offline_players", offline, "members", len(ids),
 		"grace", grace.String(), "longest_absent_ms", longestMs)
 	// 服务端 error 文本带 player_id 列表，供拒绝日志定位是谁缺席。当前 StartMatchResponse
@@ -792,10 +825,12 @@ func (u *MatchUsecase) absentBeyond(ctx context.Context, ids []uint64, window ti
 // presenceGateUnavailable 收口在线闸的依赖故障分支(与 ensureNoneInBattle 同策略)。
 func (u *MatchUsecase) presenceGateUnavailable(ctx context.Context, op string, err error) error {
 	if u.cfg.BattleGateFailOpen {
-		plog.With(ctx).Warnw("msg", "match_start_presence_gate_fail_open", "op", op, "err", err)
+		plog.With(ctx).Warnw("msg", "match_start_presence_gate_fail_open",
+			"reason", "presence_gate_locator_unavailable", "fail_open", true, "op", op, "err", err)
 		return nil
 	}
-	plog.With(ctx).Errorw("msg", "match_start_presence_gate_fail_closed", "op", op, "err", err)
+	plog.With(ctx).Errorw("msg", "match_start_presence_gate_fail_closed",
+		"reason", "presence_gate_locator_unavailable", "fail_open", false, "op", op, "err", err)
 	return errcode.New(errcode.ErrUnavailable,
 		"locator unavailable, cannot verify hub presence (%s): %v", op, err)
 }
@@ -831,9 +866,17 @@ func (u *MatchUsecase) removeActive(ctx context.Context, matchID uint64) {
 // 前置(reader 非 nil 时):team 必须存在、state=READY、captainID 为队长、成员数 ≤ 一方人数。
 // entryChoice 是玩家选的进法(0=未选,老客户端);能不能这么进由 resolveEntryMode 按关卡表判定。
 func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32, entryChoice configpb.LevelEntryMode) (uint64, error) {
+	// join key(infra.md §11.3 R3):本请求后续日志自动带 team_id。
+	if teamID != 0 {
+		ctx = plog.WithTeamID(ctx, teamID)
+	}
 	// 关卡表准入门(不变量 §9.15 接线):客户端上送的 map_id 必须是关卡表里的战斗类关卡,
 	// 否则任意 map_id 会一路透传成 DS 的 PANDORA_MAP_ID(拉起加载不存在关卡的 DS)。
 	if err := u.validateMapID(mapID); err != nil {
+		plog.With(ctx).Warnw("msg", "match_start_rejected",
+			"gate", "validate_map", "reason", u.mapRejectReason(mapID),
+			"code", int(errcode.As(err)), "ticket_id", ticketID, "team_id", teamID,
+			"captain_id", captainID, "map_id", mapID, "game_mode", u.cfg.GameMode, "err", err)
 		return 0, err
 	}
 
@@ -843,10 +886,13 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 	// 也在同一 Redis,真故障会在 CreateStartOperation 如实失败,不需要在这里预判。
 	if u.cfg.MaxQueueTickets > 0 {
 		if qlen, qerr := u.repo.QueueLen(ctx); qerr != nil {
-			plog.With(ctx).Warnw("msg", "match_queue_len_check_failed", "err", qerr)
+			plog.With(ctx).Warnw("msg", "match_queue_len_check_failed",
+				"reason", "queue_len_probe_failed", "team_id", teamID, "captain_id", captainID, "err", qerr)
 		} else if qlen >= int64(u.cfg.MaxQueueTickets) {
 			plog.With(ctx).Warnw("msg", "match_queue_admission_rejected",
-				"queue_len", qlen, "max", u.cfg.MaxQueueTickets, "team_id", teamID)
+				"reason", "queue_full",
+				"queue_len", qlen, "max", u.cfg.MaxQueueTickets, "team_id", teamID,
+				"captain_id", captainID, "map_id", mapID, "game_mode", u.cfg.GameMode)
 			return 0, errcode.New(errcode.ErrRateLimited,
 				"match queue is full (%d), retry later", qlen)
 		}
@@ -874,21 +920,27 @@ func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID,
 	// 每道门的拒绝都必须留证。此前所有失败分支都是裸 `return 0, err`,一行日志都不打 ——
 	// 服务端因此完全看不见「谁在什么时候被哪道门拒了」,INC-20260813-001 排查时只能靠
 	// envoy 访问日志的响应体字节数反推(成功 49B / 只回 code 43B)。
-	reject := func(gate string, err error) (uint64, error) {
+	reject := func(gate, reason string, err error) (uint64, error) {
 		plog.With(ctx).Warnw("msg", "match_start_rejected",
-			"gate", gate, "code", int(errcode.As(err)), "team_id", teamID,
-			"captain_id", captainID, "map_id", mapID, "err", err)
+			"gate", gate, "reason", reason,
+			"code", int(errcode.As(err)), "ticket_id", ticketID, "team_id", teamID,
+			"captain_id", captainID, "map_id", mapID, "game_mode", u.cfg.GameMode,
+			"entry_choice", entryChoice.String(), "err", err)
 		return 0, err
 	}
 
 	entryMode, err := u.resolveEntryMode(mapID, entryChoice)
 	if err != nil {
-		return reject("entry_mode", err)
+		reason := "entry_mode_not_allowed"
+		if u.allowedEntryModes(mapID) == configpb.LevelEntryMode_LEVEL_ENTRY_MODE_BOTH {
+			reason = "entry_mode_choice_required"
+		}
+		return reject("entry_mode", reason, err)
 	}
 
 	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID, mapID)
 	if err != nil {
-		return reject("resolve_members", err)
+		return reject("resolve_members", "roster_unavailable", err)
 	}
 
 	// 直进人数下限(关卡表 min_team_size):人没凑够时玩家自己进,至少要够这么多人。
@@ -898,8 +950,9 @@ func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID,
 	// 撮合入口不判本闸:它的目标恒是凑满 team_size(≥ min,加载期已校验),天然满足。
 	if entryMode == configpb.LevelEntryMode_LEVEL_ENTRY_MODE_WALK_IN {
 		if min := u.minTeamSizeForMap(mapID); len(members) < min {
-			return reject("min_team_size", errcode.New(errcode.ErrMatchTeamTooSmall,
-				"map %d requires at least %d players to walk in, got %d", mapID, min, len(members)))
+			return reject("min_team_size", "walk_in_below_min_team_size",
+				errcode.New(errcode.ErrMatchTeamTooSmall,
+					"map %d requires at least %d players to walk in, got %d", mapID, min, len(members)))
 		}
 	}
 
@@ -907,14 +960,18 @@ func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID,
 	// reason=no_show 时对 roster 记罚(10min 窗内首次免罚,第 2 次起指数退避),这里只读执行。
 	// 只有 no_show 记罚——正常结算、断线重连、主动取消都不计,正常玩家无感。
 	if err := u.checkNoShowPenalty(ctx, members); err != nil {
-		return reject("no_show_penalty", err)
+		return reject("no_show_penalty", "no_show_backoff_active", err)
 	}
 
 	// P0 修复(2026-07-15,codex P0-8):战斗中玩家不得入队。claim(preflight/SETNX)只拦
 	// "已在撒配链路里"的玩家;若上一局已 ReleaseMatch 但玩家仍在 DS 内(或 GM 拉入),
 	// 唯一能拦住的是 locator BATTLE 状态门(不变量 §1 一人一 DS)。
 	if err := u.ensureNoneInBattle(ctx, members); err != nil {
-		return reject("in_battle", err)
+		reason := "member_in_battle"
+		if errcode.As(err) == errcode.ErrUnavailable {
+			reason = "battle_gate_locator_unavailable"
+		}
+		return reject("in_battle", reason, err)
 	}
 
 	// 在线闸(INC-20260813-001)。位置刻意夹在这里:
@@ -923,11 +980,19 @@ func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID,
 	//   - 放在 preflightStartClaims 之前 —— claim 是有副作用的写(SETNX 占坑),
 	//     能在无副作用的读闸上拒掉的,就不要先去占坑再回滚。
 	if err := u.ensureAllPresent(ctx, members); err != nil {
-		return reject("member_offline", err)
+		reason := "member_absent_beyond_grace"
+		if errcode.As(err) == errcode.ErrUnavailable {
+			reason = "presence_gate_locator_unavailable"
+		}
+		return reject("member_offline", reason, err)
 	}
 
 	if err := u.preflightStartClaims(ctx, members); err != nil {
-		return reject("start_claim", err)
+		reason := "claim_probe_failed"
+		if errcode.As(err) == errcode.ErrMatchAlreadyMatching {
+			reason = "player_already_matching"
+		}
+		return reject("start_claim", reason, err)
 	}
 
 	nowMs := time.Now().UnixMilli()
@@ -949,11 +1014,14 @@ func (u *MatchUsecase) startMatchAdmitted(ctx context.Context, ticketID, teamID,
 	// RPC 的唯一提交点是 durable operation。票据主体→成员 compare-claim→queue ZADD
 	// 由服务生命周期 worker 推进；玩家断线、RPC ctx 取消或进程重启都不会中断 saga。
 	if err := u.repo.CreateStartOperation(ctx, op, u.ticketTTL()); err != nil {
-		return reject("create_start_operation", err)
+		return reject("create_start_operation", "commit_failed", err)
 	}
 
-	plog.With(ctx).Debugw("msg", "match_start_accepted", "ticket_id", ticketID, "operation_id", op.OperationId, "team_id", teamID,
-		"captain_id", captainID, "members", len(members), "avg_mmr", avgMMR, "map_id", mapID)
+	// R1 阶段推进:StartMatch 的线性化点(durable operation 已落库 = 已受理)。
+	// 曾经是 Debug —— 线上默认 info 级下一条都不出,"玩家到底有没有入队成功"无从证明。
+	plog.With(ctx).Infow("msg", "match_start_accepted", "ticket_id", ticketID, "operation_id", op.OperationId, "team_id", teamID,
+		"captain_id", captainID, "members", len(members), "member_ids", memberPlayerIDs(members),
+		"avg_mmr", avgMMR, "map_id", mapID, "game_mode", u.cfg.GameMode, "entry_mode", entryMode.String())
 	return ticketID, nil
 }
 
@@ -970,12 +1038,14 @@ func (u *MatchUsecase) tryStartCooldown(ctx context.Context, captainID, teamID u
 	ok, err := u.entryLimiter.TryStartCooldown(ctx, captainID, teamID, window)
 	if err != nil {
 		plog.With(ctx).Warnw("msg", "start_cooldown_check_failed",
+			"reason", "cooldown_probe_failed", "fail_open", true,
 			"captain_id", captainID, "team_id", teamID, "err", err)
 		return true
 	}
 	if !ok {
 		// 拒绝走日志不走 metrics 定位到玩家(§4.4:player_id 绝不能做 label)。
 		plog.With(ctx).Warnw("msg", "start_cooldown_rejected",
+			"reason", "start_cooldown_window",
 			"captain_id", captainID, "team_id", teamID, "window", window.String())
 	}
 	return ok
@@ -1003,12 +1073,14 @@ func (u *MatchUsecase) checkNoShowPenalty(ctx context.Context, members []*matchv
 		remain, err := u.entryLimiter.NoShowPenaltyRemaining(ctx, m.GetPlayerId())
 		if err != nil {
 			plog.With(ctx).Warnw("msg", "noshow_penalty_check_failed",
+				"reason", "noshow_probe_failed", "fail_open", true,
 				"player_id", m.GetPlayerId(), "err", err)
 			return nil
 		}
 		if remain > 0 {
 			retrySec := int64((remain + time.Second - 1) / time.Second)
 			plog.With(ctx).Warnw("msg", "noshow_penalty_rejected",
+				"reason", "no_show_backoff_active",
 				"player_id", m.GetPlayerId(), "retry_after_sec", retrySec)
 			return errcode.New(errcode.ErrRateLimited,
 				"player %d no-show cooldown, retry after %ds", m.GetPlayerId(), retrySec)
@@ -1065,23 +1137,36 @@ func (u *MatchUsecase) preflightStartClaims(ctx context.Context, members []*matc
 	for _, member := range members {
 		startTicketID, startFound, err := u.repo.GetStartPlayerOperation(ctx, member.GetPlayerId())
 		if err != nil {
+			plog.With(ctx).Warnw("msg", "match_start_claim_probe_failed",
+				"reason", "read_start_player_index_failed", "player_id", member.GetPlayerId(), "err", err)
 			return err
 		}
 		if startFound {
 			op, found, gerr := u.repo.GetStartOperation(ctx, startTicketID)
 			if gerr != nil {
+				plog.With(ctx).Warnw("msg", "match_start_claim_probe_failed",
+					"reason", "read_start_operation_failed", "player_id", member.GetPlayerId(),
+					"ticket_id", startTicketID, "err", gerr)
 				return gerr
 			}
 			if found && !startOperationTerminal(op.GetPhase()) {
+				plog.With(ctx).Warnw("msg", "match_start_claim_conflict",
+					"reason", "start_operation_in_flight", "player_id", member.GetPlayerId(),
+					"ticket_id", startTicketID, "phase", op.GetPhase().String())
 				return errcode.New(errcode.ErrMatchAlreadyMatching,
 					"player %d already has start operation %d", member.GetPlayerId(), startTicketID)
 			}
 			if err := u.repo.DeleteStartPlayerIfMatches(ctx, member.GetPlayerId(), startTicketID); err != nil {
+				plog.With(ctx).Warnw("msg", "match_start_claim_probe_failed",
+					"reason", "clear_zombie_start_index_failed", "player_id", member.GetPlayerId(),
+					"ticket_id", startTicketID, "err", err)
 				return err
 			}
 		}
 		ticketID, found, err := u.repo.GetPlayerTicket(ctx, member.GetPlayerId())
 		if err != nil {
+			plog.With(ctx).Warnw("msg", "match_start_claim_probe_failed",
+				"reason", "read_player_claim_failed", "player_id", member.GetPlayerId(), "err", err)
 			return err
 		}
 		if !found {
@@ -1089,12 +1174,21 @@ func (u *MatchUsecase) preflightStartClaims(ctx context.Context, members []*matc
 		}
 		_, ticketFound, err := u.repo.GetTicket(ctx, ticketID)
 		if err != nil {
+			plog.With(ctx).Warnw("msg", "match_start_claim_probe_failed",
+				"reason", "read_claimed_ticket_failed", "player_id", member.GetPlayerId(),
+				"ticket_id", ticketID, "err", err)
 			return err
 		}
 		if ticketFound {
+			plog.With(ctx).Warnw("msg", "match_start_claim_conflict",
+				"reason", "player_already_matching", "player_id", member.GetPlayerId(),
+				"ticket_id", ticketID)
 			return errcode.New(errcode.ErrMatchAlreadyMatching, "player %d already matching", member.GetPlayerId())
 		}
 		if err := u.repo.DeletePlayerIndexIfMatches(ctx, member.GetPlayerId(), ticketID); err != nil {
+			plog.With(ctx).Warnw("msg", "match_start_claim_probe_failed",
+				"reason", "clear_zombie_claim_failed", "player_id", member.GetPlayerId(),
+				"ticket_id", ticketID, "err", err)
 			return err
 		}
 	}
@@ -1397,9 +1491,15 @@ func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uin
 	// 租约用 rosterLockLeaseMs:够覆盖本函数返回后到 ClaimPlayer 落地这一小段即可。
 	team, readyGen, err := u.reader.BeginTeamMatch(ctx, teamID, captainID, rosterLockOperationID(teamID, captainID), rosterLockLeaseMs)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "match_roster_freeze_failed",
+			"reason", "team_begin_match_rejected", "code", int(errcode.As(err)),
+			"team_id", teamID, "captain_id", captainID, "map_id", mapID, "err", err)
 		return nil, 0, err
 	}
 	if teamSize := u.teamSizeForMap(mapID); len(team.Members) == 0 || len(team.Members) > teamSize {
+		plog.With(ctx).Warnw("msg", "match_roster_size_rejected",
+			"reason", "team_size_out_of_range", "team_id", teamID, "captain_id", captainID,
+			"members", len(team.Members), "map_id", mapID, "team_size", teamSize)
 		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d invalid size %d (map %d team_size %d)",
 			teamID, len(team.Members), mapID, teamSize)
 	}

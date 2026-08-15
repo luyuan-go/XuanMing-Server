@@ -18,6 +18,7 @@ package biz
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sort"
 	"sync"
@@ -56,6 +57,47 @@ const (
 
 // 迁移原因常量(HubMigrateEvent.reason)。
 const migrateReasonConsolidation = "consolidation"
+
+// 日志 reason 枚举(infra.md §11.3 R2:snake_case 固定枚举串,不是自由文本)。
+//
+// 为什么必须由业务代码自己打:pkg/middleware/logging.go 只对 errcode.IsServerFault
+// (ErrUnknown/ErrInternal/ErrTimeout/ErrUnavailable)升 ERROR;**ErrHubNoAvailable**、
+// ErrInvalidArg、ErrInvalidState 与全部 fencing 码(>999)都落 rpc_ok = DEBUG,
+// 线上默认 info 级完全不可见 —— 而「没有可用 hub」正是本域最关键的排障信号。
+const (
+	// 选分片 / 容量(hub_no_routable_shard、hub_select_rejected)
+	reasonNoShardMirror                = "no_shard_mirror"                 // Redis 里一个分片镜像都没有(拓扑未播种 / Fleet 未起)
+	reasonNoShardInRegion              = "no_shard_in_region"              // 有分片,但没有一个在本 region
+	reasonNoShardInReleaseTrack        = "no_shard_in_release_track"       // 有本 region 分片,但没有一个在本轨(canary 无容量的典型形态)
+	reasonAllShardsTrackInvalid        = "all_shards_track_invalid"        // 持久化 release_track 非法,全部 fail-closed 排除
+	reasonAllShardsWarming             = "all_shards_warming"              // 分片在但从未收到过鉴权心跳(DS 起不来 / 令牌不对)
+	reasonAllShardsDraining            = "all_shards_draining"             // 全部 draining/stopping(排空中 / 心跳超时被扫)
+	reasonAllShardsFull                = "all_shards_full"                 // 真满了,需要扩容
+	reasonAllCandidatesReserveRejected = "all_candidates_reserve_rejected" // 静态可选但被 {pod} 原子授权+占座门全拒
+	reasonCandidatesVanished           = "candidates_vanished"             // 有候选却一个都没尝试成(理论上不该出现)
+	reasonNoShardCandidate             = "no_shard_candidate"              // 兜底:上述都不匹配
+	reasonInvalidReleaseTrack          = "invalid_release_track"
+	reasonListShardsFailed             = "list_shards_failed"
+	reasonTeamShardLookupFailed        = "team_shard_lookup_failed"
+	reasonReserveSeatError             = "reserve_seat_error"
+	// 分片明细采样里的逐分片判词(shard_census 字段)
+	reasonShardTrackInvalid   = "track_invalid"
+	reasonShardTrackMismatch  = "track_mismatch"
+	reasonShardRegionMismatch = "region_mismatch"
+	reasonShardExcludedPod    = "excluded_pod"
+	reasonShardNotReady       = "not_ready"
+	reasonShardFull           = "full"
+	// 分配 / 释放 / 准入
+	reasonAssignCASExhausted    = "assign_cas_exhausted"
+	reasonReleaseCASExhausted   = "release_cas_exhausted"
+	reasonOwnerBarrierNotOpen   = "owner_barrier_not_open"
+	reasonOwnerPointsElsewhere  = "owner_points_elsewhere"
+	reasonShardHeartbeatTimeout = "heartbeat_timeout"
+	reasonSeedTokenNotReady     = "seed_token_not_ready"
+	reasonWriterLeaseNotHeld    = "writer_lease_not_held"
+	reasonCanaryNoCapacity      = "canary_no_capacity"
+	reasonTransferCASExhausted  = "transfer_cas_exhausted"
+)
 
 // presenceRefreshTimeout 是心跳后异步续期在场玩家 HUB 位置的独立 ctx 预算(在线保活,弱依赖)。
 const presenceRefreshTimeout = 3 * time.Second
@@ -340,7 +382,11 @@ type AssignResult struct {
 // (VerifyDSTicket 在线核销时复核现行性,响应窗口交付的旧票在兑换点作废)。
 // 空 = 旧调用方/dev 直连,票据不带 sjti(兼容窗)。
 func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64, sessionJTI string) (*AssignResult, error) {
+	startedAt := time.Now()
 	if err := u.requireWriter(); err != nil {
+		plog.With(ctx).Warnw("msg", "hub_assign_rejected_biz",
+			"player_id", playerID, "region", region,
+			"reason", reasonWriterLeaseNotHeld, "err", err)
 		return nil, err
 	}
 	if playerID == 0 {
@@ -443,6 +489,13 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 		// 对照实现：Battle 侧同场景的回退本就是无条件的(ds_allocator
 		// internal/data/agones_allocator.go 的 tracks = [desired, stable])。
 		if err != nil && desiredTrack == releasetrack.Canary && errcode.As(err) == errcode.ErrHubNoAvailable {
+			// R1 路由判定结果:玩家本属 canary cohort 却被降级到 stable。这是金丝雀异常
+			// (canary CrashLoop / 永不心跳 / replicas 被调 0)的第一手信号,缺它就无法
+			// 证明“当时到底走的哪一轨”(§9.21 共存窗口排障必需)。
+			plog.With(ctx).Infow("msg", "hub_assign_track_fallback",
+				"player_id", playerID, "region", region, "hub_assignment_id", assignmentID,
+				"from_track", releasetrack.Canary, "to_track", releasetrack.Stable,
+				"reason", reasonCanaryNoCapacity)
 			if ensureErr := u.ensureShards(ctx, region, releasetrack.Stable); ensureErr != nil {
 				return nil, ensureErr
 			}
@@ -496,10 +549,21 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 			continue
 		}
 		plog.With(ctx).Infow("msg", "hub_assigned",
-			"player_id", playerID, "pod", target.HubPodName, "shard_id", target.ShardId,
-			"region", target.Region, "release_track", target.ReleaseTrack)
+			"player_id", playerID, "pod", target.HubPodName, "ds_pod", target.HubPodName,
+			"hub_assignment_id", assignmentID, "shard_id", target.ShardId,
+			"region", target.Region, "release_track", target.ReleaseTrack,
+			"team_id", teamID, "role_id", effectiveRole, "reassigned", found,
+			"attempt", attempt+1,
+			"shard_players", target.PlayerCount, "shard_capacity", target.Capacity,
+			"elapsed_ms", time.Since(startedAt).Milliseconds())
 		return signedResult, nil
 	}
+	// 重试耗尽(R2):与“真没容量”同为 ErrHubNoAvailable,但处置完全相反
+	// (并发写者互撞 vs 需要扩容),必须能从日志一眼分开。
+	plog.With(ctx).Warnw("msg", "hub_assign_cas_exhausted",
+		"player_id", playerID, "region", region, "team_id", teamID,
+		"attempts", 8, "reason", reasonAssignCASExhausted,
+		"elapsed_ms", time.Since(startedAt).Milliseconds())
 	return nil, errcode.New(errcode.ErrHubNoAvailable, "player %d assignment changed concurrently", playerID)
 }
 
@@ -507,7 +571,10 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 
 // ReleaseHub 玩家离开大厅,退分片占位 + 删归属。幂等:无归属视为已离开。
 func (u *HubUsecase) ReleaseHub(ctx context.Context, playerID uint64) error {
+	startedAt := time.Now()
 	if err := u.requireWriter(); err != nil {
+		plog.With(ctx).Warnw("msg", "hub_release_rejected_biz",
+			"player_id", playerID, "reason", reasonWriterLeaseNotHeld, "err", err)
 		return err
 	}
 	if playerID == 0 {
@@ -583,7 +650,10 @@ func (u *HubUsecase) ReleaseHub(ctx context.Context, playerID uint64) error {
 			if stillFound {
 				return errcode.New(errcode.ErrInvalidState, "Hub release cleanup did not delete assignment")
 			}
-			plog.With(ctx).Infow("msg", "hub_released", "player_id", playerID, "pod", assignment.HubPodName)
+			plog.With(ctx).Infow("msg", "hub_released", "player_id", playerID,
+				"pod", assignment.HubPodName, "ds_pod", assignment.HubPodName,
+				"hub_assignment_id", assignment.GetAssignmentId(), "channel", "model_b",
+				"attempt", attempt+1, "elapsed_ms", time.Since(startedAt).Milliseconds())
 			return nil
 		}
 		// Legacy/off path has no exact Model-B owner. Preserve the historical
@@ -598,9 +668,15 @@ func (u *HubUsecase) ReleaseHub(ctx context.Context, playerID uint64) error {
 		}
 		u.releaseAssignmentSeat(ctx, assignment)
 		u.removeShardMember(ctx, assignment.HubPodName, playerID)
-		plog.With(ctx).Infow("msg", "hub_released", "player_id", playerID, "pod", assignment.HubPodName)
+		plog.With(ctx).Infow("msg", "hub_released", "player_id", playerID,
+			"pod", assignment.HubPodName, "ds_pod", assignment.HubPodName,
+			"hub_assignment_id", assignment.GetAssignmentId(), "channel", "legacy",
+			"attempt", attempt+1, "elapsed_ms", time.Since(startedAt).Milliseconds())
 		return nil
 	}
+	plog.With(ctx).Warnw("msg", "hub_release_cas_exhausted",
+		"player_id", playerID, "attempts", 8, "reason", reasonReleaseCASExhausted,
+		"elapsed_ms", time.Since(startedAt).Milliseconds())
 	return errcode.New(errcode.ErrInternal, "player %d release CAS retry exhausted", playerID)
 }
 
@@ -730,9 +806,16 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 			continue
 		}
 		plog.With(ctx).Infow("msg", "hub_transferred",
-			"player_id", playerID, "from", assignment.HubPodName, "to", target.HubPodName)
+			"player_id", playerID, "from", assignment.HubPodName, "to", target.HubPodName,
+			"from_pod", assignment.HubPodName, "ds_pod", target.HubPodName,
+			"hub_assignment_id", newAssignmentID, "from_assignment_id", assignment.GetAssignmentId(),
+			"shard_id", target.ShardId, "release_track", target.ReleaseTrack,
+			"target_hub_id", targetHubID, "attempt", attempt+1)
 		return signedResult, nil
 	}
+	plog.With(ctx).Warnw("msg", "hub_transfer_cas_exhausted",
+		"player_id", playerID, "target_hub_id", targetHubID, "attempts", 8,
+		"reason", reasonTransferCASExhausted)
 	return nil, errcode.New(errcode.ErrHubTransferFailed, "player %d assignment changed concurrently", playerID)
 }
 
@@ -1566,8 +1649,13 @@ func (u *HubUsecase) admitOwnerForAdmission(ctx context.Context, playerID uint64
 		// 归属已经不指向本实例(Transfer / 顶号 / 灾备接管都会走到这里)。
 		// 不 Admit、不开门:玩家的 owner 在别处,这台 DS 无权创建可操作玩家态。
 		plog.With(ctx).Warnw("msg", "hub_admission_owner_points_elsewhere",
-			"player_id", playerID, "want_pod", target.PodName, "owner_pod", rec.PodName,
-			"owner_uid", rec.InstanceUID, "owner_epoch", rec.OwnerEpoch)
+			"player_id", playerID, "want_pod", target.PodName, "ds_pod", target.PodName,
+			"want_uid", target.InstanceUID, "want_epoch", target.InstanceEpoch,
+			"hub_assignment_id", target.AssignmentOrAllocationID,
+			"owner_pod", rec.PodName, "owner_type", rec.OwnerType,
+			"owner_uid", rec.InstanceUID, "owner_instance_epoch", rec.InstanceEpoch,
+			"owner_epoch", rec.OwnerEpoch, "operation_id", rec.OperationID,
+			"reason", reasonOwnerPointsElsewhere)
 		return errcode.New(errcode.ErrInvalidState,
 			"owner no longer points at this hub instance; admission refused player=%d", playerID)
 	}
@@ -1581,8 +1669,16 @@ func (u *HubUsecase) admitOwnerForAdmission(ctx context.Context, playerID uint64
 	if retryAfterMs > 0 {
 		// admit_not_before 屏障未开:旧 DS 最晚安全截止时间之前放行就是双 DS。
 		// 可重试错误 + 剩余毫秒,DS 退避后用同 identity 重放 ACK(§9.23 WAIT 语义)。
-		plog.With(ctx).Debugw("msg", "hub_admission_barrier_not_open",
-			"player_id", playerID, "retry_after_ms", retryAfterMs, "owner_epoch", rec.OwnerEpoch)
+		//
+		// 级别修正(2026-08-15,§11.3 R2):原为 Debugw → 线上 info 级下一条不出。
+		// 屏障未开是玩家“卡在进场最后一步”的头号成因(DS 会按秒重放 ACK),
+		// 且它返回的 ErrUnavailable 虽是 ServerFault、access log 会升 ERROR,
+		// 却丢掉了 retry_after_ms / owner_epoch 这两个唯一能判“还要等多久”的依据字段。
+		plog.With(ctx).Warnw("msg", "hub_admission_barrier_not_open",
+			"player_id", playerID, "ds_pod", target.PodName,
+			"hub_assignment_id", target.AssignmentOrAllocationID,
+			"retry_after_ms", retryAfterMs, "owner_epoch", rec.OwnerEpoch,
+			"operation_id", rec.OperationID, "reason", reasonOwnerBarrierNotOpen)
 		return errcode.NewCause(errcode.ErrUnavailable, aerr,
 			"owner admit barrier not open; retry after %dms", retryAfterMs)
 	}
@@ -1898,7 +1994,10 @@ func (u *HubUsecase) sweepOnce(ctx context.Context) error {
 		if rerr := u.repo.RemoveActive(ctx, pod); rerr != nil {
 			plog.With(ctx).Warnw("msg", "sweep_remove_active_failed", "pod", pod, "err", rerr)
 		}
-		plog.With(ctx).Warnw("msg", "hub_shard_heartbeat_timeout", "pod", pod)
+		plog.With(ctx).Warnw("msg", "hub_shard_heartbeat_timeout", "pod", pod, "ds_pod", pod,
+			"reason", reasonShardHeartbeatTimeout,
+			"threshold_ms", threshold, "timeout", u.cfg.HeartbeatTimeout.String(),
+			"stale_total", len(stale))
 	}
 	return nil
 }
@@ -2328,22 +2427,109 @@ func assignmentSameInstance(a *hubv1.HubAssignmentStorageRecord, current *data.R
 		current.WriterEpoch == auth.DSAuthWriterEpochV2
 }
 
+// shardCensusSampleLimit 是「为什么没 hub」诊断日志里逐分片明细的采样上限。
+// 分片数被 Fleet max_replicas 有界(几~几十),但日志行长度不该随之无界增长;
+// 超出部分只体现在计数器里(counts 恒完整,样本才截断)。
+const shardCensusSampleLimit = 12
+
+// shardExclusionCensus 记录「本次选分片时,每个分片各自因为什么被排除」。
+//
+// 存在理由(§11.3 验收判据 3「为什么」+ 本轮硬性要求):ErrHubNoAvailable 在
+// pkg/middleware/logging.go 里不是 IsServerFault,access log 只记 rpc_ok(DEBUG),
+// 线上默认 info 级下**一条都不出**;即使打了日志,只写一句「没有可用 hub」也无法
+// 区分「真的满了」「全在 warming 没心跳」「release track 筛错了」「region 写错了」
+// ——这四种的处置方案完全不同(等/查 DS 心跳/调 canary 权重/查 login 传参)。
+type shardExclusionCensus struct {
+	total          int
+	trackInvalid   int // 持久化 release_track 非法(stickyReleaseTrack 报错)
+	trackMismatch  int // release_track 不是本次要的轨(canary/stable 筛选)
+	regionMismatch int
+	excludedPod    int // 显式排除(Transfer 时排除当前分片)
+	notReady       int // state != ready(warming/draining/stopping)
+	full           int // player_count >= capacity
+	warming        int // notReady 里 state==warming 的细分(= 从未收到过鉴权心跳)
+	draining       int
+	stopping       int
+	candidates     int
+	// reserveRejected:通过静态筛选、但被 {pod} 原子授权+占座门拒的候选数
+	// (授权未激活 / 心跳陈旧 / 实例元组不符 / 并发占满)。
+	reserveRejected int
+	sample          []string
+}
+
+func (c *shardExclusionCensus) observe(s *hubv1.HubShardStorageRecord, verdict string) {
+	if len(c.sample) < shardCensusSampleLimit {
+		c.sample = append(c.sample, fmt.Sprintf("%s|%s|%s|shard=%d|%d/%d|%s",
+			s.GetHubPodName(), s.GetState(), s.GetReleaseTrack(), s.GetShardId(),
+			s.GetPlayerCount(), s.GetCapacity(), verdict))
+	}
+}
+
+// fields 展开成 plog kv(不用 fmt.Sprintf 拼 msg,只作字段值;§11 允许)。
+func (c *shardExclusionCensus) fields() []any {
+	return []any{
+		"shards_total", c.total, "candidates", c.candidates,
+		"excl_track_invalid", c.trackInvalid, "excl_track_mismatch", c.trackMismatch,
+		"excl_region_mismatch", c.regionMismatch, "excl_pod", c.excludedPod,
+		"excl_not_ready", c.notReady, "excl_warming", c.warming,
+		"excl_draining", c.draining, "excl_stopping", c.stopping,
+		"excl_full", c.full, "reserve_rejected", c.reserveRejected,
+		"shard_census", c.sample,
+	}
+}
+
 // selectAndReserveShard 按队友优先、负载升序尝试所有候选；每个候选都必须通过最终原子授权+占座门。
 func (u *HubUsecase) selectAndReserveShard(ctx context.Context, playerID uint64, assignmentID, region string, teamID uint64, excludePod, releaseTrack string) (*hubv1.HubShardStorageRecord, *data.ReserveResult, error) {
 	if !releasetrack.Valid(releaseTrack) {
+		plog.With(ctx).Warnw("msg", "hub_select_rejected",
+			"player_id", playerID, "hub_assignment_id", assignmentID, "region", region,
+			"release_track", releaseTrack, "reason", reasonInvalidReleaseTrack)
 		return nil, nil, errcode.New(errcode.ErrInvalidArg, "invalid hub release_track %q", releaseTrack)
 	}
 	shards, err := u.repo.ListShards(ctx)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "hub_select_rejected",
+			"player_id", playerID, "hub_assignment_id", assignmentID, "region", region,
+			"release_track", releaseTrack, "reason", reasonListShardsFailed, "err", err)
 		return nil, nil, err
 	}
+	census := shardExclusionCensus{total: len(shards)}
 	candidates := make([]*hubv1.HubShardStorageRecord, 0, len(shards))
 	for _, shard := range shards {
 		track, trackErr := stickyReleaseTrack(shard.GetReleaseTrack())
-		if trackErr == nil && track == releaseTrack && shard.Region == region && shard.HubPodName != excludePod && shard.State == stateReady && shard.PlayerCount < shard.Capacity {
+		switch {
+		case trackErr != nil:
+			census.trackInvalid++
+			census.observe(shard, reasonShardTrackInvalid)
+		case track != releaseTrack:
+			census.trackMismatch++
+			census.observe(shard, reasonShardTrackMismatch)
+		case shard.Region != region:
+			census.regionMismatch++
+			census.observe(shard, reasonShardRegionMismatch)
+		case shard.HubPodName == excludePod:
+			census.excludedPod++
+			census.observe(shard, reasonShardExcludedPod)
+		case shard.State != stateReady:
+			census.notReady++
+			switch shard.State {
+			case stateWarming:
+				census.warming++
+			case stateDraining:
+				census.draining++
+			case stateStopping:
+				census.stopping++
+			}
+			census.observe(shard, reasonShardNotReady)
+		case shard.PlayerCount >= shard.Capacity:
+			census.full++
+			census.observe(shard, reasonShardFull)
+		default:
 			candidates = append(candidates, shard)
+			census.observe(shard, "candidate")
 		}
 	}
+	census.candidates = len(candidates)
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].PlayerCount != candidates[j].PlayerCount {
 			return candidates[i].PlayerCount < candidates[j].PlayerCount
@@ -2352,6 +2538,10 @@ func (u *HubUsecase) selectAndReserveShard(ctx context.Context, playerID uint64,
 	})
 	if teamID != 0 {
 		if pod, found, gerr := u.repo.GetTeamShard(ctx, teamID); gerr != nil {
+			plog.With(ctx).Warnw("msg", "hub_select_rejected",
+				"player_id", playerID, "hub_assignment_id", assignmentID, "region", region,
+				"team_id", teamID, "release_track", releaseTrack,
+				"reason", reasonTeamShardLookupFailed, "err", gerr)
 			return nil, nil, gerr
 		} else if found {
 			for i, candidate := range candidates {
@@ -2366,13 +2556,53 @@ func (u *HubUsecase) selectAndReserveShard(ctx context.Context, playerID uint64,
 		seat, rerr := u.reserveRoutableSeat(ctx, candidate.HubPodName, playerID, assignmentID)
 		if rerr != nil {
 			if errcode.As(rerr) == errcode.ErrHubNoAvailable {
+				census.reserveRejected++
 				continue
 			}
+			plog.With(ctx).Warnw("msg", "hub_select_rejected",
+				"player_id", playerID, "hub_assignment_id", assignmentID, "region", region,
+				"ds_pod", candidate.GetHubPodName(), "release_track", releaseTrack,
+				"reason", reasonReserveSeatError, "err", rerr)
 			return nil, nil, rerr
 		}
 		return authoritativeShard(candidate, seat), seat, nil
 	}
+	// 这是本域最关键的一条排障日志:玩家侧只会看到一句「没有可用 hub」,
+	// 到底是真满了、全在 warming、还是筛选条件写错了,只能靠这里的分项计数区分。
+	plog.With(ctx).Warnw(append([]any{
+		"msg", "hub_no_routable_shard",
+		"player_id", playerID, "hub_assignment_id", assignmentID, "region", region,
+		"team_id", teamID, "release_track", releaseTrack, "exclude_pod", excludePod,
+		"reason", noRoutableShardReason(&census),
+	}, census.fields()...)...)
 	return nil, nil, errcode.New(errcode.ErrHubNoAvailable, "no authoritatively routable hub shard in region %s", region)
+}
+
+// noRoutableShardReason 把「一个 ErrHubNoAvailable 收敛 N 种成因」拆回唯一枚举 reason(R2)。
+// 判定顺序 = 排障时的处置优先级:先分清「压根没分片」→「分片都不在这个 region/轨」→
+// 「分片在但没通过心跳」→「真满了」→「静态可选但被原子门拒」。
+func noRoutableShardReason(c *shardExclusionCensus) string {
+	switch {
+	case c.total == 0:
+		return reasonNoShardMirror
+	case c.candidates > 0 && c.reserveRejected > 0:
+		return reasonAllCandidatesReserveRejected
+	case c.candidates > 0:
+		return reasonCandidatesVanished
+	case c.full > 0 && c.full >= c.notReady:
+		return reasonAllShardsFull
+	case c.warming > 0:
+		return reasonAllShardsWarming
+	case c.draining > 0 || c.stopping > 0:
+		return reasonAllShardsDraining
+	case c.regionMismatch > 0 && c.trackMismatch == 0:
+		return reasonNoShardInRegion
+	case c.trackMismatch > 0:
+		return reasonNoShardInReleaseTrack
+	case c.trackInvalid > 0:
+		return reasonAllShardsTrackInvalid
+	}
+	return reasonNoShardCandidate
 }
 
 func authoritativeShard(shard *hubv1.HubShardStorageRecord, seat *data.ReserveResult) *hubv1.HubShardStorageRecord {

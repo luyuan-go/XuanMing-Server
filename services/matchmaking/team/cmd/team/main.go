@@ -264,7 +264,7 @@ func main() {
 			os.Exit(1)
 		}
 		v, verr := internalrpcauth.NewVerifier(cfg.Team.MatchCallAuthSecret, "matchmaker",
-			cfg.Team.MatchCallAuthAudience, 0, replay)
+			cfg.Team.MatchCallAuthAudience, 30*time.Second, replay)
 		if verr != nil {
 			helper.Errorw("msg", "match_call_verifier_init_failed", "err", verr)
 			os.Exit(1)

@@ -375,6 +375,41 @@ const (
 	// 回收 / 释放。
 	reasonReleaseTupleIncomplete = "expected_tuple_incomplete"
 	reasonReleasePodUIDMissing   = "expected_pod_uid_missing"
+	// 重连重签的只读权威查询(ResolveBattleTarget)。
+	reasonResolveArgsInvalid          = "resolve_args_invalid"
+	reasonResolveAuthorityOff         = "read_only_authority_unavailable"
+	reasonResolveAuthorityRead        = "authority_read_failed"
+	reasonResolveNotAuthorized        = "target_not_authorized"
+	reasonResolveProjectionIncomplete = "target_projection_incomplete"
+	// ReleaseBattle / ReleaseBattleExpected / FinalizeBattleReleaseExpected。
+	reasonReleaseModelBUnsupported = "model_b_requires_expected_tuple"
+	reasonReleaseFenced            = "allocation_fence_requires_reconcile"
+	reasonReleaseAuthorityOff      = "redis_authority_required"
+	reasonReleaseProofIncomplete   = "terminal_proof_incomplete"
+	reasonReleaseIdentityChanged   = "stable_identity_changed"
+	reasonReleaseAuthorityReread   = "terminal_authority_reread_failed"
+	reasonReleaseSnapshotStale     = "terminal_snapshot_incomplete"
+	reasonFinalizeProofIncomplete  = "finalize_proof_incomplete"
+	reasonFinalizeTombstonePending = "terminal_tombstone_not_confirmed"
+	// AbortPreactiveBattle(matchmaker 分配 saga 补偿)。
+	reasonAbortRequestIncomplete    = "abort_request_incomplete"
+	reasonAbortAuthorityOff         = "abort_requires_redis_authority"
+	reasonAbortPreflightFailed      = "abort_preflight_failed"
+	reasonAbortFenceFailed          = "abort_fence_failed"
+	reasonAbortAckCleanupPending    = "abort_ack_cleanup_pending"
+	reasonAbortFenceIdentityMissing = "abort_fence_pod_authority_missing"
+	reasonAbortLifecyclePending     = "abort_lifecycle_publish_pending"
+	reasonAbortLifecycleMarker      = "abort_lifecycle_marker_pending"
+	reasonAbortCompletionPending    = "abort_completion_pending"
+	// Pod UID 持久化前置(所有精确回收的共同前提)。
+	reasonPodUIDAuthorityRead   = "pod_uid_preflight_authority_read_failed"
+	reasonPodUIDIdentityChanged = "pod_uid_preflight_identity_changed"
+	reasonPodUIDResolveFailed   = "pod_uid_resolve_failed"
+	reasonPodUIDBackfillFailed  = "pod_uid_backfill_failed"
+	reasonPodUIDVerifyFailed    = "pod_uid_backfill_verify_failed"
+	// 派生 active 索引重建。
+	reasonActiveIndexUnavailable = "active_index_reconciler_unavailable"
+	reasonActiveIndexRebuild     = "active_index_rebuild_failed"
 )
 
 // ── RPC 1:AllocateBattle ──────────────────────────────────────────────────────
@@ -412,27 +447,60 @@ func (u *AllocatorUsecase) ResolveBattleTarget(
 	matchID, playerID uint64,
 ) (*AllocateResult, error) {
 	if matchID == 0 || playerID == 0 {
+		plog.With(ctx).Warnw("msg", "battle_target_refused", "reason", reasonResolveArgsInvalid,
+			"match_id", matchID, "player_id", playerID)
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id and player_id required")
 	}
 	if u == nil || !u.modelB || u.authRepo == nil {
+		// 这条以前完全静默:重连拿不到目标 → 玩家被退化成回大厅,而后端连"是因为
+		// 本副本没开 Redis 权威"都看不出来(legacy 副本在滚动共存期就会走到这里)。
+		plog.With(ctx).Warnw("msg", "battle_target_refused", "reason", reasonResolveAuthorityOff,
+			"match_id", matchID, "player_id", playerID,
+			"hint", "本副本未启用 Redis 权威(legacy/滚动共存),只读重连查询不可用")
 		return nil, errcode.New(errcode.ErrUnavailable, "battle read-only authority unavailable")
 	}
 	snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "battle_target_refused", "reason", reasonResolveAuthorityRead,
+			"match_id", matchID, "player_id", playerID, "err", err,
+			"hint", "权威读失败按 UNKNOWN fail-closed(§9.22),客户端应退避重查而非默认回大厅")
 		return nil, err
 	}
 	ready, reason := snapshot.ReadyAuthorized(
 		time.Now().UnixMilli(), u.cfg.HeartbeatTimeout.Std().Milliseconds())
 	battle := snapshot.Battle
 	if !ready || battle == nil || !slices.Contains(battle.GetPlayerIds(), playerID) {
+		// ReadyAuthorized 内部把近十条判据收敛成一个字符串 reason,这里必须原样带出来
+		// (auth-missing / phase-not-active / heartbeat-stale / projection-mismatch …),
+		// 否则"玩家重连被拒"只剩一个 PermissionDeny,分不清是对局没就绪还是人不在名单里。
+		inRoster := battle != nil && slices.Contains(battle.GetPlayerIds(), playerID)
+		plog.With(ctx).Warnw("msg", "battle_target_refused", "reason", reasonResolveNotAuthorized,
+			"match_id", matchID, "player_id", playerID, "ready", ready,
+			"ready_reason", reason, "in_roster", inRoster, "state", battle.GetState(),
+			"pod", battle.GetDsPodName(), "allocation_id", battle.GetAllocationId(),
+			"hint", "ready_reason 是 ReadyAuthorized 的具体判据;in_roster=false 说明该玩家不属这局")
 		return nil, errcode.New(errcode.ErrPermissionDeny,
 			"battle target not authorized for reconnect (reason=%s)", reason)
 	}
 	if battle.GetDsAddr() == "" || battle.GetDsPodName() == "" || battle.GetGameserverUid() == "" ||
 		battle.GetInstanceEpoch() == 0 || battle.GetAllocationId() == "" ||
 		(battle.GetReleaseTrack() != auth.ReleaseTrackStable && battle.GetReleaseTrack() != auth.ReleaseTrackCanary) {
+		// 逐字段带出"哪一项缺了":重签 v2 战斗票要求 exact 实例绑定齐全,缺任一项
+		// matchmaker/login 都签不出票,玩家表现为"重连一直失败"。
+		plog.With(ctx).Errorw("msg", "battle_target_refused", "reason", reasonResolveProjectionIncomplete,
+			"match_id", matchID, "player_id", playerID, "ds_addr", battle.GetDsAddr(),
+			"pod", battle.GetDsPodName(), "uid", battle.GetGameserverUid(),
+			"epoch", battle.GetInstanceEpoch(), "allocation_id", battle.GetAllocationId(),
+			"release_track", battle.GetReleaseTrack(),
+			"hint", "投影已 ready 却缺 exact 实例绑定字段,重签票据不可能成功;查 finalize/凭据投递链")
 		return nil, errcode.New(errcode.ErrUnavailable, "battle target projection incomplete")
 	}
+	// R1:重连重签是一次**路由判定结果**(玩家将被指回这台 exact 实例)。低频、每次重连
+	// 至多一条,是"玩家为什么被送回某台 DS"的唯一后端证据。
+	plog.With(ctx).Infow("msg", "battle_target_resolved", "match_id", matchID, "player_id", playerID,
+		"pod", battle.GetDsPodName(), "ds_addr", battle.GetDsAddr(), "uid", battle.GetGameserverUid(),
+		"epoch", battle.GetInstanceEpoch(), "allocation_id", battle.GetAllocationId(),
+		"release_track", battle.GetReleaseTrack(), "state", battle.GetState())
 	return allocateResultFromBattle(battle), nil
 }
 
@@ -1756,12 +1824,17 @@ func (u *AllocatorUsecase) reconcileAllocationUncertain(
 // ReleaseBattle 回收战斗 DS。幂等:镜像不存在视为已释放,返回成功。
 func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, reason string) error {
 	if matchID == 0 {
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonAllocMatchIDRequired,
+			"release_reason", reason, "authority", "legacy")
 		return errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
 	if u.modelB {
 		// Model-B 禁止 match_id-only 回读“当前实例”后删除：旧请求可能误杀同 match
 		// 重建出的新 UID。正常结算必须走 ReleaseBattleExpected 的 MySQL outbox 证明；
 		// abandoned 由内部 sweep 已持有同事务 expected tuple，不经过本 RPC。
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonReleaseModelBUnsupported,
+			"match_id", matchID, "release_reason", reason,
+			"hint", "有调用方还在用 match_id-only 回收;Model B 必须走 ReleaseBattleExpected 的 expected tuple")
 		return errcode.New(errcode.ErrInvalidArg,
 			"battle %d Model-B release requires terminal outbox expected tuple", matchID)
 	}
@@ -1778,6 +1851,10 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 		battle.State == statePreactiveReleasing || battle.State == stateAllocationAbort {
 		// 即使当前副本仍以 legacy 配置运行，也不能清理由另一个 Model-B writer
 		// 写下的永久 POST fence。混跑期间最多返回不可用，绝不 Release/Delete。
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonReleaseFenced,
+			"match_id", matchID, "release_reason", reason, "state", battle.State,
+			"pod", battle.GetDsPodName(), "allocation_id", battle.GetAllocationId(),
+			"hint", "该 match 被另一个 Model-B writer 永久 fence 住,legacy 副本只读跳过,等 sweep 对账")
 		return errcode.New(errcode.ErrUnavailable,
 			"battle %d allocation/release result requires explicit reconciliation", matchID)
 	}
@@ -1820,9 +1897,17 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 // an ACK-loss retry even after bounded battle/auth records expire.
 func (u *AllocatorUsecase) AbortPreactiveBattle(ctx context.Context, request battleabort.Request) error {
 	if !request.Complete() {
+		plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortRequestIncomplete,
+			"match_id", request.MatchID, "operation_id", request.OperationID,
+			"pod", request.Target.PodName, "uid", request.Target.InstanceUID,
+			"epoch", request.Target.InstanceEpoch, "allocation_id", request.Target.AllocationID,
+			"release_track", request.Target.ReleaseTrack)
 		return errcode.New(errcode.ErrInvalidArg, "complete battle allocation abort request required")
 	}
 	if !u.modelB || u.abortRepo == nil || u.authoritativeAlloc == nil {
+		plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortAuthorityOff,
+			"match_id", request.MatchID, "operation_id", request.OperationID,
+			"hint", "本副本未启用 Redis 权威;matchmaker 的分配 saga 补偿只能等 sweep 兜底回收")
 		return errcode.New(errcode.ErrInvalidState,
 			"battle allocation abort requires Redis Model-B authority")
 	}
@@ -1832,6 +1917,9 @@ func (u *AllocatorUsecase) AbortPreactiveBattle(ctx context.Context, request bat
 	// the permanent abort journal below so ACK-loss replay still works.
 	preflight, err := u.authRepo.ReadAuthority(ctx, request.MatchID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortPreflightFailed,
+			"match_id", request.MatchID, "operation_id", request.OperationID,
+			"pod", request.Target.PodName, "err", err)
 		return err
 	}
 	if preflight.BattleFound {
@@ -1840,20 +1928,32 @@ func (u *AllocatorUsecase) AbortPreactiveBattle(ctx context.Context, request bat
 				AllocationID: request.Target.AllocationID, InstanceUID: request.Target.InstanceUID,
 				InstanceEpoch: request.Target.InstanceEpoch,
 			}, request.Target.ReleaseTrack); err != nil {
+			plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortPreflightFailed,
+				"match_id", request.MatchID, "operation_id", request.OperationID,
+				"pod", request.Target.PodName, "allocation_id", request.Target.AllocationID, "err", err,
+				"hint", "pod_uid 未持久化前不得创建 ABORT fence;详因见同 trace_id 的 battle_pod_uid_preflight_refused")
 			return err
 		}
 	}
 	fence, err := u.abortRepo.FenceAllocationAbortExpected(ctx, request)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortFenceFailed,
+			"match_id", request.MatchID, "operation_id", request.OperationID,
+			"pod", request.Target.PodName, "allocation_id", request.Target.AllocationID, "err", err)
 		return err
 	}
 	if fence.Released {
 		completed, completeErr := u.abortRepo.CompleteAllocationAbortExpected(
 			ctx, request, u.dsCredentialTTL, u.battleTTL())
 		if completeErr != nil {
+			plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortAckCleanupPending,
+				"match_id", request.MatchID, "operation_id", request.OperationID, "err", completeErr)
 			return completeErr
 		}
 		if !completed {
+			plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortAckCleanupPending,
+				"match_id", request.MatchID, "operation_id", request.OperationID,
+				"hint", "ACK-loss 重放已认出 RELEASED,但保留期清理未确认;调用方同 request 幂等重试")
 			return errcode.New(errcode.ErrUnavailable,
 				"battle %d allocation abort ACK cleanup pending", request.MatchID)
 		}
@@ -1862,6 +1962,11 @@ func (u *AllocatorUsecase) AbortPreactiveBattle(ctx context.Context, request bat
 	battle := fence.Battle
 	if battle == nil || battle.GetMatchId() != request.MatchID ||
 		battle.GetDsPodName() != request.Target.PodName || battle.GetPodUid() == "" {
+		plog.With(ctx).Errorw("msg", "battle_allocation_abort_refused", "reason", reasonAbortFenceIdentityMissing,
+			"match_id", request.MatchID, "operation_id", request.OperationID,
+			"want_pod", request.Target.PodName, "got_pod", battle.GetDsPodName(),
+			"got_pod_uid", battle.GetPodUid(), "allocation_id", request.Target.AllocationID,
+			"hint", "fence 已写却拿不到 exact pod 权威,不得发 K8s 删除;人工对账")
 		return errcode.New(errcode.ErrInvalidState,
 			"battle %d allocation abort fence lacks exact pod authority", request.MatchID)
 	}
@@ -1875,6 +1980,10 @@ func (u *AllocatorUsecase) AbortPreactiveBattle(ctx context.Context, request bat
 	}
 	if !u.deliverAbandoned(ctx, request.MatchID, request.Target.PodName, request.Target.InstanceUID,
 		battle.GetPlayerIds(), battle.GetMapId(), battle.GetGameMode()) {
+		plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortLifecyclePending,
+			"match_id", request.MatchID, "operation_id", request.OperationID,
+			"pod", request.Target.PodName, "players", len(battle.GetPlayerIds()),
+			"hint", "GameServer 已回收但 ABANDONED 补偿事件未投递,玩家段位回滚会延后;sweep 会重试")
 		return errcode.New(errcode.ErrUnavailable,
 			"battle %d allocation abort lifecycle publish pending", request.MatchID)
 	}
@@ -1893,15 +2002,24 @@ func (u *AllocatorUsecase) AbortPreactiveBattle(ctx context.Context, request bat
 		request.Target.PodName, request.Target.InstanceUID, 2*time.Second)
 	if err := u.lifecycleProofRepo.RecordAllocationLifecyclePublished(
 		ctx, request.MatchID, request.Target); err != nil {
+		plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortLifecycleMarker,
+			"match_id", request.MatchID, "operation_id", request.OperationID,
+			"allocation_id", request.Target.AllocationID, "err", err)
 		return errcode.NewCause(errcode.ErrUnavailable, err,
 			"battle %d allocation abort lifecycle marker pending", request.MatchID)
 	}
 	completed, err := u.abortRepo.CompleteAllocationAbortExpected(
 		ctx, request, u.dsCredentialTTL, u.battleTTL())
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortCompletionPending,
+			"match_id", request.MatchID, "operation_id", request.OperationID, "err", err)
 		return err
 	}
 	if !completed {
+		plog.With(ctx).Warnw("msg", "battle_allocation_abort_refused", "reason", reasonAbortCompletionPending,
+			"match_id", request.MatchID, "operation_id", request.OperationID,
+			"allocation_id", request.Target.AllocationID,
+			"hint", "外部副作用已全部完成,仅永久日志置 RELEASED 未确认;同 request 幂等重试")
 		return errcode.New(errcode.ErrUnavailable,
 			"battle %d allocation abort completion pending", request.MatchID)
 	}
@@ -1926,11 +2044,22 @@ func (u *AllocatorUsecase) ReleaseBattleExpected(
 	proof data.BattleResultAuthorizationProof,
 ) error {
 	if !u.modelB || u.authRepo == nil || u.authoritativeAlloc == nil {
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonReleaseAuthorityOff,
+			"match_id", matchID, "pod", podName, "release_reason", reason,
+			"hint", "本副本未启用 Redis 权威/权威分配器,正常结算回收不可用;battle_result 会持续重试")
 		return errcode.New(errcode.ErrInvalidState, "battle terminal release requires Redis authority")
 	}
 	if matchID == 0 || reason != "completed" || podName == "" ||
 		proof.Credential.PodName != podName || proof.Credential.InstanceUID != expected.InstanceUID ||
 		proof.Credential.InstanceEpoch != expected.InstanceEpoch {
+		// 逐项带出“哪一项对不上”:这是 battle_result outbox 与 allocator 权威之间唯一的
+		// 身份握手,对不上就永远收不了 DS(pod 泄漏),但错误码只是一个 InvalidArg。
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonReleaseProofIncomplete,
+			"match_id", matchID, "pod", podName, "release_reason", reason,
+			"want_pod", podName, "got_proof_pod", proof.Credential.PodName,
+			"want_uid", expected.InstanceUID, "got_proof_uid", proof.Credential.InstanceUID,
+			"want_epoch", expected.InstanceEpoch, "got_proof_epoch", proof.Credential.InstanceEpoch,
+			"allocation_id", expected.AllocationID)
 		return errcode.New(errcode.ErrInvalidArg, "battle terminal release proof is incomplete")
 	}
 	// Rolling-upgrade gate: pod_uid was added after the first Model-B records.
@@ -1946,15 +2075,27 @@ func (u *AllocatorUsecase) ReleaseBattleExpected(
 		return err
 	}
 	if !terminated {
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonReleaseIdentityChanged,
+			"match_id", matchID, "pod", podName, "uid", expected.InstanceUID,
+			"epoch", expected.InstanceEpoch, "allocation_id", expected.AllocationID,
+			"hint", "终态 CAS 未命中:该 match 的 stable 身份已变(同名 Pod 重建/已被判弃/已回收)")
 		return errcode.New(errcode.ErrDSAllocationFailed,
 			"battle %d stable identity changed before terminal release", matchID)
 	}
 	snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonReleaseAuthorityReread,
+			"match_id", matchID, "pod", podName, "allocation_id", expected.AllocationID, "err", err)
 		return errcode.NewCause(errcode.ErrUnavailable, err,
 			"battle %d terminal authority reread failed", matchID)
 	}
 	if !exactTerminatedReleaseSnapshot(snapshot, matchID, podName, expected) {
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonReleaseSnapshotStale,
+			"match_id", matchID, "pod", podName, "uid", expected.InstanceUID,
+			"epoch", expected.InstanceEpoch, "allocation_id", expected.AllocationID,
+			"auth_found", snapshot.AuthFound, "battle_found", snapshot.BattleFound,
+			"state", snapshot.Battle.GetState(), "phase", snapshot.Auth.GetPhase().String(),
+			"hint", "终态 CAS 已成功但重读不自洽,本轮不碰 K8s;outbox 同 tuple 幂等重试")
 		return errcode.New(errcode.ErrUnavailable,
 			"battle %d terminal authority snapshot is incomplete or changed", matchID)
 	}
@@ -2008,10 +2149,21 @@ func (u *AllocatorUsecase) ensureDurableReleasePodUID(
 ) (string, error) {
 	snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "battle_pod_uid_preflight_refused", "reason", reasonPodUIDAuthorityRead,
+			"match_id", matchID, "pod", podName, "allocation_id", expected.AllocationID, "err", err)
 		return "", errcode.NewCause(errcode.ErrUnavailable, err,
 			"battle %d release preflight authority read failed", matchID)
 	}
 	if !exactReleaseIdentitySnapshot(snapshot, matchID, podName, expected, expectedReleaseTrack) {
+		// pod_uid 是所有精确回收(结算 / 判弃 / abort)的共同前提,拿不到就一台 DS 都收不回。
+		// 带出期望与实际,才能一眼分出是"同名 Pod 重建"还是"记录已被推进到别的实例"。
+		plog.With(ctx).Warnw("msg", "battle_pod_uid_preflight_refused", "reason", reasonPodUIDIdentityChanged,
+			"match_id", matchID, "want_pod", podName, "got_pod", snapshot.Battle.GetDsPodName(),
+			"want_uid", expected.InstanceUID, "got_uid", snapshot.Battle.GetGameserverUid(),
+			"want_epoch", expected.InstanceEpoch, "got_epoch", snapshot.Battle.GetInstanceEpoch(),
+			"want_allocation_id", expected.AllocationID, "got_allocation_id", snapshot.Battle.GetAllocationId(),
+			"want_release_track", expectedReleaseTrack, "got_release_track", snapshot.Battle.GetReleaseTrack(),
+			"battle_found", snapshot.BattleFound, "state", snapshot.Battle.GetState())
 		return "", errcode.New(errcode.ErrDSAllocationFailed,
 			"battle %d release preflight identity changed", matchID)
 	}
@@ -2024,6 +2176,11 @@ func (u *AllocatorUsecase) ensureDurableReleasePodUID(
 			InstanceEpoch: expected.InstanceEpoch, AllocationID: expected.AllocationID,
 		})
 	if err != nil || podUID == "" {
+		plog.With(ctx).Warnw("msg", "battle_pod_uid_preflight_refused", "reason", reasonPodUIDResolveFailed,
+			"match_id", matchID, "pod", podName, "uid", expected.InstanceUID,
+			"epoch", expected.InstanceEpoch, "allocation_id", expected.AllocationID,
+			"resolved_pod_uid", podUID, "err", err,
+			"hint", "legacy 记录缺 pod_uid 且从 K8s 精确回读不到;回收保持可重试,不创建永久 TERMINATING fence")
 		return "", errcode.NewCause(errcode.ErrUnavailable, err,
 			"battle %d legacy pod UID exact preflight failed", matchID)
 	}
@@ -2043,15 +2200,25 @@ func (u *AllocatorUsecase) ensureDurableReleasePodUID(
 		return nil
 	})
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "battle_pod_uid_preflight_refused", "reason", reasonPodUIDBackfillFailed,
+			"match_id", matchID, "pod", podName, "pod_uid", podUID,
+			"allocation_id", expected.AllocationID, "err", err)
 		return "", errcode.NewCause(errcode.ErrUnavailable, err,
 			"battle %d legacy pod UID durable backfill failed", matchID)
 	}
 	verified, err := u.authRepo.ReadAuthority(ctx, matchID)
 	if err != nil || !exactReleaseIdentitySnapshot(verified, matchID, podName, expected, expectedReleaseTrack) ||
 		verified.Battle.GetPodUid() != podUID {
+		plog.With(ctx).Warnw("msg", "battle_pod_uid_preflight_refused", "reason", reasonPodUIDVerifyFailed,
+			"match_id", matchID, "pod", podName, "want_pod_uid", podUID,
+			"got_pod_uid", verified.Battle.GetPodUid(), "allocation_id", expected.AllocationID, "err", err)
 		return "", errcode.NewCause(errcode.ErrUnavailable, err,
 			"battle %d legacy pod UID backfill verification failed", matchID)
 	}
+	// R4:本函数在 sweep 每轮、每次心跳前置都可能被调用,成功侧只能 Debugw。
+	// 但"回填过一次 pod_uid"是 legacy 记录被补齐的证据,查回收链时要看得到。
+	plog.With(ctx).Debugw("msg", "battle_pod_uid_backfilled", "match_id", matchID,
+		"pod", podName, "pod_uid", podUID, "allocation_id", expected.AllocationID)
 	return podUID, nil
 }
 
@@ -2127,19 +2294,32 @@ func (u *AllocatorUsecase) FinalizeBattleReleaseExpected(
 	proof data.BattleResultAuthorizationProof,
 ) error {
 	if !u.modelB || u.authRepo == nil {
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonReleaseAuthorityOff,
+			"match_id", matchID, "pod", podName, "release_reason", "completed-finalize")
 		return errcode.New(errcode.ErrInvalidState, "battle terminal finalize requires Redis authority")
 	}
 	if matchID == 0 || podName == "" || proof.Credential.PodName != podName ||
 		proof.Credential.InstanceUID != expected.InstanceUID ||
 		proof.Credential.InstanceEpoch != expected.InstanceEpoch {
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonFinalizeProofIncomplete,
+			"match_id", matchID, "pod", podName,
+			"want_uid", expected.InstanceUID, "got_proof_uid", proof.Credential.InstanceUID,
+			"want_epoch", expected.InstanceEpoch, "got_proof_epoch", proof.Credential.InstanceEpoch,
+			"allocation_id", expected.AllocationID)
 		return errcode.New(errcode.ErrInvalidArg, "battle terminal finalize proof is incomplete")
 	}
 	expired, err := u.authRepo.ExpireResultTerminatedExpected(
 		ctx, matchID, expected, proof, u.battleTTL())
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonFinalizeTombstonePending,
+			"match_id", matchID, "pod", podName, "allocation_id", expected.AllocationID, "err", err)
 		return err
 	}
 	if !expired {
+		plog.With(ctx).Warnw("msg", "battle_release_refused", "reason", reasonFinalizeTombstonePending,
+			"match_id", matchID, "pod", podName, "uid", expected.InstanceUID,
+			"epoch", expected.InstanceEpoch, "allocation_id", expected.AllocationID,
+			"hint", "永久墓碑未能恢复有界 TTL(身份不匹配或已被推进);outbox 会同 tuple 重试")
 		return errcode.New(errcode.ErrUnavailable,
 			"battle %d terminal tombstone retention not confirmed", matchID)
 	}
@@ -2234,6 +2414,10 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 				AllocationID: preflightSnapshot.Battle.GetAllocationId(),
 				InstanceUID:  id.InstanceUID, InstanceEpoch: id.InstanceEpoch,
 			}, preflightSnapshot.Battle.GetReleaseTrack()); err != nil {
+			plog.With(ctx).Warnw("msg", "battle_heartbeat_refused", "reason", reasonPodUIDResolveFailed,
+				"match_id", matchID, "pod", id.PodName, "uid", id.InstanceUID,
+				"epoch", id.InstanceEpoch, "err", err,
+				"hint", "滚动升级遗留的无 pod_uid 记录回填失败,本跳零状态转移;详因见同 trace_id 的 battle_pod_uid_preflight_refused")
 			return nil, err
 		}
 	}
@@ -2947,12 +3131,30 @@ func (u *AllocatorUsecase) refreshBattleLocations(ctx context.Context, playerIDs
 func (u *AllocatorUsecase) ListBattles(ctx context.Context, stateFilter string) ([]*dsv1.BattleInfo, error) {
 	matchIDs, err := u.repo.RangeActiveBattles(ctx)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "battle_list_refused", "reason", reasonHeartbeatAuthorityRead,
+			"state_filter", stateFilter, "err", err)
 		return nil, err
 	}
 	out := make([]*dsv1.BattleInfo, 0, len(matchIDs))
+	// 读失败 / 索引残留在循环里被静默 continue 掉。逐条打会刷屏(active 集合可达千级),
+	// 故按 R4 聚合:只记数量 + 首错 + 一个样本,循环后一条。
+	var readFailed, indexOrphan int
+	var firstErr error
+	var sampleMatchID uint64
 	for _, mid := range matchIDs {
 		b, found, gerr := u.repo.GetBattle(ctx, mid)
 		if gerr != nil || !found {
+			if gerr != nil {
+				readFailed++
+				if firstErr == nil {
+					firstErr, sampleMatchID = gerr, mid
+				}
+			} else {
+				indexOrphan++
+				if sampleMatchID == 0 {
+					sampleMatchID = mid
+				}
+			}
 			continue
 		}
 		if stateFilter != "" && b.State != stateFilter {
@@ -2966,6 +3168,12 @@ func (u *AllocatorUsecase) ListBattles(ctx context.Context, stateFilter string) 
 			PlayerCount:   b.PlayerCount,
 			AllocatedAtMs: b.AllocatedAtMs,
 		})
+	}
+	if readFailed > 0 || indexOrphan > 0 {
+		plog.With(ctx).Warnw("msg", "battle_list_partial", "active", len(matchIDs),
+			"returned", len(out), "read_failed", readFailed, "index_orphan", indexOrphan,
+			"state_filter", stateFilter, "sample_match_id", sampleMatchID, "first_err", firstErr,
+			"hint", "index_orphan = active ZSET 有项但权威镜像已不在(TTL 到期/已删),由 sweep 自愈")
 	}
 	return out, nil
 }
@@ -3594,6 +3802,8 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 func (u *AllocatorUsecase) reconcileActiveIndexIfDue(ctx context.Context) error {
 	if u.activeIndexReconciler == nil {
 		if u.modelB {
+			plog.With(ctx).Errorw("msg", "battle_active_index_refused", "reason", reasonActiveIndexUnavailable,
+				"hint", "Model B 下缺派生索引重建能力,丢失的永久墓碑无人发现;整轮 sweep fail-closed")
 			return errcode.New(errcode.ErrInvalidState,
 				"canonical battle active-index reconciler unavailable")
 		}
@@ -3605,9 +3815,18 @@ func (u *AllocatorUsecase) reconcileActiveIndexIfDue(ctx context.Context) error 
 		return nil
 	}
 	if err := u.activeIndexReconciler.ReconcileBattleActiveIndex(ctx, 256); err != nil {
+		plog.With(ctx).Warnw("msg", "battle_active_index_refused", "reason", reasonActiveIndexRebuild,
+			"elapsed_ms", time.Since(now).Milliseconds(), "err", err,
+			"hint", "重建失败 = 本轮 sweep 整体不执行(fail-closed),判弃补偿链顺延一个周期")
 		return errcode.NewCause(errcode.ErrUnavailable, err,
 			"rebuild canonical battle active index")
 	}
+	// R1：派生 active 索引重建是§11.3 点名要求留 INFO 的不可逆推进之一（它决定了
+	// 哪些对局能被心跳超时扫描看到）。频率固定为 activeIndexReconcileInterval（30s），
+	// 不会刷屏；无它则“判弃链从什么时候开始漏扫”无法从日志回答。
+	plog.With(ctx).Infow("msg", "battle_active_index_reconciled",
+		"interval", activeIndexReconcileInterval.String(),
+		"elapsed_ms", time.Since(now).Milliseconds())
 	u.lastActiveIndexReconcile = now
 	return nil
 }

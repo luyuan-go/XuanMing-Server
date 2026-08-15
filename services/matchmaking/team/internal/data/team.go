@@ -284,6 +284,8 @@ func (r *RedisTeamRepo) UpdateWithLock(
 	teamTTL time.Duration,
 ) error {
 	key := teamKey(teamID)
+	started := time.Now()
+	conflicts := 0
 
 	for attempt := 0; attempt <= maxRetry; attempt++ {
 		var team *teamv1.TeamStorageRecord
@@ -322,6 +324,13 @@ func (r *RedisTeamRepo) UpdateWithLock(
 		}, key)
 
 		if txErr == nil {
+			if conflicts > 0 {
+				// R4:并发重试后成功是常态(热点队伍),Debug 即可;
+				// 但它是"写变慢了"与后面那条耗尽 WARN 之间的唯一中间证据。
+				plog.With(ctx).Debugw("msg", "team_update_lock_retried",
+					"team_id", teamID, "conflicts", conflicts, "max_retry", maxRetry,
+					"elapsed_ms", time.Since(started).Milliseconds())
+			}
 			return nil
 		}
 		// fn 自身返回的业务错误 — 不重试,直接透传
@@ -330,9 +339,17 @@ func (r *RedisTeamRepo) UpdateWithLock(
 		}
 		// WATCH 冲突(redis.TxFailedErr) — 重试
 		if txErr == redis.TxFailedErr {
+			conflicts++
 			continue
 		}
 		// 其他 redis 错误 — 不重试
+		// R2:这里透传的是裸 redis 错误(非 errcode),上层只能把它归到
+		// store_write_failed 一大类。不在这里留一条带 team_id 的痕,就完全分不出
+		// 是连不上 redis、proto 坏了、还是 MULTI 写失败。
+		plog.With(ctx).Warnw("msg", "team_update_store_failed",
+			"reason", "store_write_failed",
+			"team_id", teamID, "attempt", attempt, "conflicts", conflicts,
+			"elapsed_ms", time.Since(started).Milliseconds(), "err", txErr)
 		return txErr
 	}
 	// WATCH/MULTI/EXEC 乐观锁重试耗尽(§16 TOCTOU / 重试耗尽盲点):某热点队伍被并发写打爆;
@@ -341,7 +358,8 @@ func (r *RedisTeamRepo) UpdateWithLock(
 	// 常量定义在 biz 包,data 不反向依赖 biz,故此处写字面量并在两侧注释里互指。
 	plog.With(ctx).Warnw("msg", "team_update_lock_exhausted",
 		"reason", "optimistic_retry_exhausted",
-		"team_id", teamID, "max_retry", maxRetry,
+		"team_id", teamID, "max_retry", maxRetry, "conflicts", conflicts,
+		"elapsed_ms", time.Since(started).Milliseconds(),
 		"hint", "热点队伍被并发写打爆;调用方会收到 3007,属暂态")
 	return errcode.New(errcode.ErrTeamConcurrent, "team %d update concurrent retry exhausted", teamID)
 }
@@ -468,6 +486,16 @@ func (r *RedisTeamRepo) SetInvite(ctx context.Context, inviteID, teamID, inviter
 		return err
 	}
 	if ok == 0 {
+		// R2 + §9.18:这是写入侧总量上限拒绝。必须带**当前 pending 数与上限**，
+		// 否则玩家报“收不到邀请”时分不出是真满了还是过期成员没被清。
+		// 计数只走拒绝路径且 best-effort（失败记 -1），不影响返回值与控制流。
+		plog.With(ctx).Warnw("msg", "team_invite_slot_rejected",
+			"reason", "invite_pending_limit_reached",
+			"team_id", teamID, "inviter_id", inviterID,
+			"target_player_id", targetPlayerID, "invite_id", inviteID,
+			"pending", r.pendingCount(ctx, inviteTargetKey(targetPlayerID)),
+			"max_pending", maxPending,
+			"hint", "计数不含已过期成员（写入前已 ZREMRANGEBYSCORE 清过）")
 		return errcode.New(errcode.ErrTeamInvitePendingLimit,
 			"player %d has too many pending invites (max %d)", targetPlayerID, maxPending)
 	}
@@ -607,6 +635,16 @@ func (r *RedisTeamRepo) ClaimApplication(ctx context.Context, teamID, applicantI
 		return 0, err
 	}
 	if ok == 0 {
+		// R2 + §9.18：max_applications_per_team（默认 10）上限拒绝，错误码 3009。
+		// 3009 不是 IsServerFault，access log 只会记成 rpc_ok=DEBUG，线上不可见；
+		// 玩家报“申请不了”时，只有 pending/max 同框才分得出是真满了还是清理没跑。
+		plog.With(ctx).Warnw("msg", "team_application_slot_rejected",
+			"reason", "application_pending_limit_reached",
+			"team_id", teamID, "player_id", applicantID,
+			"pending", r.pendingCount(ctx, applyKey(teamID)),
+			"max_pending", maxPending,
+			"ttl_ms", ttl.Milliseconds(),
+			"hint", "重复申请同一队伍不占新名额；计数不含已过期成员")
 		return 0, errcode.New(errcode.ErrTeamApplyPendingLimit,
 			"team %d has too many pending applications (max %d)", teamID, maxPending)
 	}
@@ -763,6 +801,25 @@ func inviteFromHash(inviteID uint64, fields map[string]string) (*InviteRecord, e
 		InviterID:      inviterID,
 		ExpiresAtMs:    expiresAtMs,
 	}, nil
+}
+
+// ── 诊断辅助 ──────────────────────────────────────────────────────────────────
+
+// pendingCount 读一个 pending 索引 zset 的当前成员数,**只用于上限拒绝那一条日志**。
+//
+// 为什么不让 Lua 顺带返回:改脚本返回值会动到已被测试与调用方依赖的契约(1/0),
+// 而这里只在**已经确定要拒**的分支上多读一次 ZCARD —— 不改控制流、不改返回值、
+// 不改错误码,失败也只是把日志里的数字记成 -1。
+//
+// 计数口径:Lua 已在同一次调用里 ZREMRANGEBYSCORE 清过期成员,所以这个数就是
+// "此刻真正占着名额的条数";与拒绝时用的判据存在毫秒级偏差(期间可能有人被删),
+// 排查量级足够,不用于任何判定。
+func (r *RedisTeamRepo) pendingCount(ctx context.Context, key string) int64 {
+	n, err := r.rdb.ZCard(ctx, key).Result()
+	if err != nil {
+		return -1
+	}
+	return n
 }
 
 // ── 序列化辅助 ────────────────────────────────────────────────────────────────

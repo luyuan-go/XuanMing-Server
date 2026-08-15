@@ -19,8 +19,22 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
+)
+
+// team→matchmaker 跨服务边界的拒绝 reason 枚举(§11.3 R2)。
+//
+// 这条边界此前零日志:玩家「离队了但票据还在排队」「明明在打却被判成空闲」
+// 两类问题在 team 与 matchmaker 两侧日志里都断线,只能靠猜。
+const (
+	matchRejectCancelRPCFailed    = "matchmaker_cancel_rpc_failed"
+	matchRejectCancelCodeNotOK    = "matchmaker_cancel_code_not_ok"
+	matchRejectCommitSignFailed   = "resume_auth_sign_failed"
+	matchRejectCommitRPCFailed    = "matchmaker_resolve_rpc_failed"
+	matchRejectCommitCodeNotOK    = "matchmaker_resolve_code_not_ok"
+	matchRejectCommitStateUnknown = "matchmaker_resolve_state_unknown"
 )
 
 // GrpcMatchClient 用 matchmaker 服务 gRPC client 实现 biz.MatchCanceler 与
@@ -60,11 +74,26 @@ func (g *GrpcMatchClient) Close() error {
 func (g *GrpcMatchClient) CancelMatch(ctx context.Context, playerID uint64) error {
 	resp, err := g.cli.CancelMatch(ctx, &matchv1.CancelMatchRequest{PlayerId: playerID})
 	if err != nil {
+		// 弱依赖:调用方只 Warn 不阻断离队,残留票据靠确认期超时 / TTL 兜底。
+		// 但「离队后仍被匹配拉进对局」的第一嫌疑就是这里,必须留证。
+		plog.With(ctx).Warnw("msg", "match_cancel_failed", "player_id", playerID,
+			"reason", matchRejectCancelRPCFailed, "err", err,
+			"hint", "票据未撤销,等确认期超时 / TTL 回收")
 		return err
 	}
-	if resp.GetCode() != commonv1.ErrCode_OK {
+	if code := resp.GetCode(); code != commonv1.ErrCode_OK {
+		// 4001 = 玩家本就不在排队,是离队路径的常态(每次离队都会调一次),走 Debug 不刷屏。
+		if errcode.Code(code) == errcode.ErrMatchNotFound {
+			plog.With(ctx).Debugw("msg", "match_cancel_noop", "player_id", playerID,
+				"reason", "player_not_in_queue")
+		} else {
+			plog.With(ctx).Warnw("msg", "match_cancel_failed", "player_id", playerID,
+				"reason", matchRejectCancelCodeNotOK, "code", int32(code))
+		}
 		return errcode.New(errcode.Code(resp.GetCode()), "matchmaker.CancelMatch code=%d player=%d", resp.GetCode(), playerID)
 	}
+	// §11.3 R1:撤票是不可逆状态推进,且是「排队中离队」链路上 team 侧唯一的成功证据。
+	plog.With(ctx).Infow("msg", "match_canceled", "player_id", playerID)
 	return nil
 }
 
@@ -86,26 +115,49 @@ func (g *GrpcMatchClient) IsPlayerCommittedToMatch(ctx context.Context, playerID
 		signed, serr := g.signer.SignContext(ctx,
 			matchv1.MatchService_ResolvePlayerMatchContext_FullMethodName, playerID)
 		if serr != nil {
+			plog.With(ctx).Warnw("msg", "match_commitment_query_failed", "player_id", playerID,
+				"reason", matchRejectCommitSignFailed, "err", serr,
+				"hint", "调用方按 UNKNOWN fail-closed,玩家会被判为「可能在对局中」")
 			return false, errcode.NewCause(errcode.ErrInternal, serr,
 				"sign matchmaker resume-auth credential for player %d", playerID)
 		}
 		ctx = signed
+	} else {
+		// 未配密钥 = 本部署恒查不到对局占用,matchmaker 必回 code=7。
+		// 这是部署配置缺口,不是偶发故障,单独一个 reason 便于一眼区分。
+		plog.With(ctx).Warnw("msg", "match_commitment_query_unsigned", "player_id", playerID,
+			"reason", "resume_auth_signer_not_configured",
+			"hint", "matchmaker 将回 ERR_PERMISSION_DENY(7),调用方 fail-closed")
 	}
 	resp, err := g.cli.ResolvePlayerMatchContext(ctx, &matchv1.ResolvePlayerMatchContextRequest{PlayerId: playerID})
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "match_commitment_query_failed", "player_id", playerID,
+			"reason", matchRejectCommitRPCFailed, "err", err)
 		return false, err
 	}
-	if resp.GetCode() != commonv1.ErrCode_OK {
+	if code := resp.GetCode(); code != commonv1.ErrCode_OK {
+		plog.With(ctx).Warnw("msg", "match_commitment_query_failed", "player_id", playerID,
+			"reason", matchRejectCommitCodeNotOK, "code", int32(code),
+			"signed", g.signer != nil)
 		return false, errcode.New(errcode.Code(resp.GetCode()),
 			"matchmaker.ResolvePlayerMatchContext code=%d player=%d", resp.GetCode(), playerID)
 	}
 	switch resp.GetState() {
 	case matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE:
+		// §11.3 R4:这是查询路径(离队 / 恢复判定都会调),成功侧走 Debug 不刷屏。
+		plog.With(ctx).Debugw("msg", "match_commitment_queried", "player_id", playerID,
+			"committed", true)
 		return true, nil
 	case matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_NONE:
+		plog.With(ctx).Debugw("msg", "match_commitment_queried", "player_id", playerID,
+			"committed", false)
 		return false, nil
 	default:
 		// UNKNOWN:读取错误 / 索引漂移 / 坏记录。不确定就是不确定,交给调用方 fail-closed。
+		// 这条必须可见 —— 它意味着玩家被判成「可能在对局中」而被挡住,且原因在 matchmaker 侧。
+		plog.With(ctx).Warnw("msg", "match_commitment_query_failed", "player_id", playerID,
+			"reason", matchRejectCommitStateUnknown, "state", int32(resp.GetState()),
+			"hint", "matchmaker 侧索引漂移 / 坏记录,调用方 fail-closed")
 		return false, errcode.New(errcode.ErrUnavailable,
 			"matchmaker.ResolvePlayerMatchContext unknown state for player %d", playerID)
 	}

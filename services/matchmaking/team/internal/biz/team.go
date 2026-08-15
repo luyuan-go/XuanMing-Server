@@ -351,7 +351,7 @@ func (u *TeamUsecase) Invite(ctx context.Context, inviteID, teamID, inviterID, t
 		// 用错误码把它们区分开:上限是产品语义的拒绝,写失败是故障。
 		reason := reasonInviteStoreFailed
 		if errcode.As(err) == errcode.ErrTeamInvitePendingLimit {
-			reason = "invite_pending_limit_reached"
+			reason = reasonInvitePendingLimit
 		}
 		u.logInviteRejected(ctx, reason, teamID, inviterID, targetPlayerID, inviteID, err)
 		return nil, err
@@ -982,14 +982,26 @@ func (u *TeamUsecase) GetPlayerTeamID(ctx context.Context, playerID uint64) (uin
 func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.TeamStorageRecord, bool, error) {
 	teamID, found, err := u.repo.GetPlayerTeamID(ctx, playerID)
 	if err != nil {
+		// R2:这条路径是「登录后进大厅第一件事」。读失败会让客户端看到「你没有队伍」
+		// 之外的错误码却查不出原因 —— 它返回的是 ErrInternal 一类,access log 虽会记
+		// rpc_failed,但没有 player_id / 阶段名,串不到这名玩家的组队链路上。
+		plog.With(ctx).Warnw("msg", "team_my_team_rejected",
+			"reason", reasonStoreReadFailed, "player_id", playerID,
+			"stage", "player_index", "err", err)
 		return nil, false, err
 	}
 	if !found {
+		// R4:没队伍是最常见的正常态,且本接口是轮询路径 —— 只能 Debug。
+		plog.With(ctx).Debugw("msg", "team_my_team_resolved",
+			"player_id", playerID, "has_team", false, "reason", reasonNoTeam)
 		return nil, false, nil
 	}
 
 	team, found, err := u.repo.Get(ctx, teamID)
 	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_my_team_rejected",
+			"reason", reasonStoreReadFailed, "player_id", playerID, "team_id", teamID,
+			"stage", "team_record", "err", err)
 		return nil, false, err
 	}
 	if !found || team.State == stateDisbanded {
@@ -1019,6 +1031,12 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 	u.inspectTeamPresence(ctx, team)
 	// 兜底:滚动升级期旧 matchmaker 副本不调 EndTeamMatch,那些局释放后队伍会永远停在 READY。
 	// 队长要开下一局必然先看队伍面板,所以这条读路径覆盖了真实风险路径(INC-20260813-001 ②)。
+	// R4:轮询路径,成功侧只能 Debug;它回答的是"这一刻服务端认为他在哪支队、什么状态"。
+	plog.With(ctx).Debugw("msg", "team_my_team_resolved",
+		"player_id", playerID, "has_team", true, "team_id", teamID,
+		"team_state", team.State, "members", len(team.Members),
+		"captain_id", team.CaptainId, "ready_count", readyCount(team.Members),
+		"ready_generation", team.GetReadyGeneration())
 	return team, true, nil
 }
 
@@ -1030,7 +1048,19 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 // 打开组队 UI 时调本接口兜底,推送从「唯一通道」降级为「加速器」。
 // 读取侧上限 = MaxPendingInvites(写入侧硬上限已兜住总量,单次全量返回即达标)。
 func (u *TeamUsecase) ListPendingInvites(ctx context.Context, playerID uint64) ([]*data.InviteRecord, error) {
-	return u.repo.ListPendingInvites(ctx, playerID, u.cfg.MaxPendingInvites)
+	invites, err := u.repo.ListPendingInvites(ctx, playerID, u.cfg.MaxPendingInvites)
+	if err != nil {
+		// R2:这是「我没收到邀请」的兜底查询。它挂了等于邀请链路彻底断掉,
+		// 而返回的错误码在 access log 里没有 player_id,串不到人。
+		plog.With(ctx).Warnw("msg", "team_list_invites_rejected",
+			"reason", reasonStoreReadFailed, "player_id", playerID,
+			"limit", u.cfg.MaxPendingInvites, "err", err)
+		return nil, err
+	}
+	// R4:登录 / 回前台 / 打开组队 UI 都会调,成功侧只能 Debug。
+	plog.With(ctx).Debugw("msg", "team_list_invites",
+		"player_id", playerID, "invites", len(invites), "limit", u.cfg.MaxPendingInvites)
+	return invites, nil
 }
 
 // ── 找队伍:列表 / 申请 / 审批 ─────────────────────────────────────────────────
@@ -1187,8 +1217,10 @@ func (u *TeamUsecase) SetTeamMap(ctx context.Context, teamID, captainID uint64, 
 	u.pushUpdate(ctx, captainID, memberIDs(result), result,
 		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MAP_CHANGED, 0)
 
-	plog.With(ctx).Debugw("msg", "team_set_map", "team_id", teamID, "captain_id", captainID,
-		"prev_map_id", prevMapID, "map_id", mapID)
+	plog.With(ctx).Infow("msg", "team_set_map", "team_id", teamID, "captain_id", captainID,
+		"prev_map_id", prevMapID, "map_id", mapID,
+		"team_state", result.State, "members", len(result.Members),
+		"open_for_recruit", isOpenForRecruit(result))
 	return result, nil
 }
 
@@ -1385,7 +1417,7 @@ func (u *TeamUsecase) ApplyToTeam(ctx context.Context, teamID, applicantID uint6
 		// 这里同时收敛「本队 pending 申请已达上限」与「Redis 写失败」,用错误码分开。
 		reason := reasonApplicationStoreFailed
 		if errcode.As(err) == errcode.ErrTeamApplyPendingLimit {
-			reason = "application_pending_limit_reached"
+			reason = reasonApplicationPendingLimit
 		}
 		u.logApplyRejected(ctx, reason, teamID, applicantID, team.State, err)
 		return false, nil, 0, err
@@ -1499,7 +1531,7 @@ func (u *TeamUsecase) HandleTeamApplication(ctx context.Context, teamID, captain
 	result, err := u.joinTeam(ctx, teamID, applicantID)
 	if err != nil {
 		plog.With(ctx).Warnw("msg", "team_application_accept_failed",
-			"reason", "join_failed_after_application_consumed",
+			"reason", reasonJoinAfterApplicationConsumed,
 			"team_id", teamID, "captain_id", captainID, "applicant_id", applicantID,
 			"hint", "令牌已消费且不放回(避免幽灵申请),申请人需重新申请", "err", err)
 		return nil, err
@@ -1617,7 +1649,7 @@ func (u *TeamUsecase) cancelMatchmaking(ctx context.Context, teamID, playerID ui
 			return // 未在排队,常态
 		}
 		plog.With(ctx).Warnw("msg", "team_cancel_matchmaking_failed",
-			"reason", "matchmaker_cancel_rpc_failed",
+			"reason", reasonMatchmakerCancelFailed,
 			"team_id", teamID, "player_id", playerID, "err", err,
 			"hint", "票据仍含已离队成员,靠确认期超时 / TTL 兜底回收")
 		return
@@ -1663,7 +1695,7 @@ func (u *TeamUsecase) pushUpdate(
 		payload, err := proto.Marshal(event)
 		if err != nil {
 			plog.With(ctx).Warnw("msg", "team_push_marshal_failed",
-				"reason", "push_payload_marshal_failed",
+				"reason", reasonPushMarshalFailed,
 				"team_id", team.GetTeamId(), "to_player_id", pid,
 				"update_reason", reason.String(), "err", err)
 			continue
@@ -1679,7 +1711,7 @@ func (u *TeamUsecase) pushUpdate(
 			// 规定的「reason = 枚举化拒绝原因」撞名。改挂到 update_reason,
 			// 让 reason 在全服务范围内只有一个含义(否则按 reason 聚合会把两类混在一起)。
 			plog.With(ctx).Warnw("msg", "team_push_failed",
-				"reason", "push_produce_failed",
+				"reason", reasonPushProduceFailed,
 				"team_id", team.GetTeamId(), "to_player_id", pid,
 				"update_reason", reason.String(), "err", err,
 				"hint", "推送是加速器不是权威;客户端靠 GetMyTeam / ListMyPendingInvites 拉取兜底")
@@ -1711,7 +1743,7 @@ func (u *TeamUsecase) pushInvite(ctx context.Context, inviterID, targetPlayerID,
 		// 序列化失败只记录告警;邀请令牌已落库,不能把推送弱依赖反向变成业务失败。
 		InvitePushFailed.WithLabelValues("dedicated").Inc()
 		plog.With(ctx).Warnw("msg", "team_invite_marshal_failed",
-			"reason", "push_payload_marshal_failed",
+			"reason", reasonPushMarshalFailed,
 			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err)
 		return
 	}
@@ -1722,7 +1754,7 @@ func (u *TeamUsecase) pushInvite(ctx context.Context, inviterID, targetPlayerID,
 	if _, err := u.pusher.PushTeamEvent(ctx, inviterID, []uint64{targetPlayerID}, payload, eventTypeInvite); err != nil {
 		InvitePushFailed.WithLabelValues("dedicated").Inc()
 		plog.With(ctx).Warnw("msg", "team_invite_push_failed",
-			"reason", "push_produce_failed",
+			"reason", reasonPushProduceFailed,
 			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err,
 			"hint", "被邀请人靠 ListMyPendingInvites 拉取兜底")
 	}

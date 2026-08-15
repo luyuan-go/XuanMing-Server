@@ -51,16 +51,28 @@ const (
 	reasonInviteStoreFailed      = "invite_store_failed"
 	reasonApplicationNotFound    = "application_not_found_or_expired"
 	reasonApplicationStoreFailed = "application_store_failed"
+	// 写入侧总量上限拒绝(§9 不变量 18)。玩家侧表现是「加不进去 / 申请不了」,
+	// 与「Redis 写失败」必须分开,否则查不出是真满了还是清理没跑。
+	reasonInvitePendingLimit      = "invite_pending_limit_reached"
+	reasonApplicationPendingLimit = "application_pending_limit_reached"
+	// reasonJoinAfterApplicationConsumed:令牌已取走(不可放回)但入队失败。
+	reasonJoinAfterApplicationConsumed = "join_failed_after_application_consumed"
 
 	// 匹配闸门 / 组票租约(与 matchmaker 的共同线性化点)。
 	reasonMatchCommitted          = "team_committed_to_match"
 	reasonMatchCommitmentUnknown  = "match_commitment_unknown"
 	reasonPlayerCommitted         = "player_committed_to_match"
+	reasonPlayerCommitmentUnknown = "player_commitment_unknown"
 	reasonRosterLocked            = "roster_locked_for_match"
 	reasonTeamNotReady            = "team_not_ready"
 	reasonReadyGenerationMismatch = "ready_generation_mismatch"
 	reasonReadyAlreadyCleared     = "ready_already_cleared"
 	reasonLegacyReadyRevoked      = "legacy_ready_revoked"
+	// reasonMatchmakerCancelFailed:离队 / 踢人后撤票的跨服务 RPC 失败。
+	reasonMatchmakerCancelFailed = "matchmaker_cancel_rpc_failed"
+	// reasonRaceRecheckFailed / reasonRaceTicketFroze:摘人与组票之间 TOCTOU 窗口的两种结局。
+	reasonRaceRecheckFailed = "offline_race_recheck_failed"
+	reasonRaceTicketFroze   = "match_ticket_froze_removed_member"
 
 	// 入参与配额。
 	reasonMissingArg       = "missing_required_arg"
@@ -74,10 +86,16 @@ const (
 	// reason 取值必须一致(data 不反向依赖 biz,那边是同值字面量)。
 	reasonOptimisticRetryExhausted = "optimistic_retry_exhausted"
 
+	// 推送(加速器,不是权威;失败只影响到达延迟)。
+	reasonPushMarshalFailed = "push_payload_marshal_failed"
+	reasonPushProduceFailed = "push_produce_failed"
+
 	// 离线判定(offline_leave.go)。
-	reasonNoTeam           = "player_has_no_team"
-	reasonSingleMemberTeam = "single_member_team"
-	reasonFeatureDisabled  = "offline_leave_disabled"
+	reasonNoTeam              = "player_has_no_team"
+	reasonSingleMemberTeam    = "single_member_team"
+	reasonFeatureDisabled     = "offline_leave_disabled"
+	reasonNoTeammateToKeep    = "no_teammate_to_keep"
+	reasonPresenceObserveFail = "presence_observe_failed"
 )
 
 // ── 状态机轨迹 ────────────────────────────────────────────────────────────────

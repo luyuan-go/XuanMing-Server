@@ -29,6 +29,19 @@ import (
 	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
 
+// DS 准入验票的拒绝 reason 枚举(§11.3 R2)。
+//
+// 这条路径上的拒绝码大多是 ErrInvalidArg / ErrUnauthorized,而 pkg/middleware/logging.go
+// 只对 errcode.IsServerFault 升 ERROR,其余一律落 rpc_ok=DEBUG —— 也就是说线上默认级别下
+// 「玩家进不去 DS」在后端一行日志都不会有。故这些分支必须由业务代码自己显式打。
+const (
+	admissionRejectRepoUnavailable       = "admission_repo_unavailable"
+	admissionRejectTicketNoJTI           = "ticket_missing_jti"
+	admissionRejectMarkerOwnerInvalid    = "admission_marker_owner_invalid"
+	admissionRejectPeekFailed            = "admission_peek_failed"
+	admissionRejectHubCheckerUnavailable = "hub_assignment_checker_unavailable"
+)
+
 // DSTicketResult 是 IssueDSTicket 的产出。
 type DSTicketResult struct {
 	Ticket      string
@@ -371,7 +384,10 @@ func (u *TicketUsecase) issueDSTicketAtCell(
 		return nil, errcode.New(errcode.ErrInternal, "sign ds ticket failed: %v", err)
 	}
 
-	h.Debugw("msg", "ds_ticket_issued",
+	// §11.3 R1:签发票据是不可逆推进,也是 login 侧唯一能证明「我发出去的票绑的是谁」的记录。
+	// DS 拒票时后端无感,两边日志就靠这条 + jti 对账;原为 Debug 在线上默认 info 级下一条不出,
+	// 与 v2 路径的 ds_ticket_v2_issued(Info)不对称 —— 同一个动作两个级别会让「票到底发没发」在 legacy 档变成盲区。
+	h.Infow("msg", "ds_ticket_issued",
 		"player_id", playerID, "ds_type", string(ds), "target_id", targetID,
 		"jti", jti, "exp_ms", expMs, "region_id", regionID, "cell_id", cellID)
 
@@ -429,6 +445,15 @@ func (u *TicketUsecase) verifyDSTicket(
 		var ok bool
 		admissionRepo, ok = u.jtiRepo.(data.AdmissionTicketJTIRepo)
 		if !ok || admissionRepo == nil || claims.JTI == "" {
+			// §11.3 R2:三个条件合并在一个 if 里,拆开才能区分「部署没接 admission repo」
+			// 和「票本身没 jti」—— 前者是配置缺口(恒不可进),后者是单张票的问题。
+			reason := admissionRejectRepoUnavailable
+			if ok && admissionRepo != nil && claims.JTI == "" {
+				reason = admissionRejectTicketNoJTI
+			}
+			h.Errorw("msg", "ds_ticket_admission_rejected", "reason", reason,
+				"player_id", claims.PlayerID, "ds_pod", dsPodName, "ds_type", claims.DSType,
+				"admission_id", admissionID)
 			return nil, errcode.New(errcode.ErrUnavailable, "ticket admission replay authority unavailable")
 		}
 		var ownerErr error
@@ -437,10 +462,17 @@ func (u *TicketUsecase) verifyDSTicket(
 			credentialHash, ownerErr = admission.AcceptedCredentialHash()
 		}
 		if ownerErr != nil {
+			// ErrInvalidArg 在 access log 里落 rpc_ok=Debug,线上完全不可见 —— 必须自己打。
+			h.Warnw("msg", "ds_ticket_admission_rejected", "reason", admissionRejectMarkerOwnerInvalid,
+				"err", ownerErr, "player_id", claims.PlayerID, "ds_pod", dsPodName,
+				"ds_type", claims.DSType, "admission_id", admissionID)
 			return nil, errcode.NewCause(errcode.ErrInvalidArg, ownerErr, "invalid admission marker owner")
 		}
 		markerStatus, err = admissionRepo.PeekAdmission(ctx, claims.JTI, attemptOwner)
 		if err != nil {
+			h.Warnw("msg", "ds_ticket_admission_rejected", "reason", admissionRejectPeekFailed,
+				"err", err, "jti", claims.JTI, "player_id", claims.PlayerID,
+				"ds_pod", dsPodName, "ds_type", claims.DSType, "admission_id", admissionID)
 			return nil, err
 		}
 		if markerStatus == data.AdmissionMarkerConflict {
@@ -463,6 +495,10 @@ func (u *TicketUsecase) verifyDSTicket(
 		if claims.DSType == string(auth.DSTypeHub) {
 			admissionChecker, ok := u.assignmentChecker.(data.AdmissionHubAssignmentChecker)
 			if !ok || admissionChecker == nil {
+				// 部署配置缺口:本部署恒不可进 Hub。玩家侧只看到「进不去」,
+				// 没这条就只能去 hub_allocator 侧猜(而那边根本没收到请求)。
+				h.Errorw("msg", "ds_ticket_admission_rejected", "reason", admissionRejectHubCheckerUnavailable,
+					"player_id", claims.PlayerID, "ds_pod", dsPodName, "admission_id", admissionID)
 				return nil, errcode.New(errcode.ErrUnavailable, "hub admission assignment checker unavailable")
 			}
 			stable := hubBindingFromClaims(claims)

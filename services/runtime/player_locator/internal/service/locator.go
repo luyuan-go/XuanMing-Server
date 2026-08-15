@@ -47,8 +47,36 @@ func (s *LocatorService) SetHubCredentialStateChecker(c HubCredentialStateChecke
 	s.hubCredentialChecker = c
 }
 
+// DS 回调面拒绝 reason 枚举(§11.3 R2)。
+//
+// ⚠️ 本面 `plog.With(ctx)` **不会自动带 player_id**(DS 走 AuthOptional,不带
+// x-pandora-player-id),所有日志的 player_id / hub_pod 必须手写,否则定位不到人。
+const (
+	reasonDSGuardRejected      = "ds_callback_guard_rejected"
+	reasonHubCredentialInative = "hub_credential_not_active"
+)
+
+// logCallbackRejected 记录一次 DS 回调面的副作用前拒绝。
+//
+// 这些拒绝返回 in-band Code(ErrUnauthorized / ErrPermissionDeny / ErrUnavailable),
+// handler 自身返回 nil error → access log 记 rpc_ok(DEBUG)。线上默认 info 级下,
+// 「Hub DS 的位置上报被门禁挡掉了」这件事**一条日志都没有**,现象只剩下
+// 「玩家在大厅里但 locator 查不到他」。
+func logCallbackRejected(ctx context.Context, rpc, reason string, playerID uint64, hubPod string, err error, extra ...any) {
+	kvs := []any{"msg", "locator_ds_callback_rejected",
+		"rpc", rpc, "reason", reason,
+		"player_id", playerID, "hub_pod", hubPod,
+		"err", err}
+	plog.With(ctx).Warnw(append(kvs, extra...)...)
+}
+
 func (s *LocatorService) SetLocation(ctx context.Context, req *locatorv1.SetLocationRequest) (*locatorv1.SetLocationResponse, error) {
 	loc := req.GetLocation()
+	// §11.3 R3:match_id 在这里第一次被解析出来,写进 ctx 让本请求后续所有日志
+	// (biz 的守卫拒绝 / 状态迁移 / data 层 CAS 耗尽)自动带上,无需层层传参。
+	if loc.GetMatchId() != 0 {
+		ctx = plog.WithMatchID(ctx, loc.GetMatchId())
+	}
 	// DS 回调范围绑定:Hub DS 只能写 HUB 状态且 pod 必须与令牌 sub 一致;
 	// 其余状态(MATCHING/BATTLE/OFFLINE 等)只允许内部服务写(matchmaker/ds_allocator/login),
 	// 来自 DS 网关或带 DS 令牌的请求一律拒(DenyDS)。
@@ -61,10 +89,17 @@ func (s *LocatorService) SetLocation(ctx context.Context, req *locatorv1.SetLoca
 	}
 	_, cred, err := s.dsGuard.CheckHubCredential(ctx, scope)
 	if err != nil {
+		logCallbackRejected(ctx, "SetLocation", reasonDSGuardRejected,
+			req.GetPlayerId(), loc.GetHubPod(), err,
+			"presence_state", int32(loc.GetState()), "deny_ds", scope.DenyDS,
+			"require_token", scope.RequireToken)
 		return &locatorv1.SetLocationResponse{Code: toProtoCode(err)}, nil
 	}
 	if loc.GetState() == locatorv1.LocationState_LOCATION_STATE_HUB && s.hubCredentialChecker != nil {
 		if err := s.hubCredentialChecker.CheckActive(ctx, loc.GetHubPod(), cred); err != nil {
+			logCallbackRejected(ctx, "SetLocation", reasonHubCredentialInative,
+				req.GetPlayerId(), loc.GetHubPod(), err,
+				"presence_state", int32(loc.GetState()))
 			return &locatorv1.SetLocationResponse{Code: toProtoCode(err)}, nil
 		}
 	}
@@ -166,10 +201,16 @@ func (s *LocatorService) RefreshHubLocations(ctx context.Context, req *locatorv1
 		Type: auth.DSTypeHub, Pod: req.GetHubPod(), RequireToken: true,
 	})
 	if err != nil {
+		// 整批被拒 = 这台 Hub 上所有玩家的 presence 都不再续期,30s 后集体蒸发
+		// (对下游就是「整台服的人同时离线」),必须可见。
+		logCallbackRejected(ctx, "RefreshHubLocations", reasonDSGuardRejected,
+			0, req.GetHubPod(), err, "requested", len(req.GetPlayerIds()))
 		return &locatorv1.RefreshHubLocationsResponse{Code: toProtoCode(err)}, nil
 	}
 	if s.hubCredentialChecker != nil {
 		if err := s.hubCredentialChecker.CheckActive(ctx, req.GetHubPod(), cred); err != nil {
+			logCallbackRejected(ctx, "RefreshHubLocations", reasonHubCredentialInative,
+				0, req.GetHubPod(), err, "requested", len(req.GetPlayerIds()))
 			return &locatorv1.RefreshHubLocationsResponse{Code: toProtoCode(err)}, nil
 		}
 	}
@@ -191,10 +232,14 @@ func (s *LocatorService) ReportDisconnect(ctx context.Context, req *locatorv1.Re
 	// —— enforce 下无令牌直连(绕过 Envoy)一律拒(fail-closed,审核 P1)。
 	_, cred, err := s.dsGuard.CheckHubCredential(ctx, middleware.DSScope{Type: auth.DSTypeHub, Pod: req.GetHubPod(), RequireToken: true})
 	if err != nil {
+		logCallbackRejected(ctx, "ReportDisconnect", reasonDSGuardRejected,
+			req.GetPlayerId(), req.GetHubPod(), err)
 		return &locatorv1.ReportDisconnectResponse{Code: toProtoCode(err)}, nil
 	}
 	if s.hubCredentialChecker != nil {
 		if err := s.hubCredentialChecker.CheckActive(ctx, req.GetHubPod(), cred); err != nil {
+			logCallbackRejected(ctx, "ReportDisconnect", reasonHubCredentialInative,
+				req.GetPlayerId(), req.GetHubPod(), err)
 			return &locatorv1.ReportDisconnectResponse{Code: toProtoCode(err)}, nil
 		}
 	}
