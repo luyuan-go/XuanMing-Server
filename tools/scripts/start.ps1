@@ -97,6 +97,12 @@ param(
     # 这个场景下全是白跑。后端没在跑时自动回落到完整启动(见 Invoke-LocalDsOnly)。
     [switch]$DsOnly,
 
+    # -NoDocker(仅 -Mode local):本机基础设施改用**原生 Windows 进程**(tools/scripts/local_infra.ps1)
+    # 而不是 docker-compose —— MySQL/Redis/Kafka/Envoy 免安装二进制,不装 Docker Desktop、不开 WSL2。
+    # 同时不起 TiDB(TiKV 没有可用的 Windows 原生部署),社交四服改连本机 MySQL 的 pandora_social。
+    # 端口 / 账号 / schema 与 docker 模式逐项一致,业务配置不分叉。默认关,不传时行为逐字节不变。
+    [switch]$NoDocker,
+
     [switch]$Down,        # 停止该模式
     [switch]$Resume,      # 电脑重启后快速恢复:不重建镜像,把上次停掉的集群/容器拉回来
     [switch]$Reset,       # 一键重置:彻底清掉旧状态再全新启动(线上 online 模式禁用)
@@ -3851,7 +3857,19 @@ function Resolve-Prerequisites([string]$mode) {
                     $allOk = $false
                 }
             }
-            if (-not (Ensure-Docker)) { $allOk = $false }
+            if ($NoDocker) {
+                # 免 Docker 模式:基础设施是本机原生进程(local_infra.ps1),不需要 Docker Desktop。
+                # mkcert 仍要(Envoy 的 TLS 叶子证书得本机签,SAN 含本机局域网 IP),但**不在这里拦人**:
+                # local_infra.ps1 -Action provision 会把它连同 MySQL/Redis/Kafka/Envoy 一起自动备料到
+                # run/localinfra/dist/mkcert,并只挂进那个进程的 PATH。策划机的增量安装因此只剩 pwsh 7。
+                # 这里在前置检查阶段就去下它没有意义:真正用到是在 [1/3] 起 Envoy 那一步,
+                # 失败也在那里报,提前下反而把「检查工具」这一步变成一次几 MB 的联网操作。
+                if (Test-CommandExists 'mkcert') {
+                    Write-Ok 'mkcert 已在 PATH(本机自带的那份)'
+                } else {
+                    Write-Info 'mkcert 未安装 —— 不用管,起基础设施时会自动备料到 run/localinfra/dist/mkcert(不写系统 PATH)。'
+                }
+            } elseif (-not (Ensure-Docker)) { $allOk = $false }
             # 先定下 Envoy 边缘绑定地址(默认 0.0.0.0 对局域网开放 / -LocalOnly 只绑回环),
             # 后面的端口占用判定才能按真实绑定地址算。
             Initialize-LocalEdgeBinding
@@ -4179,12 +4197,17 @@ function Stop-LocalStackForK8s {
 
 function Invoke-Local {
     if ($Down) {
-        & "$ScriptDir/dev_all.ps1" -Down
+        & "$ScriptDir/dev_all.ps1" -Down -NoDocker:$NoDocker
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         return
     }
-    Write-Step "local 模式:基础设施(docker) + 22 个 go 服务(宿主进程)"
-    Write-Info "策划本地联调用这个;服务可在 VS Code 断点调试。"
+    if ($NoDocker) {
+        Write-Step "local 模式(免 Docker):基础设施(本机原生进程) + 22 个 go 服务(宿主进程)"
+        Write-Info "MySQL/Redis/Kafka/Envoy 走免安装二进制;不装 Docker Desktop、不起 TiDB。"
+    } else {
+        Write-Step "local 模式:基础设施(docker) + 22 个 go 服务(宿主进程)"
+        Write-Info "策划本地联调用这个;服务可在 VS Code 断点调试。"
+    }
 
     # 与 k8s 模式互斥 + 局域网绑定已在 Resolve-Prerequisites 里做完(必须早于端口占用检查)。
 
@@ -4195,7 +4218,8 @@ function Invoke-Local {
     # 若上一轮跑过 docker / intranet(非战斗)模式,业务容器还在跑 → 宿主 hub_allocator 起来即
     # `listen tcp :20021: bind: 已被占用` 崩溃,进而拉不起本机 Hub DS(PandoraServer.exe),
     # 客户端登录后卡在连大厅。这里在起宿主进程前,先把 docker 业务容器停掉(与 Invoke-Docker 反向对称)。
-    if (Test-Path $ComposeServices) {
+    # 免 Docker 模式下本机可能压根没有 docker 命令,这段整体跳过。
+    if (-not $NoDocker -and (Test-Path $ComposeServices)) {
         $svcContainers = @(docker compose -f $ComposeServices ps --quiet 2>$null | Where-Object { $_ })
         if ($svcContainers.Count -gt 0) {
             Write-Info "检测到 docker 业务容器在跑(会抢 20001-20022 端口),先停掉它们..."
@@ -4203,7 +4227,7 @@ function Invoke-Local {
         }
     }
 
-    & "$ScriptDir/dev_all.ps1"
+    & "$ScriptDir/dev_all.ps1" -NoDocker:$NoDocker
     # dev_all.ps1 每一步失败都会 exit 1,但 `&` 调子脚本**不会**让本脚本失败 —— 不透传的话
     # start.ps1 走完 switch 就正常结束,双击窗口 / Web 管理台拿到的是「完成(退出码 0)」,
     # 而基础设施其实压根没起来(2026-08-12 现场:另一台机器缺 dev.env,[1/4] 就断了,外层照报 0)。

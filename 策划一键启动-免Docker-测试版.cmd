@@ -1,0 +1,76 @@
+@echo off
+rem ASCII-ONLY FILE - do NOT put Chinese (or any non-ASCII) text in here, and do
+rem NOT add `chcp`. cmd.exe re-reads the batch file after every line using the
+rem CURRENT console code page; start.ps1 switches the console to UTF-8, which
+rem shifts cmd's saved offset by one byte per multi-byte character and makes cmd
+rem execute fragments of comment lines (2026-08-06 bug).
+rem ============================================================
+rem  Pandora backend - planner one-click start, NO DOCKER (TEST BUILD)
+rem  (double-click to run)
+rem ------------------------------------------------------------
+rem  This is a TEST entry point. It does exactly what the regular
+rem  "live asset" one-click start does, EXCEPT that the infrastructure
+rem  (MySQL / Redis / Kafka / Envoy) runs as plain native Windows
+rem  processes instead of Docker containers:
+rem
+rem    start.ps1 -Mode local -NoDocker -DsLauncher editor -GenTables
+rem
+rem  Why: planner machines cannot reasonably run Docker Desktop (WSL2,
+rem  admin rights, slow boot, huge disk usage). The no-Docker path uses
+rem  portable binaries unpacked under run\localinfra\ - nothing is
+rem  installed into Windows, nothing is registered as a service, and
+rem  removing that folder removes everything.
+rem
+rem  Ports, accounts and DB schema are IDENTICAL to the Docker path, so
+rem  the service configs (services\*\etc\*-dev.yaml) are not forked:
+rem    MySQL 127.0.0.1:3307   Redis 127.0.0.1:6380
+rem    Kafka 127.0.0.1:9093   Envoy :8443 (client) / 127.0.0.1:8444 (DS)
+rem
+rem  Differences you should know about:
+rem    * TiDB is NOT started (TiKV has no usable native Windows build).
+rem      friend / chat / guild / mail connect to the local MySQL
+rem      pandora_social database instead. Same schema, same code path.
+rem    * Prometheus / Grafana / Loki are NOT started (planners do not
+rem      use them; saves ~1 GB of RAM).
+rem    * The local Envoy is v1.28.0 (the last official Windows build).
+rem      Only ONE field of the production envoy.yaml is unsupported and
+rem      it is stripped explicitly; anything else fails the start on
+rem      purpose. This binary is for 127.0.0.1 development only - the
+rem      intranet / k8s / production edge keeps using v1.38.
+rem
+rem  First run downloads roughly 400 MB of portable binaries. Put them on
+rem  a share and set PANDORA_LOCALINFRA_MIRROR to that folder to skip the
+rem  download on every other machine.
+rem
+rem  What a planner machine still has to install: PowerShell 7, and that
+rem  is it. Go is not needed (prebuilt exes under run\artifacts\windows\
+rem  bin are used), Docker is not needed, and mkcert is downloaded
+rem  automatically into run\localinfra\dist\mkcert - it is only added to
+rem  the PATH of the running script, never to the system PATH.
+rem
+rem  Stop: pwsh tools\scripts\start.ps1 -Mode local -NoDocker -Down
+rem ============================================================
+setlocal
+cd /d "%~dp0"
+
+rem This project requires PowerShell 7 (pwsh). If missing, error out clearly; do
+rem not fall back to Windows PowerShell 5.1.
+where pwsh >nul 2>nul
+if errorlevel 1 (
+  echo.
+  echo  [ERR] PowerShell 7 pwsh not found. This script requires PowerShell 7.
+  echo        Install: https://aka.ms/powershell  or  winget install Microsoft.PowerShell
+  echo.
+  pause
+  exit /b 1
+)
+set "PS=pwsh"
+
+%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -NoDocker -DsLauncher editor -GenTables
+set "RC=%ERRORLEVEL%"
+
+rem Keep the window open only for interactive (double-click) runs. The web admin
+rem runs this headless with PANDORA_NONINTERACTIVE=1 and shows the output there,
+rem so the misleading "Press any key" line must not be printed.
+if not defined PANDORA_NONINTERACTIVE pause
+exit /b %RC%

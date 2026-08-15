@@ -49,7 +49,13 @@ param(
 
     # 配合 -Action build:把产物编到 run/artifacts/windows/bin(而不是 run/dev/bin),
     # 供打包分发给没装 Go 的机器。
-    [switch]$PublishArtifacts
+    [switch]$PublishArtifacts,
+
+    # 社交四服(friend/chat/guild/mail)改连本机 MySQL 而不是 TiDB。
+    # 用于免 Docker 的策划机模式:TiKV 没有可用的 Windows 原生部署,而这四服的
+    # 两套配置(etc/*-dev.yaml / etc/*-dev-tidb.yaml)本来就并存,这里只是选前一套。
+    # 默认关:docker / 内网 / k8s 模式继续走 TiDB,行为不变。
+    [switch]$SocialOnMysql
 )
 
 $ErrorActionPreference = 'Stop'
@@ -108,6 +114,16 @@ $Services = @(
     @{ Name = 'matchmaker_pve'; Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-pve.yaml';     Port = 20018 }
     @{ Name = 'login';          Dir = 'services/account/login';             Cmd = 'login';          Conf = 'etc/login-dev.yaml';          Port = 20001 }
 )
+
+# -SocialOnMysql:把社交四服从 TiDB 配置切回 MySQL 配置。两套 yaml 仓库里本就都有,
+# 这里只换文件名,不生成、不改写任何配置。
+if ($SocialOnMysql) {
+    foreach ($svc in $Services) {
+        if ($svc.Conf -match '^etc/(.+)-dev-tidb\.yaml$') {
+            $svc.Conf = "etc/$($Matches[1])-dev.yaml"
+        }
+    }
+}
 
 function Get-Service([string]$name) {
     $svc = $Services | Where-Object { $_.Name -eq $name }

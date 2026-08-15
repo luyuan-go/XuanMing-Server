@@ -17,7 +17,12 @@
 param(
     [string[]]$Exclude = @(),
     [switch]$Pull,
-    [switch]$Down
+    [switch]$Down,
+
+    # 免 Docker 模式(策划机):基础设施改用本机原生进程(local_infra.ps1),
+    # 不起 TiDB(社交四服改连本机 MySQL 的 pandora_social)。
+    # 默认关 = 完全保持原有 docker 行为(CLAUDE.md §14.2)。
+    [switch]$NoDocker
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,7 +33,39 @@ if ($Down) {
     & "$ScriptDir/run_services.ps1" -Action down
     Write-Host ""
     Write-Host "===== 停止基础设施 =====" -ForegroundColor Cyan
-    & "$ScriptDir/dev_down.ps1"
+    if ($NoDocker) { & "$ScriptDir/local_infra.ps1" -Action down } else { & "$ScriptDir/dev_down.ps1" }
+    exit $LASTEXITCODE
+}
+
+if ($NoDocker) {
+    # ===== 免 Docker 路线 =====
+    # 与 docker 路线的差异只有三处:基础设施换成本机进程、不起 TiDB、迁移器用本机
+    # mysql.exe 而不是 docker exec。端口 / 账号 / schema 全部一致,所以业务配置不分叉。
+    Write-Host "===== [1/3] 本机基础设施(免 Docker) =====" -ForegroundColor Cyan
+    & "$ScriptDir/local_infra.ps1" -Action up
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERR] 本机基础设施启动失败,中止" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host ""
+    Write-Host "===== [2/3] 数据库结构 =====" -ForegroundColor Cyan
+    # 免 Docker 模式用 local_infra 备料的 mysql.exe 作客户端(docker exec 用不了)。
+    $mysqlClient = Get-ChildItem -Path (Join-Path $ScriptDir '../../run/localinfra/dist/mysql') `
+        -Recurse -File -Filter 'mysql.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $mysqlClient) {
+        Write-Host "[ERR] 找不到本机 mysql.exe(备料应由 local_infra.ps1 完成),中止" -ForegroundColor Red
+        exit 1
+    }
+    & "$ScriptDir/dev_migrate.ps1" -MysqlClient $mysqlClient.FullName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERR] 数据库结构升级失败,中止(继续启动只会让服务连着旧结构崩溃)" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host ""
+    Write-Host "===== [3/3] 业务服务 =====" -ForegroundColor Cyan
+    & "$ScriptDir/run_services.ps1" -Exclude $Exclude -SocialOnMysql
     exit $LASTEXITCODE
 }
 

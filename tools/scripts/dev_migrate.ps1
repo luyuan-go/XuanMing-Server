@@ -31,6 +31,10 @@ param(
     [string]$MysqlPassword = 'pandora_dev_pwd',
     # 重放 mysql-init 要建库 + 授权,必须 root(deploy/env/dev.env MYSQL_ROOT_PASSWORD)。
     [string]$MysqlRootPassword = 'pandora_dev_root',
+    # 免 Docker 模式(策划机):传本机 mysql.exe 的路径,就不再走 docker exec。
+    # 留空 = 保持原有 docker 行为(CLAUDE.md §14.2:开关默认值不改现有行为)。
+    # 连接地址 / 账号 / 端口两边完全一致,所以后面的迁移器调用一行都不用分叉。
+    [string]$MysqlClient = '',
     [switch]$WhatIfOnly
 )
 
@@ -45,10 +49,47 @@ function Write-MigWarn($m) { Write-Host "[WARN] $m" -ForegroundColor Yellow }
 
 Write-Host "===== 数据库结构升级(dev) =====" -ForegroundColor Cyan
 
-# 先确认 MySQL 容器能连。连不上就整个跳过(而不是报错中断):可能是没用 MySQL 的场景。
-$dbListRaw = & docker exec $Container sh -c "MYSQL_PWD='$MysqlPassword' mysql -u'$MysqlUser' --batch --skip-column-names -e 'SHOW DATABASES;'" 2>&1
+$UseLocalClient = [bool]$MysqlClient
+if ($UseLocalClient -and -not (Test-Path -LiteralPath $MysqlClient)) {
+    Write-Host "[ERR] -MysqlClient 指向的文件不存在: $MysqlClient" -ForegroundColor Red
+    exit 1
+}
+
+function Invoke-DevMysqlQuery {
+    <# 拿库列表。docker 模式走容器内 mysql,免 Docker 模式走本机 mysql.exe。#>
+    param([string]$Sql)
+    if ($UseLocalClient) {
+        $old = $env:MYSQL_PWD
+        try {
+            $env:MYSQL_PWD = $MysqlPassword
+            return & $MysqlClient '--protocol=TCP' "--host=$MysqlHost" "--port=$MysqlPort" "--user=$MysqlUser" `
+                '--batch' '--skip-column-names' '-e' $Sql 2>&1
+        } finally { $env:MYSQL_PWD = $old }
+    }
+    return & docker exec $Container sh -c "MYSQL_PWD='$MysqlPassword' mysql -u'$MysqlUser' --batch --skip-column-names -e '$Sql'" 2>&1
+}
+
+function Invoke-DevMysqlScript {
+    <# 以 root 身份执行一个 .sql 文件(mysql-init 重放)。#>
+    param([string]$Path)
+    if ($UseLocalClient) {
+        $old = $env:MYSQL_PWD
+        try {
+            $env:MYSQL_PWD = $MysqlRootPassword
+            return Get-Content -LiteralPath $Path -Raw -Encoding utf8 |
+                & $MysqlClient '--protocol=TCP' "--host=$MysqlHost" "--port=$MysqlPort" '--user=root' `
+                    '--default-character-set=utf8mb4' 2>&1
+        } finally { $env:MYSQL_PWD = $old }
+    }
+    return Get-Content -LiteralPath $Path -Raw -Encoding utf8 |
+        & docker exec -i $Container sh -c "MYSQL_PWD='$MysqlRootPassword' mysql -uroot" 2>&1
+}
+
+# 先确认 MySQL 能连。连不上就整个跳过(而不是报错中断):可能是没用 MySQL 的场景。
+$dbListRaw = Invoke-DevMysqlQuery 'SHOW DATABASES;'
 if ($LASTEXITCODE -ne 0) {
-    Write-MigWarn "连不上 dev MySQL 容器『$Container』,跳过结构升级(基础设施可能还没起完)。"
+    $whoRaw = if ($UseLocalClient) { "本机 MySQL ${MysqlHost}:${MysqlPort}" } else { "dev MySQL 容器『$Container』" }
+    Write-MigWarn "连不上 $whoRaw,跳过结构升级(基础设施可能还没起完)。"
     Write-MigWarn "  详情:$($dbListRaw | Select-Object -First 3)"
     exit 0
 }
@@ -71,8 +112,7 @@ $initFiles = @(Get-ChildItem -LiteralPath $initDir -Filter '*.sql' -ErrorAction 
 if ($initFiles.Count -gt 0) {
     Write-MigInfo "重放 mysql-init 建库建表脚本($($initFiles.Count) 个,全 IF NOT EXISTS,已存在则空跑)..."
     foreach ($f in $initFiles) {
-        $sqlOut = Get-Content -LiteralPath $f.FullName -Raw -Encoding utf8 |
-            & docker exec -i $Container sh -c "MYSQL_PWD='$MysqlRootPassword' mysql -uroot" 2>&1
+        $sqlOut = Invoke-DevMysqlScript -Path $f.FullName
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[ERR] 重放 $($f.Name) 失败:" -ForegroundColor Red
             $sqlOut | ForEach-Object { Write-Host "      $_" -ForegroundColor Red }
@@ -101,7 +141,7 @@ if ($sets.Count -eq 0) {
 # 2) 本机 dev MySQL 里实际存在哪些库。只升级「已存在」的库:建库是上面重放 mysql-init
 #    的职责,本步不越权建库,免得把拼错的库名凭空建出来。
 #    重新查一次 —— 重放可能刚建出了新库(如 pandora_owner)。
-$dbListRaw = & docker exec $Container sh -c "MYSQL_PWD='$MysqlPassword' mysql -u'$MysqlUser' --batch --skip-column-names -e 'SHOW DATABASES;'" 2>&1
+$dbListRaw = Invoke-DevMysqlQuery 'SHOW DATABASES;'
 if ($LASTEXITCODE -ne 0) {
     Write-MigWarn "重放后重查库列表失败,跳过增量迁移。"
     exit 0
