@@ -55,7 +55,7 @@ lightweight=true：controller 只取 Tool/Build/Jenkinsfile，不做整仓检出
         <hudson.model.BooleanParameterDefinition>
           <name>FORCE_PACKAGE</name>
           <description>Run package manually even when no code/resource change is detected.</description>
-          <defaultValue>false</defaultValue>
+          <defaultValue>true</defaultValue>
         </hudson.model.BooleanParameterDefinition>
         <hudson.model.BooleanParameterDefinition>
           <name>PUBLISH_PACKAGES</name>

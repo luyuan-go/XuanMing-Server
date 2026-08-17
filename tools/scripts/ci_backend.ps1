@@ -205,6 +205,8 @@ $contractTests = @(
     # 策划一键启动的两条护栏(2026-08-12):dev.env 自举 + 启动失败必须带出非零退出码。
     # 后者尤其需要门禁 —— 它的回归表现是「窗口报绿、后端没起来」,人眼 review 最容易放过。
     'tools/scripts/tests/oneclick_devenv_exitcode_contract_test.ps1'
+    # MinIO 分发必须识别 mc "exit 0 + status=error"，且 latest.json 只能在内容完成后切换。
+    'tools/scripts/tests/publish_to_minio_contract_test.ps1'
 )
 $contractFailed = @()
 foreach ($rel in $contractTests) {
