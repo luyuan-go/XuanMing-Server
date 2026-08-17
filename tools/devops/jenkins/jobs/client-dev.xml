@@ -69,8 +69,8 @@ lightweight=true：controller 只取 Tool/Build/Jenkinsfile，不做整仓检出
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
           <name>UE_ENGINE_DIR_OVERRIDE</name>
-          <description>UE 5.8 source engine root. Defaults to the LocalBuilds engine that supports Linux Server targets.</description>
-          <defaultValue>F:\UnrealEngine-5.8.0-release\LocalBuilds\Engine\Windows</defaultValue>
+          <description>UE 5.8 source engine root. Defaults to the registered source engine checkout.</description>
+          <defaultValue>F:\UnrealEngine-5.8.0-release</defaultValue>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
