@@ -88,8 +88,8 @@
       "role_id": 1008,
       "role_name": "牧师(奶)",
       "level": 1,
-      "hp": 3300,
-      "attack": 91,
+      "hp": 2400,
+      "attack": 75,
       "hit_chance": 1
     },
     {
@@ -229,6 +229,26 @@
       "attack": 10,
       "hit_chance": 1,
       "kill_exp": "80"
+    },
+    {
+      "id": 1011001,
+      "role_id": 1011,
+      "role_name": "冰法·新",
+      "level": 1,
+      "hp": 3000,
+      "attack": 100,
+      "crit_damage": 1,
+      "hit_chance": 1
+    },
+    {
+      "id": 1013001,
+      "role_id": 1013,
+      "role_name": "冰法2号",
+      "level": 1,
+      "hp": 3000,
+      "attack": 100,
+      "crit_damage": 1,
+      "hit_chance": 1
     }
   ]
 }

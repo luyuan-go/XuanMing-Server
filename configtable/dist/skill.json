@@ -386,10 +386,10 @@
       "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Attack.GA_Sister_Attack_C",
       "target_select_mode": 1,
       "use_distance": 1000,
-      "damage_rate": 1.1098901,
+      "damage_rate": 1.16,
       "correction_rate": 1,
       "effect_count": 1,
-      "damage_display": 101
+      "damage_display": 87
     },
     {
       "id": 100811,
@@ -404,11 +404,11 @@
       "orient_target_type": 2,
       "orient_target_id": 100311,
       "use_distance": 600,
-      "damage_rate": 0.47252747,
+      "damage_rate": 0.48,
       "correction_rate": 0.1,
       "effect_count": 5,
-      "damage_display": 215,
-      "heal_display": 258,
+      "damage_display": 180,
+      "heal_display": 264,
       "effect_description": "在环内的敌人持续造成总共215点伤害，环内的友军持续获得总共258点治疗。"
     },
     {
@@ -427,7 +427,7 @@
       "damage_rate": 3,
       "correction_rate": 0.8,
       "effect_count": 1,
-      "damage_display": 273,
+      "damage_display": 225,
       "effect_description": "将技能范围内的所有敌人持续拉扯到环中心，持续3秒，并造成273点伤害。"
     },
     {
@@ -440,7 +440,7 @@
       "cd_duration": 30,
       "ability_path": "/Game/Test/Role/Hero/P_D_Sister_01/GA/GA_Sister_Skill03.GA_Sister_Skill03_C",
       "effect_count": 1,
-      "heal_display": 492,
+      "heal_display": 352,
       "effect_description": "给所有队友恢复20%气血，并获得无敌效果，持续3秒。"
     },
     {

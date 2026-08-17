@@ -78,6 +78,9 @@ Assert-True ((Resolve-SourceRev '' $TableRoot) -ceq 'svn-r1844') '纯数字版�
 $script:SvnOutput = "1844`n"
 Assert-True ((Resolve-SourceRev '' $TableRoot) -ceq 'svn-r1844') '版本号带换行也要能解析(svn 输出总带换行)'
 
+$script:SvnOutput = "2064 F:\work\Pandora-Client-SVN\Table`n2066 F:\work\Pandora-Client-SVN\Table\role.xlsx"
+Assert-True ((Resolve-SourceRev '' $TableRoot) -ceq 'svn-r2066') '混合版本工作副本必须取子节点最大 revision'
+
 # 非工作副本 / 中文路径 E155010 / svn 把错误写到 stdout:全都不是版本号,必须拒。
 foreach ($bad in @('', '   ', 'Exit 1', "svn: E155010: The node '...' was not found.", 'Unversioned directory', '18a4')) {
     $script:SvnOutput = $bad

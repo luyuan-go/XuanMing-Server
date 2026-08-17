@@ -101,9 +101,16 @@ function Resolve-SourceRev([string]$Explicit, [string]$Root) {
     if (-not [string]::IsNullOrWhiteSpace($Explicit)) { return $Explicit.Trim() }
     $svn = Get-Command svn -ErrorAction SilentlyContinue
     if ($null -eq $svn) { return '' }
-    # Table 根目录是纯 ASCII 路径,svn.exe 能吃;不要往下传中文子目录(会 E155010)。
-    $rev = (& svn info --show-item last-changed-revision $Root 2>$null | Out-String).Trim()
-    if ($rev -notmatch '^\d+$') { return '' }
+    # 不能取 Table 目录节点自身的 last-changed-revision:子文件提交后目录节点
+    # 可能仍是旧版本,会把新产物错标成旧 source_rev。递归取工作副本各节点
+    # revision 的最大值,兼容 SVN 混合版本工作副本。Table 根是纯 ASCII 路径,
+    # 避免直接把中文子路径传给某些 svn.exe(会 E155010)。
+    $raw = (& svn info --show-item revision --depth infinity $Root 2>$null | Out-String)
+    $revisions = @($raw -split "`r?`n" | ForEach-Object {
+        if ($_ -match '^\s*(\d+)(?:\s|$)') { [uint64]$Matches[1] }
+    })
+    if ($revisions.Count -eq 0) { return '' }
+    $rev = ($revisions | Measure-Object -Maximum).Maximum
     return "svn-r$rev"
 }
 
@@ -311,7 +318,15 @@ if ($genExit -ne 0) {
         Write-Host '      这**不是文件被 Excel 占用**,也不是 SVN 没更新,是服务端 proto 注解需要同步。'
         Write-SyncHint '列改名'
         Write-Host "      临时想继续导表:把列名改回「$expect」。"
-    } elseif ($outText -match '读\s+.*失败|xlsx') {
+    } elseif ($outText -match '.*必填列为空') {
+        if ($outText -match '(\S+\.xlsx)\s+第\s+(\d+)\s+行\s+([^:\r\n]+):\s*必填列为空') {
+            Write-Warn2 "原因:$($Matches[1]) 第 $($Matches[2]) 行的「$($Matches[3].Trim())」没填。"
+        } else {
+            Write-Warn2 '原因:表数据里有必填列为空。'
+        }
+        Write-Host '      这**不是 xlsx 读取失败**,Excel 占用或 SVN 更新都不会修好这个值。'
+        Write-Host '      做法:按上面点名的表 / 行 / 列填入合法值后重试;0 也必须显式填 0。'
+    } elseif ($outText -match '读\s+.*\.xlsx\s+失败|打开 xlsx 失败') {
         Write-Warn2 '原因:某张 xlsx 读不出来。常见是文件正被 Excel 打开、或 SVN 更新到一半。'
         Write-Host '      做法:关掉 Excel,svn update 后重试。'
     } else {
