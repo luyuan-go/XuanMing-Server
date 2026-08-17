@@ -201,6 +201,60 @@ function Test-PortOpen([int]$Port) {
     } catch { return $false } finally { $c.Dispose() }
 }
 
+function Test-AfUnixUsable([string]$Dir) {
+    <#
+      指定目录下 AF_UNIX(Unix 域套接字)能不能 bind+connect 通。
+      为什么需要:Envoy 的 libevent 在 Windows 上优先用 AF_UNIX 造 socketpair 来做信号唤醒,
+      被拦住时它连事件循环都建不起来,直接 assert 崩 —— 而崩溃文本里只字不提 AF_UNIX。
+      为什么带目录参数:2026-08-16 实测,AF_UNIX 能不能用是**按路径**变的,有两条独立成因:
+        1. %LOCALAPPDATA% 整棵树下 connect 报 WSAEINVAL(该目录本身、以及它下面的 Temp 都中招),
+           而 C:\Windows\Temp、F: 盘、甚至同一用户的 Documents 都完全正常 —— 所以不是
+           "用户目录被拦",范围就是 AppData\Local。成因未证实(本机装着 360,其内核过滤驱动
+           360AntiSteal/360FsFlt 是头号嫌疑,且 Docker 的 socket 恰好也放在这棵树下 ——
+           但没做过"卸载后复测"的对照实验,这里只当作**现象**处理,不写死是谁干的)。
+        2. socket 全路径超过约 108 字节一律失败 —— 这是 AF_UNIX sun_path 的固有长度上限,
+           跟安全软件无关,深层目录里的工作区会撞上。
+      两条都靠这个探针挡掉,所以「AF_UNIX 不可用」永远不是全局结论,必须逐目录问。
+      返回 $null=可用;否则返回失败原因串。
+    #>
+    if (-not $Dir) { $Dir = $env:TEMP }
+    if (-not (Test-Path -LiteralPath $Dir)) { New-Item -ItemType Directory -Force -Path $Dir | Out-Null }
+    $sock = Join-Path $Dir ("pandora-afunix-probe-" + [guid]::NewGuid().ToString('N').Substring(0, 8) + ".sock")
+    $l = $null; $c = $null; $a = $null
+    try {
+        $l = [Net.Sockets.Socket]::new([Net.Sockets.AddressFamily]::Unix, [Net.Sockets.SocketType]::Stream, [Net.Sockets.ProtocolType]::Unspecified)
+        $l.Bind([Net.Sockets.UnixDomainSocketEndPoint]::new($sock))
+        $l.Listen(1)
+        $c = [Net.Sockets.Socket]::new([Net.Sockets.AddressFamily]::Unix, [Net.Sockets.SocketType]::Stream, [Net.Sockets.ProtocolType]::Unspecified)
+        $c.Connect([Net.Sockets.UnixDomainSocketEndPoint]::new($sock))
+        $a = $l.Accept()
+        return $null
+    } catch {
+        $e = $_.Exception; while ($e.InnerException) { $e = $e.InnerException }
+        return $e.Message
+    } finally {
+        foreach ($s in @($a, $c, $l)) { if ($s) { try { $s.Dispose() } catch {} } }
+        try { Remove-Item -LiteralPath $sock -Force -ErrorAction SilentlyContinue } catch {}
+    }
+}
+
+function Resolve-EnvoyTempDir {
+    <#
+      给 Envoy 挑一个 AF_UNIX 真的能用的临时目录,并把 TMP/TEMP 指过去。
+      背景见 Test-AfUnixUsable:libevent 在 TMP 目录里造 socketpair,而这台机器上
+      %LOCALAPPDATA% 树(默认 TEMP 就在里面)下这个调用是不通的。换个目录不是"绕过安全软件",
+      只是换个放临时文件的地方 —— 权限模型、拦截规则一点没动,换完照样受同一套防护管。
+      优先用项目自己的 run/localinfra/tmp:跟着工作区走、可随目录一起删,不往系统目录里拉屎;
+      它要是太深撞了 108 字节上限,自动落到 C:\Windows\Temp。
+      全都不通才返回 $null,由调用方去报「AF_UNIX 在本机哪儿都用不了」。
+    #>
+    foreach ($d in @((Join-Path $Root 'tmp'), 'C:\Windows\Temp', $env:TEMP)) {
+        if (-not $d) { continue }
+        if (-not (Test-AfUnixUsable $d)) { return $d }
+    }
+    return $null
+}
+
 function Get-PidFile([string]$Name) { Join-Path $PidDir "$Name.pid" }
 
 function Get-RunningProcess([string]$Name) {
@@ -211,12 +265,119 @@ function Get-RunningProcess([string]$Name) {
     return Get-Process -Id $procId -ErrorAction SilentlyContinue
 }
 
+function Invoke-BoundedTool {
+    <#
+      跑一个外部小工具,最多等 $TimeoutSec 秒,超时就把它本身杀掉。
+      为什么不信工具自带的超时选项:mysqladmin 的 shutdown_timeout 默认 3600s,
+      实测就是它把整个停止流程挂死了。等待边界必须由调用方掌握,不能交给被调方的默认值。
+    #>
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [int]$TimeoutSec = 15
+    )
+    try {
+        $p = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru -WindowStyle Hidden
+        if (-not $p.WaitForExit($TimeoutSec * 1000)) {
+            & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+        }
+    } catch {
+        # 优雅停机是「尽力而为」:失败就退回强杀,不能让它阻断停止流程。
+    }
+}
+
+function Request-GracefulStop([string]$Name) {
+    <#
+      对齐 docker stop 的语义:compose 路径下 docker stop 会发 SIGTERM,MySQL 会 flush、
+      Redis 会存盘。原生进程没人替我们发这个信号,只能自己调管理命令。
+      直接 taskkill /F 等于拔电源:MySQL 下次启动要做崩溃恢复,Redis 丢掉上次存盘之后的写入
+      —— 策划一天要重启好几次,不能每次都拔电源。
+      返回 $true 表示「已经请求过优雅停机,值得多等一会儿」。
+    #>
+    switch ($Name) {
+        'mysql' {
+            $admin = Find-Tool 'mysql' 'mysqladmin.exe'
+            if (-not $admin) { return $false }
+            # 口令走 MYSQL_PWD,不进命令行(命令行密码会出现在进程列表里)。
+            $old = $env:MYSQL_PWD
+            try {
+                $env:MYSQL_PWD = $MysqlRootPwd
+                Invoke-BoundedTool -FilePath $admin -TimeoutSec 15 -Arguments @(
+                    '--protocol=TCP', '--host=127.0.0.1', "--port=$MysqlPort", '--user=root',
+                    '--connect-timeout=5', 'shutdown'
+                )
+            } finally { $env:MYSQL_PWD = $old }
+            return $true
+        }
+        'redis' {
+            $cli = Find-Tool 'redis' 'redis-cli.exe'
+            if (-not $cli) { return $false }
+            # SHUTDOWN SAVE:存盘后退出,等价 docker stop 时 redis 收到 SIGTERM 的行为。
+            Invoke-BoundedTool -FilePath $cli -TimeoutSec 10 -Arguments @(
+                '-h', '127.0.0.1', '-p', "$RedisPort", 'shutdown', 'save'
+            )
+            return $true
+        }
+        default {
+            # envoy:无状态代理,杀掉即可。
+            # kafka:KRaft 日志本身就是为崩溃设计的,重启会自愈;它没有等价的一句话停机命令
+            #       (自带的 kafka-server-stop.bat 内部也就是 taskkill),没必要自己造一个。
+            return $false
+        }
+    }
+}
+
+function Wait-ProcessExit([System.Diagnostics.Process]$Proc, [int]$TimeoutSec) {
+    # 有界等待 + 到期重新观测进程状态(不是 sleep 完就假设它好了)。
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while (-not $Proc.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }
+    return $Proc.HasExited
+}
+
+function Stop-OrphanPortHolder([string]$Name, [int[]]$Ports) {
+    <#
+      pid 文件丢了(pids 目录被清、上一轮进程被手工 taskkill、或换了工作区)时 Stop-Component
+      认不出上一轮的进程,新进程起来就 bind 失败。这里按**端口 + 映像路径**兜底:只清理 dist
+      目录下我们自己那个 exe,别人的进程一律不碰 —— 端口占用的判据不能只有端口号。
+    #>
+    $own = [IO.Path]::GetFullPath((Join-Path $DistDir "$Name/$Name.exe"))
+    foreach ($port in $Ports) {
+        foreach ($c in @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue)) {
+            $p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
+            if (-not $p) { continue }
+            $path = $null
+            try { $path = $p.Path } catch { $path = $null }
+            if (-not $path -or [IO.Path]::GetFullPath($path) -ne $own) { continue }
+            Write-Warn2 "$Name(pid $($p.Id))还占着 :$port 但没有 pid 文件登记 —— 本项目上一轮的残留,清掉。"
+            & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+            [void](Wait-ProcessExit $p 10)
+        }
+    }
+}
+
 function Stop-Component([string]$Name) {
     $p = Get-RunningProcess $Name
     if ($p) {
-        # /T:kafka 是 cmd.exe 拉起 java 的父子结构,只杀父进程会留下孤儿 java 占着 9093。
-        & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
-        Write-Ok "$Name 已停止 (PID $($p.Id))"
+        $procId = $p.Id
+
+        # 只对「已经请求过优雅停机」的组件多等;没请求过就干等纯属浪费(每个组件白等 20s,
+        # 一次 down 就多花一分钟)。
+        if ((Request-GracefulStop $Name)) { [void](Wait-ProcessExit $p 20) }
+
+        if (-not $p.HasExited) {
+            # /T 连子进程一起收:留着以防将来某个组件又套一层启动器。
+            & taskkill.exe /PID $procId /T /F 2>&1 | Out-Null
+            [void](Wait-ProcessExit $p 10)
+        }
+
+        # 必须等到它**真的**退出再返回:进程退出、端口释放、数据目录解锁都是异步的,
+        # 不等就返回的话「停止后马上启动」会撞上端口被占 / 数据目录被锁 —— 而策划恰恰
+        # 天天这么干(改完表点重启),实测就是这么炸的。
+        if ($p.HasExited) {
+            Write-Ok "$Name 已停止 (PID $procId)"
+        } else {
+            Write-Err "$Name (PID $procId) 30s 内没能停掉 —— 下次启动可能撞端口,请手工确认。"
+        }
     }
     Remove-Item -LiteralPath (Get-PidFile $Name) -Force -ErrorAction SilentlyContinue
 }
@@ -550,6 +711,40 @@ function Invoke-MysqlSql {
     } finally { $env:MYSQL_PWD = $old }
 }
 
+function Get-MysqlBootstrapSqlPath { Join-Path $CfgDir 'mysql-bootstrap.sql' }
+
+function New-MysqlBootstrapSql {
+    <#
+      建账号用 mysqld 的 --init-file,不用客户端连上去执行 —— 这是 MySQL 官方在 Windows 上
+      重置 root 口令的标准做法,原因是它**不需要先能连上**:
+
+        1. `--initialize-insecure` 只会建出 'root'@'localhost';
+        2. 我们开了 skip-name-resolve(不做反解,账号 host 必须按字面匹配),
+           于是从 TCP 127.0.0.1 连进来的客户端匹配不到 'localhost',
+           MySQL 在**认证之前**就回 "Host '127.0.0.1' is not allowed to connect";
+        3. 结果是「想建账号得先连上,想连上得先有账号」的死锁。
+
+      更糟的是原来那版把建账号挂在「数据目录是不是刚建出来」这个一次性条件上:第一次失败,
+      数据目录却已经建好了,之后每次启动都判定为「不是首次」直接跳过,账号永远补不回来
+      —— 表现就是 mysqladmin / 迁移脚本 / 各服务全都连不上,而启动日志一片绿。
+
+      现在改成**每次启动都跑**这个文件,全部语句幂等(IF NOT EXISTS + ALTER),
+      账号被误删或口令被改了下次启动自动修回来,没有「一次性初始化」这种脆弱状态。
+
+      注意 --init-file 的硬性格式要求(MySQL 手册):**一行一条语句,且不能写注释**。
+    #>
+    @"
+ALTER USER 'root'@'localhost' IDENTIFIED BY '$MysqlRootPwd';
+CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY '$MysqlRootPwd';
+ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '$MysqlRootPwd';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;
+CREATE USER IF NOT EXISTS '$MysqlUser'@'%' IDENTIFIED BY '$MysqlUserPwd';
+ALTER USER '$MysqlUser'@'%' IDENTIFIED BY '$MysqlUserPwd';
+CREATE USER IF NOT EXISTS '$MysqlUser'@'127.0.0.1' IDENTIFIED BY '$MysqlUserPwd';
+ALTER USER '$MysqlUser'@'127.0.0.1' IDENTIFIED BY '$MysqlUserPwd';
+"@ | Set-Content -LiteralPath (Get-MysqlBootstrapSqlPath) -Encoding utf8NoBOM
+}
+
 function Start-LocalMysql {
     $mysqld = Find-Tool 'mysql' 'mysqld.exe'
     if (-not $mysqld) { Fail '找不到 mysqld.exe,先跑 -Action provision。' }
@@ -562,13 +757,15 @@ function Start-LocalMysql {
     }
 
     New-MysqlIni -BaseDir $baseDir
+    New-MysqlBootstrapSql
 
     $firstRun = -not (Test-Path -LiteralPath (Join-Path $dataMysql 'mysql'))
     if ($firstRun) {
         Write-Step "首次初始化 MySQL 数据目录(约 30s,只有第一次)"
         Remove-Item -LiteralPath $dataMysql -Recurse -Force -ErrorAction SilentlyContinue
         New-Item -ItemType Directory -Force -Path $dataMysql | Out-Null
-        # --initialize-insecure:建出空密码的 root@localhost(不是过期密码),后面立刻改掉。
+        # --initialize-insecure:建出空密码的 root@localhost(不是过期密码),
+        # 口令和 pandora 账号交给下面启动时的 --init-file 补齐。
         $p = Start-Process -FilePath $mysqld -ArgumentList "--defaults-file=$(Get-MysqlIniPath)", '--initialize-insecure' `
             -WindowStyle Hidden -PassThru -Wait
         if ($p.ExitCode -ne 0) {
@@ -577,23 +774,27 @@ function Start-LocalMysql {
     }
 
     Write-Step "启动 MySQL :$MysqlPort"
-    $proc = Start-Process -FilePath $mysqld -ArgumentList "--defaults-file=$(Get-MysqlIniPath)" `
+    # --no-monitor 必须加。Windows 上 mysqld 默认再 fork 一个「监控进程」,子进程一退出它就
+    # **自动重新拉起**一个 mysqld。后果有两个,都实测踩过:
+    #   1. Save-Pid 存的是监控进程(父),不是真正在服务的那个,pid 追踪从一开始就是错的;
+    #   2. mysqladmin shutdown 关掉子进程后监控立刻补一个新的,mysqladmin 永远等不到
+    #      「服务器消失」,于是挂在它自己默认的 shutdown_timeout=3600s 上 —— 表现就是
+    #      「点停止之后整个脚本不动了」。日志里同时能看到两个实例抢 ibdata1 的报错。
+    # 策划机是「一个脚本管生死」的模型,不需要 MySQL 自作主张重启;要重启由脚本负责。
+    # --init-file:每次启动都幂等补齐账号,见 New-MysqlBootstrapSql 的说明。
+    $bootstrapSql = (Get-MysqlBootstrapSqlPath) -replace '\\', '/'
+    $proc = Start-Process -FilePath $mysqld -ArgumentList `
+        "--defaults-file=$(Get-MysqlIniPath)", '--no-monitor', "--init-file=$bootstrapSql" `
         -WindowStyle Hidden -PassThru
     Save-Pid 'mysql' $proc.Id
     Wait-Port -Name 'mysql' -Port $MysqlPort -TimeoutSec 90 -Proc $proc
 
-    if ($firstRun) {
-        Write-Step '创建 root 密码与 pandora 账号(对齐 compose 的 MYSQL_* 环境变量)'
-        # compose 里 mysql 镜像用 MYSQL_ROOT_PASSWORD / MYSQL_USER / MYSQL_PASSWORD 建号;
-        # 免安装版没有这套 entrypoint,这里手工等价补齐。库和授权仍由 mysql-init/01 负责。
-        $sql = @"
-ALTER USER 'root'@'localhost' IDENTIFIED BY '$MysqlRootPwd';
-CREATE USER IF NOT EXISTS '$MysqlUser'@'%' IDENTIFIED BY '$MysqlUserPwd';
-CREATE USER IF NOT EXISTS '$MysqlUser'@'localhost' IDENTIFIED BY '$MysqlUserPwd';
-FLUSH PRIVILEGES;
-"@
-        Invoke-MysqlSql -Sql $sql -User 'root' -Password '' | Out-Null
-        Write-Ok 'MySQL 账号就绪'
+    # 端口开了不等于账号对。这里真连一次 —— 服务和迁移脚本用的就是这个账号,
+    # 连不上就当场报错,不要让「基础设施一片绿、服务起来全连不上」再发生一次。
+    try {
+        Invoke-MysqlSql -Sql 'SELECT 1;' -User $MysqlUser -Password $MysqlUserPwd | Out-Null
+    } catch {
+        Fail "MySQL 起来了但账号 '$MysqlUser' 连不上:$($_.Exception.Message)`n日志: $(Join-Path $LogDir 'mysql.log')"
     }
     Write-Ok "MySQL :$MysqlPort"
 }
@@ -667,6 +868,48 @@ log.retention.hours=48
 "@ | Set-Content -LiteralPath (Join-Path $CfgDir 'kafka.properties') -Encoding utf8NoBOM
 }
 
+function Get-KafkaJavaArgs {
+    <#
+      直接用 java 起 Kafka,**不走 bin/windows/*.bat**。
+
+      为什么:kafka-run-class.bat 会把 libs 下 120 个 jar 的**完整路径**逐个拼成 CLASSPATH,
+      本机实测 12051 字符,远超 cmd.exe 的 8191 上限,于是 kafka-storage 直接报
+      "The input line is too long." 而这个长度是「路径前缀 x 120」,随仓库放得多深而变 ——
+      同一份代码在 D:\p 下能跑、在 F:\work\XuanMing-Server\... 下就炸,属于最难查的偶发失败,
+      不能靠「让策划把仓库放浅一点」来赌。
+
+      java 自己支持 `libs/*` 通配符(由 JVM 在启动时展开,不经过命令行),命令行长度从此
+      与路径深度无关。JVM 参数照抄 kafka-run-class.bat 的默认值,只把堆调小。
+    #>
+    param(
+        [Parameter(Mandatory)][string]$KafkaHome,
+        [Parameter(Mandatory)][string]$Log4jName,
+        [Parameter(Mandatory)][string[]]$HeapOpts
+    )
+    $l4j = (Join-Path $KafkaHome "config/$Log4jName") -replace '\\', '/'
+    return @(
+        $HeapOpts
+        '-server'
+        '-XX:+UseG1GC'
+        '-XX:MaxGCPauseMillis=20'
+        '-XX:InitiatingHeapOccupancyPercent=35'
+        '-XX:+ExplicitGCInvokesConcurrent'
+        '-Djava.awt.headless=true'
+        "-Dkafka.logs.dir=$LogDir"
+        "-Dlog4j.configuration=file:$l4j"
+        '-cp'
+        (Join-Path $KafkaHome 'libs/*')
+    )
+}
+
+function ConvertTo-ProcArg {
+    # Start-Process -ArgumentList 是按空格拼回一整行的,含空格的路径必须自己加引号
+    # (策划机的仓库可能落在 "D:\我的文档\..." 这种带空格的目录下)。
+    param([string]$Value)
+    if ($Value -match '\s') { return "`"$Value`"" }
+    return $Value
+}
+
 function Start-LocalKafka {
     if (Test-PortOpen $KafkaPort) {
         Write-Ok "Kafka :$KafkaPort 已在运行"
@@ -676,7 +919,6 @@ function Start-LocalKafka {
     if (-not $home2) { Fail '找不到 kafka 发行包,先跑 -Action provision。' }
     $java = Find-Tool 'jre' 'java.exe'
     if (-not $java) { Fail '找不到自带 JRE,先跑 -Action provision。' }
-    $javaHome = Split-Path -Parent (Split-Path -Parent $java)
 
     New-KafkaProperties
     $props = Join-Path $CfgDir 'kafka.properties'
@@ -684,31 +926,36 @@ function Start-LocalKafka {
 
     if (-not (Test-Path -LiteralPath $meta)) {
         Write-Step 'Kafka 首次格式化存储(KRaft)'
-        $env:JAVA_HOME = $javaHome
-        $uuid = & (Join-Path $home2 'bin/windows/kafka-storage.bat') random-uuid
-        if ($LASTEXITCODE -ne 0 -or -not $uuid) { Fail 'kafka-storage random-uuid 失败' }
-        $uuid = ($uuid | Select-Object -Last 1).Trim()
-        $out = & (Join-Path $home2 'bin/windows/kafka-storage.bat') format -t $uuid -c $props 2>&1
+        $toolArgs = Get-KafkaJavaArgs -KafkaHome $home2 -Log4jName 'tools-log4j.properties' -HeapOpts @('-Xmx256M')
+        $uuidArgs = $toolArgs + @('kafka.tools.StorageTool', 'random-uuid')
+        $uuid = & $java @uuidArgs 2>&1
+        if ($LASTEXITCODE -ne 0 -or -not $uuid) { Fail "kafka-storage random-uuid 失败: $($uuid -join "`n")" }
+        $uuid = ($uuid | Where-Object { $_ -match '^[A-Za-z0-9_\-]{22}$' } | Select-Object -Last 1)
+        if (-not $uuid) { Fail 'kafka-storage random-uuid 没有返回可用的 cluster id' }
+        $fmtArgs = $toolArgs + @('kafka.tools.StorageTool', 'format', '-t', $uuid.Trim(), '-c', $props)
+        $out = & $java @fmtArgs 2>&1
         if ($LASTEXITCODE -ne 0) { Fail "kafka-storage format 失败: $($out -join "`n")" }
     }
 
     Write-Step "启动 Kafka :$KafkaPort"
-    # 用 cmd /c 包一层:kafka-server-start.bat 自己会 spawn java。停的时候必须 taskkill /T,
-    # 否则 java 变孤儿继续占着 9093(Stop-Component 已经带 /T)。
+    $srvArgs = @(Get-KafkaJavaArgs -KafkaHome $home2 -Log4jName 'log4j.properties' -HeapOpts @('-Xmx512M', '-Xms256M')) +
+    @('kafka.Kafka', $props)
+
+    # 这里刻意**不用** Start-Process 的 -RedirectStandardOutput,改成 cmd /c 里做重定向。
+    # 原因是 Windows 的进程创建机制:一旦用了 -Redirect*,PowerShell 会走
+    # UseShellExecute=false + bInheritHandles=TRUE,于是**父进程所有可继承句柄**(包括
+    # 调用方读取本脚本输出用的那根管道)都会被复制给这些常驻服务进程。结果是:本脚本
+    # 早就退出了,调用方却永远等不到管道 EOF —— 表现为「基础设施明明起来了,一键启动脚本
+    # 却卡住不往下走」。实测四个服务的 ppid 已不存在而父脚本仍挂着,就是这个原因。
+    # 不带重定向参数时 Start-Process 默认 UseShellExecute=true,走 ShellExecuteEx,
+    # 不传递任何句柄 —— mysql / redis / envoy 因此都保持无重定向(它们各自有日志文件)。
+    # Kafka 需要留住 JVM 早期的 stdout/stderr(log4j 起来之前的失败只在那里可见),
+    # 所以由 cmd 自己做重定向:重定向发生在 cmd 内部,与我们的句柄无关。
+    $quoted = ($srvArgs | ForEach-Object { ConvertTo-ProcArg $_ }) -join ' '
     $logFile = Join-Path $LogDir 'kafka.log'
-    $psi = @{
-        FilePath               = 'cmd.exe'
-        ArgumentList           = @('/c', "`"$(Join-Path $home2 'bin/windows/kafka-server-start.bat')`"", "`"$props`"")
-        WorkingDirectory       = $home2
-        WindowStyle            = 'Hidden'
-        PassThru               = $true
-        RedirectStandardOutput = $logFile
-        RedirectStandardError  = (Join-Path $LogDir 'kafka.err.log')
-    }
-    $env:JAVA_HOME = $javaHome
-    $env:KAFKA_HEAP_OPTS = '-Xmx512M -Xms256M'   # 默认 1G,策划机省点内存
-    $env:LOG_DIR = $LogDir
-    $proc = Start-Process @psi
+    $cmdLine = "`"$java`" $quoted > `"$logFile`" 2>&1"
+    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "`"$cmdLine`"" `
+        -WorkingDirectory $home2 -WindowStyle Hidden -PassThru
     Save-Pid 'kafka' $proc.Id
     Wait-Port -Name 'kafka' -Port $KafkaPort -TimeoutSec 120 -Proc $proc
     Write-Ok "Kafka :$KafkaPort"
@@ -793,6 +1040,19 @@ function New-LocalEnvoyConfig {
     return $dst
 }
 
+function Get-EnvoyFingerprint([string]$CfgPath) {
+    <#
+      指纹 = 派生配置 + 证书 + 私钥。这三样里任何一样变了,当前跑着的 Envoy 就是过期的,
+      必须重启才生效;三样都没变,则它跑的就是同一份配置,没有任何重启的理由。
+    #>
+    $parts = foreach ($p in @($CfgPath,
+        (Join-Path $ProjectRoot 'deploy/envoy/cert.pem'),
+        (Join-Path $ProjectRoot 'deploy/envoy/key.pem'))) {
+        if (Test-Path -LiteralPath $p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash } else { 'missing' }
+    }
+    return ($parts -join ':')
+}
+
 function Start-LocalEnvoy {
     $exe = Join-Path $DistDir 'envoy/envoy.exe'
     if (-not (Test-Path -LiteralPath $exe)) { Fail ' 找不到 envoy.exe,先跑 -Action provision。' }
@@ -803,13 +1063,74 @@ function Start-LocalEnvoy {
     Confirm-SharedDevCa -ProjectRoot $ProjectRoot | Out-Null
     Confirm-EnvoyDevCert -EnvoyDir (Join-Path $ProjectRoot 'deploy/envoy')
 
-    Stop-Component 'envoy'   # 配置每次都重生成,必须重启才生效(等价 compose 的 --force-recreate)
+    # 先派生再决定要不要重启(派生是纯函数,只写文件,不碰进程)。
+    # 原来这里是无条件 Stop-Component 'envoy',理由写的是「配置每次都重生成所以必须重启」——
+    # 但派生是**确定性**的:deploy/envoy/envoy.yaml 和证书没变时,派生结果逐字节相同,
+    # 重启就纯粹是白白踢掉所有在连的客户端和 DS。而策划的日常是「基础设施开着不动,
+    # 反复重启 go / DS」,这条无条件重启正好破坏了那个前提。
     $cfg = New-LocalEnvoyConfig
+    $fpFile = Join-Path $CfgDir 'envoy.fingerprint'
+    $fp = Get-EnvoyFingerprint $cfg
+    $oldFp = if (Test-Path -LiteralPath $fpFile) { (Get-Content -LiteralPath $fpFile -Raw).Trim() } else { '' }
+
+    if ($fp -eq $oldFp -and (Get-RunningProcess 'envoy') -and (Test-PortOpen 8443) -and (Test-PortOpen 8444)) {
+        Write-Ok 'Envoy :8443 / :8444 已在运行(配置与证书均未变化,不重启)'
+        return
+    }
+
+    Stop-Component 'envoy'
+    Stop-OrphanPortHolder 'envoy' @(8443, 8444)
+
+    # Envoy(libevent)在 TMP 目录里造 AF_UNIX socketpair,而本机安全软件只拦用户 TEMP 树。
+    # 先挑一个 AF_UNIX 真能用的目录再动 envoy —— 校验和正式启动必须用**同一个**,否则会出现
+    # 「校验过了、起的时候崩」这种最难查的分裂。
+    $envoyTmp = Resolve-EnvoyTempDir
+    $tmpSaved = @{ TMP = $env:TMP; TEMP = $env:TEMP }
+    if ($envoyTmp) {
+        if ($envoyTmp -ne $tmpSaved.TEMP) { Write-Warn2 "Envoy 临时目录改用 $envoyTmp(默认 TEMP 下 AF_UNIX 造 socketpair 不可用)" }
+        $env:TMP = $envoyTmp; $env:TEMP = $envoyTmp
+    }
+    try {
 
     Write-Step ' 校验派生的 Envoy 配置'
     $val = & $exe --mode validate -c $cfg 2>&1
     if ($LASTEXITCODE -ne 0) {
         $text = $val -join "`n"
+
+        # Envoy 连自己的事件循环都没建起来时,压根没走到读配置那一步 —— 这不是配置问题。
+        # 不分流的话这里会报「配置校验不通过」,再把人指向 $EnvoyDropFields 去 envoy.yaml 里
+        # 找不存在的未知字段,方向完全是反的。libevent 在 Windows 上优先用 AF_UNIX 造
+        # socketpair,而本机安全软件(360 主动防御 ZhuDongFangYu 等)会拦 AF_UNIX 的 connect,
+        # 于是 evsig_init_ 拿不到 event_base 直接 assert 崩掉。
+        if ($text -match 'evsig_init_|Failed to initialize libevent event_base') {
+            Write-Err 'Envoy 起不来:libevent 事件循环初始化失败(不是配置问题,配置根本没被读到)。'
+            # 不猜,现场探一次 —— 探针失败即坐实是 AF_UNIX 被拦,而不是「大概是杀软吧」。
+            $afunix = Test-AfUnixUsable
+            if ($afunix) {
+                Write-Err "本机 AF_UNIX(Unix 域套接字)不可用:$afunix"
+                $guards = @(Get-Process -ErrorAction SilentlyContinue |
+                    Where-Object { $_.ProcessName -match 'ZhuDongFangYu|360|QHSafe' } |
+                    ForEach-Object { "$($_.ProcessName)(pid $($_.Id))" } | Sort-Object -Unique)
+                if ($guards.Count -gt 0) { Write-Err "在跑的安全软件:$($guards -join ', ')" }
+                Write-Host @"
+      Envoy 的 libevent 在 Windows 上用 AF_UNIX 造 socketpair 做信号唤醒,这一步不通就直接崩。
+      本脚本已经自动换过临时目录了(见 Resolve-EnvoyTempDir),走到这里说明**候选目录全都不通**,
+      是机器级的问题,不是选错目录。
+      排查方向(按可能性):
+        1. 安全软件的内核过滤驱动。本机常见的是 360(`fltmc` 看 360AntiSteal/360FsFlt/360Box64)。
+           注意:2026-07-28 本机实测过,加白名单 / 在界面上「关闭」都不卸载内核驱动,基本无效;
+           真要验证是不是它,只能卸载后复测 —— 这一步得人来做,脚本不越权代劳。
+        2. 工作区路径太深:AF_UNIX 的 sun_path 上限约 108 字节,超了必失败,跟杀软无关。
+           把仓库挪到浅一点的路径即可。
+"@ -ForegroundColor Yellow
+            } else {
+                # 探针能过却仍崩:别把责任推给杀软,原样把现场交出去。
+                Write-Warn2 'AF_UNIX 探针本身是通的 —— 不是已知的杀软拦截,按下面的原始输出查。'
+            }
+            Write-Host $text -ForegroundColor DarkGray
+            exit 1
+        }
+
         Write-Err '派生配置在本机 Envoy 上校验不通过 —— 拒绝启动(fail-closed)。'
         $unknown = [regex]::Match($text, "no such field: '(?<f>[^']+)'")
         if ($unknown.Success) {
@@ -833,6 +1154,14 @@ function Start-LocalEnvoy {
         -WorkingDirectory $CfgDir -WindowStyle Hidden -PassThru
     Save-Pid 'envoy' $proc.Id
     Wait-Port -Name 'envoy' -Port 8443 -TimeoutSec 30 -Proc $proc
+
+    } finally {
+        # 只是给 envoy 子进程挑目录,别把本脚本后续步骤(以及被它拉起的 go 服务)也带偏。
+        $env:TMP = $tmpSaved.TMP; $env:TEMP = $tmpSaved.TEMP
+    }
+    # 指纹在**启动成功之后**才落盘:启动失败时不留指纹,下次必然重来一遍,
+    # 不会出现「指纹说没变、其实上次根本没起来」的情况。
+    Set-Content -LiteralPath $fpFile -Value $fp -Encoding ascii
     Write-Ok 'Envoy :8443 / :8444'
 }
 

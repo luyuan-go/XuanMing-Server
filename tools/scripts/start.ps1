@@ -3773,6 +3773,24 @@ function Ensure-Go {
 # 注:监听方显示的是 com.docker.backend / wslrelay 这类 Docker 转发进程,从 PID 根本
 # 反查不到是哪个容器,故改从 docker 实际发布端口这一侧认。
 function Test-EdgePortHeldByOwnEnvoy([int]$Port) {
+    # 先按**进程映像路径**认自己人。免 Docker 路线的 Envoy 是宿主原生进程
+    # (run/localinfra/dist/envoy/envoy.exe),`docker port` 永远查不到它 —— 上一轮没停干净时
+    # 就会被当成「外人占端口」硬阻断一键启动,而 local_infra.ps1 起 Envoy 前本来就会把它停掉
+    # 重建(见那边的 Stop-Component 'envoy' + Stop-OrphanPortHolder),纯属误报。
+    $native = [IO.Path]::GetFullPath((Join-Path $ProjectRoot 'run/localinfra/dist/envoy/envoy.exe'))
+    foreach ($c in @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)) {
+        $proc = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
+        if (-not $proc) { continue }
+        # 受保护进程读 .Path 会抛;认不出来就当外人,不能让它中断整个前置检查。
+        $exe = $null
+        try { $exe = $proc.Path } catch { $exe = $null }
+        if ($exe -and [IO.Path]::GetFullPath($exe) -eq $native) { return $true }
+    }
+
+    # docker 分支放最后,且只在**确实有 docker** 时问:策划机压根没装 docker,而本文件是
+    # $ErrorActionPreference='Stop',裸 `& docker` 会抛 CommandNotFoundException 直接打断一键启动
+    # (只有端口真被占时才会走到这里,平时不暴露)。免 Docker 模式也没有 pandora-envoy 容器可问。
+    if ($NoDocker -or -not (Test-CommandExists 'docker')) { return $false }
     $published = (& docker port pandora-envoy 2>$null | Out-String)
     if ([string]::IsNullOrWhiteSpace($published)) { return $false }
     return ($published -match ('(?m)->\s*\S+:{0}\s*$' -f $Port))
@@ -3797,7 +3815,7 @@ function Assert-LocalEdgePortsFree {
         if ($blocking.Count -eq 0) { continue }
 
         if (Test-EdgePortHeldByOwnEnvoy -Port $t.Port) {
-            Write-Info ("Envoy {0} {1}:{2} 当前就是本项目自己的 pandora-envoy 占着(上一轮没停),会被直接重建,不算冲突。" -f $t.Face.Trim(), $t.Host, $t.Port)
+            Write-Info ("Envoy {0} {1}:{2} 当前是本项目自己的 Envoy 占着(上一轮没停),会被直接重建,不算冲突。" -f $t.Face.Trim(), $t.Host, $t.Port)
             continue
         }
 
@@ -3823,11 +3841,18 @@ function Assert-LocalEdgePortsFree {
             return $true
         }
     }
-    Write-Info 'local 模式的 Envoy 用固定宿主端口,被占就起不来(dev_up 会报 port is already allocated)。'
+    Write-Info 'local 模式的 Envoy 用固定宿主端口,被占就起不来。'
     # 本机 k8s 曾是最常见的占用方,现在 local 启动前会自动 minikube stop(见 Stop-K8sStackForLocal),
     # 所以走到这里的占用方通常是别的进程:老的 envoy 容器、别人手工起的服务、或另一个 IDE 终端。
     Write-Info '请先停掉上面点名的进程/容器再重跑;若那是上一轮没停干净的本项目服务,可先执行:'
-    Write-Info '    pwsh tools/scripts/start.ps1 -Mode local -Down'
+    # 停机命令必须跟启动路线一致:免 Docker 起的服务,拿不带 -NoDocker 的 -Down 去停会走 docker
+    # compose 分支,原生进程一个都停不掉 —— 照着提示做了还是起不来,比不给提示更伤人。
+    if ($NoDocker) {
+        Write-Info '    双击「策划一键停止-免Docker-测试版.cmd」'
+        Write-Info '    (等价命令:pwsh tools/scripts/start.ps1 -Mode local -NoDocker -Down)'
+    } else {
+        Write-Info '    pwsh tools/scripts/start.ps1 -Mode local -Down'
+    }
     Write-Info '只想自己本机玩、不对局域网开放时,可加 -LocalOnly 只绑回环。'
     return $false
 }
@@ -4449,8 +4474,13 @@ function Invoke-LocalDsOnly {
         @{ Name = 'Redis'; Port = 6380 }
         @{ Name = 'MySQL'; Port = 3307 }
         @{ Name = 'Kafka'; Port = 9093 }
-        @{ Name = 'etcd';  Port = 2380 }
-    ) + $dsSpawners + @(
+    )
+    # etcd 只有 docker 路线才起:免 Docker 模式刻意不起它(dev 配置里 etcd_endpoints 全是
+    # 注释状态,snowflake 走 static)。这里如果无条件要求 :2380,免 Docker 机器上这条快速
+    # 通道会**永远**判定「后端没跑」而回落到完整启动 —— 恰好把「只重启 DS」这个最高频、
+    # 本该最快的动作变成最慢的动作,策划每次改完资源都要重跑迁移和 22 个服务。
+    if (-not $NoDocker) { $required += @{ Name = 'etcd'; Port = 2380 } }
+    $required += $dsSpawners + @(
         @{ Name = 'login'; Port = 20001 }
     )
 

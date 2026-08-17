@@ -55,7 +55,11 @@ param(
     # 用于免 Docker 的策划机模式:TiKV 没有可用的 Windows 原生部署,而这四服的
     # 两套配置(etc/*-dev.yaml / etc/*-dev-tidb.yaml)本来就并存,这里只是选前一套。
     # 默认关:docker / 内网 / k8s 模式继续走 TiDB,行为不变。
-    [switch]$SocialOnMysql
+    [switch]$SocialOnMysql,
+
+    # 免 Docker 的策划机模式:基础设施是本机原生进程,且**刻意不起 etcd**。
+    # 只影响基础设施预检要不要把 etcd 算进强依赖,以及不通时给什么修复指引。
+    [switch]$NoDocker
 )
 
 $ErrorActionPreference = 'Stop'
@@ -297,8 +301,12 @@ function Test-InfraReady {
         @{ Name = 'Redis';  Port = 6380 }
         @{ Name = 'MySQL';  Port = 3307 }
         @{ Name = 'Kafka';  Port = 9093 }
-        @{ Name = 'etcd';   Port = 2380 }
     )
+    # etcd 只有 docker 路线才起。免 Docker 模式刻意不起它,而 services/*/etc/*-dev.yaml 里
+    # 一处 etcd 引用都没有(已核对,全 0 命中)—— 把它当强依赖会让免 Docker 路线在最后一步
+    # 被自己的预检拦死:前面 Envoy / 迁移全绿,到 [3/3] 报「基础设施未就绪」,而那个"缺失"的
+    # 组件按设计根本就不该存在。
+    if (-not $NoDocker) { $infra += @{ Name = 'etcd'; Port = 2380 } }
     $down = @()
     foreach ($i in $infra) {
         if (-not (Test-PortOpen $i.Port)) { $down += $i }
@@ -311,10 +319,17 @@ function Test-InfraReady {
     }
     Write-Host "原因:这些是 go 服务的强依赖;Redis 不通时 hub_allocator 也拉不起大厅 Hub DS,客户端会卡在连大厅。" -ForegroundColor Yellow
     Write-Host "修复:" -ForegroundColor Yellow
-    Write-Host "  1) 确认 Docker Desktop 已启动(右下角鲸鱼图标变绿);" -ForegroundColor Yellow
-    Write-Host "  2) 起基础设施:   pwsh tools/scripts/dev_up.ps1" -ForegroundColor Yellow
-    Write-Host "  3) 查容器状态:   docker compose -f deploy/docker-compose.dev.yml ps" -ForegroundColor Yellow
-    Write-Host "     Redis 应显示 healthy 且端口映射 0.0.0.0:6380->6379。" -ForegroundColor Yellow
+    if ($NoDocker) {
+        # 免 Docker 机上没有 Docker Desktop,叫人去看鲸鱼图标是把人往沟里带。
+        Write-Host "  1) 起本机原生基础设施: pwsh tools/scripts/local_infra.ps1 -Action up" -ForegroundColor Yellow
+        Write-Host "  2) 查状态:             pwsh tools/scripts/local_infra.ps1 -Action status" -ForegroundColor Yellow
+        Write-Host "  3) 日志在 run/localinfra/logs/ 下(mysql.log / redis.log / kafka.log / envoy.log)。" -ForegroundColor Yellow
+    } else {
+        Write-Host "  1) 确认 Docker Desktop 已启动(右下角鲸鱼图标变绿);" -ForegroundColor Yellow
+        Write-Host "  2) 起基础设施:   pwsh tools/scripts/dev_up.ps1" -ForegroundColor Yellow
+        Write-Host "  3) 查容器状态:   docker compose -f deploy/docker-compose.dev.yml ps" -ForegroundColor Yellow
+        Write-Host "     Redis 应显示 healthy 且端口映射 0.0.0.0:6380->6379。" -ForegroundColor Yellow
+    }
     return $false
 }
 

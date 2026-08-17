@@ -65,7 +65,7 @@ if ($NoDocker) {
 
     Write-Host ""
     Write-Host "===== [3/3] 业务服务 =====" -ForegroundColor Cyan
-    & "$ScriptDir/run_services.ps1" -Exclude $Exclude -SocialOnMysql
+    & "$ScriptDir/run_services.ps1" -Exclude $Exclude -SocialOnMysql -NoDocker
     exit $LASTEXITCODE
 }
 
