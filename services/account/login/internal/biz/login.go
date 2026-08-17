@@ -2197,11 +2197,19 @@ func (u *LoginUsecase) requireCurrentSession(ctx context.Context, playerID uint6
 		return errcode.NewCause(errcode.ErrUnavailable, err, "session authority unavailable; retry")
 	}
 	if !found {
+		// ErrUnauthorized 非 IsServerFault → access log 只记 rpc_ok(DEBUG):不打这条,
+		// 「玩家点选角/签票被弹回登录」在生产 info 级零痕迹。
+		plog.With(ctx).Warnw("msg", "session_gate_rejected",
+			"player_id", playerID, "reason", "session_not_found",
+			"hint", "会话已过期或已登出;玩家侧表现为被弹回登录界面")
 		return errcode.New(errcode.ErrUnauthorized, "session expired or logged out; login again")
 	}
 	if jti == "" {
 		// 缺 jti 证据(绕网关/无 payload 头):无法证明现行性,维持普通未授权语义,
 		// 不得当顶号——客户端对 ErrUnauthorized 允许自动换新,对顶号码则转交互登录。
+		plog.With(ctx).Warnw("msg", "session_gate_rejected",
+			"player_id", playerID, "reason", "jti_evidence_missing",
+			"hint", "调用方缺 x-pandora-jwt-payload:直连内网联调,或网关 jwt_authn 配置漂移(全服同报=网关问题)")
 		return errcode.New(errcode.ErrUnauthorized, "session jti evidence required")
 	}
 	if cur != jti {
@@ -2224,12 +2232,16 @@ func (u *LoginUsecase) RequireCurrentSessionToken(ctx context.Context, playerID 
 	}
 	if sessionToken == "" {
 		if u.requireHubAssignmentBinding {
+			plog.With(ctx).Warnw("msg", "session_gate_rejected",
+				"player_id", playerID, "reason", "session_token_missing")
 			return errcode.New(errcode.ErrUnauthorized, "session token required")
 		}
 		return nil // dev 兼容:旧客户端未传 token 时不阻断。
 	}
 	claims, err := u.verifier.VerifySession(sessionToken)
 	if err != nil || claims.PlayerID() == 0 || claims.PlayerID() != playerID {
+		plog.With(ctx).Warnw("msg", "session_gate_rejected",
+			"player_id", playerID, "reason", "session_token_invalid", "err", err)
 		return errcode.New(errcode.ErrUnauthorized, "session token invalid for caller")
 	}
 	return u.requireCurrentSession(ctx, playerID, claims.ID)
@@ -2250,6 +2262,11 @@ func (u *LoginUsecase) RequireCurrentSessionJTI(ctx context.Context, playerID ui
 	// 严格档把缺失 jti 视为无法证明调用方仍持有当前会话，必须在任何选角副作用前拒绝。
 	if jti == "" {
 		if u.requireHubAssignmentBinding {
+			// 生产 SelectRole 必经 :8443 jwt_authn,该头必然存在——全服集中报本 reason
+			// 意味着网关配置漂移,选角会全服静默失败,必须有后端痕迹可告警。
+			plog.With(ctx).Warnw("msg", "session_gate_rejected",
+				"player_id", playerID, "reason", "jwt_payload_header_missing",
+				"hint", "SelectRole 必经 :8443 jwt_authn;全服同报=网关配置漂移")
 			return errcode.New(errcode.ErrUnauthorized, "session payload required")
 		}
 		return nil

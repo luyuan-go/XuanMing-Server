@@ -413,11 +413,14 @@ func (u *PlayerUsecase) UpdateMMR(ctx context.Context, playerID uint64, delta in
 		return 0, false, err
 	}
 	if already {
-		plog.With(ctx).Debugw("msg", "update_mmr_idempotent_hit",
+		// INFO 而非 DEBUG:幂等命中罕见(重投/重放的唯一证据),与 inventory *_idempotent_hit 同口径。
+		plog.With(ctx).Infow("msg", "update_mmr_idempotent_hit",
 			"player_id", playerID, "idempotency_key", idempotencyKey, "new_mmr", newMMR, "rating_pool", pool)
 		return newMMR, true, nil
 	}
-	plog.With(ctx).Debugw("msg", "update_mmr_applied",
+	// INFO:段位入账是每玩家每局一次的资产变更台账(「打完段位没变」必须能按 player_id 正查,
+	// 上游 battle_result 只有出箱台账,入账终点在这里)。
+	plog.With(ctx).Infow("msg", "update_mmr_applied",
 		"player_id", playerID, "delta", delta, "reason", reason, "new_mmr", newMMR, "rating_pool", pool)
 	// 分片:档案与分池段位分都是 owner 数据,锁定玩家 owner cell(ProfileShardKey=player_id,
 	// §4.2 line 142)。router 为 nil(单 Cell)→ 不打,行为与历史一致。

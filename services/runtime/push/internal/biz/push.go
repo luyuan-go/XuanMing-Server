@@ -448,16 +448,28 @@ func (u *PushUsecase) RunSubscribeStream(
 		}
 	}()
 
+	cursor := afterCursor
+	startedAt := time.Now()
+
 	// exit 统一收敛返回值:看门狗触发的取消要把会话错误作为关流原因带给客户端
 	// (经 errcode gRPC 映射成 UNAUTHENTICATED/UNAVAILABLE,客户端据此决定换会话或退避)。
+	// 同时是流关闭日志的唯一收口:与 push_stream_open 成对(每连接一条)。此前正常
+	// 关闭零日志,流生命周期只有 open 单边可见,「玩家没收到通知」无法在 info 级
+	// 确认断流时刻,只能拿下一条 open 反推;Subscribe 是 server stream,不经 unary
+	// 中间件链,access log 也兜不住。
 	exit := func(err error) error {
+		reason := "client_disconnect" // ctx 取消且无错:客户端断开 / 服务端收流
 		if p := sessClose.Load(); p != nil {
-			return p.err
+			err = p.err
+			reason = "session_closed" // 顶号/登出/到期/会话权威 fail-closed
+		} else if err != nil {
+			reason = "send_or_replay_failed"
 		}
+		h.Infow("msg", "push_stream_closed",
+			"player_id", playerID, "reason", reason,
+			"lived_ms", time.Since(startedAt).Milliseconds(), "cursor", cursor, "err", err)
 		return err
 	}
-
-	cursor := afterCursor
 
 	// 首轮拉取(重连补推/首连拉缓冲现存帧;gap 终检在 drainBuffer 拉空后执行)。
 	if playerID > 0 {
@@ -467,7 +479,9 @@ func (u *PushUsecase) RunSubscribeStream(
 			return exit(err) // 首轮失败断流:客户端重连重试(游标没动,不漏)
 		}
 		if next > cursor {
-			h.Debugw("msg", "push_replayed", "player_id", playerID, "after_cursor", afterCursor, "cursor", next)
+			// INFO:补投是每次重连一次的低频事件,「重连丢通知」需要能证实
+			// 「补投实际推进到游标 X」,只有失败/丢失可见时本步只能证伪。
+			h.Infow("msg", "push_replayed", "player_id", playerID, "after_cursor", afterCursor, "cursor", next)
 		}
 		cursor = next
 	}

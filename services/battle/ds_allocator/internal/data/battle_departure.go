@@ -479,8 +479,14 @@ func (r *RedisBattleRepo) ReconcilePlayerDepartures(
 	jKey := battleDepartureJournalKey(matchID)
 	for attempt := 0; attempt < battleDepartureCASRetries; attempt++ {
 		var orders []*dsv1.BattleEvictionOrder
+		var issuedPlayerIDs []uint64 // 本轮首次置位 IssuedAtMs 的 player(首发台账)
+		var issuedDepartureIDs []string
+		var stalledPlayerIDs []uint64 // 首发后超龄仍 PENDING 未被 DS ack 的 player
+		var oldestStalledMs int64
 		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
 			orders = nil
+			issuedPlayerIDs, issuedDepartureIDs = nil, nil
+			stalledPlayerIDs, oldestStalledMs = nil, 0
 			journal, err := readDepartureJournal(ctx, tx, matchID)
 			if err != nil {
 				return err
@@ -525,6 +531,13 @@ func (r *RedisBattleRepo) ReconcilePlayerDepartures(
 				if order.GetIssuedAtMs() == 0 {
 					order.IssuedAtMs = nowMs
 					changed = true
+					issuedPlayerIDs = append(issuedPlayerIDs, order.GetPlayerId())
+					issuedDepartureIDs = append(issuedDepartureIDs, order.GetDepartureId())
+				} else if age := nowMs - order.GetIssuedAtMs(); age >= evictionOrderStalledWarnMs {
+					stalledPlayerIDs = append(stalledPlayerIDs, order.GetPlayerId())
+					if age > oldestStalledMs {
+						oldestStalledMs = age
+					}
 				}
 				orders = append(orders, &dsv1.BattleEvictionOrder{
 					DepartureId: order.GetDepartureId(), MatchId: order.GetMatchId(),
@@ -553,10 +566,39 @@ func (r *RedisBattleRepo) ReconcilePlayerDepartures(
 		if err == redis.TxFailedErr {
 			continue
 		}
+		if err == nil {
+			logDepartureIssuance(ctx, matchID, source,
+				issuedPlayerIDs, issuedDepartureIDs, stalledPlayerIDs, oldestStalledMs)
+		}
 		return orders, err
 	}
 	return nil, errcode.New(errcode.ErrDSAllocationFailed,
 		"battle %d departure reconcile CAS retry exhausted", matchID)
+}
+
+// evictionOrderStalledWarnMs 是驱逐单「已发但迟迟未被 DS ack」的告警阈值。
+// 依据:心跳周期 5s,超过 6 拍仍 PENDING 已明显异常(正常 ack 在下一拍);待实测复核。
+const evictionOrderStalledWarnMs = 30_000
+
+// logDepartureIssuance 在 reconcile 事务落定后打驱逐单台账:
+//   - 首发 INFO:IssuedAtMs 首次置位那一轮,每 departure 恰一条(后续心跳只重发不再记)。
+//     此前首发只有 biz 层 DEBUG——「点了退出没反应」时,后端→DS 的唯一指令(驱逐单)
+//     发没发,生产 info 级查不到。
+//   - 超龄 WARN:首发后超阈值仍 PENDING,按本轮聚合点名(玩家可能卡在退出副本上)。
+func logDepartureIssuance(ctx context.Context, matchID uint64, source BattleDepartureSource,
+	issuedPlayerIDs []uint64, issuedDepartureIDs []string,
+	stalledPlayerIDs []uint64, oldestStalledMs int64) {
+	if len(issuedPlayerIDs) > 0 {
+		plog.With(ctx).Infow("msg", "battle_eviction_order_first_issued",
+			"match_id", matchID, "ds_pod", source.DSPodName,
+			"player_ids", issuedPlayerIDs, "departure_ids", issuedDepartureIDs)
+	}
+	if len(stalledPlayerIDs) > 0 {
+		plog.With(ctx).Warnw("msg", "battle_eviction_order_stalled",
+			"match_id", matchID, "ds_pod", source.DSPodName,
+			"player_ids", stalledPlayerIDs, "oldest_age_ms", oldestStalledMs,
+			"hint", "驱逐单已发但 DS 未 ack:玩家可能卡在退出副本,查 DS 侧离场处理与心跳链")
+	}
 }
 
 // RecordInstanceTeardown 必须在 ReleaseExpected 已明确成功之后调用。它先写

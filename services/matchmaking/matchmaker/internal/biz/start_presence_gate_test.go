@@ -234,3 +234,28 @@ func TestStartMatch_成员离线时不产生durableOperation(t *testing.T) {
 		t.Fatalf("被拒的 StartMatch 不得留下 durable operation: found=%v err=%v", found, gerr)
 	}
 }
+
+// 4011 必须携带结构化缺席名单(2026-08-17 拍板):此前名单只拼在 error 文本里不过线,
+// 客户端点不了名。service 层靠 errors.As 解出 MemberOfflineError 填
+// StartMatchResponse.absent_player_ids;这里钉住 biz 侧契约:①类型可解;②名单是被判
+// 缺席的那几个人;③errcode.As 经 Unwrap 链仍解析成 4011(老调用方零感知)。
+func TestEnsureAllPresent_拒绝时携带结构化缺席名单(t *testing.T) {
+	f, p, ids := presenceFixture(t, nil)
+	for _, id := range ids {
+		p.online[id] = true
+	}
+	delete(p.online, ids[2])
+	p.lastSeen[ids[2]] = time.Now().Add(-160 * time.Second).UnixMilli()
+
+	err := f.uc.ensureAllPresent(context.Background(), presenceMembers(ids))
+	if errcode.As(err) != errcode.ErrMatchMemberOffline {
+		t.Fatalf("错误码语义不得因换类型而变: err=%v code=%d", err, errcode.As(err))
+	}
+	var offline *MemberOfflineError
+	if !errors.As(err, &offline) {
+		t.Fatalf("必须能解出 MemberOfflineError(service 层填 absent_player_ids 的唯一来源): %T", err)
+	}
+	if len(offline.AbsentPlayerIDs) != 1 || offline.AbsentPlayerIDs[0] != ids[2] {
+		t.Fatalf("缺席名单必须点名到人: got=%v want=[%d]", offline.AbsentPlayerIDs, ids[2])
+	}
+}

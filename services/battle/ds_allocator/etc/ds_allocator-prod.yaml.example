@@ -53,6 +53,10 @@ allocator:
   # 判据是 census 与 roster 的差集;只在开局阶段生效(全员到齐过即永久豁免);只罚缺席者。
   # 完整说明见 ds_allocator-dev.yaml 同项注释。负值关闭整道闸。
   roster_join_deadline: "45s"
+  # 激活档(observe→enforce)与策略代:observe 只采证不判弃;enforce 只对同代局执行。
+  # 激活/回滚协议与完整说明见 ds_allocator-dev.yaml 同项注释。
+  roster_join_deadline_mode: "observe"
+  roster_policy_generation: 0
   # prod 用真 Agones(下方 agones.enabled: true),不再需要 mock_* 字段
 
 # 生产接真 Agones GameServerAllocation。in-cluster 运行时 api_server/token_path/ca_path 留空用默认。

@@ -18,12 +18,11 @@ type Config struct {
 	// systemOnly 只证明「不带玩家 JWT」,证明不了「调用方是 DS」;本配置提供后者。
 	// mode 默认 off(不校验),与接线前行为一致。
 	//
-	// ⚠️ etc/ 模板里**不得**出现 ds_auth 节点:生成器对每个服务做双向断言(节点存在 ⟺ 在权威
-	// 清单里),而 team 不在清单里,加了就是 `[FATAL] team 的 ds_auth 节点与权威服务清单不一致`,
-	// 且只在真实配置生成时才炸。真要启用须三处同批改:模板加节点 +
-	// gen_cluster_config.ps1 的 DsSecretServiceNames + online_manifest_contract.ps1 的
-	// PandoraDsCallbackHmacServices —— 那等于扩大 DS 回调密钥的分发面,是安全决策。
-	// 未启用期间守卫为 nil,Check 直接放行(同 inventory 的做法)。
+	// 2026-08-17 入列:team 已进两处权威清单(gen_cluster_config.ps1 的 DsSecretServiceNames
+	// + online_manifest_contract.ps1 的 PandoraDsCallbackHmacServices),etc 模板带 ds_auth
+	// 节点(permissive 灰度档)。生成器的双向断言(节点存在 ⟺ 在清单里)自此反向成立:
+	// **删节点或删清单必须同批**,否则真实配置生成 [FATAL]。此前未入列时守卫为 nil、
+	// Check 恒放行 —— GetPlayerTeam 的 RequireToken 曾是纸面门,入列正是为了封它。
 	DSAuth config.DSAuthConf `yaml:"ds_auth,omitempty" json:"ds_auth,omitempty"`
 }
 

@@ -1,6 +1,8 @@
 # decision-revisit:赛后准备复位的代际幂等与花名册期限的滚动激活
 
-- 状态:**待人 / 最高可用 Claude 拍板，当前 v2 禁止部署**（2026-08-13 Codex 复核提出）
+- 状态:**已拍板方案 A 并落码(2026-08-17),发布阻断解除**。拍板人:用户(2026-08-13
+  「按最标准方案做」+ 2026-08-17 复确认);落码与复核记录见 §9(新增)。
+- 历史状态:待人拍板/当前 v2 禁止部署(2026-08-13 Codex 复核提出)
 - 触发:INC-20260813-001 v2 把 `EndTeamMatch` 挂到 `ReleaseMatch`，并给
   ds_allocator 增加 45s 花名册到齐期限。常规测试通过后，按 `AGENTS.md §4/§10` 复核
   ACK 丢失、跨代重试、旧新副本共存与不停服激活，发现当前方案尚不满足这些硬约束。
@@ -207,3 +209,51 @@ blue-green/versioned endpoint 或短暂停 ReleaseMatch，保证旧 MM 不会 AC
 个人建议:**选方案 A**。它把复杂度收回 ready 生命周期 module 内，删除 ReleaseMatch 调用方
 必须理解的时序知识；失败只要求玩家重按，不会静默复用或抹掉意图。产品若明确拒绝这个手感，
 再选方案 B，不能继续部署当前无 fence 的折中版。
+
+## 9. 拍板与落码记录(2026-08-17)
+
+**拍板:方案 A**(ready 在 `BeginTeamMatch` 一次性消费),4011 加结构化缺席字段。
+
+### 9.1 相对 §4/§6 的一处重要简化:不需要三阶段发布
+
+§6 认为方案 A 须拆三阶段,理由是旧 matchmaker 的 operation_id 跨真实对局复用,新 team
+按它消费 ready 会把多局误认成一次。落码时发现更简单的解法:**收据绑定「消费后代际」
+(`MatchStartReceipt.post_ready_generation`)**。任何 ready 意图变更都会推进代际,于是:
+
+- 真·重试(玩家什么都没动)→ 当前代际 == 收据 post 代 → 判重入,返回同一份消费前快照;
+- 第二次真实点击(全队重新点过准备)→ 代际已前进 → 不是重入 → 正常消费新一代。
+
+跨局区分由代际完成、不靠 operation_id,旧 matchmaker 打到新 team 因此天然安全,
+「谁必须先上线」的顺序约束消失(§9.21 达成)。另有 60s 收据重入窗兜底
+「消费后长期无人操作,久后的真实点击被误判成重试」(失败方向安全:多按一次准备)。
+
+### 9.2 落码清单
+
+- team `BeginTeamMatch` 三路径:收据重入 / legacy 零代际 READY 保守作废(要求重按)/
+  正常消费(锁内:留消费前快照 → 清 ready → 转 FORMING → 上租约 → 盖收据);
+  收据盖章在代际推进之后(`updateTeamThenStamp`)。锁冲突检查前移到 READY 判定之前
+  (竞争必须报可重试的 3007,不得报终态 3006)。
+- `EndTeamMatch` 降级为共存窗口兼容路径:新 team 下代际 CAS 几乎恒落空 → no-op;
+  只在「新 matchmaker + 旧 team」组合真正动手。契约测试钉死零写。
+- §2.1(ACK 丢失抹新意图)、§2.2(离队重入 ABA)、§2.3(claim→End 窗口用旧 ready
+  开局)、§2.4(发布顺序漏局)由消费语义整体消除;§2.5 由 verifyMatchCall 三档验签
+  收口;§2.6 由 matchmaker `team_addr` fail-closed(`allow_missing_team` 显式开关)收口。
+- §5 allocator 激活协议落码:`roster_join_deadline_mode`(off/observe/**observe 默认**/
+  enforce)+ `roster_policy_generation`(Allocate 冻结进 battle 记录,proto 字段 26);
+  判弃唯一谓词 `conf.RosterDeadlineShouldAbandon`(biz legacy 与 data Model B 共用);
+  observe/代不匹配到点只打 `roster_incomplete_would_abandon` 采证 WARN;
+  enforce+generation=0 启动拒。激活/回滚步骤见 yaml 注释(observe+0 全量 → 代改 1 滚动 →
+  确认全量后翻 enforce;回滚只翻档;再激活代 +1,旧代局连同计时整体豁免)。
+- §8-3 拍板「加结构化字段」:`StartMatchResponse.absent_player_ids`(4011 时点名缺席者),
+  biz 用 `MemberOfflineError`(Unwrap 链保 4011 语义)携带,service 层 errors.As 填充。
+- 同批审计修复:①`formSoloMatch`/`formMatch` 装配 match 成员时丢 `team_ready_generation`
+  (主路径 End CAS 恒退化 gen=0,迟到重投可抹新 ready;已补传递 + 穿真实装配的回归测试);
+  ②`team_call_auth_secret` 纳入 matchmaker Validate 的跨信任域同钥拒绝(此前注释里的
+  「必须不同」无机械 enforcement)。
+
+### 9.3 §7 验收状态
+
+1/2/4(重试不重复消费/跨代区分/旧 ready 不开二局)= 契约测试绿(begin_consume_ready_test.go);
+3(全离队零写)= 消费语义下不可达,End no-op 测试覆盖;5 = conf 校验 + 验签测试绿;
+7/8(allocator 滚动矩阵)= 分代豁免为机制保证 + 单测绿,真实双版本矩阵留待集群演练;
+6/9/10(真实双版本矩阵、Linux -race、真集群 E2E、发布器机械门)**未做**,仍是发布前置项。

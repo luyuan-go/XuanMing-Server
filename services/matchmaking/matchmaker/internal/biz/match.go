@@ -767,11 +767,25 @@ func (u *MatchUsecase) ensureAllPresent(ctx context.Context, members []*matchv1.
 		"reason", "member_absent_beyond_grace",
 		"offline_players", offline, "members", len(ids),
 		"grace", grace.String(), "longest_absent_ms", longestMs)
-	// 服务端 error 文本带 player_id 列表，供拒绝日志定位是谁缺席。当前 StartMatchResponse
-	// 只返回 code + match_id，这段文本不会过线；客户端若要点名须另加结构化响应字段。
-	return errcode.New(errcode.ErrMatchMemberOffline,
-		"players %v left the hub more than %s ago; cannot start match", offline, grace)
+	// 缺席名单走结构化通道过线(StartMatchResponse.absent_player_ids,2026-08-17 拍板):
+	// 光靠 error 文本客户端点不了名,队长只能看见一句「有队员不在大厅」却不知道该等谁。
+	return &MemberOfflineError{
+		AbsentPlayerIDs: offline,
+		cause: errcode.New(errcode.ErrMatchMemberOffline,
+			"players %v left the hub more than %s ago; cannot start match", offline, grace),
+	}
 }
+
+// MemberOfflineError 是在线闸拒绝(4011)的载体:错误码语义不变(Unwrap 链上仍是
+// ErrMatchMemberOffline,errcode.As 照常解析),额外携带被判缺席的成员 ——
+// service 层据此填 StartMatchResponse.absent_player_ids,让客户端能点名「XX 不在大厅」。
+type MemberOfflineError struct {
+	AbsentPlayerIDs []uint64
+	cause           error
+}
+
+func (e *MemberOfflineError) Error() string { return e.cause.Error() }
+func (e *MemberOfflineError) Unwrap() error { return e.cause }
 
 // absentBeyond 按「离开了多久」找出这批玩家里已离场超过 window 的人
 // (StartMatch 在线闸与排队票离线回收共用的判据核心,契约见 ensureAllPresent 文档):
@@ -3797,6 +3811,11 @@ func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchT
 			HeroId:   m.HeroId,
 			Side:     0,
 			Confirm:  confirmAccepted,
+			// 代际必须跟着成员走完「票据 → match 镜像」这一跳:ReleaseMatch 只从 match
+			// 成员收 roster(collectTeamRosters),这里掉了它,EndTeamMatch 的跨代 CAS 在
+			// 主路径上就恒为退化档(gen=0 = 只要还挂着 ready 就清)——迟到重投会把玩家
+			// 结算后新点的准备抹掉,正是 INC-20260813-001 ① 建代际要防的形状。
+			TeamReadyGeneration: m.GetTeamReadyGeneration(),
 		})
 	}
 	match := &matchv1.MatchStorageRecord{
@@ -3888,6 +3907,9 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTi
 					HeroId:   m.HeroId,
 					Side:     sideIdx,
 					Confirm:  initialConfirm,
+					// 同 formSoloMatch:代际断在这一跳,EndTeamMatch 跨代 CAS 主路径全废
+					// (且每场组队局释放都会伪报 team_match_end_legacy_generation)。
+					TeamReadyGeneration: m.GetTeamReadyGeneration(),
 				})
 			}
 		}

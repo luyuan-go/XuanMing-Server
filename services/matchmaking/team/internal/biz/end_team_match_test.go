@@ -146,12 +146,22 @@ func TestEndTeamMatch_组票租约在手时可重试(t *testing.T) {
 		t.Fatalf("BeginTeamMatch: %v", err)
 	}
 
+	// 方案 A:Begin 已在同一把锁内消费 ready 并转 FORMING —— 那是 Begin 自己的合法写,
+	// 不是「半步副作用」。本测试守的是:租约在手时 End 必须整体推迟,**不得再叠加任何写**。
+	before := teamOf(t, uc, 9806)
+	if before.State != stateForming {
+		t.Fatalf("前提不成立:Begin 应已消费 ready 转 FORMING, got=%v", before.State)
+	}
+	beforeGen := before.GetReadyGeneration()
+	beforeUpdated := before.UpdatedAtMs
+
 	err := uc.EndTeamMatch(ctx, 9806, []uint64{7861, 7862}, 0)
 	if errcode.As(err) != errcode.ErrTeamConcurrent {
 		t.Fatalf("租约在手必须返回可重试错误: err=%v code=%d", err, errcode.As(err))
 	}
-	if teamOf(t, uc, 9806).State != stateReady {
-		t.Fatal("推迟时不得留下半步副作用")
+	after := teamOf(t, uc, 9806)
+	if after.GetReadyGeneration() != beforeGen || after.UpdatedAtMs != beforeUpdated {
+		t.Fatal("推迟时不得留下半步副作用(代际/updated_at 变了说明写回了)")
 	}
 }
 

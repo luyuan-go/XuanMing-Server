@@ -730,9 +730,30 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchResponse final : public :
 
   // accessors -------------------------------------------------------
   enum : int {
+    kAbsentPlayerIdsFieldNumber = 3,
     kMatchIdFieldNumber = 2,
     kCodeFieldNumber = 1,
   };
+  // repeated uint64 absent_player_ids = 3 [json_name = "absentPlayerIds"];
+  [[nodiscard]] int absent_player_ids_size()
+      const;
+  private:
+  int _internal_absent_player_ids_size() const;
+
+  public:
+  void clear_absent_player_ids() ;
+  [[nodiscard]] ::uint64_t absent_player_ids(int index) const;
+  void set_absent_player_ids(int index, ::uint64_t value);
+  void add_absent_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& absent_player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_absent_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_absent_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_absent_player_ids();
+
+  public:
   // uint64 match_id = 2 [json_name = "matchId"];
   void clear_match_id() ;
   [[nodiscard]] ::uint64_t match_id() const;
@@ -757,7 +778,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchResponse final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -786,6 +807,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchResponse final : public :
         const StartMatchResponse& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> absent_player_ids_;
+    ::google::protobuf::internal::CachedSize _absent_player_ids_cached_byte_size_;
     ::uint64_t match_id_;
     int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -6214,7 +6237,7 @@ inline void StartMatchRequest::_internal_set_entry_mode(::pandora::config::v1::L
 inline void StartMatchResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::pandora::common::v1::ErrCode StartMatchResponse::code() const {
   // @@protoc_insertion_point(field_get:pandora.match.v1.StartMatchResponse.code)
@@ -6222,7 +6245,7 @@ inline ::pandora::common::v1::ErrCode StartMatchResponse::code() const {
 }
 inline void StartMatchResponse::set_code(::pandora::common::v1::ErrCode value) {
   _internal_set_code(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:pandora.match.v1.StartMatchResponse.code)
 }
 inline ::pandora::common::v1::ErrCode StartMatchResponse::_internal_code() const {
@@ -6238,7 +6261,7 @@ inline void StartMatchResponse::_internal_set_code(::pandora::common::v1::ErrCod
 inline void StartMatchResponse::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t StartMatchResponse::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.match.v1.StartMatchResponse.match_id)
@@ -6246,7 +6269,7 @@ inline ::uint64_t StartMatchResponse::match_id() const {
 }
 inline void StartMatchResponse::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.match.v1.StartMatchResponse.match_id)
 }
 inline ::uint64_t StartMatchResponse::_internal_match_id() const {
@@ -6256,6 +6279,57 @@ inline ::uint64_t StartMatchResponse::_internal_match_id() const {
 inline void StartMatchResponse::_internal_set_match_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = value;
+}
+
+// repeated uint64 absent_player_ids = 3 [json_name = "absentPlayerIds"];
+inline int StartMatchResponse::_internal_absent_player_ids_size() const {
+  return _internal_absent_player_ids().size();
+}
+inline int StartMatchResponse::absent_player_ids_size() const {
+  return _internal_absent_player_ids_size();
+}
+inline void StartMatchResponse::clear_absent_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.absent_player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t StartMatchResponse::absent_player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.StartMatchResponse.absent_player_ids)
+  return _internal_absent_player_ids().Get(index);
+}
+inline void StartMatchResponse::set_absent_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_absent_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.StartMatchResponse.absent_player_ids)
+}
+inline void StartMatchResponse::add_absent_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_absent_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.match.v1.StartMatchResponse.absent_player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& StartMatchResponse::absent_player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.match.v1.StartMatchResponse.absent_player_ids)
+  return _internal_absent_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL StartMatchResponse::mutable_absent_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.match.v1.StartMatchResponse.absent_player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_absent_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+StartMatchResponse::_internal_absent_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.absent_player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+StartMatchResponse::_internal_mutable_absent_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.absent_player_ids_;
 }
 
 // -------------------------------------------------------------------

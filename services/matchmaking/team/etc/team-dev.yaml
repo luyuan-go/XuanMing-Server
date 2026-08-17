@@ -101,3 +101,16 @@ team:
 # -Prod 产物由 gen_cluster_config.ps1 机械置 true(漏配端点拒启)。
 session_gate:
   require: false
+
+# DS 回调令牌校验(verify-only,2026-08-17 入列;先例与档位说明见 player-dev.yaml 同节点)。
+#
+# 为什么 team 需要它:GetPlayerTeam 是 DS 出生编制专用的东西向反查,挂在 Envoy DS 面,
+# 该监听器没有 jwt_authn,callerID 恒为 0 —— systemOnly 只能挡「带玩家 JWT 的客户端」,
+# 挡不住「任意能连 DS 面或直连 20010 的进程查任意玩家在哪支队」。service 层的
+# dsGuard.Check(RequireToken) 早已接好,但本节点缺席时守卫为 nil、Check 恒放行(纸面门)。
+# secret 与 ds_allocator / hub_allocator 的 ds_auth.secret 同值(它们签,这里验);
+# 与玩家面 jwt.secret 严格分域(online_manifest_contract 硬拒相交发布)。
+ds_auth:
+  mode: "permissive"
+  authority_mode: "legacy"
+  secret: "pandora-dev-jwt-secret-change-me-32!"

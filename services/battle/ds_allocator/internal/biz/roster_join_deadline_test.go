@@ -18,6 +18,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/config"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
+	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
 )
 
@@ -48,11 +49,20 @@ func censusHeartbeat(t *testing.T, uc *AllocatorUsecase, matchID uint64, pod str
 
 func rosterCfg(t *testing.T, deadline time.Duration) (*AllocatorUsecase, *data.RedisBattleRepo) {
 	t.Helper()
+	// enforce + 策略代 1:本文件大多数用例测的是判弃本体,须把激活协议翻到执行档
+	// (observe 只采证的行为由 TestRosterJoinDeadline_observe档只采证不判弃 单独钉)。
+	return rosterCfgMode(t, deadline, conf.RosterJoinModeEnforce, 1)
+}
+
+func rosterCfgMode(t *testing.T, deadline time.Duration, mode string, gen uint64) (*AllocatorUsecase, *data.RedisBattleRepo) {
+	t.Helper()
 	_, repo := newUsecase(t)
 	cfg := testCfg()
 	cfg.EmptyBattleTimeout = config.Duration(5 * time.Minute)
 	cfg.NoShowBattleTimeout = config.Duration(150 * time.Second)
 	cfg.RosterJoinDeadline = config.Duration(deadline)
+	cfg.RosterJoinDeadlineMode = mode
+	cfg.RosterPolicyGeneration = gen
 	return NewAllocatorUsecase(repo, NewMockGameServerAllocator(cfg), cfg), repo
 }
 
@@ -291,5 +301,112 @@ func backdateAllocatedBy(t *testing.T, repo *data.RedisBattleRepo, matchID uint6
 		return nil
 	}, 2*time.Hour); err != nil {
 		t.Fatalf("backdate allocated_at by %s: %v", d, err)
+	}
+}
+
+// ── observe→enforce 激活协议(decision-revisit §5,2026-08-17 落码)──────────────
+//
+// 判弃执行 = mode(enforce)+ 策略代匹配 双闸;observe 只采证。误判弃一场正在打的
+// 对局比缺员局打完严重得多,所以「不许判弃」的组合逐一钉死。
+
+// observe(默认档):到点只采证,绝不判弃;事实(盖章/豁免)照常记录。
+func TestRosterJoinDeadline_observe档只采证不判弃(t *testing.T) {
+	ctx := context.Background()
+	uc, repo := rosterCfgMode(t, 90*time.Second, conf.RosterJoinModeObserve, 0)
+	roster := []uint64{10, 20, 30, 40, 50, 60}
+	res := allocateReady(t, uc, repo, 41, roster, 1, "5v5_ranked")
+
+	censusHeartbeat(t, uc, 41, res.DSPodName, roster[:5])
+	got, _, _ := repo.GetBattle(ctx, 41)
+	if got.RosterIncompleteSinceMs == 0 {
+		t.Fatal("observe 档必须照常记录缺员事实(采证是它存在的意义)")
+	}
+
+	backdateRosterIncompleteBy(t, repo, 41, 2*time.Minute)
+	censusHeartbeat(t, uc, 41, res.DSPodName, roster[:5])
+	got, _, _ = repo.GetBattle(ctx, 41)
+	if got.State == "abandoned" {
+		t.Fatal("observe 档到点绝不判弃(只打 roster_incomplete_would_abandon)")
+	}
+}
+
+// enforce 但策略代不匹配(battle 是旧代/legacy 0 代):永不判弃 —— 滚动升级窗口的
+// 「旧副本见过到齐、新副本接手时恰好缺人」正是靠这条机制性豁免。
+func TestRosterJoinDeadline_enforce下旧代局豁免(t *testing.T) {
+	ctx := context.Background()
+	// 配置代 2;下面把 battle 的代改回 1(模拟「配置代前进后仍在打的存量局」)。
+	uc, repo := rosterCfgMode(t, 90*time.Second, conf.RosterJoinModeEnforce, 2)
+	roster := []uint64{10, 20, 30, 40, 50, 60}
+	res := allocateReady(t, uc, repo, 42, roster, 1, "5v5_ranked")
+	if err := repo.UpdateBattleWithLock(ctx, 42, 3, func(b *dsv1.BattleStorageRecord) error {
+		b.RosterPolicyGeneration = 1
+		return nil
+	}, 2*time.Hour); err != nil {
+		t.Fatalf("构造旧代局: %v", err)
+	}
+
+	censusHeartbeat(t, uc, 42, res.DSPodName, roster[:5])
+	backdateRosterIncompleteBy(t, repo, 42, 2*time.Minute)
+	censusHeartbeat(t, uc, 42, res.DSPodName, roster[:5])
+	got, _, _ := repo.GetBattle(ctx, 42)
+	if got.State == "abandoned" {
+		t.Fatal("代不匹配的局必须豁免(再激活不复用旧计时器的机制保证)")
+	}
+
+	// legacy(gen=0,旧副本创建)同样豁免。
+	if err := repo.UpdateBattleWithLock(ctx, 42, 3, func(b *dsv1.BattleStorageRecord) error {
+		b.RosterPolicyGeneration = 0
+		return nil
+	}, 2*time.Hour); err != nil {
+		t.Fatalf("构造 legacy 局: %v", err)
+	}
+	censusHeartbeat(t, uc, 42, res.DSPodName, roster[:5])
+	got, _, _ = repo.GetBattle(ctx, 42)
+	if got.State == "abandoned" {
+		t.Fatal("legacy(gen=0)局永不执行期限")
+	}
+}
+
+// off 档:整道闸关死,连事实都不记。
+func TestRosterJoinDeadline_off档不记事实(t *testing.T) {
+	ctx := context.Background()
+	uc, repo := rosterCfgMode(t, 90*time.Second, conf.RosterJoinModeOff, 0)
+	roster := []uint64{10, 20, 30}
+	res := allocateReady(t, uc, repo, 43, roster, 1, "5v5_ranked")
+
+	censusHeartbeat(t, uc, 43, res.DSPodName, roster[:2])
+	got, _, _ := repo.GetBattle(ctx, 43)
+	if got.RosterIncompleteSinceMs != 0 || got.RosterEverComplete {
+		t.Fatal("off 档不得记录任何到齐事实")
+	}
+}
+
+// Allocate 冻结策略代:新局的 battle 记录必须带当前配置代。
+func TestRosterJoinDeadline_分配时冻结策略代(t *testing.T) {
+	ctx := context.Background()
+	uc, repo := rosterCfgMode(t, 90*time.Second, conf.RosterJoinModeEnforce, 7)
+	roster := []uint64{10, 20}
+	allocateReady(t, uc, repo, 44, roster, 1, "5v5_ranked")
+	got, _, _ := repo.GetBattle(ctx, 44)
+	if got.GetRosterPolicyGeneration() != 7 {
+		t.Fatalf("Allocate 必须冻结当前配置代: got=%d want=7", got.GetRosterPolicyGeneration())
+	}
+}
+
+// 配置自洽:enforce + generation=0 必须启动拒(静默 no-op 配置)。
+func TestRosterJoinDeadline_enforce零代配置拒(t *testing.T) {
+	var c conf.Config
+	c.Allocator.RosterJoinDeadlineMode = conf.RosterJoinModeEnforce
+	c.Allocator.RosterPolicyGeneration = 0
+	if err := c.ValidateRosterJoinDeadlineConfig(); err == nil {
+		t.Fatal("enforce+generation=0 是静默 no-op,必须启动失败")
+	}
+	c.Allocator.RosterPolicyGeneration = 1
+	if err := c.ValidateRosterJoinDeadlineConfig(); err != nil {
+		t.Fatalf("enforce+generation=1 应放行: %v", err)
+	}
+	c.Allocator.RosterJoinDeadlineMode = "enfocre" // 手滑拼错
+	if err := c.ValidateRosterJoinDeadlineConfig(); err == nil {
+		t.Fatal("未知档位必须报错不猜")
 	}
 }

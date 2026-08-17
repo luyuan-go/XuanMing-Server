@@ -6949,6 +6949,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     kEverHadPlayersFieldNumber = 21,
     kRosterEverCompleteFieldNumber = 25,
     kRosterIncompleteSinceMsFieldNumber = 24,
+    kRosterPolicyGenerationFieldNumber = 26,
   };
   // repeated uint64 player_ids = 5 [json_name = "playerIds"];
   [[nodiscard]] int player_ids_size()
@@ -7271,11 +7272,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
   void _internal_set_roster_incomplete_since_ms(::int64_t value);
 
   public:
+  // uint64 roster_policy_generation = 26 [json_name = "rosterPolicyGeneration"];
+  void clear_roster_policy_generation() ;
+  [[nodiscard]] ::uint64_t roster_policy_generation() const;
+  void set_roster_policy_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_roster_policy_generation() const;
+  void _internal_set_roster_policy_generation(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 25,
+      ::google::protobuf::internal::TcParseTable<5, 26,
                           1, 173,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7330,6 +7341,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     bool ever_had_players_;
     bool roster_ever_complete_;
     ::int64_t roster_incomplete_since_ms_;
+    ::uint64_t roster_policy_generation_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -13697,6 +13709,30 @@ inline bool BattleStorageRecord::_internal_roster_ever_complete() const {
 inline void BattleStorageRecord::_internal_set_roster_ever_complete(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.roster_ever_complete_ = value;
+}
+
+// uint64 roster_policy_generation = 26 [json_name = "rosterPolicyGeneration"];
+inline void BattleStorageRecord::clear_roster_policy_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_policy_generation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint64_t BattleStorageRecord::roster_policy_generation() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.roster_policy_generation)
+  return _internal_roster_policy_generation();
+}
+inline void BattleStorageRecord::set_roster_policy_generation(::uint64_t value) {
+  _internal_set_roster_policy_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.roster_policy_generation)
+}
+inline ::uint64_t BattleStorageRecord::_internal_roster_policy_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.roster_policy_generation_;
+}
+inline void BattleStorageRecord::_internal_set_roster_policy_generation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_policy_generation_ = value;
 }
 
 // -------------------------------------------------------------------

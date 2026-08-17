@@ -122,6 +122,9 @@ type LocationRepo interface {
 // RedisLocationRepo 基于 go-redis/v9 的实现。
 type RedisLocationRepo struct {
 	rdb redis.UniversalClient
+	// refreshDiffLog 限流「census 在场但投影已蒸发」告警(首错+窗口,pkg/log.Window):
+	// 撮合失败后 MATCHING 到期的玩家会连续多拍落进差集,逐拍 WARN 会刷屏。
+	refreshDiffLog plog.Window
 }
 
 // NewRedisLocationRepo 构造。
@@ -420,6 +423,15 @@ func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod stri
 	expirePipe := r.rdb.Pipeline()
 	refreshed := 0
 	queued := 0
+	// 差集分类:census 在场却未续期的玩家,按原因分桶(见 logRefreshDiff)。
+	var (
+		missingSample     []uint64
+		missingTotal      int
+		podMismatchSample []uint64
+		podMismatchTotal  int
+		otherState        int
+		readFailed        int
+	)
 	for pid, cmd := range cmds {
 		// Hub meta 承载连接 fence；在线数小时也不能让它先于 location 丢失，否则
 		// 后续 exact Disconnect 只能退化为普通 TTL。
@@ -452,28 +464,102 @@ func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod stri
 
 		vals, err := cmd.Result()
 		if err != nil || len(vals) != 2 {
+			readFailed++
 			continue
 		}
 		stateStr, ok1 := vals[0].(string)
 		podStr, ok2 := vals[1].(string)
 		if !ok1 || !ok2 {
-			continue // key 不存在(HMGET 回 nil)/ 字段缺失 → 跳过
+			// key 不存在(HMGET 回 nil)/ 字段缺失:census 证明玩家此刻连在本 Hub,
+			// 位置投影却已蒸发——「人在大厅但对 locator 不可见」(典型:撮合失败后
+			// MATCHING 30s 到期无人重建,INC-20260724-001 的结构性形态)。
+			if len(missingSample) < refreshDiffSampleCap {
+				missingSample = append(missingSample, pid)
+			}
+			missingTotal++
+			continue
 		}
 		state, err := strconv.ParseInt(stateStr, 10, 32)
-		if err != nil || int32(state) != 3 /* LOCATION_STATE_HUB */ || podStr != hubPod {
-			continue // 非 HUB 态 / 别的 pod 的记录不动(不变量 §1)
+		if err != nil {
+			readFailed++
+			continue
+		}
+		if int32(state) != 3 /* LOCATION_STATE_HUB */ {
+			otherState++ // MATCHING/BATTLE 过渡态:预期内,不动不点名(不变量 §1)
+			continue
+		}
+		if podStr != hubPod {
+			// state==HUB 但投影指向别台 Hub:本台 census 说人连在这里,权威投影却在
+			// 别处——Hub→Hub 迁移的过渡拍属正常,持续出现则是双 hub/迟到 census 异常。
+			if len(podMismatchSample) < refreshDiffSampleCap {
+				podMismatchSample = append(podMismatchSample, pid)
+			}
+			podMismatchTotal++
+			continue
 		}
 		expirePipe.Expire(ctx, locKey(pid), ttl)
 		queued++
 		refreshed++
 	}
-	if queued == 0 {
-		return 0, nil
+	if queued > 0 {
+		if _, err := expirePipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+			return 0, errcode.New(errcode.ErrInternal, "redis hub refresh expire: %v", err)
+		}
 	}
-	if _, err := expirePipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
-		return 0, errcode.New(errcode.ErrInternal, "redis hub refresh expire: %v", err)
-	}
+	r.logRefreshDiff(ctx, hubPod, nowMs, refreshDiff{
+		missingTotal: missingTotal, missingSample: missingSample,
+		podMismatchTotal: podMismatchTotal, podMismatchSample: podMismatchSample,
+		otherState: otherState, readFailed: readFailed,
+	})
 	return refreshed, nil
+}
+
+// refreshDiffSampleCap 限制差集样本名单长度:告警要能点名,但不能让单条日志随
+// census 规模(500 人/hub)无界膨胀。
+const refreshDiffSampleCap = 8
+
+// refreshDiffWindowMs 是「投影蒸发」告警的限流窗口(首错必打+每窗口一条)。
+const refreshDiffWindowMs = 60_000
+
+// refreshDiff 是一次 RefreshHubLocations 的差集分类结果(census 在场却未续期的原因)。
+type refreshDiff struct {
+	missingTotal      int
+	missingSample     []uint64
+	podMismatchTotal  int
+	podMismatchSample []uint64
+	otherState        int
+	readFailed        int
+}
+
+// logRefreshDiff 把「Hub census 在场却没被续上」的差集变成可查日志。
+//
+// 此前差集只有 biz 层 DEBUG 的 requested-refreshed 计数——「我掉线了但还显示在线 /
+// 我怎么突然变离线了」在生产 info 级零痕迹,连 LOG_LEVEL=debug 都拿不到名单。
+//   - pod 漂移:逐批 WARN(Hub 迁移过渡拍会偶发,持续出现=双 hub 异常,量随事件走);
+//   - 投影蒸发:Window 限流 WARN(受影响玩家会连续多拍命中,逐拍打会刷屏),恢复回执 INFO;
+//   - 过渡态/读失败:只进字段不点名(预期内,读失败另有整批 error 兜底)。
+func (r *RedisLocationRepo) logRefreshDiff(ctx context.Context, hubPod string, nowMs int64, d refreshDiff) {
+	if d.podMismatchTotal > 0 {
+		plog.With(ctx).Warnw("msg", "location_refresh_pod_mismatch",
+			"hub_pod", hubPod, "mismatch", d.podMismatchTotal,
+			"sample_player_ids", d.podMismatchSample,
+			"hint", "本台 Hub census 有人、投影却指向别台:迁移过渡拍偶发正常,持续出现查双 hub/迟到 census")
+	}
+	if d.missingTotal > 0 {
+		if ok, streak := r.refreshDiffLog.Admit(nowMs, refreshDiffWindowMs); ok {
+			plog.With(ctx).Warnw("msg", "location_refresh_projection_missing",
+				"hub_pod", hubPod, "missing", d.missingTotal,
+				"sample_player_ids", d.missingSample,
+				"other_state", d.otherState, "read_failed", d.readFailed,
+				"streak_batches", streak,
+				"hint", "玩家连在 Hub 上但位置投影已蒸发(好友视角离线):典型为撮合失败后 MATCHING 到期无人重建")
+		}
+		return
+	}
+	if n, _ := r.refreshDiffLog.Recovered(); n > 0 {
+		plog.With(ctx).Infow("msg", "location_refresh_projection_recovered",
+			"hub_pod", hubPod, "degraded_batches", n)
+	}
 }
 
 // touchHubAliveScript 在心跳续期时把 meta 的 last_alive_ms 推到当前时刻。

@@ -236,6 +236,12 @@ func main() {
 			"threshold", cfg.Team.OfflineLeave.Threshold.String(),
 			"check_interval", cfg.Team.OfflineLeave.CheckInterval.String(),
 			"budget", cfg.Team.OfflineLeave.Budget)
+	} else {
+		// 关闭态也要留启动痕迹(与 offline_leave_without_kafka 同精神):否则线上查
+		// 「离线队员为什么不被摘」时,日志里没有任何「本链路未启用」的证据,
+		// 排查会在 locator/offlinewatch 侧空转。
+		helper.Infow("msg", "offline_leave_disabled",
+			"hint", "team.offline_leave.enabled=false: 离线成员不会被自动摘出队伍")
 	}
 
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {

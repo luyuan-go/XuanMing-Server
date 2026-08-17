@@ -192,6 +192,25 @@ const (
 // 因此 mode=local 必须二选一,都没有就拒绝启动(而不是启动后每局失败):
 //   - config_table.dir:allocator 读关卡表按 map_id 拼启动 URL(默认路径);
 //   - local_ds.loader_map:DS 统一启到加载 / 分发关卡,由 UE 侧 Loader GameMode 读同一张表决定目标图。
+//
+// ValidateRosterJoinDeadlineConfig 校验到齐期限激活档的自洽性(启动 fail-fast)。
+//
+// enforce + generation=0 是自相矛盾的配置:判定谓词(RosterDeadlineShouldAbandon)
+// 对 gen=0 恒 false,写下 enforce 的人以为开了闸,实际对所有局静默 no-op ——
+// 这种「看起来启用了,行为却没变」正是本项目一贯 fail-fast 的失效形状。
+func (c *Config) ValidateRosterJoinDeadlineConfig() error {
+	mode, err := c.Allocator.ResolveRosterJoinMode()
+	if err != nil {
+		return err
+	}
+	if mode == RosterJoinModeEnforce && c.Allocator.RosterPolicyGeneration == 0 {
+		return fmt.Errorf("allocator.roster_join_deadline_mode=enforce requires roster_policy_generation > 0: " +
+			"generation 0 battles are permanently exempt, so enforce with 0 is a silent no-op; " +
+			"set roster_policy_generation to the activation generation (see decision-revisit §5)")
+	}
+	return nil
+}
+
 func (c *Config) ValidateLocalMapSourceConfig() error {
 	if c.Mode != ModeLocal {
 		return nil
@@ -439,6 +458,29 @@ type AllocatorConf struct {
 	// 本闸守的是「差几个人」,在场玩家在干等,两者的时间尺度本就不同。
 	RosterJoinDeadline config.Duration `yaml:"roster_join_deadline,omitempty" json:"roster_join_deadline,omitempty"`
 
+	// RosterJoinDeadlineMode 到齐期限的激活档(observe → enforce,decision-revisit §5):
+	//   - ""/observe(默认):持续记录到齐事实(roster_ever_complete /
+	//     roster_incomplete_since_ms),deadline 到点只打 WARN(roster_incomplete_would_abandon)
+	//     **不判弃**。这是采证档:运维据 would_abandon 的量与冷加载 P99 判断 45s 够不够。
+	//   - enforce:到点真判弃 —— 但**只对** roster_policy_generation 与当前配置代相同的局
+	//     (见 RosterPolicyGeneration);legacy(gen=0)局永不执行。
+	//   - off:整道闸关死,连事实都不记(等价旧的 roster_join_deadline<0)。
+	//
+	// 默认 observe 而不是 enforce:直接 enforce 会踩滚动升级误判弃(旧副本见过到齐、
+	// 新副本接手时恰好缺人),decision-revisit §2.7 判为发布阻断。写错档位启动失败,
+	// 不猜(同 pkg/dbguard.ParseMode 的口径:拼错一个字母不该改变判弃行为)。
+	RosterJoinDeadlineMode string `yaml:"roster_join_deadline_mode,omitempty" json:"roster_join_deadline_mode,omitempty"`
+
+	// RosterPolicyGeneration 到齐期限的策略代,Allocate 时冻进 battle 记录。
+	//
+	// 激活协议:①新 binary 以 observe + 本值=0 全量;②确认 would_abandon 采证合理后,
+	// 把本值改成 1 并滚动(此后新局带 gen=1);③确认全量副本都在新配置后翻 enforce ——
+	// 只有 gen=1 的局会被执行,旧局(gen=0)自然排空。回滚只翻 mode;再激活须把本值 +1,
+	// 旧代局连同其已累计的计时整体豁免(不复用旧计时器)。
+	//
+	// enforce 档下本值必须 >0(=0 的 enforce 等于对所有局静默 no-op,配置自相矛盾,启动拒)。
+	RosterPolicyGeneration uint64 `yaml:"roster_policy_generation,omitempty" json:"roster_policy_generation,omitempty"`
+
 	// ── no-show 记账 → 进入侧退避(anti-abuse §4.3③/§6 第 8 项,2026-08-10 拍板温和档)──
 	// 只有 reason=no_show 的空场判弃才记账(正常结算 / 断线重连 / 主动取消都不计);
 	// 记账在本服务(判弃权威),执行在 matchmaker StartMatch(读 pandora:rl:match:noshowcd)。
@@ -595,6 +637,38 @@ func (c AllocatorConf) ResolveRosterJoinArmWindow() time.Duration {
 		ready = DefaultReadyWaitTimeout
 	}
 	return ready + deadline + RosterJoinArmSlack
+}
+
+// 到齐期限激活档常量(空 = observe)。
+const (
+	RosterJoinModeOff     = "off"
+	RosterJoinModeObserve = "observe"
+	RosterJoinModeEnforce = "enforce"
+)
+
+// ResolveRosterJoinMode 归一化并校验 roster_join_deadline_mode(空 → observe)。
+// 未知档位报错不猜:拼错一个字母不该悄悄改变「判不判弃」。
+func (c AllocatorConf) ResolveRosterJoinMode() (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(c.RosterJoinDeadlineMode))
+	switch mode {
+	case "":
+		return RosterJoinModeObserve, nil
+	case RosterJoinModeOff, RosterJoinModeObserve, RosterJoinModeEnforce:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("allocator.roster_join_deadline_mode %q invalid (want off|observe|enforce)", c.RosterJoinDeadlineMode)
+	}
+}
+
+// RosterDeadlineShouldAbandon 是「这一局到点了能不能真判弃」的唯一判定,
+// biz(legacy 路径)与 data(Model B ActivateHeartbeat)共用,防两处漂移。
+//
+//   - mode 必须是 enforce —— observe 只采证,off 整道关;
+//   - cfgGen 必须非 0 —— enforce+0 在 Validate 就被拒,这里再兜一层;
+//   - battleGen 必须等于 cfgGen —— legacy(0)与旧代局永不执行,
+//     这是滚动升级不误判弃正在打的局的**机制**保证(proto roster_policy_generation 注释)。
+func RosterDeadlineShouldAbandon(mode string, cfgGen, battleGen uint64) bool {
+	return mode == RosterJoinModeEnforce && cfgGen != 0 && battleGen == cfgGen
 }
 
 func (c AllocatorConf) ResolveRosterJoinDeadline() time.Duration {

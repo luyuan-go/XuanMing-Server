@@ -9,7 +9,7 @@ $script:PandoraWriterServices = @('login', 'player-locator', 'ds-allocator', 'hu
 $script:PandoraPlayerHmacServices = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
 # player 2026-08-13 入列(与 gen_cluster_config.ps1 的 $DsSecretServiceNames 必须同增同减):
 # GetLoadout 经 Envoy DS 面暴露,服务端要验 DS 回调令牌,故 player 也持 DS callback HMAC 校验材料。
-$script:PandoraDsCallbackHmacServices = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator', 'player')
+$script:PandoraDsCallbackHmacServices = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator', 'player', 'team', 'guild')
 $script:PandoraPlacementDomains = [ordered]@{}
 $script:PandoraMatchResumeAuthBindings = @(
     @{ Service = 'matchmaker'; Section = 'match'; Child = 'match_resume_auth_secret' },

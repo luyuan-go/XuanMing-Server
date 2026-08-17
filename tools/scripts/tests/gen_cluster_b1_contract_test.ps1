@@ -72,7 +72,7 @@ function Invoke-B1Generator {
 function Get-B1HmacConfigs([string]$TargetDir) {
     $configs = [ordered]@{}
     foreach ($service in @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator',
-            'ds-allocator', 'battle-result', 'player-locator', 'player')) {
+            'ds-allocator', 'battle-result', 'player-locator', 'player', 'team', 'guild')) {
         $configs[$service] = Get-Content -LiteralPath (Join-Path $TargetDir "$service.yaml") -Raw
     }
     return $configs

@@ -72,3 +72,47 @@ func TestManagedConfigs_都配了teamAddr(t *testing.T) {
 		t.Fatal("Defaults 不得凭空填 team_addr —— 那会让「留空」这个失败态永远测不到")
 	}
 }
+
+// ── team_call_auth_secret 同钥塌缩守卫(2026-08-17 审计 P2)────────────────────
+//
+// 字段注释一直写着「必须与 TeamResumeAuthSecret 不同」,但此前没有任何机械 enforcement:
+// 拷错钥匙静默通过启动,BeginTeamMatch/EndTeamMatch 的准入边界塌缩进被复用钥匙的信任域。
+
+func TestValidate_teamCallAuthSecret不得复用既有信任域钥匙(t *testing.T) {
+	for name, pick := range map[string]func(c *Config) string{
+		"player JWT":   func(c *Config) string { return c.JWT.Secret },
+		"Login resume": func(c *Config) string { return c.Match.MatchResumeAuthSecret },
+		"Team resume":  func(c *Config) string { return c.Match.TeamResumeAuthSecret },
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := baseValidConfig(t)
+			c.Match.TeamResumeAuthSecret = "team-resume-independent-secret-32bytes!!!"
+			if err := c.Validate(); err != nil {
+				t.Fatalf("前提不成立: %v", err)
+			}
+			c.Match.TeamCallAuthSecret = pick(c)
+			c.Match.TeamCallAuthAudience = "team"
+			if err := c.Validate(); err == nil {
+				t.Fatalf("team_call_auth_secret 复用 %s 钥匙必须启动失败", name)
+			}
+		})
+	}
+}
+
+func TestValidate_teamCallAuthSecret独立钥匙放行(t *testing.T) {
+	c := baseValidConfig(t)
+	c.Match.TeamCallAuthSecret = "team-call-outbound-independent-32bytes!!!"
+	c.Match.TeamCallAuthAudience = "team"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("独立钥匙应放行: %v", err)
+	}
+}
+
+func TestValidate_teamCallAuthSecret配了就必须合法(t *testing.T) {
+	c := baseValidConfig(t)
+	c.Match.TeamCallAuthSecret = "too-short"
+	c.Match.TeamCallAuthAudience = "team"
+	if err := c.Validate(); err == nil {
+		t.Fatal("短钥匙必须被拒(configured-but-invalid 会看起来已启用而每次调用静默失败)")
+	}
+}

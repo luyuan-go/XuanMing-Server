@@ -125,6 +125,12 @@ message StartMatchRequest {
 message StartMatchResponse {
   pandora.common.v1.ErrCode code = 1;
   uint64 match_id = 2;
+  // absent_player_ids:code=ERR_MATCH_MEMBER_OFFLINE(4011)时,被在线闸判定
+  // 「已离开大厅超过宽限窗」的成员。客户端据此点名「XX 不在大厅」——
+  // 此前这份名单只拼在服务端 error 文本里,不过线,队长看不出该等谁
+  // (INC-20260813-001 行动项,2026-08-17 拍板加结构化字段)。
+  // 其它 code 恒为空。只回 ID:昵称等展示信息客户端本地有队伍快照,不重复下发(§9.14)。
+  repeated uint64 absent_player_ids = 3;
 }
 
 message CancelMatchRequest {

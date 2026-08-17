@@ -592,6 +592,8 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		PlayerCount:          int32(len(playerIDs)),
 		AllocationId:         allocationID,
 		PlayerCombatFactions: cloneCombatFactionRecords(combatFactions),
+		// 分配时冻结到齐期限策略代(observe→enforce 激活协议的执行依据,proto 字段注释)。
+		RosterPolicyGeneration: u.cfg.RosterPolicyGeneration,
 	}
 	claimed, existing, err := u.repo.ClaimBattle(ctx, claim, u.battleTTL())
 	if err != nil {
@@ -716,6 +718,8 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		AllocationId:         allocationID,
 		ReleaseTrack:         actualReleaseTrack,
 		PlayerCombatFactions: cloneCombatFactionRecords(combatFactions),
+		// 同 claim:策略代随分配冻结,永不改写(回滚/再激活靠配置代前进,不回填存量局)。
+		RosterPolicyGeneration: u.cfg.RosterPolicyGeneration,
 	}
 	if authoritative != nil {
 		battle.GameserverUid = authoritative.InstanceUID
@@ -2432,10 +2436,13 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 		StabilitySpanMs:    u.cfg.ActivationStabilitySpan.Std().Milliseconds(),
 		// 花名册到齐期限(INC-20260813-001)。census 未上报时 data 层整道跳过 ——
 		// 拿 player_count 硬猜会把每一局都判成缺员。
-		RosterJoinDeadline:  u.cfg.ResolveRosterJoinDeadline(),
+		RosterJoinDeadline:  u.effectiveRosterJoinDeadline(),
 		RosterJoinArmWindow: u.cfg.ResolveRosterJoinArmWindow(),
 		CensusPresent:       snapshotPresent,
 		ActivePlayerIDs:     activePlayerIDs,
+		// observe→enforce 激活档与策略代(共享谓词 conf.RosterDeadlineShouldAbandon)。
+		RosterJoinMode:         u.resolveRosterJoinModeSafe(),
+		RosterPolicyGeneration: u.cfg.RosterPolicyGeneration,
 	})
 	if err != nil {
 		// 这是 Model B 心跳唯一的授权/fencing 判定点,原来失败**一条日志都没有**:
@@ -2447,6 +2454,14 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 			"gen", id.Gen, "writer_epoch", id.WriterEpoch, "state", state,
 			"player_count", playerCount, "code", int32(errcode.As(err)), "err", err)
 		return nil, err
+	}
+	if out.RosterWouldAbandon {
+		// observe 采证 / 代不匹配豁免(与 legacy 路径同一条 WARN,enforce 翻闸前的唯一现场依据)。
+		plog.With(ctx).Warnw("msg", "roster_incomplete_would_abandon",
+			"match_id", matchID, "pod", id.PodName, "mode", u.resolveRosterJoinModeSafe(),
+			"config_policy_generation", u.cfg.RosterPolicyGeneration,
+			"deadline_ms", u.cfg.ResolveRosterJoinDeadline().Milliseconds(), "authority", "redis",
+			"hint", "mode=enforce 且 battle 代==配置代 才会真判弃;见 decision-revisit §5")
 	}
 	if out.ActivationPending {
 		// 两阶段激活(INC-20260727-001 第三 P0):稳定性证据不足,不发 ACK、不下发指令、
@@ -2692,10 +2707,16 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 	// 拦不住「来了但没来齐」。缺席者单列,判弃时只罚他们。
 	var abandonRosterIncomplete bool
 	var abandonAbsentees []uint64
+	// observe 档的采证出参:到点但本局不允许判弃(mode/代不匹配)时置位,CAS 外打 WARN。
+	var rosterWouldAbandon bool
+	var rosterWouldAbandonAbsentees []uint64
+	var rosterBattleGen uint64
 	emptyTimeoutMs := u.cfg.EmptyBattleTimeout.Std().Milliseconds()
 	noShowTimeoutMs := u.cfg.ResolveNoShowTimeout().Milliseconds()
-	rosterDeadlineMs := u.cfg.ResolveRosterJoinDeadline().Milliseconds()
+	// off 档归零 = 整道闸关死(不记事实、不判弃);与 Model B 路径同一口径(见 helper)。
+	rosterDeadlineMs := u.effectiveRosterJoinDeadline().Milliseconds()
 	rosterArmWindowMs := u.cfg.ResolveRosterJoinArmWindow().Milliseconds()
+	rosterMode := u.resolveRosterJoinModeSafe()
 	err := u.repo.UpdateBattleWithLock(ctx, matchID, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
 		// CAS 冲突重跑时以最后一轮为准,每轮重置出参标记
 		refreshActive = false
@@ -2703,6 +2724,9 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 		abandonNoShow = false
 		abandonRosterIncomplete = false
 		abandonAbsentees = nil
+		rosterWouldAbandon = false
+		rosterWouldAbandonAbsentees = nil
+		rosterBattleGen = 0
 		if b.State == stateAllocationUncertain || b.State == stateAllocationReconciling ||
 			b.State == stateAllocationEmptyFence ||
 			b.State == statePreactiveReleasing || b.State == stateAllocationAbort {
@@ -2782,6 +2806,15 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 				case b.RosterIncompleteSinceMs == 0:
 					b.RosterIncompleteSinceMs = now
 				case now-b.RosterIncompleteSinceMs >= rosterDeadlineMs:
+					// 到点。能不能**真**判弃由激活档 + 策略代把关(共享谓词,与 data 层同一份):
+					// observe 只采证;enforce 也只对「当前配置代创建」的局动手 ——
+					// legacy(gen=0)与旧代局永不执行,滚动升级窗口的误判弃在机制上不可达。
+					if !conf.RosterDeadlineShouldAbandon(rosterMode, u.cfg.RosterPolicyGeneration, b.GetRosterPolicyGeneration()) {
+						rosterWouldAbandon = true
+						rosterWouldAbandonAbsentees = absent
+						rosterBattleGen = b.GetRosterPolicyGeneration()
+						break
+					}
 					b.State = stateAbandoned
 					emptyAbandoned = true
 					abandonRosterIncomplete = true
@@ -2878,6 +2911,18 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 		plog.With(ctx).Infow("msg", "battle_ds_heartbeat_ready", "match_id", matchID,
 			"pod", podName, "state", state, "player_count", playerCount, "authority", "legacy")
 	}
+	if rosterWouldAbandon {
+		// observe 采证 / 代不匹配豁免:到点了但本局不允许真判弃。这条 WARN 是激活协议的
+		// 唯一现场依据 —— enforce 翻闸前,运维靠它判断 45s 会误伤多少「本可成立」的局
+		// (每 5s 心跳一条,持续到人补齐或对局被其它闸收走;量大本身就是「别翻 enforce」的证据)。
+		plog.With(ctx).Warnw("msg", "roster_incomplete_would_abandon",
+			"match_id", matchID, "pod", podName, "mode", rosterMode,
+			"battle_policy_generation", rosterBattleGen,
+			"config_policy_generation", u.cfg.RosterPolicyGeneration,
+			"absent_players", rosterWouldAbandonAbsentees,
+			"deadline_ms", rosterDeadlineMs, "authority", "legacy",
+			"hint", "mode=enforce 且 battle 代==配置代 才会真判弃;见 decision-revisit §5")
+	}
 	if emptyAbandoned {
 		// 空场 / 缺员超时判弃:回收 pod + 投递补偿 + 移出 active,回 stop 指令令 DS 停机。
 		return u.finishEmptyAbandon(ctx, matchID, abandonPod, abandonUID,
@@ -2933,6 +2978,26 @@ func (u *AllocatorUsecase) heartbeatLegacy(ctx context.Context, matchID uint64, 
 
 // rosterAbsentees 返回 roster 里没出现在 census 中的玩家(保持 roster 原序,便于日志比对)。
 //
+// resolveRosterJoinModeSafe 取到齐期限激活档;配置非法时滑向 observe(只采证,绝不判弃)。
+// main 启动时已 fail-fast,此兜底正常不可达 —— 留它是因为本函数在判弃路径上,
+// 不可达分支的失败方向也必须是安全侧。
+func (u *AllocatorUsecase) resolveRosterJoinModeSafe() string {
+	mode, err := u.cfg.ResolveRosterJoinMode()
+	if err != nil {
+		return conf.RosterJoinModeObserve
+	}
+	return mode
+}
+
+// effectiveRosterJoinDeadline 是「激活档折算后的」到齐期限:off 档归零(整道闸关死,
+// 连事实都不记)。legacy 与 Model B 两条心跳路径必须用同一个口径,否则 off 只关一半。
+func (u *AllocatorUsecase) effectiveRosterJoinDeadline() time.Duration {
+	if u.resolveRosterJoinModeSafe() == conf.RosterJoinModeOff {
+		return 0
+	}
+	return u.cfg.ResolveRosterJoinDeadline()
+}
+
 // 输入语义严格:census 必须是 DS 上报的**真实在场名单**,不是 roster 也不是数量。
 // 拿数量判只能得到「少了几个」,说不出少的是谁 —— 而「只罚缺席者、不罚在场的人」
 // 恰恰要求点名到人。调用方负责保证 census 确实存在(snapshotPresent),

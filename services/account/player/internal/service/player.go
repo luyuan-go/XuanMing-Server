@@ -116,8 +116,15 @@ func (s *PlayerService) GetProfile(ctx context.Context, req *playerv1.GetProfile
 	if code != commonv1.ErrCode_OK {
 		return &playerv1.GetProfileResponse{Code: code}, nil
 	}
+	// 内部直连面 ctx 不带 player_id:手写注入,让本请求全部日志(含 rpc_inband_error)可按玩家 grep。
+	ctx = plog.WithPlayerID(ctx, playerID)
 	profile, err := s.uc.GetProfile(ctx, playerID)
 	if err != nil {
+		// 玩家档读不出=「卡在加载/进不了世界」的直接判据;ErrPlayerNotFound(2001)等业务码
+		// 不升 access log,这里是唯一显式痕迹。EnsureProfile 成功后仍 not_found 属真异常
+		// (建档丢失/分片路由错),同样靠本条暴露。
+		plog.With(ctx).Warnw("msg", "get_profile_failed",
+			"player_id", playerID, "code", int32(errcode.As(err)), "err", err)
 		return &playerv1.GetProfileResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.GetProfileResponse{Code: commonv1.ErrCode_OK, Profile: profile}, nil
@@ -454,8 +461,15 @@ func (s *PlayerService) GetLoadout(ctx context.Context, req *playerv1.GetLoadout
 	if code != commonv1.ErrCode_OK {
 		return &playerv1.GetLoadoutResponse{Code: code}, nil
 	}
+	// DS 面(:8444)无身份头,ctx 恒无 player_id → 失败时 rpc_inband_error 只有 op+code,
+	// 按玩家 grep 零命中。手写注入后本请求全部日志自动带 player_id。
+	ctx = plog.WithPlayerID(ctx, playerID)
 	loadout, err := s.uc.GetLoadout(ctx, playerID)
 	if err != nil {
+		// DS 进场拉档失败=「玩家卡在加载界面」的第一判据;业务码不升 access log,
+		// 这里是唯一显式痕迹(err 含 biz 侧具体失败环节)。
+		plog.With(ctx).Warnw("msg", "get_loadout_failed",
+			"player_id", playerID, "code", int32(errcode.As(err)), "err", err)
 		return &playerv1.GetLoadoutResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.GetLoadoutResponse{Code: commonv1.ErrCode_OK, Loadout: loadout}, nil

@@ -3368,3 +3368,29 @@ immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致
     (块内会在解析期就展开成旧值)。实测:CP936 下双击路径与参数直通路径均 `exit=0`、无解析漂移。
   - `configtable_gen.ps1` 的失败提示改为首推双击该 .cmd(命令行写法保留作等价说明);策划机缺 go/buf 时
     提示语也从「他跑一条命令」改成「他双击那个 cmd」。
+
+## 2026-08-17 队伍 ready 生命周期方案 A 落码 + 批次审计修复(Claude)
+
+- **方案 A 拍板落码,发布阻断解除**:`BeginTeamMatch` 一次性消费 ready(三路径:收据重入
+  / legacy 作废 / 正常消费),收据绑定消费后代际 → 不需要原文档 §6 的三阶段发布;
+  `EndTeamMatch` 降级共存兼容路径。旧契约测试改写 + 7 个新契约测试。
+  详见 decision-revisit-team-match-lifecycle-and-roster-rollout.md §9。
+- **allocator 到齐期限 observe→enforce 分代激活**:`roster_join_deadline_mode`(默认
+  observe 只采证)+ `roster_policy_generation`(Allocate 冻结,proto 26);
+  biz/data 双路径共用判定谓词;enforce+0 启动拒;6 新测试。
+- **审计确认 2 条并修复**(13-agent workflow,8 发现 6 证伪):①formSoloMatch/formMatch
+  丢 team_ready_generation(主路径 End CAS 恒退化;补传递+穿真实装配的回归测试);
+  ②team_call_auth_secret 无同钥拒绝(纳入 Validate,同款测试)。
+- **4011 结构化缺席成员**:StartMatchResponse.absent_player_ids + MemberOfflineError。
+- **team/guild 入列 DS 回调密钥域**(verify-only,player 先例):三处清单+三份模板+
+  双向契约测试反转。⚠ 首次 online 发布会撞 HMAC 连续性门,须先走换钥流程。
+- 测试:team/matchmaker/ds_allocator/guild 全绿。未做:Linux -race、真集群双版本矩阵、
+  玩家 E2E(发布前置项,见 decision-revisit §9.3);UE 侧 absent_player_ids 接收待客户端。
+
+## 2026-08-17 玩家全链路日志可查性审计 + 修复(登录/匹配/进战/断线/结算退出/重连)
+
+- 审计:6 条后端链 + 3 条 DS/客户端链,对抗复核定谳(翻案 5 条);验收口径 = infra.md §11.3。
+- 后端落码 17 项(login 3×P0、reconnect 2×P0、段位链 P1 端到端、presence 蒸发 P1 等),全部 build+test 绿,未提交(工作区有并发在途改动,逐文件确认归属后再收)。
+- DS/客户端落码 9 项(离场证明重试终局、驱逐单收到/丢弃/ack、AwaitingTicket 零日志、ACK 失配 reason 等),待用户 UE 编译验证。
+- 新文档:docs/ops/player-journey-log-map.md(值班速查/六段链路判据/修复清单/待办)。
+- 避让未修:matchmaker 3×P1(saga 补偿/确认超时点名/取消匹配 DEBUG)、ds_allocator 判弃 player_ids——文件被并发会话占用,见文档 §4。

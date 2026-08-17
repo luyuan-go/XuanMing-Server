@@ -4417,11 +4417,11 @@ constexpr BattleStorageRecord::ParseTableT_ BattleStorageRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      25, 248,  // max_field_number, fast_idx_mask
+      26, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4261412864,  // skipmap
+      4227858432,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      25,  // num_field_entries
+      26,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -4532,7 +4532,10 @@ constexpr BattleStorageRecord::ParseTableT_ BattleStorageRecord::InternalGenerat
       {::_pbi::TcParser::FastV8S2,
        {456, 23, 0,
         PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.roster_ever_complete_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 roster_policy_generation = 26 [json_name = "rosterPolicyGeneration"];
+      {::_pbi::TcParser::FastV64S2,
+       {464, 25, 0,
+        PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.roster_policy_generation_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -4591,6 +4594,8 @@ constexpr BattleStorageRecord::ParseTableT_ BattleStorageRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.roster_incomplete_since_ms_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // bool roster_ever_complete = 25 [json_name = "rosterEverComplete"];
       {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.roster_ever_complete_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 roster_policy_generation = 26 [json_name = "rosterPolicyGeneration"];
+      {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.roster_policy_generation_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -4674,7 +4679,8 @@ inline constexpr BattleStorageRecord::Impl_::Impl_(
         rating_mode_{static_cast< ::pandora::config::v1::LevelRatingMode >(0)},
         ever_had_players_{false},
         roster_ever_complete_{false},
-        roster_incomplete_since_ms_{::int64_t{0}} {}
+        roster_incomplete_since_ms_{::int64_t{0}},
+        roster_policy_generation_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr BattleStorageRecord::BattleStorageRecord(::_pbi::ConstantInitialized,
@@ -5635,7 +5641,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_._has_bits_),
-        28, // hasbit index offset
+        29, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.ds_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.ds_addr_),
@@ -5661,6 +5667,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.rating_pool_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.roster_incomplete_since_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.roster_ever_complete_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.roster_policy_generation_),
         12,
         2,
         3,
@@ -5686,6 +5693,7 @@ const ::uint32_t
         11,
         24,
         23,
+        25,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleDSCredential, _impl_._has_bits_),
         11, // hasbit index offset
@@ -5882,15 +5890,15 @@ static const ::_pbi::MigrationSchema
         {232, sizeof(::pandora::ds::v1::ListBattlesRequest)},
         {237, sizeof(::pandora::ds::v1::ListBattlesResponse)},
         {244, sizeof(::pandora::ds::v1::BattleStorageRecord)},
-        {297, sizeof(::pandora::ds::v1::BattleDSCredential)},
-        {316, sizeof(::pandora::ds::v1::BattleDSAuthStorageRecord)},
-        {347, sizeof(::pandora::ds::v1::BattlePlayerDepartureStorageRecord)},
-        {384, sizeof(::pandora::ds::v1::BattlePlayerDepartureJournalStorageRecord)},
-        {391, sizeof(::pandora::ds::v1::BattleInstanceTeardownStorageRecord)},
-        {408, sizeof(::pandora::ds::v1::BattleAllocationAbortStorageRecord)},
-        {429, sizeof(::pandora::ds::v1::BattleAllocationLifecyclePublishedStorageRecord)},
-        {448, sizeof(::pandora::ds::v1::DSLifecycleEvent)},
-        {465, sizeof(::pandora::ds::v1::BattlePlayerCombatFaction)},
+        {299, sizeof(::pandora::ds::v1::BattleDSCredential)},
+        {318, sizeof(::pandora::ds::v1::BattleDSAuthStorageRecord)},
+        {349, sizeof(::pandora::ds::v1::BattlePlayerDepartureStorageRecord)},
+        {386, sizeof(::pandora::ds::v1::BattlePlayerDepartureJournalStorageRecord)},
+        {393, sizeof(::pandora::ds::v1::BattleInstanceTeardownStorageRecord)},
+        {410, sizeof(::pandora::ds::v1::BattleAllocationAbortStorageRecord)},
+        {431, sizeof(::pandora::ds::v1::BattleAllocationLifecyclePublishedStorageRecord)},
+        {450, sizeof(::pandora::ds::v1::DSLifecycleEvent)},
+        {467, sizeof(::pandora::ds::v1::BattlePlayerCombatFaction)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -6032,7 +6040,7 @@ const char descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto[] ABS
     "istBattlesResponse\022.\n\004code\030\001 \001(\0162\032.pando"
     "ra.common.v1.ErrCodeR\004code\0223\n\007battles\030\002 "
     "\003(\0132\031.pandora.ds.v1.BattleInfoR\007battles\""
-    "\224\010\n\023BattleStorageRecord\022\031\n\010match_id\030\001 \001("
+    "\316\010\n\023BattleStorageRecord\022\031\n\010match_id\030\001 \001("
     "\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodNa"
     "me\022\027\n\007ds_addr\030\003 \001(\tR\006dsAddr\022\024\n\005state\030\004 \001"
     "(\tR\005state\022\035\n\nplayer_ids\030\005 \003(\004R\tplayerIds"
@@ -6058,118 +6066,120 @@ const char descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto[] ABS
     "\001(\tR\nratingPool\022;\n\032roster_incomplete_sin"
     "ce_ms\030\030 \001(\003R\027rosterIncompleteSinceMs\0220\n\024"
     "roster_ever_complete\030\031 \001(\010R\022rosterEverCo"
-    "mplete\"\361\001\n\022BattleDSCredential\022\020\n\003gen\030\001 \001"
-    "(\004R\003gen\022\020\n\003jti\030\002 \001(\tR\003jti\022\025\n\006exp_ms\030\003 \001("
-    "\004R\005expMs\022\020\n\003kid\030\004 \001(\tR\003kid\022!\n\014instance_u"
-    "id\030\005 \001(\tR\013instanceUid\022%\n\016instance_epoch\030"
-    "\006 \001(\rR\rinstanceEpoch\022!\n\014token_sha256\030\007 \001"
-    "(\tR\013tokenSha256\022!\n\014writer_epoch\030\010 \001(\rR\013w"
-    "riterEpoch\"\373\004\n\031BattleDSAuthStorageRecord"
-    "\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_na"
-    "me\030\002 \001(\tR\tdsPodName\022!\n\014instance_uid\030\003 \001("
-    "\tR\013instanceUid\022%\n\016instance_epoch\030\004 \001(\rR\r"
-    "instanceEpoch\0224\n\005phase\030\005 \001(\0162\036.pandora.d"
-    "s.v1.BattleAuthPhaseR\005phase\0229\n\006active\030\006 "
-    "\001(\0132!.pandora.ds.v1.BattleDSCredentialR\006"
-    "active\022;\n\007pending\030\007 \001(\0132!.pandora.ds.v1."
-    "BattleDSCredentialR\007pending\022$\n\016high_wate"
-    "r_gen\030\010 \001(\004R\014highWaterGen\022,\n\022pending_sta"
-    "rted_ms\030\t \001(\003R\020pendingStartedMs\022!\n\014deliv"
-    "ered_rv\030\n \001(\tR\013deliveredRv\022\"\n\rupdated_at"
-    "_ms\030\013 \001(\003R\013updatedAtMs\0222\n\025required_write"
-    "r_epoch\030\014 \001(\rR\023requiredWriterEpoch\022#\n\ral"
-    "location_id\030\r \001(\tR\014allocationId\0227\n\030last_"
-    "active_heartbeat_ms\030\016 \001(\003R\025lastActiveHea"
-    "rtbeatMs\"\344\005\n\"BattlePlayerDepartureStorag"
-    "eRecord\022!\n\014departure_id\030\001 \001(\tR\013departure"
-    "Id\022\031\n\010match_id\030\002 \001(\004R\007matchId\022\033\n\tplayer_"
-    "id\030\003 \001(\004R\010playerId\022!\n\014operation_id\030\004 \001(\t"
-    "R\013operationId\022\036\n\013ds_pod_name\030\005 \001(\tR\tdsPo"
-    "dName\022%\n\016gameserver_uid\030\006 \001(\tR\rgameserve"
-    "rUid\022%\n\016instance_epoch\030\007 \001(\rR\rinstanceEp"
-    "och\022#\n\rallocation_id\030\010 \001(\tR\014allocationId"
-    "\022B\n\006status\030\t \001(\0162*.pandora.ds.v1.BattleP"
-    "layerDepartureStatusR\006status\022&\n\017requeste"
-    "d_at_ms\030\n \001(\003R\rrequestedAtMs\022 \n\014issued_a"
-    "t_ms\030\013 \001(\003R\nissuedAtMs\022$\n\016departed_at_ms"
-    "\030\014 \001(\003R\014departedAtMs\022+\n\021placement_versio"
-    "n\030\r \001(\004R\020placementVersion\0228\n\030source_plac"
-    "ement_version\030\016 \001(\004R\026sourcePlacementVers"
-    "ion\022.\n\023source_operation_id\030\017 \001(\tR\021source"
-    "OperationId\022,\n\022acknowledged_at_ms\030\020 \001(\003R"
-    "\020acknowledgedAtMs\0224\n\026acknowledged_census"
-    "_id\030\021 \001(\tR\024acknowledgedCensusId\"\231\001\n)Batt"
-    "lePlayerDepartureJournalStorageRecord\022\031\n"
-    "\010match_id\030\001 \001(\004R\007matchId\022Q\n\ndepartures\030\002"
-    " \003(\01321.pandora.ds.v1.BattlePlayerDepartu"
-    "reStorageRecordR\ndepartures\"\223\002\n#BattleIn"
-    "stanceTeardownStorageRecord\022\031\n\010match_id\030"
-    "\001 \001(\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsP"
-    "odName\022%\n\016gameserver_uid\030\003 \001(\tR\rgameserv"
-    "erUid\022%\n\016instance_epoch\030\004 \001(\rR\rinstanceE"
-    "poch\022#\n\rallocation_id\030\005 \001(\tR\014allocationI"
-    "d\022%\n\017torn_down_at_ms\030\006 \001(\003R\014tornDownAtMs"
-    "\022\027\n\007pod_uid\030\007 \001(\tR\006podUid\"\375\002\n\"BattleAllo"
-    "cationAbortStorageRecord\022\031\n\010match_id\030\001 \001"
-    "(\004R\007matchId\0226\n\027allocation_operation_id\030\002"
-    " \001(\tR\025allocationOperationId\022\036\n\013ds_pod_na"
-    "me\030\003 \001(\tR\tdsPodName\022%\n\016gameserver_uid\030\004 "
-    "\001(\tR\rgameserverUid\022%\n\016instance_epoch\030\005 \001"
-    "(\rR\rinstanceEpoch\022#\n\rallocation_id\030\006 \001(\t"
-    "R\014allocationId\022#\n\rrelease_track\030\007 \001(\tR\014r"
-    "eleaseTrack\022&\n\017requested_at_ms\030\010 \001(\003R\rre"
-    "questedAtMs\022$\n\016released_at_ms\030\t \001(\003R\014rel"
-    "easedAtMs\"\343\002\n/BattleAllocationLifecycleP"
-    "ublishedStorageRecord\022\031\n\010match_id\030\001 \001(\004R"
-    "\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName"
-    "\022%\n\016gameserver_uid\030\003 \001(\tR\rgameserverUid\022"
-    "%\n\016instance_epoch\030\004 \001(\rR\rinstanceEpoch\022#"
-    "\n\rallocation_id\030\005 \001(\tR\014allocationId\022#\n\rr"
-    "elease_track\030\006 \001(\tR\014releaseTrack\0225\n\005phas"
-    "e\030\007 \001(\0162\037.pandora.ds.v1.DSLifecyclePhase"
-    "R\005phase\022&\n\017published_at_ms\030\010 \001(\003R\rpublis"
-    "hedAtMs\"\354\001\n\020DSLifecycleEvent\022\031\n\010match_id"
-    "\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tds"
-    "PodName\0225\n\005phase\030\003 \001(\0162\037.pandora.ds.v1.D"
-    "SLifecyclePhaseR\005phase\022\035\n\nplayer_ids\030\004 \003"
-    "(\004R\tplayerIds\022\025\n\006map_id\030\005 \001(\rR\005mapId\022\033\n\t"
-    "game_mode\030\006 \001(\tR\010gameMode\022\023\n\005ts_ms\030\007 \001(\003"
-    "R\004tsMs\"d\n\031BattlePlayerCombatFaction\022\033\n\tp"
-    "layer_id\030\001 \001(\004R\010playerId\022*\n\021combat_facti"
-    "on_id\030\002 \001(\rR\017combatFactionId*\333\001\n\033BattleP"
-    "layerDepartureStatus\022.\n*BATTLE_PLAYER_DE"
-    "PARTURE_STATUS_UNSPECIFIED\020\000\022*\n&BATTLE_P"
-    "LAYER_DEPARTURE_STATUS_PENDING\020\001\022+\n\'BATT"
-    "LE_PLAYER_DEPARTURE_STATUS_DEPARTED\020\002\0223\n"
-    "/BATTLE_PLAYER_DEPARTURE_STATUS_SOURCE_T"
-    "ORN_DOWN\020\003*\331\001\n\017BattleAuthPhase\022!\n\035BATTLE"
-    "_AUTH_PHASE_UNSPECIFIED\020\000\022\037\n\033BATTLE_AUTH"
-    "_PHASE_BOOTSTRAP\020\001\022\034\n\030BATTLE_AUTH_PHASE_"
-    "ACTIVE\020\002\022\036\n\032BATTLE_AUTH_PHASE_ROTATING\020\003"
-    "\022!\n\035BATTLE_AUTH_PHASE_QUARANTINED\020\004\022!\n\035B"
-    "ATTLE_AUTH_PHASE_TERMINATING\020\005*\233\001\n\020DSLif"
-    "ecyclePhase\022\"\n\036DS_LIFECYCLE_PHASE_UNSPEC"
-    "IFIED\020\000\022 \n\034DS_LIFECYCLE_PHASE_ALLOCATED\020"
-    "\001\022\037\n\033DS_LIFECYCLE_PHASE_RELEASED\020\002\022 \n\034DS"
-    "_LIFECYCLE_PHASE_ABANDONED\020\0032\310\005\n\022DSAlloc"
-    "atorService\022]\n\016AllocateBattle\022$.pandora."
-    "ds.v1.AllocateBattleRequest\032%.pandora.ds"
-    ".v1.AllocateBattleResponse\022l\n\023ResolveBat"
-    "tleTarget\022).pandora.ds.v1.ResolveBattleT"
-    "argetRequest\032*.pandora.ds.v1.ResolveBatt"
-    "leTargetResponse\022Z\n\rReleaseBattle\022#.pand"
-    "ora.ds.v1.ReleaseBattleRequest\032$.pandora"
-    ".ds.v1.ReleaseBattleResponse\022o\n\024AbortPre"
-    "activeBattle\022*.pandora.ds.v1.AbortPreact"
-    "iveBattleRequest\032+.pandora.ds.v1.AbortPr"
-    "eactiveBattleResponse\022r\n\025EnsurePlayerDep"
-    "arture\022+.pandora.ds.v1.EnsurePlayerDepar"
-    "tureRequest\032,.pandora.ds.v1.EnsurePlayer"
-    "DepartureResponse\022N\n\tHeartbeat\022\037.pandora"
-    ".ds.v1.HeartbeatRequest\032 .pandora.ds.v1."
-    "HeartbeatResponse\022T\n\013ListBattles\022!.pando"
-    "ra.ds.v1.ListBattlesRequest\032\".pandora.ds"
-    ".v1.ListBattlesResponseb\006proto3"
+    "mplete\0228\n\030roster_policy_generation\030\032 \001(\004"
+    "R\026rosterPolicyGeneration\"\361\001\n\022BattleDSCre"
+    "dential\022\020\n\003gen\030\001 \001(\004R\003gen\022\020\n\003jti\030\002 \001(\tR\003"
+    "jti\022\025\n\006exp_ms\030\003 \001(\004R\005expMs\022\020\n\003kid\030\004 \001(\tR"
+    "\003kid\022!\n\014instance_uid\030\005 \001(\tR\013instanceUid\022"
+    "%\n\016instance_epoch\030\006 \001(\rR\rinstanceEpoch\022!"
+    "\n\014token_sha256\030\007 \001(\tR\013tokenSha256\022!\n\014wri"
+    "ter_epoch\030\010 \001(\rR\013writerEpoch\"\373\004\n\031BattleD"
+    "SAuthStorageRecord\022\031\n\010match_id\030\001 \001(\004R\007ma"
+    "tchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\022!\n"
+    "\014instance_uid\030\003 \001(\tR\013instanceUid\022%\n\016inst"
+    "ance_epoch\030\004 \001(\rR\rinstanceEpoch\0224\n\005phase"
+    "\030\005 \001(\0162\036.pandora.ds.v1.BattleAuthPhaseR\005"
+    "phase\0229\n\006active\030\006 \001(\0132!.pandora.ds.v1.Ba"
+    "ttleDSCredentialR\006active\022;\n\007pending\030\007 \001("
+    "\0132!.pandora.ds.v1.BattleDSCredentialR\007pe"
+    "nding\022$\n\016high_water_gen\030\010 \001(\004R\014highWater"
+    "Gen\022,\n\022pending_started_ms\030\t \001(\003R\020pending"
+    "StartedMs\022!\n\014delivered_rv\030\n \001(\tR\013deliver"
+    "edRv\022\"\n\rupdated_at_ms\030\013 \001(\003R\013updatedAtMs"
+    "\0222\n\025required_writer_epoch\030\014 \001(\rR\023require"
+    "dWriterEpoch\022#\n\rallocation_id\030\r \001(\tR\014all"
+    "ocationId\0227\n\030last_active_heartbeat_ms\030\016 "
+    "\001(\003R\025lastActiveHeartbeatMs\"\344\005\n\"BattlePla"
+    "yerDepartureStorageRecord\022!\n\014departure_i"
+    "d\030\001 \001(\tR\013departureId\022\031\n\010match_id\030\002 \001(\004R\007"
+    "matchId\022\033\n\tplayer_id\030\003 \001(\004R\010playerId\022!\n\014"
+    "operation_id\030\004 \001(\tR\013operationId\022\036\n\013ds_po"
+    "d_name\030\005 \001(\tR\tdsPodName\022%\n\016gameserver_ui"
+    "d\030\006 \001(\tR\rgameserverUid\022%\n\016instance_epoch"
+    "\030\007 \001(\rR\rinstanceEpoch\022#\n\rallocation_id\030\010"
+    " \001(\tR\014allocationId\022B\n\006status\030\t \001(\0162*.pan"
+    "dora.ds.v1.BattlePlayerDepartureStatusR\006"
+    "status\022&\n\017requested_at_ms\030\n \001(\003R\rrequest"
+    "edAtMs\022 \n\014issued_at_ms\030\013 \001(\003R\nissuedAtMs"
+    "\022$\n\016departed_at_ms\030\014 \001(\003R\014departedAtMs\022+"
+    "\n\021placement_version\030\r \001(\004R\020placementVers"
+    "ion\0228\n\030source_placement_version\030\016 \001(\004R\026s"
+    "ourcePlacementVersion\022.\n\023source_operatio"
+    "n_id\030\017 \001(\tR\021sourceOperationId\022,\n\022acknowl"
+    "edged_at_ms\030\020 \001(\003R\020acknowledgedAtMs\0224\n\026a"
+    "cknowledged_census_id\030\021 \001(\tR\024acknowledge"
+    "dCensusId\"\231\001\n)BattlePlayerDepartureJourn"
+    "alStorageRecord\022\031\n\010match_id\030\001 \001(\004R\007match"
+    "Id\022Q\n\ndepartures\030\002 \003(\01321.pandora.ds.v1.B"
+    "attlePlayerDepartureStorageRecordR\ndepar"
+    "tures\"\223\002\n#BattleInstanceTeardownStorageR"
+    "ecord\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_p"
+    "od_name\030\002 \001(\tR\tdsPodName\022%\n\016gameserver_u"
+    "id\030\003 \001(\tR\rgameserverUid\022%\n\016instance_epoc"
+    "h\030\004 \001(\rR\rinstanceEpoch\022#\n\rallocation_id\030"
+    "\005 \001(\tR\014allocationId\022%\n\017torn_down_at_ms\030\006"
+    " \001(\003R\014tornDownAtMs\022\027\n\007pod_uid\030\007 \001(\tR\006pod"
+    "Uid\"\375\002\n\"BattleAllocationAbortStorageReco"
+    "rd\022\031\n\010match_id\030\001 \001(\004R\007matchId\0226\n\027allocat"
+    "ion_operation_id\030\002 \001(\tR\025allocationOperat"
+    "ionId\022\036\n\013ds_pod_name\030\003 \001(\tR\tdsPodName\022%\n"
+    "\016gameserver_uid\030\004 \001(\tR\rgameserverUid\022%\n\016"
+    "instance_epoch\030\005 \001(\rR\rinstanceEpoch\022#\n\ra"
+    "llocation_id\030\006 \001(\tR\014allocationId\022#\n\rrele"
+    "ase_track\030\007 \001(\tR\014releaseTrack\022&\n\017request"
+    "ed_at_ms\030\010 \001(\003R\rrequestedAtMs\022$\n\016release"
+    "d_at_ms\030\t \001(\003R\014releasedAtMs\"\343\002\n/BattleAl"
+    "locationLifecyclePublishedStorageRecord\022"
+    "\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_nam"
+    "e\030\002 \001(\tR\tdsPodName\022%\n\016gameserver_uid\030\003 \001"
+    "(\tR\rgameserverUid\022%\n\016instance_epoch\030\004 \001("
+    "\rR\rinstanceEpoch\022#\n\rallocation_id\030\005 \001(\tR"
+    "\014allocationId\022#\n\rrelease_track\030\006 \001(\tR\014re"
+    "leaseTrack\0225\n\005phase\030\007 \001(\0162\037.pandora.ds.v"
+    "1.DSLifecyclePhaseR\005phase\022&\n\017published_a"
+    "t_ms\030\010 \001(\003R\rpublishedAtMs\"\354\001\n\020DSLifecycl"
+    "eEvent\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_"
+    "pod_name\030\002 \001(\tR\tdsPodName\0225\n\005phase\030\003 \001(\016"
+    "2\037.pandora.ds.v1.DSLifecyclePhaseR\005phase"
+    "\022\035\n\nplayer_ids\030\004 \003(\004R\tplayerIds\022\025\n\006map_i"
+    "d\030\005 \001(\rR\005mapId\022\033\n\tgame_mode\030\006 \001(\tR\010gameM"
+    "ode\022\023\n\005ts_ms\030\007 \001(\003R\004tsMs\"d\n\031BattlePlayer"
+    "CombatFaction\022\033\n\tplayer_id\030\001 \001(\004R\010player"
+    "Id\022*\n\021combat_faction_id\030\002 \001(\rR\017combatFac"
+    "tionId*\333\001\n\033BattlePlayerDepartureStatus\022."
+    "\n*BATTLE_PLAYER_DEPARTURE_STATUS_UNSPECI"
+    "FIED\020\000\022*\n&BATTLE_PLAYER_DEPARTURE_STATUS"
+    "_PENDING\020\001\022+\n\'BATTLE_PLAYER_DEPARTURE_ST"
+    "ATUS_DEPARTED\020\002\0223\n/BATTLE_PLAYER_DEPARTU"
+    "RE_STATUS_SOURCE_TORN_DOWN\020\003*\331\001\n\017BattleA"
+    "uthPhase\022!\n\035BATTLE_AUTH_PHASE_UNSPECIFIE"
+    "D\020\000\022\037\n\033BATTLE_AUTH_PHASE_BOOTSTRAP\020\001\022\034\n\030"
+    "BATTLE_AUTH_PHASE_ACTIVE\020\002\022\036\n\032BATTLE_AUT"
+    "H_PHASE_ROTATING\020\003\022!\n\035BATTLE_AUTH_PHASE_"
+    "QUARANTINED\020\004\022!\n\035BATTLE_AUTH_PHASE_TERMI"
+    "NATING\020\005*\233\001\n\020DSLifecyclePhase\022\"\n\036DS_LIFE"
+    "CYCLE_PHASE_UNSPECIFIED\020\000\022 \n\034DS_LIFECYCL"
+    "E_PHASE_ALLOCATED\020\001\022\037\n\033DS_LIFECYCLE_PHAS"
+    "E_RELEASED\020\002\022 \n\034DS_LIFECYCLE_PHASE_ABAND"
+    "ONED\020\0032\310\005\n\022DSAllocatorService\022]\n\016Allocat"
+    "eBattle\022$.pandora.ds.v1.AllocateBattleRe"
+    "quest\032%.pandora.ds.v1.AllocateBattleResp"
+    "onse\022l\n\023ResolveBattleTarget\022).pandora.ds"
+    ".v1.ResolveBattleTargetRequest\032*.pandora"
+    ".ds.v1.ResolveBattleTargetResponse\022Z\n\rRe"
+    "leaseBattle\022#.pandora.ds.v1.ReleaseBattl"
+    "eRequest\032$.pandora.ds.v1.ReleaseBattleRe"
+    "sponse\022o\n\024AbortPreactiveBattle\022*.pandora"
+    ".ds.v1.AbortPreactiveBattleRequest\032+.pan"
+    "dora.ds.v1.AbortPreactiveBattleResponse\022"
+    "r\n\025EnsurePlayerDeparture\022+.pandora.ds.v1"
+    ".EnsurePlayerDepartureRequest\032,.pandora."
+    "ds.v1.EnsurePlayerDepartureResponse\022N\n\tH"
+    "eartbeat\022\037.pandora.ds.v1.HeartbeatReques"
+    "t\032 .pandora.ds.v1.HeartbeatResponse\022T\n\013L"
+    "istBattles\022!.pandora.ds.v1.ListBattlesRe"
+    "quest\032\".pandora.ds.v1.ListBattlesRespons"
+    "eb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_deps[2] = {
@@ -6180,7 +6190,7 @@ static ::absl::once_flag descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto = {
     false,
     false,
-    9871,
+    9929,
     descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto,
     "pandora/ds/v1/allocator.proto",
     &descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_once,
@@ -12180,9 +12190,9 @@ BattleStorageRecord::BattleStorageRecord(
                offsetof(Impl_, match_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, match_id_),
-           offsetof(Impl_, roster_incomplete_since_ms_) -
+           offsetof(Impl_, roster_policy_generation_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::roster_incomplete_since_ms_));
+               sizeof(Impl_::roster_policy_generation_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.ds.v1.BattleStorageRecord)
 }
@@ -12217,9 +12227,9 @@ inline void BattleStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, match_id_),
            0,
-           offsetof(Impl_, roster_incomplete_since_ms_) -
+           offsetof(Impl_, roster_policy_generation_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::roster_incomplete_since_ms_));
+               sizeof(Impl_::roster_policy_generation_));
 }
 BattleStorageRecord::~BattleStorageRecord() {
   // @@protoc_insertion_point(destructor:pandora.ds.v1.BattleStorageRecord)
@@ -12329,7 +12339,11 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.roster_ever_complete_) -
         reinterpret_cast<char*>(&_impl_.last_heartbeat_ms_)) + sizeof(_impl_.roster_ever_complete_));
   }
-  _impl_.roster_incomplete_since_ms_ = ::int64_t{0};
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    ::memset(&_impl_.roster_incomplete_since_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.roster_policy_generation_) -
+        reinterpret_cast<char*>(&_impl_.roster_incomplete_since_ms_)) + sizeof(_impl_.roster_policy_generation_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -12594,6 +12608,15 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
     }
   }
 
+  // uint64 roster_policy_generation = 26 [json_name = "rosterPolicyGeneration"];
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_roster_policy_generation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          26, this_._internal_roster_policy_generation(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -12791,12 +12814,19 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
     // int64 roster_incomplete_since_ms = 24 [json_name = "rosterIncompleteSinceMs"];
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (this_._internal_roster_incomplete_since_ms() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::Int64Size(
                                         this_._internal_roster_incomplete_since_ms());
+      }
+    }
+    // uint64 roster_policy_generation = 26 [json_name = "rosterPolicyGeneration"];
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_roster_policy_generation() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_roster_policy_generation());
       }
     }
   }
@@ -12982,9 +13012,16 @@ void BattleStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
-    if (from._internal_roster_incomplete_since_ms() != 0) {
-      _this->_impl_.roster_incomplete_since_ms_ = from._impl_.roster_incomplete_since_ms_;
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (from._internal_roster_incomplete_since_ms() != 0) {
+        _this->_impl_.roster_incomplete_since_ms_ = from._impl_.roster_incomplete_since_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_roster_policy_generation() != 0) {
+        _this->_impl_.roster_policy_generation_ = from._impl_.roster_policy_generation_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -13019,8 +13056,8 @@ void BattleStorageRecord::InternalSwap(BattleStorageRecord* PROTOBUF_RESTRICT PR
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.pod_uid_, &other->_impl_.pod_uid_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.rating_pool_, &other->_impl_.rating_pool_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.roster_incomplete_since_ms_)
-      + sizeof(BattleStorageRecord::_impl_.roster_incomplete_since_ms_)
+      PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.roster_policy_generation_)
+      + sizeof(BattleStorageRecord::_impl_.roster_policy_generation_)
       - PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.match_id_)>(
           reinterpret_cast<char*>(&_impl_.match_id_),
           reinterpret_cast<char*>(&other->_impl_.match_id_));

@@ -371,6 +371,12 @@ func dsAuthAdditionalSecretBytes(cfg config.DSAuthConf) ([][]byte, error) {
 // reject 按模式产出拒绝:enforce 返回错误;permissive 记 warn 放行(返回 nil)。
 func (g *DSCallbackGuard) reject(ctx context.Context, code errcode.Code, viaGateway bool, format string, args ...any) error {
 	if g.mode == DSAuthEnforce {
+		// enforce 拒绝同样必须落盘(§11.3 R2):这些码(ErrUnauthorized/ErrInvalidArg)非
+		// IsServerFault,access log 只记 rpc_ok=DEBUG;各服务调用点并不逐点补日志,这里是
+		// 所有 DS 回调鉴权拒绝的唯一必经收口——DS 凭据轮换断档时,一台 DS 上全部玩家的
+		// 回调会成批被拒,没有这条就只能靠客户端表象反推。拒绝是低频异常路径,不构成噪音。
+		plog.With(ctx).Warnw("msg", "ds_callback_auth_rejected",
+			"reason", fmt.Sprintf(format, args...), "via_gateway", viaGateway, "code", int32(code))
 		return errcode.New(code, "ds callback auth: "+format, args...)
 	}
 	plog.With(ctx).Warnw("msg", "ds_callback_auth_permissive_reject",

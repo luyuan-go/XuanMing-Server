@@ -57,3 +57,11 @@ guild:
 # -Prod 产物由 gen_cluster_config.ps1 机械置 true(漏配端点拒启)。
 session_gate:
   require: false
+
+# DS 回调令牌校验(verify-only,2026-08-17 入列;先例与档位说明见 player-dev.yaml 同节点)。
+# 为什么 guild 需要它:铭牌关系上色要 DS 反查公会归属(同队/同公会变蓝),该反查与
+# team.GetPlayerTeam 同构地暴露在无 jwt_authn 的 DS 面上;dsGuard 已接好,缺本节点即纸面门。
+ds_auth:
+  mode: "permissive"
+  authority_mode: "legacy"
+  secret: "pandora-dev-jwt-secret-change-me-32!"

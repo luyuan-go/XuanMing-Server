@@ -644,8 +644,8 @@ func (u *LocatorUsecase) RefreshHubLocations(ctx context.Context, hubPod string,
 		return 0, err
 	}
 	// §11.3 R4:Hub DS 心跳携带(每 5s 一次、一次带全场百人),只能 Debug。
-	// requested vs refreshed 的差值是「多少人的 presence 没被续上」的唯一可观测量
-	// (差值持续偏大 = 那批玩家的位置投影正在 30s TTL 后静默蒸发)。
+	// 差集(census 在场却没被续上的名单)由 data 层按原因分类点名:
+	// location_refresh_projection_missing / location_refresh_pod_mismatch(WARN,带样本)。
 	plog.With(ctx).Debugw("msg", "location_hub_refreshed",
 		"hub_pod", hubPod, "requested", len(playerIDs), "refreshed", refreshed,
 		"ttl_ms", u.ttl.Milliseconds())

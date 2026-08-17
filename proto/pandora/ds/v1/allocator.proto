@@ -318,10 +318,24 @@ message BattleStorageRecord {
   // 重新盖 roster_incomplete_since_ms,并在 deadline 后把一场正打着的对局判弃 ——
   // 那比本次事故严重得多。曾经到齐过的局此后只受 empty_battle_timeout(全员掉线)管辖。
   //
-  // ⚠ 仅保留 unknown field 不等于滚动语义安全：若“到齐”只被旧副本看见，切到新副本时
-  // 已有局中掉线，新副本会把存量局当从未到齐并在 deadline 后误判弃。当前 v2 发布阻断；
-  // 最终须 observe→enforce，并只对全量新副本之后创建的 policy generation 执行期限。
+  // 仅保留 unknown field 不等于滚动语义安全:若「到齐」只被旧副本看见,切到新副本时
+  // 已有局中掉线,新副本会把存量局当从未到齐并在 deadline 后误判弃。
+  // 因此判弃执行由 roster_policy_generation 分代把关(见下),本字段只是事实记录。
   bool roster_ever_complete = 25;
+  // roster_policy_generation:分配这一局时 allocator 配置的到齐期限策略代
+  // (allocator.roster_policy_generation),Allocate 时冻结,永不改写。
+  //
+  // 这是 observe → enforce 激活协议(decision-revisit §5)的执行依据:
+  //   - 只有 mode=enforce **且** 本字段非 0 **且** 等于当前配置代的局,才允许按
+  //     deadline 判弃(reason=roster_incomplete);
+  //   - 0 = legacy(旧副本创建 / observe 全量前创建),**永不**执行期限,存量局自然排空;
+  //   - 回滚 enforce→observe 立即停判弃;再次激活必须把配置代 +1 ——
+  //     旧代局(含其已累计的 roster_incomplete_since_ms 计时)因代不匹配整体豁免,
+  //     等价于「不复用旧计时器」。
+  //
+  // 于是「旧副本见过全员到齐、新副本接手时恰好缺人」的滚动窗口误判弃在机制上不可达:
+  // 能被 enforce 的局必然创建于「全量副本都在写到齐事实」之后。
+  uint64 roster_policy_generation = 26;
 }
 
 // ===== Model B Battle DS 回调授权状态机 =====

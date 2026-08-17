@@ -292,7 +292,8 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 	// ② 唤醒本 Pod 连接写者拉取(跨 Pod 写入由写者定时轮询兜底)。
 	// kafka 重投(ack 前崩溃 / rebalance)会给同一业务事件分配新游标 → 可能重复投递,
 	// at-least-once 诚实契约(push.proto),业务侧幂等/按业务 ID 判重。
-	if _, err := k.offline.AssignAndBuffer(ctx, playerID, frame); err != nil {
+	cursor, err := k.offline.AssignAndBuffer(ctx, playerID, frame)
+	if err != nil {
 		// 指标逐次 Inc(告警走指标不走日志行数);日志按窗口限流:本条是 Error 级且
 		// 返 errcode 会被 kafkax 按 RetryPolicy 重试,每次重试都会再走一遍 handle,
 		// Redis 一挂就是「定向消息速率 ×(1+MaxRetries)」行 Error。
@@ -312,6 +313,15 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 	}
 	if n, _ := k.bufferFailLog.Recovered(); n > 0 {
 		h.Infow("msg", "push_delivery_buffer_recovered", "topic", msg.Topic, "failed_total", n)
+	}
+	// 关键低频事件的正向交付台账:match.progress 每玩家每局个位数条(QUEUED/READY/FAILED…),
+	// 「READY 到底送没送到这个玩家」必须能按 player_id 正查,不能只靠「无 ERROR」反证。
+	// 其余 topic(聊天/好友等高频无差别帧)维持成功零日志,不受影响。
+	// event_trace_id 是业务生产者的 trace(与本消费 ctx 的 trace 不同),用于串回 matchmaker。
+	if msg.Topic == kafkax.TopicMatchProgress {
+		h.Infow("msg", "push_match_progress_buffered",
+			"player_id", playerID, "event_type", eventType, "cursor", cursor,
+			"event_trace_id", frame.TraceId)
 	}
 	// 唤醒(R5 复审 P2-10 + 复审 P1-5):先本地快路径唤醒,再**无条件**发跨 Pod 唤醒
 	// 信号。不能以「本地有 slot」抑制跨 Pod 信号——本地 slot 可能是半死连接/已被顶号

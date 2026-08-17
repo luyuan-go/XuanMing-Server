@@ -116,12 +116,21 @@ func TestOnPlayerPresenceLost_组票租约在手时推迟(t *testing.T) {
 	if _, _, err := uc.BeginTeamMatch(ctx, 9703, 7721, "op-presence", 5000); err != nil {
 		t.Fatalf("BeginTeamMatch: %v", err)
 	}
+	// 方案 A:Begin 已消费 ready 转 FORMING。租约在手时软化必须整体推迟,不得再叠写。
+	before := teamOf(t, uc, 9703)
+	if before.State != stateForming {
+		t.Fatalf("前提不成立:Begin 应已消费 ready 转 FORMING, got=%v", before.State)
+	}
+	beforeGen := before.GetReadyGeneration()
+	beforeUpdated := before.UpdatedAtMs
+
 	err := uc.OnPlayerPresenceLost(ctx, 7722, time.Now().UnixMilli())
 	if !errors.Is(err, offlinewatch.ErrDeferred) {
 		t.Fatalf("租约在手必须 ErrDeferred(保留任务,租约自净后重来): %v", err)
 	}
-	if teamOf(t, uc, 9703).State != stateReady {
-		t.Fatal("推迟时不得留下半步副作用")
+	after := teamOf(t, uc, 9703)
+	if after.GetReadyGeneration() != beforeGen || after.UpdatedAtMs != beforeUpdated {
+		t.Fatal("推迟时不得留下半步副作用(代际/updated_at 变了说明写回了)")
 	}
 }
 

@@ -16,6 +16,8 @@ package biz
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"slices"
 	"time"
 
@@ -29,6 +31,13 @@ import (
 	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
 
+// ticketFingerprint 返回票据全文 sha256 的前 8 字节 hex(绝不落原始 token)。
+// 用途:验签失败时拿不到 claims/jti,签发与核销两侧只能靠同一票体指纹关联「同一张票」。
+func ticketFingerprint(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:8])
+}
+
 // DS 准入验票的拒绝 reason 枚举(§11.3 R2)。
 //
 // 这条路径上的拒绝码大多是 ErrInvalidArg / ErrUnauthorized,而 pkg/middleware/logging.go
@@ -40,6 +49,7 @@ const (
 	admissionRejectMarkerOwnerInvalid    = "admission_marker_owner_invalid"
 	admissionRejectPeekFailed            = "admission_peek_failed"
 	admissionRejectHubCheckerUnavailable = "hub_assignment_checker_unavailable"
+	admissionRejectHubAssignmentStale    = "hub_assignment_not_current"
 )
 
 // DSTicketResult 是 IssueDSTicket 的产出。
@@ -355,7 +365,8 @@ func (u *TicketUsecase) issueBattleDSTicketV2(
 		"jti", jti, "exp_ms", expMs, "region_id", regionID, "cell_id", cellID,
 		"pod", target.PodName, "allocation_id", target.AllocationID,
 		"ds_instance_uid", target.InstanceUID, "ds_instance_epoch", target.InstanceEpoch,
-		"release_track", target.ReleaseTrack, "sess_jti", sessJTI, "ds_addr", target.DSAddr)
+		"release_track", target.ReleaseTrack, "sess_jti", sessJTI, "ds_addr", target.DSAddr,
+		"ticket_sha", ticketFingerprint(tok))
 	return &DSTicketResult{
 		Ticket:       tok,
 		JTI:          jti,
@@ -389,7 +400,8 @@ func (u *TicketUsecase) issueDSTicketAtCell(
 	// 与 v2 路径的 ds_ticket_v2_issued(Info)不对称 —— 同一个动作两个级别会让「票到底发没发」在 legacy 档变成盲区。
 	h.Infow("msg", "ds_ticket_issued",
 		"player_id", playerID, "ds_type", string(ds), "target_id", targetID,
-		"jti", jti, "exp_ms", expMs, "region_id", regionID, "cell_id", cellID)
+		"jti", jti, "exp_ms", expMs, "region_id", regionID, "cell_id", cellID,
+		"ticket_sha", ticketFingerprint(tok))
 
 	return &DSTicketResult{
 		Ticket:      tok,
@@ -432,7 +444,10 @@ func (u *TicketUsecase) verifyDSTicket(
 
 	claims, err := u.verifyDSTicketSignature(ticket)
 	if err != nil {
-		h.Warnw("msg", "verify_ds_ticket_failed", "err", err, "ds_pod", dsPodName)
+		// 验签失败拿不到 claims/jti,ticket_sha(票体 sha256 前缀,绝不落原始 token)是
+		// 唯一能与签发侧 ds_ticket_v2_issued/ds_ticket_issued 关联「同一张票」的键。
+		h.Warnw("msg", "verify_ds_ticket_failed", "err", err, "ds_pod", dsPodName,
+			"ticket_sha", ticketFingerprint(ticket))
 		return nil, err
 	}
 	var (
@@ -510,6 +525,13 @@ func (u *TicketUsecase) verifyDSTicket(
 			active := hubBindingFromAdmission(*admission, claims.HubAssignmentID)
 			if err := admissionChecker.CheckCurrentAdmission(ctx, claims.PlayerID, stable, active,
 				markerStatus == data.AdmissionMarkerMissing); err != nil {
+				// 重连最常见拒票原因:断线期间 assignment 被 Transfer/Release/同名 Pod 重建,
+				// 票撞上归属变更。err 原因串否则被 toProtoCode 丢弃(只回 code),任何级别无痕;
+				// 请求也不经 hub_allocator,对侧不会有日志——这里是唯一落盘点。
+				h.Warnw("msg", "ds_ticket_admission_rejected", "reason", admissionRejectHubAssignmentStale,
+					"err", err, "player_id", claims.PlayerID, "ds_pod", dsPodName,
+					"jti", claims.JTI, "ds_type", claims.DSType, "admission_id", admissionID,
+					"ticket_hub_assignment_id", claims.HubAssignmentID)
 				return nil, err
 			}
 		}
@@ -644,7 +666,12 @@ func (u *TicketUsecase) verifyDSTicket(
 		}
 	}
 
-	h.Debugw("msg", "ds_ticket_verified",
+	// INFO 而非 DEBUG(§11.3 R1):这是「玩家真正进到该 DS」的后端完成事实,每玩家每次
+	// travel 一条(低频 MILESTONE)。battle 侧没有 hub_admitted 那样的 per-player ACK RPC,
+	// 本条是 battle 重入的唯一成功里程碑——只有 DEBUG 时,「票签出后静默」既可能是核销
+	// 成功也可能是 DS 根本没来核销,生产日志形态完全相同,「重连后卡死」无法分诊。
+	// 与签发侧 ds_ticket_v2_issued / login_battle_reconnect 用 jti 成对对账。
+	h.Infow("msg", "ds_ticket_verified",
 		"player_id", claims.PlayerID,
 		"ds_type", claims.DSType, "match_id", claims.MatchID,
 		"jti", claims.JTI, "ds_pod", dsPodName)

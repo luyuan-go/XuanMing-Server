@@ -108,8 +108,11 @@ func (c *RedisBattleTicketAuthorizer) AuthorizeBattleTicket(
 	if err := proto.Unmarshal(payload, battle); err != nil {
 		return BattleTicketTarget{}, errcode.NewCause(errcode.ErrUnavailable, err, "decode battle ticket roster failed")
 	}
-	if !c.liveRosterAllows(battle, playerID, matchID) {
-		return BattleTicketTarget{}, errcode.New(errcode.ErrPermissionDeny, "player is not authorized for battle ticket target")
+	if reason := c.liveRosterDenyReason(battle, playerID, matchID); reason != "" {
+		// reason 进错误串:调用方(login authorize_battle_reconnect_ticket_failed ERROR)带 err
+		// 落盘,否则七个条件塌成一句话,「不在 roster/心跳 stale/状态不对」无法分诊。
+		return BattleTicketTarget{}, errcode.New(errcode.ErrPermissionDeny,
+			"player is not authorized for battle ticket target: %s", reason)
 	}
 	return battleTicketTarget(battle), nil
 }
@@ -206,8 +209,11 @@ func (c *RedisBattleTicketAuthorizer) authorizeModelB(
 	if err := proto.Unmarshal(battleRaw, battle); err != nil {
 		return BattleTicketTarget{}, errcode.NewCause(errcode.ErrUnavailable, err, "decode battle ticket projection failed")
 	}
-	if !c.modelBAllows(record, battle, playerID, matchID) {
-		return BattleTicketTarget{}, errcode.New(errcode.ErrPermissionDeny, "battle ticket authority or roster is not routable")
+	if reason := c.modelBDenyReason(record, battle, playerID, matchID); reason != "" {
+		// 同 liveRosterDenyReason:约 25 个条件的合取,首个不满足的条件名必须可见,
+		// 处置方向(查 matchmaker 数据 / 等心跳自愈 / 查 DS 凭据轮换)截然不同。
+		return BattleTicketTarget{}, errcode.New(errcode.ErrPermissionDeny,
+			"battle ticket authority or roster is not routable: %s", reason)
 	}
 	return battleTicketTarget(battle), nil
 }
@@ -216,13 +222,35 @@ func (c *RedisBattleTicketAuthorizer) liveRosterAllows(
 	battle *dsv1.BattleStorageRecord,
 	playerID, matchID uint64,
 ) bool {
-	if battle == nil || battle.GetMatchId() != matchID || battle.GetDsPodName() == "" || battle.GetDsAddr() == "" ||
-		(battle.GetState() != "ready" && battle.GetState() != "running") ||
-		len(battle.GetPlayerIds()) == 0 || !slices.Contains(battle.GetPlayerIds(), playerID) {
-		return false
+	return c.liveRosterDenyReason(battle, playerID, matchID) == ""
+}
+
+// liveRosterDenyReason 返回 live roster 门第一个不满足的条件名("" = 通过)。
+// 判定语义与历史 liveRosterAllows 完全等价,只是把合取拆成可落盘的 reason 枚举
+// (§11.3 R2:拒绝必须带固定枚举 reason,一句话塌缩的 ErrPermissionDeny 无法分诊)。
+func (c *RedisBattleTicketAuthorizer) liveRosterDenyReason(
+	battle *dsv1.BattleStorageRecord,
+	playerID, matchID uint64,
+) string {
+	switch {
+	case battle == nil:
+		return "projection_missing"
+	case battle.GetMatchId() != matchID:
+		return "projection_match_id_mismatch"
+	case battle.GetDsPodName() == "":
+		return "projection_ds_pod_empty"
+	case battle.GetDsAddr() == "":
+		return "projection_ds_addr_empty"
+	case battle.GetState() != "ready" && battle.GetState() != "running":
+		return "state_not_live(" + battle.GetState() + ")"
+	case len(battle.GetPlayerIds()) == 0:
+		return "roster_empty"
+	case !slices.Contains(battle.GetPlayerIds(), playerID):
+		return "player_not_in_roster"
+	case !ticketHeartbeatFresh(battle.GetLastHeartbeatMs(), c.now().UnixMilli(), c.heartbeatAgeLimit()):
+		return "heartbeat_stale"
 	}
-	nowMs := c.now().UnixMilli()
-	return ticketHeartbeatFresh(battle.GetLastHeartbeatMs(), nowMs, c.heartbeatAgeLimit())
+	return ""
 }
 
 func battleTicketTarget(battle *dsv1.BattleStorageRecord) BattleTicketTarget {
@@ -241,32 +269,81 @@ func (c *RedisBattleTicketAuthorizer) modelBAllows(
 	battle *dsv1.BattleStorageRecord,
 	playerID, matchID uint64,
 ) bool {
-	if !c.liveRosterAllows(battle, playerID, matchID) || record == nil {
-		return false
+	return c.modelBDenyReason(record, battle, playerID, matchID) == ""
+}
+
+// modelBDenyReason 返回 Model-B 授权门第一个不满足的条件名("" = 通过)。
+// 条件与历史 modelBAllows 的合取逐项等价、顺序不变;拆开的唯一目的是让约 25 个条件
+// 的拒签可分诊(roster 数据 / 心跳 / DS 凭据轮换 / 实例漂移是完全不同的处置方向)。
+func (c *RedisBattleTicketAuthorizer) modelBDenyReason(
+	record *dsv1.BattleDSAuthStorageRecord,
+	battle *dsv1.BattleStorageRecord,
+	playerID, matchID uint64,
+) string {
+	if reason := c.liveRosterDenyReason(battle, playerID, matchID); reason != "" {
+		return reason
+	}
+	if record == nil {
+		return "auth_record_missing"
 	}
 	active := record.GetActive()
 	nowMs := c.now().UnixMilli()
-	return active != nil &&
-		(record.GetPhase() == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ACTIVE ||
-			record.GetPhase() == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ROTATING) &&
-		record.GetMatchId() == matchID && record.GetAllocationId() != "" &&
-		record.GetAllocationId() == battle.GetAllocationId() &&
-		record.GetInstanceUid() != "" && record.GetInstanceEpoch() > 0 &&
-		battle.GetGameserverUid() != "" && battle.GetInstanceEpoch() > 0 &&
-		record.GetDsPodName() == battle.GetDsPodName() && record.GetInstanceUid() == battle.GetGameserverUid() &&
-		record.GetInstanceEpoch() == battle.GetInstanceEpoch() &&
-		record.GetRequiredWriterEpoch() == auth.DSAuthWriterEpochV2 &&
-		(record.GetPending() == nil || record.GetPending().GetWriterEpoch() == auth.DSAuthWriterEpochV2) &&
-		record.GetHighWaterGen() >= active.GetGen() &&
-		ticketHeartbeatFresh(record.GetLastActiveHeartbeatMs(), nowMs, c.heartbeatAgeLimit()) &&
-		battle.GetLastHeartbeatMs() == record.GetLastActiveHeartbeatMs() &&
-		active.GetInstanceUid() != "" && active.GetInstanceEpoch() > 0 &&
-		active.GetInstanceUid() == record.GetInstanceUid() && active.GetInstanceEpoch() == record.GetInstanceEpoch() &&
-		active.GetGen() > 0 && active.GetJti() != "" && active.GetExpMs() > uint64(nowMs) &&
-		active.GetKid() != "" && active.GetTokenSha256() != "" &&
-		active.GetWriterEpoch() == auth.DSAuthWriterEpochV2 &&
-		battle.GetLastVerifiedGen() == active.GetGen() && battle.GetLastVerifiedJti() == active.GetJti() &&
-		battle.GetLastVerifiedWriterEpoch() == auth.DSAuthWriterEpochV2
+	switch {
+	case active == nil:
+		return "auth_active_credential_missing"
+	case record.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ACTIVE &&
+		record.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ROTATING:
+		return "auth_phase_not_active(" + record.GetPhase().String() + ")"
+	case record.GetMatchId() != matchID:
+		return "auth_match_id_mismatch"
+	case record.GetAllocationId() == "":
+		return "auth_allocation_id_empty"
+	case record.GetAllocationId() != battle.GetAllocationId():
+		return "allocation_id_mismatch"
+	case record.GetInstanceUid() == "" || record.GetInstanceEpoch() == 0:
+		return "auth_instance_identity_missing"
+	case battle.GetGameserverUid() == "" || battle.GetInstanceEpoch() == 0:
+		return "projection_instance_identity_missing"
+	case record.GetDsPodName() != battle.GetDsPodName():
+		return "instance_pod_mismatch"
+	case record.GetInstanceUid() != battle.GetGameserverUid():
+		return "instance_uid_mismatch"
+	case record.GetInstanceEpoch() != battle.GetInstanceEpoch():
+		return "instance_epoch_mismatch"
+	case record.GetRequiredWriterEpoch() != auth.DSAuthWriterEpochV2:
+		return "required_writer_epoch_not_v2"
+	case record.GetPending() != nil && record.GetPending().GetWriterEpoch() != auth.DSAuthWriterEpochV2:
+		return "pending_writer_epoch_not_v2"
+	case record.GetHighWaterGen() < active.GetGen():
+		return "high_water_below_active_gen"
+	case !ticketHeartbeatFresh(record.GetLastActiveHeartbeatMs(), nowMs, c.heartbeatAgeLimit()):
+		return "auth_heartbeat_stale"
+	case battle.GetLastHeartbeatMs() != record.GetLastActiveHeartbeatMs():
+		return "heartbeat_anchor_mismatch"
+	case active.GetInstanceUid() == "" || active.GetInstanceEpoch() == 0:
+		return "active_instance_identity_missing"
+	case active.GetInstanceUid() != record.GetInstanceUid() || active.GetInstanceEpoch() != record.GetInstanceEpoch():
+		return "active_instance_mismatch"
+	case active.GetGen() == 0:
+		return "active_gen_zero"
+	case active.GetJti() == "":
+		return "active_jti_empty"
+	case active.GetExpMs() <= uint64(nowMs):
+		return "active_credential_expired"
+	case active.GetKid() == "":
+		return "active_kid_empty"
+	case active.GetTokenSha256() == "":
+		return "active_token_hash_empty"
+	case active.GetWriterEpoch() != auth.DSAuthWriterEpochV2:
+		return "active_writer_epoch_not_v2"
+	case battle.GetLastVerifiedGen() != active.GetGen():
+		return "projection_verified_gen_stale"
+	case battle.GetLastVerifiedJti() != active.GetJti():
+		return "projection_verified_jti_stale"
+	case battle.GetLastVerifiedWriterEpoch() != auth.DSAuthWriterEpochV2:
+		return "projection_verified_writer_epoch_not_v2"
+	}
+	return ""
 }
 
 func (c *RedisBattleTicketAuthorizer) heartbeatAgeLimit() time.Duration {

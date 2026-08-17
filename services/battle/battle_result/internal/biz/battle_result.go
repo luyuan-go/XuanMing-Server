@@ -916,9 +916,21 @@ func (u *BattleResultUsecase) RunOutboxPublisher(ctx context.Context) {
 
 // publishOutboxBatch 取一批出箱记录投递,返回本轮成功投递并删除的条数。
 // 投递失败立即中断本轮(保留出箱行下轮重试),保证同玩家事件按 id 顺序投递。
+// outboxNoPusherLog 限流「无 producer 但出箱有积压」告警(首错+每 60s 一条)。
+var outboxNoPusherLog plog.Window
+
 func (u *BattleResultUsecase) publishOutboxBatch(ctx context.Context) (int, error) {
 	if u.pusher == nil {
 		// kafka 未配置:出箱无法投递。出箱行已落库不丢,等 producer 可用后重启再发。
+		// 积压必须可见:启动仅有一条 kafka_brokers_empty WARN,运行期若段位事件持续
+		// 堆积而零信号,「打完段位没变」会被当成结算 bug 排查(实为部署缺 kafka)。
+		if recs, ferr := u.repo.FetchOutbox(ctx, 1); ferr == nil && len(recs) > 0 {
+			if ok, streak := outboxNoPusherLog.Admit(time.Now().UnixMilli(), 60_000); ok {
+				plog.With(ctx).Warnw("msg", "outbox_pending_without_pusher",
+					"streak_ticks", streak,
+					"hint", "kafka producer 未配置但段位出箱有积压:配置 kafka.brokers 后重启")
+			}
+		}
 		return 0, nil
 	}
 	recs, err := u.repo.FetchOutbox(ctx, u.outboxBatchSize())
@@ -949,6 +961,12 @@ func (u *BattleResultUsecase) publishOutboxBatch(ctx context.Context) (int, erro
 				"hint", "kafka 已投递但出箱行未删除 → 下轮重投同一事件(下游幂等吸收)")
 			return published, derr
 		}
+		// 逐玩家成功台账(资产变更口径,与 drop_grant_delivered / mission_fact_delivered 对齐):
+		// 段位是玩家资产,「该玩家的段位事件已投出」必须能按 player_id 在 info 级正查,
+		// 不能只靠「没有 outbox_publish_failed」反证。每玩家每局一条,量级有界。
+		plog.With(rowCtx).Infow("msg", "player_update_delivered",
+			"player_id", r.PlayerID, "outbox_id", r.ID,
+			"elapsed_ms", time.Since(rowStartedAt).Milliseconds())
 		published++
 	}
 	if published > 0 {

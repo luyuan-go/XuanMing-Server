@@ -300,11 +300,20 @@ func (s *LoginService) VerifyDSTicket(ctx context.Context, req *loginv1.VerifyDS
 		err    error
 	)
 	if s.redisDSAdmission {
+		// 前置门拒绝必须显式落盘(§11.3 R2):这些是 DS 调用方级拒绝,一台 DS 的 callback
+		// credential 与 active 权威漂移会让它上面**所有玩家**的重连/进场核销整体失败,
+		// 而 ErrUnauthorized/ErrInvalidArg 非 IsServerFault → access log 只记 rpc_ok(DEBUG),
+		// toProtoCode 又只回 code 不回 message——不在这里打,拒绝原因在任何级别都不存在。
+		// 此时票还没解析,拿不到 player_id;join key 是 ds_pod + trace_id。
 		// ds_pod_name 是 Guard 的范围输入；空值不能退化成“不校验 pod”。
 		if req.GetDsPodName() == "" {
+			plog.With(ctx).Warnw("msg", "verify_ds_ticket_rejected",
+				"reason", "ds_pod_name_empty")
 			return &loginv1.VerifyDSTicketResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 		}
 		if s.dsGuard == nil || s.admissionChecker == nil {
+			plog.With(ctx).Errorw("msg", "verify_ds_ticket_rejected",
+				"reason", "ds_admission_guard_not_wired", "ds_pod", req.GetDsPodName())
 			return &loginv1.VerifyDSTicketResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
 		}
 		// 固定线性顺序：① Bearer 验签+请求 pod scope；② Redis active；
@@ -313,13 +322,24 @@ func (s *LoginService) VerifyDSTicket(ctx context.Context, req *loginv1.VerifyDS
 			Pod: req.GetDsPodName(), RequireToken: true,
 		})
 		if guardErr != nil {
+			plog.With(ctx).Warnw("msg", "verify_ds_ticket_rejected",
+				"reason", "ds_credential_rejected", "ds_pod", req.GetDsPodName(),
+				"code", int32(errcode.As(guardErr)), "err", guardErr,
+				"hint", "DS callback credential 验签/scope 失败:该 DS 上所有玩家的核销都会同型失败,查凭据轮换")
 			return &loginv1.VerifyDSTicketResponse{Code: toProtoCode(guardErr)}, nil
 		}
 		if credential == nil {
+			plog.With(ctx).Warnw("msg", "verify_ds_ticket_rejected",
+				"reason", "ds_credential_missing", "ds_pod", req.GetDsPodName())
 			return &loginv1.VerifyDSTicketResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 		}
 		admission, activeErr := s.admissionChecker.CheckActive(ctx, req.GetDsPodName(), credential)
 		if activeErr != nil {
+			plog.With(ctx).Warnw("msg", "verify_ds_ticket_rejected",
+				"reason", "ds_admission_not_active", "ds_pod", req.GetDsPodName(),
+				"admission_id", req.GetAdmissionId(),
+				"code", int32(errcode.As(activeErr)), "err", activeErr,
+				"hint", "DS credential 与 Redis active 权威漂移(轮换半途/心跳超时/投影翻转):该 DS 上所有玩家 travel 会被拒")
 			return &loginv1.VerifyDSTicketResponse{Code: toProtoCode(activeErr)}, nil
 		}
 		claims, err = s.ticketUC.VerifyDSTicketForAdmission(

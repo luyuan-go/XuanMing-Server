@@ -460,6 +460,11 @@ func (w *Watcher) Sweep(ctx context.Context) {
 	}
 
 	var acted, online0, waiting, deferred, failed, claimed int
+	// 病理性推迟聚合:推迟本身是常态(对局占用等业务闸,DEBUG),但「离线很久了还在
+	// 被推迟」是病理形态(如残留 claim 永不清)——与正常形态在逐条日志上同形,必须
+	// 按离线时长点名升级,否则 info 级只有 swept 的 deferred 计数,答不了「是谁、多久」。
+	var stuckDeferred []uint64
+	var stuckOldestMs int64
 	for _, item := range due {
 		member, ok := item.Member.(string)
 		if !ok {
@@ -535,6 +540,12 @@ func (w *Watcher) Sweep(ctx context.Context) {
 				w.retry(ctx, pid, evidence, claimUntil, w.now().UnixMilli()+w.opts.RetryBackoff.Milliseconds())
 				if errors.Is(herr, ErrDeferred) {
 					deferred++
+					if offlineMs := w.now().UnixMilli() - sinceMs; offlineMs >= deferredStuckMultiple*w.opts.Threshold.Milliseconds() {
+						stuckDeferred = append(stuckDeferred, pid)
+						if offlineMs > stuckOldestMs {
+							stuckOldestMs = offlineMs
+						}
+					}
 					plog.With(ctx).Debugw("msg", "offlinewatch_handler_deferred",
 						"namespace", w.opts.Namespace, "player_id", pid, "err", herr)
 					continue
@@ -557,6 +568,13 @@ func (w *Watcher) Sweep(ctx context.Context) {
 		}
 	}
 
+	if len(stuckDeferred) > 0 {
+		plog.With(ctx).Warnw("msg", "offlinewatch_deferred_stuck",
+			"namespace", w.opts.Namespace, "player_ids", stuckDeferred,
+			"oldest_offline_ms", stuckOldestMs,
+			"threshold_ms", w.opts.Threshold.Milliseconds(),
+			"hint", "离线时长已超阈值多倍仍被 handler 推迟:查业务侧推迟原因(如 matchmaker 残留 claim)")
+	}
 	plog.With(ctx).Infow("msg", "offlinewatch_swept",
 		"namespace", w.opts.Namespace, "scanned", len(due), "claimed", claimed,
 		"acted", acted, "online", online0, "waiting", waiting,
@@ -567,6 +585,11 @@ func (w *Watcher) Sweep(ctx context.Context) {
 	// 处理完到期项后再提名一批兜底候选,共享同一轮时间预算。
 	w.sweepRoster(ctx)
 }
+
+// deferredStuckMultiple:离线时长超过 Threshold 的该倍数仍被 handler 推迟时,视为
+// 病理性推迟并升 WARN 点名。取值依据:正常推迟主因是「在对局中」,对局时长上限量级为
+// 几十分钟,阈值(如 180s)×10=30min 足以盖住正常局;待实测复核(§16.10③)。
+const deferredStuckMultiple = 10
 
 // readPresence 分批读 locator 的两份事实。任一批失败即整体失败(不返回半份结果)。
 func (w *Watcher) readPresence(ctx context.Context, ids []uint64) (map[uint64]bool, map[uint64]int64, error) {

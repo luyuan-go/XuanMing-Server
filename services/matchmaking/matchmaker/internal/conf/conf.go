@@ -395,6 +395,28 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
+	// 出站签名钥(matchmaker → team)与 team_resume 同款守卫:可选(未分发前照常启动,
+	// team 侧按 require 档决定拒不拒),但配了就必须合法且不得与任何既有信任域同钥 ——
+	// 字段注释里那句「必须与 TeamResumeAuthSecret 不同」此前没有任何机械 enforcement,
+	// 拷错一把钥匙即静默把 BeginTeamMatch/EndTeamMatch(能冻结/复位任意队伍)的准入边界
+	// 塌缩进被复用钥匙的信任域(2026-08-17 审计确认)。
+	if c.Match.TeamCallAuthSecret != "" {
+		if err := internalrpcauth.ValidateSecret(c.Match.TeamCallAuthSecret); err != nil {
+			return fmt.Errorf("match.team_call_auth_secret invalid: %w", err)
+		}
+		if err := internalrpcauth.ValidateIdentity(c.Match.TeamCallAuthAudience); err != nil {
+			return fmt.Errorf("match.team_call_auth_audience invalid: %w", err)
+		}
+		for name, secret := range map[string]string{
+			"player JWT":   c.JWT.Secret,
+			"Login resume": c.Match.MatchResumeAuthSecret,
+			"Team resume":  c.Match.TeamResumeAuthSecret,
+		} {
+			if secret != "" && c.Match.TeamCallAuthSecret == secret {
+				return fmt.Errorf("match.team_call_auth_secret must not reuse %s key", name)
+			}
+		}
+	}
 	if c.Match.DSAllocatorAddr != "" {
 		if err := internalrpcauth.ValidateSecret(c.Match.AllocationAbortAuthSecret); err != nil {
 			return fmt.Errorf("match.allocation_abort_auth_secret invalid: %w", err)
@@ -406,6 +428,7 @@ func (c *Config) Validate() error {
 			"player JWT":   c.JWT.Secret,
 			"Login resume": c.Match.MatchResumeAuthSecret,
 			"Team resume":  c.Match.TeamResumeAuthSecret,
+			"Team call":    c.Match.TeamCallAuthSecret,
 		} {
 			if secret != "" && c.Match.AllocationAbortAuthSecret == secret {
 				return fmt.Errorf("match.allocation_abort_auth_secret must not reuse %s key", name)

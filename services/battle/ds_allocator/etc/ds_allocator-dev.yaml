@@ -157,6 +157,16 @@ allocator:
   # + 余量 = 150s,那之后缺席者物理上再也进不来)。上线前必须实测
   # 「DS ready → 最后一个 Join succeeded」的 P99,超过 45s 就得调大,否则会误杀冷加载慢的玩家。
   roster_join_deadline: "45s"
+  # roster_join_deadline_mode: 到齐期限激活档(observe → enforce,decision-revisit §5)。
+  #   observe(默认): 记录到齐事实,到点只打 roster_incomplete_would_abandon 采证 WARN,不判弃;
+  #   enforce:       到点真判弃 —— 但只对 roster_policy_generation == 本配置代的局;
+  #   off:           整道闸关死(连事实都不记)。
+  # 激活协议: ①observe + generation=0 全量 → ②确认采证合理后 generation 改 1 滚动 →
+  # ③确认全量后翻 enforce(只有 gen=1 的局会被执行,旧局自然排空)。
+  # 回滚只翻回 observe;再激活须 generation+1(旧代局连同已累计计时整体豁免)。
+  # enforce 且 generation=0 是自相矛盾配置,启动直接拒。
+  roster_join_deadline_mode: "observe"
+  roster_policy_generation: 0
   # mock_ds_addr_host: W4 ② MockGameServerAllocator 返回的假 DS host
   mock_ds_addr_host: "127.0.0.1"
   # mock_ds_port_base: Mock 端口基址(每场 port = base + match_id % range)

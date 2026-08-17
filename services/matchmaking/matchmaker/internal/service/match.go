@@ -74,7 +74,13 @@ func (s *MatchService) StartMatch(ctx context.Context, req *matchv1.StartMatchRe
 	id, err := s.uc.StartMatch(ctx, ticketID, req.GetTeamId(), captainID, req.GetMapId(), req.GetEntryMode())
 	if err != nil {
 		// 具体被哪道门拒(gate/reason)由 biz 打 match_start_rejected,这里不重复。
-		return &matchv1.StartMatchResponse{Code: toProtoCode(err)}, nil
+		resp := &matchv1.StartMatchResponse{Code: toProtoCode(err)}
+		// 4011(在线闸):把被判缺席的成员结构化过线,客户端才能点名「XX 不在大厅」。
+		var offline *biz.MemberOfflineError
+		if errors.As(err, &offline) {
+			resp.AbsentPlayerIds = offline.AbsentPlayerIDs
+		}
+		return resp, nil
 	}
 	return &matchv1.StartMatchResponse{Code: commonv1.ErrCode_OK, MatchId: id}, nil
 }

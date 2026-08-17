@@ -35,8 +35,9 @@ func (u *PlayerUsecase) PlayerUpdateHandler() kafkax.Handler {
 				"malformed event_type header on player.update offset=%d", msg.Offset))
 		}
 		if et != uint32(playerv1.PlayerPushEventType_PLAYER_PUSH_EVENT_TYPE_LEGACY_UPDATE) {
+			// kafka key = player_id(§9.9):带上它,静默跳过才能事后按玩家 join。
 			plog.With(ctx).Warnw("msg", "player_update_unexpected_event_type_skipped",
-				"event_type", et, "offset", msg.Offset)
+				"event_type", et, "offset", msg.Offset, "key", string(msg.Key))
 			return nil
 		}
 		evt := &playerv1.PlayerUpdateEvent{}

@@ -157,6 +157,10 @@ func main() {
 		helper.Errorw("msg", "local_map_source_config_invalid", "err", err)
 		os.Exit(1)
 	}
+	if err := cfg.ValidateRosterJoinDeadlineConfig(); err != nil {
+		helper.Errorw("msg", "roster_join_deadline_config_invalid", "err", err)
+		os.Exit(1)
+	}
 
 	// 2.5 策划配置表(不变量 §9.15):config_table.dir 配置后是启动强依赖,加载失败直接退出。
 	// ds_allocator 只用其中的关卡表:mode=local 起 DS 时按 map_id 现查 g_关卡.xlsx 拼关卡 URL

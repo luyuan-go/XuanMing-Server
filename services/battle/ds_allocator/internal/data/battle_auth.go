@@ -28,6 +28,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
+	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 )
 
 const (
@@ -148,6 +149,11 @@ type BattleHeartbeatInput struct {
 	// (就没法只罚缺席者),也会在 legacy / local-off-v1 档把每一局都判成缺员。
 	CensusPresent   bool
 	ActivePlayerIDs []uint64
+	// RosterJoinMode / RosterPolicyGeneration:到齐期限的激活档与配置策略代
+	// (observe→enforce 协议)。到点后能不能**真**判弃由 conf.RosterDeadlineShouldAbandon
+	// 统一判定(与 biz legacy 路径同一份谓词);不允许时只置 RosterWouldAbandon 采证。
+	RosterJoinMode         string
+	RosterPolicyGeneration uint64
 }
 
 // BattleActivateResult 同时承载 pending→active ACK 和事务提交后的 Battle 镜像。
@@ -162,10 +168,13 @@ type BattleActivateResult struct {
 	// RosterIncomplete 表示本次判弃的原因是「花名册没到齐」(INC-20260813-001),
 	// 而不是空场。外层据此改记罚对象:只罚缺席者,不罚按时到场的人。
 	RosterIncomplete bool
-	Terminal         bool
-	HeartbeatMs      int64
-	Active           BattleCredentialIdentity
-	Battle           *dsv1.BattleStorageRecord
+	// RosterWouldAbandon:到齐期限到点,但激活档/策略代不允许真判弃(observe 采证 /
+	// legacy 旧代豁免)。外层据此打 roster_incomplete_would_abandon 采证日志。
+	RosterWouldAbandon bool
+	Terminal           bool
+	HeartbeatMs        int64
+	Active             BattleCredentialIdentity
+	Battle             *dsv1.BattleStorageRecord
 }
 
 // BattleAbandonResult 是 sweep 原子 stale 判定与终止结果。
@@ -964,6 +973,7 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 			}
 			// 与 promote 同一层作用域:WATCH 冲突重跑时整个闭包重来,标记天然按轮重置。
 			rosterIncomplete := false
+			rosterWouldAbandon := false
 			if promote {
 				auth.Active = auth.Pending
 				auth.Pending = nil
@@ -1022,6 +1032,12 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 					case battle.RosterIncompleteSinceMs == 0:
 						battle.RosterIncompleteSinceMs = serverNowMs
 					case serverNowMs-battle.RosterIncompleteSinceMs >= in.RosterJoinDeadline.Milliseconds():
+						// 到点。真判弃须过激活档 + 策略代(与 biz legacy 路径共用同一谓词);
+						// 不允许时只采证 —— observe 期与 legacy/旧代局在这里被机制性豁免。
+						if !conf.RosterDeadlineShouldAbandon(in.RosterJoinMode, in.RosterPolicyGeneration, battle.GetRosterPolicyGeneration()) {
+							rosterWouldAbandon = true
+							break
+						}
 						battle.State = "abandoned"
 						rosterIncomplete = true
 					}
@@ -1065,6 +1081,7 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 			})
 			if err == nil {
 				out = activateResult(auth, battle, promote, firstAbandon, rosterIncomplete, terminal)
+				out.RosterWouldAbandon = rosterWouldAbandon
 			}
 			return err
 		}, aKey, bKey, rKey, sKey)

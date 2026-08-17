@@ -24,6 +24,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 )
 
 // MySQL 事务并发错误码:1213 死锁、1205 锁等待超时。二者发生时 InnoDB 已回滚本事务,
@@ -156,10 +157,10 @@ func (r *MySQLSessionGenerationRepo) persistSessionJTIOnce(ctx context.Context, 
 	}
 	defer func() { _ = tx.Rollback() }()
 	lease := SessionGenerationLease{}
-	var ignoredPreviousJTI string
+	var previousJTI string
 	switch err := tx.QueryRowContext(ctx,
 		`SELECT sess_jti FROM player_session_generations WHERE player_id = ? FOR UPDATE`,
-		playerID).Scan(&ignoredPreviousJTI); err {
+		playerID).Scan(&previousJTI); err {
 	case nil:
 	case sql.ErrNoRows:
 		// 首登:沿用既有 gap-lock + upsert 重试语义。
@@ -185,6 +186,15 @@ ON DUPLICATE KEY UPDATE generation = generation + 1, sess_jti = VALUES(sess_jti)
 		// 事务内已读出的 generation 一并返回，供调用方条件墓碑本次未交付代际。
 		return lease, errcode.NewCause(errcode.ErrInternal,
 			fmt.Errorf("%w: %v", ErrCommitAmbiguous, err), "commit session generation: %v", err)
+	}
+	if previousJTI != "" && previousJTI != jti {
+		// 顶号/重登轮换的**赢家侧**唯一记录(此前旧 jti 读出即弃,「谁在何时把他顶了」只能
+		// 靠相邻两条 login_ok 人肉差分)。prev_sess_jti 可 join 回上一条 login_ok 拿到旧设备
+		// device_id;被顶设备那侧另有 session_superseded_rejected(它下次发请求才出现)。
+		// COMMIT 成功后才打,回滚的事务不留假轮换记录。每次登录至多一条。
+		plog.With(ctx).Infow("msg", "session_generation_rotated",
+			"player_id", playerID, "prev_sess_jti", previousJTI, "sess_jti", jti,
+			"generation", lease.Generation)
 	}
 	return lease, nil
 }

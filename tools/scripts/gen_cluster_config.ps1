@@ -588,8 +588,8 @@ $PlayerSecretServiceNames = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allo
 # player 2026-08-13 入列:GetLoadout 挂上了 Envoy DS 面(:8444),而该监听器没有 jwt_authn,
 # 经它进来的 callerID 恒为 0 —— 服务端必须能验 DS 回调令牌,才拦得住「任意能连 :8444 或
 # 直连 20002 的进程查任意玩家出战快照」。player 只做 verify(不签发),与 team/guild 不同:
-# 那两个至今没入列,故它们的门仍是纸面门。
-$DsSecretServiceNames = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator', 'player')
+# team/guild 2026-08-17 同因入列(GetPlayerTeam / 公会归属反查同构暴露在 DS 面):服务侧 dsGuard 早已接线,此前唯独缺密钥分发。三者都 verify-only。
+$DsSecretServiceNames = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator', 'player', 'team', 'guild')
 # DSTicket v2(方案 B)签发方清单(与决策文档 §7.2 私钥暴露面一致):恰好等于玩家面 jwt 清单。
 $DsTicketServiceNames = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
 $PlacementSecretBindings = @()

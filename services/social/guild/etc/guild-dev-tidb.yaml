@@ -65,3 +65,9 @@ guild:
 # -Prod 产物由 gen_cluster_config.ps1 机械置 true(漏配端点拒启)。
 session_gate:
   require: false
+
+# DS 回调令牌校验(verify-only,2026-08-17 入列;与 guild-dev.yaml 同节点,漏改只在切库时暴露)。
+ds_auth:
+  mode: "permissive"
+  authority_mode: "legacy"
+  secret: "pandora-dev-jwt-secret-change-me-32!"

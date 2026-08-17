@@ -62,6 +62,9 @@ function New-TestHmacConfigs {
         'player-locator' = "ds_auth:`n  secret: `"$DsSecret`"$dsAdditionalLine"
         # player 2026-08-13 入列(verify-only:GetLoadout 经 :8444 暴露,须验 DS 回调令牌)。
         player = "ds_auth:`n  secret: `"$DsSecret`"$dsAdditionalLine"
+        # team/guild 2026-08-17 同因入列(verify-only:GetPlayerTeam / 公会归属反查暴露在 DS 面)。
+        team = "ds_auth:`n  secret: `"$DsSecret`"$dsAdditionalLine"
+        guild = "ds_auth:`n  secret: `"$DsSecret`"$dsAdditionalLine"
     }
 }
 

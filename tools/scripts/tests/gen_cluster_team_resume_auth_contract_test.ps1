@@ -47,10 +47,12 @@ function Assert-Throws([scriptblock]$Action, [string]$Message) {
 }
 
 # online 连续性门禁读的是整套服务 YAML(跨权限域不相交需要 hmac / abort 那几份)。
+# 这份清单必须覆盖 online_manifest_contract.ps1 的 $PandoraDsCallbackHmacServices —— 漏一个服务,
+# 门禁自己会抛「缺 xxx 配置」,测试变成确定性红,却和被测契约无关。
 function Get-TeamAuthConfigs([string]$TargetDir) {
     $configs = [ordered]@{}
     foreach ($service in @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator',
-            'ds-allocator', 'battle-result', 'player-locator', 'team', 'player')) {
+            'ds-allocator', 'battle-result', 'player-locator', 'team', 'player', 'guild')) {
         $configs[$service] = Get-Content -LiteralPath (Join-Path $TargetDir "$service.yaml") -Raw
     }
     return $configs

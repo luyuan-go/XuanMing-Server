@@ -39,6 +39,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	datav1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/data_service/v1"
 )
 
@@ -149,11 +150,17 @@ func (c *RedisPlayerCache) Get(ctx context.Context, playerID uint64) (*datav1.Pl
 	}
 	pd := &datav1.PlayerData{}
 	if err := proto.Unmarshal(b[headerLen:], pd); err != nil {
-		// 脏缓存当未命中处理。
+		// 脏缓存当未命中处理(行为不变),但必须留痕:头部/魔数/位图全过了才 Unmarshal 失败
+		// = 真坏档,不是滚动升级的旧格式;静默当 miss 只表现为命中率下降,零可查性。
+		plog.With(ctx).Warnw("msg", "player_cache_corrupt_entry",
+			"player_id", playerID, "reason", "unmarshal_failed", "err", err, "bytes", len(b))
 		return nil, false, nil
 	}
 	// 防御纵深:反序列化出的 player_id 必须与 key 对应的 playerID 一致,否则视为脏 / 串号数据。
 	if pd.GetPlayerId() != playerID {
+		// 串号是缓存投毒/键错配的强信号,比坏档更严重,必须点名。行为不变(当 miss)。
+		plog.With(ctx).Warnw("msg", "player_cache_corrupt_entry",
+			"player_id", playerID, "reason", "player_id_mismatch", "cached_player_id", pd.GetPlayerId())
 		return nil, false, nil
 	}
 	return pd, true, nil
