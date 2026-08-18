@@ -764,40 +764,55 @@ const (
 // BeginTeamMatch 在 team 的乐观锁内原子完成
 // 「校验 + 冻结名单 + 清残留 ready + 上租约锁 + 返回冻结快照」。
 //
-// # ready 不再是开局门槛(2026-08-17 拍板:LoL 式流程,推翻方案 A 的门槛半边)
+// # ready 是不是开局门槛,由**关卡表**决定(2026-08-18 拍板:两模式按图二选一)
 //
-// 队长点「开始匹配」即可组票,**无需全员先点准备**(FORMING / READY 都放行)。
-// 「带着不在场的人开局」(INC-20260813-001)的防线换成两道与 ready 无关的权威闸:
-//   - StartMatch 在线闸(matchmaker ensureAllPresent):离开大厅超过宽限窗(默认 30s)
-//     的成员直接 4011 点名拒绝 —— 事故里那位退场 75s 的缺席者在这里就进不了票;
-//   - 撮合确认期(MATCH_STAGE_CONFIRM,confirm_timeout 默认 15s):全员点「接受」
-//     才拉 DS;缺席者超时 / 拒绝 → match FAILED,含缺席者的票据判过错删除,
+// requireReady 来自关卡表 ready_mode 列(matchmaker 按本次 StartMatch 的 map_id 解析后传入):
+//
+//	requireReady=true (PRE_READY)     队伍必须 State==READY 才放行 —— 面板上全员点过准备,
+//	                                  准备态本身就是「此刻都在」的证明;撮合成功直接进场。
+//	requireReady=false(POST_CONFIRM)  FORMING 也放行,新鲜度改由撮合确认期承担。
+//
+// 这一列存在之前,这件事是全服一刀切的:2026-08-13 方案 A 让 ready 成为门槛,
+// 2026-08-17 又整体取消。两次都是改代码全图同时变。而固定队副本要不要先准备、
+// 排位要不要接受框,本就是**每张图各自的产品决定**(§17.1 差异进表)。
+//
+// 「带着不在场的人开局」(INC-20260813-001)在两种模式下都有防线:
+//   - 两种模式共有:StartMatch 在线闸(matchmaker ensureAllPresent),离开大厅超过宽限窗
+//     (默认 30s)的成员直接 4011 点名拒绝 —— 事故里那位退场 75s 的缺席者在这里就进不了票;
+//   - PRE_READY:队伍必须 READY;任何人掉线 / 离队 / 入队都会把队伍打回 FORMING(见
+//     OnPlayerPresenceLost 与入队重算),门槛自动失效,队长开不了局;
+//   - POST_CONFIRM:撮合确认期(MATCH_STAGE_CONFIRM,confirm_timeout 默认 15s)全员点
+//     「接受」才拉 DS;缺席者超时 / 拒绝 → match FAILED,含缺席者的票据判过错删除,
 //     其余票据保排队时长退回队列。此时 DS 尚未分配,没有任何人被拉进对局。
 //
-// 方案 A 的另一半 —— 锁内冻结名单、秒级租约、收据幂等重入 —— **原样保留**:
+// 方案 A 的另一半 —— 锁内冻结名单、秒级租约、收据幂等重入 —— **两种模式下都原样保留**:
 // 它们消除的是「组票 vs 自动摘人」的 TOCTOU 与「响应丢失重试」的重复消费,与 ready 无关。
 // EndTeamMatch 同样保留(滚动升级共存窗口 + 清残留 ready 的兼容路径)。
 //
-// Begin 仍会清掉残留 ready 位并把队伍转回 FORMING:存量客户端还在发 SetReady,
-// 残留 ready 不清,那些客户端的面板会在开局后继续显示「已准备」。
+// Begin 在两种模式下都清掉 ready 位并把队伍转回 FORMING。PRE_READY 下这是**必需**的:
+// 一次准备只授权一次开局,不清就等于队长能拿同一次准备连开两局(正是方案 A 要堵的形状);
+// POST_CONFIRM 下则是为了存量客户端 —— 它们还在发 SetReady,残留 ready 不清,面板会在
+// 开局后继续显示「已准备」。
 //
 // # 两条路径
 //
 //  1. **重入**:同一 attempt 的重试(响应丢失)。返回收据里那份冻结名单,不再重复冻结。
 //     判定同时看 attempt_id 与冻结后代际,见 MatchStartReceipt(proto)与 receiptReentry。
-//     注:ready 位不再是门槛后,名单未变的连续两次真实开局(同 (team,captain) 派生的
-//     attempt_id)在重入窗内也会命中此路径 —— 拿回的收据名单与当前名单**逐字节相同**,
-//     方向安全;名单一变代际必前进,不可能拿回旧名单。
-//  2. **正常冻结**:校验通过后留快照 → 清残留 ready → 转 FORMING → 上租约 → 开收据。
-//     (原「legacy 零代际 READY 作废」路径已删:ready 不再授权任何东西,
-//     「旧 ready 是否用过」不再需要证明。)
+//     注:POST_CONFIRM 下 ready 不是门槛,名单未变的连续两次真实开局(同 (team,captain)
+//     派生的 attempt_id)在重入窗内也会命中此路径 —— 拿回的收据名单与当前名单**逐字节
+//     相同**,方向安全;名单一变代际必前进,不可能拿回旧名单。PRE_READY 下第二次开局
+//     必然先经过一次 SetReady(否则过不了门槛),代际已前进,不会命中重入。
+//  2. **正常冻结**:校验通过(PRE_READY 时含 READY 闸)后留快照 → 清 ready → 转 FORMING
+//     → 上租约 → 开收据。
+//     (原「legacy 零代际 READY 作废」路径已删:那是 2026-08-13 一次性迁移的产物,
+//     升级窗口早已过去;本次恢复门槛不需要它 —— 门槛只看当前 State,不追溯旧 ready 用过没。)
 //
 // # 租约仍然要上(消除 TOCTOU 的那一半不变)
 //
 // matchmaker 原先只读 GetTeam 取名单,与本服务的自动摘人分属两把锁,凑不出共同线性化点。
 // 在这里上锁后,「冻结名单」与「移除离线成员」落在同一把 team 乐观锁上,两者只能有一个赢。
 func (u *TeamUsecase) BeginTeamMatch(
-	ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64,
+	ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64, requireReady bool,
 ) (*teamv1.TeamStorageRecord, int64, error) {
 	started := time.Now()
 	if teamID == 0 || captainID == 0 || operationID == "" {
@@ -896,11 +911,24 @@ func (u *TeamUsecase) BeginTeamMatch(
 				"team %d roster locked by operation %s until %d", teamID, team.MatchLockOperationId, team.MatchLockUntilMs)
 		}
 
+		// ── PRE_READY 图的准备门槛(关卡表 ready_mode=1) ──────────────────────
+		//
+		// 必须放在**租约冲突判定之后**:走到这里队伍可能刚被上一次冻结转成 FORMING,
+		// 先判 READY 会把一个「稍后重试即可」的暂态说成「队伍未准备」这种终态 ——
+		// 客户端会据此引导玩家去重新点准备,而其实几秒后租约一过什么都不用做。
+		//
+		// POST_CONFIRM 图(requireReady=false,含关卡表留空与旧 matchmaker 不发该字段)
+		// 整道跳过,行为与本字段上线前逐字节一致。
+		if requireReady && team.State != stateReady {
+			rejectReason = reasonTeamNotReady
+			return errcode.New(errcode.ErrTeamWrongState,
+				"team %d not ready (state=%d, map requires pre-match ready)", teamID, team.State)
+		}
+
 		// ── 路径 2:正常冻结 ──────────────────────────────────────────────────
 		//
-		// ready 不设门槛(2026-08-17 拍板,见方法注释):FORMING / READY 都放行。
-		// 先留冻结快照(matchmaker 建票的输入),再清残留 ready —— 顺序不能反,
-		// 反了快照里的 ready 位就全是假的(存量客户端还要靠它显示)。
+		// 先留冻结快照(matchmaker 建票的输入),再清 ready —— 顺序不能反,
+		// 反了快照里的 ready 位就全是假的(PRE_READY 图靠它对账,存量客户端靠它显示)。
 		rejectReason = ""
 		snapshot = cloneTeam(team)
 		for i := range team.Members {

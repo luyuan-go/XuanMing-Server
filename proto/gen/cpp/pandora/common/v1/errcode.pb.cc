@@ -42,7 +42,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
 const char descriptor_table_protodef_pandora_2fcommon_2fv1_2ferrcode_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\037pandora/common/v1/errcode.proto\022\021pando"
-    "ra.common.v1*\212&\n\007ErrCode\022\006\n\002OK\020\000\022\017\n\013ERR_"
+    "ra.common.v1*\260&\n\007ErrCode\022\006\n\002OK\020\000\022\017\n\013ERR_"
     "UNKNOWN\020\001\022\020\n\014ERR_INTERNAL\020\002\022\017\n\013ERR_TIMEO"
     "UT\020\003\022\023\n\017ERR_INVALID_ARG\020\004\022\021\n\rERR_NOT_FOU"
     "ND\020\005\022\026\n\022ERR_ALREADY_EXISTS\020\006\022\027\n\023ERR_PERM"
@@ -164,13 +164,14 @@ const char descriptor_table_protodef_pandora_2fcommon_2fv1_2ferrcode_2eproto[] A
     "ERR_OWNER_BARRIER_NOT_OPEN\020\232u\022 \n\033ERR_OWN"
     "ER_IDENTITY_MISMATCH\020\233u\022\036\n\031ERR_OWNER_LEA"
     "SE_REGRESSED\020\234u\022 \n\033ERR_OWNER_INVALID_OPE"
-    "RATION\020\235ub\006proto3"
+    "RATION\020\235u\022$\n\037ERR_OWNER_SOURCE_REVISION_S"
+    "TALE\020\236ub\006proto3"
 };
 static ::absl::once_flag descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto = {
     false,
     false,
-    4937,
+    4975,
     descriptor_table_protodef_pandora_2fcommon_2fv1_2ferrcode_2eproto,
     "pandora/common/v1/errcode.proto",
     &descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto_once,
@@ -192,7 +193,7 @@ ErrCode_descriptor() {
   return file_level_enum_descriptors_pandora_2fcommon_2fv1_2ferrcode_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t ErrCode_internal_data_[] = {
-    1048576u, 9699328u, 9201u, 5103u, 11004u, 3007u, 7014u, 9504u, 13005u, 2010u, 4010u, 7003u, 9002u, 9405u, 9606u, 12004u, 14008u, 1012u, 2042u, 4005u, 5003u, 6002u, 7010u, 7018u, 9103u, 9401u, 9409u, 9602u, 10003u, 11008u, 13001u, 14004u, 15002u, 1004u, 1023u, 2030u, 3003u, 4001u, 4008u, 5001u, 5101u, 5105u, 7001u, 7005u, 7012u, 7016u, 8002u, 9101u, 9105u, 9301u, 9403u, 9407u, 9502u, 9506u, 9604u, 10001u, 11002u, 11006u, 12002u, 12006u, 13003u, 14002u, 14006u, 14010u, 15004u, 1002u, 1010u, 1021u, 2002u, 2020u, 2040u, 3001u, 3005u, 3009u, 4003u, 4007u, 4009u, 4011u, 5002u, 5004u, 5102u, 5104u, 6001u, 6003u, 7002u, 7004u, 7006u, 7011u, 7013u, 7015u, 7017u, 8001u, 9001u, 9003u, 9102u, 9104u, 9106u, 9202u, 9302u, 9402u, 9404u, 9406u, 9408u, 9501u, 9503u, 9505u, 9601u, 9603u, 9605u, 9607u, 10002u, 11001u, 11003u, 11005u, 11007u, 12001u, 12003u, 12005u, 12007u, 13002u, 13004u, 14001u, 14003u, 14005u, 14007u, 14009u, 15001u, 15003u, 15005u, 1001u, 1003u, 1005u, 1011u, 1020u, 1022u, 2001u, 2003u, 2011u, 2021u, 2031u, 2041u, 2043u, 3002u, 3004u, 3006u, 3008u, 3010u, 4002u, 4004u, 4006u, };
+    1048576u, 9764864u, 9202u, 5104u, 11005u, 3007u, 7015u, 9505u, 14001u, 2010u, 4011u, 7004u, 9003u, 9406u, 9607u, 12005u, 14009u, 1012u, 2042u, 4005u, 5004u, 6003u, 7011u, 8001u, 9104u, 9402u, 9501u, 9603u, 11001u, 12001u, 13002u, 14005u, 15003u, 1004u, 1023u, 2030u, 3003u, 4001u, 4009u, 5002u, 5102u, 6001u, 7002u, 7006u, 7013u, 7017u, 9001u, 9102u, 9106u, 9302u, 9404u, 9408u, 9503u, 9601u, 9605u, 10002u, 11003u, 11007u, 12003u, 12007u, 13004u, 14003u, 14007u, 15001u, 15005u, 1002u, 1010u, 1021u, 2002u, 2020u, 2040u, 3001u, 3005u, 3009u, 4003u, 4007u, 4010u, 5001u, 5003u, 5101u, 5103u, 5105u, 6002u, 7001u, 7003u, 7005u, 7010u, 7012u, 7014u, 7016u, 7018u, 8002u, 9002u, 9101u, 9103u, 9105u, 9201u, 9301u, 9401u, 9403u, 9405u, 9407u, 9409u, 9502u, 9504u, 9506u, 9602u, 9604u, 9606u, 10001u, 10003u, 11002u, 11004u, 11006u, 11008u, 12002u, 12004u, 12006u, 13001u, 13003u, 13005u, 14002u, 14004u, 14006u, 14008u, 14010u, 15002u, 15004u, 15006u, 1001u, 1003u, 1005u, 1011u, 1020u, 1022u, 2001u, 2003u, 2011u, 2021u, 2031u, 2041u, 2043u, 3002u, 3004u, 3006u, 3008u, 3010u, 4002u, 4004u, 4006u, 4008u, };
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace v1
 }  // namespace common

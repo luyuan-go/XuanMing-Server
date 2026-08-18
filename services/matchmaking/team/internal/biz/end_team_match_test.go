@@ -50,7 +50,7 @@ func TestEndTeamMatch_复位后队长可直接再开局(t *testing.T) {
 	if err := uc.EndTeamMatch(ctx, 9802, []uint64{7811, 7812}, 0); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, _, err := uc.BeginTeamMatch(ctx, 9802, 7811, "op-next", 5000)
+	snapshot, _, err := uc.BeginTeamMatch(ctx, 9802, 7811, "op-next", 5000, false)
 	if err != nil {
 		t.Fatalf("复位后(FORMING)组票必须放行: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestEndTeamMatch_组票租约在手时可重试(t *testing.T) {
 	uc, _ := newOfflineLeaveUsecase(t)
 	ctx := context.Background()
 	readyTeam(t, uc, 9806, 7861, 7862)
-	if _, _, err := uc.BeginTeamMatch(ctx, 9806, 7861, "op-next", 5000); err != nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9806, 7861, "op-next", 5000, false); err != nil {
 		t.Fatalf("BeginTeamMatch: %v", err)
 	}
 

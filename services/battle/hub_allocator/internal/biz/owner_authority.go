@@ -3,6 +3,7 @@
 //   - ① hub 归属定案统一出口(签票点)**强** Begin(HUB):分配/恢复/转移/Battle 回流全路径
 //     写进 owner 权威(E+1/PENDING/屏障);**写不进即拒绝本次签票**(§9.22 fail-closed),
 //     调用方上抛,客户端按 §9.23 退避重查;
+//
 //   - ③ **Admit 的权威提交点已迁到 `HubUsecase.AcknowledgeAdmission`**(§9.23 服务端完成点,
 //     2026-07-29)。那里是玩家本次进场的线性化点、exact identity 在手,且 Admit 不成功就不开
 //     spawn gate;心跳 census 只能证明"该实例正在服务该玩家",是近似。
@@ -87,28 +88,51 @@ func (u *HubUsecase) SetOwnerAuthority(a OwnerAuthority) {
 //     调用方现铸 UUID 恰恰破坏它(每次投递一个新 operation,幂等键形同虚设)。
 //
 // Query 仍然要发:它取的是 CAS 期望值 expect_epoch。Query 与 Begin 之间记录可能已被
-// 另一个写者推进,那是 CAS 的设计内竞争,权威以 EPOCH_CONFLICT 告知——重查一次再试;
-// 仍冲突说明有写者在持续推进,fail-closed 交由调用方整体重试,不盲目循环抢。
+// 另一个写者推进,那是 CAS 的设计内竞争,权威以 EPOCH_CONFLICT 告知。这里**不按原 target
+// 盲重试**：assignment UUID 无单调次序，冲突可能正是较新的 Redis assignment 已经胜出；
+// 重查 owner epoch 后继续写旧 target 会把 winner 回滚。强调用方重走整条 Assign/Transfer
+// 并重读 assignment，census 则等下一轮 heartbeat 重新 resolver。
+//
+// guard 在 Query 之后、Begin 之前执行。Hub 签票路径用它复核 Redis 当前 assignment 仍是
+// 本次 target；这样即使另一个写者已在 assignment CAS 处胜出，本请求也不会再触碰 owner。
+//
+// 受保护路径若遇 EPOCH_CONFLICT，上层可以完整重跑 Query→guard→Begin 一次；这不是拿
+// 新 epoch 盲写旧 target，因为第二轮 guard 必须再次证明 Redis 仍精确指向 target。
+type ownerBeginGuard func(context.Context) error
+
 func beginOnePlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
-	ownerType int8, target data.OwnerTargetView) error {
-	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		rec, qerr := auth.QueryOwner(ctx, playerID)
-		if qerr != nil {
-			// 查询不可判定 → UNKNOWN,绝不当作"无归属"继续(§9.22 禁冒充 OFFLINE/空闲)。
-			return qerr
-		}
-		// 回传的新记录 hub 侧用不到(见 ownerBeginPlayer 注释:单玩家写,无部分写入可回滚)。
-		_, berr := auth.BeginTransition(ctx, playerID, rec.OwnerEpoch, "", ownerType, target)
-		if berr == nil {
-			return nil
-		}
-		if errcode.As(berr) != errcode.ErrOwnerEpochConflict {
-			return berr
-		}
-		lastErr = berr
+	ownerType int8, target data.OwnerTargetView, guard ownerBeginGuard) (data.OwnerRecordView, error) {
+	rec, qerr := auth.QueryOwner(ctx, playerID)
+	if qerr != nil {
+		// 查询不可判定 → UNKNOWN,绝不当作"无归属"继续(§9.22 禁冒充 OFFLINE/空闲)。
+		return data.OwnerRecordView{}, qerr
 	}
-	return lastErr
+	if guard != nil {
+		if gerr := guard(ctx); gerr != nil {
+			return data.OwnerRecordView{}, gerr
+		}
+	}
+	next, berr := auth.BeginTransition(ctx, playerID, rec.OwnerEpoch, "", ownerType, target)
+	if berr != nil {
+		return next, berr
+	}
+	// 滚动升级硬门：旧 owner binary 可能仍把“同物理实例、不同 assignment”当 no-op，
+	// RPC 返回 nil 却把旧 target 原样带回。只有回传记录确实等于本次完整 target、处于有效
+	// phase 且带 fencing/幂等锚点，调用方才可交付票据。
+	if !ownerRecordExactlyTargets(next, ownerType, target) {
+		return next, errcode.New(errcode.ErrInvalidState,
+			"owner Begin returned a non-exact target player=%d", playerID)
+	}
+	return next, nil
+}
+
+func ownerRecordExactlyTargets(rec data.OwnerRecordView, ownerType int8, target data.OwnerTargetView) bool {
+	return rec.OwnerEpoch > 0 && strings.TrimSpace(rec.OperationID) != "" && rec.OwnerType == ownerType &&
+		(rec.Phase == ownerPhasePending || rec.Phase == ownerPhaseAdmitted) &&
+		rec.PodName == target.PodName && rec.InstanceUID == target.InstanceUID &&
+		rec.InstanceEpoch == target.InstanceEpoch &&
+		rec.AssignmentOrAllocationID == target.AssignmentOrAllocationID &&
+		rec.ReleaseTrack == target.ReleaseTrack
 }
 
 // ownerBeginPlayer 单玩家强 Begin(contract 阶段):**写不进 owner 权威即失败**。
@@ -130,19 +154,46 @@ func beginOnePlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
 // 加,不能只是把 slice 传进来。
 func ownerBeginPlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
 	ownerType int8, target data.OwnerTargetView, budget time.Duration) error {
+	return ownerBeginPlayerGuarded(ctx, auth, playerID, ownerType, target, budget, nil)
+}
+
+func ownerBeginPlayerGuarded(ctx context.Context, auth OwnerAuthority, playerID uint64,
+	ownerType int8, target data.OwnerTargetView, budget time.Duration, guard ownerBeginGuard) error {
 	if auth == nil {
+		if guard != nil {
+			return guard(ctx)
+		}
 		return nil
 	}
 	budgetCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	if err := beginOnePlayer(budgetCtx, auth, playerID, ownerType, target); err != nil {
-		plog.With(ctx).Warnw("msg", "owner_begin_failed",
-			"player_id", playerID, "err", err,
-			"pod", target.PodName, "instance_uid", target.InstanceUID,
-			"hint", "contract 强依赖:归属写不进权威即拒绝本次交付,调用方重试")
-		return err
+	// 只有携 guard 的 Hub 发布路径允许一次 conflict 重试。严格性来自这个顺序:
+	//
+	//   Query(E) → guard(assignment=A) → Begin(expect=E,A)
+	//
+	// 最终 assignment=B 发布后，任何新的 A guard 都会失败。在 B 的 Query 与 Begin 之间，
+	// 先前已通过 guard 的旧请求中最多只有一个能以 B 观察到的 E 成功推进 epoch；
+	// 其余旧请求的 expect 已 stale。B 重跑 Query(E+1)→guard(B) 后即能收敛。
+	// guard=nil 的通用/census 路径没有 Redis 当前意图证明，仍必须单次 fail-closed。
+	maxAttempts := 1
+	if guard != nil {
+		maxAttempts = 2
 	}
-	return nil
+	var err error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		_, err = beginOnePlayer(budgetCtx, auth, playerID, ownerType, target, guard)
+		if err == nil {
+			return nil
+		}
+		if guard == nil || errcode.As(err) != errcode.ErrOwnerEpochConflict || attempt+1 == maxAttempts {
+			break
+		}
+	}
+	plog.With(ctx).Warnw("msg", "owner_begin_failed",
+		"player_id", playerID, "err", err,
+		"pod", target.PodName, "instance_uid", target.InstanceUID,
+		"hint", "contract 强依赖:归属写不进权威即拒绝本次交付,调用方重试")
+	return err
 }
 
 // ownerAdmitCensusWeak census 首见玩家代提交 Admit(migrate 近似;弱依赖)。
@@ -237,7 +288,15 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 			// 同实例判定与 operation 铸造都已下沉到权威,这里直接发起即可。
 			if resolveTarget != nil {
 				if tgt, ok := resolveTarget(budgetCtx, playerID); ok && tgt.PodName == selfPod && tgt.InstanceUID == selfUID {
-					if berr := beginOnePlayer(budgetCtx, auth, playerID, ownerType, tgt); berr != nil {
+					guard := func(guardCtx context.Context) error {
+						current, stillCurrent := resolveTarget(guardCtx, playerID)
+						if !stillCurrent || current != tgt {
+							return errcode.New(errcode.ErrInvalidState,
+								"owner census target changed before Begin player=%d", playerID)
+						}
+						return nil
+					}
+					if _, berr := beginOnePlayer(budgetCtx, auth, playerID, ownerType, tgt, guard); berr != nil {
 						healFailed++
 						noteFail(playerID, berr)
 					}

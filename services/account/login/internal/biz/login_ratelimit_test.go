@@ -48,18 +48,18 @@ func TestLogin_FailQuotaLocksThenAutoRecovers(t *testing.T) {
 
 	// 连续 3 次密码错:每次都拿到密码错(未提前锁),第 3 次布锁。
 	for i := 0; i < 3; i++ {
-		if _, err := uc.Login(ctx, "acc", "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+		if _, err := uc.Login(ctx, "acc", "wrong", "dev", false); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
 			t.Fatalf("attempt #%d want password mismatch, got %v", i+1, err)
 		}
 	}
 	// 锁窗内:即使密码正确也被拒,错误信息带可见倒计时。
-	_, err := uc.Login(ctx, "acc", "pw", "dev")
+	_, err := uc.Login(ctx, "acc", "pw", "dev", false)
 	if errcode.As(err) != errcode.ErrRateLimited || !strings.Contains(err.Error(), "retry after") {
 		t.Fatalf("locked login want ErrRateLimited with countdown, got %v", err)
 	}
 	// 锁定期过后自动恢复(PX 自过期,无需人工解锁)。
 	mr.FastForward(5*time.Minute + time.Millisecond)
-	if res, err := uc.Login(ctx, "acc", "pw", "dev"); err != nil || res == nil {
+	if res, err := uc.Login(ctx, "acc", "pw", "dev", false); err != nil || res == nil {
 		t.Fatalf("login after lock expiry = (%v, %v), want success", res, err)
 	}
 }
@@ -69,19 +69,19 @@ func TestLogin_SuccessDoesNotCount(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 2; i++ {
-		if _, err := uc.Login(ctx, "acc", "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+		if _, err := uc.Login(ctx, "acc", "wrong", "dev", false); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
 			t.Fatalf("fail #%d: %v", i+1, err)
 		}
 	}
 	// 成功登录不计数(计数停在 2,未触发锁)。
-	if _, err := uc.Login(ctx, "acc", "pw", "dev"); err != nil {
+	if _, err := uc.Login(ctx, "acc", "pw", "dev", false); err != nil {
 		t.Fatalf("success at count=2 must pass: %v", err)
 	}
 	// 第 3 次失败才触发锁。
-	if _, err := uc.Login(ctx, "acc", "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+	if _, err := uc.Login(ctx, "acc", "wrong", "dev", false); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
 		t.Fatalf("fail #3: %v", err)
 	}
-	if _, err := uc.Login(ctx, "acc", "pw", "dev"); errcode.As(err) != errcode.ErrRateLimited {
+	if _, err := uc.Login(ctx, "acc", "pw", "dev", false); errcode.As(err) != errcode.ErrRateLimited {
 		t.Fatalf("after 3 failures want locked, got %v", err)
 	}
 }
@@ -92,15 +92,15 @@ func TestLogin_IPDimensionLocksAcrossAccounts(t *testing.T) {
 
 	// 同 IP 换着账号名撞库:3 次失败后 IP 被锁,换任何账号(即使密码正确)都被拒。
 	for i, acct := range []string{"a1", "a2", "a3"} {
-		if _, err := uc.Login(ipCtx, acct, "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+		if _, err := uc.Login(ipCtx, acct, "wrong", "dev", false); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
 			t.Fatalf("fail #%d: %v", i+1, err)
 		}
 	}
-	if _, err := uc.Login(ipCtx, "a9", "pw", "dev"); errcode.As(err) != errcode.ErrRateLimited {
+	if _, err := uc.Login(ipCtx, "a9", "pw", "dev", false); errcode.As(err) != errcode.ErrRateLimited {
 		t.Fatalf("same-IP login after 3 failures want ErrRateLimited, got %v", err)
 	}
 	// 其它 IP / 无 IP(不同来源)不受该 IP 锁波及;账号维度也未达限(每账号各 1 次)。
-	if _, err := uc.Login(context.Background(), "a9", "pw", "dev"); err != nil {
+	if _, err := uc.Login(context.Background(), "a9", "pw", "dev", false); err != nil {
 		t.Fatalf("other-source login must pass, got %v", err)
 	}
 }
@@ -113,12 +113,12 @@ func TestLogin_FailQuotaCaseVariantsShareCounter(t *testing.T) {
 
 	// 对同一真实账号用 3 个变体各失败一次 → 归一化后共享计数 → 第 3 次即达限布锁。
 	for _, variant := range []string{"acc", "ACC", " Acc "} {
-		if _, err := uc.Login(ctx, variant, "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+		if _, err := uc.Login(ctx, variant, "wrong", "dev", false); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
 			t.Fatalf("variant %q want password mismatch, got %v", variant, err)
 		}
 	}
 	// 任一变体(含原文)此时都应被锁——账号维度未被大小写绕过。
-	if _, err := uc.Login(ctx, "acc", "pw", "dev"); errcode.As(err) != errcode.ErrRateLimited {
+	if _, err := uc.Login(ctx, "acc", "pw", "dev", false); errcode.As(err) != errcode.ErrRateLimited {
 		t.Fatalf("after 3 case-variant failures account must be locked, got %v", err)
 	}
 }
@@ -130,18 +130,18 @@ func TestLogin_LockResetsCounterSoSingleFailureDoesNotRelock(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
-		if _, err := uc.Login(ctx, "acc", "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+		if _, err := uc.Login(ctx, "acc", "wrong", "dev", false); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
 			t.Fatalf("fail #%d: %v", i+1, err)
 		}
 	}
 	// 锁到期。
 	mr.FastForward(5*time.Minute + time.Millisecond)
 	// 单次失败不应立即重锁(计数已在布锁时清零,现在只是第 1 次)。
-	if _, err := uc.Login(ctx, "acc", "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+	if _, err := uc.Login(ctx, "acc", "wrong", "dev", false); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
 		t.Fatalf("single post-lock failure should be plain mismatch, got %v", err)
 	}
 	// 正确密码此刻必须能进(未被单次失败重锁)。
-	if _, err := uc.Login(ctx, "acc", "pw", "dev"); err != nil {
+	if _, err := uc.Login(ctx, "acc", "pw", "dev", false); err != nil {
 		t.Fatalf("must not be re-locked by a single post-expiry failure, got %v", err)
 	}
 }
@@ -162,10 +162,10 @@ func TestLogin_FailQuotaFailOpenOnRedisError(t *testing.T) {
 
 	ctx := context.Background()
 	// Redis 故障:密码错仍返回业务错(不被配额挡),密码对正常登录(fail-open,§2 铁律)。
-	if _, err := uc.Login(ctx, "acc", "wrong", "dev"); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+	if _, err := uc.Login(ctx, "acc", "wrong", "dev", false); errcode.As(err) != errcode.ErrLoginPasswordMismatch {
 		t.Fatalf("redis down wrong pw want mismatch, got %v", err)
 	}
-	if _, err := uc.Login(ctx, "acc", "pw", "dev"); err != nil {
+	if _, err := uc.Login(ctx, "acc", "pw", "dev", false); err != nil {
 		t.Fatalf("redis down correct pw must pass, got %v", err)
 	}
 }

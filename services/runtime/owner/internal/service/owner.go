@@ -79,6 +79,9 @@ func toProtoRecord(rec data.OwnerRecord) *ownerv1.OwnerRecord {
 		AdmitNotBeforeMs: rec.AdmitNotBeforeMs,
 		LeaseDeadlineMs:  rec.LeaseDeadlineMs,
 		UpdatedAtMs:      rec.UpdatedAtMs,
+		// 高水位下发给调用方(INC-20260818-003):allocator 据此判断本部署是否已进入
+		// 带版本阶段,也让排障时不必开库就能看到门的位置。
+		HubSourceRevision: rec.HubSourceRevision,
 	}
 }
 
@@ -114,7 +117,8 @@ func (s *OwnerService) BeginTransition(ctx context.Context, req *ownerv1.BeginTr
 		return &ownerv1.BeginTransitionResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
 	}
 	rec, err := s.uc.BeginTransition(ctx, req.GetPlayerId(), req.GetExpectEpoch(),
-		req.GetOperationId(), int8(req.GetOwnerType()), fromProtoTarget(req.GetTarget()))
+		req.GetOperationId(), int8(req.GetOwnerType()), fromProtoTarget(req.GetTarget()),
+		req.GetSourceRevision())
 	if err != nil {
 		resp := &ownerv1.BeginTransitionResponse{Code: toProtoCode(err)}
 		if errcode.As(err) == errcode.ErrOwnerEpochConflict {

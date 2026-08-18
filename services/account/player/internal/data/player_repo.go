@@ -126,7 +126,11 @@ type SkillSlot struct {
 // PlayerRepo 是 player 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
 type PlayerRepo interface {
 	// EnsureProfile 确保玩家档案存在(INSERT IGNORE 默认档案),已存在则不动。
-	EnsureProfile(ctx context.Context, playerID uint64, defaultNickname string, baseMMR int) error
+	EnsureProfile(ctx context.Context, playerID uint64, defaultNickname string, baseMMR int) (created bool, err error)
+
+	// ListNicknames 批量反查角色显示名(Hub DS 铭牌用)。
+	// 只返回查到的行:请求里有、结果里没有 = 该角色无档案(与"名字是空串"必须可区分)。
+	ListNicknames(ctx context.Context, playerIDs []uint64) (map[uint64]string, error)
 	// GetProfile 读玩家档案。not found → (nil, false, nil)。
 	GetProfile(ctx context.Context, playerID uint64) (*playerv1.PlayerProfile, bool, error)
 	// UpdateNickname 改昵称。昵称被占用 → ErrPlayerNicknameTaken;玩家不存在 → ErrPlayerNotFound。

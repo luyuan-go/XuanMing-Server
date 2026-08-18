@@ -9,6 +9,8 @@
 //   - admit_not_before = CAS 时点旧租约观察值 + 余量;早到 Admit 拒;Begin 后旧实例续租
 //     不回写已算屏障;
 //   - Admit exact 身份全等(旧 epoch / 换实例 UID 拒);
+//   - 同物理实例 assignment 换发也推进 epoch/operation 并回到 PENDING；旧 epoch/assignment
+//     不得回滚或准入(2026-08-17 resume↔票据分叉死循环回归);
 //   - Release 幂等(迟到旧 operation no-op);
 //   - 实例租约只前进 + 实例纪元不符拒。
 package data
@@ -166,7 +168,7 @@ func TestOwnerRepoMySQL(t *testing.T) {
 	t.Run("FirstTransitionNoBarrierAndIdempotentReplay", func(t *testing.T) {
 		const player = 301
 		target := testTarget("uid-a")
-		rec, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 5*time.Second)
+		rec, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0, 5*time.Second)
 		if err != nil || rec.OwnerEpoch != 1 || rec.Phase != OwnerPhasePending {
 			t.Fatalf("首迁移: %+v err=%v", rec, err)
 		}
@@ -174,7 +176,7 @@ func TestOwnerRepoMySQL(t *testing.T) {
 			t.Fatalf("首迁移(无旧 owner)不应有屏障: admit=%d", rec.AdmitNotBeforeMs)
 		}
 		// Begin 幂等重放:同 operation 原样返回,epoch 不再推进。
-		replay, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 5*time.Second)
+		replay, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0, 5*time.Second)
 		if err != nil || replay.OwnerEpoch != 1 {
 			t.Fatalf("Begin 重放: %+v err=%v", replay, err)
 		}
@@ -189,19 +191,19 @@ func TestOwnerRepoMySQL(t *testing.T) {
 		}
 	})
 
-	// 同 exact 实例的重复投递必须收敛为 no-op,且 **operation_id 必须保持不变**。
+	// 同 exact owner 目标的重复投递必须收敛为 no-op,且 **operation_id 必须保持不变**。
 	// 这是 §9.23「一次真实进场用一个稳定 operation_id」的权威侧落点:调用方过去每次
 	// 投递现铸 UUID,同一次进场的重连/重复交付/心跳自愈会写出不同 operation,幂等键失效。
 	t.Run("SameInstanceRedeliveryKeepsOperationAndEpoch", func(t *testing.T) {
 		const player = 310
 		target := testTarget("uid-same")
-		first, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 5*time.Second)
+		first, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0, 5*time.Second)
 		if err != nil || first.OwnerEpoch != 1 || first.OperationID != testOpA {
 			t.Fatalf("首迁移: %+v err=%v", first, err)
 		}
 
-		// ① 换一个 operation 重复投递同一实例 → 原样返回,epoch 不动,operation 不被覆盖。
-		again, err := repo.BeginTransition(ctx, player, 0, testOpB, OwnerTypeHub, target, 5*time.Second)
+		// ① 换一个 operation 重复投递同一 exact 目标 → 原样返回,epoch 不动,operation 不被覆盖。
+		again, err := repo.BeginTransition(ctx, player, 0, testOpB, OwnerTypeHub, target, 0, 5*time.Second)
 		if err != nil {
 			t.Fatalf("同实例重复投递不应报错: %v", err)
 		}
@@ -213,34 +215,144 @@ func TestOwnerRepoMySQL(t *testing.T) {
 				again.OperationID, testOpA, testOpB)
 		}
 
-		// ② 过期 expectEpoch + 同实例 → 仍是 no-op,不得报 EPOCH_CONFLICT。
+		// ② 过期 expectEpoch + 同一 exact 目标 → 仍是 no-op,不得报 EPOCH_CONFLICT。
 		//    「目标已经是它」本就该幂等,不该先冲突再让调用方重查。
-		stale, err := repo.BeginTransition(ctx, player, 0, testOpC, OwnerTypeHub, target, 5*time.Second)
+		stale, err := repo.BeginTransition(ctx, player, 0, testOpC, OwnerTypeHub, target, 0, 5*time.Second)
 		if err != nil || stale.OwnerEpoch != 1 || stale.OperationID != testOpA {
 			t.Fatalf("过期 expect + 同实例应幂等 no-op: %+v err=%v", stale, err)
 		}
 
-		// ③ 同实例但 assignment 刷新(seat 续租)→ 仍不得推进 epoch(churn 防护)。
+		// ③ 物理实例相同但 assignment 换发仍是 exact owner 身份变化：必须推进 epoch、
+		//    回到 PENDING 并使用本次 operation。否则旧票与新票共享 fencing 版本，且迟到旧
+		//    Begin 可把新值回滚。
 		refreshed := target
 		refreshed.AssignmentOrAllocationID = "assign-uid-same-v2"
-		seat, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, refreshed, 5*time.Second)
-		if err != nil || seat.OwnerEpoch != 1 || seat.OperationID != testOpA {
-			t.Fatalf("assignment 刷新不得推进 epoch: %+v err=%v", seat, err)
+		seat, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, refreshed, 0, 5*time.Second)
+		if err != nil || seat.OwnerEpoch != 2 || seat.OperationID != testOpB || seat.Phase != OwnerPhasePending {
+			t.Fatalf("assignment 换发必须是真实迁移: %+v err=%v", seat, err)
+		}
+		if seat.Target.AssignmentOrAllocationID != refreshed.AssignmentOrAllocationID {
+			t.Fatalf("assignment 换发必须跟进最新签发值: got=%q want=%q",
+				seat.Target.AssignmentOrAllocationID, refreshed.AssignmentOrAllocationID)
 		}
 
-		// ④ 已 ADMITTED 后重复投递 → 不得被打回 PENDING。
-		if _, _, aerr := repo.Admit(ctx, player, 1, testOpA, target); aerr != nil {
-			t.Fatalf("Admit: %v", aerr)
+		// ④ 新 owner Admit 后的 exact 重投递不得再推进 epoch/回退 phase。
+		if _, _, aerr := repo.Admit(ctx, player, 2, testOpB, refreshed); aerr != nil {
+			t.Fatalf("Admit(换发后目标): %v", aerr)
 		}
-		afterAdmit, err := repo.BeginTransition(ctx, player, 1, testOpC, OwnerTypeHub, target, 5*time.Second)
-		if err != nil || afterAdmit.Phase != OwnerPhaseAdmitted || afterAdmit.OwnerEpoch != 1 {
+		afterAdmit, err := repo.BeginTransition(ctx, player, 1, testOpC, OwnerTypeHub, refreshed, 0, 5*time.Second)
+		if err != nil || afterAdmit.Phase != OwnerPhaseAdmitted || afterAdmit.OwnerEpoch != 2 ||
+			afterAdmit.OperationID != testOpB {
 			t.Fatalf("ADMITTED 后重复投递不得回退 phase: %+v err=%v", afterAdmit, err)
 		}
 
-		// ⑤ 真换实例 = 真实迁移:epoch 推进,operation 换成本次的。
-		moved, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, testTarget("uid-moved"), 0)
-		if err != nil || moved.OwnerEpoch != 2 || moved.OperationID != testOpB {
+		// ⑤ 换物理实例继续推进 epoch。
+		moved, err := repo.BeginTransition(ctx, player, 2, testOpC, OwnerTypeHub, testTarget("uid-moved"), 0, 0)
+		if err != nil || moved.OwnerEpoch != 3 || moved.OperationID != testOpC {
 			t.Fatalf("换实例应真实迁移: %+v err=%v", moved, err)
+		}
+	})
+
+	// 2026-08-17 现网死循环回归(INC 事故形状):allocator 在同一实例上换发 assignment
+	// (旧归属记录蒸发 / Release 后原地新铸 uuid)后,owner 记录是 GetResumeContext 的唯一
+	// 数据源——若不跟进,resume 恒下发旧 id、票据/DS ACK 恒携带新 id,客户端把每个 ACK 判成
+	// owner_target_mismatch 丢弃,每 45s 重取票再撞,永不收敛。本用例钉住服务端一半的收敛
+	// 判据:换发后的 Begin 必须以新 epoch/operation 让记录与 Query 视图收敛到新值，且
+	// 新旧 assignment 的 Admit 一放一拒。
+	t.Run("AssignmentRefreshConvergesResumeView", func(t *testing.T) {
+		const player = 313
+		target := testTarget("uid-refresh")
+		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0, 0); err != nil {
+			t.Fatalf("首迁移: %v", err)
+		}
+		if _, _, err := repo.Admit(ctx, player, 1, testOpA, target); err != nil {
+			t.Fatalf("admit: %v", err)
+		}
+		// 同一实例上换发 assignment,签票路径携新值重复 Begin。
+		reissued := target
+		reissued.AssignmentOrAllocationID = "assign-uid-refresh-v2"
+		rec, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, reissued, 0, 0)
+		if err != nil {
+			t.Fatalf("换发 Begin: %v", err)
+		}
+		if rec.OwnerEpoch != 2 || rec.Phase != OwnerPhasePending || rec.OperationID != testOpB {
+			t.Fatalf("换发必须推进 epoch/operation 并回到 PENDING: %+v", rec)
+		}
+		if rec.Target.AssignmentOrAllocationID != reissued.AssignmentOrAllocationID {
+			t.Fatalf("记录未跟进新 assignment: %+v", rec.Target)
+		}
+		// Query(resume 数据源)必须已看到新值——客户端收敛判据的服务端一半。
+		view, err := repo.Query(ctx, player)
+		if err != nil || view.Target.AssignmentOrAllocationID != reissued.AssignmentOrAllocationID {
+			t.Fatalf("Query 应看到换发后的 assignment: %+v err=%v", view.Target, err)
+		}
+		// DS ACK 携新 epoch/assignment 的 Admit 通过;携旧 epoch/assignment 的被拒
+		// (§9.3 换发即旧票作废,正是期望的 fencing)。
+		if _, _, err := repo.Admit(ctx, player, 2, testOpB, reissued); err != nil {
+			t.Fatalf("换发后 Admit(新 assignment)应通过: %v", err)
+		}
+		if _, _, err := repo.Admit(ctx, player, 1, testOpA, target); errcode.As(err) != errcode.ErrOwnerIdentityMismatch {
+			t.Fatalf("换发后 Admit(旧 assignment)应拒: %v", err)
+		}
+	})
+
+	// assignment 是 Hub 票据的归属版本。即使物理 DS 实例未变，旧 owner epoch 的迟到
+	// Begin 也不能把已经换发的新 assignment 写回旧值；否则旧票会被重新写回 owner
+	// 权威，ResumeContext 与当前 allocator 记录再次分叉。
+	t.Run("AssignmentRefreshRejectsStaleEpochRollback", func(t *testing.T) {
+		const player = 314
+		original := testTarget("uid-refresh-stale")
+		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, original, 0, 0); err != nil {
+			t.Fatalf("首迁移: %v", err)
+		}
+
+		reissued := original
+		reissued.AssignmentOrAllocationID = "assign-uid-refresh-stale-v2"
+		if _, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, reissued, 0, 0); err != nil {
+			t.Fatalf("换发 Begin: %v", err)
+		}
+
+		// 模拟首迁移时代的请求在换发后迟到。它携带的 expect_epoch=0 已过期，必须被
+		// CAS 拒绝，不能仅因 pod/uid/instance_epoch 相同就改写 assignment。
+		if _, err := repo.BeginTransition(ctx, player, 0, testOpC, OwnerTypeHub, original, 0, 0); errcode.As(err) != errcode.ErrOwnerEpochConflict {
+			t.Fatalf("迟到旧 epoch Begin 必须拒绝，不能回滚 assignment: %v", err)
+		}
+		view, err := repo.Query(ctx, player)
+		if err != nil {
+			t.Fatalf("Query: %v", err)
+		}
+		if view.Target.AssignmentOrAllocationID != reissued.AssignmentOrAllocationID {
+			t.Fatalf("迟到请求回滚了 assignment: got=%q want=%q",
+				view.Target.AssignmentOrAllocationID, reissued.AssignmentOrAllocationID)
+		}
+	})
+
+	// exact target 规则不只服务 Hub：Battle allocation 与 release track 同样是票据/写入
+	// fencing 身份。物理实例相同也不得继承旧 epoch/ADMITTED phase。
+	t.Run("BattleAllocationAndTrackChangesAdvanceEpoch", func(t *testing.T) {
+		const player = 315
+		target := testTarget("uid-battle-exact")
+		target.AssignmentOrAllocationID = "allocation-v1"
+		first, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeBattle, target, 0, 0)
+		if err != nil || first.OwnerEpoch != 1 {
+			t.Fatalf("首 Battle owner: %+v err=%v", first, err)
+		}
+		if _, _, err := repo.Admit(ctx, player, 1, testOpA, target); err != nil {
+			t.Fatalf("Admit v1: %v", err)
+		}
+
+		allocationV2 := target
+		allocationV2.AssignmentOrAllocationID = "allocation-v2"
+		second, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeBattle, allocationV2, 0, 0)
+		if err != nil || second.OwnerEpoch != 2 || second.Phase != OwnerPhasePending || second.OperationID != testOpB {
+			t.Fatalf("allocation 变化必须推进 epoch: %+v err=%v", second, err)
+		}
+
+		canary := allocationV2
+		canary.ReleaseTrack = "canary"
+		third, err := repo.BeginTransition(ctx, player, 2, testOpC, OwnerTypeBattle, canary, 0, 0)
+		if err != nil || third.OwnerEpoch != 3 || third.Phase != OwnerPhasePending || third.OperationID != testOpC {
+			t.Fatalf("release track 变化必须推进 epoch: %+v err=%v", third, err)
 		}
 	})
 
@@ -251,14 +363,14 @@ func TestOwnerRepoMySQL(t *testing.T) {
 	t.Run("InstanceEpochBumpIsRealMigration", func(t *testing.T) {
 		const player = 312
 		target := testTarget("uid-epoch")
-		first, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0)
+		first, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0, 0)
 		if err != nil || first.OwnerEpoch != 1 {
 			t.Fatalf("首迁移: %+v err=%v", first, err)
 		}
 		// 同 pod + 同 uid,仅 instance_epoch 前进 → 必须推进 owner_epoch 并换 operation。
 		bumped := target
 		bumped.InstanceEpoch = target.InstanceEpoch + 1
-		moved, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, bumped, 0)
+		moved, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeHub, bumped, 0, 0)
 		if err != nil {
 			t.Fatalf("instance epoch 前进应发起真实迁移: %v", err)
 		}
@@ -271,7 +383,7 @@ func TestOwnerRepoMySQL(t *testing.T) {
 	// Admit exact 校验、客户端续用与审计流水同时失去锚点)。
 	t.Run("RealTransitionRejectsEmptyOperation", func(t *testing.T) {
 		const player = 311
-		_, err := repo.BeginTransition(ctx, player, 0, "", OwnerTypeHub, testTarget("uid-empty"), 0)
+		_, err := repo.BeginTransition(ctx, player, 0, "", OwnerTypeHub, testTarget("uid-empty"), 0, 0)
 		if errcode.As(err) != errcode.ErrOwnerInvalidOperation {
 			t.Fatalf("空 operation 的真实迁移必须拒绝,得到 err=%v", err)
 		}
@@ -280,11 +392,11 @@ func TestOwnerRepoMySQL(t *testing.T) {
 	t.Run("EpochConflictAndConcurrentBegin", func(t *testing.T) {
 		const player = 302
 		target := testTarget("uid-b")
-		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0); err != nil {
+		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0, 0); err != nil {
 			t.Fatalf("首迁移: %v", err)
 		}
 		// 过期期望 → 冲突并附当前记录。
-		cur, err := repo.BeginTransition(ctx, player, 0, testOpB, OwnerTypeHub, testTarget("uid-b2"), 0)
+		cur, err := repo.BeginTransition(ctx, player, 0, testOpB, OwnerTypeHub, testTarget("uid-b2"), 0, 0)
 		if errcode.As(err) != errcode.ErrOwnerEpochConflict || cur.OwnerEpoch != 1 {
 			t.Fatalf("epoch 冲突: %+v err=%v", cur, err)
 		}
@@ -297,7 +409,7 @@ func TestOwnerRepoMySQL(t *testing.T) {
 			go func(idx int) {
 				defer wg.Done()
 				_, errs[idx] = repo.BeginTransition(ctx, player, 1, ops[idx], OwnerTypeBattle,
-					testTarget(fmt.Sprintf("uid-b-race-%d", idx)), 0)
+					testTarget(fmt.Sprintf("uid-b-race-%d", idx)), 0, 0)
 			}(i)
 		}
 		wg.Wait()
@@ -323,7 +435,7 @@ func TestOwnerRepoMySQL(t *testing.T) {
 		const player = 303
 		oldTarget := testTarget("uid-c-old")
 		newTarget := testTarget("uid-c-new")
-		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeBattle, oldTarget, 0); err != nil {
+		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeBattle, oldTarget, 0, 0); err != nil {
 			t.Fatalf("旧 owner 建立: %v", err)
 		}
 		if _, _, err := repo.Admit(ctx, player, 1, testOpA, oldTarget); err != nil {
@@ -335,7 +447,7 @@ func TestOwnerRepoMySQL(t *testing.T) {
 			t.Fatalf("旧实例续租: %v", err)
 		}
 		const margin = 5 * time.Second
-		rec, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeBattle, newTarget, margin)
+		rec, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeBattle, newTarget, 0, margin)
 		if err != nil {
 			t.Fatalf("迁移到新 owner: %v", err)
 		}
@@ -376,7 +488,7 @@ func TestOwnerRepoMySQL(t *testing.T) {
 		const player = 306
 		hubTarget := testTarget("uid-h-hub")
 		battleTarget := testTarget("uid-h-battle")
-		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, hubTarget, 0); err != nil {
+		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, hubTarget, 0, 0); err != nil {
 			t.Fatalf("hub owner 建立: %v", err)
 		}
 		if _, _, err := repo.Admit(ctx, player, 1, testOpA, hubTarget); err != nil {
@@ -388,7 +500,7 @@ func TestOwnerRepoMySQL(t *testing.T) {
 		}
 		const margin = 5 * time.Second
 		beforeMs := time.Now().UnixMilli()
-		rec, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeBattle, battleTarget, margin)
+		rec, err := repo.BeginTransition(ctx, player, 1, testOpB, OwnerTypeBattle, battleTarget, 0, margin)
 		if err != nil {
 			t.Fatalf("hub→battle 迁移: %v", err)
 		}
@@ -408,7 +520,7 @@ func TestOwnerRepoMySQL(t *testing.T) {
 	t.Run("ReleaseIdempotentLateNoop", func(t *testing.T) {
 		const player = 304
 		target := testTarget("uid-d")
-		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0); err != nil {
+		if _, err := repo.BeginTransition(ctx, player, 0, testOpA, OwnerTypeHub, target, 0, 0); err != nil {
 			t.Fatalf("建立: %v", err)
 		}
 		if _, _, err := repo.Admit(ctx, player, 1, testOpA, target); err != nil {

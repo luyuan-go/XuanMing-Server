@@ -3412,3 +3412,138 @@ immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致
   (MyTeamModel 运行时子树,权威进度确定性投影,CONFIRM 自动开面板,接既有 ConfirmMatch)。
 - 未做(另行拍板):过错方票据挂起 + 缺席者一键续排(用户已提需求,语义待确认);
   contract 期删 SetReady/ready 字段;MatchProgress 增 confirm_deadline_ms(精确倒计时)。
+
+## 2026-08-18 INC-20260818-001:大厅票据 / owner assignment 分叉导致恢复死循环(P0,本机已闭环)
+
+- 现象:PIE 登录进大厅后客户端每 ~1.3s 打一次 GetResumeContext、每 45s 重签票重连 Hub DS,
+  exact ACK 因 owner_target_mismatch 被丢弃,约 146s 后弹恢复面板;进入 BATTLE 后同一恢复机制
+  7s 内确认并停止轮询,排除客户端轮询状态机本身。事故档案:
+  [docs/incidents/2026-08-18-p0-owner-hub-assignment-divergence.md](docs/incidents/2026-08-18-p0-owner-hub-assignment-divergence.md)。
+- 根因不是 owner 单点漏写一列,而是跨服务定序与交付不变量同时破口:①owner 旧实现把同物理
+  实例当 no-op,不接纳新 assignment;②Hub replacement/transfer/drain 在 Redis assignment CAS
+  定案前调用含 owner Begin 副作用的签票 helper,CAS loser 可把 owner 指到未发布 target;
+  ③epoch conflict 后原 target 无当前意图证明的盲重试可覆盖后继 winner;④ACK 的 ADMITTED 快路只比物理实例;
+  ⑤Login 可在同一响应交付 ticket=B 与 owner Resume=A。
+- 对抗复核推翻第一版“同 epoch 原地刷新 assignment/track”方案:真 MySQL 交错证明迟到
+  expect_epoch=0 的旧请求能把 v2 回滚成 v1；同法还会让 BATTLE allocation/track 继承旧
+  epoch/ADMITTED 权限。最终 owner 语义为**完整 target 全等才 no-op**；assignment/allocation/
+  track 变化统一 `epoch+1/PENDING/new operation`,旧 epoch 立即失效。
+- Hub 修复:把签票拆为 CAS 前纯签名与 CAS winner 后 owner bind；Begin 前后重读 Redis 并比
+  完整 ticket binding + writer lease；冲突只允许完整重跑一次 Query→guard→Begin，禁止只换
+  epoch 盲写旧 target。ACK 先比 owner type + target 五字段再允许 ADMITTED
+  幂等快路。Login 交付前再次验签并把票据五字段与 owner Resume 全等比较,不一致扣票返回 WAIT。
+- DS 同型收口:取消 conflict 盲重试，用显式 operation + read-back 判定 commit-then-
+  response-loss；仍 unknown 时保留 allocation/Pod 且扣 READY。claim loser 只读 exact 复核，
+  不成为第二 binder。持久 owner-binding plan/reconciler 增强单列 INC-20260818-002。
+- 当前验证:Owner 真 MySQL 的换发收敛/迟到旧 epoch/Battle allocation+track、Hub CAS loser/
+  真 epoch barrier 交错/ACK exact、DS uncertain commit/claim loser、Login ticket↔Resume 门均有定向回归；
+  四服务全模块与 Linux race 已绿；proto lint/breaking/Go/C++ 生成全通过（wire 不变）。专用 dev
+  玩家后端 A→ReleaseHub→B 事故形状实跑为 assignment 换发、Owner epoch 1→2，ticket/Resume/Owner
+  全等且 mismatch=0。唯一标签 `g796da364-dirty-20260818-014129-inc20260818` 已按 Login 先行、
+  Hub/DS 缩零排旧 Pod/lease并静默 10.4s、Owner 最后的顺序部署到 `pandora-agones`；四服务
+  启动 commit=796da364、旧 RS=0。两轮真实 UE 玩家 Login->Hub 均以同一 exact target 完成
+  ACK/Owner ADMITTED/`ResumeContext confirmed HUB`；第二轮 confirmed 后观察 79.658 秒，新增
+  Resume 请求、额外 Travel、mismatch、deadline、恢复面板均为 0，本机 Hub P0 已闭环。
+  本机停写切换仍不等于生产滚动发布能力，assignment source revision 阻断另见
+  INC-20260818-003；未完成前不得宣称 production-ready。扩展 BATTLE/回 Hub 玩家链已尝试，
+  但在 DS 分配前被既有 StartMatch `3006/team_not_ready` 阻断，按用户要求停止并列 A-009。
+  - **同日落码:对局三段式(准备/战斗/结算)时间轴,用户拍板「不用状态机」+ 冻结深度选 A 纯倒计时**。详见 `docs/design/match-phase-lifecycle.md` §7/§8。**做法是"存时刻不存阶段"**:权威 DS 只持 `PrepareDeadlineSeconds` / `SettleDeadlineSeconds` 两个单调钟时刻(约定 `<=0` = 该段不存在或已过去),阶段是它们的**纯派生投影**——全程无 phase 枚举、无 `SetPhase()`、无转移表,客户端同理(哪一段由三条"剩余秒数"里哪条 `>=0` 派生)。落码:①服务端 `level.proto` 加列 18/19 + `pkg/configtable/level.go` 上限校验 `MaxLevelPhaseDurationSeconds=600`;②UE 侧 `FCfgLevel` 两列、`AMyGameState` 两条复制属性、`PandoraNetProtocolVersion` **10→11**、`PandoraBattleGameMode` 时间轴(复用既有 1s tick 不新建 timer)。
+  - **上一条的四个实现细节,复核时别当疏漏**:①**战斗时限武装点已改**——从"首个玩家进入"改成"准备阶段结束"(`FinishPreparePhase`),准备期不再吃玩家对局时间,这是**对已上线行为的语义变更**;②`bAgonesShutdownDeferredBySettleWindow` 必需——原码通知回流后紧接着 `RequestAgonesShutdownAfterDelay(2.0f)`,**只推迟通知而照常回收 Pod 会让玩家在 DS 消失后才收到回流 RPC**(就是"结算完回不去大厅"),两件事必须一起推迟;③`ArmSettleWindow` 里补起表的分支是防卡死——本局若从未有玩家进入则时间轴没武装过,只记 deadline 而无驱动者 = 玩家永远等不到通知(§9.19),World 缺失时降级为立即通知不留悬空等待;④`IsRosterFullyArrived` 解不出应到人数时返回 **false 而非 true**(返回 true 会让准备阶段恒 0 秒、配的时长静默失效)。另:战斗段 deadline 为 0(不限时)时加了防"大负数被当成已到点"的闸。命名债有意保留(`bBattleTimeLimitArmed`/`ClearBattleTimeLimitTimer` 等现在驱动整条时间轴,但它们在日志文案里是可观测性契约,同 `formSoloMatch` 处置)。
+  - **上一条的三个阻断/待办**:①⚠️ **proto 已加列而 `Table/关卡/g_关卡.xlsx` 表头没加 → 现在跑导表会整表被拒**,两件事必须同批落地(xlsx 是二进制表,须人用 Excel 加"准备时长""结算时长"两列);②⚠️ **`proto_gen` 未跑,XuanMing-Server 当前编译不过**(校验代码已引用 `GetPrepareDurationSeconds` 等未生成的 getter);③**UE 改动未编译**(按既定分工交用户)。另:协议 10→11 意味着旧客户端连不上新 DS,DS 包与客户端包必须同批发布 + 四份 Fleet 一起换 tag。全部新列默认 0 = 三段式不生效 = 与上线前逐字节等价,故"代码先落、表后配"是安全的 expand-then-enable。
+  - **本轮工具坑(已验证,后续照做)**:本机 Git Bash 的 **sed/awk 会静默吃掉 CR** —— 对 `Pandora.cpp` 跑一次 no-op `sed` 就把 CRLF 全打成 LF(5911→5818 字节,CR 93→0)。而这批 UE 源文件的 EOL/BOM 是**逐文件混的**(`CfgLevel.h`=LF/no-BOM、`MyGameState.h`=CRLF/no-BOM、`MyGameState.cpp`=LF/**BOM**、`PandoraBattleGameMode.h`=LF/**BOM**、`.cpp`=LF/no-BOM、`Pandora.cpp`=CRLF/no-BOM),整篇归一化必炸 churn。已写通用补丁器 `scratchpad/patch.ps1`(PowerShell `ReadAllText`/`WriteAllText`,逐文件保 EOL+BOM、片段自动转目标 EOL、OLD 片段命中 0 处或多处直接 throw、写回后回显 eol/bom 供核对),本轮 14 次替换全部原样保住。
+  - **同日补全(用户「代码写全、写到完整位置;UI 交给 Codex」)**:①补 Go 单测 `TestValidatePhaseDurations`(`pkg/configtable/level_api_test.go`,5 例:未配置放行 / 上限内放行 / 恰好卡上限放行 / 两列各自超限被拒);②**补上差点漏掉的"完整位置"—— UE 侧导表登记 `Tool/Table/Cs/Proto/g_关卡.json`**(客户端仓,CRLF+BOM),加两列 `PrepareDurationSeconds` / `SettleDurationSeconds`(`isOptCol: true` + `defaultValue "0"`,与 `BattleDurationSeconds` 同款)。**这一处漏了的后果是静默的**:只加 `FCfgLevel` 的 UPROPERTY 而不登记 schema,DS 侧 `MapCheck.CfgLevel->PrepareDurationSeconds` 恒读 0、整个特性不生效,而编译与单测全绿;③写 Codex 交接书 `Doc/服务器/对局三段式UI_UE侧交接_Codex.md`(照 `副本选择_UE侧交接_Codex.md` 体例:含真实行号、4 条坑、6 条验收、以及"别顺手做"的边界)。
+  - **上一条顺带查实两件事**:①**"proto 加列而 xlsx 没表头 → 整表被拒"已从生成器源码确认成立**(`tools/configtable-gen/internal/tablegen/builder.go:79 checkHeaders`:`padTo(header, len(d.columns))` 会把 xlsx 表头补空到 proto 列数,随后逐列精确比对,缺列会命中"期望 %q 实为 \"\"");同处 `:89` 是反向那条(xlsx 有而 proto 未登记 → 拒)。**xlsx 列序必须与 proto 字段号序一致**,所以新两列要加在"段位池"(字段 17)之后,顺序 准备时长(18) → 结算时长(19)。②`FCfgLevel` 的 `RatingMode` / `RatingPool` 在 `g_关卡.json` **未登记**(而 proto/CfgLevel.h 都有),即客户端侧这两列可能从未被导表填充过 —— 与本次无关、未改,已在交接书 §6 单列待确认。
+
+## 2026-08-18 免 Docker 一键入口自举 PowerShell 7(策划机从此零安装)
+
+- **起因**:免 Docker 那套的卖点是「策划机什么都不用装」,但三个入口开头都是一段
+  `where pwsh` + 「没装就报错退出」——**PowerShell 7 本身仍是必须先手工装的前置**,
+  入口注释里也白纸黑字写着 "What a planner machine still has to install: PowerShell 7"。
+  新机器拿到包双击,第一下就撞这堵墙。
+- **落码**:新增 `tools/scripts/bootstrap_pwsh.cmd`(ASCII / CRLF,cmd.exe 里跑,
+  被三个免 Docker 入口 `call`)。解析顺序:①本机已有 `pwsh` → 直接用,一个字节都不下;
+  ②`run/localinfra/dist/pwsh/pwsh.exe` 已解包 → 直接用;③取官方免安装包 → 校验 sha256
+  → 解包到 ②。取包三条路径与 local_infra.ps1 完全同款:本机 cache → 离线共享盘
+  `PANDORA_LOCALINFRA_MIRROR` → 公网,**三条一视同仁过同一个钉死的 sha256**。
+- **为什么是免安装 zip 不是 msi**(用户给的就是 msi 链接,这里刻意换了):msi 是按机器安装,
+  要本地管理员 + 弹 UAC —— 策划机常常没有管理员权限,而且 Web 管理台是
+  `PANDORA_NONINTERACTIVE=1` 无人值守跑这些入口的,一个 UAC 弹窗就是**永久挂住**。
+  zip 是同一份官方构建:不写注册表、不装服务、不动机器 PATH,卸载 = 删 `run/localinfra`。
+  想要机器级安装的人照常自己装,那样第 ① 步就命中,这套逻辑一行都不会跑。
+  **不退回 Windows PowerShell 5.1**(仓库既有口径),否则会把一个当场的清楚失败
+  变成几分钟后的糊涂失败。
+- **配套**:①`local_infra.ps1` 的 `-Action provision` 多备一份这个包到 cache
+  (**只 provision、不 up**:能跑到 up 的机器必然已有解释器,再下 100MB 是白下),
+  于是「程序一键出策划包」自动把它和 MySQL/Redis/Kafka/JRE/Envoy/mkcert 一起放上共享盘,
+  策划机可**完全离线**自举;②版本 / SHA256 / URL 只写在 `tools/scripts/lib/pwsh_bootstrap.pin`
+  一处,cmd 与 ps1 共读,杜绝「自举出 7.6.5、共享盘备的是 7.6.4」这种漂移;
+  ③自举成功时把该目录 **prepend 进本进程树 PATH**(不动机器 PATH)——
+  仓库里 `start.ps1` / `envoy_cert.ps1` / `configtable_sync.ps1` 有多处用**裸 `& pwsh`**
+  自我重入,不接这一步会在半路炸;④三个入口改用 `"%PS%"` 带引号调用(自举出来的是全路径,
+  仓库放在带空格的目录下不加引号必炸),并把自举失败时的 `pause` 也纳入
+  `PANDORA_NONINTERACTIVE` 判定(原来是无条件 pause,无人值守下同样会挂)。
+- **钉死的版本**:PowerShell 7.6.5,`PowerShell-7.6.5-win-x64.zip`,
+  sha256 `32eb8f6c…2434ea`。**取值来自上游 release notes 的 "SHA256 Hashes of the release
+  artifacts" 段**(不是"我下下来自己算的"——那只是把第一次下到的东西当标准),
+  2026-08-18 与实下文件核对一致(106,319,290 字节,解包后 `pwsh -v` = 7.6.5)。
+  换版本时必须重走一遍这道核对。
+- **契约测试** `tools/scripts/tests/pwsh_bootstrap_contract_test.ps1`(已进 `ci_backend.ps1`
+  的 `$contractTests`),6 组:pin 自洽(含"只改 URL 忘改 sha"这类换版事故)、
+  单一事实来源(sha 不许在别处再抄)、**入口 .cmd 纯 ASCII 无 BOM 无 chcp**
+  (2026-08-06 那条铁律此前零测试)、入口接线、**假包真跑一遍**(临时目录 + 收窄 PATH 造出
+  「本机没 pwsh」,共享盘塞个同名假包 → 必须非零退出、必须不解包、坏包必须从 cache 删掉)、
+  以及本机 cache 已备料时的**全链路自举**(没备料就明确 skip,不假装绿)。
+- **验证**:`-Action provision` 真下真校验通过(已落 `run/localinfra/cache/`);
+  在收窄 PATH 的临时树里完整模拟「一台没有 pwsh 的机器」——从共享盘取包 → 校验 → 解包 →
+  `PANDORA_PWSH` 指向解包结果 → **裸 `pwsh` 也能解析到**(`where pwsh` 命中该目录,版本 7.6.5);
+  契约测试 7 项变异逐个验证会真红,改动文件逐字节还原核对无误。
+- **范围**:只接三个 `免Docker` 入口。k8s / 出策划包 / 导表 那几个是程序用的,保持原来的
+  「没 pwsh 就明确报错」,没有跟着改。
+
+## 2026-08-18 组队开局:两种准备模式按关卡表二选一(推翻 08-17 的一刀切)
+
+- **拍板**:「匹配前准备」与「匹配成功后确认」是**两种并存模式**,原来那种也是对的,
+  按关卡表逐图选。08-13 方案 A(ready 是门槛)与 08-17(全服取消门槛)两次都是全局一刀切;
+  而固定队副本要不要先准备、排位要不要接受框,本就是每张图各自的产品决定 →
+  按 `CLAUDE.md §17.1` 落成关卡表一列(`g_关卡.xlsx`「准备模式」/ `LevelRow.ready_mode=20`)。
+- **两模式互斥**:`PRE_READY`(=1)要求 `State==READY` 才放行组票、撮合成功**直接进场不弹确认框**;
+  `POST_CONFIRM`(=2,**留空同**)无门槛、撮合成功进 15s 确认期。刻意不提供「两道都要」
+  (同一局点两次准备)与「两道都不要」(退回事故形状)。
+- **`ready` 一次一兑两种模式都保留**:`BeginTeamMatch` 无条件清 ready + 转 FORMING。
+  `PRE_READY` 下这是必需的 —— 不兑掉队长就能拿同一次准备连开两局(INC-20260813-001 形状);
+  契约测试断言「消费后用同一次准备再开第二局必须被拒」。
+- **判定单点**:`matchmaker.readyModeForMap(map_id)` 解析一次,经
+  `BeginTeamMatchRequest.require_ready` 传给 team,并用同一个判定决定要不要确认期
+  (分开判会出现「既要准备又要接受」或「两道都没有」)。不让 team 自己查表:权威 map_id 是
+  本次 StartMatch 的那一个,team 记录里的只是队长面板选择(§9.22 不建第二份判定)。
+- **`auto_confirm_match` 语义收窄**:最终判定 = `开关 || 本图 PRE_READY`;开关只剩
+  「全图强制跳过」一个语义(无 UI 脚本用),`PRE_READY` 图的跳过关不掉。
+- **滚动升级零 breaking**:新字段/新列的零值都指向 `POST_CONFIRM` = 改动前行为。
+  旧 matchmaker→新 team、新 matchmaker→旧 team、新二进制+旧批次表,三种组合都退化成无门槛,
+  **存量表一个字都不用改**。
+- **客户端**:准备按钮 / 成员准备栏按 `IsPreMatchReadyRequired()`(读同一列)显隐,确认弹窗保留
+  —— r2095/r2096 删掉的准备 UI 按原样恢复成**条件分支**,不是整体回退(整体回退会把确认弹窗
+  也一起弄没)。WBP 里 `Btn_ReadyToggle` / `Txt_MemberReady_N` 控件本体当初没清,**无需改蓝图**。
+  `hero_id` 断供随 `PRE_READY` 图自动恢复(`SetReady` 捎带),`POST_CONFIRM` 图仍回落 0。
+- **验证**:team / matchmaker / pkg/configtable / tools/configtable-gen / robot/stress 五处
+  build+test 全绿,gofmt 干净;新增用例覆盖两模式放行与拒绝、门槛排在租约冲突之后、
+  `readyModeForMap` 五种回退、`formMatch` 端到端确认期开关。UE 编译由用户执行。
+- **未做 / 待办**:①`configtable/dist` **刻意没重导** —— 新列全空,protojson 省略零值,
+  产物逐字节不变;而源表 xlsx 尚未进 SVN,此时重导只会写进一个假 `source_rev`(违反溯源纪律)。
+  策划提交 xlsx 后按真实 rev 重导一次即可。②「过错方自动续排」仍待拍板。
+
+- **续(同日)**:按用户拍板已把「准备模式」值写进 `g_关卡.xlsx` —— 6(1V1战斗)与 7(松林镇)填 2
+  =赛后确认,其余 9 张战斗关卡(4/5/8/9/10/11/12/13/14)填 1=赛前准备,1/2/3 非战斗行留空。
+  `-sync` 表头对齐通过,`[OK] level 14 行` 说明新列与类别校验都过。
+  **但 dist 仍未重导**:整批被**另一张并发改动的表**卡住 —— `角色/j_角色等级.xlsx` 第 31 行
+  (角色 1012)「击杀经验」必填列为空(该文件 mtime 05:46,在本批次上一次导表成功之后被改),
+  导表按 §9.15 fail-closed 整批不产出。补上那一格后重导一次,准备模式即生效;
+  该格是策划数据,不代填。
+- **再续(同日,卡点已解)**:用户拍板把 `j_角色等级.xlsx` 第 31 行(角色 1012)「击杀经验」填 **0**
+  (与相邻 1011/1013/3001 一致),导表随即通过,`configtable/dist` 已重导为 version 20260818002,
+  `source_rev=svn-r2110-local-readymode`(**刻意标 local**:两张源表 xlsx 尚未进 SVN,
+  这批产物不可从某个干净 rev 复现;策划提交后应按真实 rev 再导一次覆盖本批次)。
+  `level.json` 已带 `ready_mode`:6/7 = 2,4/5/8/9/10/11/12/13/14 = 1。
+  ⚠️ **本批次顺带带进了期间别人改的表**:`role.json`(+13)、`role_level.json`(+8)、
+  `skill.json`(+52,技能 63→67 行)。提交 dist 时要么连同这些一起说明,要么等对方先把源表提交。
+  pkg/configtable(含钉死真实 dist 的契约测试)/ matchmaker / team 三处测试全绿。

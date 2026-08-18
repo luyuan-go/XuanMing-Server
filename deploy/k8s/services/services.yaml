@@ -12,6 +12,22 @@
 # 新 Pod 必须 health SERVING 才进 Service Endpoints 接流量;滚动更新时旧 Pod 摘除即不再接新请求。
 #
 # 这个文件很长但全是同构片段;新增服务照抄一段、改 5 处(name/image/configKey/port/probe port)即可。
+#
+# ⚠️ 本文件里的 `-dirty-` 镜像 tag 不是发布身份(2026-08-18)
+#
+# tag 形如 `g<commit>-dirty-<时间戳>` 表示它由**带未提交改动的工作树**构建:
+# 同一个 tag 名在不同机器 / 不同时刻可以对应完全不同的二进制,`g<commit>` 只说明当时
+# 的 HEAD,不说明实际编译了什么。它只对**本机 / minikube 联调**有效(镜像也只存在于
+# 本机),不得据此推断线上跑的是哪份源码。
+#
+# 要得到可作为发布身份的 tag,必须:①工作树干净(无未提交改动);②从该提交构建;
+# ③按 §9.21 走 online 流程,由 runtime overlay 固定为 `repo@sha256:digest` 后部署。
+# 两端都**不准用 `:dev` 滚动 tag**(§9.21 / INC-20260727-001 P1-4)。
+#
+# 当前钉定的 `...-inc20260818` 一批是 INC-20260818-001 期间的本机构建,**不含**其后
+# 落码的 INC-20260818-003 来源版本协议与 login fail-closed 归属校验;要联调那批改动
+# 必须重新构建并换 tag。另注意 owner 新镜像**要求 owner_record 已有
+# hub_source_revision 列**(启动即断言,缺列拒启),部署顺序见该事故档案 §5。
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -36,7 +52,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: login
-          image: pandora/login:g125b5bf78af6-dirty-20260817-220730
+          image: pandora/login:g796da364-dirty-20260818-014129-inc20260818
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
@@ -670,7 +686,7 @@ spec:
     spec:
       containers:
         - name: owner
-          image: pandora/owner:g125b5bf78af6-dirty-20260817-220730
+          image: pandora/owner:g796da364-dirty-20260818-014129-inc20260818
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20017 } ]
@@ -736,7 +752,7 @@ spec:
       containers:
         - name: ds-allocator
           # :dev 回归理由见 matchmaker 注释(修复已入 main,临时钉定动机消失)。
-          image: pandora/ds-allocator:g125b5bf78af6-dirty-20260817-220730
+          image: pandora/ds-allocator:g796da364-dirty-20260818-014129-inc20260818
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
@@ -817,7 +833,7 @@ spec:
       serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
       containers:
         - name: hub-allocator
-          image: pandora/hub-allocator:g125b5bf78af6-dirty-20260817-220730
+          image: pandora/hub-allocator:g796da364-dirty-20260818-014129-inc20260818
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }

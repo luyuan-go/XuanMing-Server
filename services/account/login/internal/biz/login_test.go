@@ -49,10 +49,18 @@ type fakeAccountRepo struct {
 	playerNoFn   func(context.Context) (uint64, error)
 }
 
-func (f *fakeAccountRepo) FindByAccount(_ context.Context, _ string) (uint64, string, error) {
-	return f.playerID, f.passwordHash, nil
+func (f *fakeAccountRepo) FindByAccount(_ context.Context, _ string) (data.AccountIdentity, error) {
+	return data.AccountIdentity{AccountID: f.playerID, PlayerID: f.playerID, PasswordHash: f.passwordHash}, nil
 }
-func (f *fakeAccountRepo) CreateAccount(_ context.Context, _ uint64, _, _ string) error { return nil }
+func (f *fakeAccountRepo) FindByAccountID(_ context.Context, accountID uint64) (data.AccountIdentity, error) {
+	return data.AccountIdentity{AccountID: accountID, PlayerID: f.playerID, PasswordHash: f.passwordHash}, nil
+}
+func (f *fakeAccountRepo) CreateAccount(_ context.Context, _, _ uint64, _, _ string) error {
+	return nil
+}
+func (f *fakeAccountRepo) BackfillAccountID(_ context.Context, _, candidate uint64) (uint64, error) {
+	return candidate, nil
+}
 func (f *fakeAccountRepo) CheckBanned(_ context.Context, _ uint64, _ string) (bool, error) {
 	return f.banned, nil
 }
@@ -328,7 +336,7 @@ func TestLogin_NoSelectedRoleReturnsRoleRequiredWithoutHubSideEffects(t *testing
 	uc := newTestUsecaseWithNotifier(t, hub, notifier)
 	uc.roleRepo = &fakeRoleRepo{roleID: 0}
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -353,7 +361,7 @@ func TestLogin_RoleAuthorityFailureReturnsWaitWithoutHubSideEffects(t *testing.T
 	uc := newTestUsecaseWithNotifier(t, hub, notifier)
 	uc.roleRepo = &unavailableRoleRepo{err: errcode.New(errcode.ErrUnavailable, "role authority unavailable")}
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_ROLE_UNKNOWN)
 	if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
 		t.Fatalf("ROLE_UNKNOWN must not allocate/notify: hub_player=%d pending=%d",
@@ -377,7 +385,7 @@ func TestLogin_HubAssignerSuccess(t *testing.T) {
 	}
 	hub.res.HubTicket = tk
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -409,7 +417,7 @@ func TestLogin_PlayerNoTimeoutDoesNotCancelParentLogin(t *testing.T) {
 	parent, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	started := time.Now()
-	res, err := uc.Login(parent, "acc", "pw", "dev-1")
+	res, err := uc.Login(parent, "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -427,7 +435,7 @@ func TestLogin_PlayerNoTimeoutDoesNotCancelParentLogin(t *testing.T) {
 func TestLogin_HubAssignerNil_FallbackSelfSign(t *testing.T) {
 	uc := newTestUsecase(t, nil)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -448,7 +456,7 @@ func TestLogin_HubAssignerError_FallbackSelfSign(t *testing.T) {
 	hub := &fakeHubAssigner{err: errors.New("hub_allocator down")}
 	uc := newTestUsecase(t, hub)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login should fall back, got err: %v", err)
 	}
@@ -486,7 +494,7 @@ func TestLogin_CellRoute_ReturnsLocation(t *testing.T) {
 	uc := newTestUsecase(t, nil)
 	uc.SetCellRouter(singleCellRouter(t, 7, 77))
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -499,7 +507,7 @@ func TestLogin_CellRoute_ReturnsLocation(t *testing.T) {
 func TestLogin_CellRoute_NilRouterZero(t *testing.T) {
 	uc := newTestUsecase(t, nil) // 不调 SetCellRouter
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -514,7 +522,7 @@ func TestLogin_CellRoute_HubTicketBindsCell(t *testing.T) {
 	uc := newTestUsecase(t, nil)
 	uc.SetCellRouter(singleCellRouter(t, 7, 77))
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -532,7 +540,7 @@ func TestLogin_CellRoute_HubTicketBindsCell(t *testing.T) {
 func TestLogin_CellRoute_NilRouterHubTicketZeroCell(t *testing.T) {
 	uc := newTestUsecase(t, nil) // 不调 SetCellRouter
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -601,29 +609,55 @@ func TestIssueDSTicket_NilRouterZeroCell(t *testing.T) {
 
 // devFakeRepo 模拟 MySQL 行为:按 account 名查/建,验证免密模式下的懒注册稳定性。
 type devFakeRepo struct {
-	accounts map[string]uint64 // account -> player_id
-	hashes   map[string]string // account -> bcrypt password_hash
-	created  []string          // 记录被 CreateAccount 的账号(断言"只建一次")
+	accounts   map[string]uint64 // account -> player_id(角色实体 ID)
+	accountIDs map[string]uint64 // account -> account_id(账号身份;0 = 存量行尚未补铸)
+	hashes     map[string]string // account -> bcrypt password_hash
+	created    []string          // 记录被 CreateAccount 的账号(断言"只建一次")
 }
 
 func newDevFakeRepo() *devFakeRepo {
-	return &devFakeRepo{accounts: map[string]uint64{}, hashes: map[string]string{}}
+	return &devFakeRepo{
+		accounts:   map[string]uint64{},
+		accountIDs: map[string]uint64{},
+		hashes:     map[string]string{},
+	}
 }
 
-func (r *devFakeRepo) FindByAccount(_ context.Context, account string) (uint64, string, error) {
+func (r *devFakeRepo) FindByAccount(_ context.Context, account string) (data.AccountIdentity, error) {
 	if id, ok := r.accounts[account]; ok {
-		return id, r.hashes[account], nil
+		return data.AccountIdentity{AccountID: r.accountIDs[account], PlayerID: id, PasswordHash: r.hashes[account]}, nil
 	}
-	return 0, "", errcode.New(errcode.ErrLoginAccountNotFound, "account=%s not found", account)
+	return data.AccountIdentity{}, errcode.New(errcode.ErrLoginAccountNotFound, "account=%s not found", account)
 }
-func (r *devFakeRepo) CreateAccount(_ context.Context, playerID uint64, account, passwordHash string) error {
+func (r *devFakeRepo) FindByAccountID(_ context.Context, accountID uint64) (data.AccountIdentity, error) {
+	for account, id := range r.accountIDs {
+		if id == accountID {
+			return data.AccountIdentity{AccountID: accountID, PlayerID: r.accounts[account], PasswordHash: r.hashes[account]}, nil
+		}
+	}
+	return data.AccountIdentity{}, errcode.New(errcode.ErrLoginAccountNotFound, "account_id=%d not found", accountID)
+}
+func (r *devFakeRepo) CreateAccount(_ context.Context, accountID, playerID uint64, account, passwordHash string) error {
 	if _, ok := r.accounts[account]; ok {
 		return errcode.New(errcode.ErrAlreadyExists, "account=%s exists", account)
 	}
 	r.accounts[account] = playerID
+	r.accountIDs[account] = accountID
 	r.hashes[account] = passwordHash
 	r.created = append(r.created, account)
 	return nil
+}
+func (r *devFakeRepo) BackfillAccountID(_ context.Context, playerID, candidate uint64) (uint64, error) {
+	for account, id := range r.accounts {
+		if id == playerID {
+			if existing := r.accountIDs[account]; existing != 0 {
+				return existing, nil
+			}
+			r.accountIDs[account] = candidate
+			return candidate, nil
+		}
+	}
+	return 0, errcode.New(errcode.ErrLoginAccountNotFound, "player_id=%d not found", playerID)
 }
 func (r *devFakeRepo) CheckBanned(_ context.Context, _ uint64, _ string) (bool, error) {
 	return false, nil
@@ -726,7 +760,7 @@ func TestLogin_DevSkipPassword_AutoProvision(t *testing.T) {
 	repo := newDevFakeRepo()
 	uc := newDevSkipUsecase(t, repo)
 
-	res1, err := uc.Login(context.Background(), "anybody", "whatever", "dev-1")
+	res1, err := uc.Login(context.Background(), "anybody", "whatever", "dev-1", false)
 	if err != nil {
 		t.Fatalf("first login: %v", err)
 	}
@@ -734,7 +768,7 @@ func TestLogin_DevSkipPassword_AutoProvision(t *testing.T) {
 		t.Fatalf("PlayerID = 0, want auto-provisioned id")
 	}
 
-	res2, err := uc.Login(context.Background(), "anybody", "another-pw", "dev-2")
+	res2, err := uc.Login(context.Background(), "anybody", "another-pw", "dev-2", false)
 	if err != nil {
 		t.Fatalf("second login: %v", err)
 	}
@@ -753,7 +787,7 @@ func TestLogin_DevSkipPassword_ExistingAccountWrongPassword(t *testing.T) {
 	repo.accounts["known"] = 777
 	uc := newDevSkipUsecase(t, repo)
 
-	res, err := uc.Login(context.Background(), "known", "definitely-wrong", "dev-1")
+	res, err := uc.Login(context.Background(), "known", "definitely-wrong", "dev-1", false)
 	if err != nil {
 		t.Fatalf("login with wrong password should pass in skip mode: %v", err)
 	}
@@ -773,7 +807,7 @@ func TestLogin_DevAutoRegister_FirstLoginRegisters(t *testing.T) {
 	repo := newDevFakeRepo()
 	uc := newDevAutoRegUsecase(t, repo)
 
-	res1, err := uc.Login(context.Background(), "newbie", "pw1", "dev-1")
+	res1, err := uc.Login(context.Background(), "newbie", "pw1", "dev-1", false)
 	if err != nil {
 		t.Fatalf("first login (register): %v", err)
 	}
@@ -785,7 +819,7 @@ func TestLogin_DevAutoRegister_FirstLoginRegisters(t *testing.T) {
 	}
 
 	// 同密码复登 → bcrypt 校验通过,同一 player_id。
-	res2, err := uc.Login(context.Background(), "newbie", "pw1", "dev-2")
+	res2, err := uc.Login(context.Background(), "newbie", "pw1", "dev-2", false)
 	if err != nil {
 		t.Fatalf("second login (verify): %v", err)
 	}
@@ -794,7 +828,7 @@ func TestLogin_DevAutoRegister_FirstLoginRegisters(t *testing.T) {
 	}
 
 	// 错密码 → 仍拦(假注册不等于免密)。
-	if _, err := uc.Login(context.Background(), "newbie", "wrong-pw", "dev-3"); err == nil {
+	if _, err := uc.Login(context.Background(), "newbie", "wrong-pw", "dev-3", false); err == nil {
 		t.Errorf("wrong password should be rejected when only auto_register is on")
 	} else if errcode.As(err) != errcode.ErrLoginPasswordMismatch {
 		t.Errorf("err code = %d, want ErrLoginPasswordMismatch(%d)", errcode.As(err), errcode.ErrLoginPasswordMismatch)
@@ -813,7 +847,7 @@ func TestLogin_BattleReconnect_ReturnsBattleAndSkipsHub(t *testing.T) {
 	// hub 传 nil:命中重连时根本不该走 hub 分配,自签回退也不该发生(battle 分支提前 return)。
 	uc := newTestUsecaseWithNotifier(t, nil, notifier)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -853,7 +887,7 @@ func TestLogin_BattleReconnect_UsesAuthoritativeProjectionAddress(t *testing.T) 
 	}})
 	uc.SetBattleTicketIssuer(ticketUC)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -876,7 +910,7 @@ func TestLogin_BattleReconnect_EmptyAuthoritativeAddressDoesNotAssignHub(t *test
 	ticketUC.SetBattleTicketAuthorizer(&loginBattleAuthorizerFake{returnEmpty: true})
 	uc.SetBattleTicketIssuer(ticketUC)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
 		t.Fatalf("empty target mutated hub/login-pending: hub_player=%d pending=%d",
@@ -894,7 +928,7 @@ func TestLogin_BattleReconnect_RosterAuthorityFailureDoesNotAssignHub(t *testing
 	})
 	uc.SetBattleTicketIssuer(ticketUC)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 {
 		t.Fatalf("roster rejection called AssignHub for player %d", hub.gotPlayerID)
@@ -910,7 +944,7 @@ func TestLogin_BattleReconnect_MissingIssuerDoesNotAssignHub(t *testing.T) {
 	uc := newTestUsecaseWithNotifier(t, hub, notifier)
 	uc.SetBattleTicketIssuer(nil)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
 		t.Fatalf("missing issuer mutated hub/login-pending: hub_player=%d pending=%d",
@@ -944,7 +978,7 @@ func TestLogin_BattleReconnect_RecoversReadyMatchWhenPresenceMissing(t *testing.
 	}}
 	uc.SetMatchContextResolver(resolver)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -969,7 +1003,7 @@ func TestLogin_BattleReconnect_QueuedMatchStillGoesHub(t *testing.T) {
 		Stage: matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_QUEUED,
 	}})
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -984,7 +1018,7 @@ func TestLogin_BattleReconnect_NotInBattleFallsToHub(t *testing.T) {
 	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}}
 	uc := newTestUsecaseWithNotifier(t, nil, notifier) // hub=nil → 自签回退
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -1005,7 +1039,7 @@ func TestLogin_BattleReconnect_QueryErrorFallsToHub(t *testing.T) {
 	notifier := &fakeNotifier{blErr: errcode.New(errcode.ErrInternal, "locator down")}
 	uc := newTestUsecaseWithNotifier(t, nil, notifier)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login should not fail when locator query errors: %v", err)
 	}
@@ -1022,7 +1056,7 @@ func TestLogin_B1RequiresConfiguredLocatorBeforeHubAssignment(t *testing.T) {
 	uc := newTestUsecaseWithNotifier(t, hub, nil)
 	uc.SetRequireHubAssignmentBinding(true)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 {
 		t.Fatalf("Hub allocator called before locator proof, player=%d", hub.gotPlayerID)
@@ -1035,7 +1069,7 @@ func TestLogin_B1LocatorQueryFailureDoesNotAssignHub(t *testing.T) {
 	uc := newTestUsecaseWithNotifier(t, hub, notifier)
 	uc.SetRequireHubAssignmentBinding(true)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if notifier.getN != battleLocationQueryRetries {
 		t.Fatalf("locator query count=%d, want %d", notifier.getN, battleLocationQueryRetries)
@@ -1060,7 +1094,7 @@ func TestLogin_B1NotifyLoginPendingFailureDoesNotDeliverHubTicket(t *testing.T) 
 	uc.v2Verifier = keys.verifier
 	uc.SetRequireHubAssignmentBinding(true)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 	if hub.gotPlayerID != 0 || notifier.loginPendingN != 1 {
 		t.Fatalf("hub_player=%d pending_calls=%d, want 0/1", hub.gotPlayerID, notifier.loginPendingN)
@@ -1077,14 +1111,60 @@ func TestLogin_B1LocatorPendingSucceedsBeforeHubAssignment(t *testing.T) {
 	uc := newTestUsecaseWithNotifier(t, hub, notifier)
 	uc.v2Verifier = keys.verifier
 	uc.SetRequireHubAssignmentBinding(true)
+	owner := stableTestOwnerPlacement(ownerTypeHub)
+	owner.InstanceUID = "uid-hub-stable-1"
+	owner.InstanceEpoch = 7
+	owner.AssignmentOrAllocationID = "assignment-42-v7"
+	uc.SetOwnerPlacementQuerier(&fakeOwnerPlacementQuerier{view: owner})
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil || res == nil || res.HubTicket != ticket {
 		t.Fatalf("result=%+v ticket_match=%v err=%v", res, res != nil && res.HubTicket == ticket, err)
 	}
 	if hub.gotPlayerID != 42 || notifier.loginPendingN != 1 {
 		t.Fatalf("hub_player=%d pending_calls=%d, want 42/1", hub.gotPlayerID, notifier.loginPendingN)
 	}
+}
+
+// allocator 票据与 owner Resume 各自合法但 target 不同，也不得出现在同一 LoginResponse。
+// 这是 2026-08-17 事故的原样形状：ticket=B、owner=A、物理 pod 甚至可以相同。
+func TestLogin_WithholdsHubTicketWhenOwnerResumeTargetDiffers(t *testing.T) {
+	keys := newHubV2TestKeys(t)
+	ticket, _ := signHubV2ForResolve(t, keys, "", nil)
+	hub := &fakeHubAssigner{res: &data.HubAssignment{
+		HubDSAddr: "10.0.0.9:7777", HubTicket: ticket, HubPodName: "hub-stable-1", ShardID: 7,
+	}}
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier) // 默认 owner=hub-assignment-1，与票中 v7 不同。
+	uc.v2Verifier = keys.verifier
+	uc.SetRequireHubAssignmentBinding(true)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
+	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
+	if hub.gotPlayerID != 42 || notifier.loginPendingN != 1 {
+		t.Fatalf("assignment still executes once before exact post-check: hub_player=%d pending=%d",
+			hub.gotPlayerID, notifier.loginPendingN)
+	}
+}
+
+func TestLogin_WithholdsHubTicketWhenOwnerResumeTrackDiffers(t *testing.T) {
+	keys := newHubV2TestKeys(t)
+	ticket, _ := signHubV2ForResolve(t, keys, "", nil) // v2 ticket release_track=stable
+	hub := &fakeHubAssigner{res: &data.HubAssignment{
+		HubDSAddr: "10.0.0.9:7777", HubTicket: ticket, HubPodName: "hub-stable-1", ShardID: 7,
+	}}
+	uc := newTestUsecaseWithNotifier(t, hub, &fakeNotifier{bl: data.BattleLocation{InBattle: false}})
+	uc.v2Verifier = keys.verifier
+	uc.SetRequireHubAssignmentBinding(true)
+	owner := stableTestOwnerPlacement(ownerTypeHub)
+	owner.InstanceUID = "uid-hub-stable-1"
+	owner.InstanceEpoch = 7
+	owner.AssignmentOrAllocationID = "assignment-42-v7"
+	owner.ReleaseTrack = auth.ReleaseTrackCanary
+	uc.SetOwnerPlacementQuerier(&fakeOwnerPlacementQuerier{view: owner})
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
+	requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 }
 
 func TestLogin_LegacyNotifyLoginPendingFailureRemainsBestEffort(t *testing.T) {
@@ -1094,7 +1174,7 @@ func TestLogin_LegacyNotifyLoginPendingFailureRemainsBestEffort(t *testing.T) {
 	}
 	uc := newTestUsecaseWithNotifier(t, nil, notifier)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil || res == nil || res.HubTicket == "" {
 		t.Fatalf("legacy weak dependency changed: result=%+v err=%v", res, err)
 	}
@@ -1113,7 +1193,7 @@ func TestLogin_BattleReconnect_TransientErrorRetriesThenReconnects(t *testing.T)
 	}
 	uc := newTestUsecaseWithNotifier(t, nil, notifier)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -1168,7 +1248,7 @@ func TestLogin_BattleReconnect_ResumeCarriesCanonicalGameMode(t *testing.T) {
 			}}
 			uc.SetMatchContextResolver(resolver)
 
-			res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+			res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 			if err != nil {
 				t.Fatalf("Login: %v", err)
 			}
@@ -1222,7 +1302,7 @@ func TestLogin_BattleReconnect_B1FailClosedWhenGameModeUnavailable(t *testing.T)
 			uc.SetMatchContextResolver(tc.resolver)
 			uc.SetRequireHubAssignmentBinding(true)
 
-			res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+			res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 			requireLoginWait(t, res, err, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN)
 			if authorizer.authorizeCalls != 0 {
 				t.Fatalf("ticket issued %d times on rejected resume path, want 0 (no side effects)", authorizer.authorizeCalls)
@@ -1243,7 +1323,7 @@ func TestLogin_BattleReconnect_LocalDegradesWithoutResolver(t *testing.T) {
 	// owner 是归属唯一权威:presence 不能单独授权回原局(§9.22)。
 	uc.SetOwnerPlacementQuerier(&fakeOwnerPlacementQuerier{view: stableTestOwnerPlacement(ownerTypeBattle)})
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -1274,7 +1354,7 @@ func TestLogin_BattleReconnect_PresenceMissReadyClaimCarriesGameMode(t *testing.
 	}}
 	uc.SetMatchContextResolver(resolver)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1", false)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}

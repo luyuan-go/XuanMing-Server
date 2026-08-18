@@ -9,13 +9,17 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/placement"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
 )
@@ -31,6 +35,16 @@ const (
 	ownerPhasePending  int8 = 1
 	ownerPhaseAdmitted int8 = 2
 )
+
+// errOwnerBeginOutcomeUnknown 表示 Begin 的服务端提交结果无法判定。调用方必须保留
+// allocation/Pod 与本批已写 owner，不能按普通失败回滚或清理；否则可能留下指向死 Pod
+// 的 owner。它只作为进程内控制流 cause，对客户端仍统一暴露 ErrUnavailable。
+var errOwnerBeginOutcomeUnknown = errors.New("owner Begin outcome unknown")
+
+// ownerBeginReadbackBudget 是 Begin 非 epoch-conflict 失败后的独立判定预算。Begin 的
+// 入站 ctx 可能正因 transport deadline 失效，故回读必须 detach；2s 与 QueryOwner 单次
+// RPC 的默认上界同量级，足以确认 requested operation 是否已提交。
+const ownerBeginReadbackBudget = 2 * time.Second
 
 // ownerAdmittedStaleTTL 是 census 已准入缓存项(ownerAdmitted,key=instanceUID|playerID)的
 // 最大保鲜期。活实例每次心跳 census 对在场玩家续期 last-touch;超过本值未续期 = 其所属 Battle
@@ -56,8 +70,9 @@ func sweepStaleOwnerAdmitted(admitted *sync.Map, cutoff time.Time) {
 // OwnerAuthority 是 owner 权威的调用面(Query/Begin/Admit/Release)。
 // 由 data.GrpcOwnerLeaseRenewer 实现(与租约续写共用连接);可为 nil(未启用)。
 //
-// BeginTransition 回传记录:成功时是新记录(其 owner_epoch + operation_id 是精确回滚的
-// 唯一凭据),EPOCH_CONFLICT 时是权威当前记录。契约见 owner.proto BeginTransitionResponse。
+// BeginTransition 回传权威最终记录:真实写时其 owner_epoch + operation_id 是精确回滚的
+// 唯一凭据;同 target no-op 时是既有记录;EPOCH_CONFLICT 时是权威当前记录。
+// 契约见 owner.proto BeginTransitionResponse。
 type OwnerAuthority interface {
 	QueryOwner(ctx context.Context, playerID uint64) (data.OwnerRecordView, error)
 	BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target data.OwnerTargetView) (data.OwnerRecordView, error)
@@ -72,9 +87,11 @@ func (u *AllocatorUsecase) SetOwnerAuthority(a OwnerAuthority) {
 
 // beginOnePlayer 为单个玩家把 owner 权威推进到 target(contract 阶段:强依赖)。
 //
-// 同实例收敛与 operation_id 铸造都已下沉到 owner 的行锁事务:
+// 同实例收敛已下沉到 owner 的行锁事务:
 //   - 本地 Query→比对→Begin 是先查再存(§9.22 明令禁止),判定与写入不在同一线性化点;
-//   - 调用方自铸 operation 会让每次投递产生新 operation,§9.23 要求的稳定 operation 失效。
+//   - DS 批量 Begin 需要精确补偿 provenance,故每玩家传显式 UUIDv4 operation。真实写会
+//     原样回传该 operation；并发同 target no-op 返回既有 operation,调用方据此绝不把别人
+//     已写的记录纳入自己的 rollback。同 target 重投递不会覆盖既有 operation,稳定性不变。
 //
 // 顺带修掉一个洞:本文件原先的同实例判定只比 pod+uid,**不含 instance_epoch**
 // (hub_allocator 侧复审 P1-3 已加、这边一直没加)。§9.22 要求 instance epoch 变化
@@ -82,27 +99,87 @@ func (u *AllocatorUsecase) SetOwnerAuthority(a OwnerAuthority) {
 // 漏掉本应发生的 owner 迁移。权威侧的判定含 instance_epoch,下沉后自动补齐。
 //
 // Query 仍要发:取 CAS 期望值 expect_epoch。与 Begin 之间被别的写者推进属 CAS 设计内
-// 竞争,权威回 EPOCH_CONFLICT——重查一次再试;仍冲突则 fail-closed 交调用方整体重试。
-// 返回权威回传的新记录:调用方要用它的 owner_epoch + operation_id 做精确回滚。
+// 竞争,权威回 EPOCH_CONFLICT。这里不能拿原 allocation/target 重查 epoch 后盲重试:
+// conflict 可能正是更新的归属已经胜出,第二次写旧 target 会把 winner 回滚。强调用方
+// 重走整条分配链并重读 allocation。
+//
+// 成功也不能只看 nil error:滚动升级期间旧 owner binary 可能把同物理实例、不同 allocation
+// 当作 no-op,原样回传旧记录。只有回传记录与本次完整 target exact 且带有效 fencing/幂等
+// 锚点,调用方才可把它纳入精确回滚凭据并继续交付 READY。
+//
+// 非 EPOCH_CONFLICT 的 RPC 错误也不能直接当作未提交：服务端可能已经 commit requested
+// operation，只是回包丢失。此时用独立 ctx one-shot Query 回读；exact+requested operation
+// 证明本次创建，exact+其他 operation 证明既有同 target 已收敛。若回读也失败则返回
+// errOwnerBeginOutcomeUnknown，要求上层保留 allocation/Pod，绝不能猜测性 cleanup。
 func beginOnePlayer(ctx context.Context, auth OwnerAuthority, playerID uint64,
-	ownerType int8, target data.OwnerTargetView) (data.OwnerRecordView, error) {
-	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		rec, qerr := auth.QueryOwner(ctx, playerID)
-		if qerr != nil {
-			// 查询不可判定 → UNKNOWN,绝不当作"无归属"继续(§9.22 禁冒充 OFFLINE/空闲)。
-			return data.OwnerRecordView{}, qerr
-		}
-		got, berr := auth.BeginTransition(ctx, playerID, rec.OwnerEpoch, "", ownerType, target)
-		if berr == nil {
-			return got, nil
-		}
-		if errcode.As(berr) != errcode.ErrOwnerEpochConflict {
-			return data.OwnerRecordView{}, berr
-		}
-		lastErr = berr
+	ownerType int8, target data.OwnerTargetView) (data.OwnerRecordView, bool, error) {
+	requestedOperation := uuid.NewString()
+	rec, qerr := auth.QueryOwner(ctx, playerID)
+	if qerr != nil {
+		// 查询不可判定 → UNKNOWN,绝不当作"无归属"继续(§9.22 禁冒充 OFFLINE/空闲)。
+		return data.OwnerRecordView{}, false, qerr
 	}
-	return data.OwnerRecordView{}, lastErr
+	got, berr := auth.BeginTransition(ctx, playerID, rec.OwnerEpoch, requestedOperation, ownerType, target)
+	if berr != nil {
+		if errcode.As(berr) == errcode.ErrOwnerEpochConflict {
+			return got, false, berr
+		}
+
+		readbackCtx, cancel := context.WithTimeout(plog.Detach(ctx), ownerBeginReadbackBudget)
+		observed, readbackErr := auth.QueryOwner(readbackCtx, playerID)
+		cancel()
+		if readbackErr != nil {
+			return got, false, errcode.NewCause(errcode.ErrUnavailable, errOwnerBeginOutcomeUnknown,
+				"owner Begin outcome unknown player=%d: begin=%v readback=%v",
+				playerID, berr, readbackErr)
+		}
+		if ownerRecordExactlyTargets(observed, ownerType, target) {
+			return observed, observed.OperationID == requestedOperation, nil
+		}
+		// 回读明确显示当前 owner 不是本次 target：无论 Begin 未提交，还是提交后已被
+		// 更新的 writer 覆盖，本 allocation 都不再拥有该玩家，可按原错误正常补偿。
+		return observed, false, berr
+	}
+	if !ownerRecordExactlyTargets(got, ownerType, target) {
+		return got, false, errcode.New(errcode.ErrInvalidState,
+			"owner Begin returned a non-exact target player=%d", playerID)
+	}
+	return got, got.OperationID == requestedOperation, nil
+}
+
+func ownerRecordExactlyTargets(rec data.OwnerRecordView, ownerType int8, target data.OwnerTargetView) bool {
+	return rec.OwnerEpoch > 0 && placement.ValidOperationID(rec.OperationID) && rec.OwnerType == ownerType &&
+		(rec.Phase == ownerPhasePending || rec.Phase == ownerPhaseAdmitted) &&
+		rec.PodName == target.PodName && rec.InstanceUID == target.InstanceUID &&
+		rec.InstanceEpoch == target.InstanceEpoch &&
+		rec.AssignmentOrAllocationID == target.AssignmentOrAllocationID &&
+		rec.ReleaseTrack == target.ReleaseTrack
+}
+
+// ownerVerifyPlayersExact 是 claim loser / 幂等重试交付 READY 前的只读门。
+//
+// loser 不能再跑 Begin:同一批玩家的多个并发 binder 会让一个调用把另一个调用已经依赖的
+// grant 当成自己的补偿对象 Release,per-player Begin/Release 无法原子提交整批。这里只 Query
+// 并要求 roster 每个玩家都已 exact 指向 winner 的完整 Battle target；任一缺失/漂移即
+// fail-closed,等待唯一 claim winner 完成 bind 或由外层重试。函数零 Begin/Release 副作用。
+func ownerVerifyPlayersExact(ctx context.Context, auth OwnerAuthority, players []uint64,
+	ownerType int8, target data.OwnerTargetView, budget time.Duration) error {
+	if auth == nil || len(players) == 0 {
+		return nil
+	}
+	budgetCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	for _, playerID := range players {
+		rec, err := auth.QueryOwner(budgetCtx, playerID)
+		if err != nil {
+			return err
+		}
+		if !ownerRecordExactlyTargets(rec, ownerType, target) {
+			return errcode.New(errcode.ErrUnavailable,
+				"owner target not exact for ready delivery player=%d", playerID)
+		}
+	}
+	return nil
 }
 
 // ownerBeginGrant 是本次调用已成功写进权威的一份归属,用于部分失败时精确回滚。
@@ -180,10 +257,15 @@ func rollbackOwnerBegins(ctx context.Context, auth OwnerAuthority, granted []own
 // 超预算即失败,而不是 migrate 阶段的"跳过剩余玩家":一局里部分玩家有归属、部分没有,
 // 比整局失败重来更难收敛,也会让 Admit 侧看到半截状态。
 //
-// **整体失败必须连同已写入的部分一起撤销**:本函数串行逐玩家写,失败点之前的玩家归属
+// **可判定的整体失败必须连同已写入的部分一起撤销**:本函数串行逐玩家写,失败点之前的玩家归属
 // 已经落进权威,而调用方紧接着就会 cleanupAllocatedBattle 把那台 Pod 删掉。不回滚就会
 // 留下一批"归属指向已删除实例"的 PENDING 记录,且没有任何路径能清掉它们
 // (详见 rollbackOwnerBegins 的注释)。回滚是 best-effort,不改变本函数返回的原始错误。
+//
+// 唯一例外是 errOwnerBeginOutcomeUnknown：当前玩家可能已提交，而回读也不可达。此时既
+// 不回滚此前 grants，也要求调用方不清理 allocation/Pod。保留整批技术 READY/PENDING
+// 虽会 fail-closed 暂停交付，但 owner 恢复后 claim loser 可只读验证全员 exact 后收敛；
+// 回滚半批再留下一个未知提交只会主动制造更难恢复的不一致。
 func ownerBeginPlayers(ctx context.Context, auth OwnerAuthority, players []uint64,
 	ownerType int8, target data.OwnerTargetView, budget time.Duration) error {
 	if auth == nil || len(players) == 0 {
@@ -193,21 +275,28 @@ func ownerBeginPlayers(ctx context.Context, auth OwnerAuthority, players []uint6
 	defer cancel()
 	granted := make([]ownerBeginGrant, 0, len(players))
 	for i, playerID := range players {
-		rec, err := beginOnePlayer(budgetCtx, auth, playerID, ownerType, target)
+		rec, created, err := beginOnePlayer(budgetCtx, auth, playerID, ownerType, target)
 		if err != nil {
+			outcomeUnknown := errors.Is(err, errOwnerBeginOutcomeUnknown)
 			plog.With(ctx).Warnw("msg", "owner_begin_failed",
 				"players", len(players), "failed_at", i, "player_id", playerID, "err", err,
 				"pod", target.PodName, "instance_uid", target.InstanceUID,
 				"granted_before_failure", len(granted),
-				"hint", "contract 强依赖:归属写不进权威即拒绝本次交付,调用方重试")
+				"outcome_unknown", outcomeUnknown,
+				"hint", "contract 强依赖:归属未全量定案即拒绝交付;outcome unknown 必须保留 grants/allocation/pod")
+			if outcomeUnknown {
+				return err
+			}
 			rollbackOwnerBegins(ctx, auth, granted)
 			return err
 		}
-		granted = append(granted, ownerBeginGrant{
-			PlayerID:    playerID,
-			OwnerEpoch:  rec.OwnerEpoch,
-			OperationID: rec.OperationID,
-		})
+		if created {
+			granted = append(granted, ownerBeginGrant{
+				PlayerID:    playerID,
+				OwnerEpoch:  rec.OwnerEpoch,
+				OperationID: rec.OperationID,
+			})
+		}
 	}
 	return nil
 }

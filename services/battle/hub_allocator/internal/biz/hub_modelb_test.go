@@ -261,6 +261,90 @@ type admissionPostCheckDriftRepo struct {
 	driftTo  *hubv1.HubAssignmentStorageRecord
 }
 
+// ownerBindDriftRepo 在第 N 次签票 current-assignment guard 读取前把 Redis assignment
+// 换成 driftTo，用确定性交错覆盖 Begin 前与 Begin 后两个窗口。
+type ownerBindDriftRepo struct {
+	data.HubRepo
+	playerID   uint64
+	driftOnGet int
+	getCalls   int
+	driftTo    *hubv1.HubAssignmentStorageRecord
+}
+
+func (r *ownerBindDriftRepo) GetAssignment(
+	ctx context.Context, playerID uint64,
+) (*hubv1.HubAssignmentStorageRecord, bool, error) {
+	if playerID == r.playerID {
+		r.getCalls++
+		if r.getCalls == r.driftOnGet {
+			current, found, err := r.HubRepo.GetAssignment(ctx, playerID)
+			if err != nil || !found {
+				return current, found, err
+			}
+			swapped, swapErr := r.HubRepo.CompareAndSwapAssignment(ctx, playerID, current, r.driftTo, modelBAuthTTL)
+			if swapErr != nil || !swapped {
+				return nil, false, errors.New("injected owner-bind assignment drift CAS failed")
+			}
+		}
+	}
+	return r.HubRepo.GetAssignment(ctx, playerID)
+}
+
+func TestModelB_SignWithholdsWhenAssignmentDriftsAroundOwnerBegin(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		driftOnGet int
+		wantBegins int
+	}{
+		{name: "before_begin", driftOnGet: 1, wantBegins: 0},
+		{name: "after_begin", driftOnGet: 2, wantBegins: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
+			ctx := context.Background()
+			const pod, playerID = "pandora-hub-global-1", uint64(1001)
+			now := time.Now().UnixMilli()
+			seedWarming(t, repo, pod, 1, 500, now)
+			activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+			if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
+				t.Fatalf("seed assignment: %v", err)
+			}
+			assignment, found, err := repo.GetAssignment(ctx, playerID)
+			if err != nil || !found {
+				t.Fatalf("assignment found=%v err=%v", found, err)
+			}
+			target, ok := uc.ownerTargetForHubTicket(ctx, assignment)
+			if !ok {
+				t.Fatal("complete Model B assignment must yield owner target")
+			}
+			owner := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{
+				playerID: {
+					OwnerEpoch: 1, OwnerType: ownerTypeHub, Phase: ownerPhaseAdmitted,
+					PodName: target.PodName, InstanceUID: target.InstanceUID, InstanceEpoch: target.InstanceEpoch,
+					AssignmentOrAllocationID: target.AssignmentOrAllocationID, ReleaseTrack: target.ReleaseTrack,
+					OperationID: "00000000-0000-4000-8000-000000000001",
+				},
+			}}
+			uc.SetOwnerAuthority(owner)
+			drifted := proto.Clone(assignment).(*hubv1.HubAssignmentStorageRecord)
+			drifted.AssignmentId = uuid.NewString()
+			uc.repo = &ownerBindDriftRepo{HubRepo: repo, playerID: playerID,
+				driftOnGet: tc.driftOnGet, driftTo: drifted}
+
+			token, _, signErr := uc.signHubTicket(ctx, playerID, assignment.GetRoleId(), assignment, 0, "")
+			if token != "" || errcode.As(signErr) != errcode.ErrUnavailable {
+				t.Fatalf("drifted assignment must withhold ticket: token=%q code=%v err=%v",
+					token, errcode.As(signErr), signErr)
+			}
+			owner.mu.Lock()
+			defer owner.mu.Unlock()
+			if len(owner.beginTargets) != tc.wantBegins {
+				t.Fatalf("unexpected owner Begin count: got=%d want=%d", len(owner.beginTargets), tc.wantBegins)
+			}
+		})
+	}
+}
+
 func (r *admissionPostCheckDriftRepo) GetAssignment(
 	ctx context.Context, playerID uint64,
 ) (*hubv1.HubAssignmentStorageRecord, bool, error) {
@@ -396,6 +480,8 @@ func TestModelB_ConcurrentAssignSingleSeatAndBinding(t *testing.T) {
 	uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
 	signer := &concurrentBindingSigner{}
 	uc.signer = signer
+	owner := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{}}
+	uc.SetOwnerAuthority(owner)
 	const pod = "pandora-hub-global-1"
 	now := time.Now().UnixMilli()
 	seedWarming(t, repo, pod, 1, 500, now)
@@ -455,6 +541,24 @@ func TestModelB_ConcurrentAssignSingleSeatAndBinding(t *testing.T) {
 			binding.WriterEpoch != assignment.AuthWriterEpoch {
 			t.Fatalf("ticket binding drifted from winning assignment: binding=%+v assignment=%+v", binding, assignment)
 		}
+	}
+	// 纯签名允许 CAS loser 产生不交付的 token；有副作用的 owner Begin 则只能看见最终
+	// Redis winner。旧实现 signResult(Begin) 在 CAS 前，稳定会把 loser assignment 写进历史。
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	if len(owner.beginTargets) == 0 {
+		t.Fatal("successful assignment must bind owner at least once")
+	}
+	for _, target := range owner.beginTargets {
+		if target.AssignmentOrAllocationID != assignment.GetAssignmentId() ||
+			target.PodName != assignment.GetHubPodName() || target.InstanceUID != assignment.GetHubInstanceUid() {
+			t.Fatalf("CAS loser touched owner: target=%+v winner=%+v", target, assignment)
+		}
+	}
+	ownerTarget, ok := uc.ownerTargetForHubTicket(context.Background(), assignment)
+	if !ok || !ownerRecordExactlyTargets(owner.records[1001], ownerTypeHub, ownerTarget) {
+		t.Fatalf("final owner must exactly equal Redis winner: owner=%+v assignment=%+v",
+			owner.records[1001], assignment)
 	}
 }
 
@@ -542,6 +646,43 @@ func TestModelB_AcknowledgeAdmissionRequiresOwnerAdmit(t *testing.T) {
 	res3, err3 := uc3.AcknowledgeAdmission(ctx, playerID, assignID3, pod, uuid.NewString(), 1, "", cred3)
 	if errcode.As(err3) != errcode.ErrUnavailable || (res3 != nil && res3.Admitted) {
 		t.Fatalf("屏障未开必须返回可重试且不开门: res=%+v err=%v", res3, err3)
+	}
+
+	// ④ owner 已 ADMITTED 也只能对**同一 exact assignment/track**走幂等快路。
+	// 旧实现只比物理实例，导致同 pod 上的旧 assignment 或错误发布轨可绕过 Admit exact CAS
+	// 直接开 spawn gate，正是“Hub ACK 成功但 ResumeContext 永久是旧 assignment”的事故形状。
+	for _, tc := range []struct {
+		name   string
+		mutate func(*data.OwnerRecordView)
+	}{
+		{name: "stale_assignment", mutate: func(rec *data.OwnerRecordView) {
+			rec.AssignmentOrAllocationID = "assignment-stale"
+		}},
+		{name: "wrong_release_track", mutate: func(rec *data.OwnerRecordView) {
+			rec.ReleaseTrack = "canary"
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			badUC, badAssignmentID, badCred, badOwner := setup(t)
+			badOwner.mu.Lock()
+			rec := badOwner.records[playerID]
+			rec.Phase = ownerPhaseAdmitted
+			tc.mutate(&rec)
+			badOwner.records[playerID] = rec
+			badOwner.mu.Unlock()
+
+			got, gotErr := badUC.AcknowledgeAdmission(ctx, playerID, badAssignmentID, pod,
+				uuid.NewString(), 1, "", badCred)
+			if errcode.As(gotErr) != errcode.ErrInvalidState || (got != nil && got.Admitted) {
+				t.Fatalf("non-exact ADMITTED owner must not open spawn gate: res=%+v code=%v err=%v",
+					got, errcode.As(gotErr), gotErr)
+			}
+			badOwner.mu.Lock()
+			defer badOwner.mu.Unlock()
+			if len(badOwner.admits) != 0 {
+				t.Fatalf("non-exact owner must be rejected before Admit, calls=%v", badOwner.admits)
+			}
+		})
 	}
 }
 

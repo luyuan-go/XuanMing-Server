@@ -98,7 +98,9 @@ type PlayerService struct {
 	uc *biz.PlayerUsecase
 
 	// dsGuard DS 回调令牌守卫;nil = 未启用(mode=off),Check 直接放行。
-	// 只有 GetLoadout 用它:见该方法注释,它是本服务里唯一挂在 Envoy DS 面上的 RPC。
+	// 用它的是**挂在 Envoy DS 面(:8444)上的方法**:GetLoadout(出战快照)与
+	// GetPlayerNames(铭牌取名,2026-08-18)。DS 面不挂 jwt_authn,systemOnly 只能证明
+	// "不是玩家",证明不了"是我们的 DS",故这两条另需令牌门。
 	dsGuard *pmw.DSCallbackGuard
 }
 
@@ -140,6 +142,59 @@ func (s *PlayerService) UpdateNickname(ctx context.Context, req *playerv1.Update
 		return &playerv1.UpdateNicknameResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.UpdateNicknameResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+// EnsureProfile 建档并播种角色名(账号 / 角色分离 2026-08-18)。
+//
+// **系统 RPC**:唯一合法调用方是 login 服务(后端内部直连)。带玩家 JWT 的调用一律拒 ——
+// 否则玩家可以拿它给自己起任意昵称,绕过改名的全部限制。Envoy 路由层另有精确 403
+// 双保险(客户端面根本到不了这个 method)。
+func (s *PlayerService) EnsureProfile(ctx context.Context, req *playerv1.EnsureProfileRequest) (*playerv1.EnsureProfileResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &playerv1.EnsureProfileResponse{Code: code}, nil
+	}
+	if req.GetPlayerId() == 0 {
+		return &playerv1.EnsureProfileResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	res, err := s.uc.EnsureProfileNamed(ctx, req.GetPlayerId(), req.GetNickname())
+	if err != nil {
+		return &playerv1.EnsureProfileResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.EnsureProfileResponse{
+		Code:              commonv1.ErrCode_OK,
+		Created:           res.Created,
+		EffectiveNickname: res.Nickname,
+		Level:             res.Level,
+	}, nil
+}
+
+// GetPlayerNames 批量反查角色显示名(Hub DS 头顶铭牌用,2026-08-18)。
+//
+// **系统 RPC**:合法调用方是 Hub DS(后端内部直连)。带玩家 JWT 的调用一律拒,
+// Envoy 客户端面精确 403、只在 DS 面(:8444)放行 —— 玩家看别人的名字应该走
+// team / friend / guild 各自的成员列表,不该存在「按任意 player_id 查名字」的公开入口。
+func (s *PlayerService) GetPlayerNames(ctx context.Context, req *playerv1.GetPlayerNamesRequest) (*playerv1.GetPlayerNamesResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &playerv1.GetPlayerNamesResponse{Code: code}, nil
+	}
+	// DS 回调令牌守卫,与 GetLoadout 同档:本方法是本服务第二个挂在 Envoy DS 面(:8444)
+	// 的 RPC,而 DS 面不挂 jwt_authn。systemOnly 只能证明"不是玩家",证明不了"是我们的 DS";
+	// 少了这道门,任何能到达 DS 网段的东西都能按任意 player_id 批量捞名字。
+	// mode=off 时 dsGuard 为 nil,Check 直接放行(dev 行为不变)。
+	if pmw.PlayerIDFromContext(ctx) == 0 {
+		if err := s.dsGuard.Check(ctx, pmw.DSScope{RequireToken: true}); err != nil {
+			return &playerv1.GetPlayerNamesResponse{Code: toProtoCode(err)}, nil
+		}
+	}
+	names, err := s.uc.GetPlayerNames(ctx, req.GetPlayerIds())
+	if err != nil {
+		return &playerv1.GetPlayerNamesResponse{Code: toProtoCode(err)}, nil
+	}
+	out := make([]*playerv1.PlayerName, 0, len(names))
+	for _, n := range names {
+		out = append(out, &playerv1.PlayerName{PlayerId: n.PlayerID, Nickname: n.Nickname})
+	}
+	return &playerv1.GetPlayerNamesResponse{Code: commonv1.ErrCode_OK, Names: out}, nil
 }
 
 // ListHeroes 列出玩家已解锁英雄。客户端只能读自己。

@@ -89,6 +89,15 @@ func validateLevelRow(row *configpb.LevelRow) error {
 	} else if pool != "" {
 		return fmt.Errorf("段位池(rating_pool=%q)已填,但计分模式(rating_mode)不是 2=按Elo算段位(本图根本不计分,填池无意义);要么把计分模式改成 2,要么清空本列", pool)
 	}
+	// 准备模式只对**经开局链进入**的战斗 / 副本关卡有意义:登录 / 选角 / 主城不走
+	// StartMatch → BeginTeamMatch,填了不会有任何效果。与上面「不计分却填了段位池」同因——
+	// 静默失效的配置误解(填的人以为它生效了)要在加载边界报出来,而不是等玩家反馈
+	// 「这张图怎么不用准备」。留空(UNSPECIFIED)在任何类别上都合法,所以存量表不受影响。
+	if rm := row.GetReadyMode(); rm != configpb.LevelReadyMode_LEVEL_READY_MODE_UNSPECIFIED &&
+		row.GetCategory() != configpb.LevelCategory_LEVEL_CATEGORY_BATTLE {
+		return fmt.Errorf("准备模式(ready_mode=%d)已填,但关卡类别(category=%d)不是 4=战斗/副本(本图不经开局链,填了不生效);要么改类别,要么清空本列",
+			rm, row.GetCategory())
+	}
 	return nil
 }
 

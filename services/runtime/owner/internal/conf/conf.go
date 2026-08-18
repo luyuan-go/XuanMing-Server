@@ -32,6 +32,17 @@ type OwnerConf struct {
 
 	// LogRetentionDays owner_transition_log 保留天数(默认 90,§9.24)。
 	LogRetentionDays int `yaml:"log_retention_days,omitempty" json:"log_retention_days,omitempty"`
+
+	// RejectLegacySourceRevision 打开**全局** legacy(hub source revision=0)拒绝门
+	// (INC-20260818-003 §3 分阶段发布的最后一步)。
+	//
+	// 默认 false = 兼容窗:允许尚未滚上本协议的 hub_allocator 不带来源版本写入。
+	// **只有在证明旧 hub_allocator 副本已完全排空之后**才可置 true;提前打开会让仍在跑的
+	// 旧副本全部写失败 = 大厅分配停摆。
+	//
+	// 逐玩家的那条规则(见过非零版本就永久拒 legacy)不受本开关控制,它从第一个新写者
+	// 写下第一个非零版本起自动生效 —— 那条不需要人来拍时机,所以不做成开关。
+	RejectLegacySourceRevision bool `yaml:"reject_legacy_source_revision,omitempty" json:"reject_legacy_source_revision,omitempty"`
 }
 
 // Defaults 填默认值。

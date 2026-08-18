@@ -64,8 +64,10 @@ const (
 	reasonPlayerCommitted         = "player_committed_to_match"
 	reasonPlayerCommitmentUnknown = "player_commitment_unknown"
 	reasonRosterLocked            = "roster_locked_for_match"
-	// reasonTeamNotReady 已删(2026-08-17):ready 不再是开局门槛,BeginTeamMatch 对
-	// FORMING/READY 都放行,不存在「未准备被拒」这个 reason。
+	// reasonTeamNotReady:PRE_READY 图(关卡表 ready_mode=1)上队伍没全员准备就点了开始。
+	// 2026-08-17 曾随「全服取消 ready 门槛」一起删除,2026-08-18 两模式按图二选一后恢复 ——
+	// 它现在只在 requireReady=true 的图上可达,POST_CONFIRM 图不会出现这条。
+	reasonTeamNotReady            = "team_not_ready"
 	reasonReadyGenerationMismatch = "ready_generation_mismatch"
 	reasonReadyAlreadyCleared     = "ready_already_cleared"
 	reasonLegacyReadyRevoked      = "legacy_ready_revoked"

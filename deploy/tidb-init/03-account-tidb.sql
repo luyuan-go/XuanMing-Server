@@ -8,7 +8,7 @@
 -- dev 单机 MySQL 联调仍用 deploy/mysql-init/02-account-tables.sql(同构 DDL)。
 --
 -- 与 mysql-init 版的差异(只改 DDL 与存储属性,业务 SQL / Go 代码不变):
---   1. 雪花主键(accounts / player_roles / player_session_generations)→ NONCLUSTERED +
+--   1. 雪花主键(accounts / account_roles / player_roles / player_session_generations)→ NONCLUSTERED +
 --      SHARD_ROW_ID_BITS + PRE_SPLIT_REGIONS 打散时间序写热点。代价是按 player_id 点查多一次
 --      回表;login 的高频读本就走 uk_account(FindByAccount),行也极小,可接受。
 --   2. 代理主键 AUTO_INCREMENT → AUTO_RANDOM(account_devices / account_bans)。
@@ -45,6 +45,7 @@ USE `pandora_account`;
 -- 读=每次登录一次 FindByAccount(走 uk_account)。
 CREATE TABLE IF NOT EXISTS `accounts` (
     `player_id`     BIGINT UNSIGNED  NOT NULL,
+    `account_id`    BIGINT UNSIGNED       NULL COMMENT '账号身份 ID(snowflake);NULL=旧二进制注册尚未补铸',
     `account`       VARCHAR(64)      NOT NULL,
     `password_hash` VARCHAR(80)      NOT NULL COMMENT 'bcrypt(client_digest),含 cost 前缀,固定 60 字节',
     `status`        TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=normal,1=banned,2=disabled',
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS `accounts` (
     `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */,
     UNIQUE KEY `uk_account` (`account`),
+    UNIQUE KEY `uk_account_id` (`account_id`),
     UNIQUE KEY `uk_player_no` (`player_no`),
     UNIQUE KEY `uk_register_no` (`register_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -61,6 +63,39 @@ CREATE TABLE IF NOT EXISTS `accounts` (
   COMMENT='Pandora 账号身份表(uk_account 必须大小写不敏感,见文件头)';
 -- uk_player_no 是补号任务的顺序追加写(索引尾部),但写速率 = 补号批量节奏(每 5s 若干批),
 -- 远低于登录 QPS,不构成需要打散的热点;不比照雪花 PK 做 SHARD 处理。
+-- uk_account_id 同为雪花值的顺序追加写,但写速率 = 注册 QPS(与 accounts 行插入同一次数)。
+-- 二级索引没有 SHARD_ROW_ID_BITS 这类打散手段,只能接受;它与 PK 插入是同一个尖峰,
+-- 不构成新增的独立热点。
+
+-- account_roles:角色归属台账(账号身份 / 角色身份分离,2026-08-18;迁移 000008)。
+-- player_id 在本表里是**角色实体 ID**,account_id 是归属列;角色过户 = 原子改 account_id 一列。
+-- 与 mysql-init 版的差异同 accounts / player_roles:PK 是雪花值 → NONCLUSTERED +
+-- SHARD_ROW_ID_BITS 打散;写 = 建角色(注册尖峰同一量级),读 = 每次登录选角列表
+-- (走 idx_account_status)与 EnterRole 归属回查(走 PK)。
+--
+-- ⚠️ 只有**全新 bootstrap** 的集群才会拿到这里的存储属性:已 bootstrap 的集群上本表由
+-- 000008 的 `CREATE TABLE IF NOT EXISTS` 建出,迁移是方言中立的(全仓迁移都不写
+-- SHARD/AUTO_RANDOM),那边得到的是默认 clustered PK。这是本仓既有约定的已知代价,
+-- 不是本表特有 —— 要在存量 TiDB 上拿到打散属性只能另立迁移重建表,当前规模不值得。
+--
+-- role_name 刻意**不加唯一键**:显示名唯一性权威在 pandora_player.players.nickname
+-- (uk_nickname)。两个库各加一个唯一键必然出现「这边写进去了、那边被拒」的分叉且无法
+-- 自动收敛 —— 唯一性只能有一个权威点。
+CREATE TABLE IF NOT EXISTS `account_roles` (
+    `player_id`     BIGINT UNSIGNED  NOT NULL COMMENT '角色实体 ID(snowflake)',
+    `account_id`    BIGINT UNSIGNED  NOT NULL COMMENT '归属账号 ID;角色过户 = 原子改本列',
+    `slot`          TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '账号内角色槽位,0 起',
+    `role_name`     VARCHAR(64)      NOT NULL COMMENT '角色名;创建角色功能上线前 = 账号名',
+    `status`        TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=normal,1=deleted(软删)',
+    `last_login_at` DATETIME              NULL COMMENT '该角色最近一次进入游戏;选角默认选中最近的。NULL=从未进过',
+    `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */,
+    UNIQUE KEY `uk_account_slot` (`account_id`, `slot`),
+    KEY `idx_account_status` (`account_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  SHARD_ROW_ID_BITS = 4 PRE_SPLIT_REGIONS = 4
+  COMMENT='Pandora 角色归属台账(账号 → 角色;角色过户改 account_id)';
 
 -- player_no_counter:角色编号全局发号计数器,恒 1 行(id=1)。
 -- 补号事务先 FOR UPDATE 锁本行再批量编号:行锁即全局互斥,多 login 副本并发安全。

@@ -66,7 +66,7 @@ func (u *PlayerUsecase) AddExperience(ctx context.Context, playerID uint64, delt
 	if len(curve) == 0 {
 		return data.ExpState{}, false, errcode.New(errcode.ErrPlayerFeatureDisabled, "experience disabled (player level table unavailable)")
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return data.ExpState{}, false, err
 	}
 

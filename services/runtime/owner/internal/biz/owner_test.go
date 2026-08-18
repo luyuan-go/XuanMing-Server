@@ -26,7 +26,7 @@ func (f *fakeOwnerRepo) Query(context.Context, uint64) (data.OwnerRecord, error)
 	return data.OwnerRecord{}, nil
 }
 
-func (f *fakeOwnerRepo) BeginTransition(_ context.Context, _, _ uint64, operationID string, _ int8, _ data.OwnerTarget, margin time.Duration) (data.OwnerRecord, error) {
+func (f *fakeOwnerRepo) BeginTransition(_ context.Context, _, _ uint64, operationID string, _ int8, _ data.OwnerTarget, _ uint64, margin time.Duration) (data.OwnerRecord, error) {
 	f.beginCalls++
 	f.lastMargin = margin
 	f.lastOp = operationID
@@ -77,7 +77,7 @@ func TestOwnerBeginValidation(t *testing.T) {
 		{"目标身份不完整", 1, validOp, data.OwnerTypeHub, data.OwnerTarget{PodName: "p"}, errcode.ErrOwnerInvalidOperation},
 	}
 	for _, c := range cases {
-		if _, err := uc.BeginTransition(ctx, c.player, 0, c.op, c.otype, c.target); errcode.As(err) != c.code {
+		if _, err := uc.BeginTransition(ctx, c.player, 0, c.op, c.otype, c.target, 0); errcode.As(err) != c.code {
 			t.Fatalf("%s: 期望 %d,实际 %v", c.what, c.code, err)
 		}
 	}
@@ -86,7 +86,7 @@ func TestOwnerBeginValidation(t *testing.T) {
 	}
 
 	// 合法请求放行,margin 固定来自 pkg/placement(正确性常量单一来源)。
-	if _, err := uc.BeginTransition(ctx, 1, 0, validOp, data.OwnerTypeHub, validTarget()); err != nil {
+	if _, err := uc.BeginTransition(ctx, 1, 0, validOp, data.OwnerTypeHub, validTarget(), 0); err != nil {
 		t.Fatalf("合法 Begin 应放行: %v", err)
 	}
 	wantMargin := time.Duration(placement.DSFenceSkewMarginSeconds) * time.Second
@@ -104,7 +104,7 @@ func TestOwnerBeginMintsOperationWhenEmpty(t *testing.T) {
 	uc := NewOwnerUsecase(repo, conf.OwnerConf{})
 	ctx := context.Background()
 
-	if _, err := uc.BeginTransition(ctx, 1, 0, "", data.OwnerTypeHub, validTarget()); err != nil {
+	if _, err := uc.BeginTransition(ctx, 1, 0, "", data.OwnerTypeHub, validTarget(), 0); err != nil {
 		t.Fatalf("空 operation 应放行并由权威铸造: %v", err)
 	}
 	if repo.beginCalls != 1 {
@@ -118,7 +118,7 @@ func TestOwnerBeginMintsOperationWhenEmpty(t *testing.T) {
 
 	// 每次真实迁移铸的是新值(稳定性由数据层的同实例 no-op 保证,不是靠这里复用同一个)。
 	first := repo.lastOp
-	if _, err := uc.BeginTransition(ctx, 1, 0, "", data.OwnerTypeHub, validTarget()); err != nil {
+	if _, err := uc.BeginTransition(ctx, 1, 0, "", data.OwnerTypeHub, validTarget(), 0); err != nil {
 		t.Fatalf("第二次空 operation: %v", err)
 	}
 	if repo.lastOp == first {
@@ -126,7 +126,7 @@ func TestOwnerBeginMintsOperationWhenEmpty(t *testing.T) {
 	}
 
 	// 非空仍按显式幂等键原样透传(响应丢失后的原样重试路径)。
-	if _, err := uc.BeginTransition(ctx, 1, 0, validOp, data.OwnerTypeHub, validTarget()); err != nil {
+	if _, err := uc.BeginTransition(ctx, 1, 0, validOp, data.OwnerTypeHub, validTarget(), 0); err != nil {
 		t.Fatalf("显式 operation 应放行: %v", err)
 	}
 	if repo.lastOp != validOp {

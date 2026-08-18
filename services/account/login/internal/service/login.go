@@ -74,7 +74,8 @@ func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*l
 	// 受信客户端 IP(Envoy 注入 x-pandora-client-ip,入站同名头已被剥离防伪造)挂到
 	// 请求 ctx,供登录失败 Quota 的 IP 维度使用;未经 Envoy(dev 直连)为空 = 该维度关闭。
 	ctx = biz.WithClientIP(ctx, clientIPFromHeader(ctx))
-	res, err := s.loginUC.Login(ctx, req.GetAccount(), req.GetPasswordHash(), req.GetDeviceId())
+	res, err := s.loginUC.Login(ctx, req.GetAccount(), req.GetPasswordHash(), req.GetDeviceId(),
+		req.GetDeferRoleEntry())
 	if err != nil {
 		return &loginv1.LoginResponse{
 			Code: toProtoCode(err),
@@ -88,6 +89,11 @@ func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*l
 		HubTicket:    res.HubTicket,
 		RegionId:     res.RegionID,
 		CellId:       res.CellID,
+		// 账号层(两步登录 2026-08-18):defer_role_entry=true 时只有这几项非空。
+		AccountToken:      res.AccountToken,
+		AccountId:         res.AccountID,
+		AccountTokenExpMs: uint64(res.AccountTokenExpMs),
+		Roles:             accountRolesToProto(res.Roles),
 		// 断线重连(docs/design/battle-reconnect.md):命中时非空,客户端直连 battle DS 重连;
 		// 未命中时为空(零值),客户端走 hub_ds_addr / hub_ticket 进大厅。
 		BattleDsAddr: res.BattleDSAddr,
@@ -100,6 +106,74 @@ func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*l
 		// #13 兼容旧客户端/JSON，#14 给新客户端；旧调用方排空前必须双写同值。
 		RegisterNo: res.PlayerNo,
 		PlayerNo:   res.PlayerNo,
+	}, nil
+}
+
+// accountRolesToProto 把 biz 的选角视图翻成 proto(客户端可见结构,§5 第 11 条:
+// 由服务端按最小数据单位填充,不把存储行原样外抛)。
+func accountRolesToProto(in []biz.AccountRoleView) []*loginv1.AccountRole {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]*loginv1.AccountRole, 0, len(in))
+	for _, r := range in {
+		out = append(out, &loginv1.AccountRole{
+			PlayerId:      r.PlayerID,
+			RoleName:      r.RoleName,
+			RoleId:        r.RoleID,
+			PlayerNo:      r.PlayerNo,
+			Level:         r.Level,
+			LastLoginAtMs: r.LastLoginAtMs,
+			Slot:          r.Slot,
+		})
+	}
+	return out
+}
+
+// ListAccountRoles 立即完成型:列出本账号名下的角色(两步登录,2026-08-18)。
+//
+// account_id 从 ctx 读(Envoy 账号态 provider 验签后注入 x-pandora-account-id),
+// 请求体为空、不信任自报身份 —— 否则任何人都能列别人账号下的角色。
+// ⚠️ 该 path 必须挂在 envoy.yaml 的**账号态** provider 上:挂错成玩家态 provider 的话
+// 账号 token 过不了验签,挂空则完全不验签,两种都是错的。
+func (s *LoginService) ListAccountRoles(ctx context.Context, _ *loginv1.ListAccountRolesRequest) (*loginv1.ListAccountRolesResponse, error) {
+	accountID := middleware.AccountIDFromContext(ctx)
+	roles, err := s.loginUC.ListAccountRoles(ctx, accountID)
+	if err != nil {
+		return &loginv1.ListAccountRolesResponse{Code: toProtoCode(err)}, nil
+	}
+	return &loginv1.ListAccountRolesResponse{
+		Code:  commonv1.ErrCode_OK,
+		Roles: accountRolesToProto(roles),
+	}, nil
+}
+
+// EnterRole 立即完成型:选定角色进入游戏(两步登录第二步,2026-08-18)。
+//
+// account_id 从 ctx 读(账号态 JWT sub);请求体里的 player_id 是「选哪个」而非「我是谁」,
+// biz 层会按 account_roles 台账回查归属,不属于本账号一律拒。
+func (s *LoginService) EnterRole(ctx context.Context, req *loginv1.EnterRoleRequest) (*loginv1.EnterRoleResponse, error) {
+	ctx = biz.WithClientIP(ctx, clientIPFromHeader(ctx))
+	accountID := middleware.AccountIDFromContext(ctx)
+	res, err := s.loginUC.EnterRole(ctx, accountID, req.GetPlayerId(), req.GetDeviceId())
+	if err != nil {
+		return &loginv1.EnterRoleResponse{Code: toProtoCode(err)}, nil
+	}
+	return &loginv1.EnterRoleResponse{
+		Code:         commonv1.ErrCode_OK,
+		PlayerId:     res.PlayerID,
+		SessionToken: res.SessionToken,
+		HubDsAddr:    res.HubDSAddr,
+		HubTicket:    res.HubTicket,
+		RegionId:     res.RegionID,
+		CellId:       res.CellID,
+		// 断线重连:选中的角色正在战斗中时非空,客户端直连原对局而不是回大厅。
+		BattleDsAddr:   res.BattleDSAddr,
+		BattleTicket:   res.BattleTicket,
+		MatchId:        res.MatchID,
+		SelectedRoleId: res.SelectedRoleID,
+		ResumeContext:  resumeContextToProto(res.Resume),
+		PlayerNo:       res.PlayerNo,
 	}, nil
 }
 

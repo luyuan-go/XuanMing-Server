@@ -56,6 +56,31 @@ type SessionClaims struct {
 	jwt.RegisteredClaims
 }
 
+// AccountClaims 是**账号态 token** 的载荷(两步登录,2026-08-18)。
+//
+// 与 SessionClaims 的分工:
+//   - AccountClaims.sub = account_id,只能用来「列出本账号的角色」与「选一个角色进入」;
+//   - SessionClaims.sub = player_id(角色实体),才是玩家面一切 RPC 的身份。
+//
+// 两者用不同 aud(见 Config.AccountAudience 注释)彻底隔离,互相不可通过对方的校验。
+// 账号态刻意**不带**角色信息:选角之前服务端还没有为这次会话绑定任何角色,带上去等于
+// 让客户端自报,违反 §9.6「不信客户端自报身份」。
+type AccountClaims struct {
+	jwt.RegisteredClaims
+}
+
+// AccountID 把 sub 字符串解成 uint64。失败返回 0。
+func (a *AccountClaims) AccountID() uint64 {
+	if a.Subject == "" {
+		return 0
+	}
+	id, err := strconv.ParseUint(a.Subject, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
 // PlayerID 把 sub 字符串解成 uint64。失败返回 0。
 func (s *SessionClaims) PlayerID() uint64 {
 	if s.Subject == "" {
@@ -211,6 +236,21 @@ type Config struct {
 	// Audience 固定 "pandora-client"(JWT aud 字段,Envoy jwt_authn 校验)。
 	Audience string
 
+	// AccountAudience 是**账号态 token** 的 aud,默认 "pandora-account"。
+	//
+	// 为什么必须与 Audience 不同(两步登录 2026-08-18 的安全根基):
+	// Envoy 的 jwt_authn provider 把 sub claim 通过 claim_to_headers 注入
+	// x-pandora-player-id,全后端都拿这个头当玩家身份。账号态 token 的 sub 是
+	// **account_id 而不是 player_id**;两者若共用同一个 aud,一张账号 token 就能通过
+	// pandora_session provider,把 account_id 冒充成 player_id 打进 team / chat /
+	// inventory 等一切玩家面 RPC —— 这是直接的越权。
+	//
+	// 靠不同 aud 隔离,是因为 aud 校验发生在**签名校验的同一层**(Envoy 侧由 provider
+	// 的 audiences 强制,Go 侧由 jwt.WithAudience 强制),攻击者拿不到密钥就伪造不出。
+	// 换成「加一个 typ claim 再由业务层判别」是更弱的方案:Envoy 在业务层之前就已经
+	// 把头注入好了,漏判一处即越权。
+	AccountAudience string
+
 	// Secret HS256 共享密钥;dev 期 login 服务跟 Envoy 各持一份(同一字符串)。
 	Secret []byte
 
@@ -227,6 +267,14 @@ type Config struct {
 	// SessionTTL SessionToken 有效期,默认 24h。
 	SessionTTL time.Duration
 
+	// AccountTTL 账号态 token 有效期,默认 10min。
+	//
+	// 刻意远短于 SessionTTL:它只需要覆盖「登录成功 → 看角色列表 → 选一个进去」这段
+	// 交互,不是常驻凭据。过期了重新登录即可,代价只有一次输密码;而它一旦泄漏,
+	// 拿到的是**整个账号下所有角色**的进入权(比单个角色的 session 影响面更大),
+	// 所以窗口必须小。
+	AccountTTL time.Duration
+
 	// DSTicketTTL DSTicket 有效期,默认 5min(不变量 §3)。
 	DSTicketTTL time.Duration
 
@@ -242,8 +290,14 @@ func (c *Config) Defaults() {
 	if c.Audience == "" {
 		c.Audience = "pandora-client"
 	}
+	if c.AccountAudience == "" {
+		c.AccountAudience = "pandora-account"
+	}
 	if c.SessionTTL == 0 {
 		c.SessionTTL = 24 * time.Hour
+	}
+	if c.AccountTTL == 0 {
+		c.AccountTTL = 10 * time.Minute
 	}
 	if c.DSTicketTTL == 0 {
 		c.DSTicketTTL = 5 * time.Minute
@@ -269,6 +323,17 @@ func (c *Config) Validate() error {
 	}
 	if c.DSTicketTTL < time.Second {
 		return fmt.Errorf("auth.Config: DSTicketTTL must be >=1s (got %s)", c.DSTicketTTL)
+	}
+	if c.AccountTTL < time.Second {
+		return fmt.Errorf("auth.Config: AccountTTL must be >=1s (got %s)", c.AccountTTL)
+	}
+	// 账号态与玩家态共用一个 aud = 越权。账号 token 的 sub 是 account_id,一旦能通过
+	// Envoy 的 pandora_session provider,account_id 就会被 claim_to_headers 注入
+	// x-pandora-player-id,冒充成玩家身份打进全部玩家面 RPC。这是配置层唯一能机械
+	// 拦住的一环,故启动期硬拒,不留「配错了只是告警」的余地。
+	if c.AccountAudience == c.Audience {
+		return fmt.Errorf("auth.Config: AccountAudience must differ from Audience (both %q); "+
+			"共用 aud 会让账号态 token 通过玩家态校验,account_id 被当作 player_id 注入", c.Audience)
 	}
 	for i, s := range c.AdditionalSecrets {
 		if len(s) < 32 {
@@ -368,6 +433,46 @@ func (s *Signer) SignSession(playerID uint64, jti string) (token string, expires
 	str, err := t.SignedString(s.cfg.Secret)
 	if err != nil {
 		return "", 0, fmt.Errorf("auth.SignSession: %w", err)
+	}
+	return str, exp.UnixMilli(), nil
+}
+
+// AccountTTL 暴露 AccountTTL(login 用来对齐账号态 token 的过期展示)。
+func (s *Signer) AccountTTL() time.Duration { return s.cfg.AccountTTL }
+
+// SignAccount 签发**账号态 token**(两步登录第一步的产物)。
+//
+// sub = account_id;aud = AccountAudience(与玩家态严格分离)。jti 由调用方传(uuid v4)。
+// 它只解锁 ListAccountRoles / EnterRole 两个入口,拿不到任何玩家面能力。
+func (s *Signer) SignAccount(accountID uint64, jti string) (token string, expiresAtMs int64, err error) {
+	if accountID == 0 {
+		return "", 0, errors.New("auth.SignAccount: accountID must be > 0")
+	}
+	if jti == "" {
+		return "", 0, errors.New("auth.SignAccount: jti must be non-empty")
+	}
+	now := s.cfg.NowFn()
+	exp := now.Add(s.cfg.AccountTTL)
+	claims := AccountClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    s.cfg.Issuer,
+			Subject:   strconv.FormatUint(accountID, 10),
+			Audience:  jwt.ClaimStrings{s.cfg.AccountAudience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(exp),
+			ID:        jti,
+		},
+	}
+	// 刻意**不设 kid 头**,与 SignSession 保持一致。
+	// 账号态 token 跟 SessionToken 一样要经 Envoy jwt_authn 校验,而 envoy.yaml 的
+	// local_jwks 里那把 key 的 kid 是 "pandora-dev"(一个固定字面量,不是密钥指纹)。
+	// 一旦这里写进 keyFingerprint 指纹,Envoy 会按 kid 精确找 key、找不到就直接拒,
+	// 账号态入口会全线 401。DS 回调 / Hub 凭据那几个 Sign* 设 kid 是因为它们只在 Go
+	// 侧验签,不经 Envoy。
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	str, err := t.SignedString(s.cfg.Secret)
+	if err != nil {
+		return "", 0, fmt.Errorf("auth.SignAccount: %w", err)
 	}
 	return str, exp.UnixMilli(), nil
 }
@@ -673,6 +778,21 @@ func (v *Verifier) VerifySession(token string) (*SessionClaims, error) {
 	return &claims, nil
 }
 
+// VerifyAccount 校验**账号态 token**,返回 claims。
+//
+// 按 AccountAudience 校验 aud:玩家态 SessionToken 到这里必然失败(aud 不符),
+// 反之账号态 token 也过不了 VerifySession。这条互斥性有 TestAccountAndSessionTokensAreNotInterchangeable 钉住。
+func (v *Verifier) VerifyAccount(token string) (*AccountClaims, error) {
+	var claims AccountClaims
+	if err := v.parseIntoAudience(token, &claims, v.cfg.AccountAudience); err != nil {
+		return nil, err
+	}
+	if claims.AccountID() == 0 {
+		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "account sub not a valid account_id")
+	}
+	return &claims, nil
+}
+
 // VerifyDSTicket 校验 DSTicket,返回 claims。
 //
 // 校验项:
@@ -742,13 +862,23 @@ func (v *Verifier) VerifyDSCallback(token string) (*DSCallbackClaims, error) {
 
 // parseInto 把 token 解到 dst claims;统一翻译标准 jwt 错误到 errcode。
 func (v *Verifier) parseInto(token string, dst jwt.Claims) error {
+	return v.parseIntoAudience(token, dst, v.cfg.Audience)
+}
+
+// parseIntoAudience 是 parseInto 的显式 audience 版本。
+//
+// 拆出来只为一件事:账号态 token 与玩家态 SessionToken 用**不同 aud** 隔离
+// (见 Config.AccountAudience)。aud 校验必须留在这一层(jwt.WithAudience),
+// 与签名校验同层原子完成;搬到调用方去比对 claims.Audience 就变成了「验完签再判别」,
+// 漏判一处即越权。
+func (v *Verifier) parseIntoAudience(token string, dst jwt.Claims, audience string) error {
 	if token == "" {
 		return errcode.New(errcode.ErrLoginTicketInvalid, "empty token")
 	}
 	parser := jwt.NewParser(
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 		jwt.WithIssuer(v.cfg.Issuer),
-		jwt.WithAudience(v.cfg.Audience),
+		jwt.WithAudience(audience),
 		// exp 必须存在:所有 Sign* 都写 exp,校验侧强制要求,杜绝「签名正确但无过期时间 = 永久有效」
 		// 的令牌(审核 P1:DS 回调令牌若无 exp 即成永久凭证)。
 		jwt.WithExpirationRequired(),

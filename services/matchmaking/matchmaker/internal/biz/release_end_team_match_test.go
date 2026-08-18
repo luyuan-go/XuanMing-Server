@@ -34,7 +34,7 @@ func (r *recordingTeamReader) GetTeam(context.Context, uint64) (*teamv1.Team, bo
 	return nil, false, nil
 }
 
-func (r *recordingTeamReader) BeginTeamMatch(context.Context, uint64, uint64, string, int64) (*teamv1.Team, uint64, error) {
+func (r *recordingTeamReader) BeginTeamMatch(context.Context, uint64, uint64, string, int64, bool) (*teamv1.Team, uint64, error) {
 	return nil, 0, errors.New("not used in these tests")
 }
 

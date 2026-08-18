@@ -18,6 +18,7 @@ package biz
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -66,6 +67,38 @@ type LoginResult struct {
 	// 0 = 补号任务尚未分配(客户端显示「生成中」);读取 fail-soft,失败也是 0。
 	PlayerNo uint64
 	Resume   ResumeContextResult
+
+	// ===== 账号层(账号 / 角色分离,两步登录 2026-08-18)=====
+	//
+	// 与上面那批「角色层」字段是两个层面:账号层认证完就有,角色层要真正进入某个角色才有。
+	// Login 的 defer_role_entry=true 时只有账号层;EnterRole 的产出只有角色层。
+
+	// AccountID 账号身份(snowflake)。0 = 台账降级路径(未启用 / 不可用)。
+	AccountID uint64
+	// AccountToken 账号态 token(aud=pandora-account,短 TTL)。只解锁 ListAccountRoles / EnterRole。
+	AccountToken string
+	// AccountTokenExpMs AccountToken 过期时刻(unix ms)。
+	AccountTokenExpMs int64
+	// Roles 本账号名下全部可用角色,已按「最近登录优先」排好序,客户端默认选第一个。
+	Roles []AccountRoleView
+}
+
+// AccountRoleView 是选角界面上一个角色的可见信息(biz 层结构,service 再翻成 proto)。
+type AccountRoleView struct {
+	// PlayerID 角色实体 ID。注意:它**不是**账号 ID。
+	PlayerID uint64
+	// RoleName 角色名。优先取 player 服务当前显示名,不可达时降级为台账里的创建时名字。
+	RoleName string
+	// RoleID 该角色已选的 CfgRole 职业外观配置 ID;0 = 未选过。
+	RoleID uint32
+	// PlayerNo 角色编号(展示专用);0 = 补号窗口内尚未分配。
+	PlayerNo uint64
+	// Level 角色等级;player 服务不可达时为 0。
+	Level uint32
+	// LastLoginAtMs 该角色最近一次进入游戏(unix ms);0 = 从未进过。
+	LastLoginAtMs uint64
+	// Slot 账号内槽位。
+	Slot uint32
 }
 
 type ResumeContextResult struct {
@@ -116,6 +149,11 @@ type LoginUsecase struct {
 	notifier    data.LocationNotifier
 	hubAssigner data.HubAssigner    // W4 ⑥:hub_allocator 客户端,可为 nil(回退自签)
 	roleRepo    data.PlayerRoleRepo // 选角权威化(2026-07-08):player_roles 仓储,可为 nil(降级无选角)
+	// roleLedger 角色归属台账(account_roles;账号 / 角色分离 2026-08-18,SetRoleLedger 注入)。
+	// nil = 未启用两步登录:降级为「一账号一角色」,行为与改造前完全一致。
+	roleLedger data.AccountRoleRepo
+	// profileSeeder player 服务出口,用于把账号名播种成角色显示名(弱依赖,nil=不播种)。
+	profileSeeder ProfileSeeder
 	// ownerReleaser:owner 迁移登出释放(owner-authority.md migrate ⑤;弱依赖,nil=未启用)。
 	ownerReleaser OwnerReleaser
 	// loginLimiter 登录失败 Quota(anti-abuse §6 第 4 项;弱依赖,nil=不限)。
@@ -358,7 +396,14 @@ func waitLogin(base *LoginResult, reason loginv1.ResumeWaitReason) *LoginResult 
 	return &out
 }
 
-func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceID string) (*LoginResult, error) {
+// Login 认证账号。
+//
+// deferRoleEntry(两步登录,2026-08-18):
+//   - false(旧客户端 / 默认):认证完**自动进入默认角色**,响应里角色层字段照旧全填,
+//     已发布客户端零改动继续工作;
+//   - true(新客户端):只认证账号,返回 account_token + 角色列表,由客户端选角后调 EnterRole。
+//     不置 true 的话新客户端会白进一次角色(白占 Hub 座位、白签票、白轮换一次会话代际)。
+func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceID string, deferRoleEntry bool) (*LoginResult, error) {
 	h := plog.With(ctx)
 	// loginStartedAt 只供 login_ok / login_wait_returned 的 dur_total_ms 用(§11.3「慢在哪」):
 	// access log 只有一个总 latency,分不出慢在 bcrypt、AssignHub 还是 matchmaker 探测。
@@ -371,7 +416,9 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		return nil, lerr
 	}
 
-	playerID, expected, err := u.repo.FindByAccount(ctx, account)
+	identity, err := u.repo.FindByAccount(ctx, account)
+	playerID := identity.PlayerID
+	expected := identity.PasswordHash
 	if err != nil {
 		// 账号不存在:开发期“假注册” / 免密任一开关打开 → 首登自动注册(不阻断登录)。
 		if errcode.As(err) != errcode.ErrLoginAccountNotFound || !(u.devAutoRegister || u.devSkipPassword) {
@@ -393,13 +440,15 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 			}
 			return nil, err
 		}
-		playerID, err = u.ensureAccount(ctx, account, passwordHash)
+		identity, err = u.ensureAccount(ctx, account, passwordHash)
 		if err != nil {
 			h.Errorw("msg", "login_auto_register_failed", "err", err, "account", account)
 			return nil, err
 		}
+		playerID = identity.PlayerID
 		// 刚注册:密码即客户端本次所发,无需再校验。
-		h.Warnw("msg", "login_dev_auto_registered", "account", account, "player_id", playerID)
+		h.Warnw("msg", "login_dev_auto_registered", "account", account,
+			"account_id", identity.AccountID, "player_id", playerID)
 	} else if u.devSkipPassword {
 		// 账号已存在 + 免密模式 → 跳过密码校验。
 		h.Warnw("msg", "login_dev_skip_password", "account", account, "player_id", playerID)
@@ -432,6 +481,107 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		plog.With(ctx).Warnw("msg", "login_account_banned", "player_id", playerID, "device_id", deviceID)
 		return nil, errcode.New(errcode.ErrLoginAccountBanned, "account banned player_id=%d", playerID)
 	}
+
+	// ===== 到这里为止,认证的是**账号**;下面才开始进入某个**角色** =====
+	//
+	// 账号 / 角色分离(2026-08-18):补齐账号身份与角色台账,签账号态 token。
+	// fail-closed:台账**已启用**时解不出账号身份 / 角色归属就直接拒绝登录,不回落
+	// accounts.player_id(理由见 resolveAccountView 的注释:回落等于绕过归属校验)。
+	// 只有「本部署根本没启用台账」这一个配置态才降级为单角色兼容档 —— 那是滚动升级期
+	// (新二进制先上、000008 迁移还没跑完)与 dev 裸跑的必需品。
+	accountView, err := u.resolveAccountView(ctx, account, identity, deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	// defer_role_entry:新客户端走「Login → 选角 → EnterRole」,不要在这里白进一次角色。
+	if deferRoleEntry {
+		if !accountView.Enabled {
+			// 本部署没有台账,后续的 ListAccountRoles / EnterRole 必然返回 ErrNotImplemented。
+			// 此时若照旧回 OK,新客户端拿到的是「成功 + 空 account_token + 空角色列表」,
+			// 只能永远卡在选角界面 —— 一个没有任何错误码的死局。把这个事实直接告诉它,
+			// 让它回落成 defer_role_entry=false 的单步登录(§9.21 弱依赖降级纪律)。
+			h.Warnw("msg", "login_defer_role_entry_unsupported", "account", account,
+				"device_id", deviceID,
+				"hint", "本部署未启用角色台账;客户端应回落 defer_role_entry=false 单步登录")
+			return nil, errcode.New(errcode.ErrNotImplemented,
+				"account role ledger not configured on this deployment")
+		}
+		out := &LoginResult{
+			AccountID:         accountView.AccountID,
+			AccountToken:      accountView.Token,
+			AccountTokenExpMs: accountView.TokenExpMs,
+			Roles:             accountView.Roles,
+		}
+		h.Infow("msg", "login_account_only", "account", account,
+			"account_id", accountView.AccountID, "role_count", len(accountView.Roles),
+			"device_id", deviceID, "dur_total_ms", time.Since(loginStartedAt).Milliseconds())
+		return out, nil
+	}
+
+	// 兼容路径(旧客户端 / 未置 defer_role_entry):服务端替它自动进入**默认角色**
+	// (= 台账排序的第一个:最近登录过的那个)。
+	//
+	// 只有台账未启用时才回落 accounts.player_id;台账启用时 DefaultPlayerID 必然是
+	// 一个 status=0 且确属本账号的角色(resolveAccountView 已保证,解不出就不会走到这里)。
+	entryPlayerID := accountView.DefaultPlayerID
+	if !accountView.Enabled {
+		entryPlayerID = playerID
+	}
+	res, err := u.enterRoleSession(ctx, roleEntry{
+		Account:   account,
+		AccountID: accountView.AccountID,
+		PlayerID:  entryPlayerID,
+		DeviceID:  deviceID,
+		StartedAt: loginStartedAt,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// 账号层字段附在角色层结果上:旧客户端读它原本就在读的那些字段,新客户端还能顺带
+	// 拿到 account_token(比如它想在进游戏后仍支持「切角色」)。
+	res.AccountID = accountView.AccountID
+	res.AccountToken = accountView.Token
+	res.AccountTokenExpMs = accountView.TokenExpMs
+	res.Roles = accountView.Roles
+	return res, nil
+}
+
+// roleEntry 是「进入某个角色」所需的全部入参。
+//
+// 抽成结构体而不是一长串位置参数:Login 与 EnterRole 两个入口都要构造它,
+// 位置参数下 account 与 deviceID 都是 string,写反了编译器不会报错,
+// 后果是设备记账与顶号判别全部错位且极难发现。
+type roleEntry struct {
+	// Account 账号名,**只用于日志**(全链唯一把 account ↔ player_id 绑起来的地方)。
+	Account string
+	// AccountID 账号身份;0 = 台账降级路径(单角色兼容档)。
+	AccountID uint64
+	// PlayerID 要进入的角色实体 ID。调用方**必须**已经校验过它属于 AccountID。
+	PlayerID uint64
+	// DeviceID 本次进入所用设备(设备记账 + 顶号判别)。
+	DeviceID string
+	// StartedAt 请求起始时刻,用于 login_ok 的 dur_total_ms。
+	StartedAt time.Time
+}
+
+// enterRoleSession 是「进入某个角色」的完整流程:分配会话代际 → 写 session →
+// 路由落点 → 断线重连分诊 → 角色权威门 → 分配 Hub / 签票 → owner 复核 → 交付。
+//
+// 它是 Login(兼容路径自动进角色)与 EnterRole(两步登录显式选角)**唯一共用**的后半段。
+// 拆出来的意义不只是复用:两条路径若各写一份,任何一条漏掉 fenceLoginDelivery、
+// 漏掉 owner 复核、或漏掉 WAIT 分支,都会变成一条绕过进场防线的后门,而且只在
+// 其中一条路径上复现。
+//
+// 调用前置条件(调用方负责,本函数不再重复):账号已认证、未封禁、
+// **PlayerID 已确认属于 AccountID**。
+func (u *LoginUsecase) enterRoleSession(ctx context.Context, in roleEntry) (*LoginResult, error) {
+	h := plog.With(ctx)
+	account := in.Account
+	playerID := in.PlayerID
+	deviceID := in.DeviceID
+	loginStartedAt := in.StartedAt
+	ctx = plog.WithPlayerID(ctx, playerID)
 
 	sessJTI := uuid.NewString()
 	sessionToken, sessExpMs, err := u.signer.SignSession(playerID, sessJTI)
@@ -662,6 +812,8 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 记录最近登录设备:纯记账副作用(失败本就只日志),移出登录关键路径
 	// (压测审核【必修-1】),不给 prod 5s 登录预算叠加一次 MySQL upsert 往返。
 	u.touchDeviceAsync(ctx, playerID, deviceID)
+	// 同上:记录**这个角色**最近一次进入游戏,决定下次选角界面默认选中谁。
+	u.touchRoleLoginAsync(ctx, playerID)
 
 	// local/off 在 Hub 解析后 best-effort 通知；B1 已在分配前成功写入，不能重复写。
 	if !pendingNotified && u.notifier != nil {
@@ -694,14 +846,35 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	out.SelectedRoleID = selectedRoleID
 	decided, owned := u.resolveResumeFromOwner(ctx, playerID)
 	switch {
-	case !decided:
-		// owner 明确"无归属"却刚分配完 Hub:归属记录与分配结果不自洽,不冒充 TARGET。
+	case !decided || owned.EntryState == loginv1.ResumeEntryState_RESUME_ENTRY_STATE_WAIT:
+		// owner 明确"无归属"/结果不可判定，却刚拿到 Hub 票：不把一张没有 exact owner
+		// TARGET 背书的票交给客户端。assignment 已 durable，下一次重查可直接重签收敛。
 		h.Warnw("msg", "login_owner_missing_after_assign", "player_id", playerID,
 			"reason", "owner_record_missing_after_assign", "account", account,
 			"hub_ds_addr", hubDSAddr,
-			"hint", "不冒充 TARGET,返回 WAIT 让客户端重查权威")
+			"owner_entry_state", owned.EntryState.String(),
+			"hint", "扣住 Hub 票,返回 WAIT 让客户端重查 exact owner")
+		out.HubDSAddr, out.HubTicket, out.HubTicketExpMs = "", "", 0
 		out.Resume = waitLogin(base, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN).Resume
 	default:
+		summary, matchErr := u.verifyHubTicketMatchesOwnerResume(playerID, hubTicket, owned)
+		if matchErr != nil {
+			h.Warnw("msg", "login_hub_ticket_owner_mismatch",
+				"player_id", playerID, "account", account, "err", matchErr,
+				"owner_route", owned.Route.String(), "owner_pod", owned.DSPodName,
+				"owner_instance_uid", owned.DSInstanceUID,
+				"owner_instance_epoch", owned.DSInstanceEpoch,
+				"owner_assignment_id", owned.HubAssignmentID,
+				"owner_release_track", owned.ReleaseTrack,
+				"ticket_assignment_id", summary.HubAssignmentID,
+				"ticket_instance_uid", summary.DSInstanceUID,
+				"ticket_instance_epoch", hubTicketInstanceEpoch(summary),
+				"ticket_release_track", summary.ReleaseTrack,
+				"hint", "同一响应不得交付互相矛盾的 Hub 票与 Resume TARGET;扣票后重查")
+			out.HubDSAddr, out.HubTicket, out.HubTicketExpMs = "", "", 0
+			out.Resume = waitLogin(base, loginv1.ResumeWaitReason_RESUME_WAIT_REASON_OWNER_UNKNOWN).Resume
+			break
+		}
 		out.Resume = u.enrichResumeFromMatchAuthority(ctx, playerID, owned)
 	}
 	return deliver(&out)
@@ -1370,23 +1543,30 @@ func (u *LoginUsecase) enrichResumeFromMatchAuthority(ctx context.Context, playe
 // passwordHash 的 bcrypt 哈希 → 后续用同密码可走正常 bcrypt 校验(真实“首登即注”)。
 // 并发下若已被别的请求建好,CreateAccount 返回 ErrAlreadyExists,回查拿已存在的
 // player_id(保证同 account 名稳定)。
-func (u *LoginUsecase) ensureAccount(ctx context.Context, account, passwordHash string) (uint64, error) {
+func (u *LoginUsecase) ensureAccount(ctx context.Context, account, passwordHash string) (data.AccountIdentity, error) {
 	bcryptHash, err := passwd.Hash(passwordHash, passwd.DevCost)
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInternal, "hash password for auto-register: %v", err)
+		return data.AccountIdentity{}, errcode.New(errcode.ErrInternal, "hash password for auto-register: %v", err)
 	}
-	newID := u.sf.Generate()
-	if err := u.repo.CreateAccount(ctx, newID, account, bcryptHash); err != nil {
+	// 两个独立 snowflake:账号身份与首个角色实体从注册那一刻起就是两个 ID。
+	//
+	// accounts.player_id 仍写角色 ID(不是 accountID),这一点很关键:滚动升级期旧 login
+	// 二进制只认识这一列,它必须指向**真正有游戏数据的那个角色**,否则旧二进制登录会
+	// 返回一个没有任何存档的 player_id。
+	accountID := u.sf.Generate()
+	roleID := u.sf.Generate()
+	if err := u.repo.CreateAccount(ctx, accountID, roleID, account, bcryptHash); err != nil {
 		if errcode.As(err) == errcode.ErrAlreadyExists {
-			id, _, ferr := u.repo.FindByAccount(ctx, account)
+			// 并发注册:别人先建好了,回查拿赢家的身份(绝不返回自己刚铸的那两个 ID)。
+			existing, ferr := u.repo.FindByAccount(ctx, account)
 			if ferr != nil {
-				return 0, ferr
+				return data.AccountIdentity{}, ferr
 			}
-			return id, nil
+			return existing, nil
 		}
-		return 0, err
+		return data.AccountIdentity{}, err
 	}
-	return newID, nil
+	return data.AccountIdentity{AccountID: accountID, PlayerID: roleID, PasswordHash: bcryptHash}, nil
 }
 
 // resolveHub 解析玩家进大厅需要的 hub_ds_addr + hub_ticket(+ 票据过期 unix ms)。
@@ -1791,6 +1971,56 @@ type hubTicketSummary struct {
 	SessJTI         string // v2 会话绑定(§9.23);legacy 票恒空
 	RoleID          uint32
 	SourceMatchID   uint64
+}
+
+func hubTicketInstanceEpoch(summary hubTicketSummary) uint32 {
+	if summary.DSInstanceEpoch != 0 {
+		return summary.DSInstanceEpoch
+	}
+	return summary.DSProtocolEpoch
+}
+
+func normalizedHubReleaseTrack(track string) string {
+	if strings.TrimSpace(track) == "" {
+		return auth.ReleaseTrackStable // additive rollout:pre-track records/tickets are stable
+	}
+	return track
+}
+
+// verifyHubTicketMatchesOwnerResume 是 Login 响应的最后交付门。resolveHub 与 owner query
+// 各自成功仍不够：它们必须描述同一个 exact Hub target，才能把票据和 TARGET 放进同一响应。
+// legacy 非 strict 档允许完全无 assignment binding 的旧票继续独立联调；一旦票里出现
+// assignment ID，就必须带齐并逐字段等于 owner。
+func (u *LoginUsecase) verifyHubTicketMatchesOwnerResume(playerID uint64, ticket string,
+	resume ResumeContextResult) (hubTicketSummary, error) {
+	if resume.Route != loginv1.ResumeRoute_RESUME_ROUTE_HUB ||
+		resume.EntryState == loginv1.ResumeEntryState_RESUME_ENTRY_STATE_WAIT ||
+		resume.DSPodName == "" {
+		return hubTicketSummary{}, errcode.New(errcode.ErrInvalidState,
+			"owner did not return a Hub TARGET")
+	}
+	summary, err := u.verifyHubAssignmentTicket(playerID, &data.HubAssignment{
+		HubTicket: ticket, HubPodName: resume.DSPodName,
+	})
+	if err != nil {
+		return summary, err
+	}
+	if summary.HubAssignmentID == "" {
+		if u.requireHubAssignmentBinding || u.rs256DSTicketProfileEnabled() {
+			return summary, errcode.New(errcode.ErrInvalidState,
+				"strict Hub ticket lacks assignment binding")
+		}
+		return summary, nil
+	}
+	ticketEpoch := hubTicketInstanceEpoch(summary)
+	if summary.DSInstanceUID == "" || ticketEpoch == 0 ||
+		summary.HubAssignmentID != resume.HubAssignmentID ||
+		summary.DSInstanceUID != resume.DSInstanceUID || ticketEpoch != resume.DSInstanceEpoch ||
+		normalizedHubReleaseTrack(summary.ReleaseTrack) != normalizedHubReleaseTrack(resume.ReleaseTrack) {
+		return summary, errcode.New(errcode.ErrInvalidState,
+			"Hub ticket binding does not match owner Resume TARGET")
+	}
+	return summary, nil
 }
 
 // verifyHubAssignmentTicket 验证 hub_allocator 返回的票据并读取已验签 exp 与五要件摘要。

@@ -175,6 +175,13 @@ data:
                   # 二次取实例详情,且超时的代价是玩家整局没装备,与 UE 侧 10s 客户端超时对齐。
                   - match: { path: "/pandora.player.v1.PlayerService/GetLoadout" }
                     route: { cluster: player_cluster, timeout: 10s, idle_timeout: 60s }
+                  # DS 批量反查角色显示名(头顶铭牌,2026-08-18)。铭牌名字的权威是
+                  # players.nickname;DS 此前只能回退 CfgRole 职业名,全场人人同名。
+                  # 只放这一个精确方法:它是最小映射(player_id → nickname),不像 GetProfile
+                  # 会把等级 / 段位 / 战绩整份档案开到 DS 网段。服务端 systemOnly 兜底。
+                  # 超时 5s(同社交反查):进场路径只读,失败按未知处理不阻塞出生。
+                  - match: { path: "/pandora.player.v1.PlayerService/GetPlayerNames" }
+                    route: { cluster: player_cluster, timeout: 5s, idle_timeout: 60s }
       clusters:
       # 回环 admin(仅供 :9902 健康监听器转发 /ready,不对 Pod 外暴露)
       - name: local_admin_cluster

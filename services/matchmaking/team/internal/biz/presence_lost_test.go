@@ -113,7 +113,7 @@ func TestOnPlayerPresenceLost_组票租约在手时推迟(t *testing.T) {
 	ctx := context.Background()
 	readyTeam(t, uc, 9703, 7721, 7722)
 
-	if _, _, err := uc.BeginTeamMatch(ctx, 9703, 7721, "op-presence", 5000); err != nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9703, 7721, "op-presence", 5000, false); err != nil {
 		t.Fatalf("BeginTeamMatch: %v", err)
 	}
 	// 方案 A:Begin 已消费 ready 转 FORMING。租约在手时软化必须整体推迟,不得再叠写。

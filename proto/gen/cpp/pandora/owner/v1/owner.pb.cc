@@ -861,11 +861,11 @@ constexpr OwnerRecord::ParseTableT_ OwnerRecord::InternalGenerateParseTable_(con
     {
       PROTOBUF_FIELD_OFFSET(OwnerRecord, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      10,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -912,7 +912,10 @@ constexpr OwnerRecord::ParseTableT_ OwnerRecord::InternalGenerateParseTable_(con
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(OwnerRecord, _impl_.updated_at_ms_), 8>(),
        {72, 8, 0,
         PROTOBUF_FIELD_OFFSET(OwnerRecord, _impl_.updated_at_ms_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 hub_source_revision = 10 [json_name = "hubSourceRevision"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(OwnerRecord, _impl_.hub_source_revision_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(OwnerRecord, _impl_.hub_source_revision_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -939,6 +942,8 @@ constexpr OwnerRecord::ParseTableT_ OwnerRecord::InternalGenerateParseTable_(con
       {PROTOBUF_FIELD_OFFSET(OwnerRecord, _impl_.lease_deadline_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // int64 updated_at_ms = 9 [json_name = "updatedAtMs"];
       {PROTOBUF_FIELD_OFFSET(OwnerRecord, _impl_.updated_at_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // uint64 hub_source_revision = 10 [json_name = "hubSourceRevision"];
+      {PROTOBUF_FIELD_OFFSET(OwnerRecord, _impl_.hub_source_revision_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -970,7 +975,8 @@ inline constexpr OwnerRecord::Impl_::Impl_(
         phase_{static_cast< ::pandora::owner::v1::OwnerPhase >(0)},
         admit_not_before_ms_{::int64_t{0}},
         lease_deadline_ms_{::int64_t{0}},
-        updated_at_ms_{::int64_t{0}} {}
+        updated_at_ms_{::int64_t{0}},
+        hub_source_revision_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr OwnerRecord::OwnerRecord(::_pbi::ConstantInitialized,
@@ -1076,11 +1082,11 @@ constexpr BeginTransitionRequest::ParseTableT_ BeginTransitionRequest::InternalG
     {
       PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1104,14 +1110,17 @@ constexpr BeginTransitionRequest::ParseTableT_ BeginTransitionRequest::InternalG
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_.operation_id_)}},
       // .pandora.owner.v1.OwnerType owner_type = 4 [json_name = "ownerType"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BeginTransitionRequest, _impl_.owner_type_), 4>(),
-       {32, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BeginTransitionRequest, _impl_.owner_type_), 5>(),
+       {32, 5, 0,
         PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_.owner_type_)}},
       // .pandora.owner.v1.OwnerTarget target = 5 [json_name = "target"];
       {::_pbi::TcParser::FastMtS1,
        {42, 1, 0,
         PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_.target_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 source_revision = 6 [json_name = "sourceRevision"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BeginTransitionRequest, _impl_.source_revision_), 4>(),
+       {48, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_.source_revision_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -1123,9 +1132,11 @@ constexpr BeginTransitionRequest::ParseTableT_ BeginTransitionRequest::InternalG
       // string operation_id = 3 [json_name = "operationId"];
       {PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_.operation_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .pandora.owner.v1.OwnerType owner_type = 4 [json_name = "ownerType"];
-      {PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_.owner_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_.owner_type_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // .pandora.owner.v1.OwnerTarget target = 5 [json_name = "target"];
       {PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_.target_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 source_revision = 6 [json_name = "sourceRevision"];
+      {PROTOBUF_FIELD_OFFSET(BeginTransitionRequest, _impl_.source_revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1153,6 +1164,7 @@ inline constexpr BeginTransitionRequest::Impl_::Impl_(
         target_{nullptr},
         player_id_{::uint64_t{0u}},
         expect_epoch_{::uint64_t{0u}},
+        source_revision_{::uint64_t{0u}},
         owner_type_{static_cast< ::pandora::owner::v1::OwnerType >(0)} {}
 
 template <typename>
@@ -2069,7 +2081,7 @@ const ::uint32_t
         3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::OwnerRecord, _impl_._has_bits_),
-        12, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::OwnerRecord, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::OwnerRecord, _impl_.owner_epoch_),
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::OwnerRecord, _impl_.owner_type_),
@@ -2079,6 +2091,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::OwnerRecord, _impl_.admit_not_before_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::OwnerRecord, _impl_.lease_deadline_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::OwnerRecord, _impl_.updated_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::OwnerRecord, _impl_.hub_source_revision_),
         2,
         3,
         4,
@@ -2088,6 +2101,7 @@ const ::uint32_t
         6,
         7,
         8,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::QueryOwnerRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -2102,17 +2116,19 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::BeginTransitionRequest, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::BeginTransitionRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::BeginTransitionRequest, _impl_.expect_epoch_),
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::BeginTransitionRequest, _impl_.operation_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::BeginTransitionRequest, _impl_.owner_type_),
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::BeginTransitionRequest, _impl_.target_),
+        PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::BeginTransitionRequest, _impl_.source_revision_),
         2,
         3,
         0,
-        4,
+        5,
         1,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::owner::v1::BeginTransitionResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -2176,16 +2192,16 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::owner::v1::OwnerTarget)},
         {13, sizeof(::pandora::owner::v1::OwnerRecord)},
-        {34, sizeof(::pandora::owner::v1::QueryOwnerRequest)},
-        {39, sizeof(::pandora::owner::v1::QueryOwnerResponse)},
-        {46, sizeof(::pandora::owner::v1::BeginTransitionRequest)},
-        {59, sizeof(::pandora::owner::v1::BeginTransitionResponse)},
-        {66, sizeof(::pandora::owner::v1::AdmitRequest)},
-        {77, sizeof(::pandora::owner::v1::AdmitResponse)},
-        {86, sizeof(::pandora::owner::v1::RenewInstanceLeaseRequest)},
-        {93, sizeof(::pandora::owner::v1::RenewInstanceLeaseResponse)},
-        {100, sizeof(::pandora::owner::v1::ReleaseOwnerRequest)},
-        {109, sizeof(::pandora::owner::v1::ReleaseOwnerResponse)},
+        {36, sizeof(::pandora::owner::v1::QueryOwnerRequest)},
+        {41, sizeof(::pandora::owner::v1::QueryOwnerResponse)},
+        {48, sizeof(::pandora::owner::v1::BeginTransitionRequest)},
+        {63, sizeof(::pandora::owner::v1::BeginTransitionResponse)},
+        {70, sizeof(::pandora::owner::v1::AdmitRequest)},
+        {81, sizeof(::pandora::owner::v1::AdmitResponse)},
+        {90, sizeof(::pandora::owner::v1::RenewInstanceLeaseRequest)},
+        {97, sizeof(::pandora::owner::v1::RenewInstanceLeaseResponse)},
+        {104, sizeof(::pandora::owner::v1::ReleaseOwnerRequest)},
+        {113, sizeof(::pandora::owner::v1::ReleaseOwnerResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2211,7 +2227,7 @@ const char descriptor_table_protodef_pandora_2fowner_2fv1_2fowner_2eproto[] ABSL
     "%\n\016instance_epoch\030\003 \001(\rR\rinstanceEpoch\022="
     "\n\033assignment_or_allocation_id\030\004 \001(\tR\030ass"
     "ignmentOrAllocationId\022#\n\rrelease_track\030\005"
-    " \001(\tR\014releaseTrack\"\224\003\n\013OwnerRecord\022\033\n\tpl"
+    " \001(\tR\014releaseTrack\"\304\003\n\013OwnerRecord\022\033\n\tpl"
     "ayer_id\030\001 \001(\004R\010playerId\022\037\n\013owner_epoch\030\002"
     " \001(\004R\nownerEpoch\022:\n\nowner_type\030\003 \001(\0162\033.p"
     "andora.owner.v1.OwnerTypeR\townerType\0222\n\005"
@@ -2221,58 +2237,60 @@ const char descriptor_table_protodef_pandora_2fowner_2fv1_2fowner_2eproto[] ABSL
     "\006 \001(\tR\013operationId\022-\n\023admit_not_before_m"
     "s\030\007 \001(\003R\020admitNotBeforeMs\022*\n\021lease_deadl"
     "ine_ms\030\010 \001(\003R\017leaseDeadlineMs\022\"\n\rupdated"
-    "_at_ms\030\t \001(\003R\013updatedAtMs\"0\n\021QueryOwnerR"
-    "equest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"{\n\022Q"
-    "ueryOwnerResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
-    "a.common.v1.ErrCodeR\004code\0225\n\006record\030\002 \001("
-    "\0132\035.pandora.owner.v1.OwnerRecordR\006record"
-    "\"\356\001\n\026BeginTransitionRequest\022\033\n\tplayer_id"
-    "\030\001 \001(\004R\010playerId\022!\n\014expect_epoch\030\002 \001(\004R\013"
-    "expectEpoch\022!\n\014operation_id\030\003 \001(\tR\013opera"
-    "tionId\022:\n\nowner_type\030\004 \001(\0162\033.pandora.own"
-    "er.v1.OwnerTypeR\townerType\0225\n\006target\030\005 \001"
-    "(\0132\035.pandora.owner.v1.OwnerTargetR\006targe"
-    "t\"\200\001\n\027BeginTransitionResponse\022.\n\004code\030\001 "
-    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\0225\n"
-    "\006record\030\002 \001(\0132\035.pandora.owner.v1.OwnerRe"
-    "cordR\006record\"\246\001\n\014AdmitRequest\022\033\n\tplayer_"
-    "id\030\001 \001(\004R\010playerId\022\037\n\013owner_epoch\030\002 \001(\004R"
-    "\nownerEpoch\022!\n\014operation_id\030\003 \001(\tR\013opera"
-    "tionId\0225\n\006target\030\004 \001(\0132\035.pandora.owner.v"
-    "1.OwnerTargetR\006target\"\234\001\n\rAdmitResponse\022"
-    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
-    "eR\004code\0225\n\006record\030\002 \001(\0132\035.pandora.owner."
-    "v1.OwnerRecordR\006record\022$\n\016retry_after_ms"
-    "\030\003 \001(\003R\014retryAfterMs\"w\n\031RenewInstanceLea"
-    "seRequest\0225\n\006target\030\001 \001(\0132\035.pandora.owne"
-    "r.v1.OwnerTargetR\006target\022#\n\rlease_second"
-    "s\030\002 \001(\rR\014leaseSeconds\"x\n\032RenewInstanceLe"
-    "aseResponse\022.\n\004code\030\001 \001(\0162\032.pandora.comm"
-    "on.v1.ErrCodeR\004code\022*\n\021lease_deadline_ms"
-    "\030\002 \001(\003R\017leaseDeadlineMs\"v\n\023ReleaseOwnerR"
-    "equest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\037\n\013o"
-    "wner_epoch\030\002 \001(\004R\nownerEpoch\022!\n\014operatio"
-    "n_id\030\003 \001(\tR\013operationId\"}\n\024ReleaseOwnerR"
-    "esponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v"
-    "1.ErrCodeR\004code\0225\n\006record\030\002 \001(\0132\035.pandor"
-    "a.owner.v1.OwnerRecordR\006record*K\n\tOwnerT"
-    "ype\022\023\n\017OWNER_TYPE_NONE\020\000\022\022\n\016OWNER_TYPE_H"
-    "UB\020\001\022\025\n\021OWNER_TYPE_BATTLE\020\002*\\\n\nOwnerPhas"
-    "e\022\033\n\027OWNER_PHASE_UNSPECIFIED\020\000\022\027\n\023OWNER_"
-    "PHASE_PENDING\020\001\022\030\n\024OWNER_PHASE_ADMITTED\020"
-    "\0022\351\003\n\014OwnerService\022W\n\nQueryOwner\022#.pando"
-    "ra.owner.v1.QueryOwnerRequest\032$.pandora."
-    "owner.v1.QueryOwnerResponse\022f\n\017BeginTran"
-    "sition\022(.pandora.owner.v1.BeginTransitio"
-    "nRequest\032).pandora.owner.v1.BeginTransit"
-    "ionResponse\022H\n\005Admit\022\036.pandora.owner.v1."
-    "AdmitRequest\032\037.pandora.owner.v1.AdmitRes"
-    "ponse\022o\n\022RenewInstanceLease\022+.pandora.ow"
-    "ner.v1.RenewInstanceLeaseRequest\032,.pando"
-    "ra.owner.v1.RenewInstanceLeaseResponse\022]"
-    "\n\014ReleaseOwner\022%.pandora.owner.v1.Releas"
-    "eOwnerRequest\032&.pandora.owner.v1.Release"
-    "OwnerResponseb\006proto3"
+    "_at_ms\030\t \001(\003R\013updatedAtMs\022.\n\023hub_source_"
+    "revision\030\n \001(\004R\021hubSourceRevision\"0\n\021Que"
+    "ryOwnerRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
+    "rId\"{\n\022QueryOwnerResponse\022.\n\004code\030\001 \001(\0162"
+    "\032.pandora.common.v1.ErrCodeR\004code\0225\n\006rec"
+    "ord\030\002 \001(\0132\035.pandora.owner.v1.OwnerRecord"
+    "R\006record\"\227\002\n\026BeginTransitionRequest\022\033\n\tp"
+    "layer_id\030\001 \001(\004R\010playerId\022!\n\014expect_epoch"
+    "\030\002 \001(\004R\013expectEpoch\022!\n\014operation_id\030\003 \001("
+    "\tR\013operationId\022:\n\nowner_type\030\004 \001(\0162\033.pan"
+    "dora.owner.v1.OwnerTypeR\townerType\0225\n\006ta"
+    "rget\030\005 \001(\0132\035.pandora.owner.v1.OwnerTarge"
+    "tR\006target\022\'\n\017source_revision\030\006 \001(\004R\016sour"
+    "ceRevision\"\200\001\n\027BeginTransitionResponse\022."
+    "\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCode"
+    "R\004code\0225\n\006record\030\002 \001(\0132\035.pandora.owner.v"
+    "1.OwnerRecordR\006record\"\246\001\n\014AdmitRequest\022\033"
+    "\n\tplayer_id\030\001 \001(\004R\010playerId\022\037\n\013owner_epo"
+    "ch\030\002 \001(\004R\nownerEpoch\022!\n\014operation_id\030\003 \001"
+    "(\tR\013operationId\0225\n\006target\030\004 \001(\0132\035.pandor"
+    "a.owner.v1.OwnerTargetR\006target\"\234\001\n\rAdmit"
+    "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
+    "v1.ErrCodeR\004code\0225\n\006record\030\002 \001(\0132\035.pando"
+    "ra.owner.v1.OwnerRecordR\006record\022$\n\016retry"
+    "_after_ms\030\003 \001(\003R\014retryAfterMs\"w\n\031RenewIn"
+    "stanceLeaseRequest\0225\n\006target\030\001 \001(\0132\035.pan"
+    "dora.owner.v1.OwnerTargetR\006target\022#\n\rlea"
+    "se_seconds\030\002 \001(\rR\014leaseSeconds\"x\n\032RenewI"
+    "nstanceLeaseResponse\022.\n\004code\030\001 \001(\0162\032.pan"
+    "dora.common.v1.ErrCodeR\004code\022*\n\021lease_de"
+    "adline_ms\030\002 \001(\003R\017leaseDeadlineMs\"v\n\023Rele"
+    "aseOwnerRequest\022\033\n\tplayer_id\030\001 \001(\004R\010play"
+    "erId\022\037\n\013owner_epoch\030\002 \001(\004R\nownerEpoch\022!\n"
+    "\014operation_id\030\003 \001(\tR\013operationId\"}\n\024Rele"
+    "aseOwnerResponse\022.\n\004code\030\001 \001(\0162\032.pandora"
+    ".common.v1.ErrCodeR\004code\0225\n\006record\030\002 \001(\013"
+    "2\035.pandora.owner.v1.OwnerRecordR\006record*"
+    "K\n\tOwnerType\022\023\n\017OWNER_TYPE_NONE\020\000\022\022\n\016OWN"
+    "ER_TYPE_HUB\020\001\022\025\n\021OWNER_TYPE_BATTLE\020\002*\\\n\n"
+    "OwnerPhase\022\033\n\027OWNER_PHASE_UNSPECIFIED\020\000\022"
+    "\027\n\023OWNER_PHASE_PENDING\020\001\022\030\n\024OWNER_PHASE_"
+    "ADMITTED\020\0022\351\003\n\014OwnerService\022W\n\nQueryOwne"
+    "r\022#.pandora.owner.v1.QueryOwnerRequest\032$"
+    ".pandora.owner.v1.QueryOwnerResponse\022f\n\017"
+    "BeginTransition\022(.pandora.owner.v1.Begin"
+    "TransitionRequest\032).pandora.owner.v1.Beg"
+    "inTransitionResponse\022H\n\005Admit\022\036.pandora."
+    "owner.v1.AdmitRequest\032\037.pandora.owner.v1"
+    ".AdmitResponse\022o\n\022RenewInstanceLease\022+.p"
+    "andora.owner.v1.RenewInstanceLeaseReques"
+    "t\032,.pandora.owner.v1.RenewInstanceLeaseR"
+    "esponse\022]\n\014ReleaseOwner\022%.pandora.owner."
+    "v1.ReleaseOwnerRequest\032&.pandora.owner.v"
+    "1.ReleaseOwnerResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fowner_2fv1_2fowner_2eproto_deps[1] = {
@@ -2282,7 +2300,7 @@ static ::absl::once_flag descriptor_table_pandora_2fowner_2fv1_2fowner_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fowner_2fv1_2fowner_2eproto = {
     false,
     false,
-    2741,
+    2830,
     descriptor_table_protodef_pandora_2fowner_2fv1_2fowner_2eproto,
     "pandora/owner/v1/owner.proto",
     &descriptor_table_pandora_2fowner_2fv1_2fowner_2eproto_once,
@@ -2696,9 +2714,9 @@ OwnerRecord::OwnerRecord(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, updated_at_ms_) -
+           offsetof(Impl_, hub_source_revision_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::updated_at_ms_));
+               sizeof(Impl_::hub_source_revision_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.owner.v1.OwnerRecord)
 }
@@ -2713,9 +2731,9 @@ inline void OwnerRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, target_),
            0,
-           offsetof(Impl_, updated_at_ms_) -
+           offsetof(Impl_, hub_source_revision_) -
                offsetof(Impl_, target_) +
-               sizeof(Impl_::updated_at_ms_));
+               sizeof(Impl_::hub_source_revision_));
 }
 OwnerRecord::~OwnerRecord() {
   // @@protoc_insertion_point(destructor:pandora.owner.v1.OwnerRecord)
@@ -2781,7 +2799,11 @@ PROTOBUF_NOINLINE void OwnerRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.lease_deadline_ms_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.lease_deadline_ms_));
   }
-  _impl_.updated_at_ms_ = ::int64_t{0};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.updated_at_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.hub_source_revision_) -
+        reinterpret_cast<char*>(&_impl_.updated_at_ms_)) + sizeof(_impl_.hub_source_revision_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -2885,6 +2907,15 @@ PROTOBUF_NOINLINE void OwnerRecord::Clear() {
     }
   }
 
+  // uint64 hub_source_revision = 10 [json_name = "hubSourceRevision"];
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_hub_source_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_hub_source_revision(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2966,12 +2997,19 @@ PROTOBUF_NOINLINE void OwnerRecord::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // int64 updated_at_ms = 9 [json_name = "updatedAtMs"];
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_updated_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_updated_at_ms());
+      }
+    }
+    // uint64 hub_source_revision = 10 [json_name = "hubSourceRevision"];
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_hub_source_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_hub_source_revision());
       }
     }
   }
@@ -3042,9 +3080,16 @@ void OwnerRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_updated_at_ms() != 0) {
-      _this->_impl_.updated_at_ms_ = from._impl_.updated_at_ms_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_updated_at_ms() != 0) {
+        _this->_impl_.updated_at_ms_ = from._impl_.updated_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_hub_source_revision() != 0) {
+        _this->_impl_.hub_source_revision_ = from._impl_.hub_source_revision_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3068,8 +3113,8 @@ void OwnerRecord::InternalSwap(OwnerRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.operation_id_, &other->_impl_.operation_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(OwnerRecord, _impl_.updated_at_ms_)
-      + sizeof(OwnerRecord::_impl_.updated_at_ms_)
+      PROTOBUF_FIELD_OFFSET(OwnerRecord, _impl_.hub_source_revision_)
+      + sizeof(OwnerRecord::_impl_.hub_source_revision_)
       - PROTOBUF_FIELD_OFFSET(OwnerRecord, _impl_.target_)>(
           reinterpret_cast<char*>(&_impl_.target_),
           reinterpret_cast<char*>(&other->_impl_.target_));
@@ -3635,7 +3680,7 @@ PROTOBUF_NOINLINE void BeginTransitionRequest::Clear() {
       _impl_.target_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.owner_type_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.owner_type_));
@@ -3692,7 +3737,7 @@ PROTOBUF_NOINLINE void BeginTransitionRequest::Clear() {
   }
 
   // .pandora.owner.v1.OwnerType owner_type = 4 [json_name = "ownerType"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_owner_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -3705,6 +3750,15 @@ PROTOBUF_NOINLINE void BeginTransitionRequest::Clear() {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         5, *this_._impl_.target_, this_._impl_.target_->GetCachedSize(), target,
         stream);
+  }
+
+  // uint64 source_revision = 6 [json_name = "sourceRevision"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_source_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_source_revision(), target);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -3732,7 +3786,7 @@ PROTOBUF_NOINLINE void BeginTransitionRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // string operation_id = 3 [json_name = "operationId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_operation_id().empty()) {
@@ -3759,8 +3813,15 @@ PROTOBUF_NOINLINE void BeginTransitionRequest::Clear() {
             this_._internal_expect_epoch());
       }
     }
-    // .pandora.owner.v1.OwnerType owner_type = 4 [json_name = "ownerType"];
+    // uint64 source_revision = 6 [json_name = "sourceRevision"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_source_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_source_revision());
+      }
+    }
+    // .pandora.owner.v1.OwnerType owner_type = 4 [json_name = "ownerType"];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_owner_type() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_owner_type());
@@ -3785,7 +3846,7 @@ void BeginTransitionRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_operation_id().empty()) {
         _this->_internal_set_operation_id(from._internal_operation_id());
@@ -3814,6 +3875,11 @@ void BeginTransitionRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_source_revision() != 0) {
+        _this->_impl_.source_revision_ = from._impl_.source_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_owner_type() != 0) {
         _this->_impl_.owner_type_ = from._impl_.owner_type_;
       }

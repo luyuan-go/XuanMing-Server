@@ -725,6 +725,231 @@ func TestAllocateBattleTrueConcurrencyOnlyOneExternalAllocation(t *testing.T) {
 	}
 }
 
+// 技术 READY 先于 owner bind 可见时，claim loser 只能只读确认 owner；不得抢跑 Begin，
+// 更不得把 ds_addr 交付出去。唯一 winner 完成 bind 后，后续幂等 loser 才可复用 READY。
+func TestAllocateBattleClaimLoserWithholdsReadyUntilOwnerExact(t *testing.T) {
+	const matchID = uint64(701)
+	players := []uint64{1001}
+	ctx := context.Background()
+	uc, repo := newUsecase(t)
+	beginStarted := make(chan struct{})
+	beginProceed := make(chan struct{})
+	owner := &scriptedOwnerAuthority{
+		records:      map[uint64]data.OwnerRecordView{},
+		beginStarted: beginStarted,
+		beginProceed: beginProceed,
+	}
+	uc.SetOwnerAuthority(owner)
+	type result struct {
+		res *AllocateResult
+		err error
+	}
+
+	winnerDone := make(chan result, 1)
+	go func() {
+		res, err := uc.AllocateBattle(ctx, matchID, players, 1, "ranked")
+		winnerDone <- result{res: res, err: err}
+	}()
+	feedReadyHeartbeat(t, uc, repo, matchID, int32(len(players)))
+	select {
+	case <-beginStarted:
+	case <-time.After(time.Second):
+		t.Fatal("claim winner never reached owner Begin after technical READY")
+	}
+
+	// winner 的 Begin 被确定性卡住，此时 Redis battle 已 running，但 owner 仍非 exact。
+	// 同 match 的 claim loser 必须 fail-closed，且只能 Query，不能 Begin/Release/cleanup。
+	loserDone := make(chan result, 1)
+	go func() {
+		res, err := uc.AllocateBattle(ctx, matchID, players, 1, "ranked")
+		loserDone <- result{res: res, err: err}
+	}()
+	select {
+	case got := <-loserDone:
+		if got.res != nil || errcode.As(got.err) != errcode.ErrUnavailable {
+			t.Fatalf("owner 未 bind 时 loser 必须拒绝 READY: res=%+v code=%v err=%v",
+				got.res, errcode.As(got.err), got.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("claim loser 在只读 owner 门上未及时 fail-closed")
+	}
+	if len(owner.releases) != 0 {
+		t.Fatalf("claim loser 不得 Release/cleanup owner: releases=%v", owner.releases)
+	}
+
+	close(beginProceed)
+	var winner *AllocateResult
+	select {
+	case got := <-winnerDone:
+		if got.err != nil || got.res == nil {
+			t.Fatalf("winner owner bind 完成后应交付 READY: res=%+v err=%v", got.res, got.err)
+		}
+		winner = got.res
+	case <-time.After(time.Second):
+		t.Fatal("claim winner owner bind 解锁后未返回")
+	}
+
+	// owner 已 full-exact 后，幂等 loser 只 Query + allocation postcheck 即可返回同一目标；
+	// Begin 总数仍只有 winner 的一次，证明 loser 没有变成第二个 binder。
+	after, err := uc.AllocateBattle(ctx, matchID, players, 1, "ranked")
+	if err != nil || after == nil || *after != *winner {
+		t.Fatalf("owner exact 后幂等 loser 应复用同一 READY: got=%+v want=%+v err=%v", after, winner, err)
+	}
+	if len(owner.beginOps) != 1 {
+		t.Fatalf("claim loser 不得调用 Begin: total begins=%d", len(owner.beginOps))
+	}
+	if len(owner.releases) != 0 {
+		t.Fatalf("成功复用 READY 不得 Release owner: releases=%v", owner.releases)
+	}
+}
+
+// owner Begin 可能已 commit 但回包与 readback 同时失败时，winner 必须返回 Unavailable
+// 且保留技术 READY allocation/Pod。权威恢复后，幂等 claim loser 只能 Query+postcheck，
+// 不再 Begin，即可安全交付同一目标。
+func TestAllocateBattleRetainsReadyAllocationOnOwnerBeginOutcomeUnknown(t *testing.T) {
+	const matchID = uint64(703)
+	players := []uint64{1003}
+	ctx := context.Background()
+	alloc := &countingAllocator{inner: NewMockGameServerAllocator(testCfg())}
+	uc, repo, _ := newUsecaseWithAlloc(t, alloc)
+	owner := &scriptedOwnerAuthority{
+		records:        map[uint64]data.OwnerRecordView{},
+		queryErr:       errcode.New(errcode.ErrUnavailable, "readback unavailable"),
+		queryErrAfter:  1, // 初始 Query 成功，commit 后 readback 失败。
+		beginCommitErr: errcode.New(errcode.ErrUnavailable, "response lost after commit"),
+	}
+	uc.SetOwnerAuthority(owner)
+	type result struct {
+		res *AllocateResult
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		res, err := uc.AllocateBattle(ctx, matchID, players, 1, "ranked")
+		done <- result{res: res, err: err}
+	}()
+	feedReadyHeartbeat(t, uc, repo, matchID, int32(len(players)))
+	got := <-done
+	if got.res != nil || errcode.As(got.err) != errcode.ErrUnavailable ||
+		!errors.Is(got.err, errOwnerBeginOutcomeUnknown) {
+		t.Fatalf("outcome unknown 必须拒绝交付并保留 sentinel: res=%+v code=%v err=%v",
+			got.res, errcode.As(got.err), got.err)
+	}
+	if alloc.releases != 0 {
+		t.Fatalf("outcome unknown 不得回收 Pod: releases=%d", alloc.releases)
+	}
+	battle, found, err := repo.GetBattle(ctx, matchID)
+	if err != nil || !found {
+		t.Fatalf("outcome unknown 必须保留 allocation: found=%v err=%v", found, err)
+	}
+	expected := allocateResultFromBattle(battle)
+	if expected == nil || !ownerRecordExactlyTargets(owner.records[players[0]], ownerTypeBattle,
+		ownerTargetFromAllocateResult(expected)) {
+		t.Fatalf("测试桩应已 commit exact owner: battle=%+v owner=%+v", battle, owner.records[players[0]])
+	}
+	if len(owner.releases) != 0 {
+		t.Fatalf("outcome unknown 不得 Release owner: releases=%v", owner.releases)
+	}
+
+	// 模拟 owner 权威恢复。claim loser 不产生第二个 Begin，只读确认后返回原目标。
+	owner.mu.Lock()
+	owner.queryErr = nil
+	owner.mu.Unlock()
+	retry, retryErr := uc.AllocateBattle(ctx, matchID, players, 1, "ranked")
+	if retryErr != nil || retry == nil || *retry != *expected {
+		t.Fatalf("权威恢复后 loser 应只读收敛同 allocation: got=%+v want=%+v err=%v",
+			retry, expected, retryErr)
+	}
+	if len(owner.beginOps) != 1 || alloc.releases != 0 || len(owner.releases) != 0 {
+		t.Fatalf("只读收敛不得新增 Begin/Release/cleanup: begins=%d owner_releases=%v pod_releases=%d",
+			len(owner.beginOps), owner.releases, alloc.releases)
+	}
+}
+
+// 上一条用例在 ready 态判别不出保留分支:DeleteBattleIfAllocationMatches 与
+// FencePreactiveReleaseExpected 的状态白名单都不含 ready/running,cleanup 本来就动不了手,
+// 把保留分支整段删掉它照样绿。真正能判别的是 abandoned:owner Begin 有 5s 预算,同窗口内
+// no-show 空局、roster 到齐期限、stale 心跳 sweep 三处写者都能把 ready→abandoned
+// (allocator.go 2859 / 2905 / 3892),而 abandoned 在两条白名单里都放行。
+// 此时若按普通分配失败走补偿链,就会回收一台 owner 可能已 commit 指向的 Pod——
+// 正是 INC-20260818-002 要挡的形状。
+func TestAllocateBattleRetainsAbandonedAllocationOnOwnerBeginOutcomeUnknown(t *testing.T) {
+	const matchID = uint64(704)
+	players := []uint64{1004}
+	ctx := context.Background()
+	alloc := &countingAllocator{inner: NewMockGameServerAllocator(testCfg())}
+	uc, repo, _ := newUsecaseWithAlloc(t, alloc)
+	beginStarted := make(chan struct{})
+	beginProceed := make(chan struct{})
+	owner := &scriptedOwnerAuthority{
+		records:        map[uint64]data.OwnerRecordView{},
+		queryErr:       errcode.New(errcode.ErrUnavailable, "readback unavailable"),
+		queryErrAfter:  1, // 初始 Query 成功，commit 后 readback 失败。
+		beginCommitErr: errcode.New(errcode.ErrUnavailable, "response lost after commit"),
+		beginStarted:   beginStarted,
+		beginProceed:   beginProceed,
+	}
+	uc.SetOwnerAuthority(owner)
+	type result struct {
+		res *AllocateResult
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		res, err := uc.AllocateBattle(ctx, matchID, players, 1, "ranked")
+		done <- result{res: res, err: err}
+	}()
+	feedReadyHeartbeat(t, uc, repo, matchID, int32(len(players)))
+
+	// Begin 在途时判弃本局:制造「cleanup 白名单放行」的窗口。
+	select {
+	case <-beginStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("owner Begin 从未开始")
+	}
+	if err := repo.UpdateBattleKeepTTL(ctx, matchID, 3, func(b *dsv1.BattleStorageRecord) error {
+		b.State = stateAbandoned
+		return nil
+	}); err != nil {
+		t.Fatalf("置 abandoned 失败: %v", err)
+	}
+	close(beginProceed)
+
+	got := <-done
+	if got.res != nil || errcode.As(got.err) != errcode.ErrUnavailable ||
+		!errors.Is(got.err, errOwnerBeginOutcomeUnknown) {
+		t.Fatalf("outcome unknown 必须拒绝交付并保留 sentinel: res=%+v code=%v err=%v",
+			got.res, errcode.As(got.err), got.err)
+	}
+	battle, found, err := repo.GetBattle(ctx, matchID)
+	if err != nil || !found {
+		t.Fatalf("outcome unknown 必须保留 allocation: found=%v err=%v", found, err)
+	}
+	if battle.GetState() != stateAbandoned {
+		t.Fatalf("前置条件失效:必须在 cleanup 白名单放行的状态下判别,state=%s", battle.GetState())
+	}
+	if alloc.releases != 0 {
+		t.Fatalf("outcome unknown 不得回收 Pod(owner 可能已 commit 指向它): releases=%d", alloc.releases)
+	}
+	if len(owner.releases) != 0 {
+		t.Fatalf("outcome unknown 不得 Release owner: releases=%v", owner.releases)
+	}
+}
+
+func TestVerifyExistingReadyDeliveryRejectsAllocationDrift(t *testing.T) {
+	const matchID = uint64(702)
+	uc, repo := newUsecase(t)
+	ready := allocateReady(t, uc, repo, matchID, []uint64{1002}, 1, "ranked")
+	stale := *ready
+	stale.AllocationID = uuid.NewString()
+
+	got, err := uc.verifyExistingReadyDelivery(context.Background(), matchID, []uint64{1002}, &stale)
+	if got != nil || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("owner 校验后的 allocation 漂移必须拒绝 READY: got=%+v code=%v err=%v",
+			got, errcode.As(err), err)
+	}
+}
+
 func TestBattleModelB_EndToEndStageDeliverActivateReady(t *testing.T) {
 	ctx := context.Background()
 	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}

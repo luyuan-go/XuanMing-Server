@@ -26,6 +26,7 @@ import (
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	loginv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/login/v1"
 	"github.com/luyuancpp/pandora/services/account/login/internal/biz"
+	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
 
 // playerNoRPCRepo 是可注入错误的账号仓储 fake(同目录 playerNoAccountRepo 只回固定值)。
@@ -34,10 +35,18 @@ type playerNoRPCRepo struct {
 	err      error
 }
 
-func (r *playerNoRPCRepo) FindByAccount(context.Context, string) (uint64, string, error) {
-	return 42, "", nil
+func (r *playerNoRPCRepo) FindByAccount(context.Context, string) (data.AccountIdentity, error) {
+	return data.AccountIdentity{AccountID: 42, PlayerID: 42}, nil
 }
-func (r *playerNoRPCRepo) CreateAccount(context.Context, uint64, string, string) error { return nil }
+func (r *playerNoRPCRepo) FindByAccountID(context.Context, uint64) (data.AccountIdentity, error) {
+	return data.AccountIdentity{AccountID: 42, PlayerID: 42}, nil
+}
+func (r *playerNoRPCRepo) BackfillAccountID(_ context.Context, _, candidate uint64) (uint64, error) {
+	return candidate, nil
+}
+func (r *playerNoRPCRepo) CreateAccount(context.Context, uint64, uint64, string, string) error {
+	return nil
+}
 func (r *playerNoRPCRepo) CheckBanned(context.Context, uint64, string) (bool, error) {
 	return false, nil
 }

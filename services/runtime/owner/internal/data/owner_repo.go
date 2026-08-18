@@ -18,6 +18,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/placement"
 )
 
 // OwnerType 取值(对齐 owner.proto OwnerType)。
@@ -176,6 +177,19 @@ type OwnerRecord struct {
 	AdmitNotBeforeMs int64
 	LeaseDeadlineMs  int64
 	UpdatedAtMs      int64
+
+	// HubSourceRevision 该玩家的 **Hub 来源版本高水位**(INC-20260818-003)。
+	//
+	// 它与 OwnerEpoch 是两个不同维度,别混:
+	//   - OwnerEpoch 回答「谁**后**提交」——由 Owner 自己在 CAS 时 +1;
+	//   - HubSourceRevision 回答「谁的**来源**更新」——由 hub_allocator 在真正改变
+	//     target 的 assignment CAS 上领号,Owner 只负责比较与持久化。
+	// 事故反例里旧 binary 恰好能拿到合法的 expect_epoch(它先 Begin 后 CAS),
+	// 所以只靠 epoch 挡不住它;能挡住的只有来源版本。
+	//
+	// **只前进,永不清零**:Release 与 BATTLE 迁移都不动它。清零等于「打完一局回大厅」
+	// 就把门重新对 legacy(0)敞开,滚动窗口里的旧写者随即又能写进来。
+	HubSourceRevision uint64
 }
 
 // OwnerRepo 是 owner 权威数据层抽象。
@@ -188,7 +202,7 @@ type OwnerRepo interface {
 	// (失联对局 DS 的双可玩/迟到写风险);旧 owner=HUB 或无 → now(协作迁移,双写由 epoch
 	// fencing 拦,双可玩由客户端单连接拆链拦;详见实现处举证)。
 	// 同 (player, operationID) 幂等重放。expect 不符 → ErrOwnerEpochConflict(附当前记录)。
-	BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target OwnerTarget, skewMargin time.Duration) (OwnerRecord, error)
+	BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target OwnerTarget, sourceRevision uint64, skewMargin time.Duration) (OwnerRecord, error)
 
 	// Admit 屏障开 + epoch/operation/实例全等 → PENDING→ADMITTED;已 ADMITTED 幂等重放。
 	// 屏障未开 → ErrOwnerBarrierNotOpen(retryAfterMs>0)。
@@ -207,6 +221,8 @@ type OwnerRepo interface {
 // MySQLOwnerRepo 基于 database/sql 的实现(生产连 TiDB,dev 连单机 MySQL;DDL 同构)。
 type MySQLOwnerRepo struct {
 	db *sql.DB
+	// rejectLegacySourceRevision 见 SetRejectLegacySourceRevision。默认 false = 兼容窗。
+	rejectLegacySourceRevision bool
 }
 
 // NewMySQLOwnerRepo 构造。
@@ -222,7 +238,7 @@ func scanRecordRow(row *sql.Row, playerID uint64) (OwnerRecord, bool, error) {
 	err := row.Scan(&rec.OwnerEpoch, &rec.OwnerType, &rec.Phase,
 		&rec.Target.PodName, &rec.Target.InstanceUID, &rec.Target.InstanceEpoch,
 		&rec.Target.AssignmentOrAllocationID, &rec.Target.ReleaseTrack,
-		&rec.OperationID, &rec.AdmitNotBeforeMs, &rec.UpdatedAtMs)
+		&rec.OperationID, &rec.AdmitNotBeforeMs, &rec.HubSourceRevision, &rec.UpdatedAtMs)
 	if errors.Is(err, sql.ErrNoRows) {
 		return rec, false, nil
 	}
@@ -233,7 +249,7 @@ func scanRecordRow(row *sql.Row, playerID uint64) (OwnerRecord, bool, error) {
 }
 
 const selectRecordCols = `SELECT owner_epoch, owner_type, phase, pod_name, instance_uid, instance_epoch,
- assignment_or_allocation_id, release_track, operation_id, admit_not_before_ms, updated_at_ms
+ assignment_or_allocation_id, release_track, operation_id, admit_not_before_ms, hub_source_revision, updated_at_ms
  FROM owner_record WHERE player_id = ?`
 
 // lockRecordTx 确保并锁定 owner_record 行(无行则建 epoch=0/none 再锁)。
@@ -319,7 +335,73 @@ func (r *MySQLOwnerRepo) Query(ctx context.Context, playerID uint64) (OwnerRecor
 	return rec, nil
 }
 
-func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target OwnerTarget, skewMargin time.Duration) (OwnerRecord, error) {
+// sourceRevisionDecision 是来源版本闸门的判定结果。reason 只进日志与错误文案:
+// 五种拒因在排障时含义完全不同(旧写者 vs 迟到写 vs 铸号重复),合并成一句会白丢线索。
+type sourceRevisionDecision struct {
+	allow bool
+	// advance 表示本次放行**应当**把高水位推进到 incoming。
+	//
+	// 它是判定的**声明**,不是执行:写入路径刻意用 `max(旧水位, incoming)` 而不是
+	// `if advance { 水位 = incoming }`。两者在当前矩阵下等价,但取 max 在矩阵将来被扩写时
+	// 更安全 —— 万一有人加出一条 allow=true / advance=false 却 incoming>高水位 的分支,
+	// max 仍然把水位顶上去(水位越高越安全),按 advance 分支则会把水位留在低位,
+	// 等于给更旧的来源留了一道缝。所以本字段目前只被判定矩阵的测试与排障读。
+	advance bool
+	reason  string // 稳定的机器可读原因(日志 join key)
+}
+
+// classifySourceRevision 是 INC-20260818-003 的判定矩阵本体(纯函数,与 DB 无关)。
+//
+//	highWater  = 该玩家已见过的最大 Hub 来源版本(0 = 从未见过带版本的写者)
+//	incoming   = 本次 Begin 携带的版本(0 = legacy,调用方尚未滚上本协议)
+//	sameTarget = 本次 target 与记录里的 target 是否全等
+//	rejectLegacy = 全局 legacy 拒绝门(分阶段发布最后一步才打开)
+//
+// 判定表(顺序即优先级):
+//
+//	incoming=0 且 rejectLegacy         → 拒:旧写者已宣称排空,不该再有 legacy 请求
+//	incoming=0 且 highWater>0          → 拒:该玩家见过版本,legacy 永久出局(逐玩家自动生效)
+//	incoming=0 且 highWater=0          → 放行、不推进:兼容窗内的正常旧写者
+//	incoming<highWater                 → 拒:来源更旧(事故反例里迟到的 R1/R2 就落在这)
+//	incoming=highWater 且 sameTarget   → 放行、不推进:同一来源的重复投递,幂等
+//	incoming=highWater 且 !sameTarget  → 拒:同一个版本号不可能产出两个 target,
+//	                                        出现即说明铸号被复制(两个写者共用了同一任期)
+//	incoming>highWater                 → 放行并推进:唯一的正常前进路径
+//
+// 注意「放行」不等于「一定会写」:放行只是过了本闸,后面还有 epoch CAS 与各条 no-op 分支。
+func classifySourceRevision(highWater, incoming uint64, sameTarget, rejectLegacy bool) sourceRevisionDecision {
+	if incoming == placement.SourceRevisionLegacy {
+		switch {
+		case rejectLegacy:
+			return sourceRevisionDecision{reason: "legacy_rejected_globally"}
+		case highWater > 0:
+			return sourceRevisionDecision{reason: "legacy_after_versioned"}
+		default:
+			return sourceRevisionDecision{allow: true, reason: "legacy_compat_window"}
+		}
+	}
+	switch {
+	case incoming < highWater:
+		return sourceRevisionDecision{reason: "older_than_high_water"}
+	case incoming == highWater && sameTarget:
+		return sourceRevisionDecision{allow: true, reason: "same_revision_same_target"}
+	case incoming == highWater:
+		return sourceRevisionDecision{reason: "same_revision_different_target"}
+	default:
+		return sourceRevisionDecision{allow: true, advance: true, reason: "advances_high_water"}
+	}
+}
+
+// SetRejectLegacySourceRevision 打开 / 关闭**全局** legacy(revision=0)拒绝门。
+//
+// 它是 INC-20260818-003 §3 分阶段发布的最后一步,只有在**证明旧 hub_allocator 已排空**
+// 之后才允许打开;打开后任何不带来源版本的 Begin 一律被拒。默认关闭 = 兼容窗行为。
+//
+// 逐玩家的那条规则(见过非零版本就永久拒 legacy)不受本开关控制,它从第一个新写者写下
+// 第一个非零版本起就自动生效 —— 那条不需要人来拍时机,所以不该做成开关。
+func (r *MySQLOwnerRepo) SetRejectLegacySourceRevision(v bool) { r.rejectLegacySourceRevision = v }
+
+func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target OwnerTarget, sourceRevision uint64, skewMargin time.Duration) (OwnerRecord, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return OwnerRecord{}, errcode.New(errcode.ErrInternal, "begin transition tx: %v", err)
@@ -329,6 +411,31 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 	rec, lerr := lockRecordTx(ctx, tx, playerID)
 	if lerr != nil {
 		return OwnerRecord{}, lerr
+	}
+
+	// ── 来源版本闸门(INC-20260818-003)────────────────────────────────────────
+	//
+	// 必须在**所有**后续分支之前:事故反例里旧 binary 手上握着一个**合法**的 expect_epoch
+	// (它先 Begin 后 CAS),所以 epoch 检查放不倒它;能判定"谁的来源更新"的只有本闸。
+	// 比较与提交在同一行锁事务内,不存在读到旧水位再写的窗口。
+	//
+	// **只对 HUB 生效**:来源版本由 hub_allocator 领号,BATTLE 迁移不带号也不动水位。
+	// 若这里对 BATTLE 也比较,battle 的 revision=0 会被"见过非零就拒 legacy"那条挡下,
+	// 玩家将永远进不了战斗 —— 这是本改动最容易踩的一脚。
+	if ownerType == OwnerTypeHub {
+		decision := classifySourceRevision(rec.HubSourceRevision, sourceRevision,
+			rec.Target.Equal(target), r.rejectLegacySourceRevision)
+		if !decision.allow {
+			plog.With(ctx).Warnw("msg", "owner_source_revision_rejected",
+				"player_id", playerID, "reason", decision.reason,
+				"incoming_revision", sourceRevision, "high_water", rec.HubSourceRevision,
+				"current_epoch", rec.OwnerEpoch, "expect_epoch", expectEpoch,
+				"operation_id", operationID, "same_target", rec.Target.Equal(target),
+				"hint", "来源更旧的 hub assignment 被拒;调用方应重查自身 assignment,不要拿更大的 epoch 重试")
+			return rec, errcode.New(errcode.ErrOwnerSourceRevisionStale,
+				"stale hub source revision player=%d incoming=%d high_water=%d reason=%s",
+				playerID, sourceRevision, rec.HubSourceRevision, decision.reason)
+		}
 	}
 
 	// 幂等重放:同 operation 且记录就是本次 Begin 的结果(epoch=expect+1 / 目标全等)。
@@ -348,7 +455,7 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 		return rec, nil
 	}
 
-	// 同 exact 实例的重复投递:在本行锁事务内收敛为 no-op,原样返回既有记录
+	// 同 exact owner 身份的重复投递:在本行锁事务内收敛为 no-op,原样返回既有记录
 	// (不推进 epoch、不改 phase、不覆盖 operation_id)。
 	//
 	// 这段判定原先在调用方(两个 allocator 的 decideOwnerBegin:Query → 本地比对 → Begin)。
@@ -362,13 +469,16 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 	//      记录可能已变,expectEpoch 随之作废,只能靠 EPOCH_CONFLICT 兜底重查——而"目标
 	//      已经是它"本就该是 no-op,不该先冲突再重来。
 	//
-	// 比对刻意只到**实例**粒度(type + pod + uid + instance_epoch),不含
-	// assignment_or_allocation_id 与 release_track,沿用调用方原语义:同一实例上的
-	// assignment 刷新(seat 续租)是同一 owner 的重复交付,纳入会让 epoch 无谓翻动(churn);
-	// release track 是独立 Fleet,其变化必然伴随 pod/uid 变化,已被实例粒度捕获。
-	if rec.OwnerType == ownerType && rec.Target.PodName == target.PodName &&
-		rec.Target.InstanceUID == target.InstanceUID &&
-		rec.Target.InstanceEpoch == target.InstanceEpoch &&
+	// assignment_or_allocation_id 是票据/准入所绑定的归属版本,release_track 也是 exact
+	// 身份的一部分；二者任一变化都必须走下方 epoch CAS。只按物理实例做 no-op 会产生两类
+	// 安全问题：
+	//   - 新 assignment 直接覆写旧 epoch 后，迟到的旧 Begin 可再把它回滚；UUID 本身无序，
+	//     没有办法判定哪次“刷新”更新；
+	//   - BATTLE allocation 或 release track 的变化会继承旧 epoch/ADMITTED phase，让旧票与
+	//     新归属共享 fencing 版本。
+	// 因而 no-op 必须要求完整 Target.Equal。物理实例未变但 assignment/track 变化仍是一次
+	// 真实 owner 身份迁移：epoch+1、PENDING、新 operation；旧 epoch 随即失效。
+	if rec.OwnerType == ownerType && rec.Target.Equal(target) &&
 		(rec.Phase == OwnerPhasePending || rec.Phase == OwnerPhaseAdmitted) {
 		deadline, derr := readLeaseDeadline(ctx, tx, rec.Target.InstanceUID, false)
 		if derr != nil {
@@ -378,7 +488,7 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 		if cerr := tx.Commit(); cerr != nil {
 			return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit same-instance begin player=%d: %v", playerID, cerr)
 		}
-		logTransitionNoop(ctx, "same_instance", playerID, rec, target)
+		logTransitionNoop(ctx, "same_target", playerID, rec, target)
 		return rec, nil
 	}
 
@@ -444,23 +554,35 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 		oldLeaseDeadlineMs = oldDeadline
 	}
 
+	// 高水位只前进,且**只有 HUB 迁移能推它**。
+	//
+	// 取 max 而不是直接赋值:闸门已经保证 sourceRevision >= 高水位,但兼容窗内合法的
+	// legacy(0)也会走到这里 —— 直接赋值会把已经建立起来的水位打回 0,等于亲手把门重新
+	// 对旧写者敞开。BATTLE 分支原样带走旧值(Release 的 UPDATE 不含本列,天然保留)。
+	newHighWater := rec.HubSourceRevision
+	if ownerType == OwnerTypeHub && sourceRevision > newHighWater {
+		newHighWater = sourceRevision
+	}
+
 	newRec := OwnerRecord{
-		PlayerID:         playerID,
-		OwnerEpoch:       rec.OwnerEpoch + 1,
-		OwnerType:        ownerType,
-		Phase:            OwnerPhasePending,
-		Target:           target,
-		OperationID:      operationID,
-		AdmitNotBeforeMs: admitNotBefore,
-		UpdatedAtMs:      now,
+		PlayerID:          playerID,
+		OwnerEpoch:        rec.OwnerEpoch + 1,
+		OwnerType:         ownerType,
+		Phase:             OwnerPhasePending,
+		Target:            target,
+		OperationID:       operationID,
+		AdmitNotBeforeMs:  admitNotBefore,
+		HubSourceRevision: newHighWater,
+		UpdatedAtMs:       now,
 	}
 	const upd = `UPDATE owner_record SET owner_epoch = ?, owner_type = ?, phase = ?, pod_name = ?,
  instance_uid = ?, instance_epoch = ?, assignment_or_allocation_id = ?, release_track = ?,
- operation_id = ?, admit_not_before_ms = ?, updated_at_ms = ? WHERE player_id = ?`
+ operation_id = ?, admit_not_before_ms = ?, hub_source_revision = ?, updated_at_ms = ? WHERE player_id = ?`
 	if _, uerr := tx.ExecContext(ctx, upd, newRec.OwnerEpoch, newRec.OwnerType, newRec.Phase,
 		newRec.Target.PodName, newRec.Target.InstanceUID, newRec.Target.InstanceEpoch,
 		newRec.Target.AssignmentOrAllocationID, newRec.Target.ReleaseTrack,
-		newRec.OperationID, newRec.AdmitNotBeforeMs, newRec.UpdatedAtMs, playerID); uerr != nil {
+		newRec.OperationID, newRec.AdmitNotBeforeMs, newRec.HubSourceRevision,
+		newRec.UpdatedAtMs, playerID); uerr != nil {
 		return OwnerRecord{}, errcode.New(errcode.ErrInternal, "cas owner_record player=%d: %v", playerID, uerr)
 	}
 	if aerr := appendTransitionLog(ctx, tx, playerID, rec.OwnerEpoch, newRec.OwnerEpoch,
@@ -750,6 +872,10 @@ func (r *MySQLOwnerRepo) Release(ctx context.Context, playerID, ownerEpoch uint6
 	}
 	now := nowUnixMs()
 	released := rec.Target // Target 下面会被清空,先留一份给审计流水与日志
+	// ⚠️ 列清单里**刻意没有** hub_source_revision(INC-20260818-003):释放归属不该把
+	// 来源版本高水位一起抹掉。抹掉的后果是「打完一局 / 掉一次线」就把该玩家的门重新对
+	// legacy(0)敞开,滚动窗口里的旧写者随即又能写进来。以后往这条 UPDATE 加列时,
+	// 别顺手把它补上 —— 它不在这里是结论,不是遗漏。
 	const upd = `UPDATE owner_record SET owner_type = ?, phase = ?, pod_name = '', instance_uid = '',
  instance_epoch = 0, assignment_or_allocation_id = '', release_track = '', updated_at_ms = ?
  WHERE player_id = ? AND owner_epoch = ?`

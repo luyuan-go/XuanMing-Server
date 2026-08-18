@@ -31,6 +31,16 @@ const MetadataKeyTraceID = "x-pandora-trace-id"
 // MetadataKeyPlayerID 是 player_id metadata key,Envoy / gateway 鉴权后注入。
 const MetadataKeyPlayerID = "x-pandora-player-id"
 
+// MetadataKeyAccountID 是 account_id metadata key(两步登录,2026-08-18),
+// 由 Envoy 的**账号态 provider**(aud=pandora-account)从 sub claim 注入。
+//
+// ⚠️ 与 MetadataKeyPlayerID 是两个独立通道,绝不可互相顶替:
+// account_id 是账号身份,player_id 是角色实体身份。账号态 token 只能解锁
+// ListAccountRoles / EnterRole;若把 account_id 写进 x-pandora-player-id,
+// 它会被全后端当成玩家身份 —— 直接越权。两条通道由不同 aud 的 provider 各自注入,
+// 且都在入站第一时间被无条件剥离,只有验签成功才由 Envoy 重写。
+const MetadataKeyAccountID = "x-pandora-account-id"
+
 // MetadataKeyJWTPayload 是 Envoy jwt_authn 验签成功后透传的 JWT payload 头
 // (forward_payload_header,base64url JSON)。客户端面入站第一时间无条件剥离本头,
 // 只有验签成功才由 Envoy 重写,因此其中的 jti/sub 在 :8443 面可信
@@ -137,6 +147,30 @@ func extractPlayerID(ctx context.Context) uint64 {
 		return 0
 	}
 	v := tr.RequestHeader().Get(MetadataKeyPlayerID)
+	if v == "" {
+		return 0
+	}
+	id, err := strconv.ParseUint(v, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
+// AccountIDFromContext 取账号态身份(两步登录:ListAccountRoles / EnterRole 用)。
+//
+// 来源只有 Envoy 账号态 provider 注入的 x-pandora-account-id 一处。取不到返回 0,
+// 由业务侧 fail-closed 拒绝(直连内网端口联调时无网关注入,同样按未鉴权处理 ——
+// 账号态入口不存在"匿名可用"的语义)。
+//
+// 刻意**不**回退去读 x-pandora-player-id:那会让一张玩家 SessionToken 也能列角色 /
+// 换角色,等于把「账号态」这层隔离拆掉。
+func AccountIDFromContext(ctx context.Context) uint64 {
+	tr, ok := transport.FromServerContext(ctx)
+	if !ok {
+		return 0
+	}
+	v := tr.RequestHeader().Get(MetadataKeyAccountID)
 	if v == "" {
 		return 0
 	}

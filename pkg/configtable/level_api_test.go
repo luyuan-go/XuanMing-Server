@@ -353,3 +353,34 @@ func TestValidateRatingPool(t *testing.T) {
 		t.Fatal("超长池名应被拦下(非严格 sql_mode 会静默截断成另一份段位)")
 	}
 }
+
+// TestValidateReadyMode 准备模式(2026-08-18「匹配前准备 / 匹配成功后确认」按图二选一):
+//   - 战斗 / 副本类关卡两种模式都合法 —— 这正是本列的用途;
+//   - 非战斗类关卡(登录 / 选角 / 主城)不经 StartMatch → BeginTeamMatch,填了不生效,
+//     必须拒:静默失效的配置误解与「不计分却填了段位池」同类,早报早改;
+//   - 留空(UNSPECIFIED)在任何类别上都合法 —— 存量表一列不填也能过,是本列滚动升级
+//     零改动的前提(§9.21),这条断言就是那个前提的守护。
+func TestValidateReadyMode(t *testing.T) {
+	pre := configpb.LevelReadyMode_LEVEL_READY_MODE_PRE_READY
+	post := configpb.LevelReadyMode_LEVEL_READY_MODE_POST_CONFIRM
+
+	for _, mode := range []configpb.LevelReadyMode{pre, post} {
+		row := battleRow(50, "战斗图填准备模式")
+		row.ReadyMode = mode
+		if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{row}}); err != nil {
+			t.Fatalf("战斗关卡 ready_mode=%v 应放行,得 %v", mode, err)
+		}
+	}
+
+	login := &configpb.LevelRow{Id: 51, Name: "登录", AssetPath: "/Game/L/x.x",
+		Category: configpb.LevelCategory_LEVEL_CATEGORY_LOGIN}
+	login.ReadyMode = pre
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{login}}); err == nil {
+		t.Fatal("非战斗关卡填 ready_mode 应被拦下(不经开局链,填了不生效)")
+	}
+
+	login.ReadyMode = configpb.LevelReadyMode_LEVEL_READY_MODE_UNSPECIFIED
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{login}}); err != nil {
+		t.Fatalf("非战斗关卡留空 ready_mode 必须放行(存量表零改动前提),得 %v", err)
+	}
+}

@@ -57,7 +57,7 @@ func (g *GrpcTeamReader) GetTeam(ctx context.Context, teamID uint64) (*teamv1.Te
 // 调用方区分对待的结果(队伍不 READY / 不是队长 / 正被另一次组票占着),
 // 压成"没找到"会让 StartMatch 报一个误导性的错误,也会把可重试的竞争说成终态。
 func (g *GrpcTeamReader) BeginTeamMatch(
-	ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64,
+	ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64, requireReady bool,
 ) (*teamv1.Team, uint64, error) {
 	ctx, serr := g.signCall(ctx, teamv1.TeamService_BeginTeamMatch_FullMethodName, teamID)
 	if serr != nil {
@@ -68,6 +68,9 @@ func (g *GrpcTeamReader) BeginTeamMatch(
 		CaptainId:   captainID,
 		OperationId: operationID,
 		LeaseMs:     leaseMs,
+		// 关卡表 ready_mode 的解析结果。旧 team 服务不认这个字段会直接忽略 → 退化成无门槛,
+		// 与本字段上线前一致(§9.21 两个方向都不会把玩家挡在开局之外)。
+		RequireReady: requireReady,
 	})
 	if err != nil {
 		return nil, 0, err

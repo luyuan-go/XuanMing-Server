@@ -5452,6 +5452,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginTeamMatchRequest final : publi
     kTeamIdFieldNumber = 1,
     kCaptainIdFieldNumber = 2,
     kLeaseMsFieldNumber = 4,
+    kRequireReadyFieldNumber = 5,
   };
   // string operation_id = 3 [json_name = "operationId"];
   void clear_operation_id() ;
@@ -5498,11 +5499,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginTeamMatchRequest final : publi
   void _internal_set_lease_ms(::int64_t value);
 
   public:
+  // bool require_ready = 5 [json_name = "requireReady"];
+  void clear_require_ready() ;
+  [[nodiscard]] bool require_ready() const;
+  void set_require_ready(bool value);
+
+  private:
+  bool _internal_require_ready() const;
+  void _internal_set_require_ready(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.team.v1.BeginTeamMatchRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 58,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5535,6 +5546,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginTeamMatchRequest final : publi
     ::uint64_t team_id_;
     ::uint64_t captain_id_;
     ::int64_t lease_ms_;
+    bool require_ready_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -14880,6 +14892,30 @@ inline ::int64_t BeginTeamMatchRequest::_internal_lease_ms() const {
 inline void BeginTeamMatchRequest::_internal_set_lease_ms(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.lease_ms_ = value;
+}
+
+// bool require_ready = 5 [json_name = "requireReady"];
+inline void BeginTeamMatchRequest::clear_require_ready() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.require_ready_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool BeginTeamMatchRequest::require_ready() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.BeginTeamMatchRequest.require_ready)
+  return _internal_require_ready();
+}
+inline void BeginTeamMatchRequest::set_require_ready(bool value) {
+  _internal_set_require_ready(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.BeginTeamMatchRequest.require_ready)
+}
+inline bool BeginTeamMatchRequest::_internal_require_ready() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.require_ready_;
+}
+inline void BeginTeamMatchRequest::_internal_set_require_ready(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.require_ready_ = value;
 }
 
 // -------------------------------------------------------------------

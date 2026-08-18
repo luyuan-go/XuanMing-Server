@@ -81,6 +81,9 @@ message OwnerRecord {
   int64 admit_not_before_ms  = 7;   // 迁移屏障(UTC ms)
   int64 lease_deadline_ms    = 8;   // 派生:target 实例租约截止(同事务读;无租约行 = 0)
   int64 updated_at_ms        = 9;
+  // 该玩家的 Hub 来源版本高水位(INC-20260818-003)。只前进,永不清零 ——
+  // Release 与 BATTLE 迁移都不动它,否则「打完一局回大厅」就能把门重置成 legacy 可用。
+  uint64 hub_source_revision = 10;
 }
 
 message QueryOwnerRequest  { uint64 player_id = 1; }
@@ -95,6 +98,16 @@ message BeginTransitionRequest {
   string operation_id  = 3;  // UUIDv4;整条进场链稳定复用(§9.23)
   OwnerType owner_type = 4;  // 目标类型(HUB/BATTLE;NONE 非法,释放走 ReleaseOwner)
   OwnerTarget target   = 5;
+  // Hub assignment 的来源版本(INC-20260818-003,pkg/placement.ComposeSourceRevision)。
+  //
+  // 由 hub_allocator 在**真正改变 target 的 assignment CAS** 上领取,严格单调:
+  // TTL 刷新、凭据轮换、cleanup-only CAS 都不领号。Owner 按 per-player 高水位比较,
+  // 更旧 / 同号换 target 一律拒(ERR_OWNER_SOURCE_REVISION_STALE)。
+  //
+  // **0 = legacy**:调用方尚未滚上本协议。它不是「最小版本」而是「没有版本」——
+  // 一旦某玩家见过非零版本,该玩家永久拒绝 0,否则旧写者能靠不带版本绕过整道门。
+  // owner_type=BATTLE 时本字段无意义(高水位是 Hub 专用),Owner 会忽略且不清水位。
+  uint64 source_revision = 6;
 }
 message BeginTransitionResponse {
   pandora.common.v1.ErrCode code = 1;

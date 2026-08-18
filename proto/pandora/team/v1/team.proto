@@ -621,6 +621,24 @@ message BeginTeamMatchRequest {
   // lease_ms:租约时长。取值只需覆盖「组票 → ClaimPlayer 落地」,秒级即可;
   // 服务端会钳到 [min, max] 防误配成 0(永不生效)或过长(拖住摘人)。
   int64  lease_ms     = 4;
+  // require_ready:本图是否走「匹配前准备」(关卡表 ready_mode=PRE_READY)。
+  //
+  // true  → team 校验队伍 State==READY 才放行组票(不 READY 返回 ErrTeamWrongState);
+  // false → 不设门槛,FORMING 也放行(新鲜度由 matchmaker 的撮合确认期承担)。
+  //
+  // # 为什么判定结果由 matchmaker 搬过来,而不是 team 自己查表
+  //
+  // 权威的 map_id 是**本次 StartMatch 请求**的那一个,只有 matchmaker 手里有;
+  // team 记录里的 map_id 是队长在面板上的选择,可能与本次开局不是同一张图,
+  // 拿它查表等于让门槛跟着一个**不参与本次判定**的字段走(§9.22 不建第二份判定)。
+  // 这与 entry_mode 的既有做法同构:由 matchmaker 按关卡表解析一次,落定后随流程走。
+  //
+  // # 滚动升级(§9.21)
+  //
+  // 旧 matchmaker 不发本字段 → proto3 默认 false → 沿用「无门槛 + 确认期」,
+  // 与本字段上线前的行为逐字节一致;新 matchmaker 打到旧 team 则本字段被忽略,
+  // 同样退化成无门槛。两个方向都不会把玩家挡在开局之外,失败方向安全。
+  bool   require_ready = 5;
 }
 
 message BeginTeamMatchResponse {

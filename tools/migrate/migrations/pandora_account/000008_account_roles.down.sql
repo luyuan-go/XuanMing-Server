@@ -1,0 +1,8 @@
+-- expand compatibility 不可回退。
+--
+-- 删掉 accounts.account_id / account_roles 会让**已经**按新模型登录的玩家失去角色归属:
+-- 新 login 在 EnterRole 时按 account_roles 校验「这个角色属不属于这个账号」,台账没了
+-- 就只能 fail-closed 全部拒绝,等于全服登不进去。
+--
+-- contract(改 accounts PK、删 accounts.player_id)必须由未来独立迁移在所有旧二进制
+-- 退场且经过观测窗后执行;本版 down 有意 no-op。

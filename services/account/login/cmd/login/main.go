@@ -118,7 +118,7 @@ func main() {
 	}
 
 	// 5. data 层装配
-	accountRepo, roleRepo, sessionGenRepo, mode, db := mustBuildAccountRepo(&cfg, helper)
+	accountRepo, roleRepo, roleLedger, sessionGenRepo, mode, db := mustBuildAccountRepo(&cfg, helper)
 	defer func() {
 		if db != nil {
 			_ = db.Close()
@@ -227,6 +227,15 @@ func main() {
 		}
 	}()
 
+	// player 客户端(账号 / 角色分离 2026-08-18):把账号名播种成全服显示名。
+	// addr 为空 → 不播种,角色名回落 Player_<player_id>;弱依赖,不阻断登录。
+	profileSeeder, playerConn, playerMode := mustBuildProfileSeeder(&cfg, helper)
+	defer func() {
+		if playerConn != nil {
+			_ = playerConn.Close()
+		}
+	}()
+
 	// Hub allocator 的 v2 票与 Session/legacy HS256 是独立信任域。Login 主登录链和
 	// VerifyDSTicket 诊断链共用同一份完整 overlap JWKS verifier，但分别显式注入各自 usecase。
 	var v2Verifier *auth.DSTicketVerifier
@@ -312,6 +321,13 @@ func main() {
 	}
 	loginUC.SetRequireHubAssignmentBinding(cfg.Login.RequireHubAssignmentBinding)
 	loginUC.SetMatchContextResolver(matchResolver)
+	// 账号 / 角色分离(2026-08-18):角色归属台账 + 角色名播种。
+	// 两者都是弱依赖 —— 台账 nil 时登录降级为「一账号一角色」(改造前的行为),
+	// seeder nil 时角色名回落 player 默认前缀名。任何一个缺失都不会让玩家登不进去。
+	loginUC.SetRoleLedger(roleLedger)
+	if profileSeeder != nil {
+		loginUC.SetProfileSeeder(profileSeeder)
+	}
 	if cfg.Login.DevSkipPassword {
 		helper.Warnw("msg", "DEV_SKIP_PASSWORD_ENABLED",
 			"warn", "password verification disabled + unknown accounts auto-provisioned; NEVER enable in prod")
@@ -411,6 +427,10 @@ func main() {
 		"locator_notifier", locatorMode,
 		"hub_assigner", hubMode,
 		"match_resolver", matchMode,
+		// 账号 / 角色分离(2026-08-18):这两项直接决定「两步登录能不能用」与
+		// 「角色名是不是账号名」,起服日志里必须一眼可见,否则线上排查只能靠猜。
+		"role_ledger", repoEnabled(roleLedger != nil),
+		"role_name_seeder", playerMode,
 		"require_hub_assignment_binding", cfg.Login.RequireHubAssignmentBinding,
 		"ds_auth_mode", cfg.DSAuth.Mode,
 		"ds_auth_authority_mode", cfg.DSAuth.AuthorityMode,
@@ -460,7 +480,7 @@ func main() {
 // dev_skip_password / dev_auto_register 负责,不再种子固定 mock 账号。
 // roleRepo(选角权威化 2026-07-08):player_roles 表仓储,与账号表共库共连接池。
 // sessionGenRepo(R7 复审 P0-4):player_session_generations 会话代际仓储,同库同连接池。
-func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, data.PlayerRoleRepo, data.SessionGenerationRepo, string, sqlDBLike) {
+func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, data.PlayerRoleRepo, data.AccountRoleRepo, data.SessionGenerationRepo, string, sqlDBLike) {
 	if cfg.Node.MySQLClient.DSN == "" {
 		h.Errorw("msg", "mysql_dsn_required", "hint", "set node.mysql_client.dsn to pandora_account DSN")
 		os.Exit(1)
@@ -489,11 +509,27 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, d
 	// 自动重放 init SQL;缺表时 SelectRole 落库必炸、Login 读已选角持续告警。fail-fast 并指向迁移 SQL。
 	schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	// 五张表全查(2026-07-27):此前只查 player_roles / player_session_generations 两张,
-	// accounts / account_devices / account_bans 缺表时 login 照常启动、首次登录才炸。
+	// 六张表全查(2026-07-27 起;2026-08-18 加 account_roles):此前只查 player_roles /
+	// player_session_generations 两张,accounts / account_devices / account_bans 缺表时
+	// login 照常启动、首次登录才炸。
+	// account_roles 是 000008 新增的角色归属台账,缺表时两步登录的 EnterRole 会
+	// fail-closed 拒绝一切角色(「这个角色属不属于这个账号」查不出来就不能放行),
+	// 等于全服登不进去 —— 必须启动期就炸,不能等第一个玩家来试。
 	if serr := mysqlx.CheckTables(schemaCtx, db, "deploy/mysql-init/02-account-tables.sql",
 		"accounts", "account_devices", "account_bans",
-		"player_roles", "player_session_generations"); serr != nil {
+		"account_roles", "player_roles", "player_session_generations"); serr != nil {
+		h.Errorw("msg", "mysql_schema_check_failed", "err", serr)
+		os.Exit(1)
+	}
+	// accounts.account_id 是 000008 新增的账号身份列。只查表名的话,跑过 000001 基线
+	// 但漏跑 000008 的库会照常启动,直到第一次注册/补铸账号身份时才炸在 SQL 上。
+	// 刻意只校验 DATA_TYPE 与可空性:本列在 expand 窗口内必须保持 NULL-able
+	// (旧二进制注册的行留 NULL,由新 login 下次登录补铸),写成 NOT NULL 会让旧二进制
+	// 的 INSERT 直接失败,反而打穿滚动升级。
+	if serr := mysqlx.CheckColumnSpecs(schemaCtx, db,
+		"tools/migrate/migrations/pandora_account/000008_account_roles.up.sql",
+		"accounts",
+		mysqlx.ColumnSpec{Name: "account_id", DataType: "bigint", Nullable: "YES"}); serr != nil {
 		h.Errorw("msg", "mysql_schema_check_failed", "err", serr)
 		os.Exit(1)
 	}
@@ -527,7 +563,8 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, d
 		}
 		h.Infow("msg", "account_backend_tidb_verified")
 	}
-	return data.NewMySQLAccountRepo(db), data.NewMySQLPlayerRoleRepo(db), data.NewMySQLSessionGenerationRepo(db), "mysql", db
+	return data.NewMySQLAccountRepo(db), data.NewMySQLPlayerRoleRepo(db), data.NewMySQLAccountRoleRepo(db),
+		data.NewMySQLSessionGenerationRepo(db), "mysql", db
 }
 
 // mustBuildRedisRepos 按 cfg 决定是否启 Redis Session / JTI repo。
@@ -617,6 +654,26 @@ func mustBuildMatchResolver(cfg *conf.Config, h kratosHelper) (data.MatchContext
 	conn := grpcclient.MustDialInsecure(addr)
 	h.Infow("msg", "matchmaker_dial_ok", "addr", addr, "resume_auth", signer != nil)
 	return data.NewGrpcMatchContextResolver(conn, signer), conn, "grpc"
+}
+
+// mustBuildProfileSeeder 按 cfg.Login.Player.Addr 决定是否拨号到 player 服务
+// (账号 / 角色分离 2026-08-18:把账号名播种成全服显示名)。
+//
+// addr 空 → 返回 nil(不播种,角色名回落 player 默认前缀名 Player_<player_id>);
+// 拨号失败 → panic(配置写了地址却连不上属于配置错误,fail-fast 比静默不播种好排查)。
+//
+// 注意这里返回 nil 时**不打 Error**:不播种是一个完全可用的部署形态(dev 只起 login),
+// 只是角色名不好看。用 Warn 说明后果即可,不该把它渲染成故障。
+func mustBuildProfileSeeder(cfg *conf.Config, h kratosHelper) (biz.ProfileSeeder, locatorConnLike, string) {
+	addr := cfg.Login.Player.Addr
+	if addr == "" {
+		h.Warnw("msg", "role_name_seeding_disabled_in_config",
+			"hint", "set login.player.addr to seed 角色名=账号名; 未配时角色名回落 Player_<player_id>")
+		return nil, nil, "disabled"
+	}
+	conn := grpcclient.MustDialInsecure(addr)
+	h.Infow("msg", "player_dial_ok", "addr", addr, "purpose", "role_name_seeding")
+	return data.NewGrpcProfileSeeder(conn), conn, "grpc"
 }
 
 // kratosHelper 是 *klog.Helper 的简化接口,避免 main.go 导出泛型。

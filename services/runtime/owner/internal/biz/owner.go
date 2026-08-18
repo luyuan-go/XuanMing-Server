@@ -70,7 +70,11 @@ func (u *OwnerUsecase) Query(ctx context.Context, playerID uint64) (data.OwnerRe
 //     不同 operation,幂等键失效。改由权威铸造后,同 exact 实例的重复投递在数据层原样返回
 //     既有记录(含原 operation_id),真实迁移才铸新的,operation 自然贯穿整条进场链。
 //   - **非空 = 调用方持显式幂等键**(响应丢失后原样重试),必须是 canonical UUIDv4。
-func (u *OwnerUsecase) BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target data.OwnerTarget) (data.OwnerRecord, error) {
+//
+// sourceRevision 是 Hub assignment 的来源版本(INC-20260818-003)。0 = 调用方尚未滚上
+// 本协议(兼容窗);owner_type=BATTLE 时无意义,数据层会忽略。本层刻意**不**校验它的
+// 大小关系 —— 判定必须与写入落在同一个行锁事务里,放在这里做等于又造一个 TOCTOU。
+func (u *OwnerUsecase) BeginTransition(ctx context.Context, playerID, expectEpoch uint64, operationID string, ownerType int8, target data.OwnerTarget, sourceRevision uint64) (data.OwnerRecord, error) {
 	if playerID == 0 {
 		logRejected(ctx, "BeginTransition", reasonPlayerIDRequired, playerID,
 			"operation_id", operationID, "owner_type", ownerType, "req_pod", target.PodName)
@@ -103,7 +107,7 @@ func (u *OwnerUsecase) BeginTransition(ctx context.Context, playerID, expectEpoc
 		operationID = uuid.NewString()
 	}
 	return u.repo.BeginTransition(ctx, playerID, expectEpoch, operationID, ownerType, target,
-		time.Duration(placement.DSFenceSkewMarginSeconds)*time.Second)
+		sourceRevision, time.Duration(placement.DSFenceSkewMarginSeconds)*time.Second)
 }
 
 // Admit 准入提交(屏障 + exact 身份;幂等重放)。

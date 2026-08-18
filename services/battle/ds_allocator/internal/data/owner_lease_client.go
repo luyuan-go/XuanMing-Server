@@ -100,6 +100,8 @@ func (g *GrpcOwnerLeaseRenewer) BeginTransition(ctx context.Context, playerID, e
 		OperationId: operationID,
 		OwnerType:   ownerv1.OwnerType(ownerType),
 		Target:      targetProto(target),
+		// 来源版本单独发,不进 Target(见 OwnerTargetView.SourceRevision 注释)。
+		SourceRevision: target.SourceRevision,
 	})
 	if err != nil {
 		return OwnerRecordView{}, err
@@ -184,6 +186,16 @@ type OwnerTargetView struct {
 	InstanceEpoch            uint32
 	AssignmentOrAllocationID string
 	ReleaseTrack             string
+
+	// SourceRevision 是本次归属的来源版本(INC-20260818-003)。
+	//
+	// 它**不进 proto 的 OwnerTarget**:OwnerTarget 是 exact 身份,Admit 要拿它做全等校验,
+	// 把一个会变的版本号塞进身份里会让 Admit 无谓失配。它只随 BeginTransitionRequest
+	// 单独发出去。放在本视图里是为了搭现成的 target 传递链,且让
+	// ownerTargetViewEqual 天然把"版本变了"算作"归属变了"——那本来就是同一件事。
+	//
+	// 0 = 本部署未启用写者租约(dev / 单副本),或调用方尚未滚上本协议。
+	SourceRevision uint64
 }
 
 // OwnerRecordView 当前 owner 记录视图(migrate 决策用最小字段集)。

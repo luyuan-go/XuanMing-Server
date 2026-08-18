@@ -22,16 +22,45 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
 
+// AccountIdentity 是账号名解析出来的账号身份(账号 / 角色分离,2026-08-18)。
+//
+// AccountID 与 PlayerID 现在是**两个层面**的东西,别再当同一个值用:
+//   - AccountID 是账号身份,登录认证的产物,一个账号恒一个;
+//   - PlayerID 在本结构里是 accounts 表的历史主键,语义已退化为「该账号的主角色指针」。
+//     真正的「有哪些角色」权威是 account_roles 台账(见 account_role.go)。
+//     expand 窗口内保留它,是因为旧 login 二进制仍按它工作;contract 阶段才删。
+type AccountIdentity struct {
+	// AccountID 0 = 存量行 account_id 列仍是 NULL(旧二进制注册),需要 BackfillAccountID 补铸。
+	AccountID    uint64
+	PlayerID     uint64
+	PasswordHash string
+}
+
 // AccountRepo 是账号数据访问接口。biz 层依赖本接口,而不是具体实现,
 // 方便在 mock / mysql 实现之间切换不动 biz/service。
 type AccountRepo interface {
-	// FindByAccount 根据账号名查 player_id + bcrypt 哈希后的密码。
+	// FindByAccount 根据账号名查账号身份 + bcrypt 哈希后的密码。
 	// 找不到返回 ErrLoginAccountNotFound。
-	FindByAccount(ctx context.Context, account string) (playerID uint64, passwordHash string, err error)
+	FindByAccount(ctx context.Context, account string) (AccountIdentity, error)
 
-	// CreateAccount 新建账号(snowflake 分配的 playerID 传入)。
+	// FindByAccountID 按账号身份查账号行(两步登录的 EnterRole 用:封禁是账号级的,
+	// 必须回查该账号的 accounts.player_id 才能查对封禁记录,不能拿要进入的角色 ID 去查)。
+	// 找不到返回 ErrLoginAccountNotFound。
+	FindByAccountID(ctx context.Context, accountID uint64) (AccountIdentity, error)
+
+	// CreateAccount 新建账号(snowflake 分配的 accountID / playerID 传入)。
 	// 账号已存在返回 ErrAlreadyExists。
-	CreateAccount(ctx context.Context, playerID uint64, account, bcryptHash string) error
+	CreateAccount(ctx context.Context, accountID, playerID uint64, account, bcryptHash string) error
+
+	// BackfillAccountID 给 account_id 仍为 NULL 的存量行补铸账号身份(滚动升级兼容窗)。
+	//
+	// 什么时候会为 NULL:000008 迁移已把**迁移那一刻**的所有账号回填完;之后若旧 login
+	// 二进制(不认识 account_id 列)又注册了新账号,那一行就是 NULL。新 login 遇到它时
+	// 就地补铸一个。
+	//
+	// 条件写 `WHERE player_id=? AND account_id IS NULL`:并发下只有一个请求能写成功,
+	// 输的那个再读一次拿到赢家的值。返回**最终生效**的 account_id(不一定是传入的 candidate)。
+	BackfillAccountID(ctx context.Context, playerID, candidate uint64) (uint64, error)
 
 	// CheckBanned 检查账号 / 设备是否在有效封禁期内(account_bans 表 expires_at>now 或 NULL)。
 	CheckBanned(ctx context.Context, playerID uint64, deviceID string) (banned bool, err error)
@@ -62,25 +91,52 @@ func NewMySQLAccountRepo(db *sql.DB) *MySQLAccountRepo {
 	return &MySQLAccountRepo{db: db}
 }
 
-func (r *MySQLAccountRepo) FindByAccount(ctx context.Context, account string) (uint64, string, error) {
-	const q = `SELECT player_id, password_hash FROM accounts WHERE account = ? LIMIT 1`
+func (r *MySQLAccountRepo) FindByAccount(ctx context.Context, account string) (AccountIdentity, error) {
+	const q = `SELECT player_id, account_id, password_hash FROM accounts WHERE account = ? LIMIT 1`
 	var (
-		playerID uint64
-		hash     string
+		id        AccountIdentity
+		accountID sql.NullInt64
 	)
-	err := r.db.QueryRowContext(ctx, q, account).Scan(&playerID, &hash)
+	err := r.db.QueryRowContext(ctx, q, account).Scan(&id.PlayerID, &accountID, &id.PasswordHash)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, "", errcode.New(errcode.ErrLoginAccountNotFound, "account=%s not found", account)
+		return AccountIdentity{}, errcode.New(errcode.ErrLoginAccountNotFound, "account=%s not found", account)
 	}
 	if err != nil {
-		return 0, "", errcode.New(errcode.ErrInternal, "mysql find account: %v", err)
+		return AccountIdentity{}, errcode.New(errcode.ErrInternal, "mysql find account: %v", err)
 	}
-	return playerID, hash, nil
+	// NULL → 0,交给 biz 走 BackfillAccountID 补铸(旧二进制注册的存量行)。
+	if accountID.Valid {
+		id.AccountID = uint64(accountID.Int64)
+	}
+	return id, nil
 }
 
-func (r *MySQLAccountRepo) CreateAccount(ctx context.Context, playerID uint64, account, bcryptHash string) error {
-	const q = `INSERT INTO accounts(player_id, account, password_hash) VALUES (?, ?, ?)`
-	_, err := r.db.ExecContext(ctx, q, playerID, account, bcryptHash)
+func (r *MySQLAccountRepo) FindByAccountID(ctx context.Context, accountID uint64) (AccountIdentity, error) {
+	if accountID == 0 {
+		return AccountIdentity{}, errcode.New(errcode.ErrInvalidArg, "find account: accountID must be > 0")
+	}
+	// 走 uk_account_id 唯一索引点查。
+	const q = `SELECT player_id, account_id, password_hash FROM accounts WHERE account_id = ? LIMIT 1`
+	var (
+		id     AccountIdentity
+		acctID sql.NullInt64
+	)
+	err := r.db.QueryRowContext(ctx, q, accountID).Scan(&id.PlayerID, &acctID, &id.PasswordHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return AccountIdentity{}, errcode.New(errcode.ErrLoginAccountNotFound, "account_id=%d not found", accountID)
+	}
+	if err != nil {
+		return AccountIdentity{}, errcode.New(errcode.ErrInternal, "mysql find account by id: %v", err)
+	}
+	if acctID.Valid {
+		id.AccountID = uint64(acctID.Int64)
+	}
+	return id, nil
+}
+
+func (r *MySQLAccountRepo) CreateAccount(ctx context.Context, accountID, playerID uint64, account, bcryptHash string) error {
+	const q = `INSERT INTO accounts(player_id, account_id, account, password_hash) VALUES (?, ?, ?, ?)`
+	_, err := r.db.ExecContext(ctx, q, playerID, accountID, account, bcryptHash)
 	if err != nil {
 		// 1062 = ER_DUP_ENTRY,字符串匹配避免强依赖 mysql driver 错误类型
 		if isDupErr(err) {
@@ -89,6 +145,39 @@ func (r *MySQLAccountRepo) CreateAccount(ctx context.Context, playerID uint64, a
 		return errcode.New(errcode.ErrInternal, "mysql create account: %v", err)
 	}
 	return nil
+}
+
+func (r *MySQLAccountRepo) BackfillAccountID(ctx context.Context, playerID, candidate uint64) (uint64, error) {
+	if playerID == 0 || candidate == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg,
+			"backfill account_id: playerID/candidate must be > 0 (got %d/%d)", playerID, candidate)
+	}
+	// 条件写:account_id IS NULL 才写。并发只有一个赢家,输的那个 RowsAffected=0。
+	const upd = `UPDATE accounts SET account_id = ? WHERE player_id = ? AND account_id IS NULL`
+	res, err := r.db.ExecContext(ctx, upd, candidate, playerID)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "mysql backfill account_id: %v", err)
+	}
+	if n, aerr := res.RowsAffected(); aerr == nil && n > 0 {
+		return candidate, nil
+	}
+	// 没写成:要么并发被别人抢先,要么这一行根本不存在。回读拿**最终生效**的值 ——
+	// 绝不返回 candidate 假装成功,否则两个并发请求会各自以为自己的 account_id 生效,
+	// 后续按不同 account_id 建角色台账,同一个账号裂成两个。
+	const sel = `SELECT account_id FROM accounts WHERE player_id = ? LIMIT 1`
+	var current sql.NullInt64
+	if serr := r.db.QueryRowContext(ctx, sel, playerID).Scan(&current); serr != nil {
+		if errors.Is(serr, sql.ErrNoRows) {
+			return 0, errcode.New(errcode.ErrLoginAccountNotFound, "account player_id=%d not found", playerID)
+		}
+		return 0, errcode.New(errcode.ErrInternal, "mysql read back account_id: %v", serr)
+	}
+	if !current.Valid || current.Int64 <= 0 {
+		// 更新说"没改到"、回读又说"还是 NULL":两次读到互相矛盾的状态,不能猜。
+		return 0, errcode.New(errcode.ErrInternal,
+			"backfill account_id inconsistent for player_id=%d (update no-op but column still NULL)", playerID)
+	}
+	return uint64(current.Int64), nil
 }
 
 func (r *MySQLAccountRepo) CheckBanned(ctx context.Context, playerID uint64, deviceID string) (bool, error) {

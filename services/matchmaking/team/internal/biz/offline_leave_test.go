@@ -491,7 +491,7 @@ func TestBeginTeamMatch_上锁后摘人必须被拒(t *testing.T) {
 	}
 	uc.SetMatchCommitmentReader(&mockCommitment{})
 
-	frozen, expiresAt, err := uc.BeginTeamMatch(ctx, 9620, 7761, "op-1", 5000)
+	frozen, expiresAt, err := uc.BeginTeamMatch(ctx, 9620, 7761, "op-1", 5000, false)
 	if err != nil {
 		t.Fatalf("BeginTeamMatch: %v", err)
 	}
@@ -525,7 +525,7 @@ func TestBeginTeamMatch_租约过期后摘人恢复(t *testing.T) {
 	}
 	uc.SetMatchCommitmentReader(&mockCommitment{})
 
-	if _, _, err := uc.BeginTeamMatch(ctx, 9621, 7771, "op-1", 1); err != nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9621, 7771, "op-1", 1, false); err != nil {
 		t.Fatalf("BeginTeamMatch: %v", err)
 	}
 	// lease 被钳到下限 2s；直接把租约改成过去,模拟到期(不 sleep 真实时间)。
@@ -556,14 +556,14 @@ func TestBeginTeamMatch_同Operation幂等续租(t *testing.T) {
 		t.Fatalf("SetReady: %v", err)
 	}
 
-	if _, _, err := uc.BeginTeamMatch(ctx, 9622, 7781, "op-same", 5000); err != nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9622, 7781, "op-same", 5000, false); err != nil {
 		t.Fatalf("首次 Begin: %v", err)
 	}
-	if _, _, err := uc.BeginTeamMatch(ctx, 9622, 7781, "op-same", 5000); err != nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9622, 7781, "op-same", 5000, false); err != nil {
 		t.Fatalf("同 operation 重试必须幂等续租,不得判冲突: %v", err)
 	}
 	// 另一次组票在租约内必须被拒。
-	if _, _, err := uc.BeginTeamMatch(ctx, 9622, 7781, "op-other", 5000); err == nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9622, 7781, "op-other", 5000, false); err == nil {
 		t.Fatal("租约内的另一次组票必须被拒")
 	} else if errcode.As(err) != errcode.ErrTeamConcurrent {
 		t.Fatalf("应为 ErrTeamConcurrent, got=%v", err)
@@ -578,13 +578,13 @@ func TestBeginTeamMatch_锁内仍复核队长(t *testing.T) {
 
 	// 非队长不得上锁。op 在 matchmaker 按 (team, captain) 派生,非队长天然是另一个 op,
 	// 不会命中队长那次 attempt 的收据重入。
-	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7792, "op-member", 5000); err == nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7792, "op-member", 5000, false); err == nil {
 		t.Fatal("非队长不得上锁")
 	} else if errcode.As(err) != errcode.ErrTeamNotCaptain {
 		t.Fatalf("应为 ErrTeamNotCaptain, got=%v", err)
 	}
 	// ready 不再是门槛:FORMING 队伍队长直接放行。
-	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7791, "op-captain", 5000); err != nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7791, "op-captain", 5000, false); err != nil {
 		t.Fatalf("FORMING 队伍队长开局应放行: %v", err)
 	}
 }

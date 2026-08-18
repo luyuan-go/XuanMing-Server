@@ -55,7 +55,7 @@ func (u *PlayerUsecase) GrantSkillCards(ctx context.Context, playerID uint64, gr
 		}
 	}
 
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return nil, false, err
 	}
 	cards, already, err := u.repo.GrantSkillCards(ctx, playerID, grants, idempotencyKey)

@@ -433,3 +433,124 @@ func TestPartitionTicketsByMap_NormalizesDefaultMap(t *testing.T) {
 		t.Fatal("map_id=0 与显式默认 map 未归一到同一池")
 	}
 }
+
+// TestReadyModeForMap 按 map_id 读关卡表准备模式(2026-08-18 两模式按图二选一)。
+//
+// 判定只有两个出口:PRE_READY(匹配前准备,撮合成功直接进)与 POST_CONFIRM(开局无门槛,
+// 撮合成功后弹接受框)。**所有说不清的情况一律落 POST_CONFIRM** —— 表未启用、行不存在、
+// 本列留空,都与本列上线前的行为逐字节一致,这是存量表零改动、新旧二进制混跑不改行为的前提(§9.21)。
+func TestReadyModeForMap(t *testing.T) {
+	pre := configpb.LevelReadyMode_LEVEL_READY_MODE_PRE_READY
+	post := configpb.LevelReadyMode_LEVEL_READY_MODE_POST_CONFIRM
+
+	f := newFixtureWith(t, 8500, func(c *conf.MatchConf) {
+		c.TeamSize = 5
+		c.MapId = 6 // map_id==0 的默认副本兜底
+	})
+
+	// 未启用配置表(tables=nil)→ POST_CONFIRM(= 本列上线前的全服行为)。
+	if got := f.uc.readyModeForMap(7); got != post {
+		t.Fatalf("tables=nil 应落 POST_CONFIRM,得 %v", got)
+	}
+	if f.uc.requiresPreMatchReady(7) {
+		t.Fatal("tables=nil 不得要求赛前准备(会把所有人挡在开局之外)")
+	}
+
+	dir := t.TempDir()
+	rows := []*configpb.LevelRow{
+		{Id: 6, Name: "赛前准备图", AssetPath: "/Game/L/MobaLevel.MobaLevel",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, TeamSize: 5, ReadyMode: pre},
+		{Id: 7, Name: "赛后确认图", AssetPath: "/Game/L/SonglinTown.SonglinTown",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, TeamSize: 3, ReadyMode: post},
+		{Id: 8, Name: "本列留空图", AssetPath: "/Game/L/X.X",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, TeamSize: 3}, // ReadyMode 留 0
+	}
+	writeLevelBatch(t, dir, 101, rows)
+	store := configtable.NewStore()
+	if _, err := store.Load(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	f.uc.SetConfigTables(store)
+
+	cases := []struct {
+		name  string
+		mapID uint32
+		want  configpb.LevelReadyMode
+	}{
+		{"表填 1=匹配前准备", 6, pre},
+		{"表填 2=成功后确认", 7, post},
+		{"本列留空 → 成功后确认", 8, post},
+		{"表内不存在的 map → 成功后确认", 999, post},
+		{"map_id=0 兜底默认副本 6", 0, pre},
+	}
+	for _, c := range cases {
+		if got := f.uc.readyModeForMap(c.mapID); got != c.want {
+			t.Fatalf("%s: readyModeForMap(%d)=%v, 期望 %v", c.name, c.mapID, got, c.want)
+		}
+		// 布尔投影必须与枚举判定同源,否则「要不要先准备」和「要不要弹确认框」会各判各的。
+		if got, want := f.uc.requiresPreMatchReady(c.mapID), c.want == pre; got != want {
+			t.Fatalf("%s: requiresPreMatchReady(%d)=%v, 期望 %v", c.name, c.mapID, got, want)
+		}
+	}
+}
+
+// TestFormMatch_确认期按图开关 端到端锁死两模式的**行为差异**(readyModeForMap 只测了判定本身)。
+//
+//	PRE_READY    玩家已在组队面板点过准备 → 成局即全员已确认、当场排分配,不进确认期;
+//	POST_CONFIRM 成局后成员挂 PENDING 等玩家点接受,不排分配。
+//
+// 这是「两模式互斥」的落点:同一局绝不会既要求赛前准备、又弹一次接受框。
+func TestFormMatch_确认期按图开关(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name        string
+		mode        configpb.LevelReadyMode
+		wantConfirm matchv1.MatchConfirmStatus
+		wantQueued  bool
+	}{
+		{"PRE_READY 图不再弹确认框", configpb.LevelReadyMode_LEVEL_READY_MODE_PRE_READY, confirmAccepted, true},
+		{"POST_CONFIRM 图进确认期", configpb.LevelReadyMode_LEVEL_READY_MODE_POST_CONFIRM, confirmPending, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixtureWith(t, 8600, func(cf *conf.MatchConf) {
+				cf.TeamSize = 5
+				cf.MapId = 6 // 票据 map_id=0 → 兜底到默认副本 6
+			})
+			dir := t.TempDir()
+			writeLevelBatch(t, dir, 102, []*configpb.LevelRow{
+				{Id: 6, Name: "对抗图", AssetPath: "/Game/L/MobaLevel.MobaLevel",
+					Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE,
+					TeamSize: 5, ReadyMode: c.mode},
+			})
+			store := configtable.NewStore()
+			if _, err := store.Load(dir, 0); err != nil {
+				t.Fatal(err)
+			}
+			f.uc.SetConfigTables(store)
+
+			for i := uint64(1); i <= 10; i++ {
+				f.seedTicket(t, ctx, 100+i, []uint64{i}, 1000)
+			}
+			if err := f.uc.matchOnce(ctx); err != nil {
+				t.Fatalf("matchOnce: %v", err)
+			}
+			m, found, err := f.repo.GetMatch(ctx, 8600)
+			if err != nil || !found {
+				t.Fatalf("取成局记录: found=%v err=%v", found, err)
+			}
+			if len(m.Members) != 10 {
+				t.Fatalf("成员数 %d,期望 10", len(m.Members))
+			}
+			for _, mb := range m.Members {
+				if mb.GetConfirm() != c.wantConfirm {
+					t.Fatalf("成员 %d confirm=%v,期望 %v", mb.GetPlayerId(), mb.GetConfirm(), c.wantConfirm)
+				}
+			}
+			// 已确认的局当场排分配;要等玩家点接受的局绝不能提前排 —— 那等于没有确认期。
+			if queued := m.GetAllocationOperationId() != ""; queued != c.wantQueued {
+				t.Fatalf("allocation_operation_id 已排=%v,期望 %v", queued, c.wantQueued)
+			}
+		})
+	}
+}

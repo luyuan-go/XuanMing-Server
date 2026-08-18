@@ -1,9 +1,12 @@
-// begin_consume_ready_test.go — BeginTeamMatch 冻结名单 + 清残留 ready 的契约。
+// begin_consume_ready_test.go — BeginTeamMatch 冻结名单 + 清 ready 的契约。
 //
-// 2026-08-17 起 ready 不再是开局门槛(LoL 式流程):FORMING/READY 都放行,
-// 「带缺席者开局」由 matchmaker 在线闸(4011)+ 撮合确认期(CONFIRM)兜住。
-// 本文件守的契约:响应丢失重试不重复冻结、代际前进后不误判重入、
-// 冻结仍清残留 ready(存量客户端显示)并盖收据。
+// 2026-08-18 起 ready 是不是开局门槛**按关卡表 ready_mode 分图决定**,由 requireReady 入参承载:
+//   - requireReady=false(POST_CONFIRM,含表留空与旧 matchmaker 不发该字段):FORMING/READY 都放行,
+//     「带缺席者开局」由 matchmaker 在线闸(4011)+ 撮合确认期(CONFIRM)兜住;
+//   - requireReady=true (PRE_READY):队伍必须 State==READY 才放行。
+//
+// 本文件守的契约:两种模式各自的放行 / 拒绝、响应丢失重试不重复冻结、代际前进后不误判重入、
+// 冻结仍清 ready 并盖收据,以及**门槛必须排在租约冲突判定之后**(否则并发重试会被误报成未准备)。
 package biz
 
 import (
@@ -12,6 +15,8 @@ import (
 	"time"
 
 	teamv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/team/v1"
+
+	"github.com/luyuancpp/pandora/pkg/errcode"
 )
 
 // 消费语义本体:Begin 成功后 ready 清空、队伍转 FORMING、收据记下消费前后两代。
@@ -21,7 +26,7 @@ func TestBeginTeamMatch_消费ready并开收据(t *testing.T) {
 	readyTeam(t, uc, 9901, 8101, 8102)
 	genBefore := teamOf(t, uc, 9901).GetReadyGeneration()
 
-	snapshot, _, err := uc.BeginTeamMatch(ctx, 9901, 8101, "op-consume", 5000)
+	snapshot, _, err := uc.BeginTeamMatch(ctx, 9901, 8101, "op-consume", 5000, false)
 	if err != nil {
 		t.Fatalf("BeginTeamMatch: %v", err)
 	}
@@ -58,13 +63,13 @@ func TestBeginTeamMatch_同attempt重试返回收据快照(t *testing.T) {
 	ctx := context.Background()
 	readyTeam(t, uc, 9902, 8111, 8112)
 
-	first, _, err := uc.BeginTeamMatch(ctx, 9902, 8111, "op-retry", 5000)
+	first, _, err := uc.BeginTeamMatch(ctx, 9902, 8111, "op-retry", 5000, false)
 	if err != nil {
 		t.Fatalf("首次 Begin: %v", err)
 	}
 	genAfterFirst := teamOf(t, uc, 9902).GetReadyGeneration()
 
-	retry, _, err := uc.BeginTeamMatch(ctx, 9902, 8111, "op-retry", 5000)
+	retry, _, err := uc.BeginTeamMatch(ctx, 9902, 8111, "op-retry", 5000, false)
 	if err != nil {
 		t.Fatalf("同 attempt 重试必须成功(响应丢失后的重发): %v", err)
 	}
@@ -87,7 +92,7 @@ func TestBeginTeamMatch_重新ready后同attempt不是重入(t *testing.T) {
 	ctx := context.Background()
 	readyTeam(t, uc, 9903, 8121, 8122)
 
-	if _, _, err := uc.BeginTeamMatch(ctx, 9903, 8121, "op-stable", 2000); err != nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9903, 8121, "op-stable", 2000, false); err != nil {
 		t.Fatalf("第一局 Begin: %v", err)
 	}
 	waitRosterLockExpired()
@@ -101,7 +106,7 @@ func TestBeginTeamMatch_重新ready后同attempt不是重入(t *testing.T) {
 	genBeforeSecond := teamOf(t, uc, 9903).GetReadyGeneration()
 
 	// matchmaker 的 operation_id 按 (team, captain) 派生,第二局还是同一个值。
-	second, _, err := uc.BeginTeamMatch(ctx, 9903, 8121, "op-stable", 5000)
+	second, _, err := uc.BeginTeamMatch(ctx, 9903, 8121, "op-stable", 5000, false)
 	if err != nil {
 		t.Fatalf("第二局 Begin: %v", err)
 	}
@@ -121,12 +126,12 @@ func TestBeginTeamMatch_冻结后不重按也能开第二局(t *testing.T) {
 	ctx := context.Background()
 	readyTeam(t, uc, 9904, 8131, 8132)
 
-	if _, _, err := uc.BeginTeamMatch(ctx, 9904, 8131, "op-one", 2000); err != nil {
+	if _, _, err := uc.BeginTeamMatch(ctx, 9904, 8131, "op-one", 2000, false); err != nil {
 		t.Fatalf("首局 Begin: %v", err)
 	}
 	waitRosterLockExpired()
 
-	second, _, err := uc.BeginTeamMatch(ctx, 9904, 8131, "op-two", 5000)
+	second, _, err := uc.BeginTeamMatch(ctx, 9904, 8131, "op-two", 5000, false)
 	if err != nil {
 		t.Fatalf("FORMING 队伍必须放行(队长直接再开局): %v", err)
 	}
@@ -145,7 +150,7 @@ func TestBeginTeamMatch_FORMING队伍直接开局(t *testing.T) {
 	ctx := context.Background()
 	setupTwoMemberTeam(t, uc, 9908, 8171, 8172)
 
-	snapshot, _, err := uc.BeginTeamMatch(ctx, 9908, 8171, "op-forming", 5000)
+	snapshot, _, err := uc.BeginTeamMatch(ctx, 9908, 8171, "op-forming", 5000, false)
 	if err != nil {
 		t.Fatalf("FORMING 队伍直接开局必须成功: %v", err)
 	}
@@ -176,7 +181,7 @@ func TestBeginTeamMatch_legacy零代际READY直接放行(t *testing.T) {
 		t.Fatalf("构造 legacy 记录: %v", err)
 	}
 
-	snapshot, _, err := uc.BeginTeamMatch(ctx, 9905, 8141, "op-legacy", 5000)
+	snapshot, _, err := uc.BeginTeamMatch(ctx, 9905, 8141, "op-legacy", 5000, false)
 	if err != nil {
 		t.Fatalf("legacy READY 应按正常冻结放行: %v", err)
 	}
@@ -195,7 +200,7 @@ func TestBeginTeamMatch_End在新链路下是no_op(t *testing.T) {
 	ctx := context.Background()
 	readyTeam(t, uc, 9906, 8151, 8152)
 
-	snapshot, _, err := uc.BeginTeamMatch(ctx, 9906, 8151, "op-endcompat", 2000)
+	snapshot, _, err := uc.BeginTeamMatch(ctx, 9906, 8151, "op-endcompat", 2000, false)
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -240,5 +245,109 @@ func TestReceiptReentry_窗口边界(t *testing.T) {
 	// 时钟回拨(now < created):按在窗内处理,方向是放宽重试窗,安全。
 	if !receiptReentry(rec, "op-x", 7, now-5000) {
 		t.Fatal("时钟回拨应按窗内处理")
+	}
+}
+
+// ── PRE_READY 模式(关卡表 ready_mode=1,requireReady=true) ────────────────────
+
+// 门槛本体:PRE_READY 图上,没全员准备的队伍开不了局,且**一个字节都不能改**。
+//
+// 「零副作用」和「被拒」同等重要:如果被拒时已经把租约上掉或把 ready 清了,
+// 队长重新点准备再开会撞上自己刚才留下的租约,表现是「点了没反应」。
+func TestBeginTeamMatch_PRE_READY未准备被拒且零副作用(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9910, 8181, 8182)
+	genBefore := teamOf(t, uc, 9910).GetReadyGeneration()
+
+	_, _, err := uc.BeginTeamMatch(ctx, 9910, 8181, "op-pre-noready", 5000, true)
+	if err == nil {
+		t.Fatal("PRE_READY 图上未准备的队伍必须被拒")
+	}
+	if got := errcode.As(err); got != errcode.ErrTeamWrongState {
+		t.Fatalf("拒绝码应为 ErrTeamWrongState,得 %v", got)
+	}
+	team := teamOf(t, uc, 9910)
+	if team.GetMatchStartReceipt() != nil {
+		t.Fatal("被拒不得留下收据")
+	}
+	if team.GetMatchLockUntilMs() != 0 {
+		t.Fatalf("被拒不得上租约: lock_until=%d", team.GetMatchLockUntilMs())
+	}
+	if team.GetReadyGeneration() != genBefore {
+		t.Fatalf("被拒不得推进代际: got=%d want=%d", team.GetReadyGeneration(), genBefore)
+	}
+	if team.State != stateForming {
+		t.Fatalf("被拒不得改状态: state=%v", team.State)
+	}
+}
+
+// PRE_READY 放行路径:全员准备后开局成功,且 ready 仍被消费掉
+// (一次准备只授权一次开局 —— 不消费就等于队长能拿同一次准备连开两局,正是 INC-20260813-001 的形状)。
+func TestBeginTeamMatch_PRE_READY全员准备后放行并消费(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	readyTeam(t, uc, 9911, 8191, 8192)
+	genBefore := teamOf(t, uc, 9911).GetReadyGeneration()
+
+	snapshot, _, err := uc.BeginTeamMatch(ctx, 9911, 8191, "op-pre-ok", 5000, true)
+	if err != nil {
+		t.Fatalf("PRE_READY 图上全员准备后必须放行: %v", err)
+	}
+	// 交给 matchmaker 建票的仍是**消费前**名单(全员 ready)。
+	if snapshot.State != stateReady || readyCount(snapshot.Members) != 2 {
+		t.Fatalf("快照必须是消费前名单: state=%v ready=%d", snapshot.State, readyCount(snapshot.Members))
+	}
+	team := teamOf(t, uc, 9911)
+	if team.State != stateForming || readyCount(team.Members) != 0 {
+		t.Fatalf("放行后必须消费 ready: state=%v ready=%d", team.State, readyCount(team.Members))
+	}
+	if team.GetReadyGeneration() != genBefore+1 {
+		t.Fatalf("消费必须推进代际: got=%d want=%d", team.GetReadyGeneration(), genBefore+1)
+	}
+	// 消费之后队伍已是 FORMING:同一次准备再开第二局必须被门槛拦下。
+	if _, _, err := uc.BeginTeamMatch(ctx, 9911, 8191, "op-pre-second", 5000, true); err == nil {
+		t.Fatal("同一次准备不得授权第二局(消费后应回到未准备,被门槛拦下)")
+	}
+}
+
+// 判定顺序守护:门槛必须排在**租约冲突之后**。
+//
+// 走到门槛时队伍常常刚被上一次冻结转成 FORMING;若先判 READY,一个「几秒后租约自净、
+// 重试即可」的暂态会被说成「队伍未准备」这种终态,客户端据此引导玩家重新点准备 ——
+// 而其实什么都不用做。本例锁死这个顺序:必须拿到 3007(并发),不是 wrong-state。
+func TestBeginTeamMatch_PRE_READY门槛排在租约冲突之后(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	readyTeam(t, uc, 9912, 8201, 8202)
+
+	// 第一次冻结:成功,队伍转 FORMING 并持有租约。
+	if _, _, err := uc.BeginTeamMatch(ctx, 9912, 8201, "op-hold", 5000, true); err != nil {
+		t.Fatalf("首次冻结应成功: %v", err)
+	}
+	// 另一个 attempt 撞上未过期租约:此刻队伍恰好也不是 READY,两个条件同时成立。
+	_, _, err := uc.BeginTeamMatch(ctx, 9912, 8201, "op-other", 5000, true)
+	if err == nil {
+		t.Fatal("租约未过期时另一 attempt 必须被拒")
+	}
+	if got := errcode.As(err); got != errcode.ErrTeamConcurrent {
+		t.Fatalf("必须报并发冲突(可重试暂态)而非未准备(终态): got=%v", got)
+	}
+}
+
+// 同一支队伍在两种模式下的差别只有门槛:POST_CONFIRM 放行、PRE_READY 拒绝。
+// 这条把「模式选择器真的生效」钉死 —— 只改 requireReady 一个入参,结果必须相反。
+func TestBeginTeamMatch_同一队伍两模式结果相反(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9913, 8211, 8212)
+
+	if _, _, err := uc.BeginTeamMatch(ctx, 9913, 8211, "op-post", 5000, false); err != nil {
+		t.Fatalf("POST_CONFIRM 图上未准备也应放行: %v", err)
+	}
+
+	setupTwoMemberTeam(t, uc, 9914, 8221, 8222)
+	if _, _, err := uc.BeginTeamMatch(ctx, 9914, 8221, "op-pre", 5000, true); err == nil {
+		t.Fatal("PRE_READY 图上未准备必须被拒(同一支队伍、只差模式)")
 	}
 }

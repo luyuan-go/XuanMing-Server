@@ -62,7 +62,8 @@ enum ErrCode {
   // 账号 / 角色分离(两步登录,2026-08-18)。客户端要分别处理:
   //   ROLE_NOT_FOUND / ROLE_NOT_OWNED → 刷新角色列表重选(不要重登);
   //   ROLE_LIMIT                      → 提示角色数已满;
-  //   NO_ROLE                         → 引导去创建角色(该功能上线前不会出现)。
+  //   NO_ROLE                         → 引导去创建角色;也可能是唯一角色被软删 / 已过户
+  //                                     (服务端 fail-closed 拒绝,不会回落到旧角色)。
   ERR_LOGIN_ROLE_NOT_FOUND     = 1020;
   ERR_LOGIN_ROLE_NOT_OWNED     = 1021;
   ERR_LOGIN_ROLE_LIMIT         = 1022;
@@ -248,4 +249,7 @@ enum ErrCode {
   ERR_OWNER_IDENTITY_MISMATCH = 15003;  // epoch/operation/实例四元组与记录不一致(fail-closed 拒)
   ERR_OWNER_LEASE_REGRESSED   = 15004;  // 续租实例身份不符或试图回退 deadline(旧实例纪元续租拒)
   ERR_OWNER_INVALID_OPERATION = 15005;  // operation_id 非法(必须 UUIDv4)或目标类型/身份不完整
+  // Hub 来源版本不新于该玩家高水位(INC-20260818-003):版本更旧 / 同版本换了 target /
+  // 见过非零版本后又来 legacy(0)。fail-closed 拒绝,调用方应重查自身 assignment 而非重试。
+  ERR_OWNER_SOURCE_REVISION_STALE = 15006;
 }

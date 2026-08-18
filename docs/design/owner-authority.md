@@ -1,7 +1,7 @@
 # Owner Authority(每玩家 owner_epoch 线性一致权威,CLAUDE.md §9.22 落地)
 
-> 状态:**设计定稿 + 权威本体落码(2026-07-21 深夜,用户指示开工);集成(login/allocator/DS)
-> 属 migrate 阶段,未接线**。本文档是 §9.22 的实现设计;它是背包域 phase 2(DS 写权威切换)
+> 状态:**设计定稿 + 权威本体及 login/Hub allocator/DS allocator Admission 链已接线；
+> 当前仍属 migrate 阶段，生产滚动兼容与旧门退役未完成**。本文档是 §9.22 的实现设计;它是背包域 phase 2(DS 写权威切换)
 > 与 §9.23 幂等进场链的硬前置。现状地基:pkg/placement 的 fence-lease 常量(20/7/27s)与
 > `Target` 实例身份元组、battle-reconnect.md §8 的心跳再入屏障子集。
 
@@ -57,7 +57,7 @@ owner_transition_log  id PK | player_id | from_epoch | to_epoch | op(1 begin/2 a
 
 ```text
 (none/E) --BeginTransition--> (E+1, PENDING, new target, admit_not_before)
-(E+1, PENDING) --Admit(屏障开 + exact 四元组)--> (E+1, ADMITTED)
+(E+1, PENDING) --Admit(屏障开 + exact target 五字段)--> (E+1, ADMITTED)
 (E+1, *) --BeginTransition(下一次迁移)--> (E+2, PENDING, ...)
 (E, ADMITTED) --Release(epoch 匹配)--> (E, none)   // epoch 不回退,record 不删
 ```
@@ -72,10 +72,37 @@ owner_transition_log  id PK | player_id | from_epoch | to_epoch | op(1 begin/2 a
   `now + margin`)→ 写 `E+1/PENDING/new target/operation_id/admit_not_before` + 审计。
   **幂等**:同 (player_id, operation_id) 重试且记录仍是本次结果 → 原样返回(响应丢失安全);
   operation_id 必须是 UUIDv4(placement.ValidOperationID)。
+  **同 target 幂等**:只有 owner type 与完整 target
+  (`pod_name + instance_uid + instance_epoch + assignment_or_allocation_id + release_track`)
+  全等且 phase 有效时,才原样返回既有记录,不推进 epoch、不改 phase、不覆盖 operation_id。
+  同一物理实例上换发 assignment/allocation 或 release track 不是“字段刷新”,而是一次真实
+  owner 身份迁移:走正常 CAS 写 `E+1/PENDING/new operation`。assignment UUID 没有单调次序；
+  若在旧 epoch 内原地覆盖,迟到旧 Begin 能把新值回写成旧值,Battle allocation/track 也会继承
+  旧 epoch/ADMITTED 权限。新 epoch 使旧票、旧 ACK 与迟到写统一失效。
+- **Hub assignment 发布顺序**:Redis assignment CAS 是本次路由的线性化点。签名可在 CAS 前
+  纯计算,但 owner Begin 只能由 CAS winner 在发布后执行；Begin 前后都重读 Redis 并校验完整
+  ticket binding,任一漂移就扣票并让外层重读。Begin 遇 epoch conflict 只允许完整
+  重跑一次 `Query owner -> 复核 writer lease + Redis exact assignment -> Begin`；第二轮
+  仍 current 才能写,绝不得只换新 epoch 盲写原 target。这一次受保护重试用于收敛
+  “旧请求已过 guard、最终 winner 随后发布”的窗口；通用/DS helper 无当前意图 guard,
+  遇 conflict 仍单次 fail-closed。
+  该证明以所有写者均执行 guard 为前提；旧 binary 的 sign-before-CAS/blind retry 不能与新版本
+  普通滚动共存。生产滚动所需 source revision/Owner high-water 见
+  [INC-20260818-003](../incidents/2026-08-18-p1-hub-assignment-source-revision-rollout.md)。
+  Login 在同一响应交付前还必须验证 Hub ticket 与 owner Resume exact target 全等。
+- **Battle READY 交付顺序**:allocation claim winner 在技术 READY 后、对外交付前逐玩家
+  Begin(BATTLE)。DS helper 没有 Hub Redis-current guard，`EPOCH_CONFLICT` 必须单次
+  fail-closed，由外层重读 allocation，禁止盲重试旧 target。批量补偿所需的
+  每玩家 operation 由 DS 显式铸 UUIDv4；只有成功回包的 operation 等于请求值
+  才是本批 grant，same-target no-op 不可回滚。非 conflict 回包错误必须 Query
+  read-back；仍不可判定时扣 READY 并保留 allocation/Pod，不得删除可能已被
+  Owner 引用的实例。claim loser 只读确认 roster 全员 Owner full-exact，再 one-shot
+  复核同一 READY allocation；不调 Begin/Release/cleanup。持久 outcome-unknown 恢复
+  见 [INC-20260818-002](../incidents/2026-08-18-p1-ds-owner-bind-outcome-unknown.md)。
 - **Admit(player_id, owner_epoch, operation_id, target)**:单事务:锁行 → epoch/operation/
-  exact 实例四元组全等校验 → `now < admit_not_before` → ERR_OWNER_BARRIER_NOT_OPEN
+  exact target 五字段全等校验 → `now < admit_not_before` → ERR_OWNER_BARRIER_NOT_OPEN
   (带剩余毫秒,调用方退避重试,§9.23 WAIT 语义)→ PENDING→ADMITTED CAS + 审计。
-  **幂等**:已 ADMITTED 且四元组一致 → 原样返回 ADMITTED(Admission 回包丢失不再分配、
+  **幂等**:已 ADMITTED 且 exact target 五字段一致 → 原样返回 ADMITTED(Admission 回包丢失不再分配、
   不创建第二 owner)。新 DS 在 Admit 成功前只能预载资源,不得建可操作 Pawn(§9.22,DS 侧约束)。
 - **RenewInstanceLease(target, lease_seconds)**:upsert 实例租约行,deadline 只前进
   (旧实例纪元/UID 不匹配 → 拒);lease_seconds 服务端钳制 ≤ DSFenceLeaseMaxSeconds。
@@ -87,8 +114,8 @@ owner_transition_log  id PK | player_id | from_epoch | to_epoch | op(1 begin/2 a
 
 | 阶段 | 内容 |
 |---|---|
-| expand(本轮) | owner 服务 + 三表 + transition API 落地;无调用方,现网行为零变化 |
-| migrate | ①login §23 入口 query-first 接 QueryOwner,需要新归属时 BeginTransition(hub 进场/选角后首 hub);②ds_allocator READY 交付前 BeginTransition(battle);③DS Admission 链提交 Admit;④battle_result 终局 → Battle→Hub 新 operation;⑤logout → Release;⑥**allocator 心跳双写 RenewInstanceLease(已落码 2026-07-22)**:hub/ds 两 allocator 的 Model B 授权心跳成功后、响应返回前经 `renewOwnerLeaseGate` 双写(必须先于响应:DS 收到响应才延长本地租约,权威侧须先覆盖该认知);`owner_addr` 空=不启用,`owner_lease_required` 默认 false=弱依赖(失败告警放行,旧门兜底),contract 阶段置 true 转强依赖(失败即心跳失败→DS 自我 fencing,时序闭合);hub 凭据无实例纪元→epoch 传 0(owner 侧仅双方非零且不同才拒)。窗口内**新旧双门并行**:既有 last_heartbeat_ms 再入屏障照跑,admit_not_before 只增不减安全性 |
+| expand(已完成) | owner 服务 + 三表 + transition API 落地;无调用方,现网行为零变化 |
+| migrate(当前) | ①login §23 入口 query-first 接 QueryOwner,需要新归属时 BeginTransition(hub 进场/选角后首 hub);②ds_allocator READY 交付前 BeginTransition(battle);③DS Admission 链提交 Admit;④battle_result 终局 → Battle→Hub 新 operation;⑤logout → Release;⑥**allocator 心跳双写 RenewInstanceLease(已落码 2026-07-22)**:hub/ds 两 allocator 的 Model B 授权心跳成功后、响应返回前经 `renewOwnerLeaseGate` 双写(必须先于响应:DS 收到响应才延长本地租约,权威侧须先覆盖该认知);`owner_addr` 空=不启用,`owner_lease_required` 默认 false=弱依赖(失败告警放行,旧门兜底),contract 阶段置 true 转强依赖(失败即心跳失败→DS 自我 fencing,时序闭合);hub 凭据无实例纪元→epoch 传 0(owner 侧仅双方非零且不同才拒)。窗口内**新旧双门并行**:既有 last_heartbeat_ms 再入屏障照跑,admit_not_before 只增不减安全性 |
 | contract | 全链路验证后,last_heartbeat_ms 再入门退役,§9.22"尚未实现"注记删除;背包域 phase 2 / §9.23 幂等进场链解锁 |
 
 - fence 常量沿用 `pkg/placement`(单一权威计算入口):skew margin 就是 admit_not_before 的
@@ -105,9 +132,10 @@ owner_transition_log  id PK | player_id | from_epoch | to_epoch | op(1 begin/2 a
 | Admission 回包丢失 | Admit 幂等重放返回原 ADMITTED | 重放测试 |
 | Begin 响应丢失 | (player, operation_id) 幂等原样返回 | 重放测试 |
 | 旧 epoch 迟到写 | epoch 全等校验;Release 旧 epoch no-op | 旧 epoch Admit/Release 测试 |
-| 实例替换伪装 | exact 四元组(pod/uid/epoch/track)全等 | 同名换 UID Admit 必拒 |
+| 实例/归属替换伪装 | exact target 五字段(pod/uid/epoch/assignment-or-allocation/track)全等 | 同名换 UID、旧 assignment、错误 track 的 Admit 必拒 |
 | 租约回退 | Renew deadline 只前进 + 实例身份校验 | 并发 Renew 单调测试 |
 | 旧实例租约撑大屏障 | admit_not_before 取 CAS 时点观察值,后续续租不影响已算屏障 | Begin 后续租再 Admit 测试 |
+| 同实例 assignment 换发分叉(resume↔票据死循环) | 完整 target 不同即 epoch+1/PENDING；Hub assignment CAS winner 才能 Begin，Begin 前后复核 Redis；Login/ACK exact gate | 换发后 Query 收敛、新 assignment Admit 放行、旧 epoch/assignment 拒；CAS loser 零 owner 副作用；票与 Resume 不一致即 WAIT |
 | 审计增长 | transition_log 90 天 sweep | 既有 sweep 模式 |
 
 ## 6. 复杂度举证(§15.4)

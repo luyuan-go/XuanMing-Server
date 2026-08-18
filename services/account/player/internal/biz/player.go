@@ -267,7 +267,7 @@ func (u *PlayerUsecase) GetProfile(ctx context.Context, playerID uint64) (*playe
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return nil, err
 	}
 	p, found, err := u.repo.GetProfile(ctx, playerID)
@@ -314,10 +314,127 @@ func (u *PlayerUsecase) UpdateNickname(ctx context.Context, playerID uint64, nic
 	if len([]rune(nickname)) > u.cfg.MaxNicknameLen {
 		return errcode.New(errcode.ErrInvalidArg, "nickname too long (max %d)", u.cfg.MaxNicknameLen)
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return err
 	}
 	return u.repo.UpdateNickname(ctx, playerID, nickname)
+}
+
+// EnsureProfileResult 是 EnsureProfileNamed 的产出。
+type EnsureProfileResult struct {
+	// Created true = 本次调用真的建了档(请求的 nickname 生效)。
+	Created bool
+	// Nickname 调用结束后该玩家**实际**的昵称(权威值)。
+	Nickname string
+	// Level 调用结束后的等级(刚建档为 1)。
+	Level uint32
+}
+
+// EnsureProfileNamed 建档并播种昵称(账号 / 角色分离 2026-08-18,唯一调用方是 login)。
+//
+// **INSERT IGNORE 语义,不是 UPSERT**:档案已存在就原样返回既有值,一个字都不改。
+// 这条纪律是「角色名 = 账号名」能安全落地的前提 —— login 每次登录都会尽力播种
+// (补上之前因 player 不可达而漏掉的),若改成覆盖式,玩家将来自己改的名字会在
+// 下一次登录被账号名冲掉。
+//
+// nickname 为空 → 用本服务的默认前缀名(Player_<player_id>),即本 RPC 出现之前的行为。
+func (u *PlayerUsecase) EnsureProfileNamed(ctx context.Context, playerID uint64, nickname string) (EnsureProfileResult, error) {
+	if playerID == 0 {
+		return EnsureProfileResult{}, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	seed := strings.TrimSpace(nickname)
+	if seed == "" {
+		seed = u.defaultNickname(playerID)
+	} else if len([]rune(seed)) > u.cfg.MaxNicknameLen {
+		return EnsureProfileResult{}, errcode.New(errcode.ErrInvalidArg,
+			"nickname too long (max %d)", u.cfg.MaxNicknameLen)
+	}
+
+	created, err := u.repo.EnsureProfile(ctx, playerID, seed, u.cfg.BaseMMR)
+	if err != nil {
+		return EnsureProfileResult{}, err
+	}
+
+	// 无论建没建成都回读一次:
+	//   - created=true  → 回读拿等级等派生值;
+	//   - created=false → 可能是「早就有档案」,也可能是**昵称撞了 uk_nickname 被
+	//     INSERT IGNORE 静默跳过**。这两种必须靠回读区分,不能默认成前者 —— 后者下
+	//     该玩家至此仍然没有档案,谎报成功会让 login 以为播种完成、再也不重试。
+	p, found, gerr := u.repo.GetProfile(ctx, playerID)
+	if gerr != nil {
+		return EnsureProfileResult{}, gerr
+	}
+	if !found {
+		// 建档没成功且档案确实不存在 = 昵称被别人占了(唯一可能的静默失败)。
+		// 报明确错误码,由 login 决定降级策略(它的做法:记日志放弃播种,不阻断登录)。
+		return EnsureProfileResult{}, errcode.New(errcode.ErrPlayerNicknameTaken,
+			"ensure profile player=%d skipped: nickname %q already taken", playerID, seed)
+	}
+	level := p.GetLevel()
+	if level < 0 {
+		level = 0
+	}
+	return EnsureProfileResult{
+		Created:  created,
+		Nickname: p.GetNickname(),
+		Level:    uint32(level),
+	}, nil
+}
+
+// MaxPlayerNamesPerQuery 是 GetPlayerNames 单次可查的角色数上限(§9.18 读取侧上限)。
+//
+// 200 的依据:Hub 单实例 500 人,DS 按批拉名字时 3 批以内覆盖满场;再大会让单次
+// IN 查询与响应体都失控。刻意**不做隐式分页**——超出直接截断并让调用方自己分批,
+// 服务端悄悄少返回会让调用方以为"这些人就是没有档案"。
+const MaxPlayerNamesPerQuery = 200
+
+// GetPlayerNames 批量反查角色显示名(Hub DS 头顶铭牌用,2026-08-18)。
+//
+// 只返回查到的角色:请求里有、结果里没有 = 该角色无档案,调用方应保留旧值 / 走兜底。
+// 用空串占位会让 DS 把一个真名字覆盖成空,铭牌反而退化。
+func (u *PlayerUsecase) GetPlayerNames(ctx context.Context, playerIDs []uint64) ([]PlayerName, error) {
+	if len(playerIDs) == 0 {
+		return nil, nil
+	}
+	// 去重 + 去 0 + 截断。去重是因为调用方(DS 进场批)很容易把同一个人带两次,
+	// 重复项会白白撑大 IN 列表并挤掉截断额度。
+	seen := make(map[uint64]struct{}, len(playerIDs))
+	unique := make([]uint64, 0, len(playerIDs))
+	for _, id := range playerIDs {
+		if id == 0 {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+		if len(unique) >= MaxPlayerNamesPerQuery {
+			break
+		}
+	}
+	if len(unique) == 0 {
+		return nil, nil
+	}
+
+	found, err := u.repo.ListNicknames(ctx, unique)
+	if err != nil {
+		return nil, err
+	}
+	// 按请求顺序回填,让同一批请求的响应顺序稳定(调用方可直接顺序消费)。
+	out := make([]PlayerName, 0, len(found))
+	for _, id := range unique {
+		if nickname, ok := found[id]; ok {
+			out = append(out, PlayerName{PlayerID: id, Nickname: nickname})
+		}
+	}
+	return out, nil
+}
+
+// PlayerName 是「角色实体 → 显示名」的最小映射(biz 层结构,service 再翻成 proto)。
+type PlayerName struct {
+	PlayerID uint64
+	Nickname string
 }
 
 // ── 英雄 ──────────────────────────────────────────────────────────────────────
@@ -338,7 +455,7 @@ func (u *PlayerUsecase) UnlockHero(ctx context.Context, playerID uint64, heroID 
 	if heroID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "hero_id required")
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return err
 	}
 	already, err := u.repo.UnlockHero(ctx, playerID, heroID, source)
@@ -391,7 +508,7 @@ func (u *PlayerUsecase) UpdateMMR(ctx context.Context, playerID uint64, delta in
 		return 0, false, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
 	}
 
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return 0, false, err
 	}
 
@@ -446,7 +563,7 @@ func (u *PlayerUsecase) SelectHero(ctx context.Context, playerID uint64, heroID 
 	if !u.cfg.HeroSelectionEnabled {
 		return errcode.New(errcode.ErrPlayerFeatureDisabled, "hero selection disabled")
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return err
 	}
 	owned, err := u.repo.IsHeroOwned(ctx, playerID, heroID)
@@ -482,7 +599,7 @@ func (u *PlayerUsecase) GrantAttributePoints(ctx context.Context, playerID uint6
 	if idempotencyKey == "" {
 		return 0, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return 0, err
 	}
 	unspent, already, err := u.repo.GrantAttributePoints(ctx, playerID, points, idempotencyKey)
@@ -529,7 +646,7 @@ func (u *PlayerUsecase) AllocateAttributePoints(ctx context.Context, playerID ui
 			return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "total allocation out of range")
 		}
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return 0, err
 	}
 	return u.repo.AllocateAttributePoints(ctx, playerID, allocs)
@@ -540,7 +657,7 @@ func (u *PlayerUsecase) ResetAttributes(ctx context.Context, playerID uint64) (i
 	if playerID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return 0, err
 	}
 	return u.repo.ResetAttributes(ctx, playerID)
@@ -607,7 +724,7 @@ func (u *PlayerUsecase) SetEquipment(ctx context.Context, playerID uint64, slots
 	if _, err := u.validateEquipmentOwnership(ctx, playerID, slots); err != nil {
 		return err
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return err
 	}
 	if err := u.repo.SetEquipment(ctx, playerID, slots); err != nil {
@@ -817,7 +934,7 @@ func (u *PlayerUsecase) GrantTalentPoints(ctx context.Context, playerID uint64, 
 	if idempotencyKey == "" {
 		return 0, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return 0, err
 	}
 	unspent, already, err := u.repo.GrantTalentPoints(ctx, playerID, points, idempotencyKey)
@@ -872,7 +989,7 @@ func (u *PlayerUsecase) SetTalents(ctx context.Context, playerID uint64, talents
 		priced = append(priced, t)
 	}
 
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return 0, err
 	}
 	return u.repo.SetTalents(ctx, playerID, priced)
@@ -903,7 +1020,7 @@ func (u *PlayerUsecase) ResetTalents(ctx context.Context, playerID uint64) (int,
 	if !u.cfg.LoadoutCustomizeEnabled {
 		return 0, errcode.New(errcode.ErrPlayerFeatureDisabled, "loadout customize disabled")
 	}
-	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+	if _, err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return 0, err
 	}
 	return u.repo.ResetTalents(ctx, playerID)

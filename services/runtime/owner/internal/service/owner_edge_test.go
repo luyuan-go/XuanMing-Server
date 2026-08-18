@@ -36,7 +36,7 @@ func (r *ownerServiceRepo) Query(context.Context, uint64) (data.OwnerRecord, err
 	return r.queryRec, r.queryErr
 }
 
-func (r *ownerServiceRepo) BeginTransition(context.Context, uint64, uint64, string, int8, data.OwnerTarget, time.Duration) (data.OwnerRecord, error) {
+func (r *ownerServiceRepo) BeginTransition(context.Context, uint64, uint64, string, int8, data.OwnerTarget, uint64, time.Duration) (data.OwnerRecord, error) {
 	r.calls++
 	return r.beginRec, r.beginErr
 }

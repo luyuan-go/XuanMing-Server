@@ -71,6 +71,7 @@ type tableEntry struct {
 var registry = map[string]map[string]tableEntry{
 	"pandora_account": {
 		"accounts":                   {Class: classBounded},
+		"account_roles":              {Class: classBounded}, // 角色归属台账,每角色 1 行;被「账号数 × 每账号角色上限」有界
 		"player_roles":               {Class: classBounded},
 		"player_session_generations": {Class: classBounded}, // 每玩家 1 行(登录定序+SetRole fencing 权威),被玩家数有界
 		"account_devices":            {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_last_login", Columns: []string{"last_login_at"}}}, PendingWhere: "last_login_at < DATE_SUB(NOW(), INTERVAL 0 DAY)"},

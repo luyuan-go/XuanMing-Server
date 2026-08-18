@@ -58,7 +58,12 @@ type TeamReader interface {
 	// BeginTeamMatch 上的是秒级自净租约,只需覆盖到 ClaimPlayer 落地。
 	// 返回的第二个值是冻结这份名单那一刻的 ready 代际(INC-20260813-001 ①):
 	// 必须原样带进 match 记录,并在 EndTeamMatch 回传做 CAS。0 = 旧 team 服务没回。
-	BeginTeamMatch(ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64) (*teamv1.Team, uint64, error)
+	//
+	// requireReady 来自关卡表 ready_mode 列(见 readyModeForMap):PRE_READY 图要求队伍
+	// State==READY 才放行,POST_CONFIRM 图不设门槛。判定在这里解析而不是让 team 自己查表:
+	// 权威的 map_id 是**本次 StartMatch 的**那一个,只有 matchmaker 手里有(team 记录里的
+	// map_id 只是队长在面板上的选择,可能不是本次开的这张图)。
+	BeginTeamMatch(ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64, requireReady bool) (*teamv1.Team, uint64, error)
 	// EndTeamMatch 对局结束后复位队伍准备状态(INC-20260813-001)。
 	//
 	// 与 BeginTeamMatch 成对:Begin 冻结名单开一局,End 在这局释放时把队伍打回 FORMING。
@@ -431,6 +436,46 @@ func (u *MatchUsecase) allowedEntryModes(mapID uint32) configpb.LevelEntryMode {
 	default:
 		return fallback
 	}
+}
+
+// readyModeForMap 取某副本(map_id)的**准备模式**:关卡表 ready_mode 列为唯一事实源。
+//
+// 返回值恒是二者之一(UNSPECIFIED 在这里就被折算掉,调用方不必再判第三种):
+//
+//	PRE_READY     组队面板全员点准备才放行开局,撮合成功直接进场(不进确认期);
+//	POST_CONFIRM  开局无门槛,撮合成功后进确认期,全员点接受才拉 DS。
+//
+// 表未启用 / 行不存在 / 列留空一律折算成 POST_CONFIRM —— 这与本列上线前(2026-08-17
+// 全服取消 ready 门槛后)的行为逐字节一致,所以新二进制 + 旧批次表不会改变任何图的行为
+// (§9.21)。**不设部署级 fallback 开关**:准备模式是图的产品属性,不是部署属性;
+// 若按部署兜底,同一张图在 stable / canary 上会表现不同,那正是本列要消灭的东西。
+func (u *MatchUsecase) readyModeForMap(mapID uint32) configpb.LevelReadyMode {
+	const fallback = configpb.LevelReadyMode_LEVEL_READY_MODE_POST_CONFIRM
+	if u.tables == nil {
+		return fallback
+	}
+	effective := mapID
+	if effective == 0 {
+		effective = u.cfg.MapId
+	}
+	tb := u.tables.Tables()
+	if tb == nil {
+		return fallback
+	}
+	row, ok := tb.Level.ByID(effective)
+	if !ok {
+		return fallback
+	}
+	if row.GetReadyMode() == configpb.LevelReadyMode_LEVEL_READY_MODE_PRE_READY {
+		return configpb.LevelReadyMode_LEVEL_READY_MODE_PRE_READY
+	}
+	return fallback
+}
+
+// requiresPreMatchReady 是 readyModeForMap 的布尔投影,供 BeginTeamMatch 入参与确认期决策共用,
+// 保证「要不要先准备」和「要不要弹确认框」这两处**读的是同一个判定**,不会各判各的。
+func (u *MatchUsecase) requiresPreMatchReady(mapID uint32) bool {
+	return u.readyModeForMap(mapID) == configpb.LevelReadyMode_LEVEL_READY_MODE_PRE_READY
 }
 
 // isWalkInMap 判断某副本**在没有玩家选择时**是否走直进。只用于兜底:滚动升级期旧 matchmaker
@@ -1501,15 +1546,19 @@ func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uin
 	}
 
 	// 在 team 的乐观锁内冻结名单(见 TeamReader.BeginTeamMatch)。队长 / 存在性校验
-	// 都在那把锁里 —— 在这里再查一遍只会重新打开刚消灭的窗口。ready 门槛已删
-	// (2026-08-17,LoL 式流程):FORMING 队伍直接放行,「不在场者进不了局」由本服务的
+	// 都在那把锁里 —— 在这里再查一遍只会重新打开刚消灭的窗口。
+	// ready 门槛按**本次这张图**的关卡表 ready_mode 决定(2026-08-18 两模式按图二选一):
+	// PRE_READY 图要求队伍已 READY;POST_CONFIRM 图不设门槛,「不在场者进不了局」由本服务的
 	// ensureAllPresent 在线闸与撮合确认期(CONFIRM)承担。
 	// 租约用 rosterLockLeaseMs:够覆盖本函数返回后到 ClaimPlayer 落地这一小段即可。
-	team, readyGen, err := u.reader.BeginTeamMatch(ctx, teamID, captainID, rosterLockOperationID(teamID, captainID), rosterLockLeaseMs)
+	requireReady := u.requiresPreMatchReady(mapID)
+	team, readyGen, err := u.reader.BeginTeamMatch(ctx, teamID, captainID,
+		rosterLockOperationID(teamID, captainID), rosterLockLeaseMs, requireReady)
 	if err != nil {
 		plog.With(ctx).Warnw("msg", "match_roster_freeze_failed",
 			"reason", "team_begin_match_rejected", "code", int(errcode.As(err)),
-			"team_id", teamID, "captain_id", captainID, "map_id", mapID, "err", err)
+			"team_id", teamID, "captain_id", captainID, "map_id", mapID,
+			"require_ready", requireReady, "err", err)
 		return nil, 0, err
 	}
 	if teamSize := u.teamSizeForMap(mapID); len(team.Members) == 0 || len(team.Members) > teamSize {
@@ -3892,10 +3941,19 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTi
 	now := time.Now().UnixMilli()
 	deadline := now + u.cfg.ConfirmTimeout.Std().Milliseconds()
 
+	mapID := matchMapID(sides...)
+	// autoConfirm:本局要不要跳过确认期。两个来源,任一成立即跳过 ——
+	//   ① 部署级 auto_confirm_match:无 UI 的脚本联调 / 压测机器人专用;
+	//   ② 本图 ready_mode=PRE_READY:玩家已在组队面板点过准备,不该为同一局再点第二次
+	//      (2026-08-18 拍板两模式互斥)。
+	// 这里**读的是与 BeginTeamMatch 门槛同一个判定**(requiresPreMatchReady),
+	// 两处分别判会出现「既要先准备、又要再接受」或「两道都没有」的错配。
+	autoConfirm := u.cfg.AutoConfirmMatch || u.requiresPreMatchReady(mapID)
+
 	members := make([]*matchv1.MatchMemberStorageRecord, 0, len(sides)*u.cfg.TeamSize)
 	ticketIDs := make([]uint64, 0, totalTickets)
 	initialConfirm := confirmPending
-	if u.cfg.AutoConfirmMatch {
+	if autoConfirm {
 		initialConfirm = confirmAccepted
 	}
 	collect := func(side []*matchv1.MatchTicketStorageRecord, sideIdx int32) {
@@ -3929,7 +3987,7 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTi
 		TicketIds:         ticketIDs,
 		CreatedAtMs:       now,
 		ConfirmDeadlineMs: deadline,
-		MapId:             matchMapID(sides...),
+		MapId:             mapID,
 		GameMode:          u.cfg.GameMode,
 	}
 
@@ -3971,7 +4029,7 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTi
 		return fmt.Errorf("persist match %d claims before FOUND: %w", matchID, persistErr)
 	}
 	var queued *matchv1.MatchStorageRecord
-	if u.cfg.AutoConfirmMatch {
+	if autoConfirm {
 		var queueErr error
 		queued, queueErr = u.queueAcceptedMatchAllocation(ctx, match)
 		if queueErr != nil {
@@ -3987,13 +4045,16 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sides [][]*matchv1.MatchTi
 	// 幽灵票成局后要跨三个服务的日志反查才能定位到隔夜旧票。
 	oldestAgeMs := oldestTicketAgeMs(now, flat)
 	plog.With(ctx).Infow("msg", "match_found", "match_id", matchID, "players", len(members),
-		"auto_confirm", u.cfg.AutoConfirmMatch, "ticket_ids", ticketIDs,
+		// auto_confirm 是本局的**最终判定**(部署开关 OR 本图 PRE_READY),不是配置原值 ——
+		// 排障时要回答的是「这一局到底进没进确认期」,而不是「配置写了什么」。
+		"auto_confirm", autoConfirm, "ready_mode", u.readyModeForMap(mapID),
+		"ticket_ids", ticketIDs,
 		"oldest_ticket_age_ms", oldestAgeMs)
 	if oldestAgeMs > staleTicketWarnAge.Milliseconds() {
 		plog.With(ctx).Warnw("msg", "stale_ticket_matched", "match_id", matchID,
 			"oldest_ticket_age_ms", oldestAgeMs, "ticket_ids", ticketIDs)
 	}
-	if u.cfg.AutoConfirmMatch {
+	if autoConfirm {
 		plog.With(ctx).Debugw("msg", "match_allocation_queued", "match_id", matchID,
 			"operation_id", queued.GetAllocationOperationId())
 	}

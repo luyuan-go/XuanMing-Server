@@ -186,7 +186,7 @@ func TestLogin_GenerationAllocatedBeforeRedisWrite(t *testing.T) {
 	gen := &fakeSessionGenRepo{gen: 7, callOrder: &order}
 	uc := newGenUsecase(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestLogin_SupersededByNewerGeneration_NoCredentials(t *testing.T) {
 	gen := &fakeSessionGenRepo{gen: 3}
 	uc := newGenUsecase(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil {
 		t.Fatal("superseded conditional write must fail the login")
 	}
@@ -235,7 +235,7 @@ func TestLogin_RedisInfraFailure_FencesBothAuthorities(t *testing.T) {
 	gen := &fakeSessionGenRepo{gen: 5, callOrder: &order}
 	uc := newGenUsecase(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil || res != nil {
 		t.Fatalf("infra failure must fail the login with zero credentials, err=%v res=%+v", err, res)
 	}
@@ -263,7 +263,7 @@ func TestLogin_FailedTombstoneFailure_DoesNotMaskOriginalError(t *testing.T) {
 	gen := &fakeSessionGenRepo{gen: 2, failedTombstoneErr: errcode.New(errcode.ErrInternal, "mysql down too")}
 	uc := newGenUsecase(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if res != nil {
 		t.Fatalf("no credentials on failure, got %+v", res)
 	}
@@ -292,7 +292,7 @@ func TestLogin_RedisCommittedButErrored_FencesUndeliveredSession(t *testing.T) {
 	gen := &fakeSessionGenRepo{gen: 6}
 	uc := newGenUsecase2(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil || res != nil {
 		t.Fatalf("commit-but-errored write must still fail the login, err=%v res=%+v", err, res)
 	}
@@ -325,7 +325,7 @@ func TestLogin_AmbiguousCommitLanded_ResolvesAndDelivers(t *testing.T) {
 	gen := &fakeSessionGenRepo{gen: 6, ambiguousCommit: true, callOrder: &order}
 	uc := newGenUsecase(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err != nil || res == nil {
 		t.Fatalf("a COMMIT that actually landed must not fail the login: err=%v res=%+v", err, res)
 	}
@@ -355,7 +355,7 @@ func TestLogin_AmbiguousCommitDidNotLand_FailsWithZeroCompensation(t *testing.T)
 	gen := &fakeSessionGenRepo{gen: 6, ambiguousCommit: true, loadNotFound: true}
 	uc := newGenUsecase(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil || res != nil {
 		t.Fatalf("a commit that did not land must fail the login: err=%v res=%+v", err, res)
 	}
@@ -374,7 +374,7 @@ func TestLogin_AmbiguousCommitDidNotLand_FailsWithZeroCompensation(t *testing.T)
 	sessions2 := &genOrderSessionRepo{}
 	gen2 := &fakeSessionGenRepo{gen: 6, ambiguousCommit: true, loadRowJTI: "winner-jti"}
 	uc2 := newGenUsecase(t, sessions2, gen2)
-	if _, err := uc2.Login(context.Background(), "acc", "pw", "device-A"); err == nil {
+	if _, err := uc2.Login(context.Background(), "acc", "pw", "device-A", false); err == nil {
 		t.Fatal("losing the sequencing race must fail the login")
 	}
 	if len(gen2.failedTombstoneCalls) != 0 || len(gen2.tombstoneCalls) != 0 {
@@ -393,7 +393,7 @@ func TestLogin_AmbiguousCommitUnresolvable_TombstonesFailedGeneration(t *testing
 	}
 	uc := newGenUsecase(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil || res != nil {
 		t.Fatalf("unresolvable commit must fail the login: err=%v res=%+v", err, res)
 	}
@@ -431,7 +431,7 @@ func TestLogin_AmbiguousCommitUnresolvable_MySQLFenceFailureDoesNotGuessRedis(t 
 	}
 	uc := newGenUsecase(t, sessions, gen)
 
-	if _, err := uc.Login(context.Background(), "acc", "pw", "device-A"); err == nil {
+	if _, err := uc.Login(context.Background(), "acc", "pw", "device-A", false); err == nil {
 		t.Fatal("unresolvable commit must fail the login")
 	}
 	if sessions.fenceCalls != 0 {
@@ -458,7 +458,7 @@ func TestLogin_AmbiguousCommitUnresolvable_NoopNeverFencesSameGenerationWinner(t
 		t.Fatalf("seed same-generation winner C: %v", err)
 	}
 
-	if _, err := uc.Login(context.Background(), "acc", "pw", "device-B"); err == nil {
+	if _, err := uc.Login(context.Background(), "acc", "pw", "device-B", false); err == nil {
 		t.Fatal("unresolvable B commit must fail the login")
 	}
 	if sessions.fenceCalls != 0 {
@@ -480,7 +480,7 @@ func TestLogin_AmbiguousCommitUnresolvable_TombstoneGetsItsOwnBudget(t *testing.
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 请求 ctx 早已取消:补偿必须仍能跑
-	if _, err := uc.Login(ctx, "acc", "pw", "device-A"); err == nil {
+	if _, err := uc.Login(ctx, "acc", "pw", "device-A", false); err == nil {
 		t.Fatal("unresolvable commit must fail the login")
 	}
 	if len(gen.failedTombstoneCalls) != 1 {
@@ -504,7 +504,7 @@ func TestLogin_AmbiguousCommitLandedThenRedisFails_FencesFailedGeneration(t *tes
 	gen := &fakeSessionGenRepo{gen: 6, ambiguousCommit: true}
 	uc := newGenUsecase2(t, sessions, gen)
 
-	if _, err := uc.Login(context.Background(), "acc", "pw", "device-A"); err == nil {
+	if _, err := uc.Login(context.Background(), "acc", "pw", "device-A", false); err == nil {
 		t.Fatal("redis failure after a resolved commit must still fail the login")
 	}
 	if len(gen.failedTombstoneCalls) != 1 {
@@ -530,7 +530,7 @@ func TestLogin_RequestCancelled_CompensationRunsOnDetachedContext(t *testing.T) 
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 请求 ctx 在 Redis 写返回时已取消
-	if _, err := uc.Login(ctx, "acc", "pw", "device-A"); err == nil {
+	if _, err := uc.Login(ctx, "acc", "pw", "device-A", false); err == nil {
 		t.Fatal("infra failure must fail the login")
 	}
 	if len(gen.ctxSeen) == 0 {
@@ -558,7 +558,7 @@ func TestLogin_RequestCancelled_AmbiguityProbeRunsOnDetachedContext(t *testing.T
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := uc.Login(ctx, "acc", "pw", "device-A"); err != nil {
+	if _, err := uc.Login(ctx, "acc", "pw", "device-A", false); err != nil {
 		t.Fatalf("a landed commit must resolve even when the request ctx is dead: %v", err)
 	}
 	if gen.loadCalls != 1 {
@@ -599,7 +599,7 @@ func TestLogin_RedisStateUnprovable_FencesBothAuthorities(t *testing.T) {
 	gen := &fakeSessionGenRepo{gen: 9, callOrder: &order}
 	uc := newGenUsecase2(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil || res != nil {
 		t.Fatalf("infra failure must fail the login with zero credentials, err=%v res=%+v", err, res)
 	}
@@ -623,7 +623,7 @@ func TestLogin_UnprovableMySQLFenceFailure_DoesNotMaskOriginalError(t *testing.T
 	gen := &fakeSessionGenRepo{gen: 4, failedTombstoneErr: errcode.New(errcode.ErrInternal, "mysql down too")}
 	uc := newGenUsecase2(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if res != nil {
 		t.Fatalf("no credentials on failure, got %+v", res)
 	}
@@ -642,7 +642,7 @@ func TestLogin_MySQLFenceNoopDoesNotSkipRedisFence(t *testing.T) {
 	gen := &fakeSessionGenRepo{gen: 4, failedTombstoneNoop: true}
 	uc := newGenUsecase2(t, sessions, gen)
 
-	if _, err := uc.Login(context.Background(), "acc", "pw", "device-A"); err == nil {
+	if _, err := uc.Login(context.Background(), "acc", "pw", "device-A", false); err == nil {
 		t.Fatal("original Redis write failure must still fail login")
 	}
 	if len(gen.failedTombstoneCalls) != 1 {
@@ -736,7 +736,7 @@ func TestLogin_GenerationPersistFailure_FailClosedBeforeRedis(t *testing.T) {
 	gen := &fakeSessionGenRepo{err: errcode.New(errcode.ErrInternal, "mysql down")}
 	uc := newGenUsecase(t, sessions, gen)
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil {
 		t.Fatal("generation persistence failure must fail the login")
 	}

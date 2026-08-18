@@ -86,13 +86,26 @@ func newFakeRepo() *fakeRepo {
 	}
 }
 
-func (f *fakeRepo) EnsureProfile(_ context.Context, playerID uint64, defaultNickname string, baseMMR int) error {
+func (f *fakeRepo) EnsureProfile(_ context.Context, playerID uint64, defaultNickname string, baseMMR int) (bool, error) {
 	if _, ok := f.players[playerID]; !ok {
 		// 刻意不预置任何池的分:真实 EnsureProfile 只建 players 行,player_mmr 行
 		// 由首次结算 upsert 创建(baseMMR 只是 GetMMR 未命中时的返回值)。
 		f.players[playerID] = &fakeProfile{nickname: defaultNickname, legacyMMR: baseMMR, ratings: map[string]int{}}
+		return true, nil
 	}
-	return nil
+	return false, nil
+}
+
+// ListNicknames 只返回**已建档**的角色,与真实实现语义一致:
+// 请求里有、结果里没有 = 无档案,调用方据此区分「查不到」与「名字是空串」。
+func (f *fakeRepo) ListNicknames(_ context.Context, playerIDs []uint64) (map[uint64]string, error) {
+	out := map[uint64]string{}
+	for _, id := range playerIDs {
+		if p, ok := f.players[id]; ok {
+			out[id] = p.nickname
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeRepo) GetProfile(_ context.Context, playerID uint64) (*playerv1.PlayerProfile, bool, error) {

@@ -92,7 +92,7 @@ stageAllocating / stageReady / stageFailed`)。`ticket_id` / `match_id` 都是 S
 最后 `return ticketID, nil`:
 
 - `validateMapID` — 校验 `map_id` 是关卡表里的战斗类关卡(`match.go:425`)
-- `resolveMembers` — 经 `TeamService.BeginTeamMatch` 在 team 锁内冻结名单(队长 / 存在性校验在那把锁里;**ready 门槛已删,2026-08-17 LoL 式流程**),本地只校验人数 ≤ 一方人数
+- `resolveMembers` — 经 `TeamService.BeginTeamMatch` 在 team 锁内冻结名单(队长 / 存在性校验在那把锁里;**ready 门槛按关卡表 `ready_mode` 逐图决定**,由 `requiresPreMatchReady(map_id)` 解析后经 `require_ready` 传入,2026-08-18),本地只校验人数 ≤ 一方人数
 - `ensureNoneInBattle` — 战斗中的人不许再排队(不变量 §1,`match.go:437`)
 - `preflightStartClaims` — 一人只能在一个队列的快照检查(`match.go:441`)
 - `CreateStartOperation` — 写一条 durable 排队 saga(`phase = ACCEPTED`,`match.go:462`)
@@ -299,7 +299,7 @@ PVE 的目标形态是**同一张副本既能排队撮合、也能人不够时�
 | `battle_gate_fail_open` | `false` | locator 查询失败时是否放行入队(生产必须 false) |
 | `liveness_gate_enabled` | `false` | 是否启用在线保活两道离线门。**INC-20260724-001 后全部实跑配置已回退为 `false`,重开前置见下方《成局最终门的证据契约》** |
 | `walk_in` | `false` | 「即时开局 / walk-in」分叉:PVP=false 走撮合;**PVE 实例=true**(单人/整队直进副本,见「PVE 实例」节)。旧键 `enable_solo_match` 仍兼容读取(OR 并入)并打废弃 Warn |
-| `auto_confirm_match` | `false` | 撮合(versus)路径跳过确认期:默认 false 保留真实确认。**2026-08-17 起 dev 档也是 false**(LoL 式流程:ready 门槛已删,确认期是「带缺席者开局」的主防线,robot/gatecheck 已支持手动确认);仅无 UI 的脚本联调可临时开 true。与 walk-in 无关 |
+| `auto_confirm_match` | `false` | 撮合(versus)路径跳过确认期。**2026-08-18 起本开关不是唯一决定者**:最终判定是 `auto_confirm_match \|\| 本图 ready_mode==PRE_READY`。填了 `PRE_READY` 的图玩家已在组队面板点过准备,**恒不进确认期且关不掉**(让同一局点两次准备就是配错了)。本开关只剩「全图强制跳过」一个语义,给无 UI 的脚本联调 / 压测用;要让某张图有确认期请改关卡表,不要改本开关。dev 档为 false(robot/gatecheck 已支持手动确认)。与 walk-in 无关 |
 | `leader.enabled` | `false` | 撮合循环单写者选举(多副本必开) |
 
 **信任域隔离**(`Validate` 强校验):`match_resume_auth_secret`(Login 恢复读)、`allocation_abort_auth_secret`

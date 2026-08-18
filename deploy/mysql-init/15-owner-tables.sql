@@ -26,10 +26,17 @@ CREATE TABLE IF NOT EXISTS `owner_record` (
     `release_track`       VARCHAR(32)     NOT NULL DEFAULT '',
     `operation_id`        VARCHAR(64)     NOT NULL DEFAULT '' COMMENT '本次迁移的稳定 operation(UUIDv4)',
     `admit_not_before_ms` BIGINT          NOT NULL DEFAULT 0 COMMENT '迁移屏障(UTC ms;CAS 时点算定,后续旧实例续租不回写)',
+    `hub_source_revision` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Hub 来源版本高水位(INC-20260818-003);只前进,Release/BATTLE 迁移都不清',
     `updated_at_ms`       BIGINT          NOT NULL DEFAULT 0,
     PRIMARY KEY (`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='每玩家 owner 权威记录(§9.22)';
+-- 既有库需手动补(expand 阶段,可回滚;INC-20260818-003 §3 分阶段发布第 1 步):
+--   ALTER TABLE owner_record ADD COLUMN `hub_source_revision` BIGINT UNSIGNED NOT NULL DEFAULT 0
+--     COMMENT 'Hub 来源版本高水位(INC-20260818-003)';
+-- 回滚:ALTER TABLE owner_record DROP COLUMN `hub_source_revision`;
+--   ⚠️ 只有在**全部** hub_allocator 副本都回退到不写 revision 的版本之后才可以 DROP。
+--   列还在而新写者已在写非零值时 DROP,会把该玩家的高水位抹成 0 = 门重新对 legacy 敞开。
 
 CREATE TABLE IF NOT EXISTS `ds_instance_lease` (
     `instance_uid`      VARCHAR(128)    NOT NULL,

@@ -172,6 +172,16 @@ type LoginConf struct {
 	// addr 为空 → 不查,presence-only(dev/local 兼容);B1 生产建议必配。
 	Match MatchClientConf `yaml:"matchmaker,omitempty" json:"matchmaker,omitempty"`
 
+	// Player(账号 / 角色分离 2026-08-18):把账号名播种成**全服显示名**。
+	//
+	// 创建角色功能上线前角色名固定 = 账号名,而全服显示名权威是 player 服务的
+	// players.nickname(头顶铭牌 / 队伍面板 / 聊天 / 好友 / 公会 / 排行榜都读它)。
+	// login 在登录路径上尽力调 player.EnsureProfile 播种(INSERT IGNORE,不覆盖玩家改过的名字)。
+	//
+	// addr 为空 → 不播种,角色名回落 player 自己的默认前缀名 Player_<player_id>。
+	// **弱依赖**:player 不可达 / 版本还没这个 RPC,一律降级,绝不阻断登录(§9.21)。
+	Player PlayerClientConf `yaml:"player,omitempty" json:"player,omitempty"`
+
 	// AllowedRoleIDs 是选角白名单(选角权威化 2026-07-08,SelectRole RPC 服务端校验)。
 	// 对齐客户端 CfgMisc.DefaultRoleIDs(选角界面可选列表)。
 	// 非空 = 严格白名单;空 = fail-closed,SelectRole 一律拒绝(防改包客户端签任意 role_id
@@ -187,6 +197,13 @@ type LoginConf struct {
 type LocatorClientConf struct {
 	// Addr player_locator gRPC 端口(默认 127.0.0.1:20006)。
 	// 留空仅允许 local/off；Hub assignment binding 激活时 Validate 会拒绝启动。
+	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
+}
+
+// PlayerClientConf 是 login 调 player 的客户端参数(账号 / 角色分离 2026-08-18)。
+type PlayerClientConf struct {
+	// Addr player gRPC 端口(默认 127.0.0.1:20002)。
+	// 留空 → 不播种角色名(角色名回落 player 默认前缀名),其余功能不受影响。
 	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
 }
 

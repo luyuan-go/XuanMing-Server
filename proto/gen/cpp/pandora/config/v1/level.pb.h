@@ -66,6 +66,8 @@ enum LevelExpShareMode : int;
 extern const uint32_t LevelExpShareMode_internal_data_[];
 enum LevelRatingMode : int;
 extern const uint32_t LevelRatingMode_internal_data_[];
+enum LevelReadyMode : int;
+extern const uint32_t LevelReadyMode_internal_data_[];
 class LevelRow;
 struct LevelRowGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -99,6 +101,9 @@ internal::EnumTraitsT<::pandora::config::v1::LevelExpShareMode_internal_data_>
 template <>
 internal::EnumTraitsT<::pandora::config::v1::LevelRatingMode_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::config::v1::LevelRatingMode>;
+template <>
+internal::EnumTraitsT<::pandora::config::v1::LevelReadyMode_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::config::v1::LevelReadyMode>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -228,6 +233,47 @@ template <>
 [[nodiscard]] inline bool LevelRatingMode_Parse(
     ::absl::string_view name, LevelRatingMode* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<LevelRatingMode>(LevelRatingMode_descriptor(), name,
+                                           value);
+}
+enum LevelReadyMode : int {
+  LEVEL_READY_MODE_UNSPECIFIED = 0,
+  LEVEL_READY_MODE_PRE_READY = 1,
+  LEVEL_READY_MODE_POST_CONFIRM = 2,
+  LevelReadyMode_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  LevelReadyMode_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t LevelReadyMode_internal_data_[];
+inline constexpr LevelReadyMode LevelReadyMode_MIN =
+    static_cast<LevelReadyMode>(0);
+inline constexpr LevelReadyMode LevelReadyMode_MAX =
+    static_cast<LevelReadyMode>(2);
+[[nodiscard]] inline bool LevelReadyMode_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int LevelReadyMode_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+LevelReadyMode_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(LevelReadyMode) {
+  return LevelReadyMode_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& LevelReadyMode_Name(T value) {
+  static_assert(::std::is_same<T, LevelReadyMode>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to LevelReadyMode_Name().");
+  return LevelReadyMode_Name(static_cast<LevelReadyMode>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& LevelReadyMode_Name(LevelReadyMode value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<LevelReadyMode_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool LevelReadyMode_Parse(
+    ::absl::string_view name, LevelReadyMode* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<LevelReadyMode>(LevelReadyMode_descriptor(), name,
                                            value);
 }
 enum LevelCategory : int {
@@ -448,6 +494,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     kRatingModeFieldNumber = 16,
     kPrepareDurationSecondsFieldNumber = 18,
     kSettleDurationSecondsFieldNumber = 19,
+    kReadyModeFieldNumber = 20,
   };
   // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
   void clear_name() ;
@@ -664,11 +711,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
   void _internal_set_settle_duration_seconds(::uint32_t value);
 
   public:
+  // .pandora.config.v1.LevelReadyMode ready_mode = 20 [json_name = "readyMode", (.pandora.config.v1.excel_col) = "\345\207\206\345\244\207\346\250\241\345\274\217"];
+  void clear_ready_mode() ;
+  [[nodiscard]] ::pandora::config::v1::LevelReadyMode ready_mode() const;
+  void set_ready_mode(::pandora::config::v1::LevelReadyMode value);
+
+  private:
+  ::pandora::config::v1::LevelReadyMode _internal_ready_mode() const;
+  void _internal_set_ready_mode(::pandora::config::v1::LevelReadyMode value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.LevelRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 19,
+      ::google::protobuf::internal::TcParseTable<5, 20,
                           0, 100,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -716,6 +773,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     int rating_mode_;
     ::uint32_t prepare_duration_seconds_;
     ::uint32_t settle_duration_seconds_;
+    int ready_mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1606,6 +1664,30 @@ inline void LevelRow::_internal_set_settle_duration_seconds(::uint32_t value) {
   _impl_.settle_duration_seconds_ = value;
 }
 
+// .pandora.config.v1.LevelReadyMode ready_mode = 20 [json_name = "readyMode", (.pandora.config.v1.excel_col) = "\345\207\206\345\244\207\346\250\241\345\274\217"];
+inline void LevelRow::clear_ready_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::pandora::config::v1::LevelReadyMode LevelRow::ready_mode() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.ready_mode)
+  return _internal_ready_mode();
+}
+inline void LevelRow::set_ready_mode(::pandora::config::v1::LevelReadyMode value) {
+  _internal_set_ready_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.ready_mode)
+}
+inline ::pandora::config::v1::LevelReadyMode LevelRow::_internal_ready_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::config::v1::LevelReadyMode>(_impl_.ready_mode_);
+}
+inline void LevelRow::_internal_set_ready_mode(::pandora::config::v1::LevelReadyMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_mode_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // LevelTableData
@@ -1695,6 +1777,12 @@ struct is_proto_enum<::pandora::config::v1::LevelRatingMode> : std::true_type {}
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::config::v1::LevelRatingMode>() {
   return ::pandora::config::v1::LevelRatingMode_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::config::v1::LevelReadyMode> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::config::v1::LevelReadyMode>() {
+  return ::pandora::config::v1::LevelReadyMode_descriptor();
 }
 template <>
 struct is_proto_enum<::pandora::config::v1::LevelCategory> : std::true_type {};

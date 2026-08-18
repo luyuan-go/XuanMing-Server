@@ -4,7 +4,8 @@
 -- (01-create-databases.sql 先建库 + grant,本文件接着建表)。
 --
 -- 表清单:
---   accounts         账号身份(account → player_id + 密码哈希 + 状态)
+--   accounts         账号身份(account → account_id / player_id + 密码哈希 + 状态)
+--   account_roles    角色归属台账(account_id → 角色实体 player_id;一账号多角色)
 --   account_devices  设备绑定(同一账号允许多设备,记录最近登录)
 --   account_bans     封禁记录(账号 / 设备 维度,可永久或定时)
 --
@@ -17,6 +18,7 @@ USE `pandora_account`;
 
 CREATE TABLE IF NOT EXISTS `accounts` (
     `player_id`     BIGINT UNSIGNED  NOT NULL,
+    `account_id`    BIGINT UNSIGNED       NULL COMMENT '账号身份 ID(snowflake);NULL=旧二进制注册尚未补铸',
     `account`       VARCHAR(64)      NOT NULL,
     `password_hash` VARCHAR(80)      NOT NULL COMMENT 'bcrypt(client_digest),含 cost 前缀,固定 60 字节',
     `status`        TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=normal,1=banned,2=disabled',
@@ -26,10 +28,35 @@ CREATE TABLE IF NOT EXISTS `accounts` (
     `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`),
     UNIQUE KEY `uk_account` (`account`),
+    UNIQUE KEY `uk_account_id` (`account_id`),
     UNIQUE KEY `uk_player_no` (`player_no`),
     UNIQUE KEY `uk_register_no` (`register_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 账号身份表';
+
+-- 角色归属台账(账号身份 / 角色身份分离,2026-08-18;迁移 000008)。
+--
+-- player_id 在本表里是**角色实体 ID**(全仓业务数据都以它为键),account_id 是归属列。
+-- 角色过户(卖角色)= 原子改 account_id 一列,业务数据零迁移。
+--
+-- role_name:创建角色功能上线前 = 账号名。**不是显示名权威**——显示名权威是
+-- pandora_player.players.nickname(uk_nickname 全局唯一)。本列只作两用:
+--   ① login 播种 players.nickname 的取值来源;② 选角列表在 player 服务不可达时的兜底名。
+-- 故意不加唯一键:唯一性只能有一个权威点,两库各加一个必然分叉且无法自动收敛。
+CREATE TABLE IF NOT EXISTS `account_roles` (
+    `player_id`     BIGINT UNSIGNED  NOT NULL COMMENT '角色实体 ID(snowflake)',
+    `account_id`    BIGINT UNSIGNED  NOT NULL COMMENT '归属账号 ID;角色过户 = 原子改本列',
+    `slot`          TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '账号内角色槽位,0 起',
+    `role_name`     VARCHAR(64)      NOT NULL COMMENT '角色名;创建角色功能上线前 = 账号名',
+    `status`        TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=normal,1=deleted(软删)',
+    `last_login_at` DATETIME              NULL COMMENT '该角色最近一次进入游戏;选角默认选中最近的。NULL=从未进过',
+    `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`player_id`),
+    UNIQUE KEY `uk_account_slot` (`account_id`, `slot`),
+    KEY `idx_account_status` (`account_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 角色归属台账(账号 → 角色;角色过户改 account_id)';
 
 -- player_no_counter:角色编号全局发号计数器,恒 1 行(id=1)。
 -- 补号事务先 FOR UPDATE 锁本行再批量编号:行锁即全局互斥,多 login 副本并发安全,

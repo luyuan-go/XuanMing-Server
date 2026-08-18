@@ -31,11 +31,17 @@ CREATE TABLE IF NOT EXISTS `owner_record` (
     `release_track`       VARCHAR(32)     NOT NULL DEFAULT '',
     `operation_id`        VARCHAR(64)     NOT NULL DEFAULT '',
     `admit_not_before_ms` BIGINT          NOT NULL DEFAULT 0,
+    `hub_source_revision` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Hub 来源版本高水位(INC-20260818-003);只前进,Release/BATTLE 迁移都不清',
     `updated_at_ms`       BIGINT          NOT NULL DEFAULT 0,
     PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
   SHARD_ROW_ID_BITS = 4 PRE_SPLIT_REGIONS = 4
   COMMENT='每玩家 owner 权威记录(§9.22)';
+-- 既有库需手动补(expand 阶段;TiDB 支持 IF NOT EXISTS,可重复执行):
+--   ALTER TABLE owner_record ADD COLUMN IF NOT EXISTS `hub_source_revision`
+--     BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Hub 来源版本高水位(INC-20260818-003)';
+-- 回滚:ALTER TABLE owner_record DROP COLUMN IF EXISTS `hub_source_revision`;
+--   ⚠️ 同 mysql-init:必须先把全部 hub_allocator 副本退回不写 revision 的版本再 DROP。
 
 CREATE TABLE IF NOT EXISTS `ds_instance_lease` (
     `instance_uid`      VARCHAR(128)    NOT NULL,

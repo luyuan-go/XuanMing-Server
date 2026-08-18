@@ -106,6 +106,11 @@ static_resources:
               mutations:
                 request_mutations:
                 - remove: "x-pandora-player-id"
+                # 账号态身份头(两步登录 2026-08-18):与 player-id 同样必须无条件剥离。
+                # 客户端面它只由 pandora_account provider 验签成功后重写;DS 面根本不该存在。
+                # 漏剥离 = 任何调用方都能自带一个 x-pandora-account-id 打
+                # ListAccountRoles / EnterRole,列出并进入**别人账号下的角色**。
+                - remove: "x-pandora-account-id"
                 - remove: "x-pandora-jwt-payload"
                 # DS 网关标记头只属于 :8444 DS 面;客户端面无条件剥离,防公网客户端伪造
                 # “我是 DS 面流量”干扰后端 DSCallbackGuard 判定(纵深防御)。
@@ -143,7 +148,47 @@ static_resources:
                     #    secret 跟 services/account/login/etc/login-dev.yaml 的 login.jwt.secret 必须保持一致。
                     inline_string: |
                       {"keys":[{"kty":"oct","alg":"HS256","kid":"pandora-dev","k":"cGFuZG9yYS1kZXYtand0LXNlY3JldC1jaGFuZ2UtbWUtMzIh"}]}
+                # ⭐ 账号态 provider(两步登录,2026-08-18)。
+                #
+                # 与 pandora_session **同密钥、不同 audience**,这是整个两步登录的安全根基:
+                # 账号态 token 的 sub 是 account_id 而不是 player_id。两者若共用一个 aud,
+                # 一张账号 token 就能通过 pandora_session 校验,把 account_id 经
+                # claim_to_headers 写进 x-pandora-player-id —— 全后端会拿它当玩家身份,
+                # 直接越权(team / chat / inventory / trade 全线)。
+                #
+                # 所以:
+                #   - audiences 必须是 pandora-account(对应 pkg/auth 的 Config.AccountAudience,
+                #     那边启动时硬断言它与 Audience 不同);
+                #   - claim_to_headers 必须写到**另一个头** x-pandora-account-id,
+                #     绝不能复用 x-pandora-player-id。
+                #
+                # 只有 login 的 ListAccountRoles / EnterRole 两个 path 挂本 provider。
+                pandora_account:
+                  issuer: "pandora-login"
+                  audiences: [ "pandora-account" ]
+                  forward: false
+                  forward_payload_header: "x-pandora-jwt-payload"
+                  claim_to_headers:
+                  - header_name: "x-pandora-account-id"
+                    claim_name: "sub"
+                  local_jwks:
+                    # 与 pandora_session 同一把 HS256 密钥(隔离靠 aud,不靠换密钥)。
+                    inline_string: |
+                      {"keys":[{"kty":"oct","alg":"HS256","kid":"pandora-dev","k":"cGFuZG9yYS1kZXYtand0LXNlY3JldC1jaGFuZ2UtbWUtMzIh"}]}
               rules:
+              # ===== 账号态入口(两步登录 2026-08-18):必须挂 pandora_account =====
+              # 挂错成 pandora_session 会让账号 token 因 aud 不符被拒(选角界面全线 401);
+              # 不挂则完全不验签(rules 未列到的 path 默认放行),上游拿不到
+              # x-pandora-account-id,服务层会一律 ErrUnauthorized。两种错法都会「登录后
+              # 选不了角」,但日志形态不同 —— 401 是前者,ERR_UNAUTHORIZED 是后者。
+              - match:
+                  path: "/pandora.login.v1.LoginService/ListAccountRoles"
+                requires:
+                  provider_name: "pandora_account"
+              - match:
+                  path: "/pandora.login.v1.LoginService/EnterRole"
+                requires:
+                  provider_name: "pandora_account"
               # login.Logout / IssueDSTicket 需要 SessionToken(player_id 从 sub claim 来)
               - match:
                   path: "/pandora.login.v1.LoginService/Logout"
@@ -530,6 +575,18 @@ static_resources:
               - match:
                   path: "/pandora.player.v1.PlayerService/GrantSkillCards"
                 direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              # EnsureProfile 是 login 播种角色名用的系统 RPC(账号 / 角色分离 2026-08-18)。
+              # 对客户端开放 = 玩家能拿它给自己起任意昵称,绕过改名的全部限制
+              # (长度 / 屏蔽字 / 唯一性之外的业务规则)。服务层 systemOnly 兜底,这里双保险。
+              - match:
+                  path: "/pandora.player.v1.PlayerService/EnsureProfile"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              # GetPlayerNames 是 DS 面的铭牌取名接口(只在 :8444 放行)。对客户端开放
+              # 等于给出一个「按任意 player_id 查名字」的公开入口;玩家看别人的名字应走
+              # team / friend / guild 各自的成员列表,那里有关系校验。
+              - match:
+                  path: "/pandora.player.v1.PlayerService/GetPlayerNames"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
               - match:
                   prefix: "/pandora.player.v1.PlayerService/"
                 route:
@@ -688,6 +745,11 @@ static_resources:
               mutations:
                 request_mutations:
                 - remove: "x-pandora-player-id"
+                # 账号态身份头(两步登录 2026-08-18):与 player-id 同样必须无条件剥离。
+                # 客户端面它只由 pandora_account provider 验签成功后重写;DS 面根本不该存在。
+                # 漏剥离 = 任何调用方都能自带一个 x-pandora-account-id 打
+                # ListAccountRoles / EnterRole,列出并进入**别人账号下的角色**。
+                - remove: "x-pandora-account-id"
                 - remove: "x-pandora-jwt-payload"
                 # 入站先剥离网关标记头(防伪造),再由下方 vh 统一盖回 "1":
                 # 后端 DSCallbackGuard 凭此头区分「DS 面流量(须验令牌)」与「内部东西向直连」。
@@ -869,6 +931,18 @@ static_resources:
                 route:
                   cluster: player_cluster
                   timeout: 10s
+                  idle_timeout: 60s
+              # DS 批量反查角色显示名(头顶铭牌,2026-08-18)。铭牌名字的权威是
+              # players.nickname;DS 此前只能回退 CfgRole 职业名,全场人人同名。
+              # 只放这一个精确方法:它是最小映射(player_id → nickname),不像 GetProfile
+              # 会把等级 / 段位 / 战绩整份档案开到 DS 网段。服务端 systemOnly 兜底。
+              # 集群内等价配置见 deploy/k8s/agones/16-ds-envoy.yaml;两处必须同增同减。
+              # 超时 5s(同社交反查):进场路径只读,失败按未知处理不阻塞出生。
+              - match:
+                  path: "/pandora.player.v1.PlayerService/GetPlayerNames"
+                route:
+                  cluster: player_cluster
+                  timeout: 5s
                   idle_timeout: 60s
 
   clusters:

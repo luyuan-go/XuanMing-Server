@@ -485,8 +485,10 @@ func (s *TeamService) BeginTeamMatch(ctx context.Context, req *teamv1.BeginTeamM
 	// ctx 里有没有 player_id,提前写进去会把这道门直接打穿。
 	ctx = plog.WithTeamID(ctx, req.GetTeamId())
 	ctx = plog.WithPlayerID(ctx, req.GetCaptainId())
+	// require_ready 由 matchmaker 按本次 map_id 的关卡表 ready_mode 解析后传入;
+	// 旧 matchmaker 不发 → false → 无门槛(与该字段上线前一致,§9.21 共存安全)。
 	team, expiresAtMs, err := s.uc.BeginTeamMatch(ctx,
-		req.GetTeamId(), req.GetCaptainId(), req.GetOperationId(), req.GetLeaseMs())
+		req.GetTeamId(), req.GetCaptainId(), req.GetOperationId(), req.GetLeaseMs(), req.GetRequireReady())
 	if err != nil {
 		return &teamv1.BeginTeamMatchResponse{Code: toProtoCode(err)}, nil
 	}

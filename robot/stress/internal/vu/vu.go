@@ -293,9 +293,17 @@ func (v *VU) actMatchFlow(ctx context.Context) {
 	// 本轮结束后尽力离队,避免下一轮 CreateTeam 撞 ErrTeamAlreadyInTeam(harness 清理,非压测指标)。
 	defer v.leaveTeamBestEffort(ctx, teamID)
 
-	// 2) SetReady。2026-08-17 起 ready 已非开局门槛(LoL 式流程,BeginTeamMatch 对
-	// FORMING 直接放行),保留调用只为顺带覆盖 expand 期的兼容路径;失败不再中断本轮
-	// (新 team 下它只是无关紧要的显示位,不该拖垮匹配漏斗)。
+	// 2) SetReady。2026-08-18 起「要不要先准备」由**关卡表 ready_mode 按图决定**:
+	// PRE_READY 图仍要求全员准备才放行组票,POST_CONFIRM 图(含表留空)不设门槛。
+	// 压测机器人无条件点一次准备,于是两种图都能跑通 —— 这一步在 POST_CONFIRM 图上
+	// 只是无关紧要的显示位,在 PRE_READY 图上则是必须的前置。
+	//
+	// 失败仍不中断本轮:真正的判据在下一步 StartMatch(PRE_READY 图上准备没成功,
+	// 那里会以 3006 显性失败并计入漏斗),在这里提前 return 只会把一个可解释的
+	// 匹配失败变成一条没有下文的空轮次。
+	// ⚠️ ready 是**一次开局的单次授权**:BeginTeamMatch 会在成功那一刻把它兑掉
+	// (两种模式都清)。所以每一轮都必须重新点 —— 复用上一轮的 ready 在 PRE_READY 图上
+	// 会直接被门槛拒掉,那正是 INC-20260813-001 要堵的形状。
 	_ = v.timed("team.SetReady", func() error {
 		resp, e := v.pool.Team.SetReady(v.authCtx(ctx), &teamv1.SetReadyRequest{
 			TeamId: teamID,

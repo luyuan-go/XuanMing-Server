@@ -23,7 +23,7 @@ func (r illegalStateTeamReader) GetTeam(context.Context, uint64) (*teamv1.Team, 
 
 // BeginTeamMatch 复刻真实 team 侧在锁内做的三项校验(存在 / READY / 队长),
 // 让这张非法状态矩阵表继续覆盖到组票入口 —— 校验挪进了 team 的锁,断言不能跟着丢。
-func (r illegalStateTeamReader) BeginTeamMatch(_ context.Context, teamID, captainID uint64, _ string, _ int64) (*teamv1.Team, uint64, error) {
+func (r illegalStateTeamReader) BeginTeamMatch(_ context.Context, teamID, captainID uint64, _ string, _ int64, _ bool) (*teamv1.Team, uint64, error) {
 	if r.team == nil {
 		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d not found", teamID)
 	}

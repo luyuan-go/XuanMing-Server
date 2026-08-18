@@ -257,6 +257,14 @@
       "level": 1,
       "hp": 5000,
       "hit_chance": 1
+    },
+    {
+      "id": 1012001,
+      "role_id": 1012,
+      "level": 1,
+      "hp": 1000,
+      "attack": 100,
+      "hit_chance": 1
     }
   ]
 }

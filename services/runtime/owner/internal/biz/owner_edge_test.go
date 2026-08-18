@@ -48,7 +48,7 @@ func (r *ownerEdgeRepo) Query(_ context.Context, playerID uint64) (data.OwnerRec
 	return r.queryRecord, r.queryErr
 }
 
-func (r *ownerEdgeRepo) BeginTransition(context.Context, uint64, uint64, string, int8, data.OwnerTarget, time.Duration) (data.OwnerRecord, error) {
+func (r *ownerEdgeRepo) BeginTransition(context.Context, uint64, uint64, string, int8, data.OwnerTarget, uint64, time.Duration) (data.OwnerRecord, error) {
 	r.beginCalls++
 	return data.OwnerRecord{}, nil
 }

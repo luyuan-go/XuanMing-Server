@@ -8,14 +8,21 @@ import (
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	loginv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/login/v1"
 	"github.com/luyuancpp/pandora/services/account/login/internal/biz"
+	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
 
 type playerNoAccountRepo struct{ playerNo uint64 }
 
-func (r *playerNoAccountRepo) FindByAccount(context.Context, string) (uint64, string, error) {
-	return 42, "", nil
+func (r *playerNoAccountRepo) FindByAccount(context.Context, string) (data.AccountIdentity, error) {
+	return data.AccountIdentity{AccountID: 42, PlayerID: 42}, nil
 }
-func (r *playerNoAccountRepo) CreateAccount(context.Context, uint64, string, string) error {
+func (r *playerNoAccountRepo) FindByAccountID(context.Context, uint64) (data.AccountIdentity, error) {
+	return data.AccountIdentity{AccountID: 42, PlayerID: 42}, nil
+}
+func (r *playerNoAccountRepo) BackfillAccountID(_ context.Context, _, candidate uint64) (uint64, error) {
+	return candidate, nil
+}
+func (r *playerNoAccountRepo) CreateAccount(context.Context, uint64, uint64, string, string) error {
 	return nil
 }
 func (r *playerNoAccountRepo) CheckBanned(context.Context, uint64, string) (bool, error) {

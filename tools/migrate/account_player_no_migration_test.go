@@ -92,8 +92,8 @@ func TestPandoraAccountV7PlayerNoExpandCompatibilityContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 7 {
-		t.Fatalf("pandora_account latest version=%d,期望=7", version)
+	if version < 7 {
+		t.Fatalf("pandora_account latest version=%d,期望至少包含 v7", version)
 	}
 
 	up := readEmbeddedMigration(t, accountV7UpPath)

@@ -1554,6 +1554,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED OwnerRecord final : public ::google
     kAdmitNotBeforeMsFieldNumber = 7,
     kLeaseDeadlineMsFieldNumber = 8,
     kUpdatedAtMsFieldNumber = 9,
+    kHubSourceRevisionFieldNumber = 10,
   };
   // string operation_id = 6 [json_name = "operationId"];
   void clear_operation_id() ;
@@ -1656,11 +1657,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED OwnerRecord final : public ::google
   void _internal_set_updated_at_ms(::int64_t value);
 
   public:
+  // uint64 hub_source_revision = 10 [json_name = "hubSourceRevision"];
+  void clear_hub_source_revision() ;
+  [[nodiscard]] ::uint64_t hub_source_revision() const;
+  void set_hub_source_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_hub_source_revision() const;
+  void _internal_set_hub_source_revision(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.owner.v1.OwnerRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           1, 57,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1698,6 +1709,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED OwnerRecord final : public ::google
     ::int64_t admit_not_before_ms_;
     ::int64_t lease_deadline_ms_;
     ::int64_t updated_at_ms_;
+    ::uint64_t hub_source_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1857,6 +1869,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginTransitionRequest final : publ
     kTargetFieldNumber = 5,
     kPlayerIdFieldNumber = 1,
     kExpectEpochFieldNumber = 2,
+    kSourceRevisionFieldNumber = 6,
     kOwnerTypeFieldNumber = 4,
   };
   // string operation_id = 3 [json_name = "operationId"];
@@ -1910,6 +1923,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginTransitionRequest final : publ
   void _internal_set_expect_epoch(::uint64_t value);
 
   public:
+  // uint64 source_revision = 6 [json_name = "sourceRevision"];
+  void clear_source_revision() ;
+  [[nodiscard]] ::uint64_t source_revision() const;
+  void set_source_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_revision() const;
+  void _internal_set_source_revision(::uint64_t value);
+
+  public:
   // .pandora.owner.v1.OwnerType owner_type = 4 [json_name = "ownerType"];
   void clear_owner_type() ;
   [[nodiscard]] ::pandora::owner::v1::OwnerType owner_type() const;
@@ -1924,7 +1947,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginTransitionRequest final : publ
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           1, 60,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1957,6 +1980,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginTransitionRequest final : publ
     ::pandora::owner::v1::OwnerTarget* PROTOBUF_NULLABLE target_;
     ::uint64_t player_id_;
     ::uint64_t expect_epoch_;
+    ::uint64_t source_revision_;
     int owner_type_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3730,6 +3754,30 @@ inline void OwnerRecord::_internal_set_updated_at_ms(::int64_t value) {
   _impl_.updated_at_ms_ = value;
 }
 
+// uint64 hub_source_revision = 10 [json_name = "hubSourceRevision"];
+inline void OwnerRecord::clear_hub_source_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_source_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t OwnerRecord::hub_source_revision() const {
+  // @@protoc_insertion_point(field_get:pandora.owner.v1.OwnerRecord.hub_source_revision)
+  return _internal_hub_source_revision();
+}
+inline void OwnerRecord::set_hub_source_revision(::uint64_t value) {
+  _internal_set_hub_source_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.owner.v1.OwnerRecord.hub_source_revision)
+}
+inline ::uint64_t OwnerRecord::_internal_hub_source_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_source_revision_;
+}
+inline void OwnerRecord::_internal_set_hub_source_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_source_revision_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // QueryOwnerRequest
@@ -4004,7 +4052,7 @@ inline void BeginTransitionRequest::set_allocated_operation_id(::std::string* PR
 inline void BeginTransitionRequest::clear_owner_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_type_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::pandora::owner::v1::OwnerType BeginTransitionRequest::owner_type() const {
   // @@protoc_insertion_point(field_get:pandora.owner.v1.BeginTransitionRequest.owner_type)
@@ -4012,7 +4060,7 @@ inline ::pandora::owner::v1::OwnerType BeginTransitionRequest::owner_type() cons
 }
 inline void BeginTransitionRequest::set_owner_type(::pandora::owner::v1::OwnerType value) {
   _internal_set_owner_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.owner.v1.BeginTransitionRequest.owner_type)
 }
 inline ::pandora::owner::v1::OwnerType BeginTransitionRequest::_internal_owner_type() const {
@@ -4120,6 +4168,30 @@ inline void BeginTransitionRequest::set_allocated_target(::pandora::owner::v1::O
 
   _impl_.target_ = reinterpret_cast<::pandora::owner::v1::OwnerTarget*>(value);
   // @@protoc_insertion_point(field_set_allocated:pandora.owner.v1.BeginTransitionRequest.target)
+}
+
+// uint64 source_revision = 6 [json_name = "sourceRevision"];
+inline void BeginTransitionRequest::clear_source_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t BeginTransitionRequest::source_revision() const {
+  // @@protoc_insertion_point(field_get:pandora.owner.v1.BeginTransitionRequest.source_revision)
+  return _internal_source_revision();
+}
+inline void BeginTransitionRequest::set_source_revision(::uint64_t value) {
+  _internal_set_source_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.owner.v1.BeginTransitionRequest.source_revision)
+}
+inline ::uint64_t BeginTransitionRequest::_internal_source_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_revision_;
+}
+inline void BeginTransitionRequest::_internal_set_source_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_revision_ = value;
 }
 
 // -------------------------------------------------------------------

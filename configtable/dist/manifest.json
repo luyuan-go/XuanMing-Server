@@ -1,8 +1,8 @@
 {
-  "version": 20260818001,
-  "generated_at_ms": 1787041693512,
+  "version": 20260818002,
+  "generated_at_ms": 1787049725567,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-r2107",
+  "source_rev": "svn-r2110-local-readymode",
   "tables": [
     {
       "name": "chest_drop",
@@ -85,7 +85,7 @@
       "name": "level",
       "file": "level.json",
       "proto": "pandora.config.v1.LevelTableData",
-      "checksum": "sha256:b5ea9a75e35c1caa2094b5ec11e6aa4f031ad7ccfaec5d7ba88f3e87cbd26de3",
+      "checksum": "sha256:f590f038e9628bb395277d77c390c5e291c5621dfe801e8fa9397f99b47066a6",
       "rows": 14
     },
     {
@@ -127,15 +127,15 @@
       "name": "role_level",
       "file": "role_level.json",
       "proto": "pandora.config.v1.RoleLevelTableData",
-      "checksum": "sha256:9152579c3ebf4b079f5e7f1b401aefa403cf793953d4546d5fe740ec5d68607b",
-      "rows": 27
+      "checksum": "sha256:b3de90a39619edf5b00e058296cc71bb1ffead0899ebdd371bd6334ea6c60093",
+      "rows": 28
     },
     {
       "name": "role",
       "file": "role.json",
       "proto": "pandora.config.v1.RoleTableData",
-      "checksum": "sha256:bf075120bf50585e594262fd2c895d40368e206b492a5f6a99542a6b3c554599",
-      "rows": 24
+      "checksum": "sha256:eeee036ff924ed91637e9af8897937bfec2803b132d88442f1a488ae6c41e5a5",
+      "rows": 25
     },
     {
       "name": "skill_bullet",
@@ -183,8 +183,8 @@
       "name": "skill",
       "file": "skill.json",
       "proto": "pandora.config.v1.SkillTableData",
-      "checksum": "sha256:13ca3bcfb3ee037e816b9bd91b0abf346c81269c797a879f15f4a0e8d583716e",
-      "rows": 63
+      "checksum": "sha256:0846fbd6ed8bc2cc54c283c27136c4e8f602a14adf07956b58a33633868cfec9",
+      "rows": 67
     },
     {
       "name": "spawn_group",

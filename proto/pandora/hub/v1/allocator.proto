@@ -426,6 +426,20 @@ message HubAssignmentStorageRecord {
   // 0 = written before this field existed (or fencing disabled): treated as "no
   // watermark yet", so rolling upgrades and dev deployments keep working.
   uint64 writer_token = 31;
+
+  // Hub assignment 来源版本(INC-20260818-003;pkg/placement.ComposeSourceRevision)。
+  //
+  // 与 writer_token(31)的分工不能混:writer_token 只按**任期**递增,同一任期内的多次
+  // assignment 完全相同,所以它挡得住"上一届写者的迟到写",挡不住"同一届内先 Begin 后
+  // CAS 的旧请求"——而事故反例(§1)里的 R1/R2 恰好同任期。source_revision 在任期号之下
+  // 再加一段任期内严格递增的序号,于是任意两次 assignment 全序可比。
+  //
+  // **只有真正改变 target 的 CAS 才领新号**:TTL 刷新、凭据轮换、cleanup-only 标记、
+  // 墓碑删除都原样带走旧号。领号的语义是"这是一次新的归属来源",不是"这条记录被动过"。
+  //
+  // 0 = 本字段出现之前写的记录,或写者尚未滚上本协议。Owner 按 legacy 处置:
+  // 兼容窗内放行,但该玩家一旦见过非零版本就永久拒绝 0(见 owner.proto source_revision)。
+  uint64 source_revision = 32;
 }
 
 // ===== 服务间事件(Kafka 推送,客户端可见 payload)=====

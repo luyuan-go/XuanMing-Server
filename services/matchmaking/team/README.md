@@ -185,11 +185,22 @@ CreateTeam ──► FORMING ──(全员 ready)──► READY
 在本服务里定义了常量,但**当前 team 写路径不驱动这两态的迁移**(队伍进撮合/战斗后的态由 matchmaker/battle 侧管理),
 team 只驱动 `FORMING ↔ READY ↔ DISBANDED`。
 
-> **2026-08-17 起 ready 不再是开局门槛(LoL 式流程)**:`BeginTeamMatch` 对 FORMING/READY
-> 都放行,队长直接点开始匹配即可组票;「带缺席者开局」由 matchmaker 在线闸(4011 点名)
-> 与撮合确认期(`MATCH_STAGE_CONFIRM`)兜住。`SetReady` / READY 态 / `EndTeamMatch` 保留为
-> 存量客户端兼容路径(expand 期),contract 时机见
-> `docs/design/decision-revisit-team-match-lifecycle-and-roster-rollout.md`。
+> **2026-08-18 起 ready 是不是开局门槛,由关卡表「准备模式」列按图决定**(两模式互斥):
+>
+> | `ready_mode` | `BeginTeamMatch` | 撮合成功后 | 面板 |
+> |---|---|---|---|
+> | `PRE_READY`(1) | 要求 `State==READY` | 直接进场,无确认期 | 显示准备按钮 |
+> | `POST_CONFIRM`(2,**留空同**) | FORMING 也放行 | 进 `MATCH_STAGE_CONFIRM` 等全员接受 | 隐藏准备按钮 |
+>
+> 判定由 matchmaker 按**本次 StartMatch 的 `map_id`** 解析,经 `BeginTeamMatchRequest.require_ready`
+> 传入(team 不自己查表:队伍记录里的 `map_id` 只是队长的面板选择,可能不是本次开的图)。
+> 旧 matchmaker 不发该字段 → false → 无门槛,与本字段上线前一致(§9.21)。
+>
+> **两种模式下 `BeginTeamMatch` 都会消费 ready**(清位 + 转 FORMING):一次准备只授权一次开局,
+> 否则队长能拿同一次准备连开两局(INC-20260813-001 的形状)。「带缺席者开局」在两种模式下
+> 还共有 matchmaker 在线闸(4011 点名)这道防线。
+>
+> 详见 `docs/design/decision-revisit-team-match-lifecycle-and-roster-rollout.md` §9。
 
 ### 关键不变量
 

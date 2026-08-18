@@ -75,6 +75,21 @@ const (
 	ErrLoginTicketExpired    Code = 1010
 	ErrLoginTicketInvalid    Code = 1011
 	ErrLoginTicketReplayed   Code = 1012
+
+	// 账号 / 角色分离(两步登录,2026-08-18)。
+	//
+	// 这几个码刻意与 ErrUnauthorized / ErrNotFound 区分开:选角失败是玩家能看懂、
+	// 且客户端要分别处理的状态(重登 vs 刷新角色列表 vs 提示上限),混进泛化码后
+	// 客户端只能一律弹「登录失败」。
+	ErrLoginRoleNotFound Code = 1020 // 角色实体不存在(已删除 / player_id 编造)
+	ErrLoginRoleNotOwned Code = 1021 // 角色存在但不属于该账号 —— 越权尝试,必须审计
+	ErrLoginRoleLimit    Code = 1022 // 账号角色数达上限(创建角色功能上线后才可能触发)
+	// ErrLoginNoRole 账号名下一个可用角色都没有。
+	//
+	// 除了「还没创建角色」这个字面含义,它还是 Login 的 fail-closed 出口:唯一的角色
+	// 被软删(status!=0)或已过户到别的账号时,登录必须以本码被拒 —— 绝不回落
+	// accounts.player_id 把玩家送进一个已经不属于他的角色(见 login 的 resolveAccountView)。
+	ErrLoginNoRole Code = 1023
 )
 
 // player(2000-2999)
@@ -298,6 +313,11 @@ const (
 	ErrOwnerIdentityMismatch Code = 15003 // epoch/operation/实例四元组不一致(fail-closed)
 	ErrOwnerLeaseRegressed   Code = 15004 // 续租实例身份不符或 deadline 回退
 	ErrOwnerInvalidOperation Code = 15005 // operation_id 非法或目标身份不完整
+	// ErrOwnerSourceRevisionStale 本次 Begin 携带的 Hub 来源版本不新于该玩家的高水位
+	// (INC-20260818-003)。含三种情形:版本更旧、同版本却换了 target、以及见过非零版本
+	// 之后又来了 legacy(0)。一律 fail-closed 拒绝,**不带**当前记录重试建议 ——
+	// 调用方该做的是重查自己的 assignment,而不是拿更大的 epoch 再冲一次。
+	ErrOwnerSourceRevisionStale Code = 15006
 )
 
 // Error 是带错误码的标准错误类型。

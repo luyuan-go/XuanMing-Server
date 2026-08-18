@@ -234,10 +234,17 @@ type MatchConf struct {
 	EnableSoloMatch bool `yaml:"enable_solo_match,omitempty" json:"enable_solo_match,omitempty"`
 
 	// AutoConfirmMatch 只作用于撮合(versus)路径:开启后凑齐成局即视为全员已确认、跳过确认期直接拉 DS。
-	//   - 默认 false —— 保留真实确认期(玩家点接受),PVP 正式对局用;
+	//   - 默认 false —— 按关卡表决定要不要确认期(见下);
 	//   - dev / 压测设 true 省去人工点确认(robot/stress 默认与之对齐)。
 	// 与 solo / walk-in 无关:formSoloMatch 本就直接建成 confirmAccepted,不看本开关
 	//(PVE 实例保留 true 仅防误配,walk-in 下不生效)。
+	//
+	// ⚠️ 本开关**不是**「要不要确认期」的唯一决定者(2026-08-18 两模式按图二选一):
+	// 真正的判定是 `AutoConfirmMatch || 本图 ready_mode==PRE_READY`(biz.formMatch)。
+	// 关卡表填了 PRE_READY 的图,玩家已在组队面板点过准备,不会再进确认期 ——
+	// 这条**关不掉**,因为让同一局点两次准备本身就是配错了。本开关只剩「全图强制跳过」
+	// 这一个语义,给没有 UI 的脚本用;要让某张图有确认期,把它的 ready_mode 留空或填 2,
+	// 而不是改本开关。
 	AutoConfirmMatch bool `yaml:"auto_confirm_match,omitempty" json:"auto_confirm_match,omitempty"`
 
 	// MmrBaseWindow 初始 MMR 撮合窗口半宽(默认 200);两张票 avg_mmr 差 ≤ 窗口才可同场。

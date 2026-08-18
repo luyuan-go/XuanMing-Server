@@ -939,6 +939,58 @@
       "use_distance": 99999,
       "correction_rate": 1,
       "effect_count": 1
+    },
+    {
+      "id": 101201,
+      "remark": "普通射击",
+      "name": "普通射击",
+      "icon": "/Game/Test/UI/Skill/Dekker_attack.Dekker_attack",
+      "segment": 1,
+      "cd_timing": 1,
+      "cd_duration": 1.5,
+      "ability_path": "/Game/Test/Role/Hero/ParagonDekker/GA/GA_ParagonDekker_Attack01.GA_ParagonDekker_Attack01_C",
+      "target_select_mode": 1,
+      "use_distance": 300,
+      "damage_rate": 0.5
+    },
+    {
+      "id": 101211,
+      "remark": "毒蛇钉刺",
+      "name": "毒蛇钉刺",
+      "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-58.Game_skill_icon_for_MMORPG__da_2026-07-07T08-29-58",
+      "segment": 1,
+      "cd_timing": 1,
+      "cd_duration": 8,
+      "ability_path": "/Game/Test/Role/Hero/ParagonDekker/GA/GA_ParagonDekker_Skill01.GA_ParagonDekker_Skill01_C",
+      "target_select_mode": 1,
+      "use_distance": 500,
+      "damage_rate": 1
+    },
+    {
+      "id": 101221,
+      "remark": "震荡射击",
+      "name": "震荡射击",
+      "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-30-25.Game_skill_icon_for_MMORPG__da_2026-07-07T08-30-25",
+      "segment": 1,
+      "cd_timing": 1,
+      "cd_duration": 10,
+      "ability_path": "/Game/Test/Role/Hero/ParagonDekker/GA/GA_ParagonDekker_Skill02.GA_ParagonDekker_Skill02_C",
+      "target_select_mode": 1,
+      "use_distance": 500,
+      "damage_rate": 1
+    },
+    {
+      "id": 101231,
+      "remark": "瞄准射击",
+      "name": "瞄准射击",
+      "icon": "/Game/Test/UI/Skill/Game_skill_icon_for_MMORPG__da_2026-07-07T08-30-53.Game_skill_icon_for_MMORPG__da_2026-07-07T08-30-53",
+      "segment": 1,
+      "cd_timing": 1,
+      "cd_duration": 20,
+      "ability_path": "/Game/Test/Role/Hero/ParagonDekker/GA/GA_ParagonDekker_Skill03.GA_ParagonDekker_Skill03_C",
+      "target_select_mode": 1,
+      "use_distance": 500,
+      "damage_rate": 1
     }
   ]
 }

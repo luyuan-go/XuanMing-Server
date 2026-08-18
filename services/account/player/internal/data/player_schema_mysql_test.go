@@ -165,7 +165,7 @@ func seedPlayerProfile(t *testing.T, repo *MySQLPlayerRepo, playerID uint64, bas
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := repo.EnsureProfile(ctx, playerID, fmt.Sprintf("it_player_%d", playerID), baseMMR); err != nil {
+	if _, err := repo.EnsureProfile(ctx, playerID, fmt.Sprintf("it_player_%d", playerID), baseMMR); err != nil {
 		t.Fatalf("建档玩家 %d: %v", playerID, err)
 	}
 }

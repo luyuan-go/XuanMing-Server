@@ -440,6 +440,19 @@ func allocateResultFromBattle(b *dsv1.BattleStorageRecord) *AllocateResult {
 	}
 }
 
+func ownerTargetFromAllocateResult(res *AllocateResult) data.OwnerTargetView {
+	if res == nil {
+		return data.OwnerTargetView{}
+	}
+	return data.OwnerTargetView{
+		PodName:                  res.DSPodName,
+		InstanceUID:              res.GameserverUID,
+		InstanceEpoch:            res.InstanceEpoch,
+		AssignmentOrAllocationID: res.AllocationID,
+		ReleaseTrack:             res.ReleaseTrack,
+	}
+}
+
 // ResolveBattleTarget 是重连重签的只读权威查询。它只读同一 Redis auth+projection
 // 快照，不创建 allocation claim、不调用 Agones、不刷新 TTL/heartbeat/index。
 func (u *AllocatorUsecase) ResolveBattleTarget(
@@ -813,15 +826,20 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 	// Battle DS,归属没定案就放行等于让玩家可能同时被两台 DS 认领(§9.22 / 底线第 3 条)。
 	// 失败按分配失败处理:既有补偿链回收 claim 与 pod,撮合重试,客户端按 §9.23 退避重查。
 	//
-	// 预算 5s:一局最多 10 人,每人最多 2 轮 (Query+Begin)(EPOCH_CONFLICT 重查一次),
-	// 串行执行;按本地 TiDB 往返量级留足余量。超时按失败处理——待实测复核。
-	if err := ownerBeginPlayers(ctx, u.ownerAuth, playerIDs, ownerTypeBattle, data.OwnerTargetView{
-		PodName:                  res.DSPodName,
-		InstanceUID:              res.GameserverUID,
-		InstanceEpoch:            res.InstanceEpoch,
-		AssignmentOrAllocationID: res.AllocationID,
-		ReleaseTrack:             res.ReleaseTrack,
-	}, 5*time.Second); err != nil {
+	// 预算 5s:一局最多 10 人,每人单轮 Query+Begin；EPOCH_CONFLICT fail-closed 交外层
+	// 重走分配链并重读 allocation。串行执行,按本地 TiDB 往返量级留足余量。
+	if err := ownerBeginPlayers(ctx, u.ownerAuth, playerIDs, ownerTypeBattle,
+		ownerTargetFromAllocateResult(res), 5*time.Second); err != nil {
+		if errors.Is(err, errOwnerBeginOutcomeUnknown) {
+			// Begin 可能已在 owner 提交，只是回包与判定 Query 都失败。此时回收 Pod
+			// 会把可能已落库的 PENDING owner 变成永久死目标；保留同 allocation 的
+			// 技术 READY，让 owner 恢复后的 claim loser 只读 exact+postcheck 收敛。
+			plog.With(ctx).Errorw("msg", "battle_owner_begin_outcome_unknown_retained",
+				"match_id", matchID, "allocation_id", allocationID, "pod", res.DSPodName,
+				"players", len(playerIDs), "err", err,
+				"hint", "不交付 READY,不 rollback owner,不 cleanup allocation/pod;等待权威恢复后只读收敛")
+			return nil, err
+		}
 		plog.With(ctx).Warnw("msg", "battle_ready_refused_owner_begin_failed",
 			"match_id", matchID, "pod", res.DSPodName, "players", len(playerIDs), "err", err,
 			"hint", "归属未定案不交付 READY(§9.22);走既有分配失败补偿链")
@@ -1060,7 +1078,8 @@ func (u *AllocatorUsecase) awaitExistingAllocation(
 		plog.With(ctx).Infow("msg", "allocate_idempotent_hit", "match_id", matchID,
 			"ds_addr", existing.DsAddr, "state", existing.State, "allocation_id", existing.AllocationId,
 			"pod", existing.GetDsPodName())
-		return allocateResultFromBattle(existing), nil
+		return u.verifyExistingReadyDelivery(ctx, matchID, existing.GetPlayerIds(),
+			allocateResultFromBattle(existing))
 	}
 	if existing.State != stateAllocating && existing.State != stateWarming &&
 		(!u.modelB || (existing.State != stateReady && existing.State != stateRunning)) {
@@ -1077,7 +1096,75 @@ func (u *AllocatorUsecase) awaitExistingAllocation(
 		}
 		return nil, err
 	}
+	return u.verifyExistingReadyDelivery(ctx, matchID, existing.GetPlayerIds(), res)
+}
+
+// verifyExistingReadyDelivery 是 claim loser / 幂等重试返回 READY 前的双重只读门：
+// 先确认全部玩家 owner 已被唯一 claim winner exact bind，再 one-shot 重读 allocation 的
+// READY 快照，堵住 owner Query 期间 allocation 被回收/替换的 TOCTOU。loser 不拥有本次
+// allocation，故任一失败只返回 ErrUnavailable，绝不 Begin/Release/cleanup。
+func (u *AllocatorUsecase) verifyExistingReadyDelivery(ctx context.Context, matchID uint64,
+	players []uint64, res *AllocateResult) (*AllocateResult, error) {
+	target := ownerTargetFromAllocateResult(res)
+	if err := ownerVerifyPlayersExact(ctx, u.ownerAuth, players, ownerTypeBattle, target, 5*time.Second); err != nil {
+		plog.With(ctx).Warnw("msg", "battle_ready_refused_owner_not_exact",
+			"match_id", matchID, "allocation_id", target.AssignmentOrAllocationID,
+			"pod", target.PodName, "players", len(players), "err", err,
+			"hint", "claim loser 只读等待唯一 winner 完成 owner bind,不触发 Begin/Release/cleanup")
+		return nil, errcode.New(errcode.ErrUnavailable,
+			"battle %d owner binding not ready: %v", matchID, err)
+	}
+	if err := u.verifyReadyAllocationSnapshot(ctx, matchID, res); err != nil {
+		plog.With(ctx).Warnw("msg", "battle_ready_refused_postcheck_failed",
+			"match_id", matchID, "allocation_id", target.AssignmentOrAllocationID,
+			"pod", target.PodName, "err", err,
+			"hint", "owner 校验后 allocation 已漂移或不再 READY;claim loser fail-closed 且不清理")
+		return nil, err
+	}
 	return res, nil
+}
+
+func (u *AllocatorUsecase) verifyReadyAllocationSnapshot(
+	ctx context.Context, matchID uint64, expected *AllocateResult,
+) error {
+	if expected == nil {
+		return errcode.New(errcode.ErrUnavailable, "battle %d ready result missing", matchID)
+	}
+	var current *dsv1.BattleStorageRecord
+	if u.modelB {
+		if u.authRepo == nil {
+			return errcode.New(errcode.ErrUnavailable, "battle %d authority repo missing", matchID)
+		}
+		snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
+		if err != nil {
+			return errcode.New(errcode.ErrUnavailable,
+				"battle %d ready authority postcheck failed: %v", matchID, err)
+		}
+		ready, reason := snapshot.ReadyAuthorized(
+			time.Now().UnixMilli(), u.cfg.HeartbeatTimeout.Std().Milliseconds())
+		if !ready {
+			return errcode.New(errcode.ErrUnavailable,
+				"battle %d no longer ready after owner check: %s", matchID, reason)
+		}
+		current = snapshot.Battle
+	} else {
+		battle, found, err := u.repo.GetBattle(ctx, matchID)
+		if err != nil {
+			return errcode.New(errcode.ErrUnavailable,
+				"battle %d ready projection postcheck failed: %v", matchID, err)
+		}
+		if !found || !battleReadyForPod(battle, expected.DSPodName, matchID, battle.GetAllocatedAtMs()) {
+			return errcode.New(errcode.ErrUnavailable,
+				"battle %d no longer ready after owner check", matchID)
+		}
+		current = battle
+	}
+	got := allocateResultFromBattle(current)
+	if current == nil || current.GetMatchId() != matchID || got == nil || *got != *expected {
+		return errcode.New(errcode.ErrUnavailable,
+			"battle %d allocation target changed after owner check", matchID)
+	}
+	return nil
 }
 
 // battleReadyForPod 判定 DS 是否已用 Heartbeat 确认 ready:pod/match 对得上、有分配后的真实心跳

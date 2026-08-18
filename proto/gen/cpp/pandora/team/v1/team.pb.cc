@@ -3463,11 +3463,11 @@ constexpr BeginTeamMatchRequest::ParseTableT_ BeginTeamMatchRequest::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -3477,10 +3477,7 @@ constexpr BeginTeamMatchRequest::ParseTableT_ BeginTeamMatchRequest::InternalGen
       ::_pbi::TcParser::GetTable<::pandora::team::v1::BeginTeamMatchRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // int64 lease_ms = 4 [json_name = "leaseMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BeginTeamMatchRequest, _impl_.lease_ms_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.lease_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 team_id = 1 [json_name = "teamId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BeginTeamMatchRequest, _impl_.team_id_), 1>(),
        {8, 1, 0,
@@ -3493,6 +3490,16 @@ constexpr BeginTeamMatchRequest::ParseTableT_ BeginTeamMatchRequest::InternalGen
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.operation_id_)}},
+      // int64 lease_ms = 4 [json_name = "leaseMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BeginTeamMatchRequest, _impl_.lease_ms_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.lease_ms_)}},
+      // bool require_ready = 5 [json_name = "requireReady"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BeginTeamMatchRequest, _impl_.require_ready_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.require_ready_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -3504,6 +3511,8 @@ constexpr BeginTeamMatchRequest::ParseTableT_ BeginTeamMatchRequest::InternalGen
       {PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.operation_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // int64 lease_ms = 4 [json_name = "leaseMs"];
       {PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.lease_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // bool require_ready = 5 [json_name = "requireReady"];
+      {PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.require_ready_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -3524,7 +3533,8 @@ inline constexpr BeginTeamMatchRequest::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         team_id_{::uint64_t{0u}},
         captain_id_{::uint64_t{0u}},
-        lease_ms_{::int64_t{0}} {}
+        lease_ms_{::int64_t{0}},
+        require_ready_{false} {}
 
 template <typename>
 constexpr BeginTeamMatchRequest::BeginTeamMatchRequest(::_pbi::ConstantInitialized,
@@ -7453,15 +7463,17 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::BeginTeamMatchRequest, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::BeginTeamMatchRequest, _impl_.team_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::BeginTeamMatchRequest, _impl_.captain_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::BeginTeamMatchRequest, _impl_.operation_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::BeginTeamMatchRequest, _impl_.lease_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::BeginTeamMatchRequest, _impl_.require_ready_),
         1,
         2,
         0,
         3,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::BeginTeamMatchResponse, _impl_._has_bits_),
         7, // hasbit index offset
@@ -7544,11 +7556,11 @@ static const ::_pbi::MigrationSchema
         {306, sizeof(::pandora::team::v1::TeamUpdateEvent)},
         {321, sizeof(::pandora::team::v1::TeamInviteEvent)},
         {336, sizeof(::pandora::team::v1::BeginTeamMatchRequest)},
-        {347, sizeof(::pandora::team::v1::BeginTeamMatchResponse)},
-        {358, sizeof(::pandora::team::v1::EndTeamMatchRequest)},
-        {367, sizeof(::pandora::team::v1::EndTeamMatchResponse)},
-        {372, sizeof(::pandora::team::v1::GetPlayerTeamRequest)},
-        {377, sizeof(::pandora::team::v1::GetPlayerTeamResponse)},
+        {349, sizeof(::pandora::team::v1::BeginTeamMatchResponse)},
+        {360, sizeof(::pandora::team::v1::EndTeamMatchRequest)},
+        {369, sizeof(::pandora::team::v1::EndTeamMatchResponse)},
+        {374, sizeof(::pandora::team::v1::GetPlayerTeamRequest)},
+        {379, sizeof(::pandora::team::v1::GetPlayerTeamResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -7731,87 +7743,88 @@ const char descriptor_table_protodef_pandora_2fteam_2fv1_2fteam_2eproto[] ABSL_A
     " \001(\004R\010inviteId\022\035\n\ninviter_id\030\003 \001(\004R\tinvi"
     "terId\022 \n\014to_player_id\030\004 \001(\004R\ntoPlayerId\022"
     "\023\n\005ts_ms\030\005 \001(\003R\004tsMs\022\"\n\rexpires_at_ms\030\006 "
-    "\001(\003R\013expiresAtMsJ\004\010\007\020\n\"\215\001\n\025BeginTeamMatc"
+    "\001(\003R\013expiresAtMsJ\004\010\007\020\n\"\262\001\n\025BeginTeamMatc"
     "hRequest\022\027\n\007team_id\030\001 \001(\004R\006teamId\022\035\n\ncap"
     "tain_id\030\002 \001(\004R\tcaptainId\022!\n\014operation_id"
     "\030\003 \001(\tR\013operationId\022\031\n\010lease_ms\030\004 \001(\003R\007l"
-    "easeMs\"\315\001\n\026BeginTeamMatchResponse\022.\n\004cod"
-    "e\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004cod"
-    "e\022)\n\004team\030\002 \001(\0132\025.pandora.team.v1.TeamR\004"
-    "team\022-\n\023lease_expires_at_ms\030\003 \001(\003R\020lease"
-    "ExpiresAtMs\022)\n\020ready_generation\030\004 \001(\004R\017r"
-    "eadyGeneration\"\211\001\n\023EndTeamMatchRequest\022\027"
-    "\n\007team_id\030\001 \001(\004R\006teamId\022\035\n\nplayer_ids\030\002 "
-    "\003(\004R\tplayerIds\022:\n\031expected_ready_generat"
-    "ion\030\003 \001(\004R\027expectedReadyGeneration\"F\n\024En"
-    "dTeamMatchResponse\022.\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCodeR\004code\"3\n\024GetPlayerT"
-    "eamRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\""
-    "{\n\025GetPlayerTeamResponse\022.\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCodeR\004code\022\031\n\010has_"
-    "team\030\002 \001(\010R\007hasTeam\022\027\n\007team_id\030\003 \001(\004R\006te"
-    "amId*\242\001\n\tTeamState\022\032\n\026TEAM_STATE_UNSPECI"
-    "FIED\020\000\022\026\n\022TEAM_STATE_FORMING\020\001\022\024\n\020TEAM_S"
-    "TATE_READY\020\002\022\027\n\023TEAM_STATE_MATCHING\020\003\022\030\n"
-    "\024TEAM_STATE_IN_BATTLE\020\004\022\030\n\024TEAM_STATE_DI"
-    "SBANDED\020\005*l\n\016TeamJoinPolicy\022 \n\034TEAM_JOIN"
-    "_POLICY_UNSPECIFIED\020\000\022\035\n\031TEAM_JOIN_POLIC"
-    "Y_APPROVAL\020\001\022\031\n\025TEAM_JOIN_POLICY_OPEN\020\002*"
-    "Z\n\021TeamPushEventType\022$\n TEAM_PUSH_EVENT_"
-    "TYPE_UNSPECIFIED\020\000\022\037\n\033TEAM_PUSH_EVENT_TY"
-    "PE_INVITE\020\001*\202\004\n\020TeamUpdateReason\022\"\n\036TEAM"
-    "_UPDATE_REASON_UNSPECIFIED\020\000\022$\n TEAM_UPD"
-    "ATE_REASON_MEMBER_JOINED\020\001\022\"\n\036TEAM_UPDAT"
-    "E_REASON_MEMBER_LEFT\020\002\022$\n TEAM_UPDATE_RE"
-    "ASON_MEMBER_KICKED\020\003\022#\n\037TEAM_UPDATE_REAS"
-    "ON_MEMBER_READY\020\004\022#\n\037TEAM_UPDATE_REASON_"
-    "HERO_CHANGED\020\005\022\'\n#TEAM_UPDATE_REASON_CAP"
-    "TAIN_TRANSFER\020\006\022$\n TEAM_UPDATE_REASON_ST"
-    "ATE_CHANGED\020\007\022 \n\034TEAM_UPDATE_REASON_DISB"
-    "ANDED\020\010\022\"\n\036TEAM_UPDATE_REASON_INVITE_SEN"
-    "T\020\t\022+\n\'TEAM_UPDATE_REASON_APPLICATION_RE"
-    "CEIVED\020\n\022\"\n\036TEAM_UPDATE_REASON_MAP_CHANG"
-    "ED\020\013\022*\n&TEAM_UPDATE_REASON_MEMBER_OFFLIN"
-    "E_LEFT\020\0142\253\014\n\013TeamService\022U\n\nCreateTeam\022\""
-    ".pandora.team.v1.CreateTeamRequest\032#.pan"
-    "dora.team.v1.CreateTeamResponse\022I\n\006Invit"
-    "e\022\036.pandora.team.v1.InviteRequest\032\037.pand"
-    "ora.team.v1.InviteResponse\022[\n\014AcceptInvi"
-    "te\022$.pandora.team.v1.AcceptInviteRequest"
-    "\032%.pandora.team.v1.AcceptInviteResponse\022"
-    "R\n\tLeaveTeam\022!.pandora.team.v1.LeaveTeam"
-    "Request\032\".pandora.team.v1.LeaveTeamRespo"
-    "nse\022C\n\004Kick\022\034.pandora.team.v1.KickReques"
-    "t\032\035.pandora.team.v1.KickResponse\022O\n\010SetR"
-    "eady\022 .pandora.team.v1.SetReadyRequest\032!"
-    ".pandora.team.v1.SetReadyResponse\022L\n\007Get"
-    "Team\022\037.pandora.team.v1.GetTeamRequest\032 ."
-    "pandora.team.v1.GetTeamResponse\022R\n\tGetMy"
-    "Team\022!.pandora.team.v1.GetMyTeamRequest\032"
-    "\".pandora.team.v1.GetMyTeamResponse\022s\n\024L"
-    "istMyPendingInvites\022,.pandora.team.v1.Li"
-    "stMyPendingInvitesRequest\032-.pandora.team"
-    ".v1.ListMyPendingInvitesResponse\022U\n\nSetT"
-    "eamMap\022\".pandora.team.v1.SetTeamMapReque"
-    "st\032#.pandora.team.v1.SetTeamMapResponse\022"
-    "^\n\rListOpenTeams\022%.pandora.team.v1.ListO"
-    "penTeamsRequest\032&.pandora.team.v1.ListOp"
-    "enTeamsResponse\022X\n\013ApplyToTeam\022#.pandora"
-    ".team.v1.ApplyToTeamRequest\032$.pandora.te"
-    "am.v1.ApplyToTeamResponse\022s\n\024ListTeamApp"
-    "lications\022,.pandora.team.v1.ListTeamAppl"
-    "icationsRequest\032-.pandora.team.v1.ListTe"
-    "amApplicationsResponse\022v\n\025HandleTeamAppl"
-    "ication\022-.pandora.team.v1.HandleTeamAppl"
-    "icationRequest\032..pandora.team.v1.HandleT"
-    "eamApplicationResponse\022a\n\016BeginTeamMatch"
-    "\022&.pandora.team.v1.BeginTeamMatchRequest"
-    "\032\'.pandora.team.v1.BeginTeamMatchRespons"
-    "e\022[\n\014EndTeamMatch\022$.pandora.team.v1.EndT"
-    "eamMatchRequest\032%.pandora.team.v1.EndTea"
-    "mMatchResponse\022^\n\rGetPlayerTeam\022%.pandor"
-    "a.team.v1.GetPlayerTeamRequest\032&.pandora"
-    ".team.v1.GetPlayerTeamResponseb\006proto3"
+    "easeMs\022#\n\rrequire_ready\030\005 \001(\010R\014requireRe"
+    "ady\"\315\001\n\026BeginTeamMatchResponse\022.\n\004code\030\001"
+    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022)"
+    "\n\004team\030\002 \001(\0132\025.pandora.team.v1.TeamR\004tea"
+    "m\022-\n\023lease_expires_at_ms\030\003 \001(\003R\020leaseExp"
+    "iresAtMs\022)\n\020ready_generation\030\004 \001(\004R\017read"
+    "yGeneration\"\211\001\n\023EndTeamMatchRequest\022\027\n\007t"
+    "eam_id\030\001 \001(\004R\006teamId\022\035\n\nplayer_ids\030\002 \003(\004"
+    "R\tplayerIds\022:\n\031expected_ready_generation"
+    "\030\003 \001(\004R\027expectedReadyGeneration\"F\n\024EndTe"
+    "amMatchResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\"3\n\024GetPlayerTeam"
+    "Request\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"{\n\025"
+    "GetPlayerTeamResponse\022.\n\004code\030\001 \001(\0162\032.pa"
+    "ndora.common.v1.ErrCodeR\004code\022\031\n\010has_tea"
+    "m\030\002 \001(\010R\007hasTeam\022\027\n\007team_id\030\003 \001(\004R\006teamI"
+    "d*\242\001\n\tTeamState\022\032\n\026TEAM_STATE_UNSPECIFIE"
+    "D\020\000\022\026\n\022TEAM_STATE_FORMING\020\001\022\024\n\020TEAM_STAT"
+    "E_READY\020\002\022\027\n\023TEAM_STATE_MATCHING\020\003\022\030\n\024TE"
+    "AM_STATE_IN_BATTLE\020\004\022\030\n\024TEAM_STATE_DISBA"
+    "NDED\020\005*l\n\016TeamJoinPolicy\022 \n\034TEAM_JOIN_PO"
+    "LICY_UNSPECIFIED\020\000\022\035\n\031TEAM_JOIN_POLICY_A"
+    "PPROVAL\020\001\022\031\n\025TEAM_JOIN_POLICY_OPEN\020\002*Z\n\021"
+    "TeamPushEventType\022$\n TEAM_PUSH_EVENT_TYP"
+    "E_UNSPECIFIED\020\000\022\037\n\033TEAM_PUSH_EVENT_TYPE_"
+    "INVITE\020\001*\202\004\n\020TeamUpdateReason\022\"\n\036TEAM_UP"
+    "DATE_REASON_UNSPECIFIED\020\000\022$\n TEAM_UPDATE"
+    "_REASON_MEMBER_JOINED\020\001\022\"\n\036TEAM_UPDATE_R"
+    "EASON_MEMBER_LEFT\020\002\022$\n TEAM_UPDATE_REASO"
+    "N_MEMBER_KICKED\020\003\022#\n\037TEAM_UPDATE_REASON_"
+    "MEMBER_READY\020\004\022#\n\037TEAM_UPDATE_REASON_HER"
+    "O_CHANGED\020\005\022\'\n#TEAM_UPDATE_REASON_CAPTAI"
+    "N_TRANSFER\020\006\022$\n TEAM_UPDATE_REASON_STATE"
+    "_CHANGED\020\007\022 \n\034TEAM_UPDATE_REASON_DISBAND"
+    "ED\020\010\022\"\n\036TEAM_UPDATE_REASON_INVITE_SENT\020\t"
+    "\022+\n\'TEAM_UPDATE_REASON_APPLICATION_RECEI"
+    "VED\020\n\022\"\n\036TEAM_UPDATE_REASON_MAP_CHANGED\020"
+    "\013\022*\n&TEAM_UPDATE_REASON_MEMBER_OFFLINE_L"
+    "EFT\020\0142\253\014\n\013TeamService\022U\n\nCreateTeam\022\".pa"
+    "ndora.team.v1.CreateTeamRequest\032#.pandor"
+    "a.team.v1.CreateTeamResponse\022I\n\006Invite\022\036"
+    ".pandora.team.v1.InviteRequest\032\037.pandora"
+    ".team.v1.InviteResponse\022[\n\014AcceptInvite\022"
+    "$.pandora.team.v1.AcceptInviteRequest\032%."
+    "pandora.team.v1.AcceptInviteResponse\022R\n\t"
+    "LeaveTeam\022!.pandora.team.v1.LeaveTeamReq"
+    "uest\032\".pandora.team.v1.LeaveTeamResponse"
+    "\022C\n\004Kick\022\034.pandora.team.v1.KickRequest\032\035"
+    ".pandora.team.v1.KickResponse\022O\n\010SetRead"
+    "y\022 .pandora.team.v1.SetReadyRequest\032!.pa"
+    "ndora.team.v1.SetReadyResponse\022L\n\007GetTea"
+    "m\022\037.pandora.team.v1.GetTeamRequest\032 .pan"
+    "dora.team.v1.GetTeamResponse\022R\n\tGetMyTea"
+    "m\022!.pandora.team.v1.GetMyTeamRequest\032\".p"
+    "andora.team.v1.GetMyTeamResponse\022s\n\024List"
+    "MyPendingInvites\022,.pandora.team.v1.ListM"
+    "yPendingInvitesRequest\032-.pandora.team.v1"
+    ".ListMyPendingInvitesResponse\022U\n\nSetTeam"
+    "Map\022\".pandora.team.v1.SetTeamMapRequest\032"
+    "#.pandora.team.v1.SetTeamMapResponse\022^\n\r"
+    "ListOpenTeams\022%.pandora.team.v1.ListOpen"
+    "TeamsRequest\032&.pandora.team.v1.ListOpenT"
+    "eamsResponse\022X\n\013ApplyToTeam\022#.pandora.te"
+    "am.v1.ApplyToTeamRequest\032$.pandora.team."
+    "v1.ApplyToTeamResponse\022s\n\024ListTeamApplic"
+    "ations\022,.pandora.team.v1.ListTeamApplica"
+    "tionsRequest\032-.pandora.team.v1.ListTeamA"
+    "pplicationsResponse\022v\n\025HandleTeamApplica"
+    "tion\022-.pandora.team.v1.HandleTeamApplica"
+    "tionRequest\032..pandora.team.v1.HandleTeam"
+    "ApplicationResponse\022a\n\016BeginTeamMatch\022&."
+    "pandora.team.v1.BeginTeamMatchRequest\032\'."
+    "pandora.team.v1.BeginTeamMatchResponse\022["
+    "\n\014EndTeamMatch\022$.pandora.team.v1.EndTeam"
+    "MatchRequest\032%.pandora.team.v1.EndTeamMa"
+    "tchResponse\022^\n\rGetPlayerTeam\022%.pandora.t"
+    "eam.v1.GetPlayerTeamRequest\032&.pandora.te"
+    "am.v1.GetPlayerTeamResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_deps[1] = {
@@ -7821,7 +7834,7 @@ static ::absl::once_flag descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto = {
     false,
     false,
-    8518,
+    8555,
     descriptor_table_protodef_pandora_2fteam_2fv1_2fteam_2eproto,
     "pandora/team/v1/team.proto",
     &descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_once,
@@ -17498,9 +17511,9 @@ BeginTeamMatchRequest::BeginTeamMatchRequest(
                offsetof(Impl_, team_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, team_id_),
-           offsetof(Impl_, lease_ms_) -
+           offsetof(Impl_, require_ready_) -
                offsetof(Impl_, team_id_) +
-               sizeof(Impl_::lease_ms_));
+               sizeof(Impl_::require_ready_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.team.v1.BeginTeamMatchRequest)
 }
@@ -17515,9 +17528,9 @@ inline void BeginTeamMatchRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, team_id_),
            0,
-           offsetof(Impl_, lease_ms_) -
+           offsetof(Impl_, require_ready_) -
                offsetof(Impl_, team_id_) +
-               sizeof(Impl_::lease_ms_));
+               sizeof(Impl_::require_ready_));
 }
 BeginTeamMatchRequest::~BeginTeamMatchRequest() {
   // @@protoc_insertion_point(destructor:pandora.team.v1.BeginTeamMatchRequest)
@@ -17571,10 +17584,10 @@ PROTOBUF_NOINLINE void BeginTeamMatchRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.operation_id_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
     ::memset(&_impl_.team_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.lease_ms_) -
-        reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.lease_ms_));
+        reinterpret_cast<char*>(&_impl_.require_ready_) -
+        reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.require_ready_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -17636,6 +17649,15 @@ PROTOBUF_NOINLINE void BeginTeamMatchRequest::Clear() {
     }
   }
 
+  // bool require_ready = 5 [json_name = "requireReady"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_require_ready() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_require_ready(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -17661,7 +17683,7 @@ PROTOBUF_NOINLINE void BeginTeamMatchRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string operation_id = 3 [json_name = "operationId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_operation_id().empty()) {
@@ -17690,6 +17712,12 @@ PROTOBUF_NOINLINE void BeginTeamMatchRequest::Clear() {
             this_._internal_lease_ms());
       }
     }
+    // bool require_ready = 5 [json_name = "requireReady"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_require_ready() != 0) {
+        total_size += 2;
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -17708,7 +17736,7 @@ void BeginTeamMatchRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_operation_id().empty()) {
         _this->_internal_set_operation_id(from._internal_operation_id());
@@ -17733,6 +17761,11 @@ void BeginTeamMatchRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.lease_ms_ = from._impl_.lease_ms_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_require_ready() != 0) {
+        _this->_impl_.require_ready_ = from._impl_.require_ready_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -17755,8 +17788,8 @@ void BeginTeamMatchRequest::InternalSwap(BeginTeamMatchRequest* PROTOBUF_RESTRIC
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.operation_id_, &other->_impl_.operation_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.lease_ms_)
-      + sizeof(BeginTeamMatchRequest::_impl_.lease_ms_)
+      PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.require_ready_)
+      + sizeof(BeginTeamMatchRequest::_impl_.require_ready_)
       - PROTOBUF_FIELD_OFFSET(BeginTeamMatchRequest, _impl_.team_id_)>(
           reinterpret_cast<char*>(&_impl_.team_id_),
           reinterpret_cast<char*>(&other->_impl_.team_id_));

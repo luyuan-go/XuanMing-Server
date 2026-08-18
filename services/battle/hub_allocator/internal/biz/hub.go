@@ -31,6 +31,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	"github.com/luyuancpp/pandora/pkg/safego"
 	"github.com/luyuancpp/pandora/pkg/sessiongate"
@@ -193,6 +194,55 @@ type HubUsecase struct {
 	// requireWriter 快速拒写 + 后台 sweep 非写者跳 tick;存储级最终防线见
 	// data/writer_fence.go(同事务 fencing token 比较)。
 	writerFence data.WriterFence
+	// revMinter:Hub assignment 来源版本铸号器(INC-20260818-003)。零值可用,
+	// 无需注入 —— 它的持久性来自 writerFence 的任期号,进程内只存任期内序号。
+	revMinter sourceRevisionMinter
+}
+
+// sourceRevisionMinter 铸「Hub assignment 来源版本」的任期内低位序号(INC-20260818-003)。
+//
+// 为什么进程内计数就够、不需要持久发号器:revision 的高位是 writerlease 的任期号
+// (= etcd leader key 的 CreateRevision,历届严格递增且持久)。同一任期内**只有一个**
+// 写者进程在铸号,进程内自增即严格递增;进程崩溃重启必然拿到**更大**的任期号,低位
+// 从头开始也不会与旧任期的号相撞。持久性由 etcd 提供,不必再造一个持久序列。
+type sourceRevisionMinter struct {
+	mu   sync.Mutex
+	term uint64
+	seq  uint64
+}
+
+// next 领取本任期的下一个号。任期变了就把序号归零(新任期的高位更大,全序仍然成立)。
+func (m *sourceRevisionMinter) next(term uint64) (uint64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if term != m.term {
+		m.term = term
+		m.seq = 0
+	}
+	m.seq++
+	return placement.ComposeSourceRevision(term, m.seq)
+}
+
+// mintSourceRevision 为一次**真正改变 target** 的 assignment CAS 领号。
+//
+// 三条纪律:
+//  1. 只在真实置换点调用(replaceAssignmentSaga / migratePlayer)。TTL 刷新、凭据轮换、
+//     cleanup-only 标记、墓碑删除都**不**领号,原样带走旧号 —— 领号的语义是「这是一次
+//     新的归属来源」,不是「这条记录被动过」。
+//  2. 未启用 writerFence(dev / mock / 单副本 Recreate)返回 0 = legacy。那些部署里不存在
+//     「两个写者并存」,本门无事可做,也拿不到任期号。
+//  3. 持有租约但铸号失败(任期号或序号越界)一律上抛 **fail-closed**:铸不出号时正确的
+//     动作是拒绝这次 assignment,不是发一个可能比旧号还小的版本出去。
+func (u *HubUsecase) mintSourceRevision() (uint64, error) {
+	if u.writerFence == nil {
+		return placement.SourceRevisionLegacy, nil
+	}
+	term, held := u.writerFence.Current()
+	if !held {
+		return 0, errcode.New(errcode.ErrUnavailable,
+			"hub allocator writer lease not held; cannot mint assignment source revision")
+	}
+	return u.revMinter.next(term)
 }
 
 // HubCredential 是 service 层从**验签通过**的 Model B hub 令牌抽出的凭据身份(§7),
@@ -522,12 +572,12 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 		assignment.AssignmentId = assignmentID
 		assignment.ReleaseTrack = target.ReleaseTrack
 		bindAssignmentAuth(assignment, seat)
-		// 先签票、再发布 assignment:签名器失败时可以用 reservation identity
-		// 精确补偿,既不暴露拿不到票的归属,也不泄漏容量。
-		signedResult, signErr := u.signResult(ctx, playerID, effectiveRole, assignment, sourceMatchID, sessionJTI)
-		if signErr != nil {
+		// 先做**纯签名**、再发布 assignment：签名器失败时仍可用 reservation identity
+		// 精确补偿。owner Begin 被刻意拆到 CAS winner 之后，CAS loser 不得触碰 owner。
+		prepared, prepareErr := u.prepareHubTicket(ctx, playerID, effectiveRole, assignment, sourceMatchID, sessionJTI)
+		if prepareErr != nil {
 			u.compensateReservedSeat(ctx, target.HubPodName, playerID, assignmentID, seat)
-			return nil, signErr
+			return nil, prepareErr
 		}
 		var expected *hubv1.HubAssignmentStorageRecord
 		if found {
@@ -548,6 +598,10 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 		if retrySaga {
 			continue
 		}
+		if bindErr := u.bindOwnerForPublishedHubAssignment(ctx, playerID, assignment, prepared); bindErr != nil {
+			// assignment/seat 已 durable 发布，不能补偿 winner；下次 Assign 读取当前记录重签。
+			return nil, bindErr
+		}
 		plog.With(ctx).Infow("msg", "hub_assigned",
 			"player_id", playerID, "pod", target.HubPodName, "ds_pod", target.HubPodName,
 			"hub_assignment_id", assignmentID, "shard_id", target.ShardId,
@@ -556,7 +610,10 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 			"attempt", attempt+1,
 			"shard_players", target.PlayerCount, "shard_capacity", target.Capacity,
 			"elapsed_ms", time.Since(startedAt).Milliseconds())
-		return signedResult, nil
+		return &AssignResult{
+			HubDSAddr: assignment.HubAddr, HubTicket: prepared.token, HubPodName: assignment.HubPodName,
+			ShardID: assignment.ShardId, TicketExpMs: prepared.expiresAtMs,
+		}, nil
 	}
 	// 重试耗尽(R2):与“真没容量”同为 ErrHubNoAvailable,但处置完全相反
 	// (并发写者互撞 vs 需要扩容),必须能从日志一眼分开。
@@ -755,9 +812,10 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 					next.AssignmentId = uuid.NewString()
 				}
 				bindAssignmentAuth(next, ensured)
-				signedResult, signErr := u.transferResult(ctx, playerID, next.RoleId, next)
-				if signErr != nil {
-					return nil, signErr
+				prepared, prepareErr := u.prepareHubTicket(ctx, playerID, next.RoleId, next, 0,
+					pmw.SessionJTIFromContext(ctx))
+				if prepareErr != nil {
+					return nil, prepareErr
 				}
 				swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, next, u.assignmentSagaTTL())
 				if serr != nil {
@@ -769,7 +827,13 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 				if werr := u.confirmWriterForTicket(ctx, playerID); werr != nil {
 					return nil, werr
 				}
-				return signedResult, nil
+				if bindErr := u.bindOwnerForPublishedHubAssignment(ctx, playerID, next, prepared); bindErr != nil {
+					return nil, bindErr
+				}
+				return &TransferResult{
+					NewHubDSAddr: next.HubAddr, NewHubTicket: prepared.token, NewHubPodName: next.HubPodName,
+					TicketExpMs: prepared.expiresAtMs, NewAssignmentID: next.GetAssignmentId(),
+				}, nil
 			}
 		}
 
@@ -792,10 +856,11 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 		newAssignment.AssignmentId = newAssignmentID
 		newAssignment.ReleaseTrack = target.ReleaseTrack
 		bindAssignmentAuth(newAssignment, seat)
-		signedResult, signErr := u.transferResult(ctx, playerID, assignment.RoleId, newAssignment)
-		if signErr != nil {
+		prepared, prepareErr := u.prepareHubTicket(ctx, playerID, assignment.RoleId, newAssignment, 0,
+			pmw.SessionJTIFromContext(ctx))
+		if prepareErr != nil {
 			u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
-			return nil, signErr
+			return nil, prepareErr
 		}
 		retrySaga, sagaErr := u.replaceAssignmentSaga(ctx, playerID, assignment, newAssignment, seat,
 			nil, "Hub transfer assignment disappeared during cleanup")
@@ -805,13 +870,20 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 		if retrySaga {
 			continue
 		}
+		if bindErr := u.bindOwnerForPublishedHubAssignment(ctx, playerID, newAssignment, prepared); bindErr != nil {
+			return nil, bindErr
+		}
 		plog.With(ctx).Infow("msg", "hub_transferred",
 			"player_id", playerID, "from", assignment.HubPodName, "to", target.HubPodName,
 			"from_pod", assignment.HubPodName, "ds_pod", target.HubPodName,
 			"hub_assignment_id", newAssignmentID, "from_assignment_id", assignment.GetAssignmentId(),
 			"shard_id", target.ShardId, "release_track", target.ReleaseTrack,
 			"target_hub_id", targetHubID, "attempt", attempt+1)
-		return signedResult, nil
+		return &TransferResult{
+			NewHubDSAddr: newAssignment.HubAddr, NewHubTicket: prepared.token,
+			NewHubPodName: newAssignment.HubPodName, TicketExpMs: prepared.expiresAtMs,
+			NewAssignmentID: newAssignment.GetAssignmentId(),
+		}, nil
 	}
 	plog.With(ctx).Warnw("msg", "hub_transfer_cas_exhausted",
 		"player_id", playerID, "target_hub_id", targetHubID, "attempts", 8,
@@ -1073,7 +1145,7 @@ func (u *HubUsecase) transferToLineInner(ctx context.Context, playerID uint64, t
 	// R7 收口(P0-4):进入不可逆迁移(占新→切归属→退旧)前的会话终检。入口中间件
 	// 检查后到此处的窗口内若发生顶号,旧会话请求在这里被拒,零 assignment/容量/清退
 	// 副作用。此检查到 CAS 之间的残余毫秒窗由下面的 post-check + 票据绑请求方 jti
-	//(transferResult)+ ACK 消费点复核(AcknowledgeAdmission)三层兜底。
+	//(prepareHubTicket)+ ACK 消费点复核(AcknowledgeAdmission)三层兜底。
 	if err := u.requireCallerSessionCurrent(ctx, playerID); err != nil {
 		return nil, err
 	}
@@ -1614,13 +1686,12 @@ func (u *HubUsecase) AcknowledgeAdmission(ctx context.Context, playerID uint64, 
 	// Pawn / 玩家态、向客户端确认 PLAYABLE」,而 Admitted=true 正是 DS 开 spawn gate 的信号。
 	// 屏障未开是预期内的暂时态(旧 DS 仍在可玩窗口),返回可重试错误让 DS 用同 identity 重放
 	// ACK —— Admit 幂等,重放不会产生第二个 owner。
-	if err := u.admitOwnerForAdmission(ctx, playerID, data.OwnerTargetView{
-		PodName:                  pod,
-		InstanceUID:              cred.InstanceUID,
-		InstanceEpoch:            cred.ProtocolEpoch,
-		AssignmentOrAllocationID: assignmentID,
-		ReleaseTrack:             current.GetReleaseTrack(),
-	}); err != nil {
+	ownerTarget, ownerTargetOK := u.ownerTargetForHubTicket(ctx, current)
+	if !ownerTargetOK {
+		return nil, errcode.New(errcode.ErrInvalidState,
+			"hub admission current assignment lacks exact owner target")
+	}
+	if err := u.admitOwnerForAdmission(ctx, playerID, ownerTarget); err != nil {
 		return nil, err
 	}
 	return &AcknowledgeAdmissionResult{Admitted: result.Admitted}, nil
@@ -1645,22 +1716,33 @@ func (u *HubUsecase) admitOwnerForAdmission(ctx context.Context, playerID uint64
 			"owner authority unavailable during hub admission player=%d", playerID)
 	}
 	if rec.OwnerType != ownerTypeHub || rec.PodName != target.PodName ||
-		rec.InstanceUID != target.InstanceUID || rec.InstanceEpoch != target.InstanceEpoch {
-		// 归属已经不指向本实例(Transfer / 顶号 / 灾备接管都会走到这里)。
+		rec.InstanceUID != target.InstanceUID || rec.InstanceEpoch != target.InstanceEpoch ||
+		rec.AssignmentOrAllocationID != target.AssignmentOrAllocationID ||
+		rec.ReleaseTrack != target.ReleaseTrack {
+		// 归属已经不指向本次 exact assignment(Transfer / 顶号 / 同实例换发 / 灾备接管
+		// 都会走到这里)。assignment/track 校验必须早于 ADMITTED 幂等快路；否则旧
+		// assignment 只要仍在同一物理实例，就能绕过 owner Admit 的 exact CAS 开 spawn gate。
 		// 不 Admit、不开门:玩家的 owner 在别处,这台 DS 无权创建可操作玩家态。
 		plog.With(ctx).Warnw("msg", "hub_admission_owner_points_elsewhere",
 			"player_id", playerID, "want_pod", target.PodName, "ds_pod", target.PodName,
 			"want_uid", target.InstanceUID, "want_epoch", target.InstanceEpoch,
 			"hub_assignment_id", target.AssignmentOrAllocationID,
+			"want_release_track", target.ReleaseTrack,
 			"owner_pod", rec.PodName, "owner_type", rec.OwnerType,
 			"owner_uid", rec.InstanceUID, "owner_instance_epoch", rec.InstanceEpoch,
+			"owner_assignment_id", rec.AssignmentOrAllocationID,
+			"owner_release_track", rec.ReleaseTrack,
 			"owner_epoch", rec.OwnerEpoch, "operation_id", rec.OperationID,
 			"reason", reasonOwnerPointsElsewhere)
 		return errcode.New(errcode.ErrInvalidState,
-			"owner no longer points at this hub instance; admission refused player=%d", playerID)
+			"owner no longer points at this exact hub assignment; admission refused player=%d", playerID)
 	}
 	if rec.Phase == ownerPhaseAdmitted {
 		return nil // 幂等:ACK 重放 / 回包丢失后重试,原样返回已准入,不产生第二个 owner。
+	}
+	if rec.Phase != ownerPhasePending {
+		return errcode.New(errcode.ErrInvalidState,
+			"owner phase %d is not admissible player=%d", rec.Phase, playerID)
 	}
 	retryAfterMs, aerr := u.ownerAuth.Admit(ctx, playerID, rec.OwnerEpoch, rec.OperationID, target)
 	if aerr == nil {
@@ -2748,7 +2830,8 @@ func assignmentInstanceIdentity(a *hubv1.HubAssignmentStorageRecord) data.Assign
 // replaceAssignmentSaga 是「把玩家归属置换为 next」的唯一 saga 实现,AssignHub 的置换路径与
 // TransferHub 共用(此前是两份人工镜像的拷贝,补偿规则漂移即座位泄漏 / 提前释放已提交的新 owner)。
 //
-// 调用前提:新座位已占(seat)、票已签成功;old == nil 表示新建(无旧 owner)。
+// 调用前提:新座位已占(seat)、票据已完成纯签名但尚未执行 owner Begin；old == nil 表示
+// 新建(无旧 owner)。只有本 saga 的 assignment CAS winner 才能在返回后绑定 owner。
 // 返回 (retry=true, nil) 表示 CAS 输给并发写者、已补偿干净,调用方 continue 重试;
 // 返回 err 时调用方原样上抛(补偿责任已在本方法内履行完毕,或刻意不补偿交重启对账)。
 //
@@ -2767,6 +2850,21 @@ func (u *HubUsecase) replaceAssignmentSaga(
 	// Model B(authRepo 注入)下换分片必须走 owner-cleanup saga:先登记旧 owner 的
 	// 精确清理(index-first ref + 阶段字段),CAS 落盘后由 resumeAssignmentCleanup
 	// 驱逐旧物理席位;legacy 路径仍是 CAS 后立即释放旧席位。
+	// 领来源版本(INC-20260818-003)。本 saga 是「把玩家归属置换为 next」的唯一实现,
+	// 因此也是 Hub 侧的唯一领号点之一(另一个是 migratePlayer 那个刻意保留的变体)。
+	// 放在最前面:registerTransferCleanup 会把 next 的身份写进清理 ref,版本必须先定下来。
+	// 铸不出号即整笔失败,绝不带着 0 走下去 —— 那会在已建立水位的玩家上被 owner 拒,
+	// 白白经历一次占座 + 补偿。
+	revision, revErr := u.mintSourceRevision()
+	if revErr != nil {
+		u.compensateReservedSeat(ctx, next.GetHubPodName(), playerID, next.GetAssignmentId(), seat)
+		plog.With(ctx).Warnw("msg", "hub_assignment_source_revision_mint_failed",
+			"player_id", playerID, "pod", next.GetHubPodName(), "err", revErr,
+			"hint", "写者租约已失或号段耗尽;本次置换整体放弃并补偿座位")
+		return false, revErr
+	}
+	next.SourceRevision = revision
+
 	cleanupRegistered := false
 	if old != nil && u.authRepo != nil {
 		if cleanupErr := u.registerTransferCleanup(ctx, next, old); cleanupErr != nil {
@@ -3061,17 +3159,31 @@ func (u *HubUsecase) ownerTargetForHubTicket(ctx context.Context,
 		InstanceEpoch:            epoch,
 		AssignmentOrAllocationID: a.GetAssignmentId(),
 		ReleaseTrack:             releaseTrack,
+		// 来源版本直接取自**已发布的 assignment 记录**,不在这里现铸(INC-20260818-003)。
+		// 这一点是整条链的关键:Owner 要比较的是「Redis 里那条 assignment 有多新」,
+		// 现铸会让一个迟到的 Begin 拿到比它所绑定的 assignment 更新的号,恰好绕过本门。
+		SourceRevision: a.GetSourceRevision(),
 	}, true
 }
 
-func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID uint32,
+type preparedHubTicket struct {
+	token       string
+	expiresAtMs int64
+	ownerTarget data.OwnerTargetView
+	targetOK    bool
+}
+
+// prepareHubTicket 只做确定性的票据校验/签名，不触碰 owner 权威。新 reservation 路径可在
+// assignment CAS 前调用它，从而保留“签名器失败不发布归属/不泄漏座位”的补偿语义；真正有
+// 副作用的 owner Begin 必须由 bindOwnerForPublishedHubAssignment 在 CAS winner 之后执行。
+func (u *HubUsecase) prepareHubTicket(ctx context.Context, playerID uint64, roleID uint32,
 	assignment *hubv1.HubAssignmentStorageRecord, sourceMatchID uint64, sessionJTI string,
-) (string, int64, error) {
+) (preparedHubTicket, error) {
 	if assignment == nil || u.signer == nil {
-		return "", 0, errcode.New(errcode.ErrUnavailable, "Hub ticket signer unavailable")
+		return preparedHubTicket{}, errcode.New(errcode.ErrUnavailable, "Hub ticket signer unavailable")
 	}
 	if u.authRepo != nil && !assignmentBindingV2Complete(assignment, playerID) {
-		return "", 0, errcode.New(errcode.ErrInvalidState,
+		return preparedHubTicket{}, errcode.New(errcode.ErrInvalidState,
 			"refuse to sign hub ticket from incomplete writer-v2 assignment")
 	}
 	binding := ticketBindingFromAssignment(assignment)
@@ -3083,35 +3195,96 @@ func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID 
 	token, expMs, err := u.signer.SignHubTicket(playerID, roleID, binding)
 	if err != nil {
 		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
-		return "", 0, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
+		return preparedHubTicket{}, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
 	}
-	// owner 归属定案(owner-authority.md ①/④;contract 阶段=强依赖):签票是 hub 归属定案的
-	// 统一出口(分配/恢复/转移/Battle→Hub 回流全路径过此),此处 Begin(HUB) 一处覆盖全部。
-	// hub 无独立实例纪元语义,以 ProtocolEpoch 充当(census Admit 侧同源,exact 等值自洽)。
-	//
-	// **写不进 owner 就不发票**:票据是把"已由权威算好的判定结果"搬到 DS 的唯一通道(§9.3),
-	// 归属还没定案就签票,等于把一张无权威背书的入场券交出去——玩家可能同时被两台 DS 认领。
-	// 四个调用方都已能安全承接这个错误:signResult/transferResult 上抛(客户端退避重查),
-	// 两条 migrate 扫描路径回源索引 / 补偿座位后下个 tick 重试,不漏座位也不卡玩家。
-	//
-	// 预算 3s:单玩家最多 2 轮 (Query+Begin)(EPOCH_CONFLICT 重查一次),留足跨服务往返与
-	// 一次 TiDB 事务的余量。超时按失败处理,调用方重试——待实测复核。
 	target, targetOK := u.ownerTargetForHubTicket(ctx, assignment)
 	if !targetOK && u.authRepo != nil {
 		// Model B 下 exact 身份必然可得(上方 assignmentBindingV2Complete 已保证);取不出
 		// 说明数据不自洽,照 §9.22 fail-closed,绝不用不完整身份去写权威。
-		return "", 0, errcode.New(errcode.ErrInvalidState,
+		return preparedHubTicket{}, errcode.New(errcode.ErrInvalidState,
 			"refuse to sign hub ticket without exact owner identity")
 	}
-	if targetOK {
-		if err := ownerBeginPlayer(ctx, u.ownerAuth, playerID, ownerTypeHub, target, 3*time.Second); err != nil {
+	return preparedHubTicket{token: token, expiresAtMs: expMs, ownerTarget: target, targetOK: targetOK}, nil
+}
+
+// hubAssignmentDeliveryEqual 比较一次票据交付所依赖的完整 assignment 快照，刻意忽略
+// cleanup phase/AssignedAtMs 等 saga 元数据。任何会改变返回路由、角色或票据 binding 的字段
+// 都必须相等；release track 先按 sticky 规则归一化，兼容历史空值=stable。
+func hubAssignmentDeliveryEqual(a, b *hubv1.HubAssignmentStorageRecord, playerID uint64) bool {
+	if a == nil || b == nil || a.GetPlayerId() != playerID || b.GetPlayerId() != playerID {
+		return false
+	}
+	aTrack, aTrackErr := stickyReleaseTrack(a.GetReleaseTrack())
+	bTrack, bTrackErr := stickyReleaseTrack(b.GetReleaseTrack())
+	return aTrackErr == nil && bTrackErr == nil && aTrack == bTrack &&
+		a.GetAssignmentId() == b.GetAssignmentId() && a.GetHubPodName() == b.GetHubPodName() &&
+		a.GetHubAddr() == b.GetHubAddr() && a.GetShardId() == b.GetShardId() &&
+		a.GetRegion() == b.GetRegion() && a.GetTeamId() == b.GetTeamId() &&
+		a.GetRoleId() == b.GetRoleId() && a.GetHubInstanceUid() == b.GetHubInstanceUid() &&
+		a.GetAuthEpoch() == b.GetAuthEpoch() && a.GetAuthGen() == b.GetAuthGen() &&
+		a.GetAuthJti() == b.GetAuthJti() && a.GetAuthWriterEpoch() == b.GetAuthWriterEpoch()
+}
+
+func ownerTargetViewEqual(a, b data.OwnerTargetView) bool {
+	return a == b
+}
+
+// bindOwnerForPublishedHubAssignment 是签票链唯一的 owner 副作用点。调用前 assignment 必须
+// 已由 Redis CAS 发布；Query owner 后、Begin 前再读一次 Redis，机械保证 CAS loser 永远碰
+// 不到 owner。Begin 后还要复核一次，避免把已被后继 assignment 取代的票交给玩家。
+func (u *HubUsecase) bindOwnerForPublishedHubAssignment(ctx context.Context, playerID uint64,
+	assignment *hubv1.HubAssignmentStorageRecord, prepared preparedHubTicket) error {
+	guard := func(guardCtx context.Context) error {
+		// 与 assignment 复核组成同一个 Begin 前门：旧 writer 即使在入口检查后
+		// 才失租，也不得用尚未返回的请求触碰 owner。conflict 重试会重跑此门。
+		if err := u.confirmWriterForTicket(guardCtx, playerID); err != nil {
+			return err
+		}
+		current, found, err := u.repo.GetAssignment(guardCtx, playerID)
+		if err != nil {
+			return err
+		}
+		if !found || !hubAssignmentDeliveryEqual(current, assignment, playerID) {
+			return errcode.New(errcode.ErrUnavailable,
+				"hub assignment changed before owner bind player=%d", playerID)
+		}
+		if prepared.targetOK {
+			currentTarget, ok := u.ownerTargetForHubTicket(guardCtx, current)
+			if !ok || !ownerTargetViewEqual(currentTarget, prepared.ownerTarget) {
+				return errcode.New(errcode.ErrUnavailable,
+					"hub owner target changed before owner bind player=%d", playerID)
+			}
+		}
+		return nil
+	}
+	if prepared.targetOK {
+		if err := ownerBeginPlayerGuarded(ctx, u.ownerAuth, playerID, ownerTypeHub,
+			prepared.ownerTarget, 3*time.Second, guard); err != nil {
 			plog.With(ctx).Warnw("msg", "hub_ticket_refused_owner_begin_failed",
-				"player_id", playerID, "pod", target.PodName, "err", err,
-				"hint", "归属未定案不签票(§9.3/§9.22);调用方重试")
-			return "", 0, err
+				"player_id", playerID, "pod", prepared.ownerTarget.PodName, "err", err,
+				"hint", "assignment CAS winner 未能精确写入 owner;扣票并由调用方重试")
+			return err
 		}
 	}
-	return token, expMs, nil
+	if err := guard(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "hub_ticket_withheld_assignment_changed",
+			"player_id", playerID, "assignment_id", assignment.GetAssignmentId(), "err", err)
+		return err
+	}
+	return nil
+}
+
+func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID uint32,
+	assignment *hubv1.HubAssignmentStorageRecord, sourceMatchID uint64, sessionJTI string,
+) (string, int64, error) {
+	prepared, err := u.prepareHubTicket(ctx, playerID, roleID, assignment, sourceMatchID, sessionJTI)
+	if err != nil {
+		return "", 0, err
+	}
+	if err := u.bindOwnerForPublishedHubAssignment(ctx, playerID, assignment, prepared); err != nil {
+		return "", 0, err
+	}
+	return prepared.token, prepared.expiresAtMs, nil
 }
 
 // resolveOwnerTargetFromAssignment 从归属镜像重建 owner Begin 目标(census 自愈路径,
@@ -3146,25 +3319,6 @@ func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uin
 		HubPodName:  assignment.HubPodName,
 		ShardID:     assignment.ShardId,
 		TicketExpMs: expMs,
-	}, nil
-}
-
-func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord) (*TransferResult, error) {
-	// Hub→Hub 切换/重签:玩家已在大厅,无 Battle 回流 fence。
-	// R7 复审 P0-3:重签票绑定**请求方**会话 jti(Envoy 验签 payload 头,中间件提取)。
-	// 用请求方自证的 jti 而非权威当前代:若调用方已被顶,签出的票携带旧 jti,
-	// 兑换点必拒——绝不把绑定新会话的有效票交给旧设备。空(内网直连/dev 无证据)
-	// → 签空 sjti,prod 兑换点硬拒,dev(无会话权威)放行。
-	token, expMs, err := u.signHubTicket(ctx, playerID, roleID, assignment, 0, pmw.SessionJTIFromContext(ctx))
-	if err != nil {
-		return nil, err
-	}
-	return &TransferResult{
-		NewHubDSAddr:    assignment.HubAddr,
-		NewHubTicket:    token,
-		NewHubPodName:   assignment.HubPodName,
-		TicketExpMs:     expMs,
-		NewAssignmentID: assignment.GetAssignmentId(),
 	}, nil
 }
 
@@ -3610,6 +3764,19 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
 		return false
 	}
+	// 领来源版本(INC-20260818-003)。drain 迁移与 replaceAssignmentSaga 一样是一次**真实
+	// 的归属置换**,同样必须领号 —— 漏在这里的后果是:drain 出来的 assignment 带 0,
+	// 而该玩家水位已非零,owner 会把它按 legacy 拒掉,玩家卡在旧 Pod 上排不走。
+	// 与那边的差异只有失败处置:本函数的既定风格是记日志 + 补偿 + 下个 tick 重试(不上抛)。
+	migrateRevision, migrateRevErr := u.mintSourceRevision()
+	if migrateRevErr != nil {
+		plog.With(ctx).Warnw("msg", "drain_source_revision_mint_failed", "player_id", playerID,
+			"err", migrateRevErr, "hint", "写者租约已失或号段耗尽;本轮 drain 放弃,下个 tick 重试")
+		u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
+		return false
+	}
+	newAssign.SourceRevision = migrateRevision
+
 	cleanupRegistered := false
 	if u.authRepo != nil {
 		if cleanupErr := u.registerTransferCleanup(ctx, newAssign, assign); cleanupErr != nil {
@@ -3625,9 +3792,9 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
 		return false // 会话权威不可达:fail-closed,下个 tick 重试
 	}
-	token, _, terr := u.signHubTicket(ctx, playerID, assign.RoleId, newAssign, 0, sessJTI)
-	if terr != nil {
-		plog.With(ctx).Warnw("msg", "migrate_sign_ticket_failed", "player_id", playerID, "err", terr)
+	prepared, prepareErr := u.prepareHubTicket(ctx, playerID, assign.RoleId, newAssign, 0, sessJTI)
+	if prepareErr != nil {
+		plog.With(ctx).Warnw("msg", "migrate_sign_ticket_failed", "player_id", playerID, "err", prepareErr)
 		u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
 		return false
 	}
@@ -3661,11 +3828,18 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		u.releaseAssignmentSeat(ctx, assign)
 		u.removeShardMember(ctx, from.HubPodName, playerID)
 	}
+	if bindErr := u.bindOwnerForPublishedHubAssignment(ctx, playerID, newAssign, prepared); bindErr != nil {
+		plog.With(ctx).Warnw("msg", "migrate_owner_bind_failed", "player_id", playerID, "err", bindErr)
+		// assignment 已提交且旧 owner cleanup 已完成，不能释放 target；回加源索引让下个
+		// tick 进入“归属已在 drain 目标”分支重签/重绑并补发通知。
+		u.addShardMember(ctx, from.HubPodName, playerID)
+		return false
+	}
 
 	// 通知仍是异步交付;若发布失败,把玩家加回源 member 索引(R9 复审 P2):迁移已
 	// 落地,下个 tick「归属已在 drain 目标」分支会重签票据并补发通知;Login 从 durable
 	// assignment 重签恢复仍是最终兜底,但不再把「发布失败」静默当作已送达。
-	if !u.pushMigrate(ctx, playerID, from, target, token) {
+	if !u.pushMigrate(ctx, playerID, from, target, prepared.token) {
 		u.addShardMember(ctx, from.HubPodName, playerID)
 		return false
 	}

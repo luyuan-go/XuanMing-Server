@@ -117,8 +117,27 @@ func main() {
 		helper.Infow("msg", "owner_backend_tidb_verified")
 	}
 
+	// expand DDL 校验(INC-20260818-003 分阶段发布第 1 步):本版 SELECT 已引用
+	// hub_source_revision,缺列会让 owner 权威面每个 RPC 都报 1054 而启动日志毫无痕迹。
+	// 与上面的建表校验同一纪律:漏一步 DDL 就让新镜像整个不可用时,拒启比带病运行好查。
+	revCtx, revCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if rerr := data.AssertSourceRevisionColumn(revCtx, db); rerr != nil {
+		revCancel()
+		helper.Errorw("msg", "owner_source_revision_column_missing", "err", rerr)
+		os.Exit(1)
+	}
+	revCancel()
+
 	// 4. 装配链
-	uc := biz.NewOwnerUsecase(data.NewMySQLOwnerRepo(db), cfg.Owner)
+	ownerRepo := data.NewMySQLOwnerRepo(db)
+	// INC-20260818-003 分阶段发布最后一步的开关。默认关 = 兼容窗;打开前必须先证明旧
+	// hub_allocator 已排空,否则仍在跑的旧副本会整体写失败(大厅分配停摆)。
+	ownerRepo.SetRejectLegacySourceRevision(cfg.Owner.RejectLegacySourceRevision)
+	if cfg.Owner.RejectLegacySourceRevision {
+		helper.Warnw("msg", "owner_legacy_source_revision_gate_enabled",
+			"hint", "已全局拒绝不带来源版本的 Begin;确认旧 hub_allocator 副本已全部排空")
+	}
+	uc := biz.NewOwnerUsecase(ownerRepo, cfg.Owner)
 	svc := service.NewOwnerService(uc)
 
 	// 审计流水保留期清理(§9.24;多副本各自跑,DELETE 幂等无需锁)。

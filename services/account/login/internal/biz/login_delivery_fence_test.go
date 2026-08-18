@@ -58,7 +58,7 @@ func newFenceUsecase(t *testing.T, sessions interface {
 func TestLogin_DeliveryFencedWhenSessionRotatedMidFlight(t *testing.T) {
 	uc := newFenceUsecase(t, &rotatingSessionRepo{rotatedJTI: "jti-of-device-B"})
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil {
 		t.Fatal("P0-5: rotated-mid-flight login must not deliver credentials")
 	}
@@ -74,7 +74,7 @@ func TestLogin_DeliveryFencedWhenSessionRotatedMidFlight(t *testing.T) {
 func TestLogin_DeliveryFencedWhenSessionVanished(t *testing.T) {
 	uc := newFenceUsecase(t, &rotatingSessionRepo{rotatedJTI: ""})
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil || res != nil {
 		t.Fatalf("vanished session must withhold credentials, res=%+v err=%v", res, err)
 	}
@@ -89,7 +89,7 @@ func TestLogin_DeliveryFenceAuthorityDownFailClosed(t *testing.T) {
 		getErr: errcode.New(errcode.ErrUnavailable, "session authority down"),
 	})
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err == nil || res != nil {
 		t.Fatalf("authority-down at delivery must fail-closed, res=%+v err=%v", res, err)
 	}
@@ -102,7 +102,7 @@ func TestLogin_DeliveryFenceAuthorityDownFailClosed(t *testing.T) {
 func TestLogin_DeliveryFencePassesForCurrentSession(t *testing.T) {
 	uc := newFenceUsecase(t, newFakeSessionRepo())
 
-	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A", false)
 	if err != nil {
 		t.Fatalf("sole login flow must pass the delivery fence: %v", err)
 	}
