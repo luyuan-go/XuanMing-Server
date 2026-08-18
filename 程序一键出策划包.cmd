@@ -9,7 +9,7 @@ rem  Pandora backend - programmer one-click PLANNER PACKAGE
 rem  (double-click to run)
 rem ------------------------------------------------------------
 rem  Produces everything a planner machine needs so that it has to
-rem  install NOTHING except PowerShell 7:
+rem  install NOTHING AT ALL - not even PowerShell 7:
 rem
 rem    [1/2] run\artifacts\windows\bin\*.exe
 rem          The 22 Go services + configtable-gen, cross-compiled here.
@@ -20,8 +20,11 @@ rem          Wraps: tools\scripts\build_release_binaries.ps1
 rem
 rem    [2/2] run\localinfra\cache\*
 rem          The portable infrastructure archives (MySQL, Redis, Kafka,
-rem          JRE, Envoy, mkcert) used by the no-Docker start entry.
-rem          Downloading these is ~400 MB PER MACHINE, so fetch them
+rem          JRE, Envoy, mkcert) used by the no-Docker start entry,
+rem          plus the portable PowerShell 7 build that
+rem          tools\scripts\bootstrap_pwsh.cmd unpacks on a machine that
+rem          has no pwsh at all.
+rem          Downloading these is ~500 MB PER MACHINE, so fetch them
 rem          once here and hand the folder over instead.
 rem          Wraps: tools\scripts\local_infra.ps1 -Action provision
 rem

@@ -207,6 +207,10 @@ $contractTests = @(
     'tools/scripts/tests/oneclick_devenv_exitcode_contract_test.ps1'
     # MinIO 分发必须识别 mc "exit 0 + status=error"，且 latest.json 只能在内容完成后切换。
     'tools/scripts/tests/publish_to_minio_contract_test.ps1'
+    # 免 Docker 三入口的 PowerShell 7 自举(2026-08-18):钉死的 sha256 必须真拦得住假包
+    # (自举包会被直接执行,而取包路径有共享盘和公网两条不受 HTTPS 保护),且入口 .cmd 必须
+    # 纯 ASCII —— 非 ASCII 字节会让 cmd 按当前代码页算错偏移去执行注释行碎片(2026-08-06 现场)。
+    'tools/scripts/tests/pwsh_bootstrap_contract_test.ps1'
 )
 $contractFailed = @()
 foreach ($rel in $contractTests) {

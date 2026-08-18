@@ -45,20 +45,20 @@ rem ============================================================
 setlocal
 cd /d "%~dp0"
 
-rem This project requires PowerShell 7 (pwsh). If missing, error out clearly; do
-rem not fall back to Windows PowerShell 5.1.
-where pwsh >nul 2>nul
+rem This project requires PowerShell 7 (pwsh) and does NOT run on Windows
+rem PowerShell 5.1. If the machine has no pwsh, bootstrap_pwsh.cmd unpacks the
+rem official portable build under run\localinfra - no installer, no admin, no
+rem change to the machine. Read that file for why it is not the .msi.
+call "%~dp0tools\scripts\bootstrap_pwsh.cmd"
 if errorlevel 1 (
-  echo.
-  echo  [ERR] PowerShell 7 pwsh not found. This script requires PowerShell 7.
-  echo        Install: https://aka.ms/powershell  or  winget install Microsoft.PowerShell
-  echo.
-  pause
+  rem The web admin runs this headless; pausing there would hang it forever.
+  if not defined PANDORA_NONINTERACTIVE pause
   exit /b 1
 )
-set "PS=pwsh"
+rem Quote it: with the portable build this is a full path, which can contain spaces.
+set "PS=%PANDORA_PWSH%"
 
-%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -NoDocker -DsLauncher editor -GenTables -DsOnly
+"%PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -NoDocker -DsLauncher editor -GenTables -DsOnly
 set "RC=%ERRORLEVEL%"
 
 rem Keep the window open only for interactive (double-click) runs. The web admin

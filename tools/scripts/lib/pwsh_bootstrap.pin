@@ -1,0 +1,28 @@
+# ============================================================
+#  PowerShell 7 bootstrap pin - SINGLE SOURCE OF TRUTH.
+#
+#  Read by BOTH:
+#    tools\scripts\bootstrap_pwsh.cmd   (cmd.exe, for machines with no pwsh yet)
+#    tools\scripts\local_infra.ps1      (-Action provision, pre-stages the file)
+#  so the version and the hash cannot drift apart. Nothing else may hardcode
+#  them; pwsh_bootstrap_contract_test.ps1 fails the build if something does.
+#
+#  Format: KEY=VALUE, one per line, '#' starts a comment line. Keep it ASCII
+#  and CRLF - cmd.exe `for /f` parses this file.
+#
+#  Why the portable .zip and not the .msi: the .msi is a per-machine install,
+#  so it needs local admin and raises UAC. Planner machines often have neither,
+#  and a UAC dialog would hang the headless web-admin runs. The .zip is the same
+#  official build - no admin, no registry, no service, no machine PATH change.
+#
+#  SHA256 must come from the UPSTREAM published value, never from "whatever I
+#  happened to download" (that just canonicalises a possible man-in-the-middle).
+#  Source: the "SHA256 Hashes of the release artifacts" section of
+#  https://github.com/PowerShell/PowerShell/releases/tag/v7.6.5
+#  verified 2026-08-18 against the downloaded file (106,319,290 bytes,
+#  `pwsh.exe -v` -> 7.6.5). Re-do that check when bumping the version.
+# ============================================================
+PWSH_VERSION=7.6.5
+PWSH_FILE=PowerShell-7.6.5-win-x64.zip
+PWSH_SHA256=32eb8f6cdce08f86e987d625a2733e54ac3e289ae7e1621b14c0b5bcec2434ea
+PWSH_URL=https://github.com/PowerShell/PowerShell/releases/download/v7.6.5/PowerShell-7.6.5-win-x64.zip

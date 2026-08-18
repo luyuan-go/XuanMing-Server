@@ -42,31 +42,32 @@ rem  First run downloads roughly 400 MB of portable binaries. Put them on
 rem  a share and set PANDORA_LOCALINFRA_MIRROR to that folder to skip the
 rem  download on every other machine.
 rem
-rem  What a planner machine still has to install: PowerShell 7, and that
-rem  is it. Go is not needed (prebuilt exes under run\artifacts\windows\
-rem  bin are used), Docker is not needed, and mkcert is downloaded
-rem  automatically into run\localinfra\dist\mkcert - it is only added to
-rem  the PATH of the running script, never to the system PATH.
+rem  What a planner machine has to install: NOTHING. Go is not needed
+rem  (prebuilt exes under run\artifacts\windows\bin are used), Docker is not
+rem  needed, and mkcert plus - since 2026-08-18 - PowerShell 7 itself are
+rem  fetched into run\localinfra\dist\ on first run. Both are only added to
+rem  the PATH of the running script, never to the system PATH, so a machine
+rem  that already has pwsh installed keeps using its own.
 rem
 rem  Stop: pwsh tools\scripts\start.ps1 -Mode local -NoDocker -Down
 rem ============================================================
 setlocal
 cd /d "%~dp0"
 
-rem This project requires PowerShell 7 (pwsh). If missing, error out clearly; do
-rem not fall back to Windows PowerShell 5.1.
-where pwsh >nul 2>nul
+rem This project requires PowerShell 7 (pwsh) and does NOT run on Windows
+rem PowerShell 5.1. If the machine has no pwsh, bootstrap_pwsh.cmd unpacks the
+rem official portable build under run\localinfra - no installer, no admin, no
+rem change to the machine. Read that file for why it is not the .msi.
+call "%~dp0tools\scripts\bootstrap_pwsh.cmd"
 if errorlevel 1 (
-  echo.
-  echo  [ERR] PowerShell 7 pwsh not found. This script requires PowerShell 7.
-  echo        Install: https://aka.ms/powershell  or  winget install Microsoft.PowerShell
-  echo.
-  pause
+  rem The web admin runs this headless; pausing there would hang it forever.
+  if not defined PANDORA_NONINTERACTIVE pause
   exit /b 1
 )
-set "PS=pwsh"
+rem Quote it: with the portable build this is a full path, which can contain spaces.
+set "PS=%PANDORA_PWSH%"
 
-%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -NoDocker -DsLauncher editor -GenTables
+"%PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" -Mode local -NoDocker -DsLauncher editor -GenTables
 set "RC=%ERRORLEVEL%"
 
 rem Keep the window open only for interactive (double-click) runs. The web admin

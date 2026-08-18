@@ -34,7 +34,8 @@
     up        : 备料(缺什么下什么)+ 启动 + 健康检查(默认)
     down      : 停止所有本机基础设施进程(保留数据)
     status    : 打印各组件端口 / 进程状态
-    provision : 只备料不启动(适合提前在共享盘上做好离线包)
+    provision : 只备料不启动(适合提前在共享盘上做好离线包);比 up 多备一份 PowerShell 7
+                免安装包,供「连 pwsh 都没有」的策划机用 bootstrap_pwsh.cmd 自举
     reset     : 停止并删除 data 目录(MySQL / Kafka / Redis 数据全清,下次 up 会重新初始化)
 
 .PARAMETER Force
@@ -659,6 +660,44 @@ function Confirm-EnvoyBinary {
     Write-Ok "envoy $EnvoyImageTag 备料完成"
 }
 
+function Get-PwshBootstrapPin {
+    <# 读 lib/pwsh_bootstrap.pin —— 与 bootstrap_pwsh.cmd 共用的版本 / 校验和唯一来源。
+       刻意不用 ConvertFrom-StringData:那套有自己的转义语义,而这份文件同时要被 cmd.exe 的
+       `for /f` 读,两边的解析规则必须一样笨(KEY=VALUE,# 开头是注释),才不会出现
+       「PowerShell 这边读出来是一个值、cmd 那边读出来是另一个」的漂移。 #>
+    $pin = Join-Path $PSScriptRoot 'lib/pwsh_bootstrap.pin'
+    if (-not (Test-Path -LiteralPath $pin)) { Fail "缺少 $pin(工作区不完整)" }
+    $map = @{}
+    foreach ($line in [System.IO.File]::ReadAllLines($pin)) {
+        $t = $line.Trim()
+        if (-not $t -or $t.StartsWith('#')) { continue }
+        $i = $t.IndexOf('=')
+        if ($i -lt 1) { continue }
+        $map[$t.Substring(0, $i).Trim()] = $t.Substring($i + 1).Trim()
+    }
+    foreach ($k in 'PWSH_VERSION', 'PWSH_FILE', 'PWSH_SHA256', 'PWSH_URL') {
+        if (-not $map[$k]) { Fail "$pin 缺 $k" }
+    }
+    return $map
+}
+
+function Save-PwshBootstrapArchive {
+    <# 把 PowerShell 7 免安装包备到 cache —— 给「连 pwsh 都没有」的机器自举用。
+
+       为什么只归 provision、不归 up:所有一键入口本身就是 pwsh 脚本,能跑到 up 的机器必然
+       已经有解释器了,再下 100MB 纯属浪费。真正需要这个包的是 bootstrap_pwsh.cmd,而它是
+       cmd.exe 在「pwsh 还不存在」的时候跑的,只能自己从 cache / 共享盘 / 公网取。所以这一
+       步的意义是让「程序一键出策划包」把它和其它压缩包一起备进 run/localinfra/cache,一并
+       放上共享盘;策划机设了 PANDORA_LOCALINFRA_MIRROR 就能完全离线地自举出解释器。
+
+       本机不解包:解包路径归 bootstrap_pwsh.cmd(只有它知道本机到底缺不缺 pwsh)。
+       版本 / SHA256 只在 lib/pwsh_bootstrap.pin 写一份,这里不抄(抄了迟早漂)。 #>
+    $pin = Get-PwshBootstrapPin
+    Write-Step "备料 PowerShell $($pin.PWSH_VERSION)(给没装 pwsh 的机器自举用,本机不解包)"
+    $ar = Get-Archive -File $pin.PWSH_FILE -Urls @($pin.PWSH_URL) -Sha256 $pin.PWSH_SHA256
+    Write-Ok "PowerShell $($pin.PWSH_VERSION) 已备到 cache:$ar"
+}
+
 # ===== MySQL =====
 
 function Get-MysqlIniPath { Join-Path $CfgDir 'my.ini' }
@@ -1217,6 +1256,8 @@ switch ($Action) {
     'up' { Invoke-Up }
     'down' { Invoke-Down }
     'status' { Invoke-Status }
-    'provision' { Invoke-ProvisionAll }
+    # provision 比 up 多备一份 PowerShell 7 免安装包:它只服务于「本机连 pwsh 都没有」的
+    # 策划机(由 bootstrap_pwsh.cmd 在 cmd.exe 里自举),能跑到 up 的机器用不上。
+    'provision' { Invoke-ProvisionAll; Save-PwshBootstrapArchive }
     'reset' { Invoke-Reset }
 }
