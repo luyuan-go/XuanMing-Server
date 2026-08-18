@@ -290,7 +290,9 @@ func TestBagApplyTransferAndConsume(t *testing.T) {
 		wantCode(t, err, errcode.ErrBagGenerationMismatch, "目标代际不符")
 	})
 
-	t.Run("随身组consume拒", func(t *testing.T) {
+	t.Run("随身组consume只记journal不改段", func(t *testing.T) {
+		// 2026-08-17 后端先行拍板:副本丢弃的扣减流水打随身段,存储侧只记 journal
+		// 供崩溃恢复尾重放,段内容由 owner DS 经 checkpoint 覆盖(与随身拾取同构)。
 		store := newFakeSectionStore()
 		carryConsume := &bagv1.BagJournalEntry{
 			JournalSeq: 1, BagType: 0,
@@ -298,8 +300,27 @@ func TestBagApplyTransferAndConsume(t *testing.T) {
 				ConsumeItems: []*bagv1.BagItem{stackItem(10001, 1)},
 			}},
 		}
-		_, err := applyBagOpTx(carryConsume, store.load, store.dirty, capacityOf(nil), stackLimit(99))
-		wantCode(t, err, errcode.ErrBagSectionNotAllowed, "随身组 consume")
+		opType, err := applyBagOpTx(carryConsume, store.load, store.dirty, capacityOf(nil), stackLimit(99))
+		if err != nil || opType != BagOpConsume {
+			t.Fatalf("随身组 consume 应只记 journal: op=%d err=%v", opType, err)
+		}
+		if len(store.dirty) != 0 {
+			t.Fatalf("随身组 consume 不得标脏 bag_section: %v", store.dirty)
+		}
+	})
+
+	t.Run("随身组consume带产出拒", func(t *testing.T) {
+		// 随身组 consume 只承载丢弃扣减;带产出会绕开审计开出跨段发放通道,fail-closed。
+		store := newFakeSectionStore()
+		carryProduce := &bagv1.BagJournalEntry{
+			JournalSeq: 1, BagType: 0,
+			Op: &bagv1.BagJournalEntry_Consume{Consume: &bagv1.ConsumeOp{
+				ConsumeItems:   []*bagv1.BagItem{stackItem(10001, 1)},
+				ProduceBagType: BagWarehouseType, ProduceItems: []*bagv1.BagItem{stackItem(20001, 1)},
+			}},
+		}
+		_, err := applyBagOpTx(carryProduce, store.load, store.dirty, capacityOf(nil), stackLimit(99))
+		wantCode(t, err, errcode.ErrBagSectionNotAllowed, "随身组 consume 带产出")
 	})
 
 	t.Run("开箱扣产同批", func(t *testing.T) {

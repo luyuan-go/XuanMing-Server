@@ -275,6 +275,49 @@ func TestBagAppendJournalValidation(t *testing.T) {
 	}
 }
 
+// TestBagAppendCarrySectionConsumeReachesData 钉死随身段 consume 的分层契约(§5.1.1,
+// 2026-08-17「后端先行」拍板):丢弃扣减打随身组(0/2/3),校验层**必须放行到数据层**——
+// 随身段闸曾经立在数据层 apply,若校验层再加回"consume 只许后端驻留段",副本丢弃会被
+// ErrBagSectionNotAllowed(非可重试)整批拒,功能直接不通。
+func TestBagAppendCarrySectionConsumeReachesData(t *testing.T) {
+	uc, repo := newBagUsecaseForTest()
+	ctx := context.Background()
+
+	carryConsume := func(seq uint64, bagType uint32, key string) *bagv1.BagJournalEntry {
+		return &bagv1.BagJournalEntry{
+			JournalSeq: seq, BagType: bagType, IdempotencyKey: key,
+			Op: &bagv1.BagJournalEntry_Consume{Consume: &bagv1.ConsumeOp{
+				ConsumeItems: []*bagv1.BagItem{{ItemConfigId: 10001, Count: 1}},
+			}},
+		}
+	}
+	// 0 身上 / 2 装备栏 / 3 临时格:三个随身段的丢弃流水都必须能落到数据层。
+	entries := []*bagv1.BagJournalEntry{
+		carryConsume(1, 0, "discard-inventory"),
+		carryConsume(2, 2, "discard-equipment"),
+		carryConsume(3, 3, "discard-temporary"),
+	}
+	if _, err := uc.AppendJournal(ctx, 1, 1, entries, DSCallerIdentity{}); err != nil {
+		t.Fatalf("随身段 consume 应放行到数据层: %v", err)
+	}
+	if repo.appendCalls != 1 || len(repo.lastEntries) != len(entries) {
+		t.Fatalf("随身段 consume 未触达数据层: calls=%d entries=%d", repo.appendCalls, len(repo.lastEntries))
+	}
+
+	// 产出目标段仍走已知段校验(随身段"带产出拒"的执行点在数据层 applyBagOpTx,
+	// 见 data/bag_apply_test.go「随身组consume带产出拒」;此处只钉校验层不越权拦截)。
+	produceUnknown := carryConsume(4, 0, "discard-produce-unknown")
+	produceUnknown.GetConsume().ProduceBagType = 7
+	produceUnknown.GetConsume().ProduceItems = []*bagv1.BagItem{{ItemConfigId: 20001, Count: 1}}
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{produceUnknown}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrBagSectionNotAllowed, "consume 产出未知段")
+	if repo.appendCalls != 1 {
+		t.Fatalf("校验失败不得触达数据层: %d", repo.appendCalls)
+	}
+}
+
 func TestBagCheckpointAndSectionsValidation(t *testing.T) {
 	uc, repo := newBagUsecaseForTest()
 	ctx := context.Background()

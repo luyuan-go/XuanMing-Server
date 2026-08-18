@@ -309,6 +309,62 @@ func TestBagRepoMySQL(t *testing.T) {
 		}
 	})
 
+	// CarrySectionConsumeJournalOnly:随身段丢弃扣减的端到端契约(§5.1.1)——
+	// 事务内写 bag_journal(op_type=consume)但**绝不建/改 bag_section**;带产出 fail-closed
+	// 且整事务回滚(不留半条流水)。数据层单测只验内存变换,这里验真落库的那一半。
+	t.Run("CarrySectionConsumeJournalOnly", func(t *testing.T) {
+		const player = 216
+		carry := &bagv1.BagJournalEntry{
+			JournalSeq: 1, BagType: 0, IdempotencyKey: "discard-1",
+			Op: &bagv1.BagJournalEntry_Consume{Consume: &bagv1.ConsumeOp{
+				ConsumeItems: []*bagv1.BagItem{stackItem(10001, 2)},
+			}},
+		}
+		acked, err := repo.AppendJournal(ctx, player, 1, []*bagv1.BagJournalEntry{carry},
+			bagTestCaps, bagTestMaxStack, 0)
+		if err != nil || acked != 1 {
+			t.Fatalf("随身段 consume 应落库: acked=%d err=%v", acked, err)
+		}
+		var opType int8
+		if qerr := f.db.QueryRowContext(ctx,
+			`SELECT op_type FROM bag_journal WHERE player_id = ? AND journal_seq = 1`, player).Scan(&opType); qerr != nil {
+			t.Fatalf("读 bag_journal: %v", qerr)
+		}
+		if opType != BagOpConsume {
+			t.Fatalf("op_type 应为 consume(%d),实际 %d", BagOpConsume, opType)
+		}
+		var sections int
+		if qerr := f.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM bag_section WHERE player_id = ?`, player).Scan(&sections); qerr != nil {
+			t.Fatalf("读 bag_section: %v", qerr)
+		}
+		if sections != 0 {
+			t.Fatalf("随身段 consume 不得写 bag_section,实际 %d 行", sections)
+		}
+
+		// 带产出:整批拒 + 事务回滚,不得留下 seq=2 的流水。
+		withProduce := &bagv1.BagJournalEntry{
+			JournalSeq: 2, BagType: 0, IdempotencyKey: "discard-produce",
+			Op: &bagv1.BagJournalEntry_Consume{Consume: &bagv1.ConsumeOp{
+				ConsumeItems:   []*bagv1.BagItem{stackItem(10001, 1)},
+				ProduceBagType: BagWarehouseType,
+				ProduceItems:   []*bagv1.BagItem{stackItem(20001, 1)},
+			}},
+		}
+		if _, perr := repo.AppendJournal(ctx, player, 1, []*bagv1.BagJournalEntry{withProduce},
+			bagTestCaps, bagTestMaxStack, 0); errcode.As(perr) != errcode.ErrBagSectionNotAllowed {
+			t.Fatalf("随身段 consume 带产出应拒: %v", perr)
+		}
+		var rows int
+		if qerr := f.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM bag_journal WHERE player_id = ?`, player).Scan(&rows); qerr != nil {
+			t.Fatalf("读 bag_journal 计数: %v", qerr)
+		}
+		if rows != 1 {
+			t.Fatalf("拒批必须整事务回滚,bag_journal 应只有 1 行,实际 %d", rows)
+		}
+	})
+
 	t.Run("CheckpointAndLoad", func(t *testing.T) {
 		const player = 205
 		batch := []*bagv1.BagJournalEntry{

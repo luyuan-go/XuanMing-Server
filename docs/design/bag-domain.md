@@ -206,8 +206,41 @@ bag_generation  bag_type PK | current_generation | salvage_mode | updated_at_ms
    "已扣未生效"窗口内崩溃 = buff 与局内状态同命消失,回档自洽,可接受;贵重道具由策划
    做成"激活型"(激活后为持久 buff 记录)即归第 1 类,零窗口。
 3. **高频消耗型**(活动玩法内当弹药连续使用):禁止逐次 RPC——先一条 journal **装填**
-   (转移一批到随身组),再按随身组规则以 DS 速度消耗(个人消耗 = checkpoint 类)。
+   (转移一批到随身组),再按随身组规则以 DS 速度消耗(个人消耗 = checkpoint 类;
+   **丢弃例外,强制走 journal,见 §5.1.1**)。
    后端驻留段保持 UI 频率操作定位,不因玩法高频化被迫改驻留。
+
+### 5.1.1 随身组的 consume:丢弃 = 事实先行流水(2026-08-17 拍板)★
+
+§5.1 第 3 点的"个人消耗 = checkpoint 类"**保留为默认**(用药 / 弹药消耗不进 journal),
+但**丢弃是唯一强制例外**,必须走 `ConsumeOp` journal:
+
+**为什么丢弃不能是 checkpoint 类**:丢弃成功会在 DS 脚下生成掉落物,该掉落**公共先到先得**
+(策划拍板,谁捡到是谁的)。于是丢弃瞬间起就存在"第二持有人"——checkpoint 语义下,快照回滚
+会把「销毁」变成「复制」:原主回档拿回该堆,而拾取者已按 `pickup_grant` 入账,资产凭空翻倍
+(跨玩家双份 P1);反向若掉落先被销毁而扣减已提交,则是资产蒸发(P2)。事实先行(扣减落
+`bag_journal` 后才删本地堆并生成掉落)让两侧都成为 journaled 成对事实,双份与蒸发机制性消失,
+残余风险只剩"地面物随 DS 崩溃丢失"——与怪物掉落同口径,已接受。
+
+**语义**(执行点 `bag_apply.go` / 客户端 `MyBagPersistenceComponent`):
+
+- 存储侧**只记 journal,不改 `bag_section`**——随身组本就不落 `bag_section`,`deductFromBagType`
+  对随身段是 no-op,与 `pickup_grant` 打随身段完全同构。段本体仍由 owner DS 内存应用、
+  经 checkpoint 覆盖。
+- **不许带产出**:随身段 consume 的 `produce_items` 非空即 `ErrBagSectionNotAllowed`
+  (fail-closed)。理由是防止经此开出一条未经审计的跨段发放通道——丢弃只该"只出"。
+- **重放**:客户端 checkout 尾重放按 §3.2 组级寻址做组级扣减(与 transfer 随身源同构);
+  带产出的随身段条目判为非法条目。
+- **ACK 窗口漂移**:consume 已落库但本地因状态漂移未删堆时,下一个覆盖其 seq 的 checkpoint
+  会整体取代该 consume(丢弃等效未发生),不丢件也不双份。
+
+**装备暂未放开**(`EquipSlot > 0` 仍 fail-closed):journal 无带 `instance_id` 的丢弃形状,
+checkpoint-only 丢弃 + 落地会在崩溃恢复后产出双份 `instance_id`。放开需后端先补带实例载荷的
+流水,另立项。
+
+**混版安全**:老后端 + 新客户端 = 随身段 consume 被 `ErrBagSectionNotAllowed`(14009,非可
+重试)拒,客户端走确定性拒绝路径(出队 + `OnAck(false)`),道具保持在包里,不卡队列不围栏
+——功能不通但零资产风险,符合 §9.21。
 
 ### 5.2 堆叠语义:一段一权威,语义与权威同址(2026-07-22 拍板)★
 
@@ -437,6 +470,8 @@ message BagJournalEntry {
 | 重放扣减找不到物品 | 卸下(未 checkpoint)→ 交易(已 journal)→ 崩溃 | §3.2 组级寻址:按随身组整体解析 | 组级扣减重放测试 |
 | 存量迁移双算/漏算 | 迁移重跑 / 旧路径未冻结先迁 | bag_migration 一玩家一行幂等闸;作业配置门默认关,contract 冻结旧写后才开;迁后总量对账 | 幂等重跑测试 + 对账断言 |
 | 跨驻留组转移撕裂 | 仓库⇄身上转移只完成一半 | 一条 journal、存储侧同事务改两侧;身上侧先预留 | 转移与拾取/领取并发集成测试 |
+| 丢弃跨玩家双份 / 蒸发 | 丢弃落地被他人拾走,原主 checkpoint 回档 | §5.1.1 事实先行:扣减先落 journal(consume),ACK 后才删本地堆并生成掉落;拾取侧走 pickup_grant,两侧都是 journaled 成对事实 | 数据层"随身段 consume 只记 journal 不标脏" + biz 放行契约测试;丢弃后 kill DS,重进断言资产不翻倍不蒸发 |
+| 随身段 consume 越权发放 | 伪造 produce_items 从随身段"开"出物品,绕过审计 | §5.1.1 fail-closed:随身段带产出即 ErrBagSectionNotAllowed;客户端重放同判非法 | data + biz 两层"带产出拒"用例 |
 
 未覆盖验证前,不得宣称对应能力"已达成"(§16.6)。
 

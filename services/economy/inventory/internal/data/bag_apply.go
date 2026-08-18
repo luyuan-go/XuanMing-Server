@@ -43,10 +43,15 @@ func applyBagOpTx(entry *bagv1.BagJournalEntry, load bagSectionLoader, dirty map
 		return BagOpTransfer, nil
 
 	case *bagv1.BagJournalEntry_Consume:
-		// 使用语义(§5.1)只面向后端驻留段;随身组个人消耗是 checkpoint 类,不进 journal。
-		if !IsBackendResidentBagType(entry.GetBagType()) {
+		// 后端驻留段:使用语义(§5.1),真实扣段 + 可选产出。
+		// 随身组段(0/2/3):丢弃/扣减流水(2026-08-17 后端先行拍板,推翻旧「随身消耗
+		// 不进 journal」)——存储侧只记 journal 供崩溃恢复尾重放,段内容由 owner DS
+		// 内存应用、经 checkpoint 覆盖(deductFromBagType 对随身组本就 no-op,与
+		// pickup_grant 同构)。随身组 consume 不许携带产出(fail-closed,防经此开出
+		// 未经审计的跨段发放通道)。
+		if !IsBackendResidentBagType(entry.GetBagType()) && len(op.Consume.GetProduceItems()) > 0 {
 			return 0, errcode.New(errcode.ErrBagSectionNotAllowed,
-				"consume only targets backend-resident sections bag=%d", entry.GetBagType())
+				"carry-section consume must not produce bag=%d", entry.GetBagType())
 		}
 		if err := deductFromBagType(entry.GetBagType(), op.Consume.GetConsumeItems(), load, dirty); err != nil {
 			return 0, err

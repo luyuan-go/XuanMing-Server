@@ -465,8 +465,15 @@ func (x *TransferOp) GetItems() []*BagItem {
 	return nil
 }
 
-// ConsumeOp 后端驻留段物品使用(bag-domain.md §5.1):扣除 entry.bag_type 段物品,
-// 可选把产出原子入 produce_bag_type 段(开箱 / 兑换 = 扣 + 产同一事务,零窗口)。
+// ConsumeOp 物品扣减流水,语义按主段(entry.bag_type)分两种,形状同一:
+//
+//	· 后端驻留段(仓库 / 活动段)= **使用**(bag-domain.md §5.1):存储侧事务内真实扣段,
+//	  可选把产出原子入 produce_bag_type 段(开箱 / 兑换 = 扣 + 产同一事务,零窗口)。
+//	· 随身组(0/2/3)= **丢弃 / 扣减流水**(bag-domain.md §5.1.1,2026-08-17「后端先行」
+//	  拍板,推翻旧「随身消耗不进 journal」):存储侧只记 journal 供崩溃恢复尾重放,不改
+//	  bag_section(段本体由 owner DS 内存应用、经 checkpoint 覆盖),与 pickup_grant 同构。
+//	  该形状**不许带产出**——produce_items 非空即 ErrBagSectionNotAllowed(fail-closed,
+//	  防经此开出未经审计的跨段发放通道);客户端 checkout 尾重放按组级扣减解析。
 type ConsumeOp struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	ConsumeItems      []*BagItem             `protobuf:"bytes,1,rep,name=consume_items,json=consumeItems,proto3" json:"consume_items,omitempty"`          // 扣除(按 config/instance 匹配,数量不足整批拒)
