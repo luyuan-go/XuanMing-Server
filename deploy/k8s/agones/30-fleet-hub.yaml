@@ -59,12 +59,12 @@ spec:
               # 同口径):本文件是集群 desired state,钉 :dev 滚动 tag 会让任意一次 kubectl apply 把
               # live 降回本机 IfNotPresent 缓存里的旧 :dev 构建。换版流程 = 打新不可变 tag →
               # minikube image load → 改本行 → apply;严禁回填 :dev。
-              # 本清单钉定 r2062-dirty-20260817-075828,与 battle 四份 Fleet 同版；本机 Docker
-              # 已确认 hub image ID=sha256:f3b656a45236…、battle image ID=sha256:80bae1380b6c…。
+              # 本清单钉定 r2085-dirty-20260817-121023,与 battle 四份 Fleet 同版；本机 Docker
+              # 已确认 hub image ID=sha256:432bcbd9b758…、battle image ID=sha256:7e5f0eb7fa0d…。
               # hub 与 battle 不同版会让玩家 travel 时撞上不同的 PandoraNetProtocolVersion。
               # 当前未核验制品根中的同 tag 快照；宿主缺镜像时能否按 tag 重建仍是发布前置项。
               # 完整依据与历史告诫见 20-fleet-battle.yaml 该行注释。
-              image: pandora/hub-ds:r2062-dirty-20260817-075828
+              image: pandora/hub-ds:r2085-dirty-20260817-121023
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

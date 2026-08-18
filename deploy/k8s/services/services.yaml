@@ -36,7 +36,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: login
-          image: pandora/login:dev
+          image: pandora/login:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
@@ -87,7 +87,7 @@ spec:
     spec:
       containers:
         - name: player
-          image: pandora/player:dev
+          image: pandora/player:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_DEPLOY_STRATEGY, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/deploy-strategy']" } } }
@@ -123,7 +123,7 @@ spec:
     spec:
       containers:
         - name: data-service
-          image: pandora/data-service:dev
+          image: pandora/data-service:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20003 } ]
@@ -153,7 +153,7 @@ spec:
     spec:
       containers:
         - name: friend
-          image: pandora/friend:dev
+          image: pandora/friend:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20004 } ]
@@ -183,7 +183,7 @@ spec:
     spec:
       containers:
         - name: chat
-          image: pandora/chat:dev
+          image: pandora/chat:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20005 } ]
@@ -213,7 +213,7 @@ spec:
     spec:
       containers:
         - name: guild
-          image: pandora/guild:dev
+          image: pandora/guild:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20008 } ]
@@ -243,7 +243,7 @@ spec:
     spec:
       containers:
         - name: mail
-          image: pandora/mail:dev
+          image: pandora/mail:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20009 } ]
@@ -273,7 +273,7 @@ spec:
     spec:
       containers:
         - name: player-locator
-          image: pandora/player-locator:dev
+          image: pandora/player-locator:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
@@ -308,7 +308,7 @@ spec:
     spec:
       containers:
         - name: team
-          image: pandora/team:dev
+          image: pandora/team:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20010 } ]
@@ -346,7 +346,7 @@ spec:
           # 防"旧树 re-apply 回滚 INC-20260727-001 修复镜像",修复入 main 后钉定动机消失,
           # 回归 :dev——树内容落后于 live 时才需要钉定,钉定 tag 必须有可复现的产出链
           # (参照 fleet yaml:tag=制品版本,Build-DsImagesForMinikube 按版本从制品库重建)。
-          image: pandora/matchmaker:dev
+          image: pandora/matchmaker:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20011 } ]
@@ -386,7 +386,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: matchmaker-pve
-          image: pandora/matchmaker-pve:dev
+          image: pandora/matchmaker-pve:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20018 } ]
@@ -423,7 +423,7 @@ spec:
     spec:
       containers:
         - name: trade
-          image: pandora/trade:dev
+          image: pandora/trade:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20012 } ]
@@ -453,7 +453,7 @@ spec:
     spec:
       containers:
         - name: dialogue
-          image: pandora/dialogue:dev
+          image: pandora/dialogue:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20013 } ]
@@ -497,7 +497,7 @@ spec:
     spec:
       containers:
         - name: mission
-          image: pandora/mission:dev
+          image: pandora/mission:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_DEPLOY_STRATEGY, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/deploy-strategy']" } } }
@@ -539,7 +539,7 @@ spec:
     spec:
       containers:
         - name: push
-          image: pandora/push:dev
+          image: pandora/push:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20014 } ]
@@ -569,7 +569,7 @@ spec:
     spec:
       containers:
         - name: leaderboard
-          image: pandora/leaderboard:dev
+          image: pandora/leaderboard:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20007 } ]
@@ -599,7 +599,7 @@ spec:
     spec:
       containers:
         - name: inventory
-          image: pandora/inventory:dev
+          image: pandora/inventory:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20015 } ]
@@ -636,7 +636,7 @@ spec:
     spec:
       containers:
         - name: auction
-          image: pandora/auction:dev
+          image: pandora/auction:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20016 } ]
@@ -670,7 +670,7 @@ spec:
     spec:
       containers:
         - name: owner
-          image: pandora/owner:dev
+          image: pandora/owner:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 20017 } ]
@@ -736,7 +736,7 @@ spec:
       containers:
         - name: ds-allocator
           # :dev 回归理由见 matchmaker 注释(修复已入 main,临时钉定动机消失)。
-          image: pandora/ds-allocator:dev
+          image: pandora/ds-allocator:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
@@ -817,7 +817,7 @@ spec:
       serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
       containers:
         - name: hub-allocator
-          image: pandora/hub-allocator:dev
+          image: pandora/hub-allocator:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
@@ -877,7 +877,7 @@ spec:
     spec:
       containers:
         - name: battle-result
-          image: pandora/battle-result:dev
+          image: pandora/battle-result:g125b5bf78af6-dirty-20260817-220730
           imagePullPolicy: IfNotPresent
           env:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }

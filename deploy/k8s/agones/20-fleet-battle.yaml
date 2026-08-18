@@ -99,15 +99,15 @@ spec:
               # 当天 17:03 的本机 dirty FullBuild 更新但不属于 Jenkins,不在这里混用。
               # 2026-08-12 换到 r1977-dirty-20260812-031503:钉版时制品库 42 项 sha256
               # 清单已逐项重算通过。
-              # 2026-08-17 换到本机已构建 DS 快照 r2062-dirty-20260817-075828；本机 Docker
-              # 已确认 battle image ID=sha256:80bae1380b6c…、hub image ID=sha256:f3b656a45236…。
+              # 2026-08-17 换到本机已构建 DS 快照 r2085-dirty-20260817-121023；本机 Docker
+              # 已确认 battle image ID=sha256:7e5f0eb7fa0d…、hub image ID=sha256:432bcbd9b758…。
               # 当前未核验制品根中的同 tag 快照；发布前仍须单独证明可从制品根重建，不能只凭本机镜像。
               #
               # ⚠️ 换版必须改本行再 apply。历史教训:2026-07-31 曾有人绕过本文件直接改集群,
               # 结果 live 跑着 r1642-dirty-9ab0ee7f-20260731-130850 而本文件还写着 r1604,
               # 且那个 tag 在制品库里查无快照 —— 任何一次 apply 都会把 live 打回旧版,
               # 换机器更是直接 ImagePullBackOff。
-              image: pandora/battle-ds:r2062-dirty-20260817-075828
+              image: pandora/battle-ds:r2085-dirty-20260817-121023
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT
