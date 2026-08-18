@@ -74,7 +74,47 @@ service LoginService {
     };
   }
 
-  // SelectRole 立即完成型,选角(2026-07-08)。
+  // ListAccountRoles 立即完成型,列出**本账号名下的角色**(两步登录,2026-08-18)。
+  //
+  // 鉴权走**账号态 token**(aud=pandora-account),不是玩家 SessionToken:选角发生在
+  // 「已认证账号、尚未绑定角色」这段中间态,此时服务端还没有 player_id 可以签 session。
+  // account_id 取自账号态 JWT 的 sub(Envoy 注入 x-pandora-account-id),请求体不含
+  // account_id ——只能列自己的角色(§9.6 不信客户端自报身份)。
+  //
+  // 幂等只读。Login 的响应里已经带了同一份列表,本 RPC 用于选角界面停留期间的刷新
+  // (比如创建角色功能上线后新建完角色回到列表)。
+  rpc ListAccountRoles(ListAccountRolesRequest) returns (ListAccountRolesResponse) {
+    option (google.api.http) = {
+      post: "/v1/account/roles/list"
+      body: "*"
+    };
+  }
+
+  // EnterRole 立即完成型,**选定角色进入游戏**(两步登录第二步,2026-08-18)。
+  //
+  // 这是 player_id 从「账号身份」下沉为「角色实体身份」之后的进场入口:
+  //   Login(账号密码) → 账号态 token + 角色列表 → EnterRole(选中的 player_id)
+  //     → 绑定该角色的 SessionToken + hub 地址 + hub 票据。
+  //
+  // 鉴权走账号态 token。服务端**必须**核对 player_id 确实挂在该 account_id 名下
+  // (account_roles 台账),不属于则 ErrLoginRoleNotOwned —— 这是越权尝试,要留审计。
+  // 请求体里的 player_id 是「选哪个」而不是「我是谁」:它是从服务端刚下发的列表里选的,
+  // 且服务端会回查归属,不构成自报身份。
+  //
+  // 幂等:重复 EnterRole 同一角色 = 重新登录一次该角色(轮换会话代际,顶掉旧会话)。
+  rpc EnterRole(EnterRoleRequest) returns (EnterRoleResponse) {
+    option (google.api.http) = {
+      post: "/v1/role/enter"
+      body: "*"
+    };
+  }
+
+  // SelectRole 立即完成型,选**职业外观**(2026-07-08)。
+  //
+  // ⚠️ 名字容易与 EnterRole 混:本 RPC 的 role_id 是 **CfgRole 配置表 ID(职业 / 外观)**,
+  // 不是角色实体。选哪个**角色实体**进游戏走 EnterRole(参数是 player_id)。
+  // 两者正交:一个角色实体有它自己的职业。
+  //
   // 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
   //   → 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
   // 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;
@@ -121,6 +161,17 @@ message LoginRequest {
   string locale = 11;
   // 12-49 reserved for client metadata
   reserved 12 to 49;
+
+  // defer_role_entry(两步登录,2026-08-18):true = 只认证账号,**不要**自动进入角色。
+  //
+  // 为什么需要它:滚动升级期新旧客户端混跑。已发布的旧客户端只会调 Login,并期待
+  // 响应里直接带 hub_ds_addr / hub_ticket / session_token —— 所以 Login 默认仍会
+  // 自动进入默认角色(最近登录的那个),旧客户端零改动继续工作。
+  // 新客户端走「Login → 选角界面 → EnterRole」,自动进入就成了纯浪费:白占一次 Hub
+  // 座位、白签一张票、还白轮换一次会话代际(EnterRole 会立刻把它顶掉)。置 true 即跳过。
+  //
+  // true 时响应只填 account_token / account_id / roles,其余字段留空。
+  bool defer_role_entry = 50;
 }
 
 message LoginResponse {
@@ -171,6 +222,99 @@ message LoginResponse {
   // 排空后，才可在独立 contract 版本 reserved #13。
   uint64 register_no = 13 [deprecated = true];
   uint64 player_no = 14;
+
+  // ===== 账号 / 角色分离(两步登录,2026-08-18)=====
+  //
+  // 这三个字段是「已认证账号」的产物,与上面那批「已进入某个角色」的字段是两个层面:
+  //   - account_token / account_id / roles:账号层,认证完就有;
+  //   - player_id / session_token / hub_*:角色层,只有真正进入某个角色后才有。
+  //
+  // defer_role_entry=false(旧客户端 / 默认)时两批都填:服务端替它自动进了默认角色。
+  // defer_role_entry=true 时只填账号层,客户端拿 roles 渲染选角界面,再调 EnterRole。
+
+  // account_token:账号态 token(aud=pandora-account,短 TTL,默认 10min)。
+  // 只能调 ListAccountRoles / EnterRole,**拿不到任何玩家面能力** —— 它的 sub 是
+  // account_id,过不了玩家态 provider 的 aud 校验(pkg/auth 有测试钉死这条互斥性)。
+  string account_token = 15;
+  // account_id:账号身份(snowflake)。角色过户就是把角色的归属改到另一个 account_id。
+  // 注意与 player_id 的区别:player_id 现在是**角色实体 ID**,不再等于账号。
+  uint64 account_id = 16;
+  // roles:本账号名下全部可用角色。创建角色功能上线前恒 1 个(注册时自动建,名字=账号名)。
+  // 顺序:最近登录的在前,从未登录过的按 slot 升序排在后面 —— 客户端默认选中第一个即可。
+  repeated AccountRole roles = 17;
+  // account_token 过期时刻(unix ms)。客户端据此判断选角界面停留过久要重新登录。
+  // §5.12:时间戳非负,用无符号。
+  uint64 account_token_exp_ms = 18;
+}
+
+// AccountRole 是**一个角色实体**在选角界面上的可见结构(客户端可见结构,§5 第 8 条)。
+//
+// 命名消歧(全文最容易踩的一处):
+//   - player_id 是**角色实体 ID**(snowflake)。全仓业务数据都以它为键;卖角色 = 把它
+//     从一个 account_id 挂到另一个 account_id,业务数据零迁移。
+//   - role_id 是 **CfgRole 配置表 ID**(职业 / 外观,uint32,§9.12),不是角色实体。
+message AccountRole {
+  uint64 player_id = 1;
+  // role_name:角色名。创建角色功能上线前 = 账号名。
+  //
+  // 取数口径:优先取 player 服务的当前显示名(players.nickname,全服唯一、玩家可改);
+  // player 服务不可达时降级为 account_roles.role_name(创建时定的名字)。
+  // 两者在「玩家从未改过名」时恒等,而改名功能目前全仓无调用方,故当前恒等。
+  string role_name = 2;
+  // role_id:该角色已选的职业外观(CfgRole.Id)。0 = 尚未选过职业(需走 SelectRole)。
+  uint32 role_id = 3;
+  // player_no:角色编号(展示专用,绑角色实体不绑账号)。0 = 补号窗口内尚未分配。
+  uint64 player_no = 4;
+  // level:角色等级,选角界面展示用。player 服务不可达时为 0。
+  uint32 level = 5;
+  // last_login_at_ms:该角色最近一次进入游戏(unix ms)。0 = 从未进过。
+  // 客户端按它决定默认选中项(服务端已按此排序,直接取第一个即可)。
+  uint64 last_login_at_ms = 6;
+  // slot:账号内槽位(0 起)。创建角色功能上线后用于稳定排序 / 定位。
+  uint32 slot = 7;
+}
+
+message ListAccountRolesRequest {
+  // 刻意为空:account_id 只能来自账号态 JWT 的 sub(Envoy 注入 x-pandora-account-id),
+  // 不接受请求体自报 —— 否则任何人都能列别人账号下的角色。
+}
+
+message ListAccountRolesResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // 排序同 LoginResponse.roles:最近登录的在前。
+  repeated AccountRole roles = 2;
+}
+
+message EnterRoleRequest {
+  // player_id:选中的角色实体 ID,必须来自服务端刚下发的 roles 列表。
+  //
+  // 这**不是**自报身份:服务端会按 account_roles 台账回查「该角色是否挂在本账号
+  // (账号态 JWT 的 sub)名下」,不属于一律 ErrLoginRoleNotOwned 并留审计日志。
+  uint64 player_id = 1;
+  // device_id:与 LoginRequest.device_id 同义(设备绑定 + 顶号判别)。
+  // 必须带:真正建立玩家会话的是本 RPC 而不是 Login,设备记账要落在这一步。
+  string device_id = 2;
+}
+
+// EnterRoleResponse 与 LoginResponse 的「角色层」字段一一对应(刻意不复用 LoginResponse:
+// 账号层字段在这里没有意义,塞进来会让客户端以为还能再拿一张 account_token)。
+message EnterRoleResponse {
+  pandora.common.v1.ErrCode code = 1;
+  uint64 player_id     = 2;
+  string session_token = 3;
+  string hub_ds_addr   = 4;
+  string hub_ticket    = 5;
+  uint32 region_id     = 6;
+  uint32 cell_id       = 7;
+  // 断线重连三件套:语义完全同 LoginResponse(要么全空、要么全填)。
+  // 选了一个正在战斗中的角色时,直接把它送回原对局而不是大厅。
+  string battle_ds_addr = 8;
+  string battle_ticket  = 9;
+  uint64 match_id       = 10;
+  // 该角色已选职业(CfgRole.Id);0 = 未选过,客户端应先进职业选择。
+  uint32 selected_role_id = 11;
+  ResumeContext resume_context = 12;
+  uint64 player_no = 13;
 }
 
 enum ResumeRoute {

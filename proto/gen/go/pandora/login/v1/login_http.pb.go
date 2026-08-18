@@ -19,16 +19,31 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
+const OperationLoginServiceEnterRole = "/pandora.login.v1.LoginService/EnterRole"
 const OperationLoginServiceGetPlayerNo = "/pandora.login.v1.LoginService/GetPlayerNo"
 const OperationLoginServiceGetRegisterNo = "/pandora.login.v1.LoginService/GetRegisterNo"
 const OperationLoginServiceGetResumeContext = "/pandora.login.v1.LoginService/GetResumeContext"
 const OperationLoginServiceIssueDSTicket = "/pandora.login.v1.LoginService/IssueDSTicket"
+const OperationLoginServiceListAccountRoles = "/pandora.login.v1.LoginService/ListAccountRoles"
 const OperationLoginServiceLogin = "/pandora.login.v1.LoginService/Login"
 const OperationLoginServiceLogout = "/pandora.login.v1.LoginService/Logout"
 const OperationLoginServiceSelectRole = "/pandora.login.v1.LoginService/SelectRole"
 const OperationLoginServiceVerifyDSTicket = "/pandora.login.v1.LoginService/VerifyDSTicket"
 
 type LoginServiceHTTPServer interface {
+	// EnterRole EnterRole 立即完成型,**选定角色进入游戏**(两步登录第二步,2026-08-18)。
+	//
+	// 这是 player_id 从「账号身份」下沉为「角色实体身份」之后的进场入口:
+	//   Login(账号密码) → 账号态 token + 角色列表 → EnterRole(选中的 player_id)
+	//     → 绑定该角色的 SessionToken + hub 地址 + hub 票据。
+	//
+	// 鉴权走账号态 token。服务端**必须**核对 player_id 确实挂在该 account_id 名下
+	// (account_roles 台账),不属于则 ErrLoginRoleNotOwned —— 这是越权尝试,要留审计。
+	// 请求体里的 player_id 是「选哪个」而不是「我是谁」:它是从服务端刚下发的列表里选的,
+	// 且服务端会回查归属,不构成自报身份。
+	//
+	// 幂等:重复 EnterRole 同一角色 = 重新登录一次该角色(轮换会话代际,顶掉旧会话)。
+	EnterRole(context.Context, *EnterRoleRequest) (*EnterRoleResponse, error)
 	// GetPlayerNo GetPlayerNo 立即完成型,查本人角色编号(展示专用,2026-08-10)。
 	//
 	// 为什么需要它:编号由 login 补号任务**异步**分配(player-no-and-login-surge.md §3),
@@ -52,12 +67,27 @@ type LoginServiceHTTPServer interface {
 	GetResumeContext(context.Context, *GetResumeContextRequest) (*GetResumeContextResponse, error)
 	// IssueDSTicket IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据
 	IssueDSTicket(context.Context, *IssueDSTicketRequest) (*IssueDSTicketResponse, error)
+	// ListAccountRoles ListAccountRoles 立即完成型,列出**本账号名下的角色**(两步登录,2026-08-18)。
+	//
+	// 鉴权走**账号态 token**(aud=pandora-account),不是玩家 SessionToken:选角发生在
+	// 「已认证账号、尚未绑定角色」这段中间态,此时服务端还没有 player_id 可以签 session。
+	// account_id 取自账号态 JWT 的 sub(Envoy 注入 x-pandora-account-id),请求体不含
+	// account_id ——只能列自己的角色(§9.6 不信客户端自报身份)。
+	//
+	// 幂等只读。Login 的响应里已经带了同一份列表,本 RPC 用于选角界面停留期间的刷新
+	// (比如创建角色功能上线后新建完角色回到列表)。
+	ListAccountRoles(context.Context, *ListAccountRolesRequest) (*ListAccountRolesResponse, error)
 	// Login Login 立即完成型(synchronous),response 含完整 session_token + hub 地址
 	// kafka push 不发给 caller(他看 RPC response 即可)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	// Logout Logout 立即完成型,清 session
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
-	// SelectRole SelectRole 立即完成型,选角(2026-07-08)。
+	// SelectRole SelectRole 立即完成型,选**职业外观**(2026-07-08)。
+	//
+	// ⚠️ 名字容易与 EnterRole 混:本 RPC 的 role_id 是 **CfgRole 配置表 ID(职业 / 外观)**,
+	// 不是角色实体。选哪个**角色实体**进游戏走 EnterRole(参数是 player_id)。
+	// 两者正交:一个角色实体有它自己的职业。
+	//
 	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
 	//   → 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
 	// 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;
@@ -77,6 +107,8 @@ func RegisterLoginServiceHTTPServer(s *http.Server, srv LoginServiceHTTPServer) 
 	r.POST("/v1/ds/ticket/issue", _LoginService_IssueDSTicket0_HTTP_Handler(srv))
 	r.POST("/v1/player-no/get", _LoginService_GetPlayerNo0_HTTP_Handler(srv))
 	r.POST("/v1/register-no/get", _LoginService_GetRegisterNo0_HTTP_Handler(srv))
+	r.POST("/v1/account/roles/list", _LoginService_ListAccountRoles0_HTTP_Handler(srv))
+	r.POST("/v1/role/enter", _LoginService_EnterRole0_HTTP_Handler(srv))
 	r.POST("/v1/role/select", _LoginService_SelectRole0_HTTP_Handler(srv))
 	r.POST("/v1/ds/ticket/verify", _LoginService_VerifyDSTicket0_HTTP_Handler(srv))
 	r.POST("/v1/resume/context", _LoginService_GetResumeContext0_HTTP_Handler(srv))
@@ -192,6 +224,50 @@ func _LoginService_GetRegisterNo0_HTTP_Handler(srv LoginServiceHTTPServer) func(
 	}
 }
 
+func _LoginService_ListAccountRoles0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ListAccountRolesRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationLoginServiceListAccountRoles)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ListAccountRoles(ctx, req.(*ListAccountRolesRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ListAccountRolesResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _LoginService_EnterRole0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in EnterRoleRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationLoginServiceEnterRole)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.EnterRole(ctx, req.(*EnterRoleRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*EnterRoleResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _LoginService_SelectRole0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in SelectRoleRequest
@@ -259,6 +335,19 @@ func _LoginService_GetResumeContext0_HTTP_Handler(srv LoginServiceHTTPServer) fu
 }
 
 type LoginServiceHTTPClient interface {
+	// EnterRole EnterRole 立即完成型,**选定角色进入游戏**(两步登录第二步,2026-08-18)。
+	//
+	// 这是 player_id 从「账号身份」下沉为「角色实体身份」之后的进场入口:
+	//   Login(账号密码) → 账号态 token + 角色列表 → EnterRole(选中的 player_id)
+	//     → 绑定该角色的 SessionToken + hub 地址 + hub 票据。
+	//
+	// 鉴权走账号态 token。服务端**必须**核对 player_id 确实挂在该 account_id 名下
+	// (account_roles 台账),不属于则 ErrLoginRoleNotOwned —— 这是越权尝试,要留审计。
+	// 请求体里的 player_id 是「选哪个」而不是「我是谁」:它是从服务端刚下发的列表里选的,
+	// 且服务端会回查归属,不构成自报身份。
+	//
+	// 幂等:重复 EnterRole 同一角色 = 重新登录一次该角色(轮换会话代际,顶掉旧会话)。
+	EnterRole(ctx context.Context, req *EnterRoleRequest, opts ...http.CallOption) (rsp *EnterRoleResponse, err error)
 	// GetPlayerNo GetPlayerNo 立即完成型,查本人角色编号(展示专用,2026-08-10)。
 	//
 	// 为什么需要它:编号由 login 补号任务**异步**分配(player-no-and-login-surge.md §3),
@@ -282,12 +371,27 @@ type LoginServiceHTTPClient interface {
 	GetResumeContext(ctx context.Context, req *GetResumeContextRequest, opts ...http.CallOption) (rsp *GetResumeContextResponse, err error)
 	// IssueDSTicket IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据
 	IssueDSTicket(ctx context.Context, req *IssueDSTicketRequest, opts ...http.CallOption) (rsp *IssueDSTicketResponse, err error)
+	// ListAccountRoles ListAccountRoles 立即完成型,列出**本账号名下的角色**(两步登录,2026-08-18)。
+	//
+	// 鉴权走**账号态 token**(aud=pandora-account),不是玩家 SessionToken:选角发生在
+	// 「已认证账号、尚未绑定角色」这段中间态,此时服务端还没有 player_id 可以签 session。
+	// account_id 取自账号态 JWT 的 sub(Envoy 注入 x-pandora-account-id),请求体不含
+	// account_id ——只能列自己的角色(§9.6 不信客户端自报身份)。
+	//
+	// 幂等只读。Login 的响应里已经带了同一份列表,本 RPC 用于选角界面停留期间的刷新
+	// (比如创建角色功能上线后新建完角色回到列表)。
+	ListAccountRoles(ctx context.Context, req *ListAccountRolesRequest, opts ...http.CallOption) (rsp *ListAccountRolesResponse, err error)
 	// Login Login 立即完成型(synchronous),response 含完整 session_token + hub 地址
 	// kafka push 不发给 caller(他看 RPC response 即可)
 	Login(ctx context.Context, req *LoginRequest, opts ...http.CallOption) (rsp *LoginResponse, err error)
 	// Logout Logout 立即完成型,清 session
 	Logout(ctx context.Context, req *LogoutRequest, opts ...http.CallOption) (rsp *LogoutResponse, err error)
-	// SelectRole SelectRole 立即完成型,选角(2026-07-08)。
+	// SelectRole SelectRole 立即完成型,选**职业外观**(2026-07-08)。
+	//
+	// ⚠️ 名字容易与 EnterRole 混:本 RPC 的 role_id 是 **CfgRole 配置表 ID(职业 / 外观)**,
+	// 不是角色实体。选哪个**角色实体**进游戏走 EnterRole(参数是 player_id)。
+	// 两者正交:一个角色实体有它自己的职业。
+	//
 	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
 	//   → 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
 	// 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;
@@ -306,6 +410,31 @@ type LoginServiceHTTPClientImpl struct {
 
 func NewLoginServiceHTTPClient(client *http.Client) LoginServiceHTTPClient {
 	return &LoginServiceHTTPClientImpl{client}
+}
+
+// EnterRole EnterRole 立即完成型,**选定角色进入游戏**(两步登录第二步,2026-08-18)。
+//
+// 这是 player_id 从「账号身份」下沉为「角色实体身份」之后的进场入口:
+//   Login(账号密码) → 账号态 token + 角色列表 → EnterRole(选中的 player_id)
+//     → 绑定该角色的 SessionToken + hub 地址 + hub 票据。
+//
+// 鉴权走账号态 token。服务端**必须**核对 player_id 确实挂在该 account_id 名下
+// (account_roles 台账),不属于则 ErrLoginRoleNotOwned —— 这是越权尝试,要留审计。
+// 请求体里的 player_id 是「选哪个」而不是「我是谁」:它是从服务端刚下发的列表里选的,
+// 且服务端会回查归属,不构成自报身份。
+//
+// 幂等:重复 EnterRole 同一角色 = 重新登录一次该角色(轮换会话代际,顶掉旧会话)。
+func (c *LoginServiceHTTPClientImpl) EnterRole(ctx context.Context, in *EnterRoleRequest, opts ...http.CallOption) (*EnterRoleResponse, error) {
+	var out EnterRoleResponse
+	pattern := "/v1/role/enter"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationLoginServiceEnterRole))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // GetPlayerNo GetPlayerNo 立即完成型,查本人角色编号(展示专用,2026-08-10)。
@@ -379,6 +508,28 @@ func (c *LoginServiceHTTPClientImpl) IssueDSTicket(ctx context.Context, in *Issu
 	return &out, nil
 }
 
+// ListAccountRoles ListAccountRoles 立即完成型,列出**本账号名下的角色**(两步登录,2026-08-18)。
+//
+// 鉴权走**账号态 token**(aud=pandora-account),不是玩家 SessionToken:选角发生在
+// 「已认证账号、尚未绑定角色」这段中间态,此时服务端还没有 player_id 可以签 session。
+// account_id 取自账号态 JWT 的 sub(Envoy 注入 x-pandora-account-id),请求体不含
+// account_id ——只能列自己的角色(§9.6 不信客户端自报身份)。
+//
+// 幂等只读。Login 的响应里已经带了同一份列表,本 RPC 用于选角界面停留期间的刷新
+// (比如创建角色功能上线后新建完角色回到列表)。
+func (c *LoginServiceHTTPClientImpl) ListAccountRoles(ctx context.Context, in *ListAccountRolesRequest, opts ...http.CallOption) (*ListAccountRolesResponse, error) {
+	var out ListAccountRolesResponse
+	pattern := "/v1/account/roles/list"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationLoginServiceListAccountRoles))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Login Login 立即完成型(synchronous),response 含完整 session_token + hub 地址
 // kafka push 不发给 caller(他看 RPC response 即可)
 func (c *LoginServiceHTTPClientImpl) Login(ctx context.Context, in *LoginRequest, opts ...http.CallOption) (*LoginResponse, error) {
@@ -408,7 +559,12 @@ func (c *LoginServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutReque
 	return &out, nil
 }
 
-// SelectRole SelectRole 立即完成型,选角(2026-07-08)。
+// SelectRole SelectRole 立即完成型,选**职业外观**(2026-07-08)。
+//
+// ⚠️ 名字容易与 EnterRole 混:本 RPC 的 role_id 是 **CfgRole 配置表 ID(职业 / 外观)**,
+// 不是角色实体。选哪个**角色实体**进游戏走 EnterRole(参数是 player_id)。
+// 两者正交:一个角色实体有它自己的职业。
+//
 // 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
 //   → 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
 // 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;

@@ -70,6 +70,14 @@ enum ResumeRoute : int;
 extern const uint32_t ResumeRoute_internal_data_[];
 enum ResumeWaitReason : int;
 extern const uint32_t ResumeWaitReason_internal_data_[];
+class AccountRole;
+struct AccountRoleGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AccountRoleGlobalsTypeInternal AccountRole_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AccountRole_class_data_;
+#else
+extern const AccountRoleGlobalsTypeInternal AccountRole_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class DSTicket;
 struct DSTicketGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -77,6 +85,22 @@ extern DSTicketGlobalsTypeInternal DSTicket_globals_;
 extern const ::google::protobuf::internal::ClassDataFull DSTicket_class_data_;
 #else
 extern const DSTicketGlobalsTypeInternal DSTicket_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class EnterRoleRequest;
+struct EnterRoleRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EnterRoleRequestGlobalsTypeInternal EnterRoleRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EnterRoleRequest_class_data_;
+#else
+extern const EnterRoleRequestGlobalsTypeInternal EnterRoleRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class EnterRoleResponse;
+struct EnterRoleResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EnterRoleResponseGlobalsTypeInternal EnterRoleResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EnterRoleResponse_class_data_;
+#else
+extern const EnterRoleResponseGlobalsTypeInternal EnterRoleResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetPlayerNoRequest;
 struct GetPlayerNoRequestGlobalsTypeInternal;
@@ -141,6 +165,22 @@ extern IssueDSTicketResponseGlobalsTypeInternal IssueDSTicketResponse_globals_;
 extern const ::google::protobuf::internal::ClassDataFull IssueDSTicketResponse_class_data_;
 #else
 extern const IssueDSTicketResponseGlobalsTypeInternal IssueDSTicketResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListAccountRolesRequest;
+struct ListAccountRolesRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListAccountRolesRequestGlobalsTypeInternal ListAccountRolesRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListAccountRolesRequest_class_data_;
+#else
+extern const ListAccountRolesRequestGlobalsTypeInternal ListAccountRolesRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListAccountRolesResponse;
+struct ListAccountRolesResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListAccountRolesResponseGlobalsTypeInternal ListAccountRolesResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListAccountRolesResponse_class_data_;
+#else
+extern const ListAccountRolesResponseGlobalsTypeInternal ListAccountRolesResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class LoginRequest;
 struct LoginRequestGlobalsTypeInternal;
@@ -520,7 +560,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED VerifyDSTicketRequest final : publi
   [[nodiscard]] static const VerifyDSTicketRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<VerifyDSTicketRequest>(&VerifyDSTicketRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(VerifyDSTicketRequest& a, VerifyDSTicketRequest& b) { a.Swap(&b); }
   inline void Swap(VerifyDSTicketRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -760,7 +800,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectRoleResponse final : public :
   [[nodiscard]] static const SelectRoleResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectRoleResponse>(&SelectRoleResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(SelectRoleResponse& a, SelectRoleResponse& b) { a.Swap(&b); }
   inline void Swap(SelectRoleResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -995,7 +1035,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectRoleRequest final : public ::
   [[nodiscard]] static const SelectRoleRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectRoleRequest>(&SelectRoleRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(SelectRoleRequest& a, SelectRoleRequest& b) { a.Swap(&b); }
   inline void Swap(SelectRoleRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1196,7 +1236,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResumeContext final : public ::goog
   [[nodiscard]] static const ResumeContext& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ResumeContext>(&ResumeContext_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(ResumeContext& a, ResumeContext& b) { a.Swap(&b); }
   inline void Swap(ResumeContext* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1636,7 +1676,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LogoutResponse final : public ::goo
   [[nodiscard]] static const LogoutResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LogoutResponse>(&LogoutResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(LogoutResponse& a, LogoutResponse& b) { a.Swap(&b); }
   inline void Swap(LogoutResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1837,7 +1877,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LogoutRequest final : public ::goog
   [[nodiscard]] static const LogoutRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LogoutRequest>(&LogoutRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(LogoutRequest& a, LogoutRequest& b) { a.Swap(&b); }
   inline void Swap(LogoutRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2141,6 +2181,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginRequest final : public ::googl
     kClientVersionFieldNumber = 4,
     kRegionFieldNumber = 10,
     kLocaleFieldNumber = 11,
+    kDeferRoleEntryFieldNumber = 50,
   };
   // string account = 1 [json_name = "account"];
   void clear_account() ;
@@ -2232,13 +2273,23 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginRequest final : public ::googl
   ::std::string* PROTOBUF_NONNULL _internal_mutable_locale();
 
   public:
+  // bool defer_role_entry = 50 [json_name = "deferRoleEntry"];
+  void clear_defer_role_entry() ;
+  [[nodiscard]] bool defer_role_entry() const;
+  void set_defer_role_entry(bool value);
+
+  private:
+  bool _internal_defer_role_entry() const;
+  void _internal_set_defer_role_entry(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.LoginRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 6,
+      ::google::protobuf::internal::TcParseTable<2, 7,
                           0, 93,
-                          2>;
+                          7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -2271,9 +2322,148 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginRequest final : public ::googl
     ::google::protobuf::internal::ArenaStringPtr client_version_;
     ::google::protobuf::internal::ArenaStringPtr region_;
     ::google::protobuf::internal::ArenaStringPtr locale_;
+    bool defer_role_entry_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListAccountRolesRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.ListAccountRolesRequest) */ {
+ public:
+  inline ListAccountRolesRequest() : ListAccountRolesRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListAccountRolesRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListAccountRolesRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListAccountRolesRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListAccountRolesRequest(const ListAccountRolesRequest& from) : ListAccountRolesRequest(nullptr, from) {}
+  inline ListAccountRolesRequest(ListAccountRolesRequest&& from) noexcept : ListAccountRolesRequest(nullptr, ::std::move(from)) {}
+  inline ListAccountRolesRequest& operator=(const ListAccountRolesRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListAccountRolesRequest& operator=(ListAccountRolesRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListAccountRolesRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListAccountRolesRequest>(&ListAccountRolesRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 3;
+  friend void swap(ListAccountRolesRequest& a, ListAccountRolesRequest& b) { a.Swap(&b); }
+  inline void Swap(ListAccountRolesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListAccountRolesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListAccountRolesRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<ListAccountRolesRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const ListAccountRolesRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const ListAccountRolesRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.ListAccountRolesRequest"; }
+
+  explicit ListAccountRolesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListAccountRolesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListAccountRolesRequest& from);
+  ListAccountRolesRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListAccountRolesRequest&& from) noexcept
+      : ListAccountRolesRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.ListAccountRolesRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
   friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
 };
 // -------------------------------------------------------------------
@@ -2334,7 +2524,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IssueDSTicketResponse final : publi
   [[nodiscard]] static const IssueDSTicketResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IssueDSTicketResponse>(&IssueDSTicketResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(IssueDSTicketResponse& a, IssueDSTicketResponse& b) { a.Swap(&b); }
   inline void Swap(IssueDSTicketResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2569,7 +2759,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IssueDSTicketRequest final : public
   [[nodiscard]] static const IssueDSTicketRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IssueDSTicketRequest>(&IssueDSTicketRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(IssueDSTicketRequest& a, IssueDSTicketRequest& b) { a.Swap(&b); }
   inline void Swap(IssueDSTicketRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2804,7 +2994,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetResumeContextRequest final : pub
   [[nodiscard]] static const GetResumeContextRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetResumeContextRequest>(&GetResumeContextRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(GetResumeContextRequest& a, GetResumeContextRequest& b) { a.Swap(&b); }
   inline void Swap(GetResumeContextRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3010,7 +3200,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRegisterNoResponse final : publi
   [[nodiscard]] static const GetRegisterNoResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRegisterNoResponse>(&GetRegisterNoResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(GetRegisterNoResponse& a, GetRegisterNoResponse& b) { a.Swap(&b); }
   inline void Swap(GetRegisterNoResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3222,7 +3412,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRegisterNoRequest final : public
   [[nodiscard]] static const GetRegisterNoRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRegisterNoRequest>(&GetRegisterNoRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(GetRegisterNoRequest& a, GetRegisterNoRequest& b) { a.Swap(&b); }
   inline void Swap(GetRegisterNoRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3361,7 +3551,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerNoResponse final : public 
   [[nodiscard]] static const GetPlayerNoResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerNoResponse>(&GetPlayerNoResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(GetPlayerNoResponse& a, GetPlayerNoResponse& b) { a.Swap(&b); }
   inline void Swap(GetPlayerNoResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3573,7 +3763,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerNoRequest final : public :
   [[nodiscard]] static const GetPlayerNoRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerNoRequest>(&GetPlayerNoRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(GetPlayerNoRequest& a, GetPlayerNoRequest& b) { a.Swap(&b); }
   inline void Swap(GetPlayerNoRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3656,6 +3846,224 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerNoRequest final : public :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterRoleRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.EnterRoleRequest) */ {
+ public:
+  inline EnterRoleRequest() : EnterRoleRequest(nullptr) {}
+  ~EnterRoleRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EnterRoleRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EnterRoleRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EnterRoleRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EnterRoleRequest(const EnterRoleRequest& from) : EnterRoleRequest(nullptr, from) {}
+  inline EnterRoleRequest(EnterRoleRequest&& from) noexcept : EnterRoleRequest(nullptr, ::std::move(from)) {}
+  inline EnterRoleRequest& operator=(const EnterRoleRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EnterRoleRequest& operator=(EnterRoleRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EnterRoleRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EnterRoleRequest>(&EnterRoleRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 5;
+  friend void swap(EnterRoleRequest& a, EnterRoleRequest& b) { a.Swap(&b); }
+  inline void Swap(EnterRoleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EnterRoleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EnterRoleRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EnterRoleRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EnterRoleRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EnterRoleRequest& from) { EnterRoleRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EnterRoleRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.EnterRoleRequest"; }
+
+  explicit EnterRoleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EnterRoleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EnterRoleRequest& from);
+  EnterRoleRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EnterRoleRequest&& from) noexcept
+      : EnterRoleRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDeviceIdFieldNumber = 2,
+    kPlayerIdFieldNumber = 1,
+  };
+  // string device_id = 2 [json_name = "deviceId"];
+  void clear_device_id() ;
+  [[nodiscard]] const ::std::string& device_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_device_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_device_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_device_id();
+  void set_allocated_device_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_device_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_device_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_device_id();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.EnterRoleRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 51,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EnterRoleRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr device_id_;
+    ::uint64_t player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.login.v1.DSTicket) */ {
  public:
@@ -3712,7 +4120,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
   [[nodiscard]] static const DSTicket& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DSTicket>(&DSTicket_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(DSTicket& a, DSTicket& b) { a.Swap(&b); }
   inline void Swap(DSTicket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4166,6 +4574,284 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AccountRole final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.AccountRole) */ {
+ public:
+  inline AccountRole() : AccountRole(nullptr) {}
+  ~AccountRole() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AccountRole* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AccountRole));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AccountRole(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AccountRole(const AccountRole& from) : AccountRole(nullptr, from) {}
+  inline AccountRole(AccountRole&& from) noexcept : AccountRole(nullptr, ::std::move(from)) {}
+  inline AccountRole& operator=(const AccountRole& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AccountRole& operator=(AccountRole&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AccountRole& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AccountRole>(&AccountRole_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(AccountRole& a, AccountRole& b) { a.Swap(&b); }
+  inline void Swap(AccountRole* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AccountRole* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AccountRole* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AccountRole>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AccountRole& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AccountRole& from) { AccountRole::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AccountRole* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.AccountRole"; }
+
+  explicit AccountRole(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AccountRole(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AccountRole& from);
+  AccountRole(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AccountRole&& from) noexcept
+      : AccountRole(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRoleNameFieldNumber = 2,
+    kPlayerIdFieldNumber = 1,
+    kPlayerNoFieldNumber = 4,
+    kRoleIdFieldNumber = 3,
+    kLevelFieldNumber = 5,
+    kLastLoginAtMsFieldNumber = 6,
+    kSlotFieldNumber = 7,
+  };
+  // string role_name = 2 [json_name = "roleName"];
+  void clear_role_name() ;
+  [[nodiscard]] const ::std::string& role_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_role_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_role_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_role_name();
+  void set_allocated_role_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_role_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_role_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_role_name();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 player_no = 4 [json_name = "playerNo"];
+  void clear_player_no() ;
+  [[nodiscard]] ::uint64_t player_no() const;
+  void set_player_no(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_no() const;
+  void _internal_set_player_no(::uint64_t value);
+
+  public:
+  // uint32 role_id = 3 [json_name = "roleId"];
+  void clear_role_id() ;
+  [[nodiscard]] ::uint32_t role_id() const;
+  void set_role_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_role_id() const;
+  void _internal_set_role_id(::uint32_t value);
+
+  public:
+  // uint32 level = 5 [json_name = "level"];
+  void clear_level() ;
+  [[nodiscard]] ::uint32_t level() const;
+  void set_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_level() const;
+  void _internal_set_level(::uint32_t value);
+
+  public:
+  // uint64 last_login_at_ms = 6 [json_name = "lastLoginAtMs"];
+  void clear_last_login_at_ms() ;
+  [[nodiscard]] ::uint64_t last_login_at_ms() const;
+  void set_last_login_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_last_login_at_ms() const;
+  void _internal_set_last_login_at_ms(::uint64_t value);
+
+  public:
+  // uint32 slot = 7 [json_name = "slot"];
+  void clear_slot() ;
+  [[nodiscard]] ::uint32_t slot() const;
+  void set_slot(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_slot() const;
+  void _internal_set_slot(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.AccountRole)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 46,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AccountRole& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr role_name_;
+    ::uint64_t player_id_;
+    ::uint64_t player_no_;
+    ::uint32_t role_id_;
+    ::uint32_t level_;
+    ::uint64_t last_login_at_ms_;
+    ::uint32_t slot_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED VerifyDSTicketResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.login.v1.VerifyDSTicketResponse) */ {
  public:
@@ -4222,7 +4908,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED VerifyDSTicketResponse final : publ
   [[nodiscard]] static const VerifyDSTicketResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<VerifyDSTicketResponse>(&VerifyDSTicketResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(VerifyDSTicketResponse& a, VerifyDSTicketResponse& b) { a.Swap(&b); }
   inline void Swap(VerifyDSTicketResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4533,11 +5219,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
 
   // accessors -------------------------------------------------------
   enum : int {
+    kRolesFieldNumber = 17,
     kSessionTokenFieldNumber = 3,
     kHubDsAddrFieldNumber = 4,
     kHubTicketFieldNumber = 5,
     kBattleDsAddrFieldNumber = 8,
     kBattleTicketFieldNumber = 9,
+    kAccountTokenFieldNumber = 15,
     kResumeContextFieldNumber = 12,
     kPlayerIdFieldNumber = 2,
     kCodeFieldNumber = 1,
@@ -4547,7 +5235,30 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     kMatchIdFieldNumber = 10,
     kRegisterNoFieldNumber = 13,
     kPlayerNoFieldNumber = 14,
+    kAccountIdFieldNumber = 16,
+    kAccountTokenExpMsFieldNumber = 18,
   };
+  // repeated .pandora.login.v1.AccountRole roles = 17 [json_name = "roles"];
+  [[nodiscard]] int roles_size()
+      const;
+  private:
+  int _internal_roles_size() const;
+
+  public:
+  void clear_roles() ;
+  [[nodiscard]] const ::pandora::login::v1::AccountRole& roles(int index) const;
+  [[nodiscard]] ::pandora::login::v1::AccountRole* PROTOBUF_NONNULL mutable_roles(int index);
+  ::pandora::login::v1::AccountRole* PROTOBUF_NONNULL add_roles();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>&
+  roles() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>* PROTOBUF_NONNULL
+  mutable_roles();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>& _internal_roles() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>* PROTOBUF_NONNULL _internal_mutable_roles();
+
+  public:
   // string session_token = 3 [json_name = "sessionToken"];
   void clear_session_token() ;
   [[nodiscard]] const ::std::string& session_token() const;
@@ -4621,6 +5332,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
   const ::std::string& _internal_battle_ticket() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_battle_ticket(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_battle_ticket();
+
+  public:
+  // string account_token = 15 [json_name = "accountToken"];
+  void clear_account_token() ;
+  [[nodiscard]] const ::std::string& account_token() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_account_token(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_account_token();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_account_token();
+  void set_allocated_account_token(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_account_token() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_account_token(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_account_token();
 
   public:
   // .pandora.login.v1.ResumeContext resume_context = 12 [json_name = "resumeContext"];
@@ -4719,12 +5445,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
   void _internal_set_player_no(::uint64_t value);
 
   public:
+  // uint64 account_id = 16 [json_name = "accountId"];
+  void clear_account_id() ;
+  [[nodiscard]] ::uint64_t account_id() const;
+  void set_account_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_account_id() const;
+  void _internal_set_account_id(::uint64_t value);
+
+  public:
+  // uint64 account_token_exp_ms = 18 [json_name = "accountTokenExpMs"];
+  void clear_account_token_exp_ms() ;
+  [[nodiscard]] ::uint64_t account_token_exp_ms() const;
+  void set_account_token_exp_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_account_token_exp_ms() const;
+  void _internal_set_account_token_exp_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.LoginResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
-                          1, 108,
+      ::google::protobuf::internal::TcParseTable<5, 18,
+                          2, 129,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4752,11 +5498,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
         const LoginResponse& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::login::v1::AccountRole > roles_;
     ::google::protobuf::internal::ArenaStringPtr session_token_;
     ::google::protobuf::internal::ArenaStringPtr hub_ds_addr_;
     ::google::protobuf::internal::ArenaStringPtr hub_ticket_;
     ::google::protobuf::internal::ArenaStringPtr battle_ds_addr_;
     ::google::protobuf::internal::ArenaStringPtr battle_ticket_;
+    ::google::protobuf::internal::ArenaStringPtr account_token_;
     ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE resume_context_;
     ::uint64_t player_id_;
     int code_;
@@ -4766,6 +5514,232 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     ::uint64_t match_id_;
     ::uint64_t register_no_;
     ::uint64_t player_no_;
+    ::uint64_t account_id_;
+    ::uint64_t account_token_exp_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListAccountRolesResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.ListAccountRolesResponse) */ {
+ public:
+  inline ListAccountRolesResponse() : ListAccountRolesResponse(nullptr) {}
+  ~ListAccountRolesResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListAccountRolesResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListAccountRolesResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListAccountRolesResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListAccountRolesResponse(const ListAccountRolesResponse& from) : ListAccountRolesResponse(nullptr, from) {}
+  inline ListAccountRolesResponse(ListAccountRolesResponse&& from) noexcept : ListAccountRolesResponse(nullptr, ::std::move(from)) {}
+  inline ListAccountRolesResponse& operator=(const ListAccountRolesResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListAccountRolesResponse& operator=(ListAccountRolesResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListAccountRolesResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListAccountRolesResponse>(&ListAccountRolesResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(ListAccountRolesResponse& a, ListAccountRolesResponse& b) { a.Swap(&b); }
+  inline void Swap(ListAccountRolesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListAccountRolesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListAccountRolesResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListAccountRolesResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListAccountRolesResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListAccountRolesResponse& from) { ListAccountRolesResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListAccountRolesResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.ListAccountRolesResponse"; }
+
+  explicit ListAccountRolesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListAccountRolesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListAccountRolesResponse& from);
+  ListAccountRolesResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListAccountRolesResponse&& from) noexcept
+      : ListAccountRolesResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRolesFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // repeated .pandora.login.v1.AccountRole roles = 2 [json_name = "roles"];
+  [[nodiscard]] int roles_size()
+      const;
+  private:
+  int _internal_roles_size() const;
+
+  public:
+  void clear_roles() ;
+  [[nodiscard]] const ::pandora::login::v1::AccountRole& roles(int index) const;
+  [[nodiscard]] ::pandora::login::v1::AccountRole* PROTOBUF_NONNULL mutable_roles(int index);
+  ::pandora::login::v1::AccountRole* PROTOBUF_NONNULL add_roles();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>&
+  roles() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>* PROTOBUF_NONNULL
+  mutable_roles();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>& _internal_roles() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>* PROTOBUF_NONNULL _internal_mutable_roles();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.ListAccountRolesResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListAccountRolesResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::login::v1::AccountRole > roles_;
+    int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4829,7 +5803,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetResumeContextResponse final : pu
   [[nodiscard]] static const GetResumeContextResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetResumeContextResponse>(&GetResumeContextResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(GetResumeContextResponse& a, GetResumeContextResponse& b) { a.Swap(&b); }
   inline void Swap(GetResumeContextResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4985,6 +5959,382 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetResumeContextResponse final : pu
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE context_;
     int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterRoleResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.EnterRoleResponse) */ {
+ public:
+  inline EnterRoleResponse() : EnterRoleResponse(nullptr) {}
+  ~EnterRoleResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EnterRoleResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EnterRoleResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EnterRoleResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EnterRoleResponse(const EnterRoleResponse& from) : EnterRoleResponse(nullptr, from) {}
+  inline EnterRoleResponse(EnterRoleResponse&& from) noexcept : EnterRoleResponse(nullptr, ::std::move(from)) {}
+  inline EnterRoleResponse& operator=(const EnterRoleResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EnterRoleResponse& operator=(EnterRoleResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EnterRoleResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EnterRoleResponse>(&EnterRoleResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 6;
+  friend void swap(EnterRoleResponse& a, EnterRoleResponse& b) { a.Swap(&b); }
+  inline void Swap(EnterRoleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EnterRoleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EnterRoleResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EnterRoleResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EnterRoleResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EnterRoleResponse& from) { EnterRoleResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EnterRoleResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.EnterRoleResponse"; }
+
+  explicit EnterRoleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EnterRoleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EnterRoleResponse& from);
+  EnterRoleResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EnterRoleResponse&& from) noexcept
+      : EnterRoleResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSessionTokenFieldNumber = 3,
+    kHubDsAddrFieldNumber = 4,
+    kHubTicketFieldNumber = 5,
+    kBattleDsAddrFieldNumber = 8,
+    kBattleTicketFieldNumber = 9,
+    kResumeContextFieldNumber = 12,
+    kPlayerIdFieldNumber = 2,
+    kCodeFieldNumber = 1,
+    kRegionIdFieldNumber = 6,
+    kCellIdFieldNumber = 7,
+    kSelectedRoleIdFieldNumber = 11,
+    kMatchIdFieldNumber = 10,
+    kPlayerNoFieldNumber = 13,
+  };
+  // string session_token = 3 [json_name = "sessionToken"];
+  void clear_session_token() ;
+  [[nodiscard]] const ::std::string& session_token() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_session_token(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_session_token();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_session_token();
+  void set_allocated_session_token(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_session_token() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_session_token(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_session_token();
+
+  public:
+  // string hub_ds_addr = 4 [json_name = "hubDsAddr"];
+  void clear_hub_ds_addr() ;
+  [[nodiscard]] const ::std::string& hub_ds_addr() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_ds_addr(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_ds_addr();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_ds_addr();
+  void set_allocated_hub_ds_addr(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_ds_addr() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_ds_addr(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_ds_addr();
+
+  public:
+  // string hub_ticket = 5 [json_name = "hubTicket"];
+  void clear_hub_ticket() ;
+  [[nodiscard]] const ::std::string& hub_ticket() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_ticket(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_ticket();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_ticket();
+  void set_allocated_hub_ticket(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_ticket() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_ticket(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_ticket();
+
+  public:
+  // string battle_ds_addr = 8 [json_name = "battleDsAddr"];
+  void clear_battle_ds_addr() ;
+  [[nodiscard]] const ::std::string& battle_ds_addr() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_battle_ds_addr(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_battle_ds_addr();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_battle_ds_addr();
+  void set_allocated_battle_ds_addr(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_battle_ds_addr() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_battle_ds_addr(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_battle_ds_addr();
+
+  public:
+  // string battle_ticket = 9 [json_name = "battleTicket"];
+  void clear_battle_ticket() ;
+  [[nodiscard]] const ::std::string& battle_ticket() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_battle_ticket(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_battle_ticket();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_battle_ticket();
+  void set_allocated_battle_ticket(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_battle_ticket() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_battle_ticket(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_battle_ticket();
+
+  public:
+  // .pandora.login.v1.ResumeContext resume_context = 12 [json_name = "resumeContext"];
+  [[nodiscard]] bool has_resume_context()
+      const;
+  void clear_resume_context() ;
+  [[nodiscard]] const ::pandora::login::v1::ResumeContext& resume_context() const;
+  [[nodiscard]] ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE release_resume_context();
+  ::pandora::login::v1::ResumeContext* PROTOBUF_NONNULL mutable_resume_context();
+  void set_allocated_resume_context(::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_resume_context(::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE value);
+  ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE unsafe_arena_release_resume_context();
+
+  private:
+  const ::pandora::login::v1::ResumeContext& _internal_resume_context() const;
+  ::pandora::login::v1::ResumeContext* PROTOBUF_NONNULL _internal_mutable_resume_context();
+
+  public:
+  // uint64 player_id = 2 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // uint32 region_id = 6 [json_name = "regionId"];
+  void clear_region_id() ;
+  [[nodiscard]] ::uint32_t region_id() const;
+  void set_region_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_region_id() const;
+  void _internal_set_region_id(::uint32_t value);
+
+  public:
+  // uint32 cell_id = 7 [json_name = "cellId"];
+  void clear_cell_id() ;
+  [[nodiscard]] ::uint32_t cell_id() const;
+  void set_cell_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cell_id() const;
+  void _internal_set_cell_id(::uint32_t value);
+
+  public:
+  // uint32 selected_role_id = 11 [json_name = "selectedRoleId"];
+  void clear_selected_role_id() ;
+  [[nodiscard]] ::uint32_t selected_role_id() const;
+  void set_selected_role_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_selected_role_id() const;
+  void _internal_set_selected_role_id(::uint32_t value);
+
+  public:
+  // uint64 match_id = 10 [json_name = "matchId"];
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // uint64 player_no = 13 [json_name = "playerNo"];
+  void clear_player_no() ;
+  [[nodiscard]] ::uint64_t player_no() const;
+  void set_player_no(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_no() const;
+  void _internal_set_player_no(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.EnterRoleResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 13,
+                          1, 112,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EnterRoleResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr session_token_;
+    ::google::protobuf::internal::ArenaStringPtr hub_ds_addr_;
+    ::google::protobuf::internal::ArenaStringPtr hub_ticket_;
+    ::google::protobuf::internal::ArenaStringPtr battle_ds_addr_;
+    ::google::protobuf::internal::ArenaStringPtr battle_ticket_;
+    ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE resume_context_;
+    ::uint64_t player_id_;
+    int code_;
+    ::uint32_t region_id_;
+    ::uint32_t cell_id_;
+    ::uint32_t selected_role_id_;
+    ::uint64_t match_id_;
+    ::uint64_t player_no_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5391,6 +6741,30 @@ inline void LoginRequest::set_allocated_locale(::std::string* PROTOBUF_NULLABLE 
   // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.LoginRequest.locale)
 }
 
+// bool defer_role_entry = 50 [json_name = "deferRoleEntry"];
+inline void LoginRequest::clear_defer_role_entry() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.defer_role_entry_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool LoginRequest::defer_role_entry() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginRequest.defer_role_entry)
+  return _internal_defer_role_entry();
+}
+inline void LoginRequest::set_defer_role_entry(bool value) {
+  _internal_set_defer_role_entry(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginRequest.defer_role_entry)
+}
+inline bool LoginRequest::_internal_defer_role_entry() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.defer_role_entry_;
+}
+inline void LoginRequest::_internal_set_defer_role_entry(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.defer_role_entry_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // LoginResponse
@@ -5399,7 +6773,7 @@ inline void LoginRequest::set_allocated_locale(::std::string* PROTOBUF_NULLABLE 
 inline void LoginResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::pandora::common::v1::ErrCode LoginResponse::code() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.code)
@@ -5407,7 +6781,7 @@ inline ::pandora::common::v1::ErrCode LoginResponse::code() const {
 }
 inline void LoginResponse::set_code(::pandora::common::v1::ErrCode value) {
   _internal_set_code(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.code)
 }
 inline ::pandora::common::v1::ErrCode LoginResponse::_internal_code() const {
@@ -5423,7 +6797,7 @@ inline void LoginResponse::_internal_set_code(::pandora::common::v1::ErrCode val
 inline void LoginResponse::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t LoginResponse::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.player_id)
@@ -5431,7 +6805,7 @@ inline ::uint64_t LoginResponse::player_id() const {
 }
 inline void LoginResponse::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.player_id)
 }
 inline ::uint64_t LoginResponse::_internal_player_id() const {
@@ -5447,7 +6821,7 @@ inline void LoginResponse::_internal_set_player_id(::uint64_t value) {
 inline void LoginResponse::clear_session_token() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_token_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline const ::std::string& LoginResponse::session_token() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -5457,13 +6831,13 @@ inline const ::std::string& LoginResponse::session_token() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void LoginResponse::set_session_token(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   _impl_.session_token_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.session_token)
 }
 inline ::std::string* PROTOBUF_NONNULL LoginResponse::mutable_session_token()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::std::string* _s = _internal_mutable_session_token();
   // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.session_token)
   return _s;
@@ -5483,10 +6857,10 @@ inline ::std::string* PROTOBUF_NONNULL LoginResponse::_internal_mutable_session_
 inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_session_token() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.login.v1.LoginResponse.session_token)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   auto* released = _impl_.session_token_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.session_token_.Set("", GetArena());
@@ -5496,9 +6870,9 @@ inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_session_token() {
 inline void LoginResponse::set_allocated_session_token(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   _impl_.session_token_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.session_token_.IsDefault()) {
@@ -5511,7 +6885,7 @@ inline void LoginResponse::set_allocated_session_token(::std::string* PROTOBUF_N
 inline void LoginResponse::clear_hub_ds_addr() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hub_ds_addr_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& LoginResponse::hub_ds_addr() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -5521,13 +6895,13 @@ inline const ::std::string& LoginResponse::hub_ds_addr() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void LoginResponse::set_hub_ds_addr(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.hub_ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.hub_ds_addr)
 }
 inline ::std::string* PROTOBUF_NONNULL LoginResponse::mutable_hub_ds_addr()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_hub_ds_addr();
   // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.hub_ds_addr)
   return _s;
@@ -5547,10 +6921,10 @@ inline ::std::string* PROTOBUF_NONNULL LoginResponse::_internal_mutable_hub_ds_a
 inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_hub_ds_addr() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.login.v1.LoginResponse.hub_ds_addr)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.hub_ds_addr_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.hub_ds_addr_.Set("", GetArena());
@@ -5560,9 +6934,9 @@ inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_hub_ds_addr() {
 inline void LoginResponse::set_allocated_hub_ds_addr(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.hub_ds_addr_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_ds_addr_.IsDefault()) {
@@ -5575,7 +6949,7 @@ inline void LoginResponse::set_allocated_hub_ds_addr(::std::string* PROTOBUF_NUL
 inline void LoginResponse::clear_hub_ticket() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hub_ticket_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& LoginResponse::hub_ticket() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -5585,13 +6959,13 @@ inline const ::std::string& LoginResponse::hub_ticket() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void LoginResponse::set_hub_ticket(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.hub_ticket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.hub_ticket)
 }
 inline ::std::string* PROTOBUF_NONNULL LoginResponse::mutable_hub_ticket()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_hub_ticket();
   // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.hub_ticket)
   return _s;
@@ -5611,10 +6985,10 @@ inline ::std::string* PROTOBUF_NONNULL LoginResponse::_internal_mutable_hub_tick
 inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_hub_ticket() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.login.v1.LoginResponse.hub_ticket)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.hub_ticket_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.hub_ticket_.Set("", GetArena());
@@ -5624,9 +6998,9 @@ inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_hub_ticket() {
 inline void LoginResponse::set_allocated_hub_ticket(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.hub_ticket_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_ticket_.IsDefault()) {
@@ -5639,7 +7013,7 @@ inline void LoginResponse::set_allocated_hub_ticket(::std::string* PROTOBUF_NULL
 inline void LoginResponse::clear_region_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.region_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t LoginResponse::region_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.region_id)
@@ -5647,7 +7021,7 @@ inline ::uint32_t LoginResponse::region_id() const {
 }
 inline void LoginResponse::set_region_id(::uint32_t value) {
   _internal_set_region_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.region_id)
 }
 inline ::uint32_t LoginResponse::_internal_region_id() const {
@@ -5663,7 +7037,7 @@ inline void LoginResponse::_internal_set_region_id(::uint32_t value) {
 inline void LoginResponse::clear_cell_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cell_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t LoginResponse::cell_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.cell_id)
@@ -5671,7 +7045,7 @@ inline ::uint32_t LoginResponse::cell_id() const {
 }
 inline void LoginResponse::set_cell_id(::uint32_t value) {
   _internal_set_cell_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.cell_id)
 }
 inline ::uint32_t LoginResponse::_internal_cell_id() const {
@@ -5687,7 +7061,7 @@ inline void LoginResponse::_internal_set_cell_id(::uint32_t value) {
 inline void LoginResponse::clear_battle_ds_addr() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_ds_addr_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline const ::std::string& LoginResponse::battle_ds_addr() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -5697,13 +7071,13 @@ inline const ::std::string& LoginResponse::battle_ds_addr() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void LoginResponse::set_battle_ds_addr(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   _impl_.battle_ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.battle_ds_addr)
 }
 inline ::std::string* PROTOBUF_NONNULL LoginResponse::mutable_battle_ds_addr()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::std::string* _s = _internal_mutable_battle_ds_addr();
   // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.battle_ds_addr)
   return _s;
@@ -5723,10 +7097,10 @@ inline ::std::string* PROTOBUF_NONNULL LoginResponse::_internal_mutable_battle_d
 inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_battle_ds_addr() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.login.v1.LoginResponse.battle_ds_addr)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   auto* released = _impl_.battle_ds_addr_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.battle_ds_addr_.Set("", GetArena());
@@ -5736,9 +7110,9 @@ inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_battle_ds_addr() 
 inline void LoginResponse::set_allocated_battle_ds_addr(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   _impl_.battle_ds_addr_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.battle_ds_addr_.IsDefault()) {
@@ -5751,7 +7125,7 @@ inline void LoginResponse::set_allocated_battle_ds_addr(::std::string* PROTOBUF_
 inline void LoginResponse::clear_battle_ticket() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_ticket_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline const ::std::string& LoginResponse::battle_ticket() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -5761,13 +7135,13 @@ inline const ::std::string& LoginResponse::battle_ticket() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void LoginResponse::set_battle_ticket(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   _impl_.battle_ticket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.battle_ticket)
 }
 inline ::std::string* PROTOBUF_NONNULL LoginResponse::mutable_battle_ticket()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::std::string* _s = _internal_mutable_battle_ticket();
   // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.battle_ticket)
   return _s;
@@ -5787,10 +7161,10 @@ inline ::std::string* PROTOBUF_NONNULL LoginResponse::_internal_mutable_battle_t
 inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_battle_ticket() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.login.v1.LoginResponse.battle_ticket)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   auto* released = _impl_.battle_ticket_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.battle_ticket_.Set("", GetArena());
@@ -5800,9 +7174,9 @@ inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_battle_ticket() {
 inline void LoginResponse::set_allocated_battle_ticket(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   }
   _impl_.battle_ticket_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.battle_ticket_.IsDefault()) {
@@ -5815,7 +7189,7 @@ inline void LoginResponse::set_allocated_battle_ticket(::std::string* PROTOBUF_N
 inline void LoginResponse::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t LoginResponse::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.match_id)
@@ -5823,7 +7197,7 @@ inline ::uint64_t LoginResponse::match_id() const {
 }
 inline void LoginResponse::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.match_id)
 }
 inline ::uint64_t LoginResponse::_internal_match_id() const {
@@ -5839,7 +7213,7 @@ inline void LoginResponse::_internal_set_match_id(::uint64_t value) {
 inline void LoginResponse::clear_selected_role_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.selected_role_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t LoginResponse::selected_role_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.selected_role_id)
@@ -5847,7 +7221,7 @@ inline ::uint32_t LoginResponse::selected_role_id() const {
 }
 inline void LoginResponse::set_selected_role_id(::uint32_t value) {
   _internal_set_selected_role_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.selected_role_id)
 }
 inline ::uint32_t LoginResponse::_internal_selected_role_id() const {
@@ -5861,14 +7235,14 @@ inline void LoginResponse::_internal_set_selected_role_id(::uint32_t value) {
 
 // .pandora.login.v1.ResumeContext resume_context = 12 [json_name = "resumeContext"];
 inline bool LoginResponse::has_resume_context() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
   PROTOBUF_ASSUME(!value || _impl_.resume_context_ != nullptr);
   return value;
 }
 inline void LoginResponse::clear_resume_context() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.resume_context_ != nullptr) _impl_.resume_context_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline const ::pandora::login::v1::ResumeContext& LoginResponse::_internal_resume_context() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -5887,16 +7261,16 @@ inline void LoginResponse::unsafe_arena_set_allocated_resume_context(
   }
   _impl_.resume_context_ = reinterpret_cast<::pandora::login::v1::ResumeContext*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.login.v1.LoginResponse.resume_context)
 }
 inline ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE LoginResponse::release_resume_context() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::pandora::login::v1::ResumeContext* released = _impl_.resume_context_;
   _impl_.resume_context_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5916,7 +7290,7 @@ inline ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE LoginResponse::uns
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.login.v1.LoginResponse.resume_context)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::pandora::login::v1::ResumeContext* temp = _impl_.resume_context_;
   _impl_.resume_context_ = nullptr;
   return temp;
@@ -5931,12 +7305,1184 @@ inline ::pandora::login::v1::ResumeContext* PROTOBUF_NONNULL LoginResponse::_int
 }
 inline ::pandora::login::v1::ResumeContext* PROTOBUF_NONNULL LoginResponse::mutable_resume_context()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::pandora::login::v1::ResumeContext* _msg = _internal_mutable_resume_context();
   // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.resume_context)
   return _msg;
 }
 inline void LoginResponse::set_allocated_resume_context(::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.resume_context_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+
+  _impl_.resume_context_ = reinterpret_cast<::pandora::login::v1::ResumeContext*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.LoginResponse.resume_context)
+}
+
+// uint64 register_no = 13 [json_name = "registerNo", deprecated = true];
+inline void LoginResponse::clear_register_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.register_no_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t LoginResponse::register_no() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.register_no)
+  return _internal_register_no();
+}
+inline void LoginResponse::set_register_no(::uint64_t value) {
+  _internal_set_register_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.register_no)
+}
+inline ::uint64_t LoginResponse::_internal_register_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.register_no_;
+}
+inline void LoginResponse::_internal_set_register_no(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.register_no_ = value;
+}
+
+// uint64 player_no = 14 [json_name = "playerNo"];
+inline void LoginResponse::clear_player_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_no_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t LoginResponse::player_no() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.player_no)
+  return _internal_player_no();
+}
+inline void LoginResponse::set_player_no(::uint64_t value) {
+  _internal_set_player_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.player_no)
+}
+inline ::uint64_t LoginResponse::_internal_player_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_no_;
+}
+inline void LoginResponse::_internal_set_player_no(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_no_ = value;
+}
+
+// string account_token = 15 [json_name = "accountToken"];
+inline void LoginResponse::clear_account_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_token_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& LoginResponse::account_token() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.account_token)
+  return _internal_account_token();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void LoginResponse::set_account_token(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.account_token_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.account_token)
+}
+inline ::std::string* PROTOBUF_NONNULL LoginResponse::mutable_account_token()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_account_token();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.account_token)
+  return _s;
+}
+inline const ::std::string& LoginResponse::_internal_account_token() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_token_.Get();
+}
+inline void LoginResponse::_internal_set_account_token(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_token_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL LoginResponse::_internal_mutable_account_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.account_token_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_account_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.LoginResponse.account_token)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.account_token_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.account_token_.Set("", GetArena());
+  }
+  return released;
+}
+inline void LoginResponse::set_allocated_account_token(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.account_token_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.account_token_.IsDefault()) {
+    _impl_.account_token_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.LoginResponse.account_token)
+}
+
+// uint64 account_id = 16 [json_name = "accountId"];
+inline void LoginResponse::clear_account_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t LoginResponse::account_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.account_id)
+  return _internal_account_id();
+}
+inline void LoginResponse::set_account_id(::uint64_t value) {
+  _internal_set_account_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.account_id)
+}
+inline ::uint64_t LoginResponse::_internal_account_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_id_;
+}
+inline void LoginResponse::_internal_set_account_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_id_ = value;
+}
+
+// repeated .pandora.login.v1.AccountRole roles = 17 [json_name = "roles"];
+inline int LoginResponse::_internal_roles_size() const {
+  return _internal_roles().size();
+}
+inline int LoginResponse::roles_size() const {
+  return _internal_roles_size();
+}
+inline void LoginResponse::clear_roles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roles_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::login::v1::AccountRole& LoginResponse::roles(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.roles)
+  return _internal_roles().Get(index);
+}
+inline ::pandora::login::v1::AccountRole* PROTOBUF_NONNULL LoginResponse::mutable_roles(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.roles)
+  return _internal_mutable_roles()->Mutable(index);
+}
+inline ::pandora::login::v1::AccountRole* PROTOBUF_NONNULL LoginResponse::add_roles()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::login::v1::AccountRole* _add =
+      _internal_mutable_roles()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.login.v1.LoginResponse.roles)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>& LoginResponse::roles() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.login.v1.LoginResponse.roles)
+  return _internal_roles();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>* PROTOBUF_NONNULL
+LoginResponse::mutable_roles() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.login.v1.LoginResponse.roles)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_roles();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>&
+LoginResponse::_internal_roles() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.roles_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>* PROTOBUF_NONNULL
+LoginResponse::_internal_mutable_roles() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.roles_;
+}
+
+// uint64 account_token_exp_ms = 18 [json_name = "accountTokenExpMs"];
+inline void LoginResponse::clear_account_token_exp_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_token_exp_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint64_t LoginResponse::account_token_exp_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.account_token_exp_ms)
+  return _internal_account_token_exp_ms();
+}
+inline void LoginResponse::set_account_token_exp_ms(::uint64_t value) {
+  _internal_set_account_token_exp_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.account_token_exp_ms)
+}
+inline ::uint64_t LoginResponse::_internal_account_token_exp_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_token_exp_ms_;
+}
+inline void LoginResponse::_internal_set_account_token_exp_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_token_exp_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// AccountRole
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void AccountRole::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t AccountRole::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.AccountRole.player_id)
+  return _internal_player_id();
+}
+inline void AccountRole::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.AccountRole.player_id)
+}
+inline ::uint64_t AccountRole::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void AccountRole::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// string role_name = 2 [json_name = "roleName"];
+inline void AccountRole::clear_role_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& AccountRole::role_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.AccountRole.role_name)
+  return _internal_role_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AccountRole::set_role_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.role_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.AccountRole.role_name)
+}
+inline ::std::string* PROTOBUF_NONNULL AccountRole::mutable_role_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_role_name();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.AccountRole.role_name)
+  return _s;
+}
+inline const ::std::string& AccountRole::_internal_role_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.role_name_.Get();
+}
+inline void AccountRole::_internal_set_role_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AccountRole::_internal_mutable_role_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.role_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AccountRole::release_role_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.AccountRole.role_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.role_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.role_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AccountRole::set_allocated_role_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.role_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.role_name_.IsDefault()) {
+    _impl_.role_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.AccountRole.role_name)
+}
+
+// uint32 role_id = 3 [json_name = "roleId"];
+inline void AccountRole::clear_role_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t AccountRole::role_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.AccountRole.role_id)
+  return _internal_role_id();
+}
+inline void AccountRole::set_role_id(::uint32_t value) {
+  _internal_set_role_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.AccountRole.role_id)
+}
+inline ::uint32_t AccountRole::_internal_role_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.role_id_;
+}
+inline void AccountRole::_internal_set_role_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = value;
+}
+
+// uint64 player_no = 4 [json_name = "playerNo"];
+inline void AccountRole::clear_player_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_no_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t AccountRole::player_no() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.AccountRole.player_no)
+  return _internal_player_no();
+}
+inline void AccountRole::set_player_no(::uint64_t value) {
+  _internal_set_player_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.AccountRole.player_no)
+}
+inline ::uint64_t AccountRole::_internal_player_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_no_;
+}
+inline void AccountRole::_internal_set_player_no(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_no_ = value;
+}
+
+// uint32 level = 5 [json_name = "level"];
+inline void AccountRole::clear_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t AccountRole::level() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.AccountRole.level)
+  return _internal_level();
+}
+inline void AccountRole::set_level(::uint32_t value) {
+  _internal_set_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.AccountRole.level)
+}
+inline ::uint32_t AccountRole::_internal_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.level_;
+}
+inline void AccountRole::_internal_set_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_ = value;
+}
+
+// uint64 last_login_at_ms = 6 [json_name = "lastLoginAtMs"];
+inline void AccountRole::clear_last_login_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_login_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t AccountRole::last_login_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.AccountRole.last_login_at_ms)
+  return _internal_last_login_at_ms();
+}
+inline void AccountRole::set_last_login_at_ms(::uint64_t value) {
+  _internal_set_last_login_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.AccountRole.last_login_at_ms)
+}
+inline ::uint64_t AccountRole::_internal_last_login_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_login_at_ms_;
+}
+inline void AccountRole::_internal_set_last_login_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_login_at_ms_ = value;
+}
+
+// uint32 slot = 7 [json_name = "slot"];
+inline void AccountRole::clear_slot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.slot_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t AccountRole::slot() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.AccountRole.slot)
+  return _internal_slot();
+}
+inline void AccountRole::set_slot(::uint32_t value) {
+  _internal_set_slot(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.AccountRole.slot)
+}
+inline ::uint32_t AccountRole::_internal_slot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.slot_;
+}
+inline void AccountRole::_internal_set_slot(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.slot_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListAccountRolesRequest
+
+// -------------------------------------------------------------------
+
+// ListAccountRolesResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ListAccountRolesResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode ListAccountRolesResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.ListAccountRolesResponse.code)
+  return _internal_code();
+}
+inline void ListAccountRolesResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.ListAccountRolesResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ListAccountRolesResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ListAccountRolesResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// repeated .pandora.login.v1.AccountRole roles = 2 [json_name = "roles"];
+inline int ListAccountRolesResponse::_internal_roles_size() const {
+  return _internal_roles().size();
+}
+inline int ListAccountRolesResponse::roles_size() const {
+  return _internal_roles_size();
+}
+inline void ListAccountRolesResponse::clear_roles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roles_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::login::v1::AccountRole& ListAccountRolesResponse::roles(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.ListAccountRolesResponse.roles)
+  return _internal_roles().Get(index);
+}
+inline ::pandora::login::v1::AccountRole* PROTOBUF_NONNULL ListAccountRolesResponse::mutable_roles(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.ListAccountRolesResponse.roles)
+  return _internal_mutable_roles()->Mutable(index);
+}
+inline ::pandora::login::v1::AccountRole* PROTOBUF_NONNULL ListAccountRolesResponse::add_roles()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::login::v1::AccountRole* _add =
+      _internal_mutable_roles()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.login.v1.ListAccountRolesResponse.roles)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>& ListAccountRolesResponse::roles() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.login.v1.ListAccountRolesResponse.roles)
+  return _internal_roles();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>* PROTOBUF_NONNULL
+ListAccountRolesResponse::mutable_roles() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.login.v1.ListAccountRolesResponse.roles)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_roles();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>&
+ListAccountRolesResponse::_internal_roles() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.roles_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::login::v1::AccountRole>* PROTOBUF_NONNULL
+ListAccountRolesResponse::_internal_mutable_roles() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.roles_;
+}
+
+// -------------------------------------------------------------------
+
+// EnterRoleRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void EnterRoleRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t EnterRoleRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleRequest.player_id)
+  return _internal_player_id();
+}
+inline void EnterRoleRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleRequest.player_id)
+}
+inline ::uint64_t EnterRoleRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void EnterRoleRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// string device_id = 2 [json_name = "deviceId"];
+inline void EnterRoleRequest::clear_device_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.device_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& EnterRoleRequest::device_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleRequest.device_id)
+  return _internal_device_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EnterRoleRequest::set_device_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.device_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleRequest.device_id)
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleRequest::mutable_device_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_device_id();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.EnterRoleRequest.device_id)
+  return _s;
+}
+inline const ::std::string& EnterRoleRequest::_internal_device_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.device_id_.Get();
+}
+inline void EnterRoleRequest::_internal_set_device_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.device_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleRequest::_internal_mutable_device_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.device_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EnterRoleRequest::release_device_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.EnterRoleRequest.device_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.device_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.device_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EnterRoleRequest::set_allocated_device_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.device_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.device_id_.IsDefault()) {
+    _impl_.device_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.EnterRoleRequest.device_id)
+}
+
+// -------------------------------------------------------------------
+
+// EnterRoleResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void EnterRoleResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::pandora::common::v1::ErrCode EnterRoleResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.code)
+  return _internal_code();
+}
+inline void EnterRoleResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.code)
+}
+inline ::pandora::common::v1::ErrCode EnterRoleResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void EnterRoleResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// uint64 player_id = 2 [json_name = "playerId"];
+inline void EnterRoleResponse::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t EnterRoleResponse::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.player_id)
+  return _internal_player_id();
+}
+inline void EnterRoleResponse::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.player_id)
+}
+inline ::uint64_t EnterRoleResponse::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void EnterRoleResponse::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// string session_token = 3 [json_name = "sessionToken"];
+inline void EnterRoleResponse::clear_session_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_token_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& EnterRoleResponse::session_token() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.session_token)
+  return _internal_session_token();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EnterRoleResponse::set_session_token(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.session_token_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.session_token)
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::mutable_session_token()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_session_token();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.EnterRoleResponse.session_token)
+  return _s;
+}
+inline const ::std::string& EnterRoleResponse::_internal_session_token() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.session_token_.Get();
+}
+inline void EnterRoleResponse::_internal_set_session_token(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_token_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::_internal_mutable_session_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.session_token_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EnterRoleResponse::release_session_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.EnterRoleResponse.session_token)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.session_token_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.session_token_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EnterRoleResponse::set_allocated_session_token(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.session_token_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.session_token_.IsDefault()) {
+    _impl_.session_token_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.EnterRoleResponse.session_token)
+}
+
+// string hub_ds_addr = 4 [json_name = "hubDsAddr"];
+inline void EnterRoleResponse::clear_hub_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ds_addr_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& EnterRoleResponse::hub_ds_addr() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.hub_ds_addr)
+  return _internal_hub_ds_addr();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EnterRoleResponse::set_hub_ds_addr(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.hub_ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.hub_ds_addr)
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::mutable_hub_ds_addr()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_hub_ds_addr();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.EnterRoleResponse.hub_ds_addr)
+  return _s;
+}
+inline const ::std::string& EnterRoleResponse::_internal_hub_ds_addr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_ds_addr_.Get();
+}
+inline void EnterRoleResponse::_internal_set_hub_ds_addr(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ds_addr_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::_internal_mutable_hub_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_ds_addr_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EnterRoleResponse::release_hub_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.EnterRoleResponse.hub_ds_addr)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.hub_ds_addr_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_ds_addr_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EnterRoleResponse::set_allocated_hub_ds_addr(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.hub_ds_addr_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_ds_addr_.IsDefault()) {
+    _impl_.hub_ds_addr_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.EnterRoleResponse.hub_ds_addr)
+}
+
+// string hub_ticket = 5 [json_name = "hubTicket"];
+inline void EnterRoleResponse::clear_hub_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ticket_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& EnterRoleResponse::hub_ticket() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.hub_ticket)
+  return _internal_hub_ticket();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EnterRoleResponse::set_hub_ticket(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.hub_ticket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.hub_ticket)
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::mutable_hub_ticket()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_hub_ticket();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.EnterRoleResponse.hub_ticket)
+  return _s;
+}
+inline const ::std::string& EnterRoleResponse::_internal_hub_ticket() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_ticket_.Get();
+}
+inline void EnterRoleResponse::_internal_set_hub_ticket(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ticket_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::_internal_mutable_hub_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_ticket_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EnterRoleResponse::release_hub_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.EnterRoleResponse.hub_ticket)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.hub_ticket_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_ticket_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EnterRoleResponse::set_allocated_hub_ticket(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.hub_ticket_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_ticket_.IsDefault()) {
+    _impl_.hub_ticket_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.EnterRoleResponse.hub_ticket)
+}
+
+// uint32 region_id = 6 [json_name = "regionId"];
+inline void EnterRoleResponse::clear_region_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t EnterRoleResponse::region_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.region_id)
+  return _internal_region_id();
+}
+inline void EnterRoleResponse::set_region_id(::uint32_t value) {
+  _internal_set_region_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.region_id)
+}
+inline ::uint32_t EnterRoleResponse::_internal_region_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.region_id_;
+}
+inline void EnterRoleResponse::_internal_set_region_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_id_ = value;
+}
+
+// uint32 cell_id = 7 [json_name = "cellId"];
+inline void EnterRoleResponse::clear_cell_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cell_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t EnterRoleResponse::cell_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.cell_id)
+  return _internal_cell_id();
+}
+inline void EnterRoleResponse::set_cell_id(::uint32_t value) {
+  _internal_set_cell_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.cell_id)
+}
+inline ::uint32_t EnterRoleResponse::_internal_cell_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cell_id_;
+}
+inline void EnterRoleResponse::_internal_set_cell_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cell_id_ = value;
+}
+
+// string battle_ds_addr = 8 [json_name = "battleDsAddr"];
+inline void EnterRoleResponse::clear_battle_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ds_addr_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& EnterRoleResponse::battle_ds_addr() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.battle_ds_addr)
+  return _internal_battle_ds_addr();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EnterRoleResponse::set_battle_ds_addr(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.battle_ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.battle_ds_addr)
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::mutable_battle_ds_addr()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_battle_ds_addr();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.EnterRoleResponse.battle_ds_addr)
+  return _s;
+}
+inline const ::std::string& EnterRoleResponse::_internal_battle_ds_addr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_ds_addr_.Get();
+}
+inline void EnterRoleResponse::_internal_set_battle_ds_addr(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ds_addr_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::_internal_mutable_battle_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.battle_ds_addr_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EnterRoleResponse::release_battle_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.EnterRoleResponse.battle_ds_addr)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.battle_ds_addr_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.battle_ds_addr_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EnterRoleResponse::set_allocated_battle_ds_addr(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.battle_ds_addr_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.battle_ds_addr_.IsDefault()) {
+    _impl_.battle_ds_addr_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.EnterRoleResponse.battle_ds_addr)
+}
+
+// string battle_ticket = 9 [json_name = "battleTicket"];
+inline void EnterRoleResponse::clear_battle_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ticket_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& EnterRoleResponse::battle_ticket() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.battle_ticket)
+  return _internal_battle_ticket();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EnterRoleResponse::set_battle_ticket(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.battle_ticket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.battle_ticket)
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::mutable_battle_ticket()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_battle_ticket();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.EnterRoleResponse.battle_ticket)
+  return _s;
+}
+inline const ::std::string& EnterRoleResponse::_internal_battle_ticket() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_ticket_.Get();
+}
+inline void EnterRoleResponse::_internal_set_battle_ticket(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ticket_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EnterRoleResponse::_internal_mutable_battle_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.battle_ticket_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EnterRoleResponse::release_battle_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.EnterRoleResponse.battle_ticket)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.battle_ticket_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.battle_ticket_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EnterRoleResponse::set_allocated_battle_ticket(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.battle_ticket_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.battle_ticket_.IsDefault()) {
+    _impl_.battle_ticket_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.EnterRoleResponse.battle_ticket)
+}
+
+// uint64 match_id = 10 [json_name = "matchId"];
+inline void EnterRoleResponse::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t EnterRoleResponse::match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.match_id)
+  return _internal_match_id();
+}
+inline void EnterRoleResponse::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.match_id)
+}
+inline ::uint64_t EnterRoleResponse::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void EnterRoleResponse::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// uint32 selected_role_id = 11 [json_name = "selectedRoleId"];
+inline void EnterRoleResponse::clear_selected_role_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_role_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t EnterRoleResponse::selected_role_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.selected_role_id)
+  return _internal_selected_role_id();
+}
+inline void EnterRoleResponse::set_selected_role_id(::uint32_t value) {
+  _internal_set_selected_role_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.selected_role_id)
+}
+inline ::uint32_t EnterRoleResponse::_internal_selected_role_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.selected_role_id_;
+}
+inline void EnterRoleResponse::_internal_set_selected_role_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_role_id_ = value;
+}
+
+// .pandora.login.v1.ResumeContext resume_context = 12 [json_name = "resumeContext"];
+inline bool EnterRoleResponse::has_resume_context() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.resume_context_ != nullptr);
+  return value;
+}
+inline void EnterRoleResponse::clear_resume_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.resume_context_ != nullptr) _impl_.resume_context_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::pandora::login::v1::ResumeContext& EnterRoleResponse::_internal_resume_context() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::login::v1::ResumeContext* p = _impl_.resume_context_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::login::v1::ResumeContext>(&::pandora::login::v1::ResumeContext_globals_);
+}
+inline const ::pandora::login::v1::ResumeContext& EnterRoleResponse::resume_context() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.resume_context)
+  return _internal_resume_context();
+}
+inline void EnterRoleResponse::unsafe_arena_set_allocated_resume_context(
+    ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.resume_context_);
+  }
+  _impl_.resume_context_ = reinterpret_cast<::pandora::login::v1::ResumeContext*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.login.v1.EnterRoleResponse.resume_context)
+}
+inline ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE EnterRoleResponse::release_resume_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::pandora::login::v1::ResumeContext* released = _impl_.resume_context_;
+  _impl_.resume_context_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE EnterRoleResponse::unsafe_arena_release_resume_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.EnterRoleResponse.resume_context)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::pandora::login::v1::ResumeContext* temp = _impl_.resume_context_;
+  _impl_.resume_context_ = nullptr;
+  return temp;
+}
+inline ::pandora::login::v1::ResumeContext* PROTOBUF_NONNULL EnterRoleResponse::_internal_mutable_resume_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.resume_context_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::login::v1::ResumeContext>(GetArena());
+    _impl_.resume_context_ = reinterpret_cast<::pandora::login::v1::ResumeContext*>(p);
+  }
+  return _impl_.resume_context_;
+}
+inline ::pandora::login::v1::ResumeContext* PROTOBUF_NONNULL EnterRoleResponse::mutable_resume_context()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::pandora::login::v1::ResumeContext* _msg = _internal_mutable_resume_context();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.EnterRoleResponse.resume_context)
+  return _msg;
+}
+inline void EnterRoleResponse::set_allocated_resume_context(::pandora::login::v1::ResumeContext* PROTOBUF_NULLABLE value) {
   ::google::protobuf::Arena* message_arena = GetArena();
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (message_arena == nullptr) {
@@ -5954,53 +8500,29 @@ inline void LoginResponse::set_allocated_resume_context(::pandora::login::v1::Re
   }
 
   _impl_.resume_context_ = reinterpret_cast<::pandora::login::v1::ResumeContext*>(value);
-  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.LoginResponse.resume_context)
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.EnterRoleResponse.resume_context)
 }
 
-// uint64 register_no = 13 [json_name = "registerNo", deprecated = true];
-inline void LoginResponse::clear_register_no() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.register_no_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
-}
-inline ::uint64_t LoginResponse::register_no() const {
-  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.register_no)
-  return _internal_register_no();
-}
-inline void LoginResponse::set_register_no(::uint64_t value) {
-  _internal_set_register_no(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
-  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.register_no)
-}
-inline ::uint64_t LoginResponse::_internal_register_no() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.register_no_;
-}
-inline void LoginResponse::_internal_set_register_no(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.register_no_ = value;
-}
-
-// uint64 player_no = 14 [json_name = "playerNo"];
-inline void LoginResponse::clear_player_no() {
+// uint64 player_no = 13 [json_name = "playerNo"];
+inline void EnterRoleResponse::clear_player_no() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_no_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
-inline ::uint64_t LoginResponse::player_no() const {
-  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.player_no)
+inline ::uint64_t EnterRoleResponse::player_no() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.EnterRoleResponse.player_no)
   return _internal_player_no();
 }
-inline void LoginResponse::set_player_no(::uint64_t value) {
+inline void EnterRoleResponse::set_player_no(::uint64_t value) {
   _internal_set_player_no(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
-  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.player_no)
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.EnterRoleResponse.player_no)
 }
-inline ::uint64_t LoginResponse::_internal_player_no() const {
+inline ::uint64_t EnterRoleResponse::_internal_player_no() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.player_no_;
 }
-inline void LoginResponse::_internal_set_player_no(::uint64_t value) {
+inline void EnterRoleResponse::_internal_set_player_no(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_no_ = value;
 }

@@ -28,6 +28,8 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	PlayerService_GetProfile_FullMethodName              = "/pandora.player.v1.PlayerService/GetProfile"
 	PlayerService_UpdateNickname_FullMethodName          = "/pandora.player.v1.PlayerService/UpdateNickname"
+	PlayerService_EnsureProfile_FullMethodName           = "/pandora.player.v1.PlayerService/EnsureProfile"
+	PlayerService_GetPlayerNames_FullMethodName          = "/pandora.player.v1.PlayerService/GetPlayerNames"
 	PlayerService_ListHeroes_FullMethodName              = "/pandora.player.v1.PlayerService/ListHeroes"
 	PlayerService_UnlockHero_FullMethodName              = "/pandora.player.v1.PlayerService/UnlockHero"
 	PlayerService_GetMMR_FullMethodName                  = "/pandora.player.v1.PlayerService/GetMMR"
@@ -60,6 +62,35 @@ const (
 type PlayerServiceClient interface {
 	GetProfile(ctx context.Context, in *GetProfileRequest, opts ...grpc.CallOption) (*GetProfileResponse, error)
 	UpdateNickname(ctx context.Context, in *UpdateNicknameRequest, opts ...grpc.CallOption) (*UpdateNicknameResponse, error)
+	// EnsureProfile 建档并**播种角色名**(账号 / 角色分离,2026-08-18)。
+	//
+	// 系统 RPC:只允许后端内部直连(当前唯一调用方是 login),带玩家 JWT 的客户端调用一律拒,
+	// 且在 Envoy 路由层精确 403 —— 否则玩家可以拿它给自己起任意昵称,绕过改名的所有限制。
+	//
+	// 语义是 **INSERT IGNORE(建档即定名),不是 UPSERT**:
+	//   - 档案不存在 → 建档,nickname = 请求里的 nickname;
+	//   - 档案已存在 → **完全不动**,原样返回既有昵称(created=false)。
+	//
+	// 这条纪律是"角色名 = 账号名"能安全落地的前提:login 每次登录都会尽力播种(补上
+	// 之前因 player 不可达而漏掉的),若语义是覆盖式,玩家将来自己改的名字会在下次登录
+	// 被账号名冲掉。
+	//
+	// 昵称冲突(uk_nickname 已被别人占用)返回 ErrPlayerNicknameTaken,由调用方决定
+	// 降级策略(login 的做法:记日志放弃播种,让 player 自己的默认前缀名生效,不阻断登录)。
+	EnsureProfile(ctx context.Context, in *EnsureProfileRequest, opts ...grpc.CallOption) (*EnsureProfileResponse, error)
+	// GetPlayerNames 批量反查**角色显示名**(Hub DS 头顶铭牌用,2026-08-18)。
+	//
+	// 系统 RPC:只允许后端内部直连(当前调用方是 Hub DS),带玩家 JWT 的调用一律拒,
+	// 且在 Envoy 客户端面精确 403、只在 DS 面(:8444)放行。玩家想看别人的名字走
+	// team / friend / guild 各自的成员列表,不该有一个「按任意 player_id 查名字」的公开入口。
+	//
+	// 为什么单开一个而不复用 GetProfile:GetProfile 返回等级 / 段位 / 战绩 / 经验一整份档案,
+	// 而 DS 只需要一个名字。把整份档案开到 DS 面等于无谓放大爆炸半径(§9.6「爆炸半径」内核),
+	// 且 500 人大厅逐个 GetProfile 是 500 次往返 —— 本 RPC 是批量的。
+	//
+	// 只读幂等。查不到的 player_id **不出现在响应里**(不返回空名字占位):
+	// 「查不到」与「名字是空串」必须可区分,前者调用方应保留旧值 / 走兜底,后者是真数据。
+	GetPlayerNames(ctx context.Context, in *GetPlayerNamesRequest, opts ...grpc.CallOption) (*GetPlayerNamesResponse, error)
 	ListHeroes(ctx context.Context, in *ListHeroesRequest, opts ...grpc.CallOption) (*ListHeroesResponse, error)
 	UnlockHero(ctx context.Context, in *UnlockHeroRequest, opts ...grpc.CallOption) (*UnlockHeroResponse, error)
 	GetMMR(ctx context.Context, in *GetMMRRequest, opts ...grpc.CallOption) (*GetMMRResponse, error)
@@ -127,6 +158,26 @@ func (c *playerServiceClient) UpdateNickname(ctx context.Context, in *UpdateNick
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateNicknameResponse)
 	err := c.cc.Invoke(ctx, PlayerService_UpdateNickname_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) EnsureProfile(ctx context.Context, in *EnsureProfileRequest, opts ...grpc.CallOption) (*EnsureProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnsureProfileResponse)
+	err := c.cc.Invoke(ctx, PlayerService_EnsureProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GetPlayerNames(ctx context.Context, in *GetPlayerNamesRequest, opts ...grpc.CallOption) (*GetPlayerNamesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlayerNamesResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GetPlayerNames_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -379,6 +430,35 @@ func (c *playerServiceClient) AddExperience(ctx context.Context, in *AddExperien
 type PlayerServiceServer interface {
 	GetProfile(context.Context, *GetProfileRequest) (*GetProfileResponse, error)
 	UpdateNickname(context.Context, *UpdateNicknameRequest) (*UpdateNicknameResponse, error)
+	// EnsureProfile 建档并**播种角色名**(账号 / 角色分离,2026-08-18)。
+	//
+	// 系统 RPC:只允许后端内部直连(当前唯一调用方是 login),带玩家 JWT 的客户端调用一律拒,
+	// 且在 Envoy 路由层精确 403 —— 否则玩家可以拿它给自己起任意昵称,绕过改名的所有限制。
+	//
+	// 语义是 **INSERT IGNORE(建档即定名),不是 UPSERT**:
+	//   - 档案不存在 → 建档,nickname = 请求里的 nickname;
+	//   - 档案已存在 → **完全不动**,原样返回既有昵称(created=false)。
+	//
+	// 这条纪律是"角色名 = 账号名"能安全落地的前提:login 每次登录都会尽力播种(补上
+	// 之前因 player 不可达而漏掉的),若语义是覆盖式,玩家将来自己改的名字会在下次登录
+	// 被账号名冲掉。
+	//
+	// 昵称冲突(uk_nickname 已被别人占用)返回 ErrPlayerNicknameTaken,由调用方决定
+	// 降级策略(login 的做法:记日志放弃播种,让 player 自己的默认前缀名生效,不阻断登录)。
+	EnsureProfile(context.Context, *EnsureProfileRequest) (*EnsureProfileResponse, error)
+	// GetPlayerNames 批量反查**角色显示名**(Hub DS 头顶铭牌用,2026-08-18)。
+	//
+	// 系统 RPC:只允许后端内部直连(当前调用方是 Hub DS),带玩家 JWT 的调用一律拒,
+	// 且在 Envoy 客户端面精确 403、只在 DS 面(:8444)放行。玩家想看别人的名字走
+	// team / friend / guild 各自的成员列表,不该有一个「按任意 player_id 查名字」的公开入口。
+	//
+	// 为什么单开一个而不复用 GetProfile:GetProfile 返回等级 / 段位 / 战绩 / 经验一整份档案,
+	// 而 DS 只需要一个名字。把整份档案开到 DS 面等于无谓放大爆炸半径(§9.6「爆炸半径」内核),
+	// 且 500 人大厅逐个 GetProfile 是 500 次往返 —— 本 RPC 是批量的。
+	//
+	// 只读幂等。查不到的 player_id **不出现在响应里**(不返回空名字占位):
+	// 「查不到」与「名字是空串」必须可区分,前者调用方应保留旧值 / 走兜底,后者是真数据。
+	GetPlayerNames(context.Context, *GetPlayerNamesRequest) (*GetPlayerNamesResponse, error)
 	ListHeroes(context.Context, *ListHeroesRequest) (*ListHeroesResponse, error)
 	UnlockHero(context.Context, *UnlockHeroRequest) (*UnlockHeroResponse, error)
 	GetMMR(context.Context, *GetMMRRequest) (*GetMMRResponse, error)
@@ -436,6 +516,12 @@ func (UnimplementedPlayerServiceServer) GetProfile(context.Context, *GetProfileR
 }
 func (UnimplementedPlayerServiceServer) UpdateNickname(context.Context, *UpdateNicknameRequest) (*UpdateNicknameResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateNickname not implemented")
+}
+func (UnimplementedPlayerServiceServer) EnsureProfile(context.Context, *EnsureProfileRequest) (*EnsureProfileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnsureProfile not implemented")
+}
+func (UnimplementedPlayerServiceServer) GetPlayerNames(context.Context, *GetPlayerNamesRequest) (*GetPlayerNamesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPlayerNames not implemented")
 }
 func (UnimplementedPlayerServiceServer) ListHeroes(context.Context, *ListHeroesRequest) (*ListHeroesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListHeroes not implemented")
@@ -561,6 +647,42 @@ func _PlayerService_UpdateNickname_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlayerServiceServer).UpdateNickname(ctx, req.(*UpdateNicknameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_EnsureProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnsureProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).EnsureProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_EnsureProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).EnsureProfile(ctx, req.(*EnsureProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GetPlayerNames_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayerNamesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GetPlayerNames(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GetPlayerNames_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GetPlayerNames(ctx, req.(*GetPlayerNamesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1011,6 +1133,14 @@ var PlayerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateNickname",
 			Handler:    _PlayerService_UpdateNickname_Handler,
+		},
+		{
+			MethodName: "EnsureProfile",
+			Handler:    _PlayerService_EnsureProfile_Handler,
+		},
+		{
+			MethodName: "GetPlayerNames",
+			Handler:    _PlayerService_GetPlayerNames_Handler,
 		},
 		{
 			MethodName: "ListHeroes",

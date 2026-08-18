@@ -37,6 +37,8 @@ const (
 	LoginService_IssueDSTicket_FullMethodName    = "/pandora.login.v1.LoginService/IssueDSTicket"
 	LoginService_GetPlayerNo_FullMethodName      = "/pandora.login.v1.LoginService/GetPlayerNo"
 	LoginService_GetRegisterNo_FullMethodName    = "/pandora.login.v1.LoginService/GetRegisterNo"
+	LoginService_ListAccountRoles_FullMethodName = "/pandora.login.v1.LoginService/ListAccountRoles"
+	LoginService_EnterRole_FullMethodName        = "/pandora.login.v1.LoginService/EnterRole"
 	LoginService_SelectRole_FullMethodName       = "/pandora.login.v1.LoginService/SelectRole"
 	LoginService_VerifyDSTicket_FullMethodName   = "/pandora.login.v1.LoginService/VerifyDSTicket"
 	LoginService_GetResumeContext_FullMethodName = "/pandora.login.v1.LoginService/GetResumeContext"
@@ -71,7 +73,36 @@ type LoginServiceClient interface {
 	// 等最后一个旧客户端版本排空后，才可按 expand -> migrate -> contract 收缩本入口。
 	// 新代码一律调用 GetPlayerNo，不得新增对本入口的依赖。
 	GetRegisterNo(ctx context.Context, in *GetRegisterNoRequest, opts ...grpc.CallOption) (*GetRegisterNoResponse, error)
-	// SelectRole 立即完成型,选角(2026-07-08)。
+	// ListAccountRoles 立即完成型,列出**本账号名下的角色**(两步登录,2026-08-18)。
+	//
+	// 鉴权走**账号态 token**(aud=pandora-account),不是玩家 SessionToken:选角发生在
+	// 「已认证账号、尚未绑定角色」这段中间态,此时服务端还没有 player_id 可以签 session。
+	// account_id 取自账号态 JWT 的 sub(Envoy 注入 x-pandora-account-id),请求体不含
+	// account_id ——只能列自己的角色(§9.6 不信客户端自报身份)。
+	//
+	// 幂等只读。Login 的响应里已经带了同一份列表,本 RPC 用于选角界面停留期间的刷新
+	// (比如创建角色功能上线后新建完角色回到列表)。
+	ListAccountRoles(ctx context.Context, in *ListAccountRolesRequest, opts ...grpc.CallOption) (*ListAccountRolesResponse, error)
+	// EnterRole 立即完成型,**选定角色进入游戏**(两步登录第二步,2026-08-18)。
+	//
+	// 这是 player_id 从「账号身份」下沉为「角色实体身份」之后的进场入口:
+	//
+	//	Login(账号密码) → 账号态 token + 角色列表 → EnterRole(选中的 player_id)
+	//	  → 绑定该角色的 SessionToken + hub 地址 + hub 票据。
+	//
+	// 鉴权走账号态 token。服务端**必须**核对 player_id 确实挂在该 account_id 名下
+	// (account_roles 台账),不属于则 ErrLoginRoleNotOwned —— 这是越权尝试,要留审计。
+	// 请求体里的 player_id 是「选哪个」而不是「我是谁」:它是从服务端刚下发的列表里选的,
+	// 且服务端会回查归属,不构成自报身份。
+	//
+	// 幂等:重复 EnterRole 同一角色 = 重新登录一次该角色(轮换会话代际,顶掉旧会话)。
+	EnterRole(ctx context.Context, in *EnterRoleRequest, opts ...grpc.CallOption) (*EnterRoleResponse, error)
+	// SelectRole 立即完成型,选**职业外观**(2026-07-08)。
+	//
+	// ⚠️ 名字容易与 EnterRole 混:本 RPC 的 role_id 是 **CfgRole 配置表 ID(职业 / 外观)**,
+	// 不是角色实体。选哪个**角色实体**进游戏走 EnterRole(参数是 player_id)。
+	// 两者正交:一个角色实体有它自己的职业。
+	//
 	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
 	//
 	//	→ 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
@@ -148,6 +179,26 @@ func (c *loginServiceClient) GetRegisterNo(ctx context.Context, in *GetRegisterN
 	return out, nil
 }
 
+func (c *loginServiceClient) ListAccountRoles(ctx context.Context, in *ListAccountRolesRequest, opts ...grpc.CallOption) (*ListAccountRolesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAccountRolesResponse)
+	err := c.cc.Invoke(ctx, LoginService_ListAccountRoles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *loginServiceClient) EnterRole(ctx context.Context, in *EnterRoleRequest, opts ...grpc.CallOption) (*EnterRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnterRoleResponse)
+	err := c.cc.Invoke(ctx, LoginService_EnterRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *loginServiceClient) SelectRole(ctx context.Context, in *SelectRoleRequest, opts ...grpc.CallOption) (*SelectRoleResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SelectRoleResponse)
@@ -207,7 +258,36 @@ type LoginServiceServer interface {
 	// 等最后一个旧客户端版本排空后，才可按 expand -> migrate -> contract 收缩本入口。
 	// 新代码一律调用 GetPlayerNo，不得新增对本入口的依赖。
 	GetRegisterNo(context.Context, *GetRegisterNoRequest) (*GetRegisterNoResponse, error)
-	// SelectRole 立即完成型,选角(2026-07-08)。
+	// ListAccountRoles 立即完成型,列出**本账号名下的角色**(两步登录,2026-08-18)。
+	//
+	// 鉴权走**账号态 token**(aud=pandora-account),不是玩家 SessionToken:选角发生在
+	// 「已认证账号、尚未绑定角色」这段中间态,此时服务端还没有 player_id 可以签 session。
+	// account_id 取自账号态 JWT 的 sub(Envoy 注入 x-pandora-account-id),请求体不含
+	// account_id ——只能列自己的角色(§9.6 不信客户端自报身份)。
+	//
+	// 幂等只读。Login 的响应里已经带了同一份列表,本 RPC 用于选角界面停留期间的刷新
+	// (比如创建角色功能上线后新建完角色回到列表)。
+	ListAccountRoles(context.Context, *ListAccountRolesRequest) (*ListAccountRolesResponse, error)
+	// EnterRole 立即完成型,**选定角色进入游戏**(两步登录第二步,2026-08-18)。
+	//
+	// 这是 player_id 从「账号身份」下沉为「角色实体身份」之后的进场入口:
+	//
+	//	Login(账号密码) → 账号态 token + 角色列表 → EnterRole(选中的 player_id)
+	//	  → 绑定该角色的 SessionToken + hub 地址 + hub 票据。
+	//
+	// 鉴权走账号态 token。服务端**必须**核对 player_id 确实挂在该 account_id 名下
+	// (account_roles 台账),不属于则 ErrLoginRoleNotOwned —— 这是越权尝试,要留审计。
+	// 请求体里的 player_id 是「选哪个」而不是「我是谁」:它是从服务端刚下发的列表里选的,
+	// 且服务端会回查归属,不构成自报身份。
+	//
+	// 幂等:重复 EnterRole 同一角色 = 重新登录一次该角色(轮换会话代际,顶掉旧会话)。
+	EnterRole(context.Context, *EnterRoleRequest) (*EnterRoleResponse, error)
+	// SelectRole 立即完成型,选**职业外观**(2026-07-08)。
+	//
+	// ⚠️ 名字容易与 EnterRole 混:本 RPC 的 role_id 是 **CfgRole 配置表 ID(职业 / 外观)**,
+	// 不是角色实体。选哪个**角色实体**进游戏走 EnterRole(参数是 player_id)。
+	// 两者正交:一个角色实体有它自己的职业。
+	//
 	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
 	//
 	//	→ 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
@@ -246,6 +326,12 @@ func (UnimplementedLoginServiceServer) GetPlayerNo(context.Context, *GetPlayerNo
 }
 func (UnimplementedLoginServiceServer) GetRegisterNo(context.Context, *GetRegisterNoRequest) (*GetRegisterNoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRegisterNo not implemented")
+}
+func (UnimplementedLoginServiceServer) ListAccountRoles(context.Context, *ListAccountRolesRequest) (*ListAccountRolesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAccountRoles not implemented")
+}
+func (UnimplementedLoginServiceServer) EnterRole(context.Context, *EnterRoleRequest) (*EnterRoleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnterRole not implemented")
 }
 func (UnimplementedLoginServiceServer) SelectRole(context.Context, *SelectRoleRequest) (*SelectRoleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SelectRole not implemented")
@@ -366,6 +452,42 @@ func _LoginService_GetRegisterNo_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LoginService_ListAccountRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAccountRolesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LoginServiceServer).ListAccountRoles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LoginService_ListAccountRoles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LoginServiceServer).ListAccountRoles(ctx, req.(*ListAccountRolesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LoginService_EnterRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnterRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LoginServiceServer).EnterRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LoginService_EnterRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LoginServiceServer).EnterRole(ctx, req.(*EnterRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LoginService_SelectRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SelectRoleRequest)
 	if err := dec(in); err != nil {
@@ -446,6 +568,14 @@ var LoginService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRegisterNo",
 			Handler:    _LoginService_GetRegisterNo_Handler,
+		},
+		{
+			MethodName: "ListAccountRoles",
+			Handler:    _LoginService_ListAccountRoles_Handler,
+		},
+		{
+			MethodName: "EnterRole",
+			Handler:    _LoginService_EnterRole_Handler,
 		},
 		{
 			MethodName: "SelectRole",

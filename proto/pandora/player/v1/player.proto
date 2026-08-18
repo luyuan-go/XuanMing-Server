@@ -15,6 +15,36 @@ import "pandora/inventory/v1/inventory.proto";
 service PlayerService {
   rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
   rpc UpdateNickname(UpdateNicknameRequest) returns (UpdateNicknameResponse);
+
+  // EnsureProfile 建档并**播种角色名**(账号 / 角色分离,2026-08-18)。
+  //
+  // 系统 RPC:只允许后端内部直连(当前唯一调用方是 login),带玩家 JWT 的客户端调用一律拒,
+  // 且在 Envoy 路由层精确 403 —— 否则玩家可以拿它给自己起任意昵称,绕过改名的所有限制。
+  //
+  // 语义是 **INSERT IGNORE(建档即定名),不是 UPSERT**:
+  //   - 档案不存在 → 建档,nickname = 请求里的 nickname;
+  //   - 档案已存在 → **完全不动**,原样返回既有昵称(created=false)。
+  // 这条纪律是"角色名 = 账号名"能安全落地的前提:login 每次登录都会尽力播种(补上
+  // 之前因 player 不可达而漏掉的),若语义是覆盖式,玩家将来自己改的名字会在下次登录
+  // 被账号名冲掉。
+  //
+  // 昵称冲突(uk_nickname 已被别人占用)返回 ErrPlayerNicknameTaken,由调用方决定
+  // 降级策略(login 的做法:记日志放弃播种,让 player 自己的默认前缀名生效,不阻断登录)。
+  rpc EnsureProfile(EnsureProfileRequest) returns (EnsureProfileResponse);
+
+  // GetPlayerNames 批量反查**角色显示名**(Hub DS 头顶铭牌用,2026-08-18)。
+  //
+  // 系统 RPC:只允许后端内部直连(当前调用方是 Hub DS),带玩家 JWT 的调用一律拒,
+  // 且在 Envoy 客户端面精确 403、只在 DS 面(:8444)放行。玩家想看别人的名字走
+  // team / friend / guild 各自的成员列表,不该有一个「按任意 player_id 查名字」的公开入口。
+  //
+  // 为什么单开一个而不复用 GetProfile:GetProfile 返回等级 / 段位 / 战绩 / 经验一整份档案,
+  // 而 DS 只需要一个名字。把整份档案开到 DS 面等于无谓放大爆炸半径(§9.6「爆炸半径」内核),
+  // 且 500 人大厅逐个 GetProfile 是 500 次往返 —— 本 RPC 是批量的。
+  //
+  // 只读幂等。查不到的 player_id **不出现在响应里**(不返回空名字占位):
+  // 「查不到」与「名字是空串」必须可区分,前者调用方应保留旧值 / 走兜底,后者是真数据。
+  rpc GetPlayerNames(GetPlayerNamesRequest) returns (GetPlayerNamesResponse);
   rpc ListHeroes(ListHeroesRequest) returns (ListHeroesResponse);
   rpc UnlockHero(UnlockHeroRequest) returns (UnlockHeroResponse);
   rpc GetMMR(GetMMRRequest) returns (GetMMRResponse);
@@ -131,6 +161,52 @@ message UpdateNicknameRequest {
 
 message UpdateNicknameResponse {
   pandora.common.v1.ErrCode code = 1;
+}
+
+message EnsureProfileRequest {
+  uint64 player_id = 1;
+  // nickname:建档时要用的角色名。空 = 用 player 服务自己的默认前缀名(Player_<player_id>),
+  // 与本 RPC 出现之前的行为一致。
+  //
+  // 仅在**首次建档**时生效(见 RPC 注释:INSERT IGNORE 语义)。档案已存在时本字段被忽略,
+  // 绝不覆盖玩家现有昵称。
+  string nickname  = 2;
+}
+
+// PlayerName 是「角色实体 → 显示名」的最小映射(客户端可见结构,§5 第 8 条)。
+message PlayerName {
+  uint64 player_id = 1;
+  string nickname  = 2;
+}
+
+message GetPlayerNamesRequest {
+  // player_ids:要反查的角色实体 ID。
+  //
+  // 服务端按 max_player_names_per_query(默认 200)截断:§9.18 要求读取侧有单次返回上限。
+  // 500 人大厅由调用方自己分批 —— 不在服务端做隐式分页,否则调用方会以为拿全了。
+  repeated uint64 player_ids = 1;
+}
+
+message GetPlayerNamesResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // names:只含**查到的**角色。请求里有、响应里没有 = 该角色无档案,
+  // 调用方应保留旧值或走自己的兜底,不要当成"名字是空串"。
+  repeated PlayerName names = 2;
+}
+
+message EnsureProfileResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // created:true = 本次调用真的建了档(nickname 生效);false = 档案早就存在,什么都没改。
+  // 调用方据此判断"播种成功了没有",不要靠 code==OK 推断 —— 两种情况都是 OK。
+  bool created = 2;
+  // effective_nickname:调用结束后该角色**实际**的昵称。
+  // created=false 时即既有昵称(可能与请求的 nickname 不同),供调用方对账 / 打日志。
+  string effective_nickname = 3;
+  // level:调用结束后该角色的等级(刚建档为 1)。
+  //
+  // 顺带返回是因为调用方(login 的选角列表)本来就要展示它,而档案行此刻就在手边;
+  // 单独再发一次 GetProfile 等于在登录热路径上多一次跨服务往返。
+  uint32 level = 4;
 }
 
 // ===== 英雄 =====

@@ -41,6 +41,16 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
         // ::pandora::player::v1::UpdateNicknameResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::EnsureProfileRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::PlayerName
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::GetPlayerNamesRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::GetPlayerNamesResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::EnsureProfileResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
         // ::pandora::player::v1::ListHeroesRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
         // ::pandora::player::v1::ListHeroesResponse
@@ -266,7 +276,7 @@ constexpr auto UpgradeSkillCardRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[48],
+      &file_reflection_data[53],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -708,7 +718,7 @@ constexpr auto UpdateMMRResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -891,7 +901,7 @@ constexpr auto UpdateMMRRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -1032,7 +1042,7 @@ constexpr auto UnlockHeroResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -1193,7 +1203,7 @@ constexpr auto UnlockHeroRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -1341,7 +1351,7 @@ constexpr auto TalentNode::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[30],
+      &file_reflection_data[35],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -1489,7 +1499,7 @@ constexpr auto SkillSlot::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[44],
+      &file_reflection_data[49],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -1637,7 +1647,7 @@ constexpr auto SkillCardGrant::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[46],
+      &file_reflection_data[51],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -1793,7 +1803,7 @@ constexpr auto SkillCard::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[43],
+      &file_reflection_data[48],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -1941,7 +1951,7 @@ constexpr auto SetTalentsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[38],
+      &file_reflection_data[43],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -2082,7 +2092,7 @@ constexpr auto SetEquipmentResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[32],
+      &file_reflection_data[37],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -2223,7 +2233,7 @@ constexpr auto SelectHeroResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -2371,7 +2381,7 @@ constexpr auto SelectHeroRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[22],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -2507,7 +2517,7 @@ constexpr auto RewardClaimStorageRecord_PermanentEntry_DoNotUse::InternalGenerat
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[58],
+      &file_reflection_data[63],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -2640,7 +2650,7 @@ constexpr auto RewardClaimStorageRecord_ActivityEntry_DoNotUse::InternalGenerate
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[59],
+      &file_reflection_data[64],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -2788,7 +2798,7 @@ constexpr auto ResetTalentsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[40],
+      &file_reflection_data[45],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -2929,7 +2939,7 @@ constexpr auto ResetTalentsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[39],
+      &file_reflection_data[44],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -3077,7 +3087,7 @@ constexpr auto ResetAttributesResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[26],
+      &file_reflection_data[31],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -3218,7 +3228,7 @@ constexpr auto ResetAttributesRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[25],
+      &file_reflection_data[30],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -3404,7 +3414,7 @@ constexpr auto PlayerUpdateEvent::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -3608,6 +3618,159 @@ const ::_pbi::ClassData* PlayerRating_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class PlayerName::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PlayerName>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PlayerName, _impl_._has_bits_);
+};
+
+constexpr PlayerName::ParseTableT_ PlayerName::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PlayerName, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::PlayerName>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string nickname = 2 [json_name = "nickname"];
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerName, _impl_.nickname_)}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerName, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerName, _impl_.player_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(PlayerName, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string nickname = 2 [json_name = "nickname"];
+      {PROTOBUF_FIELD_OFFSET(PlayerName, _impl_.nickname_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\34\0\10\0\0\0\0\0"
+      "pandora.player.v1.PlayerName"
+      "nickname"
+    }},
+  };
+}
+
+
+inline constexpr PlayerName::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        nickname_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr PlayerName::PlayerName(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PlayerName::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PlayerName(arena);
+}
+constexpr auto PlayerName::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PlayerName), alignof(PlayerName));
+}
+constexpr auto PlayerName::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PlayerName::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PlayerName>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PlayerName::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PlayerName>(), &PlayerName::ByteSizeLong,
+              &PlayerName::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PlayerName, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PlayerNameGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PlayerNameGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PlayerName_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PlayerName::InternalGenerateClassData_(
+            _default, &PlayerName_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PlayerName>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PlayerNameGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PlayerName _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PlayerName>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PlayerNameGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PlayerNameGlobalsTypeInternal PlayerName_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PlayerName_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PlayerName_globals_.GetClassData();
+#else
+  return PlayerName_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class PlayerExperienceEvent::_Internal {
  public:
   using HasBits = decltype(::std::declval<PlayerExperienceEvent>()._impl_._has_bits_);
@@ -3735,7 +3898,7 @@ constexpr auto PlayerExperienceEvent::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -3891,7 +4054,7 @@ constexpr auto LoadoutSkillCard::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[55],
+      &file_reflection_data[60],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -4044,7 +4207,7 @@ constexpr auto ListHeroesResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -4185,7 +4348,7 @@ constexpr auto ListHeroesRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -4333,7 +4496,7 @@ constexpr auto GrantTalentPointsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[36],
+      &file_reflection_data[41],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -4494,7 +4657,7 @@ constexpr auto GrantTalentPointsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[35],
+      &file_reflection_data[40],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -4642,7 +4805,7 @@ constexpr auto GrantAttributePointsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[27],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -4803,7 +4966,7 @@ constexpr auto GrantAttributePointsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[26],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -4944,7 +5107,7 @@ constexpr auto GetTalentsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[41],
+      &file_reflection_data[46],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -5085,7 +5248,7 @@ constexpr auto GetSkillCardsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[52],
+      &file_reflection_data[57],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -5238,7 +5401,7 @@ constexpr auto GetRewardClaimsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[64],
+      &file_reflection_data[69],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -5405,7 +5568,7 @@ constexpr auto GetRewardClaimsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[63],
+      &file_reflection_data[68],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -5597,6 +5760,152 @@ const ::_pbi::ClassData* GetProfileRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GetPlayerNamesRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetPlayerNamesRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetPlayerNamesRequest, _impl_._has_bits_);
+};
+
+constexpr GetPlayerNamesRequest::ParseTableT_ GetPlayerNamesRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetPlayerNamesRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::GetPlayerNamesRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+      {::_pbi::TcParser::FastV64P1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerNamesRequest, _impl_.player_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+      {PROTOBUF_FIELD_OFFSET(GetPlayerNamesRequest, _impl_.player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetPlayerNamesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::GetPlayerNamesRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+template <typename>
+constexpr GetPlayerNamesRequest::GetPlayerNamesRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetPlayerNamesRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetPlayerNamesRequest(arena);
+}
+constexpr auto GetPlayerNamesRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GetPlayerNamesRequest), alignof(GetPlayerNamesRequest));
+}
+constexpr auto GetPlayerNamesRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetPlayerNamesRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetPlayerNamesRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetPlayerNamesRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetPlayerNamesRequest>(), &GetPlayerNamesRequest::ByteSizeLong,
+              &GetPlayerNamesRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetPlayerNamesRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[8],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetPlayerNamesRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetPlayerNamesRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetPlayerNamesRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetPlayerNamesRequest::InternalGenerateClassData_(
+            _default, &GetPlayerNamesRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerNamesRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetPlayerNamesRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetPlayerNamesRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerNamesRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetPlayerNamesRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetPlayerNamesRequestGlobalsTypeInternal GetPlayerNamesRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetPlayerNamesRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetPlayerNamesRequest_globals_.GetClassData();
+#else
+  return GetPlayerNamesRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetMMRResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetMMRResponse>()._impl_._has_bits_);
@@ -5713,7 +6022,7 @@ constexpr auto GetMMRResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -5866,7 +6175,7 @@ constexpr auto GetMMRRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -6007,7 +6316,7 @@ constexpr auto GetLoadoutRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[56],
+      &file_reflection_data[61],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -6148,7 +6457,7 @@ constexpr auto GetEquipmentRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[33],
+      &file_reflection_data[38],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -6289,7 +6598,7 @@ constexpr auto GetAttributesRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[27],
+      &file_reflection_data[32],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -6437,7 +6746,7 @@ constexpr auto GetActiveHeroResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[25],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -6578,7 +6887,7 @@ constexpr auto GetActiveHeroRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -6625,6 +6934,326 @@ const ::_pbi::ClassData* GetActiveHeroRequest_get_class_data() {
   return GetActiveHeroRequest_globals_.GetClassData();
 #else
   return GetActiveHeroRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class EnsureProfileResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EnsureProfileResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_._has_bits_);
+};
+
+constexpr EnsureProfileResponse::ParseTableT_ EnsureProfileResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::EnsureProfileResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 level = 4 [json_name = "level"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnsureProfileResponse, _impl_.level_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.level_)}},
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnsureProfileResponse, _impl_.code_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.code_)}},
+      // bool created = 2 [json_name = "created"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EnsureProfileResponse, _impl_.created_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.created_)}},
+      // string effective_nickname = 3 [json_name = "effectiveNickname"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.effective_nickname_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // bool created = 2 [json_name = "created"];
+      {PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.created_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // string effective_nickname = 3 [json_name = "effectiveNickname"];
+      {PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.effective_nickname_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 level = 4 [json_name = "level"];
+      {PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.level_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+      "\47\0\0\22\0\0\0\0"
+      "pandora.player.v1.EnsureProfileResponse"
+      "effective_nickname"
+    }},
+  };
+}
+
+
+inline constexpr EnsureProfileResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        effective_nickname_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
+        created_{false},
+        level_{0u} {}
+
+template <typename>
+constexpr EnsureProfileResponse::EnsureProfileResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EnsureProfileResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EnsureProfileResponse(arena);
+}
+constexpr auto EnsureProfileResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(EnsureProfileResponse), alignof(EnsureProfileResponse));
+}
+constexpr auto EnsureProfileResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EnsureProfileResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EnsureProfileResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EnsureProfileResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EnsureProfileResponse>(), &EnsureProfileResponse::ByteSizeLong,
+              &EnsureProfileResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[10],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EnsureProfileResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EnsureProfileResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EnsureProfileResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EnsureProfileResponse::InternalGenerateClassData_(
+            _default, &EnsureProfileResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EnsureProfileResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EnsureProfileResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EnsureProfileResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EnsureProfileResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EnsureProfileResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EnsureProfileResponseGlobalsTypeInternal EnsureProfileResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EnsureProfileResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EnsureProfileResponse_globals_.GetClassData();
+#else
+  return EnsureProfileResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class EnsureProfileRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EnsureProfileRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EnsureProfileRequest, _impl_._has_bits_);
+};
+
+constexpr EnsureProfileRequest::ParseTableT_ EnsureProfileRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EnsureProfileRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::EnsureProfileRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string nickname = 2 [json_name = "nickname"];
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EnsureProfileRequest, _impl_.nickname_)}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnsureProfileRequest, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EnsureProfileRequest, _impl_.player_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(EnsureProfileRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string nickname = 2 [json_name = "nickname"];
+      {PROTOBUF_FIELD_OFFSET(EnsureProfileRequest, _impl_.nickname_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\46\0\10\0\0\0\0\0"
+      "pandora.player.v1.EnsureProfileRequest"
+      "nickname"
+    }},
+  };
+}
+
+
+inline constexpr EnsureProfileRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        nickname_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr EnsureProfileRequest::EnsureProfileRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EnsureProfileRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EnsureProfileRequest(arena);
+}
+constexpr auto EnsureProfileRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(EnsureProfileRequest), alignof(EnsureProfileRequest));
+}
+constexpr auto EnsureProfileRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EnsureProfileRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EnsureProfileRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EnsureProfileRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EnsureProfileRequest>(), &EnsureProfileRequest::ByteSizeLong,
+              &EnsureProfileRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EnsureProfileRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[6],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EnsureProfileRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EnsureProfileRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EnsureProfileRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EnsureProfileRequest::InternalGenerateClassData_(
+            _default, &EnsureProfileRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EnsureProfileRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EnsureProfileRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EnsureProfileRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EnsureProfileRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EnsureProfileRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EnsureProfileRequestGlobalsTypeInternal EnsureProfileRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EnsureProfileRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EnsureProfileRequest_globals_.GetClassData();
+#else
+  return EnsureProfileRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -6719,7 +7348,7 @@ constexpr auto ClaimRewardResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[62],
+      &file_reflection_data[67],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -6896,7 +7525,7 @@ constexpr auto ClaimRewardRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[61],
+      &file_reflection_data[66],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -7049,7 +7678,7 @@ constexpr auto AttributeAllocation::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -7197,7 +7826,7 @@ constexpr auto AllocateAttributePointsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[29],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -7375,7 +8004,7 @@ constexpr auto AddExperienceResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[66],
+      &file_reflection_data[71],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -7558,7 +8187,7 @@ constexpr auto AddExperienceRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[65],
+      &file_reflection_data[70],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -7720,7 +8349,7 @@ constexpr auto UpgradeSkillCardResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[49],
+      &file_reflection_data[54],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -7878,7 +8507,7 @@ constexpr auto SetTalentsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[37],
+      &file_reflection_data[42],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -8036,7 +8665,7 @@ constexpr auto SetSkillSlotsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[51],
+      &file_reflection_data[56],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -8194,7 +8823,7 @@ constexpr auto SetSkillSlotsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[50],
+      &file_reflection_data[55],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -8351,7 +8980,7 @@ constexpr auto RewardClaimStorageRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[60],
+      &file_reflection_data[65],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -8766,7 +9395,7 @@ constexpr auto LoadoutEquipment::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[29],
+      &file_reflection_data[34],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -8932,7 +9561,7 @@ constexpr auto GrantSkillCardsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[47],
+      &file_reflection_data[52],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -9103,7 +9732,7 @@ constexpr auto GrantSkillCardsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[45],
+      &file_reflection_data[50],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -9269,7 +9898,7 @@ constexpr auto GetTalentsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[42],
+      &file_reflection_data[47],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -9444,7 +10073,7 @@ constexpr auto GetSkillCardsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[53],
+      &file_reflection_data[58],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -9491,6 +10120,164 @@ const ::_pbi::ClassData* GetSkillCardsResponse_get_class_data() {
   return GetSkillCardsResponse_globals_.GetClassData();
 #else
   return GetSkillCardsResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetPlayerNamesResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetPlayerNamesResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetPlayerNamesResponse, _impl_._has_bits_);
+};
+
+constexpr GetPlayerNamesResponse::ParseTableT_ GetPlayerNamesResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetPlayerNamesResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::GetPlayerNamesResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated .pandora.player.v1.PlayerName names = 2 [json_name = "names"];
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerNamesResponse, _impl_.names_)}},
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetPlayerNamesResponse, _impl_.code_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerNamesResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(GetPlayerNamesResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // repeated .pandora.player.v1.PlayerName names = 2 [json_name = "names"];
+      {PROTOBUF_FIELD_OFFSET(GetPlayerNamesResponse, _impl_.names_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::player::v1::PlayerName>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::player::v1::PlayerName_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetPlayerNamesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        names_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::GetPlayerNamesResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesResponse, _impl_.names_)>()
+         }
+        ,
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr GetPlayerNamesResponse::GetPlayerNamesResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetPlayerNamesResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetPlayerNamesResponse(arena);
+}
+constexpr auto GetPlayerNamesResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GetPlayerNamesResponse), alignof(GetPlayerNamesResponse));
+}
+constexpr auto GetPlayerNamesResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetPlayerNamesResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetPlayerNamesResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetPlayerNamesResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetPlayerNamesResponse>(), &GetPlayerNamesResponse::ByteSizeLong,
+              &GetPlayerNamesResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetPlayerNamesResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[9],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetPlayerNamesResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetPlayerNamesResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetPlayerNamesResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetPlayerNamesResponse::InternalGenerateClassData_(
+            _default, &GetPlayerNamesResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerNamesResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetPlayerNamesResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetPlayerNamesResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerNamesResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetPlayerNamesResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetPlayerNamesResponseGlobalsTypeInternal GetPlayerNamesResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetPlayerNamesResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetPlayerNamesResponse_globals_.GetClassData();
+#else
+  return GetPlayerNamesResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -9610,7 +10397,7 @@ constexpr auto GetAttributesResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[28],
+      &file_reflection_data[33],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -9768,7 +10555,7 @@ constexpr auto AllocateAttributePointsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[23],
+      &file_reflection_data[28],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -9926,7 +10713,7 @@ constexpr auto SetEquipmentRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[31],
+      &file_reflection_data[36],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -10153,7 +10940,7 @@ constexpr auto PlayerLoadout::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[54],
+      &file_reflection_data[59],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -10465,7 +11252,7 @@ constexpr auto GetEquipmentResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[34],
+      &file_reflection_data[39],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -10619,7 +11406,7 @@ constexpr auto GetLoadoutResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[57],
+      &file_reflection_data[62],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
@@ -10738,6 +11525,43 @@ const ::uint32_t
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::player::v1::UpdateNicknameResponse, _impl_.code_),
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::EnsureProfileRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::EnsureProfileRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::EnsureProfileRequest, _impl_.nickname_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::PlayerName, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::PlayerName, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::PlayerName, _impl_.nickname_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesRequest, _impl_.player_ids_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesResponse, _impl_.names_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::EnsureProfileResponse, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::EnsureProfileResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::EnsureProfileResponse, _impl_.created_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::EnsureProfileResponse, _impl_.effective_nickname_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::EnsureProfileResponse, _impl_.level_),
+        1,
+        2,
+        0,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::player::v1::ListHeroesRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -11239,67 +12063,72 @@ static const ::_pbi::MigrationSchema
         {39, sizeof(::pandora::player::v1::GetProfileResponse)},
         {46, sizeof(::pandora::player::v1::UpdateNicknameRequest)},
         {53, sizeof(::pandora::player::v1::UpdateNicknameResponse)},
-        {58, sizeof(::pandora::player::v1::ListHeroesRequest)},
-        {63, sizeof(::pandora::player::v1::ListHeroesResponse)},
-        {70, sizeof(::pandora::player::v1::UnlockHeroRequest)},
-        {79, sizeof(::pandora::player::v1::UnlockHeroResponse)},
-        {84, sizeof(::pandora::player::v1::GetMMRRequest)},
-        {91, sizeof(::pandora::player::v1::GetMMRResponse)},
-        {102, sizeof(::pandora::player::v1::UpdateMMRRequest)},
-        {115, sizeof(::pandora::player::v1::UpdateMMRResponse)},
-        {122, sizeof(::pandora::player::v1::PlayerUpdateEvent)},
-        {137, sizeof(::pandora::player::v1::PlayerExperienceEvent)},
-        {152, sizeof(::pandora::player::v1::AttributeAllocation)},
-        {159, sizeof(::pandora::player::v1::SelectHeroRequest)},
-        {166, sizeof(::pandora::player::v1::SelectHeroResponse)},
-        {171, sizeof(::pandora::player::v1::GetActiveHeroRequest)},
-        {176, sizeof(::pandora::player::v1::GetActiveHeroResponse)},
-        {183, sizeof(::pandora::player::v1::GrantAttributePointsRequest)},
-        {192, sizeof(::pandora::player::v1::GrantAttributePointsResponse)},
-        {199, sizeof(::pandora::player::v1::AllocateAttributePointsRequest)},
-        {206, sizeof(::pandora::player::v1::AllocateAttributePointsResponse)},
-        {213, sizeof(::pandora::player::v1::ResetAttributesRequest)},
-        {218, sizeof(::pandora::player::v1::ResetAttributesResponse)},
-        {225, sizeof(::pandora::player::v1::GetAttributesRequest)},
-        {230, sizeof(::pandora::player::v1::GetAttributesResponse)},
-        {239, sizeof(::pandora::player::v1::LoadoutEquipment)},
-        {252, sizeof(::pandora::player::v1::TalentNode)},
-        {259, sizeof(::pandora::player::v1::SetEquipmentRequest)},
-        {266, sizeof(::pandora::player::v1::SetEquipmentResponse)},
-        {271, sizeof(::pandora::player::v1::GetEquipmentRequest)},
-        {276, sizeof(::pandora::player::v1::GetEquipmentResponse)},
-        {283, sizeof(::pandora::player::v1::GrantTalentPointsRequest)},
-        {292, sizeof(::pandora::player::v1::GrantTalentPointsResponse)},
-        {299, sizeof(::pandora::player::v1::SetTalentsRequest)},
-        {306, sizeof(::pandora::player::v1::SetTalentsResponse)},
-        {313, sizeof(::pandora::player::v1::ResetTalentsRequest)},
-        {318, sizeof(::pandora::player::v1::ResetTalentsResponse)},
-        {325, sizeof(::pandora::player::v1::GetTalentsRequest)},
-        {330, sizeof(::pandora::player::v1::GetTalentsResponse)},
-        {339, sizeof(::pandora::player::v1::SkillCard)},
-        {348, sizeof(::pandora::player::v1::SkillSlot)},
-        {355, sizeof(::pandora::player::v1::GrantSkillCardsRequest)},
-        {364, sizeof(::pandora::player::v1::SkillCardGrant)},
-        {371, sizeof(::pandora::player::v1::GrantSkillCardsResponse)},
-        {380, sizeof(::pandora::player::v1::UpgradeSkillCardRequest)},
-        {387, sizeof(::pandora::player::v1::UpgradeSkillCardResponse)},
-        {396, sizeof(::pandora::player::v1::SetSkillSlotsRequest)},
-        {403, sizeof(::pandora::player::v1::SetSkillSlotsResponse)},
-        {410, sizeof(::pandora::player::v1::GetSkillCardsRequest)},
-        {415, sizeof(::pandora::player::v1::GetSkillCardsResponse)},
-        {424, sizeof(::pandora::player::v1::PlayerLoadout)},
-        {443, sizeof(::pandora::player::v1::LoadoutSkillCard)},
-        {452, sizeof(::pandora::player::v1::GetLoadoutRequest)},
-        {457, sizeof(::pandora::player::v1::GetLoadoutResponse)},
-        {464, sizeof(::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse)},
-        {471, sizeof(::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse)},
-        {478, sizeof(::pandora::player::v1::RewardClaimStorageRecord)},
-        {485, sizeof(::pandora::player::v1::ClaimRewardRequest)},
-        {498, sizeof(::pandora::player::v1::ClaimRewardResponse)},
-        {503, sizeof(::pandora::player::v1::GetRewardClaimsRequest)},
-        {514, sizeof(::pandora::player::v1::GetRewardClaimsResponse)},
-        {521, sizeof(::pandora::player::v1::AddExperienceRequest)},
-        {534, sizeof(::pandora::player::v1::AddExperienceResponse)},
+        {58, sizeof(::pandora::player::v1::EnsureProfileRequest)},
+        {65, sizeof(::pandora::player::v1::PlayerName)},
+        {72, sizeof(::pandora::player::v1::GetPlayerNamesRequest)},
+        {77, sizeof(::pandora::player::v1::GetPlayerNamesResponse)},
+        {84, sizeof(::pandora::player::v1::EnsureProfileResponse)},
+        {95, sizeof(::pandora::player::v1::ListHeroesRequest)},
+        {100, sizeof(::pandora::player::v1::ListHeroesResponse)},
+        {107, sizeof(::pandora::player::v1::UnlockHeroRequest)},
+        {116, sizeof(::pandora::player::v1::UnlockHeroResponse)},
+        {121, sizeof(::pandora::player::v1::GetMMRRequest)},
+        {128, sizeof(::pandora::player::v1::GetMMRResponse)},
+        {139, sizeof(::pandora::player::v1::UpdateMMRRequest)},
+        {152, sizeof(::pandora::player::v1::UpdateMMRResponse)},
+        {159, sizeof(::pandora::player::v1::PlayerUpdateEvent)},
+        {174, sizeof(::pandora::player::v1::PlayerExperienceEvent)},
+        {189, sizeof(::pandora::player::v1::AttributeAllocation)},
+        {196, sizeof(::pandora::player::v1::SelectHeroRequest)},
+        {203, sizeof(::pandora::player::v1::SelectHeroResponse)},
+        {208, sizeof(::pandora::player::v1::GetActiveHeroRequest)},
+        {213, sizeof(::pandora::player::v1::GetActiveHeroResponse)},
+        {220, sizeof(::pandora::player::v1::GrantAttributePointsRequest)},
+        {229, sizeof(::pandora::player::v1::GrantAttributePointsResponse)},
+        {236, sizeof(::pandora::player::v1::AllocateAttributePointsRequest)},
+        {243, sizeof(::pandora::player::v1::AllocateAttributePointsResponse)},
+        {250, sizeof(::pandora::player::v1::ResetAttributesRequest)},
+        {255, sizeof(::pandora::player::v1::ResetAttributesResponse)},
+        {262, sizeof(::pandora::player::v1::GetAttributesRequest)},
+        {267, sizeof(::pandora::player::v1::GetAttributesResponse)},
+        {276, sizeof(::pandora::player::v1::LoadoutEquipment)},
+        {289, sizeof(::pandora::player::v1::TalentNode)},
+        {296, sizeof(::pandora::player::v1::SetEquipmentRequest)},
+        {303, sizeof(::pandora::player::v1::SetEquipmentResponse)},
+        {308, sizeof(::pandora::player::v1::GetEquipmentRequest)},
+        {313, sizeof(::pandora::player::v1::GetEquipmentResponse)},
+        {320, sizeof(::pandora::player::v1::GrantTalentPointsRequest)},
+        {329, sizeof(::pandora::player::v1::GrantTalentPointsResponse)},
+        {336, sizeof(::pandora::player::v1::SetTalentsRequest)},
+        {343, sizeof(::pandora::player::v1::SetTalentsResponse)},
+        {350, sizeof(::pandora::player::v1::ResetTalentsRequest)},
+        {355, sizeof(::pandora::player::v1::ResetTalentsResponse)},
+        {362, sizeof(::pandora::player::v1::GetTalentsRequest)},
+        {367, sizeof(::pandora::player::v1::GetTalentsResponse)},
+        {376, sizeof(::pandora::player::v1::SkillCard)},
+        {385, sizeof(::pandora::player::v1::SkillSlot)},
+        {392, sizeof(::pandora::player::v1::GrantSkillCardsRequest)},
+        {401, sizeof(::pandora::player::v1::SkillCardGrant)},
+        {408, sizeof(::pandora::player::v1::GrantSkillCardsResponse)},
+        {417, sizeof(::pandora::player::v1::UpgradeSkillCardRequest)},
+        {424, sizeof(::pandora::player::v1::UpgradeSkillCardResponse)},
+        {433, sizeof(::pandora::player::v1::SetSkillSlotsRequest)},
+        {440, sizeof(::pandora::player::v1::SetSkillSlotsResponse)},
+        {447, sizeof(::pandora::player::v1::GetSkillCardsRequest)},
+        {452, sizeof(::pandora::player::v1::GetSkillCardsResponse)},
+        {461, sizeof(::pandora::player::v1::PlayerLoadout)},
+        {480, sizeof(::pandora::player::v1::LoadoutSkillCard)},
+        {489, sizeof(::pandora::player::v1::GetLoadoutRequest)},
+        {494, sizeof(::pandora::player::v1::GetLoadoutResponse)},
+        {501, sizeof(::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse)},
+        {508, sizeof(::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse)},
+        {515, sizeof(::pandora::player::v1::RewardClaimStorageRecord)},
+        {522, sizeof(::pandora::player::v1::ClaimRewardRequest)},
+        {535, sizeof(::pandora::player::v1::ClaimRewardResponse)},
+        {540, sizeof(::pandora::player::v1::GetRewardClaimsRequest)},
+        {551, sizeof(::pandora::player::v1::GetRewardClaimsResponse)},
+        {558, sizeof(::pandora::player::v1::AddExperienceRequest)},
+        {571, sizeof(::pandora::player::v1::AddExperienceResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -11309,6 +12138,11 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::player::v1::GetProfileResponse_globals_,
         &::pandora::player::v1::UpdateNicknameRequest_globals_,
         &::pandora::player::v1::UpdateNicknameResponse_globals_,
+        &::pandora::player::v1::EnsureProfileRequest_globals_,
+        &::pandora::player::v1::PlayerName_globals_,
+        &::pandora::player::v1::GetPlayerNamesRequest_globals_,
+        &::pandora::player::v1::GetPlayerNamesResponse_globals_,
+        &::pandora::player::v1::EnsureProfileResponse_globals_,
         &::pandora::player::v1::ListHeroesRequest_globals_,
         &::pandora::player::v1::ListHeroesResponse_globals_,
         &::pandora::player::v1::UnlockHeroRequest_globals_,
@@ -11396,259 +12230,277 @@ const char descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto[] AB
     "NicknameRequest\022\033\n\tplayer_id\030\001 \001(\004R\010play"
     "erId\022\032\n\010nickname\030\002 \001(\tR\010nickname\"H\n\026Upda"
     "teNicknameResponse\022.\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCodeR\004code\"0\n\021ListHeroes"
-    "Request\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"_\n\022"
-    "ListHeroesResponse\022.\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCodeR\004code\022\031\n\010hero_ids\030\002"
-    " \003(\rR\007heroIds\"a\n\021UnlockHeroRequest\022\033\n\tpl"
-    "ayer_id\030\001 \001(\004R\010playerId\022\027\n\007hero_id\030\002 \001(\r"
-    "R\006heroId\022\026\n\006source\030\003 \001(\tR\006source\"D\n\022Unlo"
-    "ckHeroResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
-    "ommon.v1.ErrCodeR\004code\"M\n\rGetMMRRequest\022"
-    "\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\037\n\013rating_p"
-    "ool\030\002 \001(\tR\nratingPool\"\211\001\n\016GetMMRResponse"
-    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
-    "deR\004code\022\020\n\003mmr\030\002 \001(\005R\003mmr\022\037\n\013rating_poo"
-    "l\030\003 \001(\tR\nratingPool\022\024\n\005found\030\004 \001(\010R\005foun"
-    "d\"\247\001\n\020UpdateMMRRequest\022\033\n\tplayer_id\030\001 \001("
-    "\004R\010playerId\022\024\n\005delta\030\002 \001(\005R\005delta\022\026\n\006rea"
-    "son\030\003 \001(\tR\006reason\022\'\n\017idempotency_key\030\004 \001"
-    "(\tR\016idempotencyKey\022\037\n\013rating_pool\030\005 \001(\tR"
-    "\nratingPool\"\\\n\021UpdateMMRResponse\022.\n\004code"
-    "\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code"
-    "\022\027\n\007new_mmr\030\002 \001(\005R\006newMmr\"\266\001\n\021PlayerUpda"
-    "teEvent\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031\n\010"
-    "match_id\030\002 \001(\004R\007matchId\022\033\n\tmmr_delta\030\003 \001"
-    "(\005R\010mmrDelta\022\026\n\006reason\030\004 \001(\tR\006reason\022\023\n\005"
-    "ts_ms\030\005 \001(\003R\004tsMs\022\037\n\013rating_pool\030\006 \001(\tR\n"
-    "ratingPool\"\310\001\n\025PlayerExperienceEvent\022\033\n\t"
-    "player_id\030\001 \001(\004R\010playerId\022\024\n\005level\030\002 \001(\005"
-    "R\005level\022 \n\014exp_in_level\030\003 \001(\004R\nexpInLeve"
-    "l\022 \n\014is_max_level\030\004 \001(\010R\nisMaxLevel\022#\n\rl"
-    "evels_gained\030\005 \001(\rR\014levelsGained\022\023\n\005ts_m"
-    "s\030\006 \001(\003R\004tsMs\"H\n\023AttributeAllocation\022\031\n\010"
-    "attr_key\030\001 \001(\tR\007attrKey\022\026\n\006points\030\002 \001(\005R"
-    "\006points\"I\n\021SelectHeroRequest\022\033\n\tplayer_i"
-    "d\030\001 \001(\004R\010playerId\022\027\n\007hero_id\030\002 \001(\rR\006hero"
-    "Id\"D\n\022SelectHeroResponse\022.\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCodeR\004code\"3\n\024GetA"
-    "ctiveHeroRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pla"
-    "yerId\"`\n\025GetActiveHeroResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022\027"
-    "\n\007hero_id\030\002 \001(\rR\006heroId\"{\n\033GrantAttribut"
-    "ePointsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
-    "rId\022\026\n\006points\030\002 \001(\005R\006points\022\'\n\017idempoten"
-    "cy_key\030\003 \001(\tR\016idempotencyKey\"u\n\034GrantAtt"
-    "ributePointsResponse\022.\n\004code\030\001 \001(\0162\032.pan"
-    "dora.common.v1.ErrCodeR\004code\022%\n\016unspent_"
-    "points\030\002 \001(\005R\runspentPoints\"\207\001\n\036Allocate"
-    "AttributePointsRequest\022\033\n\tplayer_id\030\001 \001("
-    "\004R\010playerId\022H\n\013allocations\030\002 \003(\0132&.pando"
-    "ra.player.v1.AttributeAllocationR\013alloca"
-    "tions\"x\n\037AllocateAttributePointsResponse"
-    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
-    "deR\004code\022%\n\016unspent_points\030\002 \001(\005R\runspen"
-    "tPoints\"5\n\026ResetAttributesRequest\022\033\n\tpla"
-    "yer_id\030\001 \001(\004R\010playerId\"p\n\027ResetAttribute"
-    "sResponse\022.\n\004code\030\001 \001(\0162\032.pandora.common"
-    ".v1.ErrCodeR\004code\022%\n\016unspent_points\030\002 \001("
-    "\005R\runspentPoints\"3\n\024GetAttributesRequest"
-    "\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"\266\001\n\025GetAtt"
-    "ributesResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
-    "common.v1.ErrCodeR\004code\022F\n\nattributes\030\002 "
-    "\003(\0132&.pandora.player.v1.AttributeAllocat"
-    "ionR\nattributes\022%\n\016unspent_points\030\003 \001(\005R"
-    "\runspentPoints\"\322\001\n\020LoadoutEquipment\022\022\n\004s"
-    "lot\030\001 \001(\rR\004slot\022$\n\016item_config_id\030\002 \001(\rR"
-    "\014itemConfigId\022\037\n\013instance_id\030\003 \001(\004R\ninst"
-    "anceId\022\036\n\nidentified\030\004 \001(\010R\nidentified\022C"
-    "\n\nattributes\030\005 \003(\0132#.pandora.inventory.v"
-    "1.ItemAttributeR\nattributes\"\?\n\nTalentNod"
-    "e\022\033\n\ttalent_id\030\001 \001(\rR\010talentId\022\024\n\005level\030"
-    "\002 \001(\005R\005level\"u\n\023SetEquipmentRequest\022\033\n\tp"
-    "layer_id\030\001 \001(\004R\010playerId\022A\n\tequipment\030\002 "
-    "\003(\0132#.pandora.player.v1.LoadoutEquipment"
-    "R\tequipment\"F\n\024SetEquipmentResponse\022.\n\004c"
-    "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004c"
-    "ode\"2\n\023GetEquipmentRequest\022\033\n\tplayer_id\030"
-    "\001 \001(\004R\010playerId\"\211\001\n\024GetEquipmentResponse"
-    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
-    "deR\004code\022A\n\tequipment\030\002 \003(\0132#.pandora.pl"
-    "ayer.v1.LoadoutEquipmentR\tequipment\"x\n\030G"
-    "rantTalentPointsRequest\022\033\n\tplayer_id\030\001 \001"
-    "(\004R\010playerId\022\026\n\006points\030\002 \001(\005R\006points\022\'\n\017"
-    "idempotency_key\030\003 \001(\tR\016idempotencyKey\"r\n"
-    "\031GrantTalentPointsResponse\022.\n\004code\030\001 \001(\016"
-    "2\032.pandora.common.v1.ErrCodeR\004code\022%\n\016un"
-    "spent_points\030\002 \001(\005R\runspentPoints\"i\n\021Set"
-    "TalentsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
-    "rId\0227\n\007talents\030\002 \003(\0132\035.pandora.player.v1"
-    ".TalentNodeR\007talents\"k\n\022SetTalentsRespon"
+    "ra.common.v1.ErrCodeR\004code\"O\n\024EnsureProf"
+    "ileRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022"
+    "\032\n\010nickname\030\002 \001(\tR\010nickname\"E\n\nPlayerNam"
+    "e\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\032\n\010nickna"
+    "me\030\002 \001(\tR\010nickname\"6\n\025GetPlayerNamesRequ"
+    "est\022\035\n\nplayer_ids\030\001 \003(\004R\tplayerIds\"}\n\026Ge"
+    "tPlayerNamesResponse\022.\n\004code\030\001 \001(\0162\032.pan"
+    "dora.common.v1.ErrCodeR\004code\0223\n\005names\030\002 "
+    "\003(\0132\035.pandora.player.v1.PlayerNameR\005name"
+    "s\"\246\001\n\025EnsureProfileResponse\022.\n\004code\030\001 \001("
+    "\0162\032.pandora.common.v1.ErrCodeR\004code\022\030\n\007c"
+    "reated\030\002 \001(\010R\007created\022-\n\022effective_nickn"
+    "ame\030\003 \001(\tR\021effectiveNickname\022\024\n\005level\030\004 "
+    "\001(\rR\005level\"0\n\021ListHeroesRequest\022\033\n\tplaye"
+    "r_id\030\001 \001(\004R\010playerId\"_\n\022ListHeroesRespon"
     "se\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
-    "CodeR\004code\022%\n\016unspent_points\030\002 \001(\005R\runsp"
-    "entPoints\"2\n\023ResetTalentsRequest\022\033\n\tplay"
-    "er_id\030\001 \001(\004R\010playerId\"m\n\024ResetTalentsRes"
-    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCodeR\004code\022%\n\016unspent_points\030\002 \001(\005R\ru"
-    "nspentPoints\"0\n\021GetTalentsRequest\022\033\n\tpla"
-    "yer_id\030\001 \001(\004R\010playerId\"\244\001\n\022GetTalentsRes"
-    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCodeR\004code\0227\n\007talents\030\002 \003(\0132\035.pandora"
-    ".player.v1.TalentNodeR\007talents\022%\n\016unspen"
-    "t_points\030\003 \001(\005R\runspentPoints\"R\n\tSkillCa"
-    "rd\022\027\n\007card_id\030\001 \001(\rR\006cardId\022\024\n\005level\030\002 \001"
-    "(\rR\005level\022\026\n\006shards\030\003 \001(\rR\006shards\"8\n\tSki"
-    "llSlot\022\022\n\004slot\030\001 \001(\rR\004slot\022\027\n\007card_id\030\002 "
-    "\001(\rR\006cardId\"\231\001\n\026GrantSkillCardsRequest\022\033"
-    "\n\tplayer_id\030\001 \001(\004R\010playerId\0229\n\006grants\030\002 "
-    "\003(\0132!.pandora.player.v1.SkillCardGrantR\006"
-    "grants\022\'\n\017idempotency_key\030\003 \001(\tR\016idempot"
-    "encyKey\"A\n\016SkillCardGrant\022\027\n\007card_id\030\001 \001"
-    "(\rR\006cardId\022\026\n\006shards\030\002 \001(\rR\006shards\"\227\001\n\027G"
-    "rantSkillCardsResponse\022.\n\004code\030\001 \001(\0162\032.p"
-    "andora.common.v1.ErrCodeR\004code\0222\n\005cards\030"
-    "\002 \003(\0132\034.pandora.player.v1.SkillCardR\005car"
-    "ds\022\030\n\007already\030\003 \001(\010R\007already\"O\n\027UpgradeS"
-    "killCardRequest\022\033\n\tplayer_id\030\001 \001(\004R\010play"
-    "erId\022\027\n\007card_id\030\002 \001(\rR\006cardId\"\233\001\n\030Upgrad"
-    "eSkillCardResponse\022.\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCodeR\004code\0220\n\004card\030\002 \001(\013"
-    "2\034.pandora.player.v1.SkillCardR\004card\022\035\n\n"
-    "shard_cost\030\003 \001(\rR\tshardCost\"g\n\024SetSkillS"
-    "lotsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId"
-    "\0222\n\005slots\030\002 \003(\0132\034.pandora.player.v1.Skil"
-    "lSlotR\005slots\"{\n\025SetSkillSlotsResponse\022.\n"
-    "\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR"
-    "\004code\0222\n\005slots\030\002 \003(\0132\034.pandora.player.v1"
-    ".SkillSlotR\005slots\"3\n\024GetSkillCardsReques"
-    "t\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"\257\001\n\025GetSk"
-    "illCardsResponse\022.\n\004code\030\001 \001(\0162\032.pandora"
-    ".common.v1.ErrCodeR\004code\0222\n\005cards\030\002 \003(\0132"
-    "\034.pandora.player.v1.SkillCardR\005cards\0222\n\005"
-    "slots\030\003 \003(\0132\034.pandora.player.v1.SkillSlo"
-    "tR\005slots\"\300\003\n\rPlayerLoadout\022\033\n\tplayer_id\030"
-    "\001 \001(\004R\010playerId\022$\n\016active_hero_id\030\002 \001(\rR"
-    "\014activeHeroId\022F\n\nattributes\030\003 \003(\0132&.pand"
-    "ora.player.v1.AttributeAllocationR\nattri"
-    "butes\022.\n\023unspent_attr_points\030\004 \001(\005R\021unsp"
-    "entAttrPoints\022A\n\tequipment\030\005 \003(\0132#.pando"
-    "ra.player.v1.LoadoutEquipmentR\tequipment"
-    "\0227\n\007talents\030\006 \003(\0132\035.pandora.player.v1.Ta"
-    "lentNodeR\007talents\0222\n\025unspent_talent_poin"
-    "ts\030\007 \001(\005R\023unspentTalentPoints\022D\n\013skill_c"
-    "ards\030\010 \003(\0132#.pandora.player.v1.LoadoutSk"
-    "illCardR\nskillCards\"U\n\020LoadoutSkillCard\022"
-    "\022\n\004slot\030\001 \001(\rR\004slot\022\027\n\007card_id\030\002 \001(\rR\006ca"
-    "rdId\022\024\n\005level\030\003 \001(\rR\005level\"0\n\021GetLoadout"
-    "Request\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"\200\001\n"
-    "\022GetLoadoutResponse\022.\n\004code\030\001 \001(\0162\032.pand"
-    "ora.common.v1.ErrCodeR\004code\022:\n\007loadout\030\002"
-    " \001(\0132 .pandora.player.v1.PlayerLoadoutR\007"
-    "loadout\"\306\002\n\030RewardClaimStorageRecord\022X\n\t"
-    "permanent\030\001 \003(\0132:.pandora.player.v1.Rewa"
-    "rdClaimStorageRecord.PermanentEntryR\tper"
-    "manent\022U\n\010activity\030\002 \003(\01329.pandora.playe"
-    "r.v1.RewardClaimStorageRecord.ActivityEn"
-    "tryR\010activity\032<\n\016PermanentEntry\022\020\n\003key\030\001"
-    " \001(\tR\003key\022\024\n\005value\030\002 \001(\014R\005value:\0028\001\032;\n\rA"
-    "ctivityEntry\022\020\n\003key\030\001 \001(\004R\003key\022\024\n\005value\030"
-    "\002 \001(\014R\005value:\0028\001\"\336\001\n\022ClaimRewardRequest\022"
-    "\033\n\tplayer_id\030\001 \001(\004R\010playerId\022D\n\013source_t"
-    "ype\030\002 \001(\0162#.pandora.player.v1.RewardSour"
-    "ceTypeR\nsourceType\022\026\n\006source\030\003 \001(\tR\006sour"
-    "ce\0220\n\024activity_instance_id\030\004 \001(\004R\022activi"
-    "tyInstanceId\022\033\n\treward_id\030\005 \001(\rR\010rewardI"
-    "d\"E\n\023ClaimRewardResponse\022.\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCodeR\004code\"\305\001\n\026Get"
-    "RewardClaimsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010"
-    "playerId\022D\n\013source_type\030\002 \001(\0162#.pandora."
-    "player.v1.RewardSourceTypeR\nsourceType\022\026"
-    "\n\006source\030\003 \001(\tR\006source\0220\n\024activity_insta"
-    "nce_id\030\004 \001(\004R\022activityInstanceId\"w\n\027GetR"
-    "ewardClaimsResponse\022.\n\004code\030\001 \001(\0162\032.pand"
-    "ora.common.v1.ErrCodeR\004code\022,\n\022claimed_r"
-    "eward_ids\030\002 \003(\rR\020claimedRewardIds\"\262\001\n\024Ad"
-    "dExperienceRequest\022\033\n\tplayer_id\030\001 \001(\004R\010p"
-    "layerId\022\033\n\texp_delta\030\002 \001(\004R\010expDelta\022\026\n\006"
-    "reason\030\003 \001(\tR\006reason\022\'\n\017idempotency_key\030"
-    "\004 \001(\tR\016idempotencyKey\022\037\n\013rating_pool\030\005 \001"
-    "(\tR\nratingPool\"\340\001\n\025AddExperienceResponse"
+    "CodeR\004code\022\031\n\010hero_ids\030\002 \003(\rR\007heroIds\"a\n"
+    "\021UnlockHeroRequest\022\033\n\tplayer_id\030\001 \001(\004R\010p"
+    "layerId\022\027\n\007hero_id\030\002 \001(\rR\006heroId\022\026\n\006sour"
+    "ce\030\003 \001(\tR\006source\"D\n\022UnlockHeroResponse\022."
+    "\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCode"
+    "R\004code\"M\n\rGetMMRRequest\022\033\n\tplayer_id\030\001 \001"
+    "(\004R\010playerId\022\037\n\013rating_pool\030\002 \001(\tR\nratin"
+    "gPool\"\211\001\n\016GetMMRResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\022\020\n\003mmr\030"
+    "\002 \001(\005R\003mmr\022\037\n\013rating_pool\030\003 \001(\tR\nratingP"
+    "ool\022\024\n\005found\030\004 \001(\010R\005found\"\247\001\n\020UpdateMMRR"
+    "equest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\024\n\005d"
+    "elta\030\002 \001(\005R\005delta\022\026\n\006reason\030\003 \001(\tR\006reaso"
+    "n\022\'\n\017idempotency_key\030\004 \001(\tR\016idempotencyK"
+    "ey\022\037\n\013rating_pool\030\005 \001(\tR\nratingPool\"\\\n\021U"
+    "pdateMMRResponse\022.\n\004code\030\001 \001(\0162\032.pandora"
+    ".common.v1.ErrCodeR\004code\022\027\n\007new_mmr\030\002 \001("
+    "\005R\006newMmr\"\266\001\n\021PlayerUpdateEvent\022\033\n\tplaye"
+    "r_id\030\001 \001(\004R\010playerId\022\031\n\010match_id\030\002 \001(\004R\007"
+    "matchId\022\033\n\tmmr_delta\030\003 \001(\005R\010mmrDelta\022\026\n\006"
+    "reason\030\004 \001(\tR\006reason\022\023\n\005ts_ms\030\005 \001(\003R\004tsM"
+    "s\022\037\n\013rating_pool\030\006 \001(\tR\nratingPool\"\310\001\n\025P"
+    "layerExperienceEvent\022\033\n\tplayer_id\030\001 \001(\004R"
+    "\010playerId\022\024\n\005level\030\002 \001(\005R\005level\022 \n\014exp_i"
+    "n_level\030\003 \001(\004R\nexpInLevel\022 \n\014is_max_leve"
+    "l\030\004 \001(\010R\nisMaxLevel\022#\n\rlevels_gained\030\005 \001"
+    "(\rR\014levelsGained\022\023\n\005ts_ms\030\006 \001(\003R\004tsMs\"H\n"
+    "\023AttributeAllocation\022\031\n\010attr_key\030\001 \001(\tR\007"
+    "attrKey\022\026\n\006points\030\002 \001(\005R\006points\"I\n\021Selec"
+    "tHeroRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerI"
+    "d\022\027\n\007hero_id\030\002 \001(\rR\006heroId\"D\n\022SelectHero"
+    "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
+    "v1.ErrCodeR\004code\"3\n\024GetActiveHeroRequest"
+    "\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"`\n\025GetActi"
+    "veHeroResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
+    "ommon.v1.ErrCodeR\004code\022\027\n\007hero_id\030\002 \001(\rR"
+    "\006heroId\"{\n\033GrantAttributePointsRequest\022\033"
+    "\n\tplayer_id\030\001 \001(\004R\010playerId\022\026\n\006points\030\002 "
+    "\001(\005R\006points\022\'\n\017idempotency_key\030\003 \001(\tR\016id"
+    "empotencyKey\"u\n\034GrantAttributePointsResp"
+    "onse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.E"
+    "rrCodeR\004code\022%\n\016unspent_points\030\002 \001(\005R\run"
+    "spentPoints\"\207\001\n\036AllocateAttributePointsR"
+    "equest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022H\n\013a"
+    "llocations\030\002 \003(\0132&.pandora.player.v1.Att"
+    "ributeAllocationR\013allocations\"x\n\037Allocat"
+    "eAttributePointsResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\022%\n\016unsp"
+    "ent_points\030\002 \001(\005R\runspentPoints\"5\n\026Reset"
+    "AttributesRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pl"
+    "ayerId\"p\n\027ResetAttributesResponse\022.\n\004cod"
+    "e\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004cod"
+    "e\022%\n\016unspent_points\030\002 \001(\005R\runspentPoints"
+    "\"3\n\024GetAttributesRequest\022\033\n\tplayer_id\030\001 "
+    "\001(\004R\010playerId\"\266\001\n\025GetAttributesResponse\022"
+    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
+    "eR\004code\022F\n\nattributes\030\002 \003(\0132&.pandora.pl"
+    "ayer.v1.AttributeAllocationR\nattributes\022"
+    "%\n\016unspent_points\030\003 \001(\005R\runspentPoints\"\322"
+    "\001\n\020LoadoutEquipment\022\022\n\004slot\030\001 \001(\rR\004slot\022"
+    "$\n\016item_config_id\030\002 \001(\rR\014itemConfigId\022\037\n"
+    "\013instance_id\030\003 \001(\004R\ninstanceId\022\036\n\nidenti"
+    "fied\030\004 \001(\010R\nidentified\022C\n\nattributes\030\005 \003"
+    "(\0132#.pandora.inventory.v1.ItemAttributeR"
+    "\nattributes\"\?\n\nTalentNode\022\033\n\ttalent_id\030\001"
+    " \001(\rR\010talentId\022\024\n\005level\030\002 \001(\005R\005level\"u\n\023"
+    "SetEquipmentRequest\022\033\n\tplayer_id\030\001 \001(\004R\010"
+    "playerId\022A\n\tequipment\030\002 \003(\0132#.pandora.pl"
+    "ayer.v1.LoadoutEquipmentR\tequipment\"F\n\024S"
+    "etEquipmentResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\"2\n\023GetEquipm"
+    "entRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\""
+    "\211\001\n\024GetEquipmentResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\022A\n\tequi"
+    "pment\030\002 \003(\0132#.pandora.player.v1.LoadoutE"
+    "quipmentR\tequipment\"x\n\030GrantTalentPoints"
+    "Request\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\026\n\006"
+    "points\030\002 \001(\005R\006points\022\'\n\017idempotency_key\030"
+    "\003 \001(\tR\016idempotencyKey\"r\n\031GrantTalentPoin"
+    "tsResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
+    "n.v1.ErrCodeR\004code\022%\n\016unspent_points\030\002 \001"
+    "(\005R\runspentPoints\"i\n\021SetTalentsRequest\022\033"
+    "\n\tplayer_id\030\001 \001(\004R\010playerId\0227\n\007talents\030\002"
+    " \003(\0132\035.pandora.player.v1.TalentNodeR\007tal"
+    "ents\"k\n\022SetTalentsResponse\022.\n\004code\030\001 \001(\016"
+    "2\032.pandora.common.v1.ErrCodeR\004code\022%\n\016un"
+    "spent_points\030\002 \001(\005R\runspentPoints\"2\n\023Res"
+    "etTalentsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pla"
+    "yerId\"m\n\024ResetTalentsResponse\022.\n\004code\030\001 "
+    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\022%\n"
+    "\016unspent_points\030\002 \001(\005R\runspentPoints\"0\n\021"
+    "GetTalentsRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pl"
+    "ayerId\"\244\001\n\022GetTalentsResponse\022.\n\004code\030\001 "
+    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\0227\n"
+    "\007talents\030\002 \003(\0132\035.pandora.player.v1.Talen"
+    "tNodeR\007talents\022%\n\016unspent_points\030\003 \001(\005R\r"
+    "unspentPoints\"R\n\tSkillCard\022\027\n\007card_id\030\001 "
+    "\001(\rR\006cardId\022\024\n\005level\030\002 \001(\rR\005level\022\026\n\006sha"
+    "rds\030\003 \001(\rR\006shards\"8\n\tSkillSlot\022\022\n\004slot\030\001"
+    " \001(\rR\004slot\022\027\n\007card_id\030\002 \001(\rR\006cardId\"\231\001\n\026"
+    "GrantSkillCardsRequest\022\033\n\tplayer_id\030\001 \001("
+    "\004R\010playerId\0229\n\006grants\030\002 \003(\0132!.pandora.pl"
+    "ayer.v1.SkillCardGrantR\006grants\022\'\n\017idempo"
+    "tency_key\030\003 \001(\tR\016idempotencyKey\"A\n\016Skill"
+    "CardGrant\022\027\n\007card_id\030\001 \001(\rR\006cardId\022\026\n\006sh"
+    "ards\030\002 \001(\rR\006shards\"\227\001\n\027GrantSkillCardsRe"
+    "sponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1"
+    ".ErrCodeR\004code\0222\n\005cards\030\002 \003(\0132\034.pandora."
+    "player.v1.SkillCardR\005cards\022\030\n\007already\030\003 "
+    "\001(\010R\007already\"O\n\027UpgradeSkillCardRequest\022"
+    "\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\027\n\007card_id\030"
+    "\002 \001(\rR\006cardId\"\233\001\n\030UpgradeSkillCardRespon"
+    "se\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
+    "CodeR\004code\0220\n\004card\030\002 \001(\0132\034.pandora.playe"
+    "r.v1.SkillCardR\004card\022\035\n\nshard_cost\030\003 \001(\r"
+    "R\tshardCost\"g\n\024SetSkillSlotsRequest\022\033\n\tp"
+    "layer_id\030\001 \001(\004R\010playerId\0222\n\005slots\030\002 \003(\0132"
+    "\034.pandora.player.v1.SkillSlotR\005slots\"{\n\025"
+    "SetSkillSlotsResponse\022.\n\004code\030\001 \001(\0162\032.pa"
+    "ndora.common.v1.ErrCodeR\004code\0222\n\005slots\030\002"
+    " \003(\0132\034.pandora.player.v1.SkillSlotR\005slot"
+    "s\"3\n\024GetSkillCardsRequest\022\033\n\tplayer_id\030\001"
+    " \001(\004R\010playerId\"\257\001\n\025GetSkillCardsResponse"
     "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
-    "deR\004code\022\024\n\005level\030\002 \001(\005R\005level\022 \n\014exp_in"
-    "_level\030\003 \001(\004R\nexpInLevel\022 \n\014is_max_level"
-    "\030\004 \001(\010R\nisMaxLevel\022#\n\rlevels_gained\030\005 \001("
-    "\rR\014levelsGained\022\030\n\007already\030\006 \001(\010R\007alread"
-    "y*f\n\023PlayerPushEventType\022(\n$PLAYER_PUSH_"
-    "EVENT_TYPE_LEGACY_UPDATE\020\000\022%\n!PLAYER_PUS"
-    "H_EVENT_TYPE_EXPERIENCE\020\001*y\n\020RewardSourc"
-    "eType\022\"\n\036REWARD_SOURCE_TYPE_UNSPECIFIED\020"
-    "\000\022 \n\034REWARD_SOURCE_TYPE_PERMANENT\020\001\022\037\n\033R"
-    "EWARD_SOURCE_TYPE_ACTIVITY\020\0022\246\024\n\rPlayerS"
-    "ervice\022Y\n\nGetProfile\022$.pandora.player.v1"
-    ".GetProfileRequest\032%.pandora.player.v1.G"
-    "etProfileResponse\022e\n\016UpdateNickname\022(.pa"
-    "ndora.player.v1.UpdateNicknameRequest\032)."
-    "pandora.player.v1.UpdateNicknameResponse"
-    "\022Y\n\nListHeroes\022$.pandora.player.v1.ListH"
-    "eroesRequest\032%.pandora.player.v1.ListHer"
-    "oesResponse\022Y\n\nUnlockHero\022$.pandora.play"
-    "er.v1.UnlockHeroRequest\032%.pandora.player"
-    ".v1.UnlockHeroResponse\022M\n\006GetMMR\022 .pando"
-    "ra.player.v1.GetMMRRequest\032!.pandora.pla"
-    "yer.v1.GetMMRResponse\022V\n\tUpdateMMR\022#.pan"
-    "dora.player.v1.UpdateMMRRequest\032$.pandor"
-    "a.player.v1.UpdateMMRResponse\022Y\n\nSelectH"
-    "ero\022$.pandora.player.v1.SelectHeroReques"
-    "t\032%.pandora.player.v1.SelectHeroResponse"
-    "\022b\n\rGetActiveHero\022\'.pandora.player.v1.Ge"
-    "tActiveHeroRequest\032(.pandora.player.v1.G"
-    "etActiveHeroResponse\022w\n\024GrantAttributePo"
-    "ints\022..pandora.player.v1.GrantAttributeP"
-    "ointsRequest\032/.pandora.player.v1.GrantAt"
-    "tributePointsResponse\022\200\001\n\027AllocateAttrib"
-    "utePoints\0221.pandora.player.v1.AllocateAt"
-    "tributePointsRequest\0322.pandora.player.v1"
-    ".AllocateAttributePointsResponse\022h\n\017Rese"
-    "tAttributes\022).pandora.player.v1.ResetAtt"
-    "ributesRequest\032*.pandora.player.v1.Reset"
-    "AttributesResponse\022b\n\rGetAttributes\022\'.pa"
-    "ndora.player.v1.GetAttributesRequest\032(.p"
-    "andora.player.v1.GetAttributesResponse\022_"
-    "\n\014SetEquipment\022&.pandora.player.v1.SetEq"
-    "uipmentRequest\032\'.pandora.player.v1.SetEq"
-    "uipmentResponse\022_\n\014GetEquipment\022&.pandor"
-    "a.player.v1.GetEquipmentRequest\032\'.pandor"
-    "a.player.v1.GetEquipmentResponse\022n\n\021Gran"
-    "tTalentPoints\022+.pandora.player.v1.GrantT"
-    "alentPointsRequest\032,.pandora.player.v1.G"
-    "rantTalentPointsResponse\022Y\n\nSetTalents\022$"
-    ".pandora.player.v1.SetTalentsRequest\032%.p"
-    "andora.player.v1.SetTalentsResponse\022_\n\014R"
-    "esetTalents\022&.pandora.player.v1.ResetTal"
-    "entsRequest\032\'.pandora.player.v1.ResetTal"
-    "entsResponse\022Y\n\nGetTalents\022$.pandora.pla"
-    "yer.v1.GetTalentsRequest\032%.pandora.playe"
-    "r.v1.GetTalentsResponse\022h\n\017GrantSkillCar"
-    "ds\022).pandora.player.v1.GrantSkillCardsRe"
-    "quest\032*.pandora.player.v1.GrantSkillCard"
-    "sResponse\022k\n\020UpgradeSkillCard\022*.pandora."
-    "player.v1.UpgradeSkillCardRequest\032+.pand"
-    "ora.player.v1.UpgradeSkillCardResponse\022b"
-    "\n\rSetSkillSlots\022\'.pandora.player.v1.SetS"
-    "killSlotsRequest\032(.pandora.player.v1.Set"
-    "SkillSlotsResponse\022b\n\rGetSkillCards\022\'.pa"
-    "ndora.player.v1.GetSkillCardsRequest\032(.p"
-    "andora.player.v1.GetSkillCardsResponse\022Y"
-    "\n\nGetLoadout\022$.pandora.player.v1.GetLoad"
-    "outRequest\032%.pandora.player.v1.GetLoadou"
-    "tResponse\022\\\n\013ClaimReward\022%.pandora.playe"
-    "r.v1.ClaimRewardRequest\032&.pandora.player"
-    ".v1.ClaimRewardResponse\022h\n\017GetRewardClai"
-    "ms\022).pandora.player.v1.GetRewardClaimsRe"
-    "quest\032*.pandora.player.v1.GetRewardClaim"
-    "sResponse\022b\n\rAddExperience\022\'.pandora.pla"
-    "yer.v1.AddExperienceRequest\032(.pandora.pl"
-    "ayer.v1.AddExperienceResponseb\006proto3"
+    "deR\004code\0222\n\005cards\030\002 \003(\0132\034.pandora.player"
+    ".v1.SkillCardR\005cards\0222\n\005slots\030\003 \003(\0132\034.pa"
+    "ndora.player.v1.SkillSlotR\005slots\"\300\003\n\rPla"
+    "yerLoadout\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022"
+    "$\n\016active_hero_id\030\002 \001(\rR\014activeHeroId\022F\n"
+    "\nattributes\030\003 \003(\0132&.pandora.player.v1.At"
+    "tributeAllocationR\nattributes\022.\n\023unspent"
+    "_attr_points\030\004 \001(\005R\021unspentAttrPoints\022A\n"
+    "\tequipment\030\005 \003(\0132#.pandora.player.v1.Loa"
+    "doutEquipmentR\tequipment\0227\n\007talents\030\006 \003("
+    "\0132\035.pandora.player.v1.TalentNodeR\007talent"
+    "s\0222\n\025unspent_talent_points\030\007 \001(\005R\023unspen"
+    "tTalentPoints\022D\n\013skill_cards\030\010 \003(\0132#.pan"
+    "dora.player.v1.LoadoutSkillCardR\nskillCa"
+    "rds\"U\n\020LoadoutSkillCard\022\022\n\004slot\030\001 \001(\rR\004s"
+    "lot\022\027\n\007card_id\030\002 \001(\rR\006cardId\022\024\n\005level\030\003 "
+    "\001(\rR\005level\"0\n\021GetLoadoutRequest\022\033\n\tplaye"
+    "r_id\030\001 \001(\004R\010playerId\"\200\001\n\022GetLoadoutRespo"
+    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
+    "rCodeR\004code\022:\n\007loadout\030\002 \001(\0132 .pandora.p"
+    "layer.v1.PlayerLoadoutR\007loadout\"\306\002\n\030Rewa"
+    "rdClaimStorageRecord\022X\n\tpermanent\030\001 \003(\0132"
+    ":.pandora.player.v1.RewardClaimStorageRe"
+    "cord.PermanentEntryR\tpermanent\022U\n\010activi"
+    "ty\030\002 \003(\01329.pandora.player.v1.RewardClaim"
+    "StorageRecord.ActivityEntryR\010activity\032<\n"
+    "\016PermanentEntry\022\020\n\003key\030\001 \001(\tR\003key\022\024\n\005val"
+    "ue\030\002 \001(\014R\005value:\0028\001\032;\n\rActivityEntry\022\020\n\003"
+    "key\030\001 \001(\004R\003key\022\024\n\005value\030\002 \001(\014R\005value:\0028\001"
+    "\"\336\001\n\022ClaimRewardRequest\022\033\n\tplayer_id\030\001 \001"
+    "(\004R\010playerId\022D\n\013source_type\030\002 \001(\0162#.pand"
+    "ora.player.v1.RewardSourceTypeR\nsourceTy"
+    "pe\022\026\n\006source\030\003 \001(\tR\006source\0220\n\024activity_i"
+    "nstance_id\030\004 \001(\004R\022activityInstanceId\022\033\n\t"
+    "reward_id\030\005 \001(\rR\010rewardId\"E\n\023ClaimReward"
+    "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
+    "v1.ErrCodeR\004code\"\305\001\n\026GetRewardClaimsRequ"
+    "est\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022D\n\013sour"
+    "ce_type\030\002 \001(\0162#.pandora.player.v1.Reward"
+    "SourceTypeR\nsourceType\022\026\n\006source\030\003 \001(\tR\006"
+    "source\0220\n\024activity_instance_id\030\004 \001(\004R\022ac"
+    "tivityInstanceId\"w\n\027GetRewardClaimsRespo"
+    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
+    "rCodeR\004code\022,\n\022claimed_reward_ids\030\002 \003(\rR"
+    "\020claimedRewardIds\"\262\001\n\024AddExperienceReque"
+    "st\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\033\n\texp_d"
+    "elta\030\002 \001(\004R\010expDelta\022\026\n\006reason\030\003 \001(\tR\006re"
+    "ason\022\'\n\017idempotency_key\030\004 \001(\tR\016idempoten"
+    "cyKey\022\037\n\013rating_pool\030\005 \001(\tR\nratingPool\"\340"
+    "\001\n\025AddExperienceResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\022\024\n\005leve"
+    "l\030\002 \001(\005R\005level\022 \n\014exp_in_level\030\003 \001(\004R\nex"
+    "pInLevel\022 \n\014is_max_level\030\004 \001(\010R\nisMaxLev"
+    "el\022#\n\rlevels_gained\030\005 \001(\rR\014levelsGained\022"
+    "\030\n\007already\030\006 \001(\010R\007already*f\n\023PlayerPushE"
+    "ventType\022(\n$PLAYER_PUSH_EVENT_TYPE_LEGAC"
+    "Y_UPDATE\020\000\022%\n!PLAYER_PUSH_EVENT_TYPE_EXP"
+    "ERIENCE\020\001*y\n\020RewardSourceType\022\"\n\036REWARD_"
+    "SOURCE_TYPE_UNSPECIFIED\020\000\022 \n\034REWARD_SOUR"
+    "CE_TYPE_PERMANENT\020\001\022\037\n\033REWARD_SOURCE_TYP"
+    "E_ACTIVITY\020\0022\361\025\n\rPlayerService\022Y\n\nGetPro"
+    "file\022$.pandora.player.v1.GetProfileReque"
+    "st\032%.pandora.player.v1.GetProfileRespons"
+    "e\022e\n\016UpdateNickname\022(.pandora.player.v1."
+    "UpdateNicknameRequest\032).pandora.player.v"
+    "1.UpdateNicknameResponse\022b\n\rEnsureProfil"
+    "e\022\'.pandora.player.v1.EnsureProfileReque"
+    "st\032(.pandora.player.v1.EnsureProfileResp"
+    "onse\022e\n\016GetPlayerNames\022(.pandora.player."
+    "v1.GetPlayerNamesRequest\032).pandora.playe"
+    "r.v1.GetPlayerNamesResponse\022Y\n\nListHeroe"
+    "s\022$.pandora.player.v1.ListHeroesRequest\032"
+    "%.pandora.player.v1.ListHeroesResponse\022Y"
+    "\n\nUnlockHero\022$.pandora.player.v1.UnlockH"
+    "eroRequest\032%.pandora.player.v1.UnlockHer"
+    "oResponse\022M\n\006GetMMR\022 .pandora.player.v1."
+    "GetMMRRequest\032!.pandora.player.v1.GetMMR"
+    "Response\022V\n\tUpdateMMR\022#.pandora.player.v"
+    "1.UpdateMMRRequest\032$.pandora.player.v1.U"
+    "pdateMMRResponse\022Y\n\nSelectHero\022$.pandora"
+    ".player.v1.SelectHeroRequest\032%.pandora.p"
+    "layer.v1.SelectHeroResponse\022b\n\rGetActive"
+    "Hero\022\'.pandora.player.v1.GetActiveHeroRe"
+    "quest\032(.pandora.player.v1.GetActiveHeroR"
+    "esponse\022w\n\024GrantAttributePoints\022..pandor"
+    "a.player.v1.GrantAttributePointsRequest\032"
+    "/.pandora.player.v1.GrantAttributePoints"
+    "Response\022\200\001\n\027AllocateAttributePoints\0221.p"
+    "andora.player.v1.AllocateAttributePoints"
+    "Request\0322.pandora.player.v1.AllocateAttr"
+    "ibutePointsResponse\022h\n\017ResetAttributes\022)"
+    ".pandora.player.v1.ResetAttributesReques"
+    "t\032*.pandora.player.v1.ResetAttributesRes"
+    "ponse\022b\n\rGetAttributes\022\'.pandora.player."
+    "v1.GetAttributesRequest\032(.pandora.player"
+    ".v1.GetAttributesResponse\022_\n\014SetEquipmen"
+    "t\022&.pandora.player.v1.SetEquipmentReques"
+    "t\032\'.pandora.player.v1.SetEquipmentRespon"
+    "se\022_\n\014GetEquipment\022&.pandora.player.v1.G"
+    "etEquipmentRequest\032\'.pandora.player.v1.G"
+    "etEquipmentResponse\022n\n\021GrantTalentPoints"
+    "\022+.pandora.player.v1.GrantTalentPointsRe"
+    "quest\032,.pandora.player.v1.GrantTalentPoi"
+    "ntsResponse\022Y\n\nSetTalents\022$.pandora.play"
+    "er.v1.SetTalentsRequest\032%.pandora.player"
+    ".v1.SetTalentsResponse\022_\n\014ResetTalents\022&"
+    ".pandora.player.v1.ResetTalentsRequest\032\'"
+    ".pandora.player.v1.ResetTalentsResponse\022"
+    "Y\n\nGetTalents\022$.pandora.player.v1.GetTal"
+    "entsRequest\032%.pandora.player.v1.GetTalen"
+    "tsResponse\022h\n\017GrantSkillCards\022).pandora."
+    "player.v1.GrantSkillCardsRequest\032*.pando"
+    "ra.player.v1.GrantSkillCardsResponse\022k\n\020"
+    "UpgradeSkillCard\022*.pandora.player.v1.Upg"
+    "radeSkillCardRequest\032+.pandora.player.v1"
+    ".UpgradeSkillCardResponse\022b\n\rSetSkillSlo"
+    "ts\022\'.pandora.player.v1.SetSkillSlotsRequ"
+    "est\032(.pandora.player.v1.SetSkillSlotsRes"
+    "ponse\022b\n\rGetSkillCards\022\'.pandora.player."
+    "v1.GetSkillCardsRequest\032(.pandora.player"
+    ".v1.GetSkillCardsResponse\022Y\n\nGetLoadout\022"
+    "$.pandora.player.v1.GetLoadoutRequest\032%."
+    "pandora.player.v1.GetLoadoutResponse\022\\\n\013"
+    "ClaimReward\022%.pandora.player.v1.ClaimRew"
+    "ardRequest\032&.pandora.player.v1.ClaimRewa"
+    "rdResponse\022h\n\017GetRewardClaims\022).pandora."
+    "player.v1.GetRewardClaimsRequest\032*.pando"
+    "ra.player.v1.GetRewardClaimsResponse\022b\n\r"
+    "AddExperience\022\'.pandora.player.v1.AddExp"
+    "erienceRequest\032(.pandora.player.v1.AddEx"
+    "perienceResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_deps[2] = {
@@ -11659,13 +12511,13 @@ static ::absl::once_flag descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto = {
     false,
     false,
-    11037,
+    11744,
     descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto,
     "pandora/player/v1/player.proto",
     &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_once,
     descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_deps,
     2,
-    67,
+    72,
     schemas,
     file_message_globals,
     TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto::offsets,
@@ -13311,6 +14163,1261 @@ void UpdateNicknameResponse::InternalSwap(UpdateNicknameResponse* PROTOBUF_RESTR
 }
 
 ::google::protobuf::Metadata UpdateNicknameResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+EnsureProfileRequest::EnsureProfileRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EnsureProfileRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.EnsureProfileRequest)
+}
+PROTOBUF_NDEBUG_INLINE EnsureProfileRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::player::v1::EnsureProfileRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        nickname_(arena, from.nickname_) {}
+
+EnsureProfileRequest::EnsureProfileRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EnsureProfileRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EnsureProfileRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  EnsureProfileRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.player_id_ = from._impl_.player_id_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.EnsureProfileRequest)
+}
+PROTOBUF_NDEBUG_INLINE EnsureProfileRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        nickname_(arena) {}
+
+inline void EnsureProfileRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.player_id_ = {};
+}
+EnsureProfileRequest::~EnsureProfileRequest() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.EnsureProfileRequest)
+  SharedDtor(*this);
+}
+inline void EnsureProfileRequest::SharedDtor(MessageLite& self) {
+  EnsureProfileRequest& this_ = static_cast<EnsureProfileRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.nickname_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EnsureProfileRequest_class_data_ =
+        EnsureProfileRequest::InternalGenerateClassData_(EnsureProfileRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EnsureProfileRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EnsureProfileRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EnsureProfileRequest_class_data_.tc_table);
+  return EnsureProfileRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EnsureProfileRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EnsureProfileRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EnsureProfileRequest_globals_));
+  return EnsureProfileRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EnsureProfileRequest::ParseTableT_
+    EnsureProfileRequest::_table_ =
+        EnsureProfileRequest::InternalGenerateParseTable_(EnsureProfileRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EnsureProfileRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.EnsureProfileRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.nickname_.ClearNonDefaultToEmpty();
+  }
+  _impl_.player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EnsureProfileRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EnsureProfileRequest& this_ = static_cast<const EnsureProfileRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EnsureProfileRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EnsureProfileRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.EnsureProfileRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string nickname = 2 [json_name = "nickname"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_nickname().empty()) {
+      const ::std::string& _s = this_._internal_nickname();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.player.v1.EnsureProfileRequest.nickname");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.EnsureProfileRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EnsureProfileRequest::ByteSizeLong(const MessageLite& base) {
+  const EnsureProfileRequest& this_ = static_cast<const EnsureProfileRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EnsureProfileRequest::ByteSizeLong() const {
+  const EnsureProfileRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.EnsureProfileRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string nickname = 2 [json_name = "nickname"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_nickname().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_nickname());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EnsureProfileRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EnsureProfileRequest*>(&to_msg);
+  auto& from = static_cast<const EnsureProfileRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.EnsureProfileRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_nickname().empty()) {
+        _this->_internal_set_nickname(from._internal_nickname());
+      } else {
+        if (_this->_impl_.nickname_.IsDefault()) {
+          _this->_internal_set_nickname("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EnsureProfileRequest::CopyFrom(const EnsureProfileRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.EnsureProfileRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EnsureProfileRequest::InternalSwap(EnsureProfileRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.nickname_, &other->_impl_.nickname_, arena);
+  swap(_impl_.player_id_, other->_impl_.player_id_);
+}
+
+::google::protobuf::Metadata EnsureProfileRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+PlayerName::PlayerName(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerName_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.PlayerName)
+}
+PROTOBUF_NDEBUG_INLINE PlayerName::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::player::v1::PlayerName& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        nickname_(arena, from.nickname_) {}
+
+PlayerName::PlayerName(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PlayerName& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerName_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PlayerName* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.player_id_ = from._impl_.player_id_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.PlayerName)
+}
+PROTOBUF_NDEBUG_INLINE PlayerName::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        nickname_(arena) {}
+
+inline void PlayerName::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.player_id_ = {};
+}
+PlayerName::~PlayerName() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.PlayerName)
+  SharedDtor(*this);
+}
+inline void PlayerName::SharedDtor(MessageLite& self) {
+  PlayerName& this_ = static_cast<PlayerName&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.nickname_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PlayerName_class_data_ =
+        PlayerName::InternalGenerateClassData_(PlayerName_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerName::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerName_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PlayerName_class_data_.tc_table);
+  return PlayerName_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerName::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerName_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PlayerName_globals_));
+  return PlayerName_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PlayerName::ParseTableT_
+    PlayerName::_table_ =
+        PlayerName::InternalGenerateParseTable_(PlayerName_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PlayerName::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.PlayerName)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.nickname_.ClearNonDefaultToEmpty();
+  }
+  _impl_.player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PlayerName::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PlayerName& this_ = static_cast<const PlayerName&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PlayerName::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PlayerName& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.PlayerName)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string nickname = 2 [json_name = "nickname"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_nickname().empty()) {
+      const ::std::string& _s = this_._internal_nickname();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.player.v1.PlayerName.nickname");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.PlayerName)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PlayerName::ByteSizeLong(const MessageLite& base) {
+  const PlayerName& this_ = static_cast<const PlayerName&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PlayerName::ByteSizeLong() const {
+  const PlayerName& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.PlayerName)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string nickname = 2 [json_name = "nickname"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_nickname().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_nickname());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PlayerName::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PlayerName*>(&to_msg);
+  auto& from = static_cast<const PlayerName&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.PlayerName)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_nickname().empty()) {
+        _this->_internal_set_nickname(from._internal_nickname());
+      } else {
+        if (_this->_impl_.nickname_.IsDefault()) {
+          _this->_internal_set_nickname("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PlayerName::CopyFrom(const PlayerName& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.PlayerName)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PlayerName::InternalSwap(PlayerName* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.nickname_, &other->_impl_.nickname_, arena);
+  swap(_impl_.player_id_, other->_impl_.player_id_);
+}
+
+::google::protobuf::Metadata PlayerName::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetPlayerNamesRequest::GetPlayerNamesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerNamesRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.GetPlayerNamesRequest)
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerNamesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::player::v1::GetPlayerNamesRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        player_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::player::v1::GetPlayerNamesRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesRequest, _impl_.player_ids_)>()
+          , from.player_ids_
+        }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+GetPlayerNamesRequest::GetPlayerNamesRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetPlayerNamesRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerNamesRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetPlayerNamesRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.GetPlayerNamesRequest)
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerNamesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::GetPlayerNamesRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+inline void GetPlayerNamesRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+GetPlayerNamesRequest::~GetPlayerNamesRequest() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.GetPlayerNamesRequest)
+  SharedDtor(*this);
+}
+inline void GetPlayerNamesRequest::SharedDtor(MessageLite& self) {
+  GetPlayerNamesRequest& this_ = static_cast<GetPlayerNamesRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetPlayerNamesRequest_class_data_ =
+        GetPlayerNamesRequest::InternalGenerateClassData_(GetPlayerNamesRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerNamesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerNamesRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetPlayerNamesRequest_class_data_.tc_table);
+  return GetPlayerNamesRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerNamesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerNamesRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetPlayerNamesRequest_globals_));
+  return GetPlayerNamesRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetPlayerNamesRequest::ParseTableT_
+    GetPlayerNamesRequest::_table_ =
+        GetPlayerNamesRequest::InternalGenerateParseTable_(GetPlayerNamesRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetPlayerNamesRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.GetPlayerNamesRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.player_ids_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetPlayerNamesRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetPlayerNamesRequest& this_ = static_cast<const GetPlayerNamesRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetPlayerNamesRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetPlayerNamesRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.GetPlayerNamesRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._player_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            1, this_._internal_player_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.GetPlayerNamesRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetPlayerNamesRequest::ByteSizeLong(const MessageLite& base) {
+  const GetPlayerNamesRequest& this_ = static_cast<const GetPlayerNamesRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetPlayerNamesRequest::ByteSizeLong() const {
+  const GetPlayerNamesRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.GetPlayerNamesRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_player_ids(), 1,
+              this_._impl_._player_ids_cached_byte_size_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetPlayerNamesRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetPlayerNamesRequest*>(&to_msg);
+  auto& from = static_cast<const GetPlayerNamesRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.GetPlayerNamesRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetPlayerNamesRequest::CopyFrom(const GetPlayerNamesRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.GetPlayerNamesRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetPlayerNamesRequest::InternalSwap(GetPlayerNamesRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
+}
+
+::google::protobuf::Metadata GetPlayerNamesRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetPlayerNamesResponse::GetPlayerNamesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerNamesResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.GetPlayerNamesResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerNamesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::player::v1::GetPlayerNamesResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        names_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::player::v1::GetPlayerNamesResponse,
+              PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesResponse, _impl_.names_)>()
+          , from.names_
+        }
+     {}
+
+GetPlayerNamesResponse::GetPlayerNamesResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetPlayerNamesResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerNamesResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetPlayerNamesResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.code_ = from._impl_.code_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.GetPlayerNamesResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerNamesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        names_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::GetPlayerNamesResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetPlayerNamesResponse, _impl_.names_)>()
+         }
+     {}
+
+inline void GetPlayerNamesResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+GetPlayerNamesResponse::~GetPlayerNamesResponse() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.GetPlayerNamesResponse)
+  SharedDtor(*this);
+}
+inline void GetPlayerNamesResponse::SharedDtor(MessageLite& self) {
+  GetPlayerNamesResponse& this_ = static_cast<GetPlayerNamesResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetPlayerNamesResponse_class_data_ =
+        GetPlayerNamesResponse::InternalGenerateClassData_(GetPlayerNamesResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerNamesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerNamesResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetPlayerNamesResponse_class_data_.tc_table);
+  return GetPlayerNamesResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerNamesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerNamesResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetPlayerNamesResponse_globals_));
+  return GetPlayerNamesResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetPlayerNamesResponse::ParseTableT_
+    GetPlayerNamesResponse::_table_ =
+        GetPlayerNamesResponse::InternalGenerateParseTable_(GetPlayerNamesResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetPlayerNamesResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.GetPlayerNamesResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.names_.Clear();
+  }
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetPlayerNamesResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetPlayerNamesResponse& this_ = static_cast<const GetPlayerNamesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetPlayerNamesResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetPlayerNamesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.GetPlayerNamesResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // repeated .pandora.player.v1.PlayerName names = 2 [json_name = "names"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_names_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_names().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              2, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.GetPlayerNamesResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetPlayerNamesResponse::ByteSizeLong(const MessageLite& base) {
+  const GetPlayerNamesResponse& this_ = static_cast<const GetPlayerNamesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetPlayerNamesResponse::ByteSizeLong() const {
+  const GetPlayerNamesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.GetPlayerNamesResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // repeated .pandora.player.v1.PlayerName names = 2 [json_name = "names"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_names_size();
+      for (const auto& msg : this_._internal_names()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetPlayerNamesResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetPlayerNamesResponse*>(&to_msg);
+  auto& from = static_cast<const GetPlayerNamesResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.GetPlayerNamesResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_names()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_names());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetPlayerNamesResponse::CopyFrom(const GetPlayerNamesResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.GetPlayerNamesResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetPlayerNamesResponse::InternalSwap(GetPlayerNamesResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.names_.InternalSwap(&other->_impl_.names_);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata GetPlayerNamesResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+EnsureProfileResponse::EnsureProfileResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EnsureProfileResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.EnsureProfileResponse)
+}
+PROTOBUF_NDEBUG_INLINE EnsureProfileResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::player::v1::EnsureProfileResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        effective_nickname_(arena, from.effective_nickname_) {}
+
+EnsureProfileResponse::EnsureProfileResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EnsureProfileResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EnsureProfileResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  EnsureProfileResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, code_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, code_),
+           offsetof(Impl_, level_) -
+               offsetof(Impl_, code_) +
+               sizeof(Impl_::level_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.EnsureProfileResponse)
+}
+PROTOBUF_NDEBUG_INLINE EnsureProfileResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        effective_nickname_(arena) {}
+
+inline void EnsureProfileResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, code_),
+           0,
+           offsetof(Impl_, level_) -
+               offsetof(Impl_, code_) +
+               sizeof(Impl_::level_));
+}
+EnsureProfileResponse::~EnsureProfileResponse() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.EnsureProfileResponse)
+  SharedDtor(*this);
+}
+inline void EnsureProfileResponse::SharedDtor(MessageLite& self) {
+  EnsureProfileResponse& this_ = static_cast<EnsureProfileResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.effective_nickname_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EnsureProfileResponse_class_data_ =
+        EnsureProfileResponse::InternalGenerateClassData_(EnsureProfileResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EnsureProfileResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EnsureProfileResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EnsureProfileResponse_class_data_.tc_table);
+  return EnsureProfileResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EnsureProfileResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EnsureProfileResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EnsureProfileResponse_globals_));
+  return EnsureProfileResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EnsureProfileResponse::ParseTableT_
+    EnsureProfileResponse::_table_ =
+        EnsureProfileResponse::InternalGenerateParseTable_(EnsureProfileResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EnsureProfileResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.EnsureProfileResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.effective_nickname_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+    ::memset(&_impl_.code_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.level_) -
+        reinterpret_cast<char*>(&_impl_.code_)) + sizeof(_impl_.level_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EnsureProfileResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EnsureProfileResponse& this_ = static_cast<const EnsureProfileResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EnsureProfileResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EnsureProfileResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.EnsureProfileResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // bool created = 2 [json_name = "created"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_created() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_created(), target);
+    }
+  }
+
+  // string effective_nickname = 3 [json_name = "effectiveNickname"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_effective_nickname().empty()) {
+      const ::std::string& _s = this_._internal_effective_nickname();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.player.v1.EnsureProfileResponse.effective_nickname");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint32 level = 4 [json_name = "level"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_level() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_level(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.EnsureProfileResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EnsureProfileResponse::ByteSizeLong(const MessageLite& base) {
+  const EnsureProfileResponse& this_ = static_cast<const EnsureProfileResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EnsureProfileResponse::ByteSizeLong() const {
+  const EnsureProfileResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.EnsureProfileResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // string effective_nickname = 3 [json_name = "effectiveNickname"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_effective_nickname().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_effective_nickname());
+      }
+    }
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+    // bool created = 2 [json_name = "created"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_created() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 level = 4 [json_name = "level"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_level() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_level());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EnsureProfileResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EnsureProfileResponse*>(&to_msg);
+  auto& from = static_cast<const EnsureProfileResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.EnsureProfileResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_effective_nickname().empty()) {
+        _this->_internal_set_effective_nickname(from._internal_effective_nickname());
+      } else {
+        if (_this->_impl_.effective_nickname_.IsDefault()) {
+          _this->_internal_set_effective_nickname("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_created() != 0) {
+        _this->_impl_.created_ = from._impl_.created_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_level() != 0) {
+        _this->_impl_.level_ = from._impl_.level_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EnsureProfileResponse::CopyFrom(const EnsureProfileResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.EnsureProfileResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EnsureProfileResponse::InternalSwap(EnsureProfileResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.effective_nickname_, &other->_impl_.effective_nickname_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.level_)
+      + sizeof(EnsureProfileResponse::_impl_.level_)
+      - PROTOBUF_FIELD_OFFSET(EnsureProfileResponse, _impl_.code_)>(
+          reinterpret_cast<char*>(&_impl_.code_),
+          reinterpret_cast<char*>(&other->_impl_.code_));
+}
+
+::google::protobuf::Metadata EnsureProfileResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
