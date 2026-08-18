@@ -1,8 +1,8 @@
 {
   "rows": [
     {
-      "id": 60001,
-      "level_id": 7,
+      "id": 110001,
+      "level_id": 11,
       "level_asset_path": "/Game/Test/Level/SonglinTown.SonglinTown",
       "remark": "松林镇-静态怪导入",
       "enabled": true,
@@ -21,6 +21,38 @@
       "level_id": 4,
       "level_asset_path": "/Game/Test/Level/Fight/Lvl_Test_Fight.Lvl_Test_Fight",
       "remark": "战斗测试-手动摆怪",
+      "priority": 100
+    },
+    {
+      "id": 50001,
+      "level_id": 7,
+      "level_asset_path": "/Game/Test/Level/SonglinTown.SonglinTown",
+      "remark": "松林镇-静态怪导入",
+      "enabled": true,
+      "priority": 100
+    },
+    {
+      "id": 130001,
+      "level_id": 13,
+      "level_asset_path": "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk.StylizedCyberpunk",
+      "remark": "Level13-自动创建",
+      "enabled": true,
+      "priority": 100
+    },
+    {
+      "id": 130002,
+      "level_id": 13,
+      "level_asset_path": "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk.StylizedCyberpunk",
+      "remark": "Level13-防守波次专用",
+      "enabled": true,
+      "priority": 100
+    },
+    {
+      "id": 130003,
+      "level_id": 13,
+      "level_asset_path": "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk.StylizedCyberpunk",
+      "remark": "Level13-防守第二波",
+      "enabled": true,
       "priority": 100
     }
   ]

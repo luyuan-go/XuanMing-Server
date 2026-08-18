@@ -144,7 +144,7 @@ func TestLoadRealDistIfPresent(t *testing.T) {
 // 历史上这份数值住在服务 yaml 里时就漏配过 2007/2008 两只怪且长期无人发现(2026-08-04
 // 迁到 role_level 表时才查出来),所以把"每只怪都有正经验"变成可机械复现的断言。
 //
-// 玩家英雄行(1001~1010)显式配 0,表示"有意不给击杀经验",不在本断言范围内。
+// 断言范围按角色表 entity_type 判定,不按 ID 区间猜:只有「怪物」才必须有正经验。
 func TestRealDistMonsterKillExp(t *testing.T) {
 	dist := filepath.Join("..", "..", "configtable", "dist")
 	if _, err := os.Stat(filepath.Join(dist, ManifestFileName)); err != nil {
@@ -159,18 +159,32 @@ func TestRealDistMonsterKillExp(t *testing.T) {
 		t.Fatal("角色等级表为空")
 	}
 
-	// 怪物角色 ID 段:2xxx 起(1001~1010 是玩家英雄)。逐行断言经验为正。
-	const firstMonsterRoleID = 2000
+	// 「哪一行该有击杀经验」按角色表的 entity_type 判,不按 ID 区间猜。
+	// 类型取值(源表「类型」列;proto 侧是裸 uint32,没有 enum):1=玩家英雄、2=怪物、3=防守目标。
+	//
+	// 这里原本写的是「role_id < 2000 且 > 10 视为玩家英雄」——那是 entity_type 的**近似**,
+	// 只在"只有英雄和怪"两类时成立。2026-08-18 防守玩法落表引入第三类(3001「雅典娜」,
+	// entity_type=3,description 写着"防守关卡目标")当场把它捅穿:它是要**保护**的目标,
+	// 不是给你杀的怪,配击杀经验没有意义,却因为 ID 落在 2000 以上被当成怪判红。
+	// 改按 entity_type 判之后,以后新增防守目标 / 新增怪都不用再回来改这个用例。
+	const roleEntityTypeMonster = 2
 	monsters := 0
 	for _, row := range tb.RoleLevel.All() {
 		roleID := row.GetRoleId()
-		if roleID < firstMonsterRoleID && roleID > 10 {
-			continue // 玩家英雄行:显式 0 是有意的
+		roleRow, ok := tb.RoleLevelRoleIdRow(row)
+		if !ok {
+			// 分不清是不是怪就必须报错,不能静默跳过——那正好是漏配会藏身的地方。
+			t.Errorf("角色等级表 role_id=%d level=%d 在角色表里没有对应行,无法判定是否该给击杀经验",
+				roleID, row.GetLevel())
+			continue
+		}
+		if roleRow.GetEntityType() != roleEntityTypeMonster {
+			continue // 玩家英雄(显式 0 是有意的)/ 防守目标等非怪行,不在本断言范围
 		}
 		monsters++
 		if row.GetKillExp() == 0 {
 			t.Errorf("怪物 role_id=%d level=%d 的击杀经验为 0(杀它零收益且不打任何日志;"+
-				"若确实不该给经验请在此用例登记豁免)", roleID, row.GetLevel())
+				"若确实不该给经验请把它的 entity_type 改成非怪,或在此用例登记豁免)", roleID, row.GetLevel())
 		}
 	}
 	if monsters == 0 {
@@ -229,18 +243,21 @@ func TestRealDistBattleLaunchURLs(t *testing.T) {
 	// 逐张比对(值取自 g_关卡.xlsx;7/8 等历史图的 URL 与旧 yaml 手抄值逐字一致)。
 	// id=5「测试场景」的 GameMode类 列为空 → 不拼 ?game=,沿用关卡自带 GameMode。
 	want := map[uint32]string{
-		4:  "/Game/Test/Level/Fight/Lvl_Test_Fight?game=/Script/Pandora.PandoraBattleGameMode",
-		5:  "/Game/Test/Level/_Test/Level_TopDown_Test02",
-		6:  "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode",
-		7:  "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode",
-		8:  "/Game/ScifiArctic/Maps/ExampleLevel_Artic01?game=/Script/Pandora.PandoraPveGameMode",
+		4: "/Game/Test/Level/Fight/Lvl_Test_Fight?game=/Script/Pandora.PandoraBattleGameMode",
+		5: "/Game/Test/Level/_Test/Level_TopDown_Test02",
+		6: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode",
+		7: "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode",
+		8: "/Game/ScifiArctic/Maps/ExampleLevel_Artic01?game=/Script/Pandora.PandoraPveGameMode",
 		// 9 原是「PVP战斗」指向 dungeon 图,svn r1987 策划改成「3V3战斗」并换到 MainCity;
 		// 12「2V2战斗」同批新增、同一张图,13 是 3 人档 PVE(与 11 同图、team_size 不同)。
 		9:  "/Game/Test/Level/MainCity?game=/Script/Pandora.PandoraBattleGameMode",
 		10: "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon_Pve?game=/Script/Pandora.PandoraPveGameMode",
 		11: "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk?game=/Script/Pandora.PandoraPveGameMode",
 		12: "/Game/Test/Level/MainCity?game=/Script/Pandora.PandoraBattleGameMode",
-		13: "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk?game=/Script/Pandora.PandoraPveGameMode",
+		// 13 在 svn r2103 由策划从 PVE 改成**防守玩法**(PandoraDefenseGameMode,同图新增
+		// 防守目标角色 3001「雅典娜」);14「PVE战斗」同批新增,与 8 同图但 team_size=3。
+		13: "/Game/StylizedCyberpunk/Levels/StylizedCyberpunk?game=/Script/Pandora.PandoraDefenseGameMode",
+		14: "/Game/ScifiArctic/Maps/ExampleLevel_Artic01?game=/Script/Pandora.PandoraPveGameMode",
 	}
 	for id, wantURL := range want {
 		got, err := lv.BattleLaunchURL(id)

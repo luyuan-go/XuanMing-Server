@@ -1,8 +1,8 @@
 {
-  "version": 20260817001,
-  "generated_at_ms": 1786956125778,
+  "version": 20260818001,
+  "generated_at_ms": 1787041693512,
   "generator": "configtable-gen@0.1.0",
-  "source_rev": "svn-r2066",
+  "source_rev": "svn-r2107",
   "tables": [
     {
       "name": "chest_drop",
@@ -78,15 +78,15 @@
       "name": "item",
       "file": "item.json",
       "proto": "pandora.config.v1.ItemTableData",
-      "checksum": "sha256:2e0a5c5ca7abe7f940523ffdf6b6981c9c0dec0abcc77406efc9f005307d9f4f",
-      "rows": 65
+      "checksum": "sha256:58edba9a5dc62420f77048274c4cf87049b69a720d1ea31dd72d4500f611217b",
+      "rows": 185
     },
     {
       "name": "level",
       "file": "level.json",
       "proto": "pandora.config.v1.LevelTableData",
-      "checksum": "sha256:c0233840bb3686e35bb4661bb0606d823c5b59a54abfc45fbf9fcbd65224412f",
-      "rows": 13
+      "checksum": "sha256:b5ea9a75e35c1caa2094b5ec11e6aa4f031ad7ccfaec5d7ba88f3e87cbd26de3",
+      "rows": 14
     },
     {
       "name": "mission",
@@ -127,15 +127,15 @@
       "name": "role_level",
       "file": "role_level.json",
       "proto": "pandora.config.v1.RoleLevelTableData",
-      "checksum": "sha256:e86978bfac44c840efb4f5d55797e1aee35723f80b1ec7960f03f18c14235d6f",
-      "rows": 26
+      "checksum": "sha256:9152579c3ebf4b079f5e7f1b401aefa403cf793953d4546d5fe740ec5d68607b",
+      "rows": 27
     },
     {
       "name": "role",
       "file": "role.json",
       "proto": "pandora.config.v1.RoleTableData",
-      "checksum": "sha256:a36f6c493d7168a9aeefe4bda95b0863e50ddca3830902eb77e08aae78403a18",
-      "rows": 23
+      "checksum": "sha256:bf075120bf50585e594262fd2c895d40368e206b492a5f6a99542a6b3c554599",
+      "rows": 24
     },
     {
       "name": "skill_bullet",
@@ -190,15 +190,15 @@
       "name": "spawn_group",
       "file": "spawn_group.json",
       "proto": "pandora.config.v1.SpawnGroupTableData",
-      "checksum": "sha256:e773e9ceaaae20dca980ca4145a8e5c9806d925f9b438b630a91405b624df7b6",
-      "rows": 3
+      "checksum": "sha256:3aa1e95357c8a82b3f22348167b2ea27884ae1074556785bc9eabb463804aef6",
+      "rows": 7
     },
     {
       "name": "spawn_point",
       "file": "spawn_point.json",
       "proto": "pandora.config.v1.SpawnPointTableData",
-      "checksum": "sha256:81c6209cb766ecff0a3c0a83eab05077ee3281d7b6209cda33d1b17caa64e578",
-      "rows": 402
+      "checksum": "sha256:8c826f92d7e5c32c120ffa7225c5c83c382ef6c60b0746d3b9e51fcb20a8c889",
+      "rows": 227
     },
     {
       "name": "talent_effect",

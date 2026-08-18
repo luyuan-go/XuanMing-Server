@@ -249,6 +249,14 @@
       "attack": 100,
       "crit_damage": 1,
       "hit_chance": 1
+    },
+    {
+      "id": 3001001,
+      "role_id": 3001,
+      "role_name": "雅典娜",
+      "level": 1,
+      "hp": 5000,
+      "hit_chance": 1
     }
   ]
 }

@@ -31,8 +31,10 @@ func TestRealItemTableInventoryContract(t *testing.T) {
 		t.Fatalf("load real dist: %v", err)
 	}
 	tables := store.Tables()
-	if got := tables.Item.Count(); got != 65 {
-		t.Fatalf("item row count drifted: got=%d want=65", got)
+	// 行数是漂移探针,跟着 g_道具.xlsx 走:svn r2107(dist 20260818001)一批补了
+	// 10066~10185 共 120 行装备(六个鉴定池各成体系),65 → 185。
+	if got := tables.Item.Count(); got != 185 {
+		t.Fatalf("item row count drifted: got=%d want=185", got)
 	}
 	if got := tables.EquipmentAffix.Count(); got != 18 {
 		t.Fatalf("equipment affix row count drifted: got=%d want=18", got)
@@ -52,7 +54,10 @@ func TestRealItemTableInventoryContract(t *testing.T) {
 			battleUsable++
 		}
 	}
-	if equipment != 31 || sellable != 60 || battleUsable != 5 {
+	// 同上跟着表走:新增的 120 行全是装备(equipment 31→151、sellable 60→180),
+	// 局内可用件数没变——这条正是本断言的价值:整批补装备不该顺手放开"战斗中可用",
+	// 那是唯一能让 DS 走内部持久扣减 RPC 的授权位(见 Lookup 的 BattleUsable 注释)。
+	if equipment != 151 || sellable != 180 || battleUsable != 5 {
 		t.Fatalf("real item contract drift: equipment=%d sellable=%d battle_usable=%d", equipment, sellable, battleUsable)
 	}
 
@@ -78,8 +83,8 @@ func TestRealItemTableInventoryContract(t *testing.T) {
 	if _, ok := catalog.IdentifyRule(10001); ok {
 		t.Fatal("non-equipment must not expose an identify rule")
 	}
-	if got := len(itemMaxStacksFromTables(tables)); got != 65 {
-		t.Fatalf("max-stack projection count=%d want=65", got)
+	if got := len(itemMaxStacksFromTables(tables)); got != 185 {
+		t.Fatalf("max-stack projection count=%d want=185", got)
 	}
 
 	// Compile-time guard: catalog remains the biz-facing seam, not a command-only helper.
