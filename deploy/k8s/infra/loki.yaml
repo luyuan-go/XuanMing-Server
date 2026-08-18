@@ -40,6 +40,33 @@ data:
           index:
             prefix: index_
             period: 24h
+
+        # ── 以后切 MinIO/S3 时在这里**追加新周期**(不要改上面那条)──────────────
+        # Loki 跨 schema 边界透明合并查询:旧周期仍从 filesystem 读,新周期写 s3,
+        # 切换之后历史日志照样查得到。from 必须是**未来**的 UTC 日期(YYYY-MM-DD)。
+        # - from: "2026-09-01"
+        #   store: tsdb
+        #   object_store: s3
+        #   schema: v13
+        #   index:
+        #     prefix: index_
+        #     period: 24h
+
+    # ── MinIO/S3 后端(与上面新周期配套;现在不生效)──────────────────────────────
+    # 凭据经 k8s Secret 注入容器环境 + Loki 加 -config.expand-env=true,勿写进本文件。
+    # ⚠️ 桶上不要再挂 MinIO ILM 过期规则:保留期由 compactor 的 retention_period 统一管,
+    #    两套并存会让 MinIO 删掉索引仍引用的 chunk,查询报错。
+    # storage_config:
+    #   filesystem:
+    #     directory: /loki/chunks
+    #   aws:
+    #     endpoint: minio.pandora.svc:9000
+    #     bucketnames: pandora-logs
+    #     access_key_id: ${MINIO_ROOT_USER}
+    #     secret_access_key: ${MINIO_ROOT_PASSWORD}
+    #     s3forcepathstyle: true
+    #     insecure: true
+    #     region: null
     limits_config:
       retention_period: 168h
       reject_old_samples: true
@@ -51,11 +78,28 @@ data:
       retention_enabled: true
       delete_request_store: filesystem
 ---
+# 日志数据盘。原为 emptyDir —— Loki Pod 一重建(滚更/驱逐/节点漂移)历史日志全部归零,
+# 与 retention_period=168h 无关,是「事后查不到那局 DS 日志」的首要现实原因。
+# dev 用 minikube 默认 hostpath StorageClass 落本机盘即可;生产改对象存储见 infra.md §11.2。
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: loki-data
+  namespace: pandora
+  labels: { app: loki }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 10Gi }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: loki, namespace: pandora, labels: { app: loki } }
 spec:
   replicas: 1
+  # 单副本 + RWO 数据盘不得 RollingUpdate：新旧 Pod 会抢同一个 PVC,新 Pod 卡 Pending。
+  # 与 etcd 同一纪律(infra.yaml)。
+  strategy: { type: Recreate }
   # 新机器首次冷拉 Grafana 日志栈时允许 30 分钟；日志栈仍是非关键路径，不阻断业务启动。
   progressDeadlineSeconds: 1800
   selector: { matchLabels: { app: loki } }
@@ -78,7 +122,7 @@ spec:
         - name: config
           configMap: { name: loki-config }
         - name: data
-          emptyDir: {}
+          persistentVolumeClaim: { claimName: loki-data }
 ---
 apiVersion: v1
 kind: Service
@@ -180,11 +224,27 @@ data:
       }
     }
 ---
+# 采集进度(positions)盘。原为 emptyDir —— Alloy 重启即忘记读到哪。
+# 对长驻业务 Pod 只是重复/漏采一小段;但对 **Battle DS 这种每局一换的短命 Pod**,
+# 重启期间被回收掉的那一局,Pod 与 kubelet 日志目录都已消失,没有第二份可回补 = 永久丢失。
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alloy-data
+  namespace: pandora
+  labels: { app: alloy }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 1Gi }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: alloy, namespace: pandora, labels: { app: alloy } }
 spec:
   replicas: 1
+  # 单副本 + RWO 数据盘不得 RollingUpdate(同 Loki/etcd 纪律)。
+  strategy: { type: Recreate }
   # 与 Loki 对齐，避免共享下载带宽时被 Deployment 默认 600s 提前判失败。
   progressDeadlineSeconds: 1800
   selector: { matchLabels: { app: alloy } }
@@ -207,4 +267,4 @@ spec:
         - name: config
           configMap: { name: alloy-config }
         - name: data
-          emptyDir: {}
+          persistentVolumeClaim: { claimName: alloy-data }

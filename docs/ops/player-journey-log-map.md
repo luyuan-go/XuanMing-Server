@@ -58,6 +58,14 @@ player_id/ds_pod/ds_instance_epoch`;重连=`player_id/match_id/owner_epoch/jti/t
 - **trace_id 跨进程**:后端采纳入站 `x-pandora-trace-id`;UE 客户端前缀 `ue`、UE DS 前缀 `ds`——看前缀即知
   链路发起端。DS 自己的本地日志行没有 trace_id 字段,靠 `player=/match=` 文本对齐时间窗。
 - **DS 文本行检索约定**:关键行必须含 `player=<id>`(部分历史行是中文语句,检索词见 §2.7)。
+- **能查多久 / 存在哪**(决定"这单还查不查得动"):日志存 **Loki**,不在 MySQL/TiDB 里,别去翻库。
+  保留 **7 天**(compactor 到期真删),超期即查不到。落盘位置:compose=docker volume `loki-data`;
+  k8s=PVC `loki-data`(2026-08-18 前是 emptyDir,**Loki Pod 一重建历史全零**,老工单查无结果可能是这个原因
+  而不是没打日志)。`start.ps1 -Down` 已改为保留 PVC。生产切 MinIO 的路径见 infra.md §11.2。
+- **短命 DS 也查得到**:Battle DS 每局一个 Pod,但结算后约 15~17s(异常 15~20s)才回收,Alloy 秒级采集
+  来得及;Pod 删除后仍能在 Loki 查到(INC-20260803 即从 Loki 捞回已删 Pod 的完整退出序列)。
+  唯一例外是 **Alloy 自身重启的窗口**——那一局的 Pod 与 kubelet 日志目录已消失,无第二份可回补,
+  故 Alloy 的 positions 也已落 PVC。
 
 ## 2. 六段链路:里程碑、玩家问题判据与陷阱
 

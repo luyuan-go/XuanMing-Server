@@ -661,7 +661,36 @@ pandora_kafka_consumer_lag{topic="pandora.battle.result",group="battle_result"}
 | local / battle(宿主 go 进程) | Alloy tail `run/logs/*.log` | 同上(compose 挂载 `../run/logs`) |
 | k8s(minikube) | 集群内 Alloy 经 kubelet API 采全部 Pod(业务 + Agones DS UE log) | `deploy/k8s/infra/loki.yaml`(start.ps1 -Mode k8s 自动 apply) |
 
-Loki 端口 **3100**(compose 宿主直查),保留 7 天,filesystem 存储(volume `pandora-loki-data`)。Grafana 数据源经 provisioning 自动注入(`deploy/grafana/provisioning/`):`Loki`(compose)/ `Loki (k8s)`(需 `kubectl -n pandora port-forward svc/loki 3101:3100`)/ `Prometheus`。
+Loki 端口 **3100**(compose 宿主直查)。Grafana 数据源经 provisioning 自动注入(`deploy/grafana/provisioning/`):`Loki`(compose)/ `Loki (k8s)`(需 `kubectl -n pandora port-forward svc/loki 3101:3100`)/ `Prometheus`。
+
+**存储后端与保留期(2026-08-18 修订)**
+
+日志**不进 MySQL/TiDB,也不进 Redis**。日志是「写多读少、按时间过期、全文检索」的负载:关系库要为永不被读的数据付索引与写放大的代价,清理老数据靠大批量 DELETE,还与「不许因数据大自动删」的容量红线直接冲突;Redis 是内存价,装不下也不持久。这条纪律的另一面同样重要——**「业务事件」不是日志**:结算流水、背包变更、封禁记录要对账、要精确统计、要长期留存,它们本来就在 TiDB 里(`battle_result`、bag journal 等),不要因为"顺手"塞进 Loki,也不要反过来把排障日志塞进库。
+
+| 模式 | 数据落点 | Pod/容器重建 | 保留期 |
+|---|---|---|---|
+| compose(dev) | docker named volume `loki-data` | **不丢** | 7 天 |
+| k8s(minikube) | PVC `loki-data`(10Gi,默认 hostpath SC) | **不丢**(2026-08-18 前是 emptyDir,重建即全丢) | 7 天 |
+| 生产(未启用) | MinIO/S3 对象存储 | 不丢 | 7 天,可调 |
+
+保留期由 **Loki compactor** 统一执行(`retention_period: 168h` + `compactor.retention_enabled: true`,到期真删)。超过 7 天的日志查不到,这是刻意取舍:排障线索不是业务事实,过期即弃。
+
+采集端 Alloy 的读取进度(positions)在 k8s 侧同样落 PVC `alloy-data`。这一条专门为 **Agones GameServer(Battle DS)**:业务 Pod 长驻,Alloy 重启后能续采;而 DS 每局一换,重启窗口内被回收的那一局,Pod 与 kubelet 日志目录都已消失,**没有第二份可回补**。
+
+⚠️ `start.ps1 -Down` 已改为**保留 PVC**(与 namespace/`etcd-data` 同一政策,见 `Remove-K8sManifestObjectsPreserving`)。要清空日志盘必须显式执行 `kubectl -n pandora delete pvc/loki-data`。
+
+**切换到 MinIO/S3(以后上线时)**
+
+两份 Loki 配置(`deploy/loki/loki-config.yml`、`deploy/k8s/infra/loki.yaml` 的 ConfigMap)里已写好注释形态的 `storage_config.aws` 块与 schema 新周期模板,切换步骤:
+
+1. 确认桶存在(CI 栈的 `minio-init` 已自动建 `pandora-logs`,**刻意不挂 ILM**)。
+2. 在 `schema_config.configs` **追加**一个 `from` 为**未来日期**、`object_store: s3` 的新周期,**不要修改既有那条**。Loki 能跨 schema 边界透明合并查询,于是**旧数据继续从 filesystem 读、新数据写 S3,切换之后历史日志照样查得到**。
+3. 放开 `storage_config` 块;`s3forcepathstyle: true` 对 MinIO 是必需的(桶名走路径而非子域名)。
+4. 凭据经环境变量/k8s Secret 注入,Loki 启动加 `-config.expand-env=true`,**不要把密钥写进版本库**。
+5. 改完用官方校验器验一遍再上:
+   `docker run --rm -v <cfg 目录>:/etc/loki grafana/loki:3.4.1 -config.file=/etc/loki/loki-config.yml -verify-config`
+
+⚠️ **桶上不要再挂 MinIO ILM 过期规则**:保留期只能有一个执行者。MinIO 删掉 Loki 索引仍引用的 chunk 会让查询直接报错。
 
 **本地 dev 默认凭据**:仅用于本机/内网开发,生产/预发必须经 `.env` 或 k8s Secret 覆盖,强密码不进 git。
 
@@ -670,6 +699,7 @@ Loki 端口 **3100**(compose 宿主直查),保留 7 天,filesystem 存储(volume
 | Grafana | `http://localhost:3001` | `${GRAFANA_USER:-admin}` | `${GRAFANA_PASSWORD:-pandora_dev_admin}` |
 | MySQL 普通用户 | `localhost:3307` | `${MYSQL_USER:-pandora}` | `${MYSQL_PASSWORD:-pandora_dev_pwd}` |
 | MySQL root(仅本地排障) | `localhost:3307` | `root` | `${MYSQL_ROOT_PASSWORD:-pandora_dev_root}` |
+| MinIO(CI 栈,制品 + 日志桶) | API `localhost:9000` / 控制台 `localhost:9001` | `${MINIO_ROOT_USER:-pandora}` | `${MINIO_ROOT_PASSWORD:-pandora-minio-secret}` |
 
 **操作入口**:
 

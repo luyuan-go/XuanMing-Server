@@ -5785,7 +5785,15 @@ function Invoke-K8s {
             param($o)
             ([string]$o.Kind -ceq 'Namespace') -and ([string]$o.Name -ceq $K8sNamespace)
         }
-        Invoke-K8sDownDelete -What 'kubectl delete Loki' -Arguments @('--context', $mkProfile, 'delete', '-f', $lokiYaml, '--ignore-not-found')
+        # Loki/Alloy 现在带数据盘(loki-data / alloy-data PVC)。普通 -Down 只停服务,不得删日志——
+        # 与上面 namespace/etcd-data 同一政策:删了 PVC,下次起来是个空 Loki,历史排障线索(含已回收
+        # 的短命 Battle DS 那几局)永久消失。要清盘请显式 `kubectl -n pandora delete pvc/loki-data`。
+        $lokiManifestText = (Get-Content -LiteralPath $lokiYaml -Raw)
+        $null = Remove-K8sManifestObjectsPreserving -KubeContext $mkProfile -ManifestText $lokiManifestText `
+            -What 'kubectl delete Loki（保留日志数据盘）' -ShouldPreserve {
+            param($o)
+            [string]$o.Kind -ceq 'PersistentVolumeClaim'
+        }
         Invoke-K8sDownDelete -What 'kubectl delete Prometheus/Grafana' -Arguments @('--context', $mkProfile, 'delete', '-f', $monitoringYaml, '--ignore-not-found')
         Invoke-K8sDownDelete -What 'kubectl delete TiDB' -Arguments @('--context', $mkProfile, 'delete', '-f', $tidbYaml, '--ignore-not-found')
         Invoke-K8sDownDelete -What 'kubectl delete tidb-init Job' -Arguments @('--context', $mkProfile, 'delete', '-f', $tidbInitJobYaml, '--ignore-not-found')

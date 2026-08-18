@@ -35,6 +35,36 @@ schema_config:
         prefix: index_
         period: 24h
 
+    # ── 以后切 MinIO/S3 对象存储时,在这里**追加一个新周期**(不要改上面那条)────────
+    # Loki 能跨 schema 边界透明合并查询:旧周期继续从 filesystem 读,新周期写 s3,
+    # 所以**切换之后历史日志照样查得到**。这是官方的后端迁移标准做法。
+    #   - from 必须填一个**未来**的 UTC 日期(留出部署时间),格式 YYYY-MM-DD,且不得早于上一条。
+    #   - store/schema 保持 tsdb/v13 不变,只换 object_store。
+    # - from: "2026-09-01"
+    #   store: tsdb
+    #   object_store: s3
+    #   schema: v13
+    #   index:
+    #     prefix: index_
+    #     period: 24h
+
+# ── MinIO/S3 后端(与上面的新周期配套启用;现在不生效)──────────────────────────────
+# MinIO 已随 CI 栈在跑(tools/devops/docker-compose.stack.yml),需先建桶 pandora-logs。
+# 凭据不要写进本文件(会进版本库):用 -config.expand-env=true 启动 Loki,值走环境变量。
+# ⚠️ 桶上**不要**再挂 MinIO ILM 过期规则 —— 保留期由下面 compactor 的 retention_period 统一
+#    管理;两套机制并存会让 MinIO 删掉 Loki 索引仍引用的 chunk,查询直接报错。
+# storage_config:
+#   filesystem:
+#     directory: /loki/chunks
+#   aws:
+#     endpoint: minio:9000          # 跨 compose 栈时换成宿主可达地址
+#     bucketnames: pandora-logs
+#     access_key_id: ${MINIO_ROOT_USER}
+#     secret_access_key: ${MINIO_ROOT_PASSWORD}
+#     s3forcepathstyle: true        # MinIO 必须为 true:桶名走路径而不是子域名
+#     insecure: true                # 内网 http;走 https 时删掉这行
+#     region: null
+
 limits_config:
   # label 纪律(infra.md §11.2):只有 service/level/source 等低基数字段进 label,
   # trace_id/player_id 用 LogQL `| json | trace_id="xxx"` 过滤,严禁进 label。

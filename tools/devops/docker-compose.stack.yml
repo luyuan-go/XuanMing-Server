@@ -107,6 +107,8 @@ services:
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-pandora-minio-secret}
       - MINIO_BUCKET=${MINIO_BUCKET:-pandora-artifacts}
       - MINIO_EXPIRE_DAYS=${MINIO_EXPIRE_DAYS:-30}
+      # 日志桶:Loki 切对象存储后端时用(infra.md §11.2)。现在先建好,切换即为纯改配置。
+      - MINIO_LOGS_BUCKET=${MINIO_LOGS_BUCKET:-pandora-logs}
     entrypoint:
       - /bin/sh
       - -c
@@ -117,7 +119,10 @@ services:
         done
         mc mb --ignore-existing "local/$$MINIO_BUCKET"
         mc ilm rule add --expire-days "$$MINIO_EXPIRE_DAYS" "local/$$MINIO_BUCKET" || echo 'lifecycle rule skipped (non-fatal)'
-        echo "minio bootstrap done: bucket=$$MINIO_BUCKET expire=$${MINIO_EXPIRE_DAYS}d"
+        # 日志桶刻意**不挂 ILM 过期规则**:保留期由 Loki compactor 的 retention_period 统一管理。
+        # 两套保留机制并存 = MinIO 删掉 Loki 索引仍引用的 chunk,查询直接报错。
+        mc mb --ignore-existing "local/$$MINIO_LOGS_BUCKET"
+        echo "minio bootstrap done: bucket=$$MINIO_BUCKET expire=$${MINIO_EXPIRE_DAYS}d logs_bucket=$$MINIO_LOGS_BUCKET(no-ilm)"
     restart: "no"
 
   # ─────────────────────────────────────────────────────────────
