@@ -980,7 +980,10 @@ $retryCommand = 'pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad -MinikubeProfile 
 Assert-True ([regex]::Matches($source, [regex]::Escape($retryCommand)).Count -ge 2) `
     'start.ps1 两处失败提示都必须保留 profile/context/bind，不能诱导回环绑定回归'
 $pathRefreshFunction = $source.IndexOf('function Sync-ProcessPathFromRegistry', [StringComparison]::Ordinal)
-$pathRefreshCall = $source.IndexOf("Sync-ProcessPathFromRegistry`r`n", $pathRefreshFunction + 1, [StringComparison]::Ordinal)
+$pathRefreshCall = $source.IndexOf(
+    'Sync-ProcessPathFromRegistry',
+    $pathRefreshFunction + 'function Sync-ProcessPathFromRegistry'.Length,
+    [StringComparison]::Ordinal)
 $prerequisiteCall = $source.LastIndexOf('$prereqOk = Resolve-Prerequisites $Mode', [StringComparison]::Ordinal)
 Assert-True ($pathRefreshFunction -ge 0 -and $pathRefreshCall -gt $pathRefreshFunction) `
     'start.ps1 必须在每次运行时合并 Windows 机器/用户 PATH，兼容长期运行 web 的旧环境快照'
