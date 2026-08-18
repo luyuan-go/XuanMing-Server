@@ -438,6 +438,29 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 		}
 	}
 
+	// 高水位推进不能被下面两条 no-op 早退分支吞掉(INC-20260818-003 复审)。
+	//
+	// hub 侧 backfillSourceRevision 把存量 legacy(0)补成 R 时,target 一个字节都不变,
+	// 于是这次 Begin 必然落到 idempotent_replay 或 same_target 的 return —— 而推水位的
+	// 代码在它们**下游**(见下方 newHighWater),永远走不到。结果是 assignment 侧已经
+	// 有号、owner 侧水位永久停在 0,「某玩家见过非零版本就永久拒 legacy」这条逐玩家
+	// 防线对这批玩家从不 arm,只剩全局开关一道保护。
+	//
+	// 闸门在上面已经判过 allow,这里只负责落库,不重复判定。
+	advanceHubSourceRevision := func() error {
+		if ownerType != OwnerTypeHub || sourceRevision <= rec.HubSourceRevision {
+			return nil
+		}
+		if _, uerr := tx.ExecContext(ctx,
+			`UPDATE owner_record SET hub_source_revision = ?, updated_at_ms = ? WHERE player_id = ?`,
+			sourceRevision, nowUnixMs(), playerID); uerr != nil {
+			return errcode.New(errcode.ErrInternal,
+				"advance hub source revision player=%d: %v", playerID, uerr)
+		}
+		rec.HubSourceRevision = sourceRevision
+		return nil
+	}
+
 	// 幂等重放:同 operation 且记录就是本次 Begin 的结果(epoch=expect+1 / 目标全等)。
 	// 响应丢失后的原样重试拿回同一结果,不再推进 epoch(§9.23 端到端幂等)。
 	// operationID 为空时本分支不适用(空 = 调用方未持显式幂等键,交由下面的同实例收敛)。
@@ -448,6 +471,9 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 			return OwnerRecord{}, derr
 		}
 		rec.LeaseDeadlineMs = deadline
+		if aerr := advanceHubSourceRevision(); aerr != nil {
+			return OwnerRecord{}, aerr
+		}
 		if cerr := tx.Commit(); cerr != nil {
 			return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit replay begin player=%d: %v", playerID, cerr)
 		}
@@ -485,6 +511,9 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 			return OwnerRecord{}, derr
 		}
 		rec.LeaseDeadlineMs = deadline
+		if aerr := advanceHubSourceRevision(); aerr != nil {
+			return OwnerRecord{}, aerr
+		}
 		if cerr := tx.Commit(); cerr != nil {
 			return OwnerRecord{}, errcode.New(errcode.ErrInternal, "commit same-instance begin player=%d: %v", playerID, cerr)
 		}

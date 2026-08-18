@@ -103,3 +103,101 @@ func TestResolveOwnerTargetFromAssignmentKeepsLegacyZero(t *testing.T) {
 		t.Fatalf("自愈路径不该给 legacy 记录现铸号:got %d,want 0", got.SourceRevision)
 	}
 }
+
+// ── 存量 legacy 回填(INC-20260818-003,rollout 第 5 步的前置条件)──────────────
+//
+// 返回值契约是这组用例的重点,不只是「rec 有没有被改」。
+//
+// 调用方靠返回值决定**要不要打 hub_assignment_source_revision_backfilled 成功事件**,
+// 而且必须等到 CompareAndSwapAssignment 返回 swapped==true 之后再打。原因:CAS 报错或
+// 竞争落败时这次补号根本没落进 Redis,若成功事件已经打出去,Loki 上就出现「已回填」而存储
+// 仍是 0。rollout 第 5 步「证明不存在 source_revision=0 的存活 assignment」正是拿这个事件
+// 流判空的 —— 污染它 = 提前打开 reject_legacy_source_revision = 存量玩家持续进不了大厅。
+//
+// 所以「返回非零 ⟺ 确实写进了 rec」必须逐格钉住:返回值多报一次,就是一条伪证。
+
+// TestBackfillSourceRevisionMintsForLegacyRecord:持有写者租约时,0 必须被补成非零。
+//
+// 不补的话存量 0 永远不会自然收敛(复用/续期都 proto.Clone 原样带走),
+// 打开 reject_legacy_source_revision 后这些玩家一律被判 legacy_rejected_globally。
+func TestBackfillSourceRevisionMintsForLegacyRecord(t *testing.T) {
+	u := &HubUsecase{writerFence: &fakeWriterFence{token: 7, held: true}}
+	rec := boundAssignmentWithRevision(90101, placement.SourceRevisionLegacy)
+
+	got := u.backfillSourceRevision(context.Background(), rec)
+
+	if rec.GetSourceRevision() == placement.SourceRevisionLegacy {
+		t.Fatal("持租约时 legacy 记录必须被补上号,却仍是 0")
+	}
+	if term, _ := placement.SplitSourceRevision(rec.GetSourceRevision()); term != 7 {
+		t.Fatalf("补出来的号任期不对:got term=%d,want 7", term)
+	}
+	if got != rec.GetSourceRevision() {
+		t.Fatalf("返回值必须等于真正写进 rec 的号:got %d,rec=%d", got, rec.GetSourceRevision())
+	}
+}
+
+// TestBackfillSourceRevisionLeavesVersionedRecordAlone:已有号的记录一个字节都不许动。
+//
+// 这是「补水位」与「抬水位」的分界:重写一个已存在的号 = 让同一份来源看起来更新,
+// 正是 mintSourceRevision 三条纪律要防的事。
+func TestBackfillSourceRevisionLeavesVersionedRecordAlone(t *testing.T) {
+	existing, err := placement.ComposeSourceRevision(3, 11)
+	if err != nil {
+		t.Fatalf("构造来源版本失败: %v", err)
+	}
+	u := &HubUsecase{writerFence: &fakeWriterFence{token: 99, held: true}}
+	rec := boundAssignmentWithRevision(90102, existing)
+
+	got := u.backfillSourceRevision(context.Background(), rec)
+
+	if rec.GetSourceRevision() != existing {
+		t.Fatalf("已有号被改写了:got %d,want %d(补水位不是抬水位)", rec.GetSourceRevision(), existing)
+	}
+	if got != 0 {
+		t.Fatalf("什么都没补却返回了 %d —— 调用方会据此打出一条不存在的回填成功事件", got)
+	}
+}
+
+// TestBackfillSourceRevisionKeepsLegacyWhenLeaseLost:铸不出号时保持 0,**不阻断**复用。
+//
+// 失败不阻断是刻意的:本改动之前这条路径就是带着 0 走完的,补不上只是回到原行为;
+// 若在这里 fail-closed,会把一次本来能成功的复用拒掉 —— 那是新增的可用性回归。
+// 真正的 fail-closed 在两处且都不在这里:置换点 mintSourceRevision 直接上抛,
+// 以及仓储侧 writer fence(失租的写者根本发布不出去)。
+func TestBackfillSourceRevisionKeepsLegacyWhenLeaseLost(t *testing.T) {
+	u := &HubUsecase{writerFence: &fakeWriterFence{token: 7, held: false}}
+	rec := boundAssignmentWithRevision(90103, placement.SourceRevisionLegacy)
+
+	got := u.backfillSourceRevision(context.Background(), rec)
+
+	if rec.GetSourceRevision() != placement.SourceRevisionLegacy {
+		t.Fatalf("未持租约时不该铸出号:got %d,want 0", rec.GetSourceRevision())
+	}
+	if got != 0 {
+		t.Fatalf("铸号失败却返回了 %d —— 会在 Loki 上伪造一条回填成功事件", got)
+	}
+}
+
+// TestBackfillSourceRevisionNoopWithoutWriterFence:未启用写者租约的部署(dev)保持 0。
+func TestBackfillSourceRevisionNoopWithoutWriterFence(t *testing.T) {
+	u := &HubUsecase{} // writerFence == nil
+	rec := boundAssignmentWithRevision(90104, placement.SourceRevisionLegacy)
+
+	got := u.backfillSourceRevision(context.Background(), rec)
+
+	if rec.GetSourceRevision() != placement.SourceRevisionLegacy {
+		t.Fatalf("dev 部署不该铸号:got %d,want 0", rec.GetSourceRevision())
+	}
+	if got != 0 {
+		t.Fatalf("dev 部署什么都没补却返回了 %d", got)
+	}
+}
+
+// TestBackfillSourceRevisionReturnZeroForNilRecord:nil 记录不得 panic,且返回 0。
+func TestBackfillSourceRevisionReturnZeroForNilRecord(t *testing.T) {
+	u := &HubUsecase{writerFence: &fakeWriterFence{token: 7, held: true}}
+	if got := u.backfillSourceRevision(context.Background(), nil); got != 0 {
+		t.Fatalf("nil 记录必须返回 0,got %d", got)
+	}
+}

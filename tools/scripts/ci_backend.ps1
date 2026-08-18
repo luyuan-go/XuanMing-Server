@@ -211,6 +211,10 @@ $contractTests = @(
     # (自举包会被直接执行,而取包路径有共享盘和公网两条不受 HTTPS 保护),且入口 .cmd 必须
     # 纯 ASCII —— 非 ASCII 字节会让 cmd 按当前代码页算错偏移去执行注释行碎片(2026-08-06 现场)。
     'tools/scripts/tests/pwsh_bootstrap_contract_test.ps1'
+    # DS 面身份头剥离清单(2026-08-18):同一份清单被 deploy/envoy/envoy.yaml 的 :8444 与
+    # deploy/k8s/agones/16-ds-envoy.yaml 各写一遍,加新身份头的人只会改自己在用的那份。
+    # 集群那份漏剥 = 该头在生产上可被任意调用方伪造(实测曾漏 account-id 与 client-ip)。
+    'tools/scripts/tests/envoy_ds_identity_header_strip_contract_test.ps1'
 )
 $contractFailed = @()
 foreach ($rel in $contractTests) {

@@ -52,7 +52,14 @@ type ProfileSeeder interface {
 // SetRoleLedger 注入角色归属台账仓储(account_roles)。
 //
 // nil = 未启用账号 / 角色分离:登录降级为「一账号一角色」,行为与本次改造之前完全一致。
-// 这条降级是滚动升级期的必需品(新二进制先上、000008 迁移还没跑完的窗口)。
+// 部署顺序是 **migration-first**,不是 binary-first:login 启动期(cmd/login/main.go
+// mustBuildAccountRepo)硬断言 account_roles 表与 accounts.account_id 列存在,缺任一即
+// os.Exit(1)。所以「新二进制先上、000008 还没跑完」那个窗口**根本不存在** —— 进程在
+// 走到这条降级之前就已经退出了。
+//
+// 那这条降级还留着干什么:它只在 roleLedger 没被注入的形态下可达 —— 单元测试直接构造
+// LoginUsecase、以及不走 mustBuildAccountRepo 的 dev 裸跑。真实二进制里 main.go 无条件
+// 调 SetRoleLedger,永不为 nil。
 func (u *LoginUsecase) SetRoleLedger(repo data.AccountRoleRepo) { u.roleLedger = repo }
 
 // SetProfileSeeder 注入 player 服务出口。nil = 不播种角色名(名字回落 player 默认前缀名)。
@@ -278,6 +285,14 @@ func (u *LoginUsecase) seedRoleProfile(
 		// §9.21:对端还没滚上这个 RPC。重试永远不会成功,只能等它上线,不是故障。
 		h.Infow("msg", "role_profile_seed_unimplemented", "player_id", r.PlayerID,
 			"hint", "player 服务尚未滚上 EnsureProfile;角色名暂用台账名,对端上线后自动收敛")
+	case errcode.ErrInvalidArg:
+		// 账号名超出 player 侧昵称上限(player.MaxNicknameLen,默认 32 rune),而
+		// accounts.account 是 VARCHAR(64) —— 两侧上限本就不等宽,33~64 的账号永远播不进去。
+		// 重试无用(名字不会自己变短),必须人工介入,所以是 Warn 不是 Info,且明确说
+		// 「永不重试」,免得下次有人照着 role_profile_seed_failed 的「下次登录重试」去等。
+		h.Warnw("msg", "role_profile_seed_name_too_long", "player_id", r.PlayerID,
+			"account_runes", len([]rune(account)), "err", err,
+			"hint", "账号名超出昵称上限;该角色沿用 player 默认名,永不自动收敛,需人工改名或改配置")
 	case errcode.ErrPlayerNicknameTaken:
 		// 账号名与某个既有昵称撞了。创建角色功能上线前极罕见(账号名唯一、昵称默认是
 		// Player_<id>),真撞上说明有人的昵称正好长成另一个账号名的样子。

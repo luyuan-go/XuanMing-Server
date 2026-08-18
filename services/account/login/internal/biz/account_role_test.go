@@ -192,9 +192,12 @@ func TestLoginRejectsWhenRoleTransferredToAnotherAccount(t *testing.T) {
 
 // TestLoginDegradesWhenLedgerNotConfigured:**未部署**台账仍必须放行。
 //
-// 这是 fail-closed 唯一的例外,而且它不是「故障」是「配置态」:dev 裸跑、以及新二进制
-// 已上线但 000008 迁移还没跑完的滚动窗口。这两种情况下集群里根本没有 account_roles,
-// 拒绝登录等于把整个滚动升级窗口变成一次停服。
+// 这是 fail-closed 唯一的例外,而且它不是「故障」是「配置态」:roleLedger 没被注入。
+//
+// ⚠️ 别把它当成「新二进制先上、迁移还没跑完」的滚动窗口 —— 那个窗口不存在:
+// cmd/login/main.go 的 mustBuildAccountRepo 在启动期硬断言 account_roles 表与
+// accounts.account_id 列,缺任一即 os.Exit(1),真实二进制根本走不到这里。部署顺序是
+// migration-first。本用例覆盖的是单元测试/裸跑形态,别据此推断部署纪律。
 //
 // 与上面几条的判别点是 u.roleLedger == nil,不是「查询失败」—— 别把两者合并处理。
 func TestLoginDegradesWhenLedgerNotConfigured(t *testing.T) {

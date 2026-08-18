@@ -85,10 +85,16 @@ data:
                   mutations:
                     request_mutations:
                     - remove: "x-pandora-player-id"
+                    # 账号态身份头(账号 / 角色分离 2026-08-18)。与 player-id 同级别的身份断言,
+                    # 唯一合法来源是主 Envoy 账号态 provider 验签后注入;DS 面绝不可自带。
+                    - remove: "x-pandora-account-id"
                     - remove: "x-pandora-jwt-payload"
                     # 入站先剥离网关标记头(防外部伪造),再由下方 vh 统一盖回 "1":
                     # 后端 DSCallbackGuard 凭此头区分「DS 面流量(须验令牌)」与「内部东西向直连」。
                     - remove: "x-pandora-ds-gateway"
+                    # 受信客户端 IP 头(纵深防御,与 deploy/envoy/envoy.yaml 的 :8444 面对齐):
+                    # DS 面无客户端 IP 语义、也不注入该头,伪 DS 不得预置一个将来可能被误信的值。
+                    - remove: "x-pandora-client-ip"
               - name: envoy.filters.http.router
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router

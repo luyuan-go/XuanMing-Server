@@ -245,6 +245,48 @@ func (u *HubUsecase) mintSourceRevision() (uint64, error) {
 	return u.revMinter.next(term)
 }
 
+// backfillSourceRevision 给**存量** legacy(revision=0)记录补铸一个号,在复用/续期的 CAS
+// 前调用(INC-20260818-003)。
+//
+// 这是 mintSourceRevision 三条纪律的**唯一例外**,作者已确认:纪律说的「TTL 刷新不领号」
+// 防的是「同一份来源被反复抬号」,而这里补的是 0→非零 —— 0 在判定矩阵里不是「最小版本」
+// 而是「没有版本」(placement.SourceRevisionLegacy),与任何非零都不可比。给它一个号是
+// **建立水位**,不是抬高水位;target 一个字节不变,不存在「旧来源看起来更新」的风险。
+//
+// 不补的后果:存量 0 会被复用/续期原样带走(proto.Clone + bindAssignmentAuth 都不碰它),
+// 永远不会自然收敛。而 rollout 第 5 步打开 reject_legacy_source_revision 后,这些玩家的
+// Begin 一律被判 legacy_rejected_globally —— 活跃玩家持续进不了大厅。
+//
+// 铸不出号(未持租约/越界)时保持 0 原样返回,不阻断这次复用:与本改动之前的行为逐字节
+// 相同。真正的 fail-closed 有两处且都不在这里 —— 置换点的 mintSourceRevision 直接上抛,
+// 以及仓储侧的 writer fence(失租的写者根本发布不出去)。
+//
+// **本函数只改内存里的 rec,绝不打成功日志**:成功事件必须由调用方在 CAS 确认
+// swapped==true 之后再打。在这里打等于把「打算补」记成「已补上」—— CAS 报错或竞争落败
+// 时 Redis 里仍然是 0,而 Loki 上已经躺着一条成功事件。rollout 第 5 步「证明不存在
+// source_revision=0 的存活 assignment」正是拿这个事件流判空的,污染它 = 提前开门 =
+// 存量玩家持续进不了大厅。
+//
+// 返回:本次真正写进 rec 的号;0 = 什么都没补(非 legacy 记录 / 未启用租约 / 铸号失败)。
+func (u *HubUsecase) backfillSourceRevision(ctx context.Context, rec *hubv1.HubAssignmentStorageRecord) uint64 {
+	if rec == nil || rec.GetSourceRevision() != placement.SourceRevisionLegacy {
+		return 0
+	}
+	revision, err := u.mintSourceRevision()
+	if err != nil {
+		// 失败事件在这里打是准确的:它描述的是「这次没能铸出号」,与 CAS 结果无关。
+		plog.With(ctx).Warnw("msg", "hub_assignment_source_revision_backfill_failed",
+			"player_id", rec.GetPlayerId(), "assignment_id", rec.GetAssignmentId(), "err", err)
+		return 0
+	}
+	if revision == placement.SourceRevisionLegacy {
+		// 未启用写者租约的部署(dev / 单副本):本门无事可做,不刷日志。
+		return 0
+	}
+	rec.SourceRevision = revision
+	return revision
+}
+
 // HubCredential 是 service 层从**验签通过**的 Model B hub 令牌抽出的凭据身份(§7),
 // 由 HeartbeatWithCredential 透传到 authRepo.ActivateHeartbeat 做 promote/validate 匹配。
 type HubCredential struct {
@@ -490,6 +532,8 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 						next.AssignmentId = uuid.NewString()
 					}
 					bindAssignmentAuth(next, ensured)
+					// 存量 legacy(revision=0)在这里收敛:复用/续期是它唯一会被重写的时机(INC-20260818-003)。
+					backfilled := u.backfillSourceRevision(ctx, next)
 					// 即使归属 bytes 完全相同也必须走 CAS SET 刷新 assignment TTL。CAS 仍以
 					// 完整旧 bytes 为前置；失败时不清理 ensure 的共享 seat，交 winner 精确释放
 					// 或让新建 reservation 的有界 TTL 回收。
@@ -499,6 +543,13 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 					}
 					if !swapped {
 						continue
+					}
+					if backfilled != 0 {
+						// 只有 CAS 真的落地才算「补上」(见 backfillSourceRevision 头注释):本事件是
+						// rollout 第 5 步开门前判空的依据,早于存储成功打出去就是伪证。
+						plog.With(ctx).Infow("msg", "hub_assignment_source_revision_backfilled",
+							"player_id", playerID, "assignment_id", next.GetAssignmentId(),
+							"source_revision", backfilled)
 					}
 					u.addShardMember(ctx, next.HubPodName, playerID)
 					if werr := u.confirmWriterForTicket(ctx, playerID); werr != nil {
