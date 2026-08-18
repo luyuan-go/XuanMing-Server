@@ -3305,6 +3305,10 @@ func (u *HubUsecase) resolveOwnerTargetFromAssignment(ctx context.Context, playe
 		InstanceEpoch:            binding.ProtocolEpoch,
 		AssignmentOrAllocationID: binding.HubAssignmentID,
 		ReleaseTrack:             binding.ReleaseTrack,
+		// 来源版本与签票路径(ownerTargetForHubTicket)同源:取自**已发布的 assignment 记录**。
+		// 漏填会让自愈 Begin 恒发 legacy=0,而该玩家水位已非零,owner 按 legacy_after_versioned
+		// 拒掉 —— 专为修漂移而建的这条通道会 100% 失效(INC-20260818-003)。
+		SourceRevision: assignment.GetSourceRevision(),
 	}, true
 }
 
