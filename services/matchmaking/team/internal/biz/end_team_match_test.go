@@ -1,11 +1,8 @@
-// end_team_match_test.go — 对局结束复位队伍准备状态(INC-20260813-001 v2 第一根因)。
+// end_team_match_test.go — 对局结束复位残留 ready(源自 INC-20260813-001 v2)。
 //
-// 事故形状:队员阵亡后**先退了战斗**（比结算还早 13 秒），队长在他退出仅 75 秒后就开了
-// 下一局。此时他刚 login 回来、停在选角界面 —— 而队伍仍是 TEAM_STATE_READY、他的 ready
-// 标记原样保留，于是被冻进新票据，DS 拿到 6 人只进来 5 个。
-//
-// **注意这跟掉线无关**：他全程没有任何异常，只是连打第二局的正常窗口。所以离线判定
-// （不论阈值多短）都堵不住，必须有 match-ended 复位这一条。
+// 2026-08-17 起 ready 不再是开局门槛(LoL 式流程):本路径的职责收窄为
+// 「清残留 ready(存量客户端显示)+ 滚动升级共存窗口的赛后复位」,
+// 幂等 / 跨代 CAS / 租约推迟等契约不变。
 package biz
 
 import (
@@ -27,7 +24,7 @@ func TestEndTeamMatch_结算后复位准备(t *testing.T) {
 
 	team := teamOf(t, uc, 9801)
 	if team.State != stateForming {
-		t.Fatalf("打完一局队伍必须回 FORMING,否则队长能带着还没回大厅的队友立刻再开一局: state=%v", team.State)
+		t.Fatalf("打完一局队伍必须回 FORMING(清残留 ready + 回到招募列表): state=%v", team.State)
 	}
 	for _, pid := range []uint64{7801, 7802} {
 		if memberReady(team, pid) {
@@ -43,8 +40,9 @@ func TestEndTeamMatch_结算后复位准备(t *testing.T) {
 	}
 }
 
-// 复位之后队长再点开始匹配必须被 team 侧拒掉(这是本修复的最终判据)。
-func TestEndTeamMatch_复位后不再READY组不了票(t *testing.T) {
+// 2026-08-17 起 ready 不再是开局门槛:复位后队长可**直接**再开局(LoL 式,不用重按准备)。
+// 「带缺席者开局」由 matchmaker 在线闸(4011 点名)+ 撮合确认期(CONFIRM 超时判过错)兜住。
+func TestEndTeamMatch_复位后队长可直接再开局(t *testing.T) {
 	uc, _ := newOfflineLeaveUsecase(t)
 	ctx := context.Background()
 	readyTeam(t, uc, 9802, 7811, 7812)
@@ -52,9 +50,12 @@ func TestEndTeamMatch_复位后不再READY组不了票(t *testing.T) {
 	if err := uc.EndTeamMatch(ctx, 9802, []uint64{7811, 7812}, 0); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := uc.BeginTeamMatch(ctx, 9802, 7811, "op-next", 5000)
-	if errcode.As(err) != errcode.ErrTeamWrongState {
-		t.Fatalf("复位后组票必须被拒(队伍不是 READY): err=%v code=%d", err, errcode.As(err))
+	snapshot, _, err := uc.BeginTeamMatch(ctx, 9802, 7811, "op-next", 5000)
+	if err != nil {
+		t.Fatalf("复位后(FORMING)组票必须放行: %v", err)
+	}
+	if len(snapshot.Members) != 2 {
+		t.Fatalf("组票名单必须是当前全员: members=%d", len(snapshot.Members))
 	}
 }
 

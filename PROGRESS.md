@@ -3394,3 +3394,21 @@ immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致
 - DS/客户端落码 9 项(离场证明重试终局、驱逐单收到/丢弃/ack、AwaitingTicket 零日志、ACK 失配 reason 等),待用户 UE 编译验证。
 - 新文档:docs/ops/player-journey-log-map.md(值班速查/六段链路判据/修复清单/待办)。
 - 避让未修:matchmaker 3×P1(saga 补偿/确认超时点名/取消匹配 DEBUG)、ds_allocator 判弃 player_ids——文件被并发会话占用,见文档 §4。
+
+## 2026-08-17 取消准备门槛:LoL 式开局流程(拍板 + 双仓落码)
+
+- 拍板:队员不再点准备,队长直接开始匹配;「带缺席者开局」防线移交 StartMatch 在线闸(4011)
+  + 撮合确认期(CONFIRM 15s,全员接受才拉 DS;失败时 DS 未分配,无人被拉进对局)。
+  决策记录:decision-revisit-team-match-lifecycle-and-roster-rollout.md §8。
+- team:BeginTeamMatch 删 READY 闸与 legacy 作废分支(FORMING/READY 都放行),冻结/租约/收据
+  /清残留 ready 原样保留;SetReady/EndTeamMatch/掉线软档保留为存量兼容(expand 期,零 proto 变更)。
+  测试按新语义反转(冻结后可直接开第二局 / FORMING 直接开局 / legacy 放行),team 全绿。
+- matchmaker:代码零变更;dev 档 auto_confirm_match 翻 false(确认期成为主防线)。
+  ⚠ 该配置生效须与客户端确认弹窗版本一起上,否则旧客户端撮合局全部 15s 超时失败。
+- robot:默认档 AutoConfirmMatch 翻 false(方向安全:手动档打 auto 后端只是可容忍竞态;
+  反向会让漏斗全断),gatecheck 在 FOUND/CONFIRM 主动接受;robot/stress 全绿。
+- UE 客户端(待用户编译 + WBP 清理见 F:\work\HANDOFF-取消准备-LoL式流程-20260817.md):
+  删准备按钮/成员准备栏/SetReady 模型链(两套 UI 面都删);新增撮合确认弹窗
+  (MyTeamModel 运行时子树,权威进度确定性投影,CONFIRM 自动开面板,接既有 ConfirmMatch)。
+- 未做(另行拍板):过错方票据挂起 + 缺席者一键续排(用户已提需求,语义待确认);
+  contract 期删 SetReady/ready 字段;MatchProgress 增 confirm_deadline_ms(精确倒计时)。

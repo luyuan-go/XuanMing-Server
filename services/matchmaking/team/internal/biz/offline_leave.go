@@ -27,6 +27,11 @@
 // 真正的缺口是 team 侧没有 match-ended 复位路径(见下面的 EndTeamMatch);
 // 本档是掉线场景的纵深防御,任何离线阈值都覆盖不到「正常玩家还没走回来」这一形态。
 //
+// ⚠️ 2026-08-17 起 ready 不再是开局门槛(LoL 式流程,见 BeginTeamMatch 注释),
+// 软档清 ready 不再能挡住组票;「不在场者进不了票」由 matchmaker 的 StartMatch
+// 在线闸(4011 点名)与撮合确认期(CONFIRM 超时判过错)承担。软档保留的价值:
+// 存量客户端的「已准备」显示随掉线复位,且 READY→FORMING 让队伍回到招募列表。
+//
 // # 三道闸,少一道都会出事(硬档 OnPlayerOffline)
 //
 //  1. **此刻真的不在线**:由 offlinewatch 回查 locator 得出。locator 查不通一律不动作
@@ -269,20 +274,22 @@ func (u *TeamUsecase) OnPlayerPresenceLost(ctx context.Context, playerID uint64,
 
 // EndTeamMatch 对局结束后复位队伍准备状态(matchmaker 在 ReleaseMatch 时调用)。
 //
-// # 这是本事故的**第一根因**(INC-20260813-001 v2)
+// # 历史与现状
 //
-// 在此之前 team 侧**没有任何一条 match-ended 路径** —— 全仓只有 LeaveTeam / Kick /
-// 离线摘人会把 State 打回 FORMING。于是一局打完,队伍仍停在 TEAM_STATE_READY、
-// 全员 ready 标记原样保留,队长可以在队友还卡在结算界面 / 回大厅路上的时候立刻再开一局。
-// 事故当天队员阵亡后先退了战斗(比结算还早 13 秒),队长距他退出仅 **75 秒**就开了下一局,
-// 而他此时才刚 login 回来、停在选角界面 —— 于是被原样冻进新票据,DS 拿到 6 人只进来 5 个。
+// 这条路径为 INC-20260813-001 v2 的第一根因而生:当时 ready 是开局门槛,一局打完
+// 队伍仍停在 READY,队长能在队友还没回大厅时用残留 ready 立刻再开一局(缺席者被
+// 原样冻进票据,3v3 打成 3v2)。
 //
-// 注意这跟「掉线」无关:他全程没有任何异常,只是**连打第二局的正常窗口**。
-// 所以光靠离线判定(不论阈值多短)都堵不住,必须有这条 match-ended 复位。
+// 2026-08-17 起 ready 不再是开局门槛(LoL 式流程,见 BeginTeamMatch 注释),
+// 「带缺席者开局」由 matchmaker 在线闸 + 撮合确认期兜住。本方法保留两个职责:
+//  1. 清掉本局成员的残留 ready 位 —— 存量客户端还在按 ready 渲染面板;
+//  2. 滚动升级共存窗口:旧 team 记录 / 旧 matchmaker 组合下,这是唯一的赛后复位。
+//
+// 新链路下 Begin 已在开局时清过 ready,本方法的代际 CAS 几乎总是落空 → no-op。
 //
 // # 语义
 //
-// 打完一局回大厅 = 必须重新点准备。除了堵住上述窗口,它也符合玩家预期(避免"手滑连开")。
+// 打完一局回大厅,残留 ready 被清掉;队长**不必**等任何人重新点准备即可再开局。
 //
 // # 幂等与终态
 //
@@ -744,51 +751,51 @@ const (
 	// matchStartReceiptWindow 是收据的重入窗:超过这么久之后,即使 attempt_id 与
 	// post_ready_generation 都还对得上,也不再把请求当成「同一次尝试的重试」。
 	//
-	// 为什么必须有上界:消费之后若全队都没再动 ready,代际就停在收据记的值上。
-	// 没有窗口的话,一小时后队长的一次**真实点击**会被判成重试,拿回一份一小时前的
-	// 名单去建票 —— 正是「用过期名单开局」的事故形状。
+	// 为什么必须有上界:冻结之后若名单/状态都没再变,代际就停在收据记的值上。
+	// 名单不变时收据名单与当前名单逐字节相同,拿回收据本身无害;窗口兜的是
+	// 「重入路径不重复冻结、不推送」这层语义 —— 一次很久之后的真实点击应当走
+	// 正常冻结路径(重清残留 ready、重新盖收据),而不是永远命中重入。
 	//
 	// 取 60s:明显大于客户端最长重试链(RPC 超时 + 断线重发,秒级),又远小于
-	// 「看完结算回大厅再开一局」的尺度。过窗后队伍处于 FORMING,玩家本就该重新点准备,
-	// 失败方向安全(多按一次,不会多开一局)。
+	// 「看完结算回大厅再开一局」的尺度。失败方向安全(多走一次正常冻结,不会多开一局)。
 	matchStartReceiptWindow = 60 * time.Second
 )
 
 // BeginTeamMatch 在 team 的乐观锁内原子完成
-// 「校验 + 冻结名单 + **消费 ready** + 上租约锁 + 返回消费前快照」。
+// 「校验 + 冻结名单 + 清残留 ready + 上租约锁 + 返回冻结快照」。
 //
-// # ready 是一次开局授权,在这里被兑掉(方案 A,2026-08-13 拍板;proto 契约同此)
+// # ready 不再是开局门槛(2026-08-17 拍板:LoL 式流程,推翻方案 A 的门槛半边)
 //
-// 队伍的 ready 不是一个可以反复使用的状态,而是**一次 StartMatch 的单次授权**。
-// 本方法在同一把锁里把它消费掉:清空成员 ready、把队伍转回 FORMING,
-// 并把**消费前**的名单快照返回给 matchmaker 建票。
+// 队长点「开始匹配」即可组票,**无需全员先点准备**(FORMING / READY 都放行)。
+// 「带着不在场的人开局」(INC-20260813-001)的防线换成两道与 ready 无关的权威闸:
+//   - StartMatch 在线闸(matchmaker ensureAllPresent):离开大厅超过宽限窗(默认 30s)
+//     的成员直接 4011 点名拒绝 —— 事故里那位退场 75s 的缺席者在这里就进不了票;
+//   - 撮合确认期(MATCH_STAGE_CONFIRM,confirm_timeout 默认 15s):全员点「接受」
+//     才拉 DS;缺席者超时 / 拒绝 → match FAILED,含缺席者的票据判过错删除,
+//     其余票据保排队时长退回队列。此时 DS 尚未分配,没有任何人被拉进对局。
 //
-// 于是「一次 ready 意图最多授权一次 StartMatch」成了一把乐观锁的直接后果,而不是要靠
-// 赛后一条可能丢失、可能迟到、可能跨代的复位 RPC 去维持。整类问题就此消失:
-// ACK 丢失后重投抹掉新意图、离队重入的 player_id 级 ABA、「claim 已释放但 End 还没到」
-// 窗口里用旧 ready 开出下一局(INC-20260813-001 的残余窗口)、以及发布顺序依赖
-// (旧 matchmaker 本来就调本方法,team 升级后它自动获得新语义)。
-// EndTeamMatch 保留为共存窗口兼容路径:新 team 下它的代际 CAS 几乎总是落空 → no-op。
+// 方案 A 的另一半 —— 锁内冻结名单、秒级租约、收据幂等重入 —— **原样保留**:
+// 它们消除的是「组票 vs 自动摘人」的 TOCTOU 与「响应丢失重试」的重复消费,与 ready 无关。
+// EndTeamMatch 同样保留(滚动升级共存窗口 + 清残留 ready 的兼容路径)。
 //
-// # 三条路径
+// Begin 仍会清掉残留 ready 位并把队伍转回 FORMING:存量客户端还在发 SetReady,
+// 残留 ready 不清,那些客户端的面板会在开局后继续显示「已准备」。
 //
-//  1. **重入**:同一 attempt 的重试(响应丢失)。返回收据里那份消费前名单,不再消费。
-//     判定同时看 attempt_id 与消费后代际,见 MatchStartReceipt(proto)与 receiptReentry。
-//  2. **legacy 作废**:代际为 0 却挂着 READY = 升级前写的记录,无法证明这一代 ready
-//     是否已经授权过一局。保守清掉并要求重按(一次性迁移成本,只在升级瞬间可达)。
-//  3. **正常消费**:校验通过后留快照 → 清 ready → 转 FORMING → 上租约 → 开收据。
+// # 两条路径
+//
+//  1. **重入**:同一 attempt 的重试(响应丢失)。返回收据里那份冻结名单,不再重复冻结。
+//     判定同时看 attempt_id 与冻结后代际,见 MatchStartReceipt(proto)与 receiptReentry。
+//     注:ready 位不再是门槛后,名单未变的连续两次真实开局(同 (team,captain) 派生的
+//     attempt_id)在重入窗内也会命中此路径 —— 拿回的收据名单与当前名单**逐字节相同**,
+//     方向安全;名单一变代际必前进,不可能拿回旧名单。
+//  2. **正常冻结**:校验通过后留快照 → 清残留 ready → 转 FORMING → 上租约 → 开收据。
+//     (原「legacy 零代际 READY 作废」路径已删:ready 不再授权任何东西,
+//     「旧 ready 是否用过」不再需要证明。)
 //
 // # 租约仍然要上(消除 TOCTOU 的那一半不变)
 //
 // matchmaker 原先只读 GetTeam 取名单,与本服务的自动摘人分属两把锁,凑不出共同线性化点。
 // 在这里上锁后,「冻结名单」与「移除离线成员」落在同一把 team 乐观锁上,两者只能有一个赢。
-// 方案 A 下租约只剩这一个职责:挡住「冻结名单 → ClaimPlayer 落地」窗口里的摘人;
-// ready 正确性不再依赖它。
-//
-// # 已知代价(拍板接受)
-//
-// 排队取消、准入闸拒绝、成局失败之后玩家都要**重新点准备**。失败方向是安全的 ——
-// 多按一次不会多开一局,而反过来(保留 ready)正是本事故的形状。
 func (u *TeamUsecase) BeginTeamMatch(
 	ctx context.Context, teamID, captainID uint64, operationID string, leaseMs int64,
 ) (*teamv1.TeamStorageRecord, int64, error) {
@@ -811,13 +818,12 @@ func (u *TeamUsecase) BeginTeamMatch(
 	}
 
 	var (
-		// snapshot 是**消费前**的名单,返回给 matchmaker 建票;重入路径下来自收据。
+		// snapshot 是**冻结时刻**的名单,返回给 matchmaker 建票;重入路径下来自收据。
 		snapshot *teamv1.TeamStorageRecord
 		// committed 是本次提交落定后的队伍(含推进后的代际),用于推送与状态机日志。
-		committed     *teamv1.TeamStorageRecord
-		expiresAtMs   int64
-		reentered     bool
-		legacyRevoked bool
+		committed   *teamv1.TeamStorageRecord
+		expiresAtMs int64
+		reentered   bool
 	)
 	// 锁内看到的判定依据只用于日志:乐观锁重试时会被覆盖成最后一轮的取值,
 	// 那正是本次提交真正依据的那一轮(与 team.go 各写路径同一套写法)。
@@ -832,8 +838,8 @@ func (u *TeamUsecase) BeginTeamMatch(
 	)
 	if err := u.updateTeamThenStamp(ctx, teamID, func(team *teamv1.TeamStorageRecord) error {
 		// 乐观锁重试会重跑整个闭包 → 上一轮的输出必须清干净,否则「前一轮判成重入、
-		// 这一轮正常消费」会带着上一轮的 snapshot/标志位污染本轮结果。
-		snapshot, reentered, legacyRevoked = nil, false, false
+		// 这一轮正常冻结」会带着上一轮的 snapshot/标志位污染本轮结果。
+		snapshot, reentered = nil, false
 		prevState = team.State
 		prevCaptainID = team.CaptainId
 		prevMembers = len(team.Members)
@@ -866,8 +872,9 @@ func (u *TeamUsecase) BeginTeamMatch(
 			team.MatchLockUntilMs = expiresAtMs
 			team.MatchLockOperationId = operationID
 			team.UpdatedAtMs = now
-			// 用收据重建「消费那一刻」的队伍:当前记录的 ready 已被清空、状态已转 FORMING,
+			// 用收据重建「冻结那一刻」的队伍:当前记录的 ready 已被清空、状态已转 FORMING,
 			// 直接返回当前记录等于把一份空 ready 的名单交给 matchmaker 建票。
+			// State 置 READY 只为与首次返回的快照形状一致 —— matchmaker 不读 State。
 			snapshot = cloneTeam(team)
 			snapshot.Members = cloneMembers(rec.GetRoster())
 			snapshot.State = stateReady
@@ -883,42 +890,17 @@ func (u *TeamUsecase) BeginTeamMatch(
 		}
 		if team.MatchLockUntilMs > now && team.MatchLockOperationId != operationID {
 			// 另一次组票的租约还没到期。这是正常竞争(并发重试 / 罕见的换 attempt),
-			// 必须在 READY 判定**之前**拒:消费发生后队伍已是 FORMING,先判 READY 会把
-			// 一个「稍后重试即可」的暂态,说成「队伍未准备」这种终态 —— 客户端会引导玩家
-			// 去重新点准备,而其实几秒后锁一过什么都不用做。
+			// 返回可重试错误 —— 几秒后租约自净,客户端重试即可。
 			rejectReason = reasonRosterLocked
 			return errcode.New(errcode.ErrTeamConcurrent,
 				"team %d roster locked by operation %s until %d", teamID, team.MatchLockOperationId, team.MatchLockUntilMs)
 		}
 
-		// ── 路径 2:legacy READY 作废 ──────────────────────────────────────────
+		// ── 路径 2:正常冻结 ──────────────────────────────────────────────────
 		//
-		// 代际恒为 0 却挂着 READY,只可能是升级前写下的记录:新版任何一次 SetReady 都会
-		// 把代际推到 ≥1(见 ready_generation.go)。这一代 ready 有没有已经授权过一局
-		// 无从证明(旧版没有收据也没有代际),放行就可能让同一次准备开出第二局 ——
-		// 那正是本事故。保守作废,影响面 = 升级瞬间正在 READY 的队伍,一次性重按。
-		if team.GetReadyGeneration() == 0 && team.State == stateReady {
-			rejectReason = reasonLegacyReadyRevoked
-			for i := range team.Members {
-				team.Members[i].Ready = false
-			}
-			team.State = stateForming
-			team.UpdatedAtMs = now
-			legacyRevoked = true
-			return nil
-		}
-
-		// 与 matchmaker 原先在 resolveMembers 里做的校验保持一致,只是挪进了锁内。
-		// (锁冲突已在上面拒掉,走到这里的「不 READY」是真·需要重新点准备。)
-		if team.State != stateReady {
-			rejectReason = reasonTeamNotReady
-			return errcode.New(errcode.ErrTeamWrongState, "team %d not ready (state=%d)", teamID, team.State)
-		}
-
-		// ── 路径 3:正常消费 ──────────────────────────────────────────────────
-		//
-		// 先留消费前快照(matchmaker 建票的输入),再把 ready 兑掉。顺序不能反 ——
-		// 反了就只剩一份空 ready 的名单。
+		// ready 不设门槛(2026-08-17 拍板,见方法注释):FORMING / READY 都放行。
+		// 先留冻结快照(matchmaker 建票的输入),再清残留 ready —— 顺序不能反,
+		// 反了快照里的 ready 位就全是假的(存量客户端还要靠它显示)。
 		rejectReason = ""
 		snapshot = cloneTeam(team)
 		for i := range team.Members {
@@ -931,9 +913,9 @@ func (u *TeamUsecase) BeginTeamMatch(
 		team.UpdatedAtMs = now
 		return nil
 	}, func(team *teamv1.TeamStorageRecord) {
-		// 盖章在代际推进**之后**:收据要记的是消费后代际(receiptReentry 的 CAS 依据)。
+		// 盖章在代际推进**之后**:收据要记的是冻结后代际(receiptReentry 的 CAS 依据)。
 		// 手动去猜「当前值 + 1」等于复刻 updateTeam 内部实现,推进规则一变就静默劈叉。
-		if snapshot != nil && !reentered && !legacyRevoked {
+		if snapshot != nil && !reentered {
 			team.MatchStartReceipt = &teamv1.MatchStartReceipt{
 				AttemptId:               operationID,
 				Roster:                  cloneMembers(snapshot.GetMembers()),
@@ -969,25 +951,9 @@ func (u *TeamUsecase) BeginTeamMatch(
 		return nil, 0, err
 	}
 
-	if legacyRevoked {
-		// 客户端面板必须立刻反映「准备已被清掉」,否则玩家会对着一个显示全员已准备的
-		// 面板反复点开始,每次都被这道门拒 —— 看起来就是「按钮坏了」。
-		u.publishReadyCleared(ctx, committed)
-		logTeamStateChanged(ctx, teamID, prevState, committed.State, "legacy_ready_revoked",
-			committed.GetReadyGeneration(), len(committed.Members))
-		plog.With(ctx).Warnw("msg", "team_match_start_rejected",
-			"reason", reasonLegacyReadyRevoked,
-			"team_id", teamID, "captain_id", captainID, "operation_id", operationID,
-			"members", prevMembers, "ready_count", prevReady,
-			"elapsed_ms", time.Since(started).Milliseconds(),
-			"hint", "升级前写下的 READY 无法证明是否已授权过一局,已保守清空;玩家需重新点准备")
-		return nil, 0, errcode.New(errcode.ErrTeamWrongState,
-			"team %d ready predates this version and was revoked; members must ready up again", teamID)
-	}
-
 	if !reentered {
-		// ready 已被消费 → 队伍已转 FORMING。必须推送 + 同步招募索引,否则客户端面板
-		// 一直显示全员已准备,且 FORMING 队伍不回到招募列表。
+		// 残留 ready 已被清掉 → 队伍已转 FORMING。必须推送 + 同步招募索引,否则存量
+		// 客户端面板一直显示全员已准备,且 FORMING 队伍不回到招募列表。
 		u.publishReadyCleared(ctx, committed)
 		logTeamStateChanged(ctx, teamID, prevState, committed.State, "match_start_consume",
 			committed.GetReadyGeneration(), len(committed.Members))

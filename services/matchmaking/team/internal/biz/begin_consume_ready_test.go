@@ -1,7 +1,9 @@
-// begin_consume_ready_test.go — BeginTeamMatch 一次性消费 ready 的契约(方案 A)。
+// begin_consume_ready_test.go — BeginTeamMatch 冻结名单 + 清残留 ready 的契约。
 //
-// 对应 decision-revisit-team-match-lifecycle-and-roster-rollout.md §7 验收标准 1/2/4:
-// 响应丢失重试不重复消费、代际前进后不误判重入、旧 ready 不能授权第二局。
+// 2026-08-17 起 ready 不再是开局门槛(LoL 式流程):FORMING/READY 都放行,
+// 「带缺席者开局」由 matchmaker 在线闸(4011)+ 撮合确认期(CONFIRM)兜住。
+// 本文件守的契约:响应丢失重试不重复冻结、代际前进后不误判重入、
+// 冻结仍清残留 ready(存量客户端显示)并盖收据。
 package biz
 
 import (
@@ -9,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/luyuancpp/pandora/pkg/errcode"
 	teamv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/team/v1"
 )
 
@@ -113,8 +114,9 @@ func TestBeginTeamMatch_重新ready后同attempt不是重入(t *testing.T) {
 	}
 }
 
-// §7.4 消费后的 ready 不能再授权一局:不重新点准备,同队长换 attempt 也开不出第二局。
-func TestBeginTeamMatch_消费后不重按开不出第二局(t *testing.T) {
+// LoL 式:冻结后无人重按,同队长换 attempt 也能直接开第二局(FORMING 放行)。
+// 「带缺席者开局」不再靠 ready 门槛,由 matchmaker 在线闸 + 确认期兜住。
+func TestBeginTeamMatch_冻结后不重按也能开第二局(t *testing.T) {
 	uc, _ := newOfflineLeaveUsecase(t)
 	ctx := context.Background()
 	readyTeam(t, uc, 9904, 8131, 8132)
@@ -124,17 +126,43 @@ func TestBeginTeamMatch_消费后不重按开不出第二局(t *testing.T) {
 	}
 	waitRosterLockExpired()
 
-	_, _, err := uc.BeginTeamMatch(ctx, 9904, 8131, "op-two", 5000)
-	if err == nil {
-		t.Fatal("ready 已消费且无人重按,第二局必须被拒")
+	second, _, err := uc.BeginTeamMatch(ctx, 9904, 8131, "op-two", 5000)
+	if err != nil {
+		t.Fatalf("FORMING 队伍必须放行(队长直接再开局): %v", err)
 	}
-	if errcode.As(err) != errcode.ErrTeamWrongState {
-		t.Fatalf("应为 ErrTeamWrongState(需重新点准备): %v", err)
+	if len(second.Members) != 2 {
+		t.Fatalf("第二局必须拿到当前名单: members=%d", len(second.Members))
+	}
+	// 换 attempt 走的是正常冻结路径:收据必须盖成新 attempt,不能把 op-one 的旧收据留在场上。
+	if got := teamOf(t, uc, 9904).GetMatchStartReceipt().GetAttemptId(); got != "op-two" {
+		t.Fatalf("收据应盖成新 attempt: %s", got)
 	}
 }
 
-// legacy 迁移:升级前写下的 READY(代际=0)不能授权开局,必须被保守作废并要求重按。
-func TestBeginTeamMatch_legacy零代际READY作废(t *testing.T) {
+// 主路径:从未有人点准备的 FORMING 队伍,队长直接开局成功(LoL 式流程本体)。
+func TestBeginTeamMatch_FORMING队伍直接开局(t *testing.T) {
+	uc, _ := newOfflineLeaveUsecase(t)
+	ctx := context.Background()
+	setupTwoMemberTeam(t, uc, 9908, 8171, 8172)
+
+	snapshot, _, err := uc.BeginTeamMatch(ctx, 9908, 8171, "op-forming", 5000)
+	if err != nil {
+		t.Fatalf("FORMING 队伍直接开局必须成功: %v", err)
+	}
+	if len(snapshot.Members) != 2 {
+		t.Fatalf("冻结名单必须是当前全员: members=%d", len(snapshot.Members))
+	}
+	team := teamOf(t, uc, 9908)
+	if team.GetMatchStartReceipt() == nil {
+		t.Fatal("冻结必须留下收据")
+	}
+	if team.State != stateForming {
+		t.Fatalf("冻结后队伍保持 FORMING: state=%v", team.State)
+	}
+}
+
+// legacy 记录(代际=0 的 READY)不再作废:ready 不授权任何东西,按正常冻结放行。
+func TestBeginTeamMatch_legacy零代际READY直接放行(t *testing.T) {
 	uc, _ := newOfflineLeaveUsecase(t)
 	ctx := context.Background()
 	readyTeam(t, uc, 9905, 8141, 8142)
@@ -148,16 +176,16 @@ func TestBeginTeamMatch_legacy零代际READY作废(t *testing.T) {
 		t.Fatalf("构造 legacy 记录: %v", err)
 	}
 
-	_, _, err := uc.BeginTeamMatch(ctx, 9905, 8141, "op-legacy", 5000)
-	if err == nil {
-		t.Fatal("legacy READY 必须被作废而不是放行")
+	snapshot, _, err := uc.BeginTeamMatch(ctx, 9905, 8141, "op-legacy", 5000)
+	if err != nil {
+		t.Fatalf("legacy READY 应按正常冻结放行: %v", err)
 	}
-	if errcode.As(err) != errcode.ErrTeamWrongState {
-		t.Fatalf("应为 ErrTeamWrongState: %v", err)
+	if len(snapshot.Members) != 2 {
+		t.Fatalf("冻结名单必须是当前全员: members=%d", len(snapshot.Members))
 	}
 	team := teamOf(t, uc, 9905)
 	if team.State != stateForming || readyCount(team.Members) != 0 {
-		t.Fatalf("legacy READY 应被清空: state=%v ready=%d", team.State, readyCount(team.Members))
+		t.Fatalf("冻结后残留 ready 应被清空: state=%v ready=%d", team.State, readyCount(team.Members))
 	}
 }
 

@@ -1500,8 +1500,10 @@ func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uin
 		return m, 0, nil
 	}
 
-	// 在 team 的乐观锁内冻结名单(见 TeamReader.BeginTeamMatch)。READY / 队长 / 存在性
-	// 三项校验都挪到了那把锁里 —— 在这里再查一遍只会重新打开刚消灭的窗口。
+	// 在 team 的乐观锁内冻结名单(见 TeamReader.BeginTeamMatch)。队长 / 存在性校验
+	// 都在那把锁里 —— 在这里再查一遍只会重新打开刚消灭的窗口。ready 门槛已删
+	// (2026-08-17,LoL 式流程):FORMING 队伍直接放行,「不在场者进不了局」由本服务的
+	// ensureAllPresent 在线闸与撮合确认期(CONFIRM)承担。
 	// 租约用 rosterLockLeaseMs:够覆盖本函数返回后到 ClaimPlayer 落地这一小段即可。
 	team, readyGen, err := u.reader.BeginTeamMatch(ctx, teamID, captainID, rosterLockOperationID(teamID, captainID), rosterLockLeaseMs)
 	if err != nil {

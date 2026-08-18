@@ -130,8 +130,10 @@ match:
   # PVE 实例(matchmaker-pve.yaml)才置 true;单客户端本地联调如需跳过凑人可临时开,联调完改回。
   # (2026-07-25 由 enable_solo_match 正名;旧键仍被兼容读取,新配置一律用 walk_in)
   walk_in: false
-  # auto_confirm_match: 本地端到端测试专用;撮合后跳过确认期,直接拉 Battle DS
-  auto_confirm_match: true
+  # auto_confirm_match: true = 撮合后跳过确认期直接拉 Battle DS(仅无 UI 的脚本联调用)。
+  # 2026-08-17 起 dev 默认 false:LoL 式流程下确认期是「带缺席者开局」的主防线
+  # (ready 门槛已删),dev 必须真实走 CONFIRM 弹窗;压测 robot/gatecheck 已支持手动确认。
+  auto_confirm_match: false
   # mmr_base_window: 初始 MMR 撮合窗口半宽
   mmr_base_window: 200
   # mmr_widen_per_sec: 每等待 1 秒窗口放宽的 MMR

@@ -64,7 +64,8 @@ const (
 	reasonPlayerCommitted         = "player_committed_to_match"
 	reasonPlayerCommitmentUnknown = "player_commitment_unknown"
 	reasonRosterLocked            = "roster_locked_for_match"
-	reasonTeamNotReady            = "team_not_ready"
+	// reasonTeamNotReady 已删(2026-08-17):ready 不再是开局门槛,BeginTeamMatch 对
+	// FORMING/READY 都放行,不存在「未准备被拒」这个 reason。
 	reasonReadyGenerationMismatch = "ready_generation_mismatch"
 	reasonReadyAlreadyCleared     = "ready_already_cleared"
 	reasonLegacyReadyRevoked      = "legacy_ready_revoked"

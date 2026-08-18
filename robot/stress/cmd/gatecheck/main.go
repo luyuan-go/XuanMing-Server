@@ -111,7 +111,8 @@ func main() {
 		}
 	}()
 
-	// 3) 建单人队并 READY(matchmaker 的 team 校验前置)。
+	// 3) 建单人队。2026-08-17 起 ready 已非开局门槛(LoL 式流程),SetReady 保留调用
+	// 只为顺带覆盖 expand 期的兼容路径;失败不再 fatal(新 team 下它只是无关紧要的显示位)。
 	teamResp, err := pool.Team.CreateTeam(auth(ctx), &teamv1.CreateTeamRequest{})
 	if err != nil || teamResp.GetCode() != commonv1.ErrCode_OK || teamResp.GetTeamId() == 0 {
 		fatal("create_team err=%v code=%v", err, teamResp.GetCode())
@@ -119,7 +120,7 @@ func main() {
 	teamID := teamResp.GetTeamId()
 	logf("team ok team_id=%d", teamID)
 	if resp, e := pool.Team.SetReady(auth(ctx), &teamv1.SetReadyRequest{TeamId: teamID, Ready: true, HeroId: 1}); e != nil || resp.GetCode() != commonv1.ErrCode_OK {
-		fatal("set_ready err=%v code=%v", e, resp.GetCode())
+		logf("set_ready err(容忍,ready 已非门槛): err=%v code=%v", e, resp.GetCode())
 	}
 
 	// 4) 入队(map_id 指定副本,PVE walk-in 单人直进)。
@@ -172,6 +173,16 @@ poll:
 			break poll
 		case matchv1.MatchStage_MATCH_STAGE_FAILED:
 			fatal("match FAILED match_id=%d t+%.1fs", matchID, time.Since(startAt).Seconds())
+		case matchv1.MatchStage_MATCH_STAGE_FOUND, matchv1.MatchStage_MATCH_STAGE_CONFIRM:
+			// 手动确认档(auto_confirm_match=false)下必须接受,否则 15s 超时判 FAILED。
+			// auto 档下这里可能与「自动确认→拉DS」流水线竞态而报错 —— 容忍即可(同 vu.go 口径)。
+			if matchID != 0 {
+				if resp, e := pool.Matchmaker.ConfirmMatch(auth(ctx), &matchv1.ConfirmMatchRequest{
+					MatchId: matchID, Accept: true,
+				}); e != nil || resp.GetCode() != commonv1.ErrCode_OK {
+					logf("confirm_match err(容忍): err=%v code=%v", e, resp.GetCode())
+				}
+			}
 		}
 	}
 	logf("READY match_id=%d ds_addr=%s total=%.1fs —— 开始 %s 观测窗口(本进程不连 DS,构成门 A 无客户端场景)", matchID, dsAddr, time.Since(startAt).Seconds(), *watch)

@@ -257,3 +257,42 @@ blue-green/versioned endpoint 或短暂停 ReleaseMatch，保证旧 MM 不会 AC
 3(全离队零写)= 消费语义下不可达,End no-op 测试覆盖;5 = conf 校验 + 验签测试绿;
 7/8(allocator 滚动矩阵)= 分代豁免为机制保证 + 单测绿,真实双版本矩阵留待集群演练;
 6/9/10(真实双版本矩阵、Linux -race、真集群 E2E、发布器机械门)**未做**,仍是发布前置项。
+
+## 8. 修订:取消 ready 门槛(2026-08-17 拍板,LoL 式流程)
+
+用户拍板:组队开局改为 LoL / 王者式 —— **队员不再需要点准备,队长随时可点开始匹配**;
+「带缺席者开局」(INC-20260813-001 的形状)的防线整体移交给两道与 ready 无关的权威闸:
+
+1. **StartMatch 在线闸**(`ensureAllPresent`):离开大厅超过宽限窗(默认 30s)的成员
+   4011 点名拒绝 —— 事故里退场 75s 的缺席者在入队时就被拦下;
+2. **撮合确认期**(`MATCH_STAGE_CONFIRM`,`confirm_timeout` 默认 15s):全员点「接受」
+   才拉 DS;缺席者超时/拒绝 → match FAILED,含缺席者的票据判过错删除,其余票据保
+   排队时长退回队列。确认期在 ALLOCATING 之前,失败时 DS 尚未分配,无人被拉进对局。
+
+方案 A 的另一半(锁内冻结名单 + 秒级租约 + 收据幂等重入)**原样保留** —— 它们消除的
+是组票 TOCTOU 与响应丢失重试,与 ready 无关。§6 担心的「旧 matchmaker 跨局复用
+operation_id 误判重入」在无 ready 门槛下不再是风险:名单不变时收据名单与当前名单逐
+字节相同,名单一变代际必前进。
+
+### 8.1 本次落码(expand 期,零 proto 变更)
+
+- team `BeginTeamMatch`:删 `State != READY` 拒绝与 legacy 零代际作废分支,FORMING/READY
+  都放行;仍清残留 ready 位 + 转 FORMING(存量客户端显示)+ 冻结/租约/收据不变;
+- `SetReady` / `EndTeamMatch` / 掉线软档保留为存量客户端兼容路径(行为不变);
+- matchmaker dev 档 `auto_confirm_match` 翻为 `false`(确认期成为主防线,dev 必须真实走);
+- robot/stress 默认档 `AutoConfirmMatch` 同步翻 `false`,gatecheck 在 FOUND/CONFIRM 主动接受;
+- UE 客户端:删准备按钮/成员准备栏交互,新增 CONFIRM 接受弹窗(接既有 `ConfirmMatch`)。
+
+### 8.2 contract 期(旧客户端排空后,另行拍板)
+
+删 `SetReady`/`EndTeamMatch` RPC(编号 reserve)、`TeamMember.ready`/`ready_generation`
+相关字段收缩(指纹退化为 State+成员集合)、`TEAM_STATE_READY` 停用、掉线软档下线。
+新 RPC/删 RPC 不得靠发布顺序兜底(§9.21 + errcode.ErrNotImplemented 弱依赖降级)。
+
+### 8.3 已接受的代价
+
+- 缺席者不点确认 → 本队被判过错、整队回 FORMING,队长需重新点开始(对手方自动回队列
+  不受罚)。「过错队自动续排 / 缺席者一键恢复」另行评估,不在本次范围。
+- 队内英雄位(`SetReadyRequest.hero_id` 捎带写入 roster)在客户端删准备按钮后暂无写入方,
+  各成员 `hero_id` 回落为 0 —— 与单排票据现状一致,选英雄权威本就在 player 服务
+  (`SelectHero`/`GetActiveHero`);若后续要在组队面板选英雄,应新增独立 `SetHero` 入口。

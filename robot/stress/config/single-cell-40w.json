@@ -19,7 +19,7 @@
   "steady_seconds": 1800,
   "machine_id": "robot-0",
   "ds_mode": "stub",
-  "auto_confirm_match": true,
+  "auto_confirm_match": false,
   "account_prefix": "stressbot_",
   "envoy_sample_ratio": 0.01,
   "action_interval_ms": 5000,

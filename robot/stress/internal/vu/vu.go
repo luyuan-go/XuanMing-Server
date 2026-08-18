@@ -293,8 +293,10 @@ func (v *VU) actMatchFlow(ctx context.Context) {
 	// 本轮结束后尽力离队,避免下一轮 CreateTeam 撞 ErrTeamAlreadyInTeam(harness 清理,非压测指标)。
 	defer v.leaveTeamBestEffort(ctx, teamID)
 
-	// 2) 单人队也必须 READY 后才能通过 matchmaker 的 team 校验。
-	if err := v.timed("team.SetReady", func() error {
+	// 2) SetReady。2026-08-17 起 ready 已非开局门槛(LoL 式流程,BeginTeamMatch 对
+	// FORMING 直接放行),保留调用只为顺带覆盖 expand 期的兼容路径;失败不再中断本轮
+	// (新 team 下它只是无关紧要的显示位,不该拖垮匹配漏斗)。
+	_ = v.timed("team.SetReady", func() error {
 		resp, e := v.pool.Team.SetReady(v.authCtx(ctx), &teamv1.SetReadyRequest{
 			TeamId: teamID,
 			Ready:  true,
@@ -307,9 +309,7 @@ func (v *VU) actMatchFlow(ctx context.Context) {
 			return fmt.Errorf("set_ready code=%v", resp.GetCode())
 		}
 		return nil
-	}); err != nil {
-		return
-	}
+	})
 
 	// 3) 入队匹配。StartMatch 返回 ticket_id 作为排队句柄(不是最终 match_id)。
 	var ticketHandle uint64

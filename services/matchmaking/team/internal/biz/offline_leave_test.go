@@ -570,26 +570,21 @@ func TestBeginTeamMatch_同Operation幂等续租(t *testing.T) {
 	}
 }
 
-// 非 READY / 非队长的校验挪进锁内后不能丢。
-func TestBeginTeamMatch_锁内仍复核READY与队长(t *testing.T) {
+// 队长校验挪进锁内后不能丢;ready 门槛已删(2026-08-17),FORMING 队长直接放行。
+func TestBeginTeamMatch_锁内仍复核队长(t *testing.T) {
 	uc, _ := newOfflineLeaveUsecase(t)
 	ctx := context.Background()
 	setupTwoMemberTeam(t, uc, 9623, 7791, 7792)
 
-	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7791, "op-1", 5000); err == nil {
-		t.Fatal("未全员 READY 时不得上锁")
-	} else if errcode.As(err) != errcode.ErrTeamWrongState {
-		t.Fatalf("应为 ErrTeamWrongState, got=%v", err)
-	}
-	if _, err := uc.SetReady(ctx, 9623, 7791, true, 1); err != nil {
-		t.Fatalf("SetReady: %v", err)
-	}
-	if _, err := uc.SetReady(ctx, 9623, 7792, true, 1); err != nil {
-		t.Fatalf("SetReady: %v", err)
-	}
-	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7792, "op-1", 5000); err == nil {
+	// 非队长不得上锁。op 在 matchmaker 按 (team, captain) 派生,非队长天然是另一个 op,
+	// 不会命中队长那次 attempt 的收据重入。
+	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7792, "op-member", 5000); err == nil {
 		t.Fatal("非队长不得上锁")
 	} else if errcode.As(err) != errcode.ErrTeamNotCaptain {
 		t.Fatalf("应为 ErrTeamNotCaptain, got=%v", err)
+	}
+	// ready 不再是门槛:FORMING 队伍队长直接放行。
+	if _, _, err := uc.BeginTeamMatch(ctx, 9623, 7791, "op-captain", 5000); err != nil {
+		t.Fatalf("FORMING 队伍队长开局应放行: %v", err)
 	}
 }
