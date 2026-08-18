@@ -3547,3 +3547,19 @@ immutable;本次曾误改过它的 COMMENT,已回滚)。两条路径最终一致
   ⚠️ **本批次顺带带进了期间别人改的表**:`role.json`(+13)、`role_level.json`(+8)、
   `skill.json`(+52,技能 63→67 行)。提交 dist 时要么连同这些一起说明,要么等对方先把源表提交。
   pkg/configtable(含钉死真实 dist 的契约测试)/ matchmaker / team 三处测试全绿。
+
+## 2026-08-18 首次生产上线日期成为全仓兼容闸
+
+- **用户确认当前尚未首次生产上线**；`CLAUDE.md §3.1` 新增唯一状态字段
+  `首次生产上线日期（YYYY-MM-DD）：未填写`。该字段只能由用户本人填写 / 纠正，AI 不得从测试环境、
+  镜像、tag 或提交历史自行推断。首次面向真实玩家或外部生产消费者发布前必须先填写；真实上线后不得清空。
+- **日期未填写时**，允许 proto 字段 / 编号 / 类型 / 语义、enum、RPC、数据库 / migration 基线、
+  Redis / Kafka / blob 格式、配置表与客户端生成物做有意 breaking，不要求兼容尚未发布的旧 dev 构建；
+  但必须把所有生产者 / 消费者、Go / C++ pb、配置表 dist / manifest、客户端资源、测试与受影响 dev / test
+  数据作为一个批次刷新并验证，不能混读新旧数据或留下半成品。
+- **日期填写后**，字段 / enum 编号永久不复用，RPC / 事件 / 存储格式须支持新旧共存，schema 走版本化
+  migration 与 expand → migrate → contract，Stable / Canary 与回滚按不停服规范执行。
+- **不随日期放宽**：鉴权授权、owner / fencing、幂等 / 原子 / 事务、数据正确性、容量 / 分页 / 保留期、
+  超时 / 重试 / 可见恢复、玩家不卡死、事故建档与验证证据等红线。同步更新 `AGENTS.md`、
+  `docs/design/proto-design.md`、`docs/design/zero-downtime-update.md` 与 `docs/design/pandora-arch.md` 的引用口径，
+  避免多份“是否上线”状态漂移。

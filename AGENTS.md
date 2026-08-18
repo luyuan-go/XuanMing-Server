@@ -15,6 +15,9 @@
 
 **没读懂就动手 = 失忆人改代码**,会出大问题。
 
+涉及 proto、RPC、数据库 / migration、序列化数据、客户端生成物或滚动升级兼容时，先读
+`CLAUDE.md §3.1「首次生产上线兼容闸」`。首次生产上线日期只在该处维护；本文件不复制状态与执行细则。
+
 ## 2. AI 能做的
 
 写代码(go / UE C++ / proto / yaml / shell / ps1)/ 文档 / 测试;跑本地 build/test/lint;跑本地 docker-compose / kubectl(apply 受限,见 §3);建议 commit message 与 PR 描述;代码审查 / 设计评审;分析 stress_summarize 输出表。
@@ -75,7 +78,7 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 
 ## 6. proto 同步
 
-以 `CLAUDE.md §5`(尤其 §5.8-§5.10、§5.12)和 `docs/design/proto-design.md` 为准,本文件不重复细则。**非负整型字段默认用无符号类型**(`uint32` / `uint64`),仅差值 / 增量、可能下溢的减法字段、枚举 / 状态例外——细则见 `CLAUDE.md §5` 第 12 条。
+先按 `CLAUDE.md §3.1` 的首次生产上线日期判定兼容阶段，再以 `CLAUDE.md §5`(尤其 §5.8-§5.10、§5.12)和 `docs/design/proto-design.md` 为准,本文件不重复细则。**非负整型字段默认用无符号类型**(`uint32` / `uint64`),仅差值 / 增量、可能下溢的减法字段、枚举 / 状态例外——细则见 `CLAUDE.md §5` 第 12 条。
 
 ## 7. 跨 AI 冲突解决
 
@@ -91,6 +94,11 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 长任务开始时估完工时间;实际超 1.5 倍立刻汇报;不许"先干完再说"。
 
 ## 10. 触碰红线 → 立刻停止 + 报告
+
+下段“无法金丝雀发布”与“破坏不停服更新”两类**历史兼容红线**的生效阶段由
+`CLAUDE.md §3.1` 唯一决定：日期未填写时允许在非生产环境做有意且全量刷新的整批重整；日期填写后才按
+生产混版硬门禁立即停止。鉴权、数据正确性、owner / fencing、幂等原子性、容量、超时恢复、玩家不卡死等
+其余红线始终生效，不能借“尚未上线”放宽。
 
 任务范围明显扩大或漏关键文件 / 规范文档自相矛盾 / 要写 secrets 进 git / 要 sudo / chmod / 关防火墙 / build 改坏别的服务 / 即将 push 远端 / **任何可能让玩家卡死、永久等待或进不去场景的代码**(所有登录、选角、匹配、传送、重连、切场景和进 Hub / Battle DS 路径必须有有界超时、持续驱动、可见错误与真实可用的重试 / 返回 / 恢复入口,见 `CLAUDE.md` §9 不变量 19/20/23) / **任何让 Go 服务或 Hub / Battle DS 无法金丝雀发布、必须停服升级或会强杀在场玩家的改动**(Go 新旧副本兼容共存,已有 RPC 不得原地禁用,同一逻辑任务 / 分片的单写者 Stable / Canary 共用 election + 单调 fencing token;DS Stable/Canary 双 Fleet,新版本只接新分配,旧版本停止接新并排空在场会话后退役,见 `CLAUDE.md` §9 不变量 21、`docs/design/zero-downtime-update.md` §6.3) / **破坏不停服更新(给 Redis pb 存储改字段编号·类型·语义、read-modify-write 路径丢弃 unknown fields、设计「必须停服才能上线/读数据」的方案)**(见 `CLAUDE.md` §9 不变量 16/17、`docs/design/zero-downtime-update.md`) / **新增客户端可写入的累积列表却没有写入侧总量上限和读取侧分页 / 单次返回上限**(好友、好友申请、公会申请、公会成员、组队 / 入群邀请、临时群成员、我所在的群、交易请求、黑名单、待处理队列等;必须在事务 / 原子写路径校验单玩家 / 单实体的 pending / active 数量,超限回明确业务错误,读取侧走 cursor 分页或 SQL LIMIT 兜底;登记到 `CLAUDE.md` §9 不变量 18 的「现存受管列表清单」) / **新增只增不删的持久化表却没有保留期和"待清理量报告"任务**(注意:保留期清理**默认只报告不删**,§9.24 + 2026-07-22 用户指令;真删须显式配 retention_mode=delete。业务性过期删除如道具过期/邮件失效不受此约束)(幂等流水、审计、托管、归档、领取记录、outbox 等会随时间 / 活跃度线性增长的表必须有界;玩家已失去 / 已终态的失效数据物理保留默认且最多 90 天,幂等行保留期须远大于重试窗口且删后重放 fail-closed / no-op;登记到 `CLAUDE.md` §9 不变量 24 的只增表清单**并同步 `tools/migrate/cmd/dbcheck` 内嵌清单**——该工具是上线前发布门禁与压测前后强制检查,未登记表 / 缺清理索引 / outbox 堆积直接 FAIL;无清理方案的只增表一律拒) / **新增 blob·JSON·CSV·位图这类集合序列化列却没有写入侧上限**(必须同时具备单元素上限 + 集合条目上限 + 整体字节上限三条,缺一即有洞;上限按设计期望定不按列类型上限定,列类型能用 `VARBINARY(N)` 就不用 `LONGBLOB`;登记进 dbcheck `bigFields` 与服务 `budgets.go`。排查手册见 `docs/design/db-capacity-guard.md`) / **新增连 MySQL 的服务却没在启动时断言 `sql_mode` 严格**(`pkg/dbguard.AssertStrictMode`;非严格模式超长写入静默截断 = 无声的数据损坏)。
 

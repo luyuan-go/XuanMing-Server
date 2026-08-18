@@ -25,6 +25,59 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 
 所有 AI 协作产出**用中文**。注释、commit message、文档全中文。
 
+## 3.1 首次生产上线兼容闸（全仓唯一权威）
+
+**首次生产上线日期（YYYY-MM-DD）：** `未填写`
+
+本字段是全仓判断“是否必须兼容已发布版本与已存在生产数据”的**唯一事实源**。`未填写` =
+项目尚未首次生产上线；替换为真实日期 = 从该日进入生产兼容模式。这里的“生产上线”指首次向真实玩家或
+外部生产消费者开放，并产生必须长期保留、不能随开发环境一起重建的数据或协议契约；本地、CI、临时测试、
+压测和 staging 不会自动改变该字段。**只有用户本人可以填写或纠正日期**，AI 不得根据 Pod、镜像、tag、
+测试环境或提交历史自行推断、自动填写、清空或回退。首次生产发布前必须先由用户填写；一旦真实上线，不得
+通过清空日期绕过兼容要求。
+
+兼容闸只控制“为兼容已经发布的版本、客户端或持久化数据而存在”的约束，包括：
+
+- protobuf / gRPC / HTTP / Kafka 的字段、编号、枚举、消息与 RPC 契约；
+- MySQL / TiDB schema 与 migration 基线、Redis / Kafka / blob 等序列化格式、缓存 key / value 格式；
+- 配置表 schema、生成物、UE 客户端 / DS 与服务器之间的协议版本和数据快照；
+- Stable / Canary、新旧二进制、旧客户端与新服务的混跑兼容窗口，以及 expand → migrate → contract 顺序。
+
+### 日期未填写：首次上线前的破坏性重整
+
+允许为了得到更干净的首发基线而做**有意且整批闭环**的破坏性变更：proto 字段可改名、改编号、改类型、
+改基数 / 语义、删除或复用编号；enum value、message、RPC、数据库基线、迁移、序列化格式和开发数据也可
+随同重整。此时不需要兼容尚未发布的旧构建，也不把旧 dev / staging 快照当成生产包袱。
+
+“允许破坏”不等于“只改一处”。同一交付批次必须完成并验证以下刷新闭环：
+
+1. 同步修改所有生产者与消费者：Go 服务、UE 客户端 / DS、脚本、测试、fixture / golden、运维工具与部署模板；
+2. proto 至少运行 `pwsh tools/scripts/proto_gen.ps1 -Cpp`，提交全部 Go / C++ 生成物并编译 / 测试所有启用模块；
+   若本次就是有意 breaking，`-Breaking` 的失败只用来列出变化，不能代替生成与全链验证；非 breaking 变更仍跑
+   `pwsh tools/scripts/proto_gen.ps1 -Cpp -Breaking`；
+3. 枚举所有受影响数据与状态。要么提供转换 / migration，要么在用户授权的**明确 dev / test 目标**上重建；
+   已执行过的 migration、`schema_migrations`、Redis / Kafka / blob、缓存、索引和本地存档必须与新格式一起刷新，
+   不得让新旧字节混读，也不得把“刷新数据”扩大成未指明目标的删除；
+4. 重新生成配置表 `dist` / manifest、客户端 DataTable / 资源、协议版本、缓存 / schema 版本和所有派生产物，
+   保留真实 source revision / checksum；不能留下“源码已改、生成物或数据以后再刷”的半成品；
+5. 在提交与 `PROGRESS.md` 明确写出 breaking 范围、刷新对象、验证证据和仍需用户执行的客户端编译 / 数据重建。
+   含 proto 的 commit message 仍标 `[proto]`。
+
+### 日期已填写：生产兼容模式
+
+从填写日期起，`§5`、`§9.16`、`§9.17`、`§9.21` 与
+[`docs/design/zero-downtime-update.md`](./docs/design/zero-downtime-update.md) 的兼容、滚更和数据演进规则全部作为
+硬门禁：字段 / enum 编号不复用，删除走 `reserved`；RPC、事件与存储格式须支持共存窗口；schema 走版本化
+migration 与 expand → migrate → contract；任何破坏性演进必须新建版本 / 字段 / 格式，附迁移、回滚和混版验证，
+不能原地改旧契约，也不能用删库或清空日期代替迁移。
+
+### 无论日期是否填写都不能放宽
+
+本闸**不代表功能已完成或可上线**，也不豁免鉴权 / 授权、唯一 owner 与 fencing、原子性 / 幂等、事务边界、
+数据不丢不串、容量 / 分页 / 保留期上限、严格 SQL、输入校验、超时 / 重试 / 可见恢复、玩家不卡死、事故建档、
+测试与发布证据等正确性和安全红线。任何规则如果同时保护兼容性与正确性，只能放宽其中“兼容旧版本 / 旧数据”
+的部分；不能用“尚未上线”解释脑裂、数据损坏、安全突破、无界增长、半成品接线或无出口等待。
+
 ## 4. 提交纪律
 
 1. commit message 格式:`<type>(<scope>): <subject>`
@@ -39,7 +92,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 1. proto 改动后由 Codex 跑 `pwsh tools/scripts/proto_gen.ps1` 生成 go pb
 2. cpp pb 同步到 UE 仓库 `Source/Pandora/Generated/Proto/`,由 Codex 执行
 3. UE 客户端改动跟随后端 proto 同步,由 Codex 协助
-4. 字段编号:上线后**不复用**,只能 deprecate(`reserved 5;` + 注释原因);开发期已删字段可复用编号,但须重生 proto 并完整编译所有启用 module
+4. 字段编号兼容阶段由 `§3.1` 的首次生产上线日期唯一决定：日期未填写时可在整批刷新闭环内删除 / 复用 / 重排；日期填写后**不复用**,只能 deprecate(`reserved 5;` + 注释原因)
 5. `player_id` / `team_id` / `match_id` / `order_id` / `message_id` / `dialogue_id` / `hub_id` / `invite_id` 等 Snowflake 业务 ID **一律 `uint64`**,不准用 `int64` / `string`;未知/空值用 `0`,需 presence 时用 `optional uint64`
 6. 配置表 / 静态表 ID **默认 `uint32`**(`npc_id` / `hero_id` / `skill_id` / `item_config_id` / `map_id` 等);易与运行时实体混淆时新协议命名为 `<entity>_config_id`
 7. 状态 / 类型 / 原因等 proto 枚举**不属 ID 规则**;enum 底层是 `int32`,Go 优先用生成的 enum 类型,不因取值非负改 `uint32`
@@ -98,7 +151,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
    `docs/design/decision-revisit-hub-ds-ticket.md` §7 的四条举证门槛(替代不可伪造通道 /
    吊销时延测算 / §9.21 共存窗口验证 / §9.19 有界驱动证明),仅以"看起来更简单"为由的取消提案直接驳回
 4. **DS 崩溃必有补偿**(Battle DS 15s 心跳超时 → abandoned → 段位回滚;Hub DS 默认 30s 超时 → draining/停止分配)
-5. **proto 字段编号上线后不复用**;开发期间已删除字段可复用编号,但必须重新生成 proto 并完整编译所有已启用 module
+5. **proto 字段编号兼容规则以 `§3.1` 为准**：首次生产上线日期未填写时允许随整批刷新复用；日期填写后永久不复用
 6. **派生数值一律服务端计算;DS 的写权限有范围、可验证、有额度**(原"DS 不可信",
    2026-07-21 MMO 化修订——原则内核"限制单实例被攻破/出 bug 的爆炸半径"不变):
    - **数值不信 DS**:MMR / 经验换算 / 掉落发放判定等派生数值仍只在 battle_result 等
@@ -118,8 +171,8 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 13. **proto enum / 状态常量保持 enum/int32 语义**(`TEAM_STATE_*` / `STATE_*` / `*_REASON_*` 等),不准因枚举值非负改成 `uint32`
 14. **客户端只拿客户端可见结构**:任何面向客户端的 response / push 不准直接返回 `*StorageRecord`、数据库整行、Redis value、内部 Kafka envelope 或内部审计字段;必须经服务端组装成最小视图,只包含客户端渲染 / 交互所需字段。
 15. **配置表热更走标准流水线**:**版本号 + checksum + staging 目录 + reload 接口 + 加载成功才切换 + 失败保留旧配置**。新表加载+校验全过才原子替换内存指针,任一步失败保留旧表不影响线上;version 单调递增防回退;发布通知用 etcd version 键(复用 `etcdtable`/`etcdnode`,不存表体),**不引入 Apollo / Nacos**。详见 `docs/design/config-table-hotreload.md`。
-16. **服务必须支持不停服更新(零停机滚动更新)**:go 服务全部 headless、无状态、可水平扩展,权威态在 Redis/MySQL/etcd,进程内只做缓存/Actor 邮箱,收到 `SIGTERM` 先摘流量→排空在途→flush write-behind 脏数据→退出,任意副本可随时被杀被替换。**任何依赖「先停服再启动」才能上线或才能读数据的设计一律拒**。
-17. **Redis 二进制 pb 存储只做兼容演进,支持不停服加玩家数据**:滚动更新期间新旧版本副本同时在线,存储 pb 必须**双向兼容**——只允许**加新字段(新编号)/ 加 enum 值(带 `*_UNSPECIFIED` + fallback)/ `reserved` 删字段**;**禁止**改 field number、改类型、改基数/语义、复用 reserved 编号。**read-modify-write(读 Redis→改→写回)路径禁止 `DiscardUnknown` 丢弃 unknown fields**(否则旧副本回写会静默丢新字段)。加玩家数据 = 加 proto 字段 + 懒迁移(下次改写自然补齐或不停服 backfill),**不停服、不全量刷库**。详见 `docs/design/zero-downtime-update.md`。
+16. **生产服务必须支持不停服更新(零停机滚动更新)**:go 服务全部 headless、无状态、可水平扩展,权威态在 Redis/MySQL/etcd,进程内只做缓存/Actor 邮箱,收到 `SIGTERM` 先摘流量→排空在途→flush write-behind 脏数据→退出,任意副本可随时被杀被替换。生效阶段按 `§3.1`：日期未填写时，明确的非生产环境可随整批破坏性重整而重建，不要求兼容旧 dev / staging 快照；日期填写后，**任何依赖「先停服再启动」才能上线或才能读数据的设计一律拒**。
+17. **生产模式下 Redis 二进制 pb 存储只做兼容演进,支持不停服加玩家数据**:生效阶段按 `§3.1`；日期未填写时允许破坏性重整，但必须刷新全部读写者与受影响数据。日期填写后，滚动更新期间新旧版本副本同时在线,存储 pb 必须**双向兼容**——只允许**加新字段(新编号)/ 加 enum 值(带 `*_UNSPECIFIED` + fallback)/ `reserved` 删字段**;**禁止**改 field number、改类型、改基数/语义、复用 reserved 编号。**read-modify-write(读 Redis→改→写回)路径禁止 `DiscardUnknown` 丢弃 unknown fields**(否则旧副本回写会静默丢新字段)。加玩家数据 = 加 proto 字段 + 懒迁移(下次改写自然补齐或不停服 backfill),**不停服、不全量刷库**。详见 `docs/design/zero-downtime-update.md`。
 18. **客户端可写入的累积列表必须有上限**:凡客户端能主动新增、可长期堆积、又会被客户端拉取展示的列表,必须同时具备**写入侧总量上限**和**读取侧分页 / 单次返回上限**。包括但不限于:好友、好友申请、公会申请、公会成员、组队 / 入群邀请、临时群成员、我所在的群、交易请求、黑名单、订阅 / 关注 / 待处理队列。只做唯一键防重复不够;只做列表分页也不够。新增此类功能时必须在服务端事务 / 原子写路径里校验单玩家、单目标或单实体的 pending / active 数量上限,配置有默认值,超限返回明确业务错误,并在 proto 列表接口提供 `cursor+limit+next_cursor` 或等价分页(列表被写入侧硬上限兜住到几百内时,单次全量返回 + 服务端 `SQL LIMIT` 兜底即算「单次返回上限」达标)。没有上限的方案一律拒。
 
     **现存受管列表清单**(新增同类列表照此登记 + 落上限):
@@ -165,7 +218,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 
 20. **任何代码都不能让玩家卡死或进不去场景（全局硬性要求）**：第 19 条的有界驱动 / 恢复入口与第 23 条的单一幂等进场规则，适用于所有登录、选角、匹配、组队、传送、加载、重连、前后台切换、地图切换及进入 / 返回 Hub、Battle 的路径。禁止永久黑屏、无限 loading、无 deadline 等待或轮询、按钮不可用、只能杀进程恢复、残留状态阻止重新进场，以及客户端和服务端互相等待。新增或修改相关路径必须验证成功、超时、断网、重复 / 迟到 / 丢失回调、切后台、重启和部分失败；无法证明满足本条的改动不得合入。
 
-21. **所有 Go 服务和 Hub / Battle DS 都必须支持金丝雀发布新版本且不停服（全局硬性要求）**：Go 服务通过 stable / canary 新旧副本并存、readiness、按比例或按人群分流、优雅摘流量和在途排空发布；RPC、事件和存储格式必须在共存窗口双向兼容，异常时能立即把 Canary 权重归零，Stable 持续服务。已有 RPC / 字段 / 语义不得原地禁用或硬切；删除能力必须走 expand → migrate → contract，先让新旧调用方双向兼容并验证 Stable↔Canary、旧 DS↔新 Go、新 DS↔旧 Go 组合，最后一个旧调用者和旧 DS 排空后才能收缩。只有作用于**同一未分区权威 / 同一逻辑任务或分片**的单写者循环才共享 leader election；权威写同时原子校验单调 fencing token，失租旧 leader 永久不能补写。可并行 worker 应用 consumer group、行 claim、幂等 CAS 等标准机制，不得为金丝雀强行全局串行化。同一多步骤 operation 要么粘住 release track，要么其持久状态和迁移语义必须让新旧版本双向理解。DS 通过 Agones Stable / Canary 独立 Fleet 发布：Canary 必须先预热 Ready 后才接小比例**新分配**，同一玩家 / 对局固定 release track；回滚先停止 Canary 新分配，禁止删除或强杀仍承载玩家的 Allocated DS。旧 Battle DS 必须把当前对局跑完，旧 Hub DS 必须停止接新并安全迁移 / 排空玩家，确认空场后才退役。任何升级都不得要求全服停机、踢掉在场玩家、打断对局或让玩家无法进入场景；详见 `docs/design/zero-downtime-update.md` §6.3。
+21. **首次生产上线后，所有 Go 服务和 Hub / Battle DS 都必须支持金丝雀发布新版本且不停服（全局硬性要求）**：生效阶段按 `§3.1`；日期未填写时可把非生产环境、全部二进制和数据作为一个已验证批次重建，不要求与旧 dev 构建混跑，但金丝雀能力仍是首发架构与验收目标。日期填写后，Go 服务通过 stable / canary 新旧副本并存、readiness、按比例或按人群分流、优雅摘流量和在途排空发布；RPC、事件和存储格式必须在共存窗口双向兼容，异常时能立即把 Canary 权重归零，Stable 持续服务。已有 RPC / 字段 / 语义不得原地禁用或硬切；删除能力必须走 expand → migrate → contract，先让新旧调用方双向兼容并验证 Stable↔Canary、旧 DS↔新 Go、新 DS↔旧 Go 组合，最后一个旧调用者和旧 DS 排空后才能收缩。只有作用于**同一未分区权威 / 同一逻辑任务或分片**的单写者循环才共享 leader election；权威写同时原子校验单调 fencing token，失租旧 leader 永久不能补写。可并行 worker 应用 consumer group、行 claim、幂等 CAS 等标准机制，不得为金丝雀强行全局串行化。同一多步骤 operation 要么粘住 release track，要么其持久状态和迁移语义必须让新旧版本双向理解。DS 通过 Agones Stable / Canary 独立 Fleet 发布：Canary 必须先预热 Ready 后才接小比例**新分配**，同一玩家 / 对局固定 release track；回滚先停止 Canary 新分配，禁止删除或强杀仍承载玩家的 Allocated DS。旧 Battle DS 必须把当前对局跑完，旧 Hub DS 必须停止接新并安全迁移 / 排空玩家，确认空场后才退役。任何升级都不得要求全服停机、踢掉在场玩家、打断对局或让玩家无法进入场景；详见 `docs/design/zero-downtime-update.md` §6.3。
 
 22. **状态优先查询唯一权威，不重复存储影子状态（全局硬性要求）**：先明确每个状态的唯一权威源，只在该处保存跨请求 / 重启仍影响正确性且无法可靠重建的**最小权威事实或必要租约**；其他服务需要状态时查询权威接口，不得各自持久化并信任一份副本。可由权威事实计算的展示状态、聚合状态和派生字段按需查询 / 计算；缓存与物化视图必须明确为非权威、带 TTL / version、可失效且可从权威源重建，不能参与扣减、准入、归属切换等权威写决策。关键迁移禁止普通“先查再存”（存在 TOCTOU 竞态），必须通过事务、CAS、条件更新、唯一键或等价原子机制完成检查与修改。查询缺失只有在契约明确时才能推导状态；查询超时、依赖故障或结果不确定必须返回 `UNKNOWN` / `UNAVAILABLE` 并重试或 fail-closed，禁止冒充 `OFFLINE`、空闲、成功或其它默认状态。
 
@@ -271,7 +324,7 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 - ❌ 不要把 player_id 当 prometheus label(高基数会爆)
 - ❌ 不要在 W1 写业务逻辑,只搭骨架
 - ❌ 不要混用 `Pandora` / `pandora` / `MOBA` / `moba` 命名 — 见 §13 命名大小写规则
-- ❌ **不要做破坏不停服更新的改动**:不要给 Redis pb 存储改字段编号/类型/语义、不要在 read-modify-write 路径丢弃 unknown fields、不要设计「必须停服才能上线/读数据」的方案 — 见 §9 不变量 16/17、`docs/design/zero-downtime-update.md`
+- ❌ **首次生产上线后不要做破坏不停服更新的改动**:日期与首次上线前整批重整口径见 `§3.1`；日期填写后不要给 Redis pb 存储改字段编号/类型/语义、不要在 read-modify-write 路径丢弃 unknown fields、不要设计「必须停服才能上线/读数据」的方案 — 见 §9 不变量 16/17、`docs/design/zero-downtime-update.md`
 - ❌ **UE 侧不要再用 `Xuanming` / `Xm` 命名任何工程 / 模块 / 类 / 文件 — 一律 `Pandora`**(见 §11.1)
 - ❌ **不要交半成品**(TODO 占位 / 空实现 / “先留个钩子以后接”)— 见 §14 接线完整性铁律
 
@@ -358,7 +411,7 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 
 配套约束：
 - **消耗型条件必须与进入同生共死**：扣门票 / 扣次数与"真正进入成功"必须绑定同一个 `§9.23` 稳定 `operation_id`，用既有托管 / 流水 / CAS 模式做到要么都成、要么都不成；进入失败或 DS 分配失败必须精确回滚**本次未交付**的扣减（验收底线第 4 条：只撤销未交付的写，绝不回退玩家已获得的东西）。禁止"先扣后进、进不去靠人工补"。
-- **proto 演进按 `§9.21`**：进入请求新增参数只能加字段 / 加 enum 值，禁止改编号、类型、语义；用 `oneof` 承载分场景参数前必须先证明"加表列解决不了"，否则按 `§15.3` 拒绝——不得因"以后可能扩展"提前搭参数框架、规则引擎或适配层。
+- **proto 演进阶段先按 `§3.1` 判定**：首次生产上线日期填写后按 `§9.21`，进入请求新增参数只能加字段 / 加 enum 值，禁止改编号、类型、语义；日期未填写时可随整批刷新做 breaking，但“差异进表、不进接口签名”与简单性要求不因此失效。用 `oneof` 承载分场景参数前必须先证明"加表列解决不了"，否则按 `§15.3` 拒绝——不得因"以后可能扩展"提前搭参数框架、规则引擎或适配层。
 - **关卡表是跨仓共享事实**：DS 侧只有自己那份表，"同 `map_id` 在两仓指向不同地图"的漂移无法自检（历史事故：松林镇 4002 镜像关卡表漂移）。改表必须双仓同步发布，并遵守 `§9.15` 配置表热更流水线。
 
 客户端侧对应条款见 `Pandora-Client-SVN/CLAUDE.md「进入场景 / 副本的客户端纪律」`。

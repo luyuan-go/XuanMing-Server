@@ -1,6 +1,8 @@
 # Pandora Proto 设计
 
 > Pandora 协议设计。本文档是 D3 写 .proto 文件的执行依据。
+> 协议兼容阶段由 [`CLAUDE.md §3.1`](../../CLAUDE.md) 的“首次生产上线日期”唯一决定：日期未填写时允许
+> 有意 breaking，但必须整批刷新所有读写者、数据与生成物；日期填写后，本文兼容条款全部作为硬门禁。
 
 ## 1. 设计原则
 
@@ -9,7 +11,7 @@
 3. **gRPC 双向**:同步走 unary RPC,推送走 server stream 或 Kafka
 4. **kafka 消息走 envelope**:`KafkaEnvelope { topic, key, payload(bytes), trace_id, ts }`
 5. **字段编号预留**:每个消息预留 50~99 段给后续扩展
-6. **向前兼容**:不删字段不改类型,只 `reserved <num>; // <reason>`
+6. **向前兼容**:首次生产上线日期填写后不删字段、不改类型,只 `reserved <num>; // <reason>`；日期未填写时按 `CLAUDE.md §3.1` 的刷新闭环执行
 
 ## 2. proto 目录结构
 
@@ -336,7 +338,7 @@ pandora.dlq.<original_topic> 死信队列
 - C. **bazel + rules_proto**:大型项目最佳,但学习曲线陡
 
 **建议 A(buf)**,理由:
-- buf 内置 breaking change 检测,符合"字段编号上线后不复用"规则;开发期间已删除字段可复用编号,但必须重新生成 proto 并完整编译所有已启用 module
+- buf 内置 breaking change 检测；首次生产上线日期填写后以其作为“不复用编号”的硬门禁，日期未填写且本次有意 breaking 时用它列出变化，并按 `CLAUDE.md §3.1` 完成全量生成、数据刷新和模块验证
 - 双仓库场景下,buf 生成器可以一次配置 go + cpp 两种产物
 - 社区主流,UE 项目对接成熟
 
