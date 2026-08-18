@@ -28,7 +28,7 @@
 Secret 多一个未审核目标、名字重复都会在读取 DSN 前失败。例如：
 
 ```text
--expected-targets=account-primary:pandora_account:pandora_account,player-primary:pandora_player:pandora_player,social-primary:pandora_social:pandora_social,battle-primary:pandora_battle:pandora_battle,trade-primary:pandora_trade:pandora_trade,auction-shard-00:pandora_auction:pandora_auction_00,auction-shard-01:pandora_auction:pandora_auction_01,leaderboard-primary:pandora_leaderboard:pandora_leaderboard
+-expected-targets=account-primary:pandora_account:pandora_account,player-primary:pandora_player:pandora_player,social-primary:pandora_social:pandora_social,battle-primary:pandora_battle:pandora_battle,trade-primary:pandora_trade:pandora_trade,auction-shard-00:pandora_auction:pandora_auction_00,auction-shard-01:pandora_auction:pandora_auction_01,leaderboard-primary:pandora_leaderboard:pandora_leaderboard,owner-primary:pandora_owner:pandora_owner,bag-primary:pandora_bag:pandora_bag,mission-primary:pandora_mission:pandora_mission
 ```
 
 生产发布必须从实际分片配置生成/复核这份 inventory，不能照抄示例 descriptor。
@@ -41,7 +41,7 @@ Secret 多一个未审核目标、名字重复都会在读取 DSN 前失败。�
 pandora_migrator:<由密钥管理系统注入>@tcp(mysql.example.internal:3306)/pandora_account?tls=true
 ```
 
-`pandora_social` 将来切到 TiDB 作为迁移目标时，DSN 还必须带
+生产 `pandora_owner` 目标以及 `pandora_social` 将来切到 TiDB 作为迁移目标时，DSN 还必须带
 `tidb_skip_isolation_level_check=1`。原因是 `golang-migrate` 的 MySQL driver 会请求
 `SERIALIZABLE` 事务，而 TiDB 需要显式允许把该请求降级到其支持的隔离语义；缺少此参数会在
 执行第一条迁移前 fail-closed。生产示例形态为

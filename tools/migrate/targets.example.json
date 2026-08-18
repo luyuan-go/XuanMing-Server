@@ -63,6 +63,30 @@
       "dsn_file": "leaderboard.dsn",
       "timeout_seconds": 900,
       "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "owner-primary",
+      "migration_set": "pandora_owner",
+      "database": "pandora_owner",
+      "dsn_file": "owner.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "bag-primary",
+      "migration_set": "pandora_bag",
+      "database": "pandora_bag",
+      "dsn_file": "bag.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "mission-primary",
+      "migration_set": "pandora_mission",
+      "database": "pandora_mission",
+      "dsn_file": "mission.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
     }
   ]
 }
