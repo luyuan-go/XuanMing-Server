@@ -167,6 +167,14 @@ login:
     auth_secret: "pandora-dev-match-resume-auth-key-v1!"
     auth_audience: "matchmaker:5v5_ranked"
 
+  # player(账号 / 角色分离 2026-08-18):把账号名播种成**全服显示名**。
+  # 创建角色功能上线前角色名固定 = 账号名,而别人在头顶铭牌 / 队伍面板 / 聊天 / 好友 /
+  # 公会 / 排行榜看到的名字来自 player 服务的 players.nickname(uk_nickname 全服唯一)。
+  # login 在登录路径上调 player.EnsureProfile 播种(INSERT IGNORE,不覆盖玩家改过的名字)。
+  # addr 留空 → 不播种,角色名回落 Player_<player_id>;弱依赖,player 挂了不阻断登录。
+  player:
+    addr: "127.0.0.1:20002"
+
 # UE DS → login.VerifyDSTicket 在线入场鉴权。默认 off/legacy，保留既有内部 Verify 行为；
 # 集群生成器在 Model B 激活产物里原子切成 enforce/redis，并注入与 assignment 相同的 fence。
 ds_auth:
