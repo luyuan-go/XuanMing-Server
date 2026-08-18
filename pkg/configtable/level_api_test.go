@@ -153,6 +153,44 @@ func TestValidateMinTeamSize(t *testing.T) {
 	}
 }
 
+// TestValidatePhaseDurations 对局三段式两段窗口时长的加载期上限校验:
+//   - 两列留 0 = 该段不存在,一律放行——这是两列上线前的默认态,旧批次表必须照常加载(§9.21);
+//   - 上限内(含恰好等于上限)放行;
+//   - 超上限整表拒绝。误配这两个数不会崩任何东西,只会让整图玩家静默卡在一段
+//     什么都做不了的时间里(准备期还不能打 / 结算期已打完只等退场),
+//     是最难从现场反推回配置的一类故障,所以必须挡在加载边界而不是等玩家反馈。
+func TestValidatePhaseDurations(t *testing.T) {
+	unset := battleRow(40, "两段都没配")
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{unset}}); err != nil {
+		t.Fatalf("prepare/settle 均为 0 应放行(该段不存在),得 %v", err)
+	}
+
+	ok := battleRow(41, "准备 20s 结算 10s")
+	ok.PrepareDurationSeconds, ok.SettleDurationSeconds = 20, 10
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{ok}}); err != nil {
+		t.Fatalf("上限内的准备/结算时长应放行,得 %v", err)
+	}
+
+	atMax := battleRow(42, "两段都恰好卡上限")
+	atMax.PrepareDurationSeconds = MaxLevelPhaseDurationSeconds
+	atMax.SettleDurationSeconds = MaxLevelPhaseDurationSeconds
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{atMax}}); err != nil {
+		t.Fatalf("时长=MaxLevelPhaseDurationSeconds 应放行(闭区间),得 %v", err)
+	}
+
+	prepareOver := battleRow(43, "准备时长多打一个 0")
+	prepareOver.PrepareDurationSeconds = MaxLevelPhaseDurationSeconds + 1
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{prepareOver}}); err == nil {
+		t.Fatalf("prepare_duration_seconds>%d 应被拦下(玩家会被静默挡在开打之外)", MaxLevelPhaseDurationSeconds)
+	}
+
+	settleOver := battleRow(44, "结算时长多打一个 0")
+	settleOver.SettleDurationSeconds = MaxLevelPhaseDurationSeconds + 1
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{settleOver}}); err == nil {
+		t.Fatalf("settle_duration_seconds>%d 应被拦下(玩家会被静默压在结算界面)", MaxLevelPhaseDurationSeconds)
+	}
+}
+
 // TestValidateRatingMode 计分模式的加载期校验:
 //   - 未配置(0)一律放行——这是本列上线前的默认态,旧批次表必须照常加载(§9.21);
 //   - NONE 与任何对局结构都相容(合作副本、对抗图都可以不计分);

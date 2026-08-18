@@ -21,6 +21,14 @@ import (
 // 0 是合法值(表示沿用服务端全局 team_size 兜底),只挡上界。
 const MaxLevelTeamSize = 50
 
+// MaxLevelPhaseDurationSeconds 是关卡表「准备时长」/「结算时长」两列的上限(秒)。
+// 这两段都是**玩家被挡在玩法之外**的窗口:准备期还不能打,结算期已经打完只等退场。
+// 配错一个大值(多打一个 0)不会崩任何东西,只会让整图玩家静默地卡在一段什么都做不了的
+// 时间里——那是最难从现场反推回配置的一类故障。取 600s(10 分钟)封顶:比任何合理的
+// 加载等待 / 战报展示都大一个量级,又把误配钳在"一眼能看出不对"的范围内。
+// 0 是合法值(该阶段不存在),只挡上界;与 team_size 同款,失败即整批不切换(§9.15)。
+const MaxLevelPhaseDurationSeconds = 600
+
 // validateLevelRow 逐行业务校验(生成的 newLevelTable 调用;主键非零/唯一已由生成代码兜住)。
 // 与生成阶段校验重复是有意的 fail-closed:服务端不信任产物一定出自本生成器。
 func validateLevelRow(row *configpb.LevelRow) error {
@@ -48,6 +56,14 @@ func validateLevelRow(row *configpb.LevelRow) error {
 		if minTS > ts {
 			return fmt.Errorf("队伍人数下限(min_team_size=%d)大于队伍人数上限(team_size=%d)", minTS, ts)
 		}
+	}
+	// 阶段时长上限(准备 / 结算):见 MaxLevelPhaseDurationSeconds 注释——误配的后果是玩家
+	// 静默卡在非玩法窗口里,现场极难反推,所以挡在加载边界而不是等玩家反馈。
+	if d := row.GetPrepareDurationSeconds(); d > MaxLevelPhaseDurationSeconds {
+		return fmt.Errorf("准备时长(prepare_duration_seconds=%d)超过上限 %d 秒(玩家会被静默挡在开打之外)", d, MaxLevelPhaseDurationSeconds)
+	}
+	if d := row.GetSettleDurationSeconds(); d > MaxLevelPhaseDurationSeconds {
+		return fmt.Errorf("结算时长(settle_duration_seconds=%d)超过上限 %d 秒(玩家会被静默压在结算界面)", d, MaxLevelPhaseDurationSeconds)
 	}
 	// 计分模式与对局结构的一致性:Elo 是「双方对抗的相对分」,单方合作副本没有对手结构,
 	// 算给谁都说不通。填成 ELO 属于配置错配,挡在加载边界(整批不切换、保留旧表,§9.15),

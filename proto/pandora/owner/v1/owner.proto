@@ -16,7 +16,7 @@
 //   - ERR_OWNER_EPOCH_CONFLICT:expect_epoch 不等于当前(响应携带当前记录,调用方重查再决策);
 //   - ERR_OWNER_BARRIER_NOT_OPEN:now < admit_not_before(响应带剩余毫秒,调用方退避重试,
 //     对应 §9.23 的 WAIT 语义);
-//   - ERR_OWNER_IDENTITY_MISMATCH:operation/实例四元组与记录不一致(fail-closed);
+//   - ERR_OWNER_IDENTITY_MISMATCH:operation/exact target 五字段与记录不一致(fail-closed);
 //   - 查询/事务失败:调用方一律按 UNKNOWN 处理并重试或 fail-closed,禁冒充 OFFLINE/空闲(§9.22)。
 
 syntax = "proto3";
@@ -33,7 +33,7 @@ service OwnerService {
   // 同事务读旧实例租约计算 admit_not_before。同 (player_id, operation_id) 幂等重放。
   rpc BeginTransition(BeginTransitionRequest) returns (BeginTransitionResponse);
 
-  // Admit 准入提交:屏障已开 + epoch/operation/实例四元组全等 → PENDING→ADMITTED。
+  // Admit 准入提交:屏障已开 + epoch/operation/exact target 五字段全等 → PENDING→ADMITTED。
   // 已 ADMITTED 幂等重放(Admission 回包丢失不再分配、不创建第二 owner)。
   rpc Admit(AdmitRequest) returns (AdmitResponse);
 
@@ -105,7 +105,7 @@ message AdmitRequest {
   uint64 player_id    = 1;
   uint64 owner_epoch  = 2;
   string operation_id = 3;
-  OwnerTarget target  = 4;  // exact 四元组全等校验
+  OwnerTarget target  = 4;  // pod/uid/instance_epoch/assignment-or-allocation/track 全等校验
 }
 message AdmitResponse {
   pandora.common.v1.ErrCode code = 1;

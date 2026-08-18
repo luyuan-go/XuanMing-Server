@@ -22,6 +22,7 @@ var levelBitIndexMap = map[uint32]uint32{
 	11: 10,
 	12: 11,
 	13: 12,
+	14: 13,
 }
 
 // LevelBitIndex 查 ID 的位序;ID 不在当前表内返回 false。
@@ -31,4 +32,4 @@ func LevelBitIndex(id uint32) (uint32, bool) {
 }
 
 // LevelBitCount 位图长度 = 最大已分配位 + 1(含已删除 ID 的保留位,存储侧按此定容)。
-const LevelBitCount uint32 = 13
+const LevelBitCount uint32 = 14

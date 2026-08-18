@@ -446,6 +446,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     kBattleDurationSecondsFieldNumber = 14,
     kMinTeamSizeFieldNumber = 15,
     kRatingModeFieldNumber = 16,
+    kPrepareDurationSecondsFieldNumber = 18,
+    kSettleDurationSecondsFieldNumber = 19,
   };
   // string name = 2 [json_name = "name", (.pandora.config.v1.excel_col) = "\345\205\263\345\215\241\345\220\215\347\247\260", (.pandora.config.v1.excel_required) = true];
   void clear_name() ;
@@ -642,11 +644,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
   void _internal_set_rating_mode(::pandora::config::v1::LevelRatingMode value);
 
   public:
+  // uint32 prepare_duration_seconds = 18 [json_name = "prepareDurationSeconds", (.pandora.config.v1.excel_col) = "\345\207\206\345\244\207\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
+  void clear_prepare_duration_seconds() ;
+  [[nodiscard]] ::uint32_t prepare_duration_seconds() const;
+  void set_prepare_duration_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_prepare_duration_seconds() const;
+  void _internal_set_prepare_duration_seconds(::uint32_t value);
+
+  public:
+  // uint32 settle_duration_seconds = 19 [json_name = "settleDurationSeconds", (.pandora.config.v1.excel_col) = "\347\273\223\347\256\227\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
+  void clear_settle_duration_seconds() ;
+  [[nodiscard]] ::uint32_t settle_duration_seconds() const;
+  void set_settle_duration_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_settle_duration_seconds() const;
+  void _internal_set_settle_duration_seconds(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.config.v1.LevelRow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 17,
+      ::google::protobuf::internal::TcParseTable<5, 19,
                           0, 100,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -692,6 +714,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelRow final : public ::google::p
     ::uint32_t battle_duration_seconds_;
     ::uint32_t min_team_size_;
     int rating_mode_;
+    ::uint32_t prepare_duration_seconds_;
+    ::uint32_t settle_duration_seconds_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1532,6 +1556,54 @@ inline void LevelRow::set_allocated_rating_pool(::std::string* PROTOBUF_NULLABLE
     _impl_.rating_pool_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.config.v1.LevelRow.rating_pool)
+}
+
+// uint32 prepare_duration_seconds = 18 [json_name = "prepareDurationSeconds", (.pandora.config.v1.excel_col) = "\345\207\206\345\244\207\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
+inline void LevelRow::clear_prepare_duration_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prepare_duration_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t LevelRow::prepare_duration_seconds() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.prepare_duration_seconds)
+  return _internal_prepare_duration_seconds();
+}
+inline void LevelRow::set_prepare_duration_seconds(::uint32_t value) {
+  _internal_set_prepare_duration_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.prepare_duration_seconds)
+}
+inline ::uint32_t LevelRow::_internal_prepare_duration_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.prepare_duration_seconds_;
+}
+inline void LevelRow::_internal_set_prepare_duration_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prepare_duration_seconds_ = value;
+}
+
+// uint32 settle_duration_seconds = 19 [json_name = "settleDurationSeconds", (.pandora.config.v1.excel_col) = "\347\273\223\347\256\227\346\227\266\351\225\277", (.pandora.config.v1.excel_default) = "0"];
+inline void LevelRow::clear_settle_duration_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.settle_duration_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t LevelRow::settle_duration_seconds() const {
+  // @@protoc_insertion_point(field_get:pandora.config.v1.LevelRow.settle_duration_seconds)
+  return _internal_settle_duration_seconds();
+}
+inline void LevelRow::set_settle_duration_seconds(::uint32_t value) {
+  _internal_set_settle_duration_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:pandora.config.v1.LevelRow.settle_duration_seconds)
+}
+inline ::uint32_t LevelRow::_internal_settle_duration_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.settle_duration_seconds_;
+}
+inline void LevelRow::_internal_set_settle_duration_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.settle_duration_seconds_ = value;
 }
 
 // -------------------------------------------------------------------
