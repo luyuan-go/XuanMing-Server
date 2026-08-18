@@ -227,6 +227,7 @@ func TestLoginDeferRoleEntryRejectsWhenLedgerNotConfigured(t *testing.T) {
 		t.Fatalf("两步登录撞上未启用台账时错误码不对:err=%v res=%+v(期望 ErrNotImplemented)", err, res)
 	}
 }
+
 // TestLoginDeferRoleEntryReturnsAccountLayerOnly:新客户端置 defer_role_entry 后,
 // Login 只认证账号,不该白进一次角色(白占 Hub 座位 + 白签票 + 白轮换一次会话代际)。
 func TestLoginDeferRoleEntryReturnsAccountLayerOnly(t *testing.T) {
