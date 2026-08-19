@@ -69,6 +69,23 @@ async def clean_key():
                 await c.delete(f"{etcdleader.DEFAULT_PREFIX}{name}".encode())
 
 
+async def _await_condition(predicate, timeout: float = 15.0, tick: float = 0.05) -> bool:
+    """轮询等待条件成立,超时返回 False。
+
+    ★ 为什么不用固定 sleep(2026-08-18 全量跑间歇性变红后改):
+        `await asyncio.sleep(2)` 之后直接断言"应该当选了"是 §16.10 点名的
+        「用定时器掩盖时序」—— 到期后**假设成功**。机器一忙(全量跑时并行着
+        MySQL/Redis 用例)竞选还没完成,测试就红,而代码完全正确。
+        改成轮询 + deadline 后,到期是**重查**而不是假设,与时间快慢无关。
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        await asyncio.sleep(tick)
+    return False
+
+
 async def _run_for(el: etcdleader.LeaderElection, task, seconds: float) -> asyncio.Task:
     """把 el.run 跑成后台 task,跑 seconds 秒后取消。"""
     handle = asyncio.create_task(el.run(task))
@@ -303,11 +320,14 @@ async def test_leader_is_lowest_create_revision(clean_key) -> None:
 
     first = etcdleader.LeaderElection([ENDPOINT], election, lease_ttl_sec=6)
     h1 = asyncio.create_task(first.run(make(1)))
-    await asyncio.sleep(1.5)  # 让 1 号先建 key(CreateRevision 更小)
+    # 等 1 号真的当选(而不是"睡 1.5 秒然后假设它选上了")
+    got_first = await _await_condition(lambda: first.is_leader)
 
     second = etcdleader.LeaderElection([ENDPOINT], election, lease_ttl_sec=6)
     h2 = asyncio.create_task(second.run(make(2)))
-    await asyncio.sleep(2)
+    # 2 号必须**抢不到**;这是个否定断言,只能给它足够时间去尝试。
+    # 用「等到它至少完整跑过一轮竞选」作为判据:退避一轮 + 余量。
+    await asyncio.sleep(etcdleader.RECONNECT_BACKOFF_SEC + 1.0)
 
     leader_flags = (first.is_leader, second.is_leader)
 
@@ -316,6 +336,7 @@ async def test_leader_is_lowest_create_revision(clean_key) -> None:
         with contextlib.suppress(asyncio.CancelledError):
             await h
 
+    assert got_first, "1 号在 15s 内没能当选 —— 不是时序问题,是选主坏了"
     assert leader_flags == (True, False), (
         f"先到的应当是 leader,实际 first={leader_flags[0]} second={leader_flags[1]}"
     )
@@ -343,17 +364,20 @@ async def test_waiting_candidate_keeps_queue_position(clean_key) -> None:
 
         return task
 
+    # 时序判据全部用「等条件 + deadline」,不用固定 sleep(见 _await_condition 注释)。
     a = etcdleader.LeaderElection([ENDPOINT], election, lease_ttl_sec=3)
     ha = asyncio.create_task(a.run(make("A")))
-    await asyncio.sleep(1.2)
+    assert await _await_condition(lambda: a.is_leader), "A 没能当选"
 
+    # B 入队:必须等它**真的建好了自己的 key**(而不是睡一会儿假设建好了),
+    # 否则 C 可能抢在 B 前面拿到更小的 CreateRevision,队列顺序就不是 A→B→C 了。
     b = etcdleader.LeaderElection([ENDPOINT], election, lease_ttl_sec=3)
     hb = asyncio.create_task(b.run(make("B")))
-    await asyncio.sleep(1.2)
+    assert await _await_condition(lambda: b.queued), "B 没能入队"
 
     c = etcdleader.LeaderElection([ENDPOINT], election, lease_ttl_sec=3)
     hc = asyncio.create_task(c.run(make("C")))
-    await asyncio.sleep(1.2)
+    assert await _await_condition(lambda: c.queued), "C 没能入队"
 
     assert (a.is_leader, b.is_leader, c.is_leader) == (True, False, False), (
         f"入队最早的应当当选:A={a.is_leader} B={b.is_leader} C={c.is_leader}"
@@ -363,7 +387,8 @@ async def test_waiting_candidate_keeps_queue_position(clean_key) -> None:
     ha.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await ha
-    await asyncio.sleep(3)
+    # 等 B 接管;超时才算失败(而不是"睡 3 秒后假设接管完成")
+    took_over_ok = await _await_condition(lambda: b.is_leader, timeout=20.0)
 
     took_over = (b.is_leader, c.is_leader)
     for h in (hb, hc):
@@ -371,6 +396,7 @@ async def test_waiting_candidate_keeps_queue_position(clean_key) -> None:
         with contextlib.suppress(asyncio.CancelledError):
             await h
 
+    assert took_over_ok, "B 在 20s 内没接管 —— 不是时序问题,是队列语义坏了"
     assert took_over == (True, False), (
         f"应由排队更早的 B 接管,实际 B={took_over[0]} C={took_over[1]} —— "
         f"队列位置没保住(候选者被重新排到队尾了?)"

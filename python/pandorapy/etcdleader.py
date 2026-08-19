@@ -68,6 +68,7 @@ class LeaderElection:
         "_dial_timeout",
         "_election_name",
         "is_leader",
+        "queued",
         "lost_leadership_count",
         "term_count",
     )
@@ -94,6 +95,10 @@ class LeaderElection:
         self._ttl = lease_ttl_sec if lease_ttl_sec > 0 else DEFAULT_LEASE_TTL_SEC
         self._dial_timeout = dial_timeout_sec if dial_timeout_sec > 0 else DEFAULT_DIAL_TIMEOUT_SEC
         self.is_leader = False
+        # queued:本副本的候选 key 已在选举前缀下(排队中),但未必是队首。
+        # 「已入队未当选」与「根本没入队」是两种不同的运维状态:前者是正常热备,
+        # 后者说明 etcd 写不进去 —— 只看 is_leader 分不出来,两者都是 False。
+        self.queued = False
         # 可观测计数:失主次数异常增长 = etcd 抖动或 TTL 配得太紧。
         self.lost_leadership_count = 0
         self.term_count = 0
@@ -185,6 +190,7 @@ class LeaderElection:
                     keepalive.cancel()
                     with contextlib.suppress(asyncio.CancelledError, Exception):
                         await keepalive
+                self.queued = False
                 if self.is_leader:
                     self.is_leader = False
                     self.lost_leadership_count += 1
@@ -208,6 +214,12 @@ class LeaderElection:
         if not succeeded:
             return None
         self._my_key = my_key
+        # 入队成功。此后本副本一直持有这个 key(靠续约保活)直到当选或退出,
+        # 所以 queued 在整个排队期间为真 —— 它与 is_leader 一起构成三态:
+        #   (queued=False, is_leader=False) 没入队(etcd 写不进去 = 要告警)
+        #   (queued=True,  is_leader=False) 排队中(正常热备)
+        #   (queued=True,  is_leader=True ) 当选
+        self.queued = True
         return my_key
 
     async def _wait_for_turn(

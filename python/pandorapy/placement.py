@@ -40,8 +40,12 @@ DS_FENCE_REENTRY_BARRIER_SECONDS = DS_FENCE_LEASE_MAX_SECONDS + DS_FENCE_SKEW_MA
 
 # canonical 小写 RFC4122 UUID 的形状。先用正则挡掉大写 / 花括号 / URN 前缀这些
 # uuid.UUID() 会**接受但改写**的形式 —— 我们要的是"原样 canonical",不是"能解析"。
+# ⚠️ 用 `\A`/`\Z` 而不是 `^`/`$`:Python 的 `$` 匹配"字符串末尾**或末尾换行之前**",
+# 于是末尾带一个换行的串会被正则放过。这里目前还有下面 `str(parsed) == value`
+# 那道二次校验兜着,但把洞留在正则里等于赌将来没人删那道校验。
+# (2026-08-18 在 auction 的幂等键正则上真的踩到了这个陷阱,顺手全仓加固。)
 _CANONICAL_UUID_RE = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    r"\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z"
 )
 
 
