@@ -1,0 +1,63 @@
+[project]
+name = "pandora-py"
+version = "0.1.0"
+description = "Pandora 后端 Python 实现(strangler 迁移中,与 Go 版并存)"
+requires-python = ">=3.13"
+
+dependencies = [
+    # ── RPC / 协议 ──────────────────────────────────────────────
+    "grpcio>=1.71",              # 208 个 RPC 的服务端;Envoy/客户端零改动的前提
+    "grpcio-health-checking",
+    "grpcio-reflection",         # 对应 yaml 的 enable_reflection
+    "protobuf>=5.29",
+    # googleapis 公共 proto(google/api/annotations.proto)。login.proto 的 11 处 http 注解
+    # 依赖它:Go 侧由 google.golang.org/genproto 提供,Python 侧必须显式装,否则 login_pb2
+    # import 即 ModuleNotFoundError: No module named 'google.api'。
+    "googleapis-common-protos>=1.66",
+    # ── HTTP 面(/metrics + login 的 10 个 REST 端点)──────────────
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    # ── 配置 ────────────────────────────────────────────────────
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "pyyaml>=6.0",
+    # ── 可观测(字段口径必须对齐 pkg/log 的 zap)────────────────────
+    "structlog>=25.1",
+    "prometheus-client>=0.21",
+    # ── 存储 / 消息(dialogue 用不到,先不装,迁到时再加)──────────────
+]
+
+[project.optional-dependencies]
+storage = [
+    "redis>=5.2",
+    "PyMySQL>=1.1",
+    "SQLAlchemy>=2.0",
+    "alembic>=1.14",
+    "kafka-python>=3.0",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "grpcio-tools>=1.71",
+    "fakeredis>=2.26",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+# 两个包根:
+#   .     → pandorapy(业务代码)
+#   gen   → pandora / proto2mysql(buf 生成的 protobuf 模块)
+#
+# 为什么必须这样声明,而不是靠 PYTHONPATH:
+#   protobuf 生成的模块用绝对导入(dialogue_pb2 里 `from pandora.common.v1 import ...`),
+#   所以 gen/ 必须直接在 sys.path 上。靠环境变量传会踩两个坑:
+#     1. Git Bash 里 $PWD 是 MSYS 路径(/f/work/...),Python 认不了 —— 实测报
+#        ModuleNotFoundError: No module named 'pandora'
+#     2. 每个入口(服务 / 测试 / 工具 / K8s 命令行)都得各自记得设,漏一个就炸
+#   在这里声明后 `pip install -e .` 会把两个根都写进 .pth,所有入口自动可用。
+where = [".", "gen"]
+include = ["pandorapy*", "pandora*", "proto2mysql*"]
+namespaces = true
