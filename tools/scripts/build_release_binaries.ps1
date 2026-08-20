@@ -62,6 +62,21 @@ if (-not $Service) {
     }
     if ($genExit -ne 0) { Write-Host "[ERR] configtable-gen 构建失败" -ForegroundColor Red; exit 1 }
     Write-Host "[ OK ] 导表器 -> $genExePath" -ForegroundColor Green
+
+    # 迁移器同样是策划免 Go 启动链的必需品:dev_migrate.ps1 固定从发布目录调用它。
+    # 若发布包漏掉该文件,数据库结构升级会被跳过,随后服务可能因旧 schema 启动失败。
+    $migrateSrcDir = Join-Path $ProjectRoot 'tools/migrate'
+    $migrateExePath = Join-Path $ArtifactDir 'pandora-migrate.exe'
+    Write-Host "构建数据库迁移器 pandora-migrate ..." -ForegroundColor DarkGray
+    Push-Location $migrateSrcDir
+    try {
+        & go build -o $migrateExePath .
+        $migrateExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    if ($migrateExit -ne 0) { Write-Host "[ERR] pandora-migrate 构建失败" -ForegroundColor Red; exit 1 }
+    Write-Host "[ OK ] 数据库迁移器 -> $migrateExePath" -ForegroundColor Green
 }
 
 # manifest:记录这批二进制是哪个提交编出来的,升级/排查时能一眼对上版本。

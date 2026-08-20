@@ -1,14 +1,16 @@
 # 策划本地启动手册(Pandora 后端)
 
-> 给策划的最简上手:**只要装 Docker,双击一个文件,整套后端就跑起来。**
-> 不需要装 Go、不需要会编译。
+> 稳定入口仍是 Docker；没有 Docker 的策划机可用
+> `策划一键启动-免Docker-测试版.cmd`。两条路线都不需要会编译；免 Docker 测试入口连
+> PowerShell 7 和基础设施都放在仓库 `run/` 下自举，不安装系统服务。
 
 ## 一、第一次准备(只做一次)
 
-1. 安装 **Docker Desktop**:https://www.docker.com/products/docker-desktop/
+1. 使用稳定 Docker 入口时，安装 **Docker Desktop**:https://www.docker.com/products/docker-desktop/
    - 装完按提示重启电脑。
    - 启动 Docker Desktop,等右下角**鲸鱼图标变绿**(表示 Docker 已就绪)。
    - (如果你机器有 `winget`,也可以直接双击下面的启动脚本,它会尝试自动安装。)
+   使用下文“免 Docker 测试入口”时跳过这一步，不要为了本项目安装或改动 Docker。
 2. 用 Git 把本仓库拉到本地(已有就 `git pull` 更新到最新)。
 
 ## 二、日常使用
@@ -17,6 +19,28 @@
 |---|---|
 | 启动整套后端 | 命令行执行 `pwsh tools/scripts/play.ps1`(docker 模式,DS=mock) |
 | 停止 | 命令行执行 `pwsh tools/scripts/play.ps1 -Stop`;旧机器遗留的含战斗环境双击 `策划一键停止.cmd` 清理 |
+
+### 没装 Docker：测试入口
+
+双击 `策划一键启动-免Docker-测试版.cmd`。它会导表，并以原生 Windows 进程启动
+MySQL / Redis / Kafka / Envoy 与 22 个后端服务；第一次需下载约 400 MB 免安装包，之后复用。
+
+这条路线不会占用或复用 Docker MySQL 的 `3307`：本项目原生 MySQL 会从 `13307..13398`
+自动选择可用端口，验证确属本工作区后记录在 `run/localinfra/cfg/ports.json`，服务配置副本生成到
+`run/localinfra/cfg/services/`。机器上已有的 Docker/MySQL 不会被迁移、停止或删除；停止本项目也
+只认本工作区的 mysqld 映像和 `my.ini`。启动包还必须带
+`run/artifacts/windows/bin/pandora-migrate.exe`；缺少它会明确失败，不会带旧表结构继续启动。
+查看状态：
+
+```powershell
+pwsh tools/scripts/local_infra.ps1 -Action status
+```
+
+状态里的 MySQL 应为 `OWNED`；`FOREIGN` 表示端口后来被外部进程占用，脚本不会碰它。
+Docker 与免 Docker 来回切换时，脚本会依据 `run/dev/mysql-port-applied.json` 中的模式、端口和
+社交库配置自动完整重启宿主服务，避免旧进程继续连接上一次模式的数据库。
+连续双击启动/停止也不会并发穿插：整条导表、基础设施、迁移和业务服务链共用工作区编排锁；
+已有一轮在执行时，第二轮会明确退出，不会停掉刚由另一轮启动的 MySQL。
 
 > 【已废弃 2026-07-14】「策划一键启动-含战斗.cmd」已删除:Windows DS 只在开发机
 > `local` 模式下启动;要真实战斗请直接用客户端连**内网 k8s 服务器**
@@ -169,9 +193,9 @@ pwsh tools/scripts/build_release_binaries.ps1 -Zip
 启动脚本检测到本机没有 Go 会**自动改用这批预编译二进制**,秒级启动。
 以后升级也只需**替换 `run/artifacts` 这一个目录**,不用重装任何东西。
 
-> 唯一绕不开的安装项仍然是 **Docker Desktop**:MySQL/Redis/Kafka/etcd 都跑在容器里,
-> 而 Docker 在 Windows 上是系统级组件(装虚拟化 + 驱动 + 服务),没法塞进项目目录里"绿色免安装"。
-> 除它之外的东西(镜像、二进制、配置、证书)都已经在仓库目录里,拷过去就能用。
+> 上述普通 `local` / Docker 入口绕不开 **Docker Desktop**。若机器不能安装 Docker，改用
+> `策划一键启动-免Docker-测试版.cmd`；它不起 TiDB/观测栈，并用仓库内免安装二进制代替
+> MySQL/Redis/Kafka/Envoy，具体限制以上文“没装 Docker：测试入口”为准。
 
 ## 三、机器拉不到镜像（内网 / 断网 / 镜像加速失效）
 

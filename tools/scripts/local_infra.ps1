@@ -6,11 +6,12 @@
 .DESCRIPTION
     背景:策划机不装 Docker Desktop(装不动、要 WSL2、开机慢、IT 不给管理员),
     但本机跑一整套后端需要 MySQL / Redis / Kafka / Envoy 四件套。本脚本用**免安装**
-    的原生 Windows 二进制把这四件套跑成宿主进程,端口 / 账号 / 配置与
-    deploy/docker-compose.dev.yml 完全一致,因此 services/*/etc/*-dev.yaml 一个字都不用改。
+    的原生 Windows 二进制把这四件套跑成宿主进程。Redis / Kafka / Envoy 保持 dev 固定端口；
+    MySQL 刻意不用 Docker 路线的 3307，而是在 13307..13398 中选择可真实 bind 的独立端口，
+    再由 run_services.ps1 派生运行态配置，避免复用或改写机器上已有的 Docker MySQL。
 
     与 docker 模式的对应关系(端口 / 账号必须一致,否则服务配置就得分叉):
-      MySQL  127.0.0.1:3307   root/pandora_dev_root   pandora/pandora_dev_pwd
+      MySQL  127.0.0.1:自动选择(13307..13398) root/pandora_dev_root pandora/pandora_dev_pwd
       Redis  127.0.0.1:6380   无密码,appendonly yes,maxmemory 1gb noeviction
       Kafka  127.0.0.1:9093   KRaft 单节点(不需要 ZooKeeper),自动建 topic,4 分区
       Envoy  0.0.0.0:8443(客户端面) / 127.0.0.1:8444(DS 面) / 127.0.0.1:9901(admin)
@@ -65,9 +66,15 @@ $LogDir = Join-Path $Root 'logs'
 $PidDir = Join-Path $Root 'pids'
 $CfgDir = Join-Path $Root 'cfg'
 $CacheDir = Join-Path $Root 'cache'     # 下载的压缩包
+. (Join-Path $PSScriptRoot 'lib/local_infra_state.ps1')
 
-# ===== 与 docker-compose.dev.yml 对齐的端口 / 账号(改这里就得同步改 compose)=====
-$MysqlPort = 3307
+# ===== 端口 / 账号 =====
+# 3307 属于 Docker dev 路线，免 Docker 绝不把那个 listener 当成自己的。13399 已被
+# pandora-mysql-itest 使用，所以候选池到 13398 为止；实际端口只在 MySQL 完成归属与账号
+# 探活后写入 run/localinfra/cfg/ports.json。
+$MysqlPort = 0
+$MysqlPortMin = 13307
+$MysqlPortMax = 13398
 $RedisPort = 6380
 $KafkaPort = 9093
 $KafkaCtrlPort = 9094          # KRaft controller,仅本机内部
@@ -202,6 +209,33 @@ function Test-PortOpen([int]$Port) {
     } catch { return $false } finally { $c.Dispose() }
 }
 
+function Test-PortBindable([int]$Port) {
+    <#
+      用真正的 bind 判断候选端口，而不是只看 LISTEN 表。Windows 的 Hyper-V / WSL2 / Docker
+      会通过 winnat 保留一段端口；这种端口没人监听，但 mysqld 仍会收到 WSAEACCES。
+    #>
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+    try {
+        $listener.Server.ExclusiveAddressUse = $true
+        $listener.Start()
+        return $true
+    } catch {
+        return $false
+    } finally {
+        try { $listener.Stop() } catch {}
+    }
+}
+
+function Get-PortOwningProcessIds([int]$Port) {
+    $ids = @()
+    try {
+        $ids = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique |
+            Where-Object { $_ -and $_ -gt 0 })
+    } catch { $ids = @() }
+    return ,$ids
+}
+
 function Test-AfUnixUsable([string]$Dir) {
     <#
       指定目录下 AF_UNIX(Unix 域套接字)能不能 bind+connect 通。
@@ -258,12 +292,226 @@ function Resolve-EnvoyTempDir {
 
 function Get-PidFile([string]$Name) { Join-Path $PidDir "$Name.pid" }
 
+function Get-ProcessCommandLine([int]$ProcessId) {
+    try {
+        return [string](Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction Stop).CommandLine
+    } catch {
+        return ''
+    }
+}
+
+function Test-ComponentProcessOwned([string]$Name, $Proc) {
+    <#
+      PID 文件只是一串会被系统复用的数字，不是归属证明。MySQL 的 down 路径会先发 shutdown，
+      再 taskkill；因此必须同时核对 exe 与本工作区 my.ini。任一信息读不到都 fail closed。
+      其他组件暂时保持既有行为，本次先封住会写数据库且有外部 Docker 共存诉求的 MySQL。
+    #>
+    if (-not $Proc) { return $false }
+    if ($Name -ne 'mysql') { return $true }
+
+    $expectedExe = Find-Tool 'mysql' 'mysqld.exe'
+    if (-not $expectedExe) { return $false }
+    $actualExe = $null
+    try { $actualExe = $Proc.Path } catch { $actualExe = $null }
+    if (-not $actualExe) { return $false }
+    try {
+        if ([IO.Path]::GetFullPath($actualExe) -ne [IO.Path]::GetFullPath($expectedExe)) { return $false }
+    } catch { return $false }
+
+    $cmd = Get-ProcessCommandLine $Proc.Id
+    if (-not $cmd) { return $false }
+    $actualIni = Get-PandoraDefaultsFileArgument $cmd
+    if (-not $actualIni) { return $false }
+    try {
+        return [IO.Path]::GetFullPath($actualIni) -eq [IO.Path]::GetFullPath((Get-MysqlIniPath))
+    } catch { return $false }
+}
+
+function Get-OwnedMysqlListenerRecords([int[]]$Ports) {
+    $wanted = [Collections.Generic.HashSet[int]]::new()
+    foreach ($port in $Ports) { if ($port -gt 0) { [void]$wanted.Add($port) } }
+    if ($wanted.Count -eq 0) { return @() }
+
+    $records = @()
+    $seen = @{}
+    try {
+        foreach ($conn in @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)) {
+            if (-not $wanted.Contains([int]$conn.LocalPort) -or -not $conn.OwningProcess) { continue }
+            $key = "$($conn.LocalPort):$($conn.OwningProcess)"
+            if ($seen.ContainsKey($key)) { continue }
+            $seen[$key] = $true
+            $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+            if ($proc -and (Test-ComponentProcessOwned 'mysql' $proc)) {
+                $records += [pscustomobject]@{ Port = [int]$conn.LocalPort; Process = $proc }
+            }
+        }
+    } catch { return @() }
+    return @($records)
+}
+
+function Get-OwnedMysqlListenerProcess([int]$Port) {
+    $record = @(Get-OwnedMysqlListenerRecords @($Port)) | Select-Object -First 1
+    if ($record) { return $record.Process }
+    return $null
+}
+
+function Get-OnlyOwnedMysqlListener([int[]]$Ports) {
+    $records = @(Get-OwnedMysqlListenerRecords $Ports)
+    if ($records.Count -gt 1) {
+        Fail "同一工作区检测到多个原生 MySQL listener:$((@($records | ForEach-Object { ":$($_.Port)/PID=$($_.Process.Id)" })) -join ', ')。拒绝再启动，请先人工核对。"
+    }
+    if ($records.Count -eq 1) { return $records[0] }
+    return $null
+}
+
+function Get-OwnedMysqlProcesses {
+    $owned = @()
+    foreach ($proc in @(Get-Process -Name 'mysqld' -ErrorAction SilentlyContinue)) {
+        if (Test-ComponentProcessOwned 'mysql' $proc) { $owned += $proc }
+    }
+    return @($owned)
+}
+
+function Get-OnlyOwnedMysqlProcess {
+    $owned = @(Get-OwnedMysqlProcesses)
+    if ($owned.Count -gt 1) {
+        Fail "同一工作区检测到多个原生 mysqld 进程:$((@($owned | ForEach-Object { 'PID={0}' -f $_.Id })) -join ', ')。拒绝自动停机或删数据，请先人工核对。"
+    }
+    if ($owned.Count -eq 1) { return $owned[0] }
+    return $null
+}
+
+function Get-MysqlListenerRecordsForProcess($Proc) {
+    if (-not $Proc) { return @() }
+    $ports = @()
+    try {
+        $ports = @(Get-NetTCPConnection -State Listen -ErrorAction Stop |
+            Where-Object { [int]$_.OwningProcess -eq [int]$Proc.Id } |
+            Select-Object -ExpandProperty LocalPort -Unique)
+    } catch { return @() }
+    return @($ports | ForEach-Object { [pscustomobject]@{ Port = [int]$_; Process = $Proc } })
+}
+
+function Resolve-LocalMysqlPort {
+    <#
+      端口选择优先级:显式环境变量 > 已验证状态 > 独立候选池。外部 listener、系统保留端口、
+      安全软件拒绝 bind 都只会让该候选被跳过；绝不连接它确认“密码碰巧对不对”。
+    #>
+    $explicitPort = 0
+    $hasExplicit = -not [string]::IsNullOrWhiteSpace($env:PANDORA_LOCALINFRA_MYSQL_PORT)
+    if ($hasExplicit) {
+        if (-not [int]::TryParse($env:PANDORA_LOCALINFRA_MYSQL_PORT, [ref]$explicitPort) -or
+            $explicitPort -lt 1024 -or $explicitPort -gt 49151 -or $explicitPort -eq 3307) {
+            Fail 'PANDORA_LOCALINFRA_MYSQL_PORT 必须是 1024..49151 且不能是 Docker dev 专用的 3307。'
+        }
+    }
+
+    $storedPort = Get-PandoraLocalMysqlPort $ProjectRoot
+    $searchPorts = @(
+        3307
+        if ($hasExplicit) { $explicitPort }
+        if ($storedPort) { $storedPort }
+        $MysqlPortMin..$MysqlPortMax
+    ) | Select-Object -Unique
+    $existing = Get-OnlyOwnedMysqlListener $searchPorts
+    if ($existing) {
+        if ($hasExplicit -and $explicitPort -ne $existing.Port) {
+            Fail "本工作区 MySQL 已在 :$($existing.Port) 运行；拒绝按显式 :$explicitPort 再启动第二实例。"
+        }
+        if ($existing.Port -eq 3307) {
+            Write-Warn2 '检测到本工作区旧版原生 MySQL 仍在 :3307，本轮继续复用；下次停机后会迁到独立端口。'
+        }
+        return [int]$existing.Port
+    }
+
+    # 状态文件和显式环境变量都可能丢，但同一 data dir 的 mysqld 还活着。端口池扫描找不到它时，
+    # 必须先按 exe + exact my.ini 找进程，再从该 PID 的所有 listener 恢复真实端口；尚未 listen
+    # 说明它正在初始化或异常，宁可失败也不能用同一 data dir 启第二份。
+    $ownedProcess = Get-OnlyOwnedMysqlProcess
+    if ($ownedProcess) {
+        $records = @(Get-MysqlListenerRecordsForProcess $ownedProcess)
+        if ($records.Count -gt 1) {
+            Fail "本工作区 mysqld PID $($ownedProcess.Id) 同时监听多个端口:$((@($records | ForEach-Object { $_.Port })) -join ', ')；拒绝猜测实例端口。"
+        }
+        if ($records.Count -eq 0) {
+            Fail "本工作区 mysqld PID $($ownedProcess.Id) 仍存活但尚未监听；它可能正在初始化或异常，拒绝用同一 data dir 启动第二实例。"
+        }
+        $recovered = $records[0]
+        if ($hasExplicit -and $explicitPort -ne $recovered.Port) {
+            Fail "本工作区 MySQL 已在 :$($recovered.Port) 运行；拒绝按显式 :$explicitPort 再启动第二实例。"
+        }
+        Write-Warn2 "端口状态丢失，但已从本工作区 mysqld PID $($ownedProcess.Id) 恢复 listener :$($recovered.Port)。"
+        return [int]$recovered.Port
+    }
+
+    $candidates = if ($hasExplicit) {
+        @($explicitPort)
+    } else {
+        @(
+            if ($storedPort -and $storedPort -ne 3307) { $storedPort }
+            $MysqlPortMin..$MysqlPortMax
+        ) | Select-Object -Unique
+    }
+
+    foreach ($candidate in $candidates) {
+        if (Test-PortBindable $candidate) { return [int]$candidate }
+
+        $holders = Get-PortHolder $candidate
+        if ($holders.Count -gt 0) {
+            Write-Warn2 ("MySQL 候选端口 :{0} 已由外部进程占用({1})，不会复用或停止，继续找空闲端口。" -f $candidate, ($holders -join '; '))
+        } else {
+            Write-Warn2 "MySQL 候选端口 :$candidate 无法 bind(可能被 Windows 保留)，继续找空闲端口。"
+        }
+    }
+
+    if ($hasExplicit) {
+        Fail "指定的免 Docker MySQL 端口 :$explicitPort 不可用；未启动、未停止、未连接该端口上的任何实例。"
+    }
+    Fail "免 Docker MySQL 独立端口池 $MysqlPortMin..$MysqlPortMax 全部不可用；未触碰 3307 上的 Docker/MySQL。"
+}
+
 function Get-RunningProcess([string]$Name) {
     $f = Get-PidFile $Name
     if (-not (Test-Path -LiteralPath $f)) { return $null }
     $procId = 0
     if (-not [int]::TryParse((Get-Content -LiteralPath $f -Raw).Trim(), [ref]$procId)) { return $null }
-    return Get-Process -Id $procId -ErrorAction SilentlyContinue
+    $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
+    if (-not $proc) {
+        Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue
+        return $null
+    }
+    if (-not (Test-ComponentProcessOwned $Name $proc)) {
+        if ($Name -eq 'mysql') {
+            # 活 PID 但归属读不到/不吻合时保留证据。down 不会杀它，reset 也必须被阻断；
+            # 否则“无法证明安全”会被误当成“已经退出”，继而删除仍在使用的数据。
+            Write-Warn2 "$Name 的 pid 文件指向仍存活的 PID $procId，但映像/启动参数未通过本工作区归属验证；保留登记且不会停止该进程。"
+        } else {
+            Write-Warn2 "$Name 的 pid 文件指向 PID $procId，但映像/启动参数不属于本工作区；忽略并删除陈旧登记，不会停止该进程。"
+            Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue
+        }
+        return $null
+    }
+    return $proc
+}
+
+function Get-LivePidFileProcess([string]$Name) {
+    $file = Get-PidFile $Name
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { return $null }
+    $registeredId = 0
+    try { $raw = (Get-Content -LiteralPath $file -Raw).Trim() } catch { return $null }
+    if (-not [int]::TryParse($raw, [ref]$registeredId) -or $registeredId -le 0) { return $null }
+    return Get-Process -Id $registeredId -ErrorAction SilentlyContinue
+}
+
+function Set-MysqlStateStopped {
+    if ($MysqlPort -le 0) { return }
+    $state = Get-PandoraLocalInfraPortState $ProjectRoot
+    $exe = if ($state) { $state.MysqlExecutable } else { Find-Tool 'mysql' 'mysqld.exe' }
+    $ini = if ($state) { $state.MysqlDefaultsFile } else { Get-MysqlIniPath }
+    if ($exe -and $ini) {
+        Set-PandoraLocalInfraPortState -ProjectRoot $ProjectRoot -MysqlPort $MysqlPort `
+            -MysqlProcessId 0 -MysqlExecutable $exe -MysqlDefaultsFile $ini | Out-Null
+    }
 }
 
 function Invoke-BoundedTool {
@@ -287,7 +535,7 @@ function Invoke-BoundedTool {
     }
 }
 
-function Request-GracefulStop([string]$Name) {
+function Request-GracefulStop([string]$Name, $Proc = $null) {
     <#
       对齐 docker stop 的语义:compose 路径下 docker stop 会发 SIGTERM,MySQL 会 flush、
       Redis 会存盘。原生进程没人替我们发这个信号,只能自己调管理命令。
@@ -297,6 +545,14 @@ function Request-GracefulStop([string]$Name) {
     #>
     switch ($Name) {
         'mysql' {
+            # 网络 shutdown 的目标必须就是准备停止的那个已归属 PID。状态文件端口陈旧、
+            # 被外部 MySQL 接管时宁可跳过优雅停机，也绝不能把 shutdown 发给别人。
+            if (-not $Proc) { return $false }
+            $listener = Get-OwnedMysqlListenerProcess $MysqlPort
+            if (-not $listener -or [int]$listener.Id -ne [int]$Proc.Id) {
+                Write-Warn2 "MySQL PID $($Proc.Id) 未被证明是 :$MysqlPort 的本项目 listener；跳过 mysqladmin，仅允许按进程身份回收本项目 PID。"
+                return $false
+            }
             $admin = Find-Tool 'mysql' 'mysqladmin.exe'
             if (-not $admin) { return $false }
             # 口令走 MYSQL_PWD,不进命令行(命令行密码会出现在进程列表里)。
@@ -358,12 +614,59 @@ function Stop-OrphanPortHolder([string]$Name, [int[]]$Ports) {
 
 function Stop-Component([string]$Name) {
     $p = Get-RunningProcess $Name
+    # 防御式复核:即使未来调用方绕过/替换了 Get-RunningProcess，也不能凭一串 PID 触发
+    # mysqladmin shutdown 或 taskkill。归属读不到时宁可留下自己的残进程，也不能误停别人。
+    if ($p -and -not (Test-ComponentProcessOwned $Name $p)) {
+        Write-Warn2 "$Name PID $($p.Id) 未通过本工作区归属复核；不会发送停机命令。"
+        $p = $null
+    }
+
+    if ($Name -eq 'mysql') {
+        $registeredLive = Get-LivePidFileProcess 'mysql'
+        if ($registeredLive -and -not (Test-ComponentProcessOwned 'mysql' $registeredLive)) {
+            Write-Err "mysql.pid 指向仍存活但无法证明属于本工作区的 PID $($registeredLive.Id)；不会停止它，且拒绝把 down/reset 报成功。"
+            return $false
+        }
+    }
+
+    if ($Name -eq 'mysql') {
+        $stopPorts = (@(3307, $MysqlPort) + @($MysqlPortMin..$MysqlPortMax)) |
+            Where-Object { $_ -gt 0 } | Select-Object -Unique
+        $listenerRecord = Get-OnlyOwnedMysqlListener $stopPorts
+        if (-not $p -and $listenerRecord) {
+            $p = $listenerRecord.Process
+            $script:MysqlPort = [int]$listenerRecord.Port
+            Write-Warn2 "mysql.pid 缺失或失效，但 :$MysqlPort 的 listener 已通过 exe + my.ini 归属验证；按本项目进程回收。"
+        } elseif (-not $p) {
+            # mysqld 可能还在初始化、尚未 listen；reset 也不能在这种窗口删除 data。
+            $p = Get-OnlyOwnedMysqlProcess
+            if ($p) { Write-Warn2 "mysql.pid 缺失且尚未监听，但 PID $($p.Id) 已通过 exe + my.ini 归属验证；按本项目进程回收。" }
+        } elseif ($listenerRecord -and [int]$listenerRecord.Process.Id -eq [int]$p.Id) {
+            # ports.json 可能陈旧；只采用由同一已归属 PID 实际监听的端口。
+            $script:MysqlPort = [int]$listenerRecord.Port
+        } elseif ($listenerRecord -and [int]$listenerRecord.Process.Id -ne [int]$p.Id) {
+            Write-Err "mysql.pid 与本工作区 listener 指向两个不同 PID；拒绝自动停止，避免误伤。"
+            return $false
+        }
+
+        if (-not $p) {
+            $state = Get-PandoraLocalInfraPortState $ProjectRoot
+            if ($state -and [int]$state.MysqlProcessId -gt 0) {
+                $stateProc = Get-Process -Id ([int]$state.MysqlProcessId) -ErrorAction SilentlyContinue
+                if ($stateProc) {
+                    Write-Err "ports.json 指向仍存活但无法证明安全退出的 PID $($state.MysqlProcessId)；拒绝把 down/reset 报成功。"
+                    return $false
+                }
+            }
+        }
+    }
+
     if ($p) {
         $procId = $p.Id
 
         # 只对「已经请求过优雅停机」的组件多等;没请求过就干等纯属浪费(每个组件白等 20s,
         # 一次 down 就多花一分钟)。
-        if ((Request-GracefulStop $Name)) { [void](Wait-ProcessExit $p 20) }
+        if ((Request-GracefulStop $Name $p)) { [void](Wait-ProcessExit $p 20) }
 
         if (-not $p.HasExited) {
             # /T 连子进程一起收:留着以防将来某个组件又套一层启动器。
@@ -376,11 +679,18 @@ function Stop-Component([string]$Name) {
         # 天天这么干(改完表点重启),实测就是这么炸的。
         if ($p.HasExited) {
             Write-Ok "$Name 已停止 (PID $procId)"
+            Remove-Item -LiteralPath (Get-PidFile $Name) -Force -ErrorAction SilentlyContinue
+            if ($Name -eq 'mysql') { Set-MysqlStateStopped }
+            return $true
         } else {
             Write-Err "$Name (PID $procId) 30s 内没能停掉 —— 下次启动可能撞端口,请手工确认。"
+            # 保留 pid 文件，下一轮仍能追踪；down/reset 必须据此失败。
+            return $false
         }
     }
     Remove-Item -LiteralPath (Get-PidFile $Name) -Force -ErrorAction SilentlyContinue
+    if ($Name -eq 'mysql') { Set-MysqlStateStopped }
+    return $true
 }
 
 function Save-Pid([string]$Name, [int]$ProcessId) {
@@ -424,11 +734,59 @@ function Get-PortHolder([int]$Port) {
     return , @($rows | Sort-Object -Unique)   # 逗号同上:没有占用者时必须是空数组,不是 $null
 }
 
+function Get-PortReservation([int]$Port) {
+    <#
+      这个端口是不是落在 Windows 的**保留端口区间**里。
+      为什么必须单独问一次:Windows 上 bind 失败有两种完全不同的成因,而且报的错不一样 ——
+        · WSAEADDRINUSE(10048,"通常每个套接字地址…只允许使用一次"):真有进程 LISTEN 着,
+          Get-PortHolder 能指名道姓;
+        · WSAEACCES  (10013,"以一种访问权限不允许的方式做了一个访问套接字的尝试"):
+          **没有任何进程在 LISTEN**,是 Hyper-V / WSL2 / Docker Desktop 起来时 winnat 预留了
+          大段动态端口,把我们的固定端口圈了进去。
+      这两种情况的处置办法相反(前者去关那个进程,后者关进程一辈子也关不掉),所以诊断必须
+      分得开。实测踩过:mysqld 自己也分不开 —— 它 bind 失败就无脑追问一句
+      "Do you already have another mysqld server running on port",于是把人整整带偏一轮。
+      返回 $null = 没被保留;否则返回命中的区间描述串。
+    #>
+    $out = $null
+    try { $out = & netsh.exe int ipv4 show excludedportrange protocol=tcp 2>&1 } catch { return $null }
+    if (-not $out) { return $null }
+    foreach ($line in @($out | ForEach-Object { [string]$_ })) {
+        if ($line -notmatch '^\s*(\d+)\s+(\d+)') { continue }
+        $start = [int]$Matches[1]; $end = [int]$Matches[2]
+        if ($start -le $end -and $Port -ge $start -and $Port -le $end) { return "$start-$end" }
+    }
+    return $null
+}
+
+function Show-PortDiagnosis([int]$Port) {
+    <# bind 不上时唯一的权威判据:到底有没有人 LISTEN。没有 → 往保留区间那条路查。 #>
+    if ($Port -le 0) { return }
+    $holders = Get-PortHolder $Port
+    if ($holders.Count -gt 0) {
+        Write-Err ("端口 :{0} 的占用者:{1}" -f $Port, ($holders -join '; '))
+        return
+    }
+    Write-Warn2 "端口 :$Port 上没有任何进程在 LISTEN —— 所以这不是「被别的进程占着」。"
+    $range = Get-PortReservation $Port
+    if ($range) {
+        Write-Err ":$Port 落在 Windows 的保留端口区间 $range 里(Hyper-V / WSL2 / Docker Desktop 的 winnat 预留),bind 会直接被拒(WSAEACCES 10013)。"
+        Write-Err '解法(管理员 PowerShell,二选一):① net stop winnat; net start winnat —— 让它重新分配预留区间,多数情况当场就好;'
+        Write-Err ("② 永久把这个端口占为己有:netsh int ipv4 add excludedportrange protocol=tcp startport={0} numberofports=1 store=persistent(需重启生效)。" -f $Port)
+    } else {
+        Write-Warn2 "也不在 Windows 保留端口区间里。剩下的可能:安全软件拦了 bind、或别人以独占方式绑了这个端口。用管理员权限跑 netsh int ipv4 show excludedportrange protocol=tcp 再确认一次。"
+    }
+}
+
 # 日志里认识的错 → 人话 + 该怎么办。命中几条就报几条(一次崩溃常常同时有因和果)。
 # 只登记**判据明确**的:猜出来的"可能是杀软吧"只会把人带偏(见 Envoy 那段 AF_UNIX 的教训)。
 $script:InfraLogHints = @(
-    @{ Pattern = 'Address already in use|Bind on TCP/IP port|Do you already have another mysqld server running'
+    @{ Pattern = 'Address already in use'
        Message = '端口已被别的进程占着。上面「端口占用者」那行就是它;不是本项目的进程就换掉它或改端口。' }
+    # 注意别把这条也写成"端口被占":mysqld 的 MY-010257 是它自己的**猜测**,bind 被拒于
+    # WSAEACCES(没人 LISTEN,端口被系统保留)时它照样这么问,照抄就是把人往错方向送。
+    @{ Pattern = 'Bind on TCP/IP port|Do you already have another mysqld server running'
+       Message = '绑定端口失败。别信 mysqld 那句"是不是已经有一个 mysqld 在跑" —— 它是猜的。以上面「端口 :N」那两行为准:有占用者就去关它;写着「没有任何进程在 LISTEN」就按那里给的保留区间解法处理。' }
     @{ Pattern = "Can't create/write to file|Access is denied|Permission denied|OS errno 13|errno: 13"
        Message = '数据 / 日志目录写不进去。要么这个目录被安全软件锁了,要么工作区放在了需要管理员才能写的位置(如 C:\Program Files)。' }
     @{ Pattern = 'unknown variable|unknown option|Failed to set up|error while setting value'
@@ -486,10 +844,7 @@ function Show-ComponentFailure {
         }
     }
 
-    if ($Port -gt 0) {
-        $holders = Get-PortHolder $Port
-        if ($holders.Count -gt 0) { Write-Err ("端口 :{0} 的占用者:{1}" -f $Port, ($holders -join '; ')) }
-    }
+    Show-PortDiagnosis $Port
 
     $logPath = Join-Path $LogDir "$Name.log"
     $tail = Read-LogTail -Path $logPath -Lines 40
@@ -535,7 +890,15 @@ function Wait-Port([string]$Name, [int]$Port, [int]$TimeoutSec, [System.Diagnost
             Show-ComponentFailure -Name $Name -Port $Port -Proc $Proc
             exit 1
         }
-        if (Test-PortOpen $Port) { return }
+        if (Test-PortOpen $Port) {
+            if ($Name -ne 'mysql') { return }
+            $owner = Get-OwnedMysqlListenerProcess $Port
+            if ($owner -and (-not $Proc -or $owner.Id -eq $Proc.Id)) { return }
+
+            Write-Err "端口 :$Port 已能连接，但监听者不是本次启动的本工作区 mysqld；不会把它当成就绪。"
+            Show-PortDiagnosis $Port
+            exit 1
+        }
         Start-Sleep -Milliseconds 500
     }
     Write-Err "$Name 在 ${TimeoutSec}s 内没有监听 :$Port。"
@@ -935,7 +1298,23 @@ function Start-LocalMysql {
     $dataMysql = Join-Path $DataDir 'mysql'
 
     if (Test-PortOpen $MysqlPort) {
-        Write-Ok "MySQL :$MysqlPort 已在运行"
+        $owned = Get-OwnedMysqlListenerProcess $MysqlPort
+        if (-not $owned) {
+            $holders = Get-PortHolder $MysqlPort
+            $who = if ($holders.Count -gt 0) { $holders -join '; ' } else { '监听进程身份不可确认' }
+            Fail "MySQL 端口 :$MysqlPort 已由非本项目实例占用($who)；不会复用、迁移或停止它。"
+        }
+        try {
+            Invoke-MysqlSql -Sql 'SELECT 1;' -User $MysqlUser -Password $MysqlUserPwd | Out-Null
+        } catch {
+            Fail "本工作区 MySQL :$MysqlPort 在监听，但账号 '$MysqlUser' 探活失败；不会继续迁移:$($_.Exception.Message)"
+        }
+        # pid 文件可能被手工清掉；既然 listener/exe/my.ini 已精确验明归属，就恢复登记，
+        # 否则本轮能复用、下一次 down 却停不掉它。
+        Save-Pid 'mysql' $owned.Id
+        Set-PandoraLocalInfraPortState -ProjectRoot $ProjectRoot -MysqlPort $MysqlPort `
+            -MysqlProcessId $owned.Id -MysqlExecutable $owned.Path -MysqlDefaultsFile (Get-MysqlIniPath) | Out-Null
+        Write-Ok "MySQL :$MysqlPort 已在运行(归属与账号已验证)"
         return
     }
 
@@ -949,7 +1328,7 @@ function Start-LocalMysql {
         New-Item -ItemType Directory -Force -Path $dataMysql | Out-Null
         # --initialize-insecure:建出空密码的 root@localhost(不是过期密码),
         # 口令和 pandora 账号交给下面启动时的 --init-file 补齐。
-        $p = Start-Process -FilePath $mysqld -ArgumentList "--defaults-file=$(Get-MysqlIniPath)", '--initialize-insecure' `
+        $p = Start-Process -FilePath $mysqld -ArgumentList "--defaults-file=`"$(Get-MysqlIniPath)`"", '--initialize-insecure' `
             -WindowStyle Hidden -PassThru -Wait
         if ($p.ExitCode -ne 0) {
             Write-Err "MySQL 初始化失败 (exit $($p.ExitCode))。"
@@ -969,7 +1348,7 @@ function Start-LocalMysql {
     # --init-file:每次启动都幂等补齐账号,见 New-MysqlBootstrapSql 的说明。
     $bootstrapSql = (Get-MysqlBootstrapSqlPath) -replace '\\', '/'
     $proc = Start-Process -FilePath $mysqld -ArgumentList `
-        "--defaults-file=$(Get-MysqlIniPath)", '--no-monitor', "--init-file=$bootstrapSql" `
+        "--defaults-file=`"$(Get-MysqlIniPath)`"", '--no-monitor', "--init-file=`"$bootstrapSql`"" `
         -WindowStyle Hidden -PassThru
     Save-Pid 'mysql' $proc.Id
     Wait-Port -Name 'mysql' -Port $MysqlPort -TimeoutSec 90 -Proc $proc
@@ -983,7 +1362,13 @@ function Start-LocalMysql {
         Show-ComponentFailure -Name 'mysql' -Port 0 -Proc $null
         exit 1
     }
-    Write-Ok "MySQL :$MysqlPort"
+    $owner = Get-OwnedMysqlListenerProcess $MysqlPort
+    if (-not $owner -or $owner.Id -ne $proc.Id) {
+        Fail "MySQL :$MysqlPort 虽可连接，但监听 PID 不等于本次启动的 $($proc.Id)；拒绝落端口状态。"
+    }
+    Set-PandoraLocalInfraPortState -ProjectRoot $ProjectRoot -MysqlPort $MysqlPort `
+        -MysqlProcessId $owner.Id -MysqlExecutable $owner.Path -MysqlDefaultsFile (Get-MysqlIniPath) | Out-Null
+    Write-Ok "MySQL :$MysqlPort(独立端口；不会占用 Docker 的 3307)"
 }
 
 # ===== Redis =====
@@ -1356,6 +1741,8 @@ function Start-LocalEnvoy {
 
 function Invoke-Up {
     Invoke-ProvisionAll
+    $script:MysqlPort = Resolve-LocalMysqlPort
+    Write-Ok "免 Docker MySQL 选用独立端口 :$MysqlPort(Docker dev 的 :3307 保持原样)"
     Start-LocalMysql
     Start-LocalRedis
     Start-LocalKafka
@@ -1366,13 +1753,20 @@ function Invoke-Up {
 }
 
 function Invoke-Down {
-    foreach ($n in @('envoy', 'kafka', 'redis', 'mysql')) { Stop-Component $n }
+    $failed = @()
+    foreach ($n in @('envoy', 'kafka', 'redis', 'mysql')) {
+        if (-not (Stop-Component $n)) { $failed += $n }
+    }
+    if ($failed.Count -gt 0) {
+        Write-Err "本机基础设施未能全部停止:$($failed -join ', ')。数据与 PID 登记均保留，不会继续 reset。"
+        return $false
+    }
     Write-Ok '本机基础设施已停止(数据保留)'
+    return $true
 }
 
 function Invoke-Status {
     $rows = @(
-        @{ Name = 'mysql'; Port = $MysqlPort }
         @{ Name = 'redis'; Port = $RedisPort }
         @{ Name = 'kafka'; Port = $KafkaPort }
         @{ Name = 'envoy'; Port = 8443 }
@@ -1380,6 +1774,14 @@ function Invoke-Status {
     )
     Write-Host ''
     Write-Host '  组件      端口   状态' -ForegroundColor Gray
+    if ($MysqlPort -le 0) {
+        Write-Host ("  {0,-9} {1,-6} {2}" -f 'mysql', '-', 'UNCONFIGURED') -ForegroundColor DarkGray
+    } else {
+        $ownedMysql = Get-OwnedMysqlListenerProcess $MysqlPort
+        $mysqlState = if ($ownedMysql) { 'OWNED' } elseif (Test-PortOpen $MysqlPort) { 'FOREIGN' } else { 'DOWN' }
+        $mysqlColor = if ($mysqlState -eq 'OWNED') { 'Green' } elseif ($mysqlState -eq 'FOREIGN') { 'Yellow' } else { 'Red' }
+        Write-Host ("  {0,-9} {1,-6} {2}" -f 'mysql', $MysqlPort, $mysqlState) -ForegroundColor $mysqlColor
+    }
     foreach ($r in $rows) {
         $ok = Test-PortOpen $r.Port
         $txt = if ($ok) { 'UP  ' } else { 'DOWN' }
@@ -1389,23 +1791,110 @@ function Invoke-Status {
     Write-Host ''
 }
 
+function Test-MysqlDataDirUnlocked {
+    if (-not (Test-Path -LiteralPath $DataDir -PathType Container)) { return $true }
+    # PID/CIM 都可能因权限或陈旧登记而不可见；reset 再用 MySQL 长期开启的核心文件做最后一道
+    # 独占打开探针。任何一个仍被占用或无法确认时都 fail closed，不冒险递归删 data。
+    $probes = @(
+        (Join-Path $DataDir 'mysql/ibdata1'),
+        (Join-Path $DataDir 'mysql/undo_001'),
+        (Join-Path $DataDir 'mysql/undo_002')
+    )
+    $redoDir = Join-Path $DataDir 'mysql/#innodb_redo'
+    if (Test-Path -LiteralPath $redoDir -PathType Container) {
+        $probes += @(Get-ChildItem -LiteralPath $redoDir -File -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName)
+    }
+    foreach ($path in @($probes | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) })) {
+        $stream = $null
+        try {
+            $stream = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        } catch {
+            Write-Err "MySQL 数据文件仍被占用或无法独占验证:$path；拒绝 reset 删除数据。"
+            return $false
+        } finally {
+            if ($stream) { $stream.Dispose() }
+        }
+    }
+    return $true
+}
+
 function Invoke-Reset {
-    Invoke-Down
+    if (-not (Invoke-Down)) { return $false }
+    $ownedMysql = @(Get-OwnedMysqlProcesses)
+    if ($ownedMysql.Count -gt 0) {
+        Write-Err "仍检测到属于本工作区的 mysqld PID:$((@($ownedMysql | ForEach-Object { $_.Id })) -join ', ')；拒绝删除仍可能被使用的数据目录。"
+        return $false
+    }
+    if (-not (Test-MysqlDataDirUnlocked)) { return $false }
     Write-Step '删除本机基础设施数据目录'
-    Remove-Item -LiteralPath $DataDir -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $DataDir) {
+        try {
+            Remove-Item -LiteralPath $DataDir -Recurse -Force -ErrorAction Stop
+        } catch {
+            Write-Err "删除本机基础设施数据目录失败:$($_.Exception.Message)"
+            return $false
+        }
+    }
+    if (Test-Path -LiteralPath $DataDir) {
+        Write-Err "数据目录仍存在，reset 未完成:$DataDir"
+        return $false
+    }
     Write-Ok "已删除 $DataDir(下次 up 会重新初始化)"
+    return $true
 }
 
 New-Item -ItemType Directory -Force -Path $Root, $LogDir, $PidDir, $CfgDir | Out-Null
 # 已备料过就先挂 PATH:down / status 这类不走 provision 的动作也能用上自带工具。
 Register-LocalToolPath
+$lifecycleLock = $null
+$orchestrationLockEntered = $false
+try {
+    if ($Action -in @('up', 'down', 'reset', 'provision')) {
+        Enter-PandoraOrchestrationLock -ProjectRoot $ProjectRoot -Operation "免 Docker 基础设施 $Action"
+        $orchestrationLockEntered = $true
+        $lockPath = Join-Path $Root 'lifecycle.lock'
+        try {
+            $lifecycleLock = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        } catch {
+            Fail "另一轮免 Docker 基础设施生命周期操作正在进行；本轮 $Action 不会并发执行。"
+        }
+    }
 
-switch ($Action) {
-    'up' { Invoke-Up }
-    'down' { Invoke-Down }
-    'status' { Invoke-Status }
-    # provision 比 up 多备一份 PowerShell 7 免安装包:它只服务于「本机连 pwsh 都没有」的
-    # 策划机(由 bootstrap_pwsh.cmd 在 cmd.exe 里自举),能跑到 up 的机器用不上。
-    'provision' { Invoke-ProvisionAll; Save-PwshBootstrapArchive }
-    'reset' { Invoke-Reset }
+    $knownMysqlPort = Get-PandoraLocalMysqlPort $ProjectRoot
+    if ($knownMysqlPort -gt 0) {
+        $script:MysqlPort = $knownMysqlPort
+    } elseif ($Action -in @('down', 'status', 'reset')) {
+        # 兼容没有 ports.json / pid 文件的运行实例；先扫整个私有池和旧版 3307，
+        # 只有 exe + 本工作区 my.ini 都吻合才认，外部 listener 一律不碰。
+        $knownOwned = Get-OnlyOwnedMysqlListener (@(3307) + @($MysqlPortMin..$MysqlPortMax))
+        if ($knownOwned) {
+            $script:MysqlPort = [int]$knownOwned.Port
+        } else {
+            # 上次通过环境变量选过池外端口、随后 ports.json 丢失时，不能只扫固定池。
+            # 先按 exe + exact my.ini 找唯一进程，再从该 PID 的 listener 恢复真实端口。
+            $knownProcess = Get-OnlyOwnedMysqlProcess
+            if ($knownProcess) {
+                $records = @(Get-MysqlListenerRecordsForProcess $knownProcess)
+                if ($records.Count -gt 1) {
+                    Fail "本工作区 mysqld PID $($knownProcess.Id) 同时监听多个端口:$((@($records | ForEach-Object { $_.Port })) -join ', ')；拒绝猜测状态/停机目标。"
+                }
+                if ($records.Count -eq 1) { $script:MysqlPort = [int]$records[0].Port }
+            }
+        }
+    }
+
+    switch ($Action) {
+        'up' { Invoke-Up }
+        'down' { if (-not (Invoke-Down)) { exit 1 } }
+        # status 也显式返回退出码，供 start.ps1 这类父脚本可靠汇总；否则成功路径可能
+        # 继承调用者残留的 $LASTEXITCODE，失败路径又可能被后续 status 子命令覆盖。
+        'status' { Invoke-Status; exit 0 }
+        # provision 比 up 多备一份 PowerShell 7 免安装包:它只服务于「本机连 pwsh 都没有」的
+        # 策划机(由 bootstrap_pwsh.cmd 在 cmd.exe 里自举),能跑到 up 的机器用不上。
+        'provision' { Invoke-ProvisionAll; Save-PwshBootstrapArchive }
+        'reset' { if (-not (Invoke-Reset)) { exit 1 } }
+    }
+} finally {
+    if ($lifecycleLock) { $lifecycleLock.Dispose() }
+    if ($orchestrationLockEntered) { Exit-PandoraOrchestrationLock }
 }

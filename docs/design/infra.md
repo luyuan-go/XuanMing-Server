@@ -360,6 +360,43 @@ prefix 默认 `/pandora/leader/`,可经 `match.leader.prefix` 按环境配成 `/
 | Grafana | 3001 | 开发环境端口 |
 | Jaeger UI | 16687 | 开发环境端口 |
 
+### 6.1.1 策划机免 Docker 端口隔离
+
+`策划一键启动-免Docker-测试版.cmd` 不复用 docker-compose 的 MySQL `3307`。启动器从
+`13307..13398` 中按顺序选择一个能在 `127.0.0.1` **真实独占 bind** 的端口，因此同时避开：
+
+- 已有进程或 Docker 端口映射；
+- Hyper-V / WSL2 / Docker Desktop 经 winnat 保留、但没有 LISTEN 进程的端口；
+- 安全软件拒绝 bind 的端口。
+
+端口只有在 `mysqld` 监听 PID、可执行文件路径、本工作区 `my.ini` 启动参数以及 `pandora`
+账号探活全部通过后，才把 `mysql_port + mysql_process_id + mysql_executable +
+mysql_defaults_file` 原子写入 `run/localinfra/cfg/ports.json`。迁移脚本每次调用本机客户端及
+启动迁移器前、业务服务生成配置/预检以及 `-DsOnly` 快速重启都会重新核对这四项；只凭 TCP、MySQL 协议或相同密码均不能
+证明归属。13 份 MySQL dev 配置中的 14 条 DSN 只在 `run/localinfra/cfg/services/` 生成运行态
+副本，受版本控制的 YAML 保持不变。
+
+`run/dev/mysql-port-applied.json` 独立记录业务服务**最后成功应用**的
+`mode + mysql_port + social_on_mysql` 配置画像。
+它不能由基础设施启动提前更新；Docker `3307` 与免 Docker 动态端口/模式任一变化，都必须先完整
+停止已登记业务进程，全部服务真正监听后才原子更新，防止幂等启动把仍持旧 DSN 的进程 skip；
+`-Exclude/-Only` 部分启动会先清除旧画像且不冒充“全服务已应用”；单服务启动/重启若与现有画像
+不一致则直接拒绝，必须先走一次完整模式切换。
+`pandora-migrate.exe` 是免 Go 策划包的必需产物，与 22 个服务一起构建、进入 manifest/zip；强制
+迁移模式下缺迁移器、连库失败或 listener 归属变化都以非零码中止。
+
+`3307` 上无论是本项目 Docker MySQL 还是机器所有者自己的 MySQL，免 Docker 路线都不会
+复用、迁移、shutdown 或 taskkill。旧版原生 MySQL 已经在 `3307` 运行时，仅在 PID、映像和
+本工作区 `my.ini` 三者精确吻合的当轮兼容复用；停机后自动迁入独立端口池。确需固定端口时可在
+启动前设置 `PANDORA_LOCALINFRA_MYSQL_PORT`，范围必须是 `1024..49151` 且不能为 `3307`。
+
+`start.ps1`、`dev_all.ps1`、`dev_up/dev_down.ps1`、`run_services.ps1`、`dev_migrate.ps1` 与
+`local_infra.ps1` 的本机启动、迁移、停止、reset 共用
+`run/orchestration.lock`，同一条调用链可重入、两次双击不能交错；基础设施内部另保留生命周期锁。
+`down` 只有在进程确认退出后才删除 PID 登记；
+未知活 PID、停止超时或状态冲突会返回失败。`reset` 还会复核本工作区 mysqld 与核心 InnoDB 文件
+独占状态，任何不确定性都保留数据目录，不把“看不见归属”冒充成“已经停止”。
+
 ### 6.2 Go 服务 gRPC 端口
 
 > **端口段必须留在 49152 以下 —— 这是硬约束,不是口味(2026-08-05 事故后定)。**

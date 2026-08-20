@@ -27,10 +27,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptDir = $PSScriptRoot
+. (Join-Path $ScriptDir 'lib/local_infra_state.ps1')
+$projectRoot = (Resolve-Path "$ScriptDir/../..").Path
 
+Enter-PandoraOrchestrationLock -ProjectRoot $projectRoot -Operation $(if ($Down) { '完整停止' } else { '完整启动' })
+try {
 if ($Down) {
     Write-Host "===== 停止业务服务 =====" -ForegroundColor Cyan
     & "$ScriptDir/run_services.ps1" -Action down
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host '[ERR] 业务服务未能全部停止；保留基础设施，避免仍存活服务被突然断库。' -ForegroundColor Red
+        exit 1
+    }
     Write-Host ""
     Write-Host "===== 停止基础设施 =====" -ForegroundColor Cyan
     if ($NoDocker) { & "$ScriptDir/local_infra.ps1" -Action down } else { & "$ScriptDir/dev_down.ps1" }
@@ -39,13 +47,28 @@ if ($Down) {
 
 if ($NoDocker) {
     # ===== 免 Docker 路线 =====
-    # 与 docker 路线的差异只有三处:基础设施换成本机进程、不起 TiDB、迁移器用本机
-    # mysql.exe 而不是 docker exec。端口 / 账号 / schema 全部一致,所以业务配置不分叉。
+    # 与 docker 路线的差异:基础设施换成本机进程、不起 TiDB、迁移器用本机 mysql.exe；
+    # MySQL 使用独立动态端口，并在 run/localinfra 下派生服务运行态配置，仓库 yaml 不分叉。
     Write-Host "===== [1/3] 本机基础设施(免 Docker) =====" -ForegroundColor Cyan
+    # 端口权威与“业务服务已经应用的端口”是两件事。只有完整服务启动成功才更新后者；
+    # 即使上轮在基础设施启动后半途失败，下轮也仍会强制刷新旧 DSN 进程。
+    $appliedMysql = Get-PandoraServiceAppliedMysqlState $projectRoot
     & "$ScriptDir/local_infra.ps1" -Action up
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERR] 本机基础设施启动失败,中止" -ForegroundColor Red
         exit 1
+    }
+    $mysqlPort = Get-PandoraLocalMysqlPort $projectRoot -Required
+
+    if (-not $appliedMysql -or $appliedMysql.Mode -ne 'nodocker' -or
+        [int]$appliedMysql.MysqlPort -ne $mysqlPort -or -not [bool]$appliedMysql.SocialOnMysql) {
+        $fromText = if ($appliedMysql) { "$($appliedMysql.Mode)/:$($appliedMysql.MysqlPort)/social_mysql=$($appliedMysql.SocialOnMysql)" } else { '未登记/旧版' }
+        Write-Host "[INFO] 业务服务已应用运行态为 $fromText，当前为 nodocker/:$mysqlPort/social_mysql=True；完整停止本项目业务服务以刷新 DSN。" -ForegroundColor Cyan
+        & "$ScriptDir/run_services.ps1" -Action down
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host '[ERR] 旧业务服务停止失败，不能带着旧 MySQL DSN 继续启动。' -ForegroundColor Red
+            exit 1
+        }
     }
 
     Write-Host ""
@@ -57,7 +80,7 @@ if ($NoDocker) {
         Write-Host "[ERR] 找不到本机 mysql.exe(备料应由 local_infra.ps1 完成),中止" -ForegroundColor Red
         exit 1
     }
-    & "$ScriptDir/dev_migrate.ps1" -MysqlClient $mysqlClient.FullName
+    & "$ScriptDir/dev_migrate.ps1" -MysqlClient $mysqlClient.FullName -MysqlPort $mysqlPort -RequireMysql
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERR] 数据库结构升级失败,中止(继续启动只会让服务连着旧结构崩溃)" -ForegroundColor Red
         exit 1
@@ -65,7 +88,7 @@ if ($NoDocker) {
 
     Write-Host ""
     Write-Host "===== [3/3] 业务服务 =====" -ForegroundColor Cyan
-    & "$ScriptDir/run_services.ps1" -Exclude $Exclude -SocialOnMysql -NoDocker
+    & "$ScriptDir/run_services.ps1" -Exclude $Exclude -SocialOnMysql -NoDocker -MysqlPort $mysqlPort
     exit $LASTEXITCODE
 }
 
@@ -94,7 +117,7 @@ if ($LASTEXITCODE -ne 0) {
 # 结构会启动即崩(实测 player: Unknown column 'exp')。幂等,已最新则空跑。
 Write-Host ""
 Write-Host "===== [3/4] 数据库结构 =====" -ForegroundColor Cyan
-& "$ScriptDir/dev_migrate.ps1"
+& "$ScriptDir/dev_migrate.ps1" -RequireMysql
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERR] 数据库结构升级失败,中止(继续启动只会让服务连着旧结构崩溃)" -ForegroundColor Red
     exit 1
@@ -105,3 +128,6 @@ Write-Host ""
 Write-Host "===== [4/4] 业务服务 =====" -ForegroundColor Cyan
 & "$ScriptDir/run_services.ps1" -Exclude $Exclude
 exit $LASTEXITCODE
+} finally {
+    Exit-PandoraOrchestrationLock
+}

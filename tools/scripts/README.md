@@ -14,6 +14,7 @@
 | `dev_up.ps1` | 起 docker 基础设施(MySQL/Redis/Kafka/etcd/Prometheus) | `start.ps1`、`dev_all.ps1`、`play.ps1` |
 | `dev_down.ps1` | 停基础设施容器 | `start.ps1`、`dev_all.ps1`、`play.ps1` |
 | `dev_status.ps1` | 查看开发环境状态(容器 + 端口监听) | 手动 |
+| `local_infra.ps1` | 策划机免 Docker 原生基础设施；MySQL 从 13307..13398 选独立端口，不复用/停止 3307 的外部实例 | `dev_all.ps1 -NoDocker` |
 | `run_services.ps1` | 宿主 go 服务编排(启/停/看日志) | `start.ps1`、`play.ps1`、`dev_all.ps1`、`dev_tools.ps1` |
 | `gen_cluster_config.ps1` | 生成集群版配置(容器地址 / allocator 模式；auction 强制 etcd Snowflake + 跨实例锁) | `start.ps1`(docker/battle 等) |
 | `tidb_up.ps1` | TiDB 集群一键起(社交库可选) | 手动(见 `deploy/tidb-init/README.md`) |
@@ -71,6 +72,8 @@ fail-closed、招募列表恒空）。生成器会拒绝公开 dev key、短 key
 | `release_preflight.ps1` | 发布前预检(配置安全 / 密码强度) | 手动(见 `docs/ops/release-checklist.md`) |
 | `http2_probe.ps1` | 探测 Envoy 客户端连接是否走 HTTP/2 | 手动(见 `docs/design/gateway-decision.md`) |
 | `lib/online_manifest_contract.ps1` | online 镜像 digest pin、writer/Fleet annotation 与渲染契约纯 helper(不访问远端) | `start.ps1`、静态测试 |
+| `build_release_binaries.ps1` | 构建 22 个服务、configtable-gen 与免 Go 必需的 pandora-migrate，生成 manifest/可选 zip | 人工发布策划包 |
+| `lib/local_infra_state.ps1` | 免 Docker MySQL PID/exe/my.ini/listener 身份、业务服务已应用 mode+port+social 画像与可重入工作区编排锁 | `local_infra.ps1`、`dev_all.ps1`、`dev_up/down.ps1`、`dev_migrate.ps1`、`run_services.ps1`、`start.ps1` |
 | `lib/dsticket_keyset_contract.ps1` | DSTicket 私钥/JWKS/K8s 对象严格对账（RFC 7638、顶层 active_kid、immutable/hash） | `start.ps1`、`dsticket_keyset.ps1`、静态测试 |
 | `lib/dsticket_rotation_contract.ps1` | DSTicket 三阶段材料、marker 时间链、controller/Pod owner、普通发布终态与共享操作锁契约 | `start.ps1`、`dsticket_rotate.ps1`、静态测试 |
 | `tests/online_manifest_contract_test.ps1` | online 镜像/Fleet 契约与 mutant 反例测试 | 手动/CI |
@@ -82,5 +85,8 @@ fail-closed、招募列表恒空）。生成器会拒绝公开 dev key、短 key
 | `tests/configtable_gen_svn_status_test.ps1` | 导表失败归因用的 SVN 判定(取版本号 / 未提交判定,含"干净副本 ≠ 没装 svn")行为测试 | 手动/CI |
 | `tests/configtable_client_repo_resolve_test.ps1` | 客户端仓定位:SVN 原名 `Client` / 自定义仓名 / trunk 整检出 / `-TableRoot` / `PANDORA_CLIENT_REPO` / 空 Table 归类 / 多份检出必须报出来 / 不存在盘符只跳过 | 手动/CI |
 | `tests/oneclick_devenv_exitcode_contract_test.ps1` | 策划一键启动两条护栏:dev.env 自举三态(建/不覆盖/工作区不全硬失败)+ `Invoke-Local` 必须透传 dev_all 退出码 | 手动/CI |
+| `tests/localinfra_mysql_ownership_test.ps1` | 外部 listener 不复用、未知/陈旧 PID 不 shutdown/taskkill、down/reset 失败闭环 | 手动/CI |
+| `tests/localinfra_mysql_port_flow_test.ps1` | 身份状态、候选选择、14 条 DSN 改写、mode+port+social、编排锁与启动链贯穿 | 手动/CI |
+| `tests/release_binaries_migrate_contract_test.ps1` | pandora-migrate 构建、manifest/zip 与运行时消费路径闭环 | 手动/CI |
 | `tests/publish_to_minio_contract_test.ps1` | MinIO 分发错误传播、不可变内容先传/latest 指针后切、允许远端历史对象的单向完整性校验 | 手动/CI |
 | `tests/infra_etcd_persistence_contract_test.ps1` | 本地 etcd PVC/Recreate 持久化契约与反例 | 手动/CI |

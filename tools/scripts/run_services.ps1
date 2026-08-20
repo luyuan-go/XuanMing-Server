@@ -59,10 +59,19 @@ param(
 
     # 免 Docker 的策划机模式:基础设施是本机原生进程,且**刻意不起 etcd**。
     # 只影响基础设施预检要不要把 etcd 算进强依赖,以及不通时给什么修复指引。
-    [switch]$NoDocker
+    [switch]$NoDocker,
+
+    # 免 Docker MySQL 的已验证独立端口。0 表示从 run/localinfra/cfg/ports.json 读取；
+    # Docker 路线仍固定 3307。
+    [ValidateRange(0, 49151)]
+    [int]$MysqlPort = 0
 )
 
 $ErrorActionPreference = 'Stop'
+
+# 免 Docker 路线没有 TiDB，社交四服必须使用其 MySQL dev 配置；把这个关系收成不变量，
+# 避免手工漏传 -SocialOnMysql 后仍写出一个看似匹配、实际握着 TiDB DSN 的运行态 marker。
+if ($NoDocker) { $SocialOnMysql = $true }
 
 # 国内网络拉 Go 依赖:默认 proxy.golang.org / sum.golang.org 在国内基本连不上,
 # 会导致 go build 拉模块超时(dial tcp 142.251.188.141:443 ... connectex: 超时)。
@@ -78,6 +87,62 @@ if (-not $env:GOSUMDB -or $env:GOSUMDB -match 'sum\.golang\.org') {
 }
 
 $ProjectRoot = (Resolve-Path "$PSScriptRoot/../..").Path
+$stateHelper = Join-Path $PSScriptRoot 'lib/local_infra_state.ps1'
+. $stateHelper
+if ($NoDocker) {
+    $mustUseMysql = $Action -in @('up', 'restart')
+    $mysqlState = Get-PandoraLocalInfraPortState $ProjectRoot
+    if ($mustUseMysql -and -not $mysqlState) {
+        throw '免 Docker MySQL 尚无已验证身份状态；拒绝生成配置或启动服务。'
+    }
+    if ($mysqlState) {
+        $verifiedMysqlPort = [int]$mysqlState.MysqlPort
+        if ($MysqlPort -eq 0) {
+            $MysqlPort = $verifiedMysqlPort
+        } elseif ($MysqlPort -ne $verifiedMysqlPort) {
+            throw "-MysqlPort $MysqlPort 与已验证运行态端口 $verifiedMysqlPort 不一致；拒绝生成可能连错库的配置。"
+        }
+    }
+} elseif ($MysqlPort -eq 0) {
+    $MysqlPort = 3307
+}
+$serviceRuntimeMode = if ($NoDocker) { 'nodocker' } else { 'docker' }
+$serviceRuntimeSocialOnMysql = [bool]$SocialOnMysql
+
+function Test-ServiceRuntimeProfileMatches($State) {
+    return $State -and $State.Mode -eq $serviceRuntimeMode -and
+        [int]$State.MysqlPort -eq $MysqlPort -and
+        [bool]$State.SocialOnMysql -eq $serviceRuntimeSocialOnMysql
+}
+
+function Assert-SingleServiceRuntimeCompatible {
+    $applied = Get-PandoraServiceAppliedMysqlState $ProjectRoot
+    if (-not $applied) {
+        $alreadyRunning = @($Services | Where-Object {
+            (Get-RunningProcess $_) -or (Test-PortOpen $_.Port)
+        } | ForEach-Object { $_.Name })
+        if ($alreadyRunning.Count -gt 0) {
+            throw "全服务运行态未登记，但已有业务端口在运行:$($alreadyRunning -join ', ')。" +
+                '拒绝单独启动/重启后形成混合 DSN；请先执行一次完整启动统一刷新。'
+        }
+        return
+    }
+    if (-not (Test-ServiceRuntimeProfileMatches $applied)) {
+        throw "单服务启动/重启要求 $serviceRuntimeMode/:$MysqlPort/social_mysql=$serviceRuntimeSocialOnMysql，" +
+            "但全服务已登记为 $($applied.Mode)/:$($applied.MysqlPort)/social_mysql=$($applied.SocialOnMysql)。" +
+            '拒绝制造混合 DSN；请执行一次完整启动完成模式切换。'
+    }
+}
+
+function Assert-NoDockerMysqlOwned {
+    if (-not $NoDocker) { return }
+    $currentState = Get-PandoraLocalInfraPortState $ProjectRoot
+    if (-not $currentState -or [int]$currentState.MysqlPort -ne $MysqlPort -or
+        -not (Get-PandoraLocalMysqlOwnedProcess $ProjectRoot $currentState)) {
+        throw "免 Docker MySQL :$MysqlPort 当前 listener 未通过 PID + exe + my.ini 归属复核；拒绝连接、迁移或生成服务配置。"
+    }
+}
+if ($mustUseMysql) { Assert-NoDockerMysqlOwned }
 $RunDir = Join-Path $ProjectRoot 'run/dev'
 $BinDir = Join-Path $RunDir 'bin'
 $LogDir = Join-Path $RunDir 'logs'
@@ -127,6 +192,38 @@ if ($SocialOnMysql) {
             $svc.Conf = "etc/$($Matches[1])-dev.yaml"
         }
     }
+}
+
+function Get-ServiceConfigPath($svc) {
+    Assert-NoDockerMysqlOwned
+    $svcDir = Join-Path $ProjectRoot $svc.Dir
+    $source = Join-Path $svcDir $svc.Conf
+    if (-not $NoDocker -or $MysqlPort -eq 3307) { return $svc.Conf }
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        throw "服务 $($svc.Name) 配置不存在:$source"
+    }
+
+    $text = [IO.File]::ReadAllText($source)
+    $dsnPattern = 'tcp\(127\.0\.0\.1:3307\)'
+    if ($text -notmatch $dsnPattern) { return $svc.Conf }
+
+    # 只改 DSN 的 tcp(...) 片段；注释、文案或其它用途的 127.0.0.1:3307 原样保留。
+    $rewritten = [regex]::Replace($text, $dsnPattern, "tcp(127.0.0.1:$MysqlPort)")
+    if ($rewritten -match $dsnPattern) {
+        throw "服务 $($svc.Name) 的运行态配置仍残留 MySQL :3307 DSN，拒绝启动。"
+    }
+
+    $runtimeDir = Join-Path $ProjectRoot 'run/localinfra/cfg/services'
+    New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+    $target = Join-Path $runtimeDir "$($svc.Name).yaml"
+    $tmp = "$target.$PID.tmp"
+    try {
+        [IO.File]::WriteAllText($tmp, $rewritten, [Text.UTF8Encoding]::new($false))
+        [IO.File]::Move($tmp, $target, $true)
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
+    return $target
 }
 
 function Get-Service([string]$name) {
@@ -190,6 +287,21 @@ function Test-PortOpen([int]$port) {
     } finally {
         $client.Close()
     }
+}
+
+function Test-ServiceListenerOwned($svc, $proc) {
+    if (-not $proc) { return $false }
+    try {
+        $owners = @(Get-NetTCPConnection -State Listen -LocalPort ([int]$svc.Port) -ErrorAction Stop |
+            Select-Object -ExpandProperty OwningProcess -Unique)
+        return $owners -contains [int]$proc.Id
+    } catch { return $false }
+}
+
+function Wait-ServiceProcessExit($proc, [int]$TimeoutSec) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while (-not $proc.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }
+    return [bool]$proc.HasExited
 }
 
 # 清理 allocator 在 mode=local 下用 exec 拉起的 UE DS 子进程(Hub DS / Battle DS)。
@@ -297,9 +409,10 @@ function Clear-PortSquatter($svc) {
 # 无限重连(进程不退,端口探活还可能"假就绪"),表现成"服务起了但客户端连不上/进不了大厅"。
 # 这里在拉起业务服务前先探基础设施端口,不通就直接拦下并给出明确修复指引,避免静默 crash-loop。
 function Test-InfraReady {
+    Assert-NoDockerMysqlOwned
     $infra = @(
         @{ Name = 'Redis';  Port = 6380 }
-        @{ Name = 'MySQL';  Port = 3307 }
+        @{ Name = 'MySQL';  Port = $MysqlPort }
         @{ Name = 'Kafka';  Port = 9093 }
     )
     # etcd 只有 docker 路线才起。免 Docker 模式刻意不起它,而 services/*/etc/*-dev.yaml 里
@@ -380,8 +493,12 @@ function Build-Service($svc) {
 function Start-Service($svc) {
     $existing = Get-RunningProcess $svc
     if ($existing) {
-        Write-Host "  [skip] $($svc.Name) 已在运行 (PID $($existing.Id))" -ForegroundColor Yellow
-        return
+        if (Test-ServiceListenerOwned $svc $existing) {
+            Write-Host "  [skip] $($svc.Name) 已在运行 (PID $($existing.Id))" -ForegroundColor Yellow
+            return $true
+        }
+        Write-Host "  [FAIL] $($svc.Name) PID $($existing.Id) 存活但未拥有 :$($svc.Port)，拒绝误报已运行。" -ForegroundColor Red
+        return $false
     }
 
     # 启动前清理占端口的残留实例,避免新进程 bind 端口失败静默崩溃。
@@ -396,11 +513,12 @@ function Start-Service($svc) {
     }
 
     $svcDir = Join-Path $ProjectRoot $svc.Dir
+    $confPath = Get-ServiceConfigPath $svc
     $log = Get-LogFile $svc
     $err = Get-ErrFile $svc
 
     $proc = Start-Process -FilePath $exe `
-        -ArgumentList '-conf', $svc.Conf `
+        -ArgumentList '-conf', "`"$confPath`"" `
         -WorkingDirectory $svcDir `
         -RedirectStandardOutput $log `
         -RedirectStandardError $err `
@@ -413,16 +531,19 @@ function Start-Service($svc) {
     $ready = $false
     for ($i = 0; $i -lt 30; $i++) {
         if ($proc.HasExited) { break }
-        if (Test-PortOpen $svc.Port) { $ready = $true; break }
+        if (Test-ServiceListenerOwned $svc $proc) { $ready = $true; break }
         Start-Sleep -Milliseconds 400
     }
 
     if ($proc.HasExited) {
         Write-Host "  [FAIL] $($svc.Name) 启动后立即退出 (exit $($proc.ExitCode)),看日志: $err" -ForegroundColor Red
+        return $false
     } elseif ($ready) {
         Write-Host "  [ OK ] $($svc.Name)  PID $($proc.Id)  :$($svc.Port)" -ForegroundColor Green
+        return $true
     } else {
         Write-Host "  [WARN] $($svc.Name) PID $($proc.Id) 已起但 :$($svc.Port) 未就绪,看日志: $log" -ForegroundColor Yellow
+        return $false
     }
 }
 
@@ -433,13 +554,20 @@ function Stop-Service($svc) {
         # 先杀 DS 子进程再杀 allocator:反过来的话子进程会先失去父进程变成无主,
         # ParentProcessId 指向已回收的 PID,直系关系就认不出来了。
         if ($LocalDsSpawners -contains $svc.Name) { Clear-LocalDsProcesses $svc $proc }
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        try { Stop-Process -Id $proc.Id -Force -ErrorAction Stop } catch {
+            Write-Host "  [FAIL] $($svc.Name) (PID $($proc.Id)) 停止命令失败:$($_.Exception.Message)" -ForegroundColor Red
+        }
+        if (-not (Wait-ServiceProcessExit $proc 10)) {
+            Write-Host "  [FAIL] $($svc.Name) (PID $($proc.Id)) 10s 内仍未退出；保留 PID 登记。" -ForegroundColor Red
+            return $false
+        }
         Write-Host "  [stop] $($svc.Name) (PID $($proc.Id))" -ForegroundColor DarkGray
     } else {
         Write-Host "  [----] $($svc.Name) 未运行" -ForegroundColor DarkGray
         if ($LocalDsSpawners -contains $svc.Name) { Clear-LocalDsProcesses $svc $null -OrphansOnly }
     }
     if (Test-Path $pidFile) { Remove-Item $pidFile -Force }
+    return $true
 }
 
 function Show-Status {
@@ -458,6 +586,12 @@ function Show-Status {
 }
 
 # ===== 主流程 =====
+$orchestrationLockEntered = $false
+try {
+if ($Action -in @('up', 'down', 'restart')) {
+    Enter-PandoraOrchestrationLock -ProjectRoot $ProjectRoot -Operation "业务服务 $Action"
+    $orchestrationLockEntered = $true
+}
 switch ($Action) {
 
     'status' { Show-Status; break }
@@ -474,8 +608,16 @@ switch ($Action) {
 
     'down' {
         Write-Host "===== 停止业务服务 =====" -ForegroundColor Cyan
-        if ($Service) { Stop-Service (Get-Service $Service) }
-        else { foreach ($svc in $Services) { Stop-Service $svc } }
+        $stopTargets = if ($Service) { ,(Get-Service $Service) } else { @($Services) }
+        $stopFailed = @()
+        foreach ($svc in $stopTargets) {
+            if (-not (Stop-Service $svc)) { $stopFailed += $svc.Name }
+        }
+        if ($stopFailed.Count -gt 0) {
+            Write-Host "[ERR] 业务服务未能全部停止:$($stopFailed -join ', ')" -ForegroundColor Red
+            exit 1
+        }
+        exit 0
         break
     }
 
@@ -490,15 +632,18 @@ switch ($Action) {
 
     'restart' {
         if (-not $Service) { Write-Host "[ERR] -Action restart 需要 -Service <name>" -ForegroundColor Red; exit 1 }
+        Assert-SingleServiceRuntimeCompatible
         $svc = Get-Service $Service
         Write-Host "===== 重启 $($svc.Name) =====" -ForegroundColor Cyan
-        Stop-Service $svc
+        if (-not (Stop-Service $svc)) { exit 1 }
         Start-Sleep -Milliseconds 300
-        Start-Service $svc
+        if (-not (Start-Service $svc)) { exit 1 }
+        exit 0
         break
     }
 
     'up' {
+        if ($Service) { Assert-SingleServiceRuntimeCompatible }
         # 单服务前台运行
         if ($Foreground) {
             if (-not $Service) { Write-Host "[ERR] -Foreground 需要 -Service <name>" -ForegroundColor Red; exit 1 }
@@ -506,25 +651,48 @@ switch ($Action) {
             $running = Get-RunningProcess $svc
             if ($running) {
                 Write-Host "[!] $($svc.Name) 已在后台运行 (PID $($running.Id)),先停掉它" -ForegroundColor Yellow
-                Stop-Service $svc
+                if (-not (Stop-Service $svc)) { exit 1 }
             }
             $svcDir = Join-Path $ProjectRoot $svc.Dir
+            $confPath = Get-ServiceConfigPath $svc
             Write-Host "===== 前台运行 $($svc.Name) (:$($svc.Port),Ctrl+C 退出) =====" -ForegroundColor Cyan
             # 没装 Go 的机器跑不了 go run,退回「预编译产物 + 前台执行」,日志一样直出。
             if (-not $script:HasGo -or $UseArtifacts) {
                 $exe = Build-Service $svc
                 Push-Location $svcDir
-                try { & $exe -conf $svc.Conf } finally { Pop-Location }
+                try { & $exe -conf $confPath } finally { Pop-Location }
                 break
             }
             Push-Location $svcDir
-            try { & go run "./cmd/$($svc.Cmd)" -conf $svc.Conf } finally { Pop-Location }
+            try { & go run "./cmd/$($svc.Cmd)" -conf $confPath } finally { Pop-Location }
             break
         }
 
         $targets = if ($Service) { ,(Get-Service $Service) } else { @(Get-TargetServices) }
         $targetCount = if ($Service) { 1 } else { $targets.Count }
         if ($targetCount -eq 0) { Write-Host "[!] 排除后无服务可启动" -ForegroundColor Yellow; break }
+
+        if (-not $Service) {
+            $appliedMysql = Get-PandoraServiceAppliedMysqlState $ProjectRoot
+            if (-not (Test-ServiceRuntimeProfileMatches $appliedMysql)) {
+                $fromText = if ($appliedMysql) { "$($appliedMysql.Mode)/:$($appliedMysql.MysqlPort)/social_mysql=$($appliedMysql.SocialOnMysql)" } else { '未登记/旧版' }
+                Write-Host "[INFO] 业务服务已应用运行态为 $fromText，当前为 $serviceRuntimeMode/:$MysqlPort/social_mysql=$serviceRuntimeSocialOnMysql；先完整停止已登记服务，禁止跨模式或旧 DSN 进程被 skip。" -ForegroundColor Cyan
+                $stopFailed = @()
+                foreach ($svc in $Services) {
+                    if (-not (Stop-Service $svc)) { $stopFailed += $svc.Name }
+                }
+                if ($stopFailed.Count -gt 0) {
+                    Write-Host "[ERR] 旧业务服务停止失败:$($stopFailed -join ', ')；不会带着旧 MySQL DSN 继续启动。" -ForegroundColor Red
+                    exit 1
+                }
+            }
+            if ($Exclude.Count -gt 0 -or $Only.Count -gt 0) {
+                # 部分启动不能证明 22 个进程都用了同一套配置。先使旧的全局 marker 失效，
+                # 否则下一次完整启动可能误信旧 marker 并 skip 本轮改过配置的进程。
+                Clear-PandoraServiceAppliedMysqlState $ProjectRoot
+                Write-Host '[WARN] 本轮是 -Exclude/-Only 部分启动；已清除“全服务已应用”运行态，下次完整启动会统一刷新。' -ForegroundColor Yellow
+            }
+        }
 
         # 全起前先探基础设施(Redis/MySQL/Kafka/etcd);不通就拦下,别让服务空转 crash-loop。
         # 单起某个服务(-Service)时不强拦(可能就是要单独调该服务),仅靠日志暴露。
@@ -536,7 +704,21 @@ switch ($Action) {
         if ($Exclude.Count -gt 0) { Write-Host "排除: $($Exclude -join ', ')  (留给 IDE 调试)" -ForegroundColor Yellow }
         Write-Host ""
 
-        foreach ($svc in $targets) { Start-Service $svc }
+        $startFailed = @()
+        foreach ($svc in $targets) {
+            if (-not (Start-Service $svc)) { $startFailed += $svc.Name }
+        }
+
+        if ($startFailed.Count -gt 0) {
+            Write-Host "[ERR] 业务服务未全部就绪:$($startFailed -join ', ')；不会登记已应用 MySQL 端口。" -ForegroundColor Red
+            exit 1
+        }
+        if (-not $Service -and $Exclude.Count -eq 0 -and $Only.Count -eq 0) {
+            Set-PandoraServiceAppliedMysqlPort -ProjectRoot $ProjectRoot -Mode $serviceRuntimeMode `
+                -MysqlPort $MysqlPort -SocialOnMysql $serviceRuntimeSocialOnMysql | Out-Null
+        } elseif (-not $Service) {
+            Write-Host '[WARN] 部分启动不登记“全服务已应用”运行态。' -ForegroundColor Yellow
+        }
 
         Write-Host ""
         Show-Status
@@ -544,6 +726,9 @@ switch ($Action) {
         Write-Host "客户端入口 (UE 连这个): Envoy https://localhost:8443" -ForegroundColor Green
         Write-Host "看日志:  pwsh tools/scripts/run_services.ps1 -Action logs -Service <name>" -ForegroundColor DarkGray
         Write-Host "全停止:  pwsh tools/scripts/run_services.ps1 -Action down" -ForegroundColor DarkGray
-        break
+        exit 0
     }
+}
+} finally {
+    if ($orchestrationLockEntered) { Exit-PandoraOrchestrationLock }
 }
